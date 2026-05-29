@@ -1,0 +1,11 @@
+node_modules
+dist/
+coverage/
+.test-src/
+*.tgz
+.env
+.env.*
+.DS_Store
+.pi/npm/
+.pi/git/
+docs/private/

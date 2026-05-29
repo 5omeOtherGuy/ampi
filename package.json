@@ -1,0 +1,72 @@
+{
+  "name": "pi-mmr",
+  "version": "0.1.0",
+  "description": "Pi Multi-Model Routing extensions.",
+  "type": "module",
+  "license": "MIT",
+  "author": "5omeOtherGuy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/5omeOtherGuy/pi-mmr.git"
+  },
+  "homepage": "https://github.com/5omeOtherGuy/pi-mmr#readme",
+  "bugs": {
+    "url": "https://github.com/5omeOtherGuy/pi-mmr/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "mmr",
+    "multi-model-routing"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/extensions/mmr-core/index.ts",
+      "./src/extensions/mmr-session-fallback/index.ts",
+      "./src/extensions/mmr-toolbox/index.ts",
+      "./src/extensions/mmr-web/index.ts",
+      "./src/extensions/mmr-subagents/index.ts",
+      "./src/extensions/mmr-history/index.ts"
+    ]
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./extensions/mmr-core": "./src/extensions/mmr-core/index.ts",
+    "./extensions/mmr-session-fallback": "./src/extensions/mmr-session-fallback/index.ts",
+    "./extensions/mmr-toolbox": "./src/extensions/mmr-toolbox/index.ts",
+    "./extensions/mmr-web": "./src/extensions/mmr-web/index.ts",
+    "./extensions/mmr-subagents": "./src/extensions/mmr-subagents/index.ts",
+    "./extensions/mmr-history": "./src/extensions/mmr-history/index.ts"
+  },
+  "scripts": {
+    "prepare": "node scripts/install-hooks.mjs",
+    "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
+    "test:cov": "PI_MMR_KEEP_PREPARED_SRC=1 node --test --experimental-test-coverage tests/*.test.mjs",
+    "test:cov:clean": "rm -rf .test-src",
+    "check": "tsc --noEmit",
+    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "check:changelog": "node scripts/check-changelog.mjs",
+    "check:primary-fresh": "bash scripts/check-primary-fresh.sh",
+    "sync:primary": "bash scripts/sync-primary.sh",
+    "release:notes": "node scripts/github-release-notes.mjs",
+    "pack:dry-run": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=20.3.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.18.12",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "typebox": "^1.1.38"
+  }
+}

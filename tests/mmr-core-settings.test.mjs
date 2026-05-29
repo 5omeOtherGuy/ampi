@@ -1,0 +1,176 @@
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { after, describe, it } from "node:test";
+import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+
+after(cleanupLoadedSource);
+
+describe("mmr-core settings", () => {
+  it("loads global and project MMR settings with project overrides", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+
+      writeFileSync(
+        path.join(home, ".pi/agent/settings.json"),
+        JSON.stringify({
+          mmr: {
+            core: {
+              defaultMode: "rush",
+              modelPreferences: { deep: ["gpt-5.5", "claude-opus-4-8"] },
+            },
+          },
+        }),
+      );
+      writeFileSync(
+        path.join(project, ".pi/settings.json"),
+        JSON.stringify({
+          mmrCore: {
+            defaultMode: "deep",
+            modelPreferences: { deep: ["openai-codex/gpt-5.5", { model: "claude-opus-4-8", thinkingLevel: "xhigh" }] },
+          },
+        }),
+      );
+
+      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+
+      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.toolAliases, undefined);
+      assert.deepEqual(loaded.settings.modelPreferences, {
+        deep: [
+          { model: "gpt-5.5", providers: ["openai-codex"] },
+          { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
+        ],
+      });
+      assert.equal(loaded.filesRead.length, 2);
+      assert.deepEqual(loaded.warnings, []);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("warns and skips a malformed settings JSON file while loading the sibling file", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+
+      writeFileSync(
+        path.join(home, ".pi/agent/settings.json"),
+        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+      );
+      writeFileSync(path.join(project, ".pi/settings.json"), "{ this is not valid json");
+
+      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+
+      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.deepEqual(loaded.filesRead, [path.join(home, ".pi/agent/settings.json")]);
+      assert.equal(loaded.warnings.length, 1);
+      assert.match(loaded.warnings[0], /Could not read MMR settings from .*\/project\/\.pi\/settings\.json/);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when mmrCore is not an object and continues with valid sibling settings", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+
+      writeFileSync(
+        path.join(home, ".pi/agent/settings.json"),
+        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+      );
+      writeFileSync(
+        path.join(project, ".pi/settings.json"),
+        JSON.stringify({ mmrCore: ["oops"] }),
+      );
+
+      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+
+      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.filesRead.length, 2);
+      assert.ok(
+        loaded.warnings.some((w) => /mmrCore/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
+        `expected an mmrCore-shape warning, got ${JSON.stringify(loaded.warnings)}`,
+      );
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("emits a deprecation warning when toolAliases appears in a settings file and ignores it", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+
+      writeFileSync(
+        path.join(home, ".pi/agent/settings.json"),
+        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+      );
+      writeFileSync(
+        path.join(project, ".pi/settings.json"),
+        JSON.stringify({ mmrCore: { toolAliases: { oracle: ["mmr-oracle"] } } }),
+      );
+
+      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+
+      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.toolAliases, undefined);
+      assert.ok(
+        loaded.warnings.some((w) => /toolAliases/.test(w) && /removed/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
+        `expected a toolAliases deprecation warning, got ${JSON.stringify(loaded.warnings)}`,
+      );
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when modelPreferences is the wrong shape and ignores it", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+
+      writeFileSync(
+        path.join(home, ".pi/agent/settings.json"),
+        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+      );
+      writeFileSync(
+        path.join(project, ".pi/settings.json"),
+        JSON.stringify({ mmrCore: { modelPreferences: ["gpt-5.5"] } }),
+      );
+
+      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+
+      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.modelPreferences, undefined);
+      assert.ok(
+        loaded.warnings.some((w) => /modelPreferences/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
+        `expected a modelPreferences-shape warning, got ${JSON.stringify(loaded.warnings)}`,
+      );
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});

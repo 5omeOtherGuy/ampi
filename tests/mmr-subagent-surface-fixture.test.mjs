@@ -1,0 +1,440 @@
+// Phase 6: subagent effective-surface fixtures.
+//
+// Pins the rendered debug surface for the finder subagent so any drift
+// in its system prompt or active tool manifest is caught at PR time.
+// Mirrors the workflow used by tests/mmr-subagents-finder-fixture.test.mjs:
+// PI_MMR_UPDATE_FIXTURES=1 rewrites the snapshot, every other run pins
+// it.
+//
+// Independent structural assertions guarantee the rendered output
+// always carries the required sections (System Messages / Tools) and
+// excludes tools outside the profile allowlist, regardless of exact
+// rendering of any one line.
+
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { after, beforeEach, describe, it } from "node:test";
+import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+
+after(cleanupLoadedSource);
+
+const subagentFixtureDir = path.join(
+  import.meta.dirname,
+  "fixtures/mmr-subagent-surface",
+);
+const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
+
+function assertFixtureMatches(filename, actual) {
+  const fixturePath = path.join(subagentFixtureDir, filename);
+  if (UPDATE_FIXTURES) {
+    writeFileSync(fixturePath, actual);
+    return;
+  }
+  if (!existsSync(fixturePath)) {
+    assert.fail(`fixture ${filename} is missing; rerun with PI_MMR_UPDATE_FIXTURES=1 to create it after reviewing the rendered surface`);
+  }
+  const expected = readFileSync(fixturePath, "utf8");
+  assert.equal(
+    actual,
+    expected,
+    `fixture ${filename} drift; rerun with PI_MMR_UPDATE_FIXTURES=1 to refresh`,
+  );
+}
+
+function makePiToolManifestEntry(name, description, schema) {
+  return {
+    name,
+    owner: "pi",
+    promptGuidelines: [],
+    description,
+    schema,
+  };
+}
+
+// A small but representative slice of Pi's read-only tool surface so
+// the fixture is realistic without dragging in every Pi tool.
+function buildOracleActiveManifest() {
+  return [
+    makePiToolManifestEntry("read", "Read file contents.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    }),
+    makePiToolManifestEntry("grep", "Search file contents for patterns (respects .gitignore).", {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        pattern: { type: "string" },
+        path: { type: "string" },
+      },
+      required: ["pattern"],
+    }),
+    makePiToolManifestEntry("find", "Find files by glob pattern (respects .gitignore).", {
+      type: "object",
+      additionalProperties: false,
+      properties: { glob: { type: "string" } },
+      required: ["glob"],
+    }),
+    makePiToolManifestEntry("web_search", "Search the web for a topic.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { objective: { type: "string" } },
+      required: ["objective"],
+    }),
+    makePiToolManifestEntry("read_web_page", "Fetch and convert a web page to Markdown.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { url: { type: "string" } },
+      required: ["url"],
+    }),
+    // Deliberately include a tool the profile does NOT allow so the
+    // structural test confirms it is filtered out before reaching the
+    // rendered manifest.
+    makePiToolManifestEntry("bash", "Run a shell command.", {
+      type: "object",
+      properties: { command: { type: "string" } },
+      required: ["command"],
+    }),
+  ];
+}
+
+function buildLibrarianActiveManifest() {
+  return [
+    makePiToolManifestEntry("web_search", "Search public repository pages and related documentation.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { objective: { type: "string" }, search_queries: { type: "array" } },
+      required: ["objective"],
+    }),
+    makePiToolManifestEntry("read_web_page", "Read a public repository URL as Markdown.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { url: { type: "string" }, objective: { type: "string" } },
+      required: ["url"],
+    }),
+    makePiToolManifestEntry("read", "Read local file contents.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    }),
+    makePiToolManifestEntry("bash", "Run a shell command.", {
+      type: "object",
+      properties: { command: { type: "string" } },
+      required: ["command"],
+    }),
+  ];
+}
+
+function buildTaskActiveManifest() {
+  return [
+    makePiToolManifestEntry("read", "Read file contents.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    }),
+    makePiToolManifestEntry("bash", "Run shell commands.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { command: { type: "string" } },
+      required: ["command"],
+    }),
+    makePiToolManifestEntry("edit", "Edit existing files.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" }, oldText: { type: "string" }, newText: { type: "string" } },
+      required: ["path", "oldText", "newText"],
+    }),
+    makePiToolManifestEntry("write", "Create or overwrite files.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" }, content: { type: "string" } },
+      required: ["path", "content"],
+    }),
+    makePiToolManifestEntry("web_search", "Search the web for a topic.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { objective: { type: "string" } },
+      required: ["objective"],
+    }),
+    makePiToolManifestEntry("read_web_page", "Fetch and convert a web page to Markdown.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { url: { type: "string" } },
+      required: ["url"],
+    }),
+    makePiToolManifestEntry("finder", "Search code by behavior or concept.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    }),
+    makePiToolManifestEntry("task_list", "Manage the session-local todo list.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { tasks: { type: "array" } },
+      required: ["tasks"],
+    }),
+    // Deliberately include recursive/advisory tools the Task profile
+    // does NOT allow so the fixture pins deny-list filtering.
+    makePiToolManifestEntry("Task", "Spawn another worker.", {
+      type: "object",
+      properties: { prompt: { type: "string" }, description: { type: "string" } },
+      required: ["prompt", "description"],
+    }),
+    makePiToolManifestEntry("oracle", "Consult an advisor worker.", {
+      type: "object",
+      properties: { task: { type: "string" } },
+      required: ["task"],
+    }),
+  ];
+}
+
+function buildFinderActiveManifest() {
+  return [
+    makePiToolManifestEntry("grep", "Search file contents for patterns (respects .gitignore).", {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        pattern: { type: "string" },
+        path: { type: "string" },
+      },
+      required: ["pattern"],
+    }),
+    makePiToolManifestEntry("find", "Find files by glob pattern (respects .gitignore).", {
+      type: "object",
+      additionalProperties: false,
+      properties: { glob: { type: "string" } },
+      required: ["glob"],
+    }),
+    makePiToolManifestEntry("read", "Read file contents.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { path: { type: "string" } },
+      required: ["path"],
+    }),
+    // Deliberately include a tool the profile does NOT allow so the
+    // structural test confirms it is filtered out before reaching the
+    // rendered manifest.
+    makePiToolManifestEntry("bash", "Run a shell command.", {
+      type: "object",
+      properties: { command: { type: "string" } },
+      required: ["command"],
+    }),
+  ];
+}
+
+describe("mmr-subagent-surface: finder fixture", () => {
+  let assembleMmrSubagentSurface;
+  let renderMmrPromptDebugFixture;
+  let clearMmrSubagentPromptBuilders;
+  let registerMmrSubagentsPromptBuilders;
+  let getMmrSubagentProfile;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/mmr-subagents/prompts.ts");
+    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
+    renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
+    clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
+    registerMmrSubagentsPromptBuilders = prompts.registerMmrSubagentsPromptBuilders;
+    getMmrSubagentProfile = profiles.getMmrSubagentProfile;
+    clearMmrSubagentPromptBuilders();
+    registerMmrSubagentsPromptBuilders();
+  });
+
+  it("pins the rendered debug surface for the finder subagent", () => {
+    const profile = getMmrSubagentProfile("finder");
+    const result = assembleMmrSubagentSurface({
+      profile,
+      baseSystemPrompt: "",
+      activeToolManifest: buildFinderActiveManifest(),
+      cwd: "/abs/repo",
+    });
+
+    const rendered = renderMmrPromptDebugFixture(result);
+
+    // Structural guarantees independent of exact wording.
+    assert.match(rendered, /^=== System Messages ===/m);
+    assert.match(rendered, /^=== Tools ===/m);
+    // Profile-allowlisted tools must appear; out-of-allowlist tools
+    // (`bash`) must not, because the framework filters them out before
+    // returning the active manifest.
+    assert.match(rendered, /^# grep$/m);
+    assert.match(rendered, /^# find$/m);
+    assert.match(rendered, /^# read$/m);
+    assert.doesNotMatch(rendered, /^# bash$/m);
+    // Tool descriptions and schema bodies must be rendered.
+    assert.match(rendered, /Search file contents for patterns/);
+    assert.match(rendered, /Find files by glob pattern/);
+    assert.match(rendered, /Read file contents/);
+    assert.match(rendered, /"type": "object"/);
+    // Finder system-prompt landmarks must be present.
+    assert.match(rendered, /You are a fast, parallel code search agent\./);
+    assert.match(rendered, /Workspace root: \/abs\/repo/);
+    assert.match(rendered, /8\+ parallel tool calls/);
+
+    assertFixtureMatches("finder.md", rendered);
+  });
+});
+
+describe("mmr-subagent-surface: Task fixture", () => {
+  let assembleMmrSubagentSurface;
+  let renderMmrPromptDebugFixture;
+  let clearMmrSubagentPromptBuilders;
+  let registerMmrSubagentsPromptBuilders;
+  let getMmrSubagentProfile;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/mmr-subagents/prompts.ts");
+    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
+    renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
+    clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
+    registerMmrSubagentsPromptBuilders = prompts.registerMmrSubagentsPromptBuilders;
+    getMmrSubagentProfile = profiles.getMmrSubagentProfile;
+    clearMmrSubagentPromptBuilders();
+    registerMmrSubagentsPromptBuilders();
+  });
+
+  it("pins the rendered debug surface for the Task subagent", () => {
+    const profile = getMmrSubagentProfile("task-subagent");
+    const baseSystemPrompt = readFileSync(path.join(import.meta.dirname, "fixtures/mmr-core-prompts/base.md"), "utf8");
+    const result = assembleMmrSubagentSurface({
+      profile,
+      baseSystemPrompt,
+      activeToolManifest: buildTaskActiveManifest(),
+      cwd: "/abs/repo",
+      parentMode: "smart",
+    });
+
+    const rendered = renderMmrPromptDebugFixture(result);
+
+    assert.match(rendered, /^=== System Messages ===/m);
+    assert.match(rendered, /^=== Tools ===/m);
+    assert.match(rendered, /^# read$/m);
+    assert.match(rendered, /^# bash$/m);
+    assert.match(rendered, /^# edit$/m);
+    assert.match(rendered, /^# write$/m);
+    assert.match(rendered, /^# web_search$/m);
+    assert.match(rendered, /^# read_web_page$/m);
+    assert.match(rendered, /^# finder$/m);
+    assert.match(rendered, /^# task_list$/m);
+    assert.doesNotMatch(rendered, /^# Task$/m);
+    assert.doesNotMatch(rendered, /^# oracle$/m);
+    assert.match(rendered, /<mmr_mode name="smart">/);
+    assert.match(rendered, /## Task Worker Role/);
+    assert.match(rendered, /Return a compact result, not a transcript/);
+
+    assertFixtureMatches("task.md", rendered);
+  });
+});
+
+describe("mmr-subagent-surface: oracle fixture", () => {
+  let assembleMmrSubagentSurface;
+  let renderMmrPromptDebugFixture;
+  let clearMmrSubagentPromptBuilders;
+  let registerMmrSubagentsPromptBuilders;
+  let getMmrSubagentProfile;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/mmr-subagents/prompts.ts");
+    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
+    renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
+    clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
+    registerMmrSubagentsPromptBuilders = prompts.registerMmrSubagentsPromptBuilders;
+    getMmrSubagentProfile = profiles.getMmrSubagentProfile;
+    clearMmrSubagentPromptBuilders();
+    registerMmrSubagentsPromptBuilders();
+  });
+
+  it("pins the rendered debug surface for the oracle subagent", () => {
+    const profile = getMmrSubagentProfile("oracle");
+    const result = assembleMmrSubagentSurface({
+      profile,
+      baseSystemPrompt: "",
+      activeToolManifest: buildOracleActiveManifest(),
+      cwd: "/abs/repo",
+    });
+
+    const rendered = renderMmrPromptDebugFixture(result);
+
+    assert.match(rendered, /^=== System Messages ===/m);
+    assert.match(rendered, /^=== Tools ===/m);
+    // Profile-allowlisted tools must appear; bash (out-of-allowlist)
+    // must not.
+    assert.match(rendered, /^# read$/m);
+    assert.match(rendered, /^# grep$/m);
+    assert.match(rendered, /^# find$/m);
+    assert.match(rendered, /^# web_search$/m);
+    assert.match(rendered, /^# read_web_page$/m);
+    assert.doesNotMatch(rendered, /^# bash$/m);
+    // Oracle system-prompt landmarks must be present.
+    assert.match(rendered, /You are the Oracle - an expert AI advisor/);
+    assert.match(rendered, /Workspace root: \/abs\/repo/);
+    assert.match(rendered, /TL;DR/);
+    assert.match(rendered, /IMPORTANT: Only your last message is returned/);
+
+    assertFixtureMatches("oracle.md", rendered);
+  });
+});
+
+describe("mmr-subagent-surface: librarian fixture", () => {
+  let assembleMmrSubagentSurface;
+  let renderMmrPromptDebugFixture;
+  let clearMmrSubagentPromptBuilders;
+  let registerMmrSubagentsPromptBuilders;
+  let getMmrSubagentProfile;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/mmr-subagents/prompts.ts");
+    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
+    renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
+    clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
+    registerMmrSubagentsPromptBuilders = prompts.registerMmrSubagentsPromptBuilders;
+    getMmrSubagentProfile = profiles.getMmrSubagentProfile;
+    clearMmrSubagentPromptBuilders();
+    registerMmrSubagentsPromptBuilders();
+  });
+
+  it("pins the rendered debug surface for the librarian subagent", () => {
+    const profile = getMmrSubagentProfile("librarian");
+    const result = assembleMmrSubagentSurface({
+      profile,
+      baseSystemPrompt: "",
+      activeToolManifest: buildLibrarianActiveManifest(),
+      cwd: "/abs/repo",
+    });
+
+    const rendered = renderMmrPromptDebugFixture(result);
+
+    assert.match(rendered, /^=== System Messages ===/m);
+    assert.match(rendered, /^=== Tools ===/m);
+    assert.match(rendered, /^# web_search$/m);
+    assert.match(rendered, /^# read_web_page$/m);
+    assert.doesNotMatch(rendered, /^# read$/m);
+    assert.doesNotMatch(rendered, /^# bash$/m);
+    assert.match(rendered, /You are Librarian, a specialized repository research worker\./);
+    assert.match(rendered, /Use the available tools extensively/);
+    assert.match(rendered, /cannot access connected private repositories/);
+    assert.match(rendered, /Search public repository pages/);
+    assert.match(rendered, /Read a public repository URL as Markdown/);
+    assert.doesNotMatch(rendered, /\/home\//);
+    assert.doesNotMatch(rendered, /docs\/private\//i);
+
+    assertFixtureMatches("librarian-local-mvp.md", rendered);
+  });
+});

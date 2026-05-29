@@ -1,0 +1,410 @@
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { MmrModeKey, MmrModelPreference } from "./types.js";
+
+/**
+ * Subagent prompt-assembly route.
+ *
+ * - `standalone` — the subagent uses a concrete prompt template
+ *   produced by a registered prompt builder (e.g. finder, oracle,
+ *   librarian). The prompt does not inherit from any user-facing
+ *   locked mode and is assembled from scratch.
+ * - `mode-derived` — the subagent derives its prompt from an existing
+ *   user-facing mode's prompt assembly (`profile.baseMode`) and then
+ *   appends a worker-role block plus any subagent-specific overrides.
+ *   Reserved for workers that should behave like a sub-instance of a
+ *   parent mode (e.g. Task).
+ *
+ * Distinct from the user-facing `MmrPromptRoute`
+ * (`default`/`rush`/`deep`/`free`): subagent workers are not locked
+ * modes, do not capture/restore Pi baselines, and do not apply
+ * locked-mode prompt templates. `mmr-core` preserves Pi's base prompt
+ * and the worker's `--append-system-prompt` content as-is unless a
+ * prompt-assembly path explicitly replaces them.
+ */
+export type MmrSubagentPromptRoute = "standalone" | "mode-derived";
+
+/**
+ * Parent mode source for mode-derived subagent prompts.
+ *
+ * A concrete MMR mode key pins the worker to that mode's prompt
+ * assembly. `from-parent` defers the choice to the invocation site;
+ * `assembleMmrSubagentSurface` then requires a `parentMode` input and
+ * fails closed if it is missing.
+ */
+export type MmrSubagentBaseMode = MmrModeKey | "from-parent";
+
+/**
+ * Canonical execution profile for a subagent worker. Resolved by
+ * `mmr-core` from `--mmr-subagent <name>` in the child Pi process and
+ * by the prompt-assembly framework when building a subagent's
+ * effective surface.
+ *
+ * Profiles are the single source of truth for subagent behavior; the
+ * runner mirrors the resolved values into `--model` / `--tools` only for
+ * compatibility and observability. If the explicit CLI args disagree
+ * with the profile-resolved route, activation fails closed before any
+ * model/tool mutation.
+ */
+export interface MmrSubagentProfile {
+  /** Profile identifier used by `--mmr-subagent`. */
+  readonly name: string;
+  /** Human-facing label surfaced in diagnostics and fixtures. */
+  readonly displayName: string;
+  /** Ordered worker-model preferences, resolved against the local Pi model registry. */
+  readonly modelPreferences: readonly MmrModelPreference[];
+  /** Optional parent-mode-specific worker-model preferences for mode-derived profiles. */
+  readonly modeModelPreferences?: Partial<Record<MmrModeKey, readonly MmrModelPreference[]>>;
+  /** Optional thinking level. When omitted, Pi's default thinking level applies. */
+  readonly thinkingLevel?: ThinkingLevel;
+  /**
+   * Optional hard cap on the worker's per-request output tokens. When set,
+   * the child Pi process applies it through mmr-core's
+   * `before_provider_request` hook (Anthropic `max_tokens` /
+   * OpenAI Responses `max_output_tokens`) even though subagent workers are
+   * not locked modes. Profiles omit it to keep Pi's provider default.
+   */
+  readonly maxOutputTokens?: number;
+  /** Concrete Pi tool allowlist applied via `pi.setActiveTools`. */
+  readonly tools: readonly string[];
+  /**
+   * Optional explicit deny list of tool names that must never appear in
+   * the worker's effective tool set, even if they leak in through
+   * parent-active tools or future profile changes. Recursive/advisory
+   * tools (`Task`, `oracle`, `librarian`, `handoff`) belong here for
+   * profiles that delegate to workers. Defaults to an empty list when
+   * omitted; `resolveMmrSubagentInvocation` enforces the subtraction.
+   */
+  readonly denyTools?: readonly string[];
+  /** Optional maximum inference turns for future in-process runners. */
+  readonly maxTurns?: number;
+  /**
+   * Prompt-assembly route. `standalone` uses the registered prompt
+   * builder for `promptBuilder`; `mode-derived` builds on
+   * `assembleActiveSurface(baseMode)` and then appends a worker role
+   * block.
+   */
+  readonly promptRoute: MmrSubagentPromptRoute;
+  /**
+   * Parent user-facing mode for `mode-derived` profiles. Must be
+   * `undefined` for `standalone` profiles. The profile registry is
+   * checked to enforce this invariant at module load.
+   */
+  readonly baseMode?: MmrSubagentBaseMode;
+  /**
+   * Identifier of the prompt builder registered through the
+   * subagent prompt-builder registry. For `standalone` profiles the
+   * builder produces the entire system prompt; for `mode-derived`
+   * profiles the builder produces the appended worker-role block.
+   */
+  readonly promptBuilder: string;
+  /**
+   * Whether the worker may surface MCP-bridged tools. Reserved for
+   * profiles that explicitly need MCP reach. Read-only research workers
+   * keep this `false` unless a profile-specific safety contract opens it.
+   */
+  readonly allowMcp: boolean;
+  /**
+   * Whether the worker may surface `mmr-toolbox` mutation tools
+   * (`apply_patch`, etc.). Read-only research workers must keep this
+   * `false`.
+   */
+  readonly allowToolbox: boolean;
+  /** Subagent workers never apply locked-mode policy. */
+  readonly enforceLockedMode: false;
+  /** Subagent workers never persist mode/subagent state through Pi entries. */
+  readonly persistSubagentState: false;
+}
+
+/**
+ * Deep-freeze a JSON-shaped value (objects, arrays, primitives only).
+ * Returned reference is the same object, now frozen recursively.
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  if (Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value as Record<string, unknown>)) {
+    deepFreeze(child);
+  }
+  return value;
+}
+
+/**
+ * Canonical subagent profile table. Add new profiles here.
+ *
+ * Each entry is deep-frozen at module-load time so callers that retain
+ * `getMmrSubagentProfile(...)` references cannot accidentally corrupt the
+ * runtime contract.
+ */
+const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
+  finder: deepFreeze({
+    name: "finder",
+    displayName: "Finder",
+    modelPreferences: [
+      // Finder pins thinking to MINIMAL, so the provider-pinned Flash
+      // route is used as the low-effort primary while keeping higher-
+      // effort routes available for reasoning-heavy modes.
+      { model: "gemini-3.5-flash-extra-low", providers: ["antigravity"] },
+      { model: "gpt-5.4-mini" },
+      { model: "claude-haiku-4-5" },
+    ],
+    // Finder is a search/grep planner, not a reasoner. Pin worker
+    // thinking to MINIMAL so providers that support a low-effort
+    // reasoning lane (Anthropic, OpenAI Responses) actually use it.
+    // Providers without such a lane resolve `minimal` via mmr-core's
+    // existing thinking-level policy / Pi's clamp.
+    thinkingLevel: "minimal",
+    tools: ["grep", "find", "read"],
+    promptRoute: "standalone",
+    promptBuilder: "finder",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  "history-reader": deepFreeze({
+    name: "history-reader",
+    displayName: "History Reader",
+    modelPreferences: [
+      { model: "gpt-5.4-mini" },
+      { model: "claude-haiku-4-5" },
+    ],
+    thinkingLevel: "low",
+    tools: [],
+    maxTurns: 1,
+    promptRoute: "standalone",
+    promptBuilder: "history-reader",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  oracle: deepFreeze({
+    name: "oracle",
+    displayName: "Oracle",
+    // Oracle is the high-capability advisory worker. Primary route is
+    // GPT-5.5 at HIGH reasoning; the Claude Opus 4.6 fallback also
+    // runs at HIGH so both routes deliver the same advisor posture
+    // even when the primary provider is not authenticated.
+    modelPreferences: [
+      { model: "gpt-5.5" },
+      { model: "claude-opus-4-6", thinkingLevel: "high" },
+    ],
+    thinkingLevel: "high",
+    // The full advisory tool surface. Pi-native concrete names where a
+    // direct equivalent exists (Read → read, Grep → grep, glob → find);
+    // mmr-web / mmr-history names where the tool is owned by a sibling
+    // extension. Tools whose owning extension is not yet shipped (e.g.
+    // mmr-history) are listed here for honest profile intent and are
+    // dropped from the worker's actual active set by Pi's tool resolver
+    // the same way unimplemented mode tools are reported as deferred.
+    tools: [
+      "read",
+      "grep",
+      "find",
+      "web_search",
+      "read_web_page",
+      "read_session",
+      "find_session",
+    ],
+    promptRoute: "standalone",
+    promptBuilder: "oracle",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  cthulu: deepFreeze({
+    name: "cthulu",
+    displayName: "Cthulu",
+    // Hidden, summon-gated advisory worker. Highest-capability route at
+    // maximum reasoning effort, with no output-token economy: the worker
+    // is meant to read, iterate, and reason as much as it needs to find
+    // the optimal solution regardless of cost.
+    modelPreferences: [
+      { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
+      { model: "gpt-5.5", thinkingLevel: "xhigh" },
+    ],
+    thinkingLevel: "xhigh",
+    maxOutputTokens: 128000,
+    // Same advisory tool surface as the oracle.
+    tools: [
+      "read",
+      "grep",
+      "find",
+      "web_search",
+      "read_web_page",
+      "read_session",
+      "find_session",
+    ],
+    promptRoute: "standalone",
+    promptBuilder: "cthulu",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  librarian: deepFreeze({
+    name: "librarian",
+    displayName: "Librarian",
+    modelPreferences: [
+      { model: "claude-opus-4-6" },
+      { model: "gpt-5.4" },
+    ],
+    thinkingLevel: "medium",
+    tools: ["web_search", "read_web_page"],
+    promptRoute: "standalone",
+    promptBuilder: "librarian",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  "task-subagent": deepFreeze({
+    name: "task-subagent",
+    displayName: "Task Subagent",
+    // Pinned Task route order: claude-opus-4-8 at high is the canonical
+    // Task route shared by all
+    // Task-enabled modes (including deep, which aliases to smart through the
+    // resolver). Each preference entry carries its own thinking level so the
+    // resolver returns a deterministic thinkingLevel without consulting any
+    // profile-level default.
+    modelPreferences: [
+      { model: "claude-opus-4-8", thinkingLevel: "high" },
+      { model: "gpt-5.5", thinkingLevel: "medium" },
+      { model: "claude-opus-4-6", thinkingLevel: "high" },
+      { model: "claude-haiku-4-5-20251001", thinkingLevel: "low" },
+      { model: "claude-haiku-4-5", thinkingLevel: "low" },
+    ],
+    // Rush workers follow the parent mode's latency-first route instead of
+    // the shared high-capability Task default: GPT-5.5 with thinking off,
+    // falling back to Haiku 4.5 with thinking off when GPT routes are not
+    // registered or authenticated.
+    modeModelPreferences: {
+      rush: [
+        { model: "gpt-5.5", thinkingLevel: "off" },
+        { model: "claude-haiku-4-5-20251001", thinkingLevel: "off" },
+        { model: "claude-haiku-4-5", thinkingLevel: "off" },
+      ],
+    },
+    // Concrete Pi/MMR names matching the task worker's intended tool
+    // surface: local read/shell/edit/create, web page/search, finder,
+    // skills, and session task tracking. Recursive subagent/advisory
+    // tools live in denyTools so they cannot leak in.
+    tools: [
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "read_web_page",
+      "web_search",
+      "finder",
+      "skill",
+      "task_list",
+    ],
+    denyTools: ["Task", "oracle", "librarian", "handoff"],
+    promptRoute: "mode-derived",
+    baseMode: "from-parent",
+    promptBuilder: "task-subagent",
+    // MCP/toolbox stay false in this slice (spec §5); a follow-up may
+    // open them once the safety semantics for child mutations are pinned.
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+};
+
+// Enforce promptRoute/baseMode invariant at module load so a registry
+// entry that names a baseMode for a standalone profile (or omits one
+// for a mode-derived profile) is caught before any caller resolves
+// against it.
+for (const profile of Object.values(MMR_SUBAGENT_PROFILE_TABLE)) {
+  if (profile.promptRoute === "standalone" && profile.baseMode !== undefined) {
+    throw new Error(
+      `mmr-core subagent profile "${profile.name}" is standalone but declares baseMode "${profile.baseMode}"`,
+    );
+  }
+  if (profile.promptRoute === "mode-derived" && profile.baseMode === undefined) {
+    throw new Error(
+      `mmr-core subagent profile "${profile.name}" is mode-derived but does not declare a baseMode`,
+    );
+  }
+}
+
+/**
+ * Frozen, ordered list of registered subagent profile names. Deterministic
+ * (Object.keys order at module-load time).
+ */
+const MMR_SUBAGENT_PROFILE_NAMES: readonly string[] = Object.freeze(
+  Object.keys(MMR_SUBAGENT_PROFILE_TABLE),
+);
+
+/**
+ * Look up a subagent profile by name. Returns `undefined` for unknown or
+ * empty names. The returned profile is deep-frozen.
+ */
+export function getMmrSubagentProfile(name: string): MmrSubagentProfile | undefined {
+  if (typeof name !== "string" || name.length === 0) return undefined;
+  return MMR_SUBAGENT_PROFILE_TABLE[name];
+}
+
+/**
+ * Enumerate registered subagent profile names in stable order.
+ */
+export function listMmrSubagentProfiles(): readonly string[] {
+  return MMR_SUBAGENT_PROFILE_NAMES;
+}
+
+/**
+ * Expand an ordered `MmrModelPreference[]` (e.g. a profile's
+ * `modelPreferences` or a settings-level
+ * `subagentModelPreferences[<profileName>]` override) into the flat
+ * `string[]` shape consumed by the loose-match helpers used by
+ * concrete subagent tools (`selectFinderWorkerModel`,
+ * `selectOracleWorkerModel`, `selectHistoryReaderWorkerModel`).
+ *
+ * For each preference, the resulting list emits canonical
+ * `provider/model` entries using the preference's explicit `providers`
+ * when present. Explicit provider routes do not get a bare-id fallback,
+ * because falling through to any provider with the same model id would
+ * disagree with child subagent activation. When providers are omitted,
+ * the helper emits the same provider hint used by
+ * `getDefaultProvidersForModel`: `gpt-*` → `openai-codex`,
+ * `gemini-*` / `gemma-*` → `google`, `claude-*` →
+ * `claude-subscription`, then emits the bare model id so consumers can
+ * fall back when the parent Pi registry exposes only bare names. The
+ * helper preserves preference order and never reorders, deduplicates,
+ * or drops entries.
+ */
+export function expandMmrModelPreferencesToStrings(
+  preferences: readonly MmrModelPreference[] | undefined,
+): readonly string[] {
+  if (!preferences || preferences.length === 0) return [];
+  const expanded: string[] = [];
+  for (const preference of preferences) {
+    const bare = preference.model;
+    if (typeof bare !== "string" || bare.length === 0) continue;
+    const explicitProviders = preference.providers?.filter((provider) => typeof provider === "string" && provider.length > 0);
+    if (explicitProviders && explicitProviders.length > 0) {
+      for (const provider of explicitProviders) {
+        expanded.push(`${provider}/${bare}`);
+      }
+      continue;
+    }
+    if (bare.startsWith("gpt-")) {
+      expanded.push(`openai-codex/${bare}`);
+    } else if (bare.startsWith("gemini-") || bare.startsWith("gemma-")) {
+      expanded.push(`google/${bare}`);
+    } else if (bare.startsWith("claude-")) {
+      expanded.push(`claude-subscription/${bare}`);
+    }
+    expanded.push(bare);
+  }
+  return expanded;
+}

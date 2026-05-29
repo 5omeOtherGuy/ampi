@@ -1,0 +1,402 @@
+import assert from "node:assert/strict";
+import { after, beforeEach, describe, it } from "node:test";
+import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+
+after(cleanupLoadedSource);
+
+const LIBRARIAN_MODULE = "extensions/mmr-subagents/librarian.ts";
+const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
+const MMR_WEB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-web/tool-ownership.ts";
+const WEB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-web/index.ts";
+
+beforeEach(async () => {
+  const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
+  const { registerMmrSubagentsPromptBuilders } = await importSource(PROMPTS_MODULE);
+  const {
+    __resetMmrWebToolSourcePathsForTests,
+    registerMmrWebToolSourcePath,
+  } = await importSource(MMR_WEB_TOOL_OWNERSHIP_MODULE);
+  clearMmrSubagentPromptBuilders();
+  registerMmrSubagentsPromptBuilders();
+  __resetMmrWebToolSourcePathsForTests();
+  registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
+});
+
+function usage(overrides = {}) {
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0, ...overrides };
+}
+
+function makeWorkerResult(overrides = {}) {
+  return {
+    messages: [],
+    finalOutput: "The router lives in [src/router.ts](https://example.com/acme/repo/blob/main/src/router.ts).",
+    truncatedFinalOutput: "The router lives in [src/router.ts](https://example.com/acme/repo/blob/main/src/router.ts).",
+    usage: usage({ input: 100, output: 50, turns: 1 }),
+    model: "claude-opus-4-6",
+    stopReason: "end_turn",
+    errorMessage: undefined,
+    prompt: "Query: explain routing",
+    cwd: "/tmp/project",
+    command: "pi",
+    args: ["--mode", "json", "-p", "--no-session"],
+    exitCode: 0,
+    signal: null,
+    stderr: "",
+    aborted: false,
+    outputTruncated: false,
+    ignoredJsonLines: 0,
+    agentStarted: true,
+    trail: [],
+    ...overrides,
+  };
+}
+
+function makeRunnerSpy(result = makeWorkerResult()) {
+  const calls = [];
+  const runWorker = async (options) => {
+    calls.push(options);
+    if (result instanceof Error) throw result;
+    return result;
+  };
+  return { runWorker, calls };
+}
+
+function makeRegistry(models) {
+  return {
+    getAll: () => models,
+    find: (provider, id) => models.find((m) => m.provider === provider && m.id === id),
+    hasConfiguredAuth: () => true,
+    isUsingOAuth: (model) => model.provider.endsWith("subscription") || model.provider.endsWith("codex"),
+  };
+}
+
+function makeCtx(models = [{ provider: "claude-subscription", id: "claude-opus-4-6", contextWindow: 200000 }]) {
+  return {
+    cwd: "/abs/project",
+    modelRegistry: makeRegistry(models),
+  };
+}
+
+function webHost({
+  registered = ["web_search", "read_web_page"],
+  active = ["web_search", "read_web_page"],
+  sourcePath = WEB_SOURCE_PATH,
+} = {}) {
+  return {
+    getAllTools: () => registered.map((name) => ({
+      name,
+      description: `${name} description`,
+      promptSnippet: `${name} snippet`,
+      promptGuidelines: [`${name} guideline`],
+      parameters: { type: "object" },
+      ...(sourcePath === null ? {} : { sourceInfo: { path: sourcePath } }),
+    })),
+    getActiveTools: () => [...active],
+  };
+}
+
+function firstText(result) {
+  return result.content.find((entry) => entry.type === "text")?.text ?? "";
+}
+
+describe("librarian tool definition", () => {
+  it("declares the expected name, snippet, description, and schema", async () => {
+    const {
+      createLibrarianTool,
+      LIBRARIAN_TOOL_NAME,
+      LIBRARIAN_SUBAGENT_PROFILE_NAME,
+      LIBRARIAN_PROMPT_SNIPPET,
+      LIBRARIAN_DESCRIPTION,
+    } = await importSource(LIBRARIAN_MODULE);
+    assert.equal(LIBRARIAN_TOOL_NAME, "librarian");
+    assert.equal(LIBRARIAN_SUBAGENT_PROFILE_NAME, "librarian");
+    const tool = createLibrarianTool();
+    assert.equal(tool.name, "librarian");
+    assert.equal(tool.promptSnippet, LIBRARIAN_PROMPT_SNIPPET);
+    assert.equal(tool.description, LIBRARIAN_DESCRIPTION);
+    assert.equal(tool.renderShell, "self");
+    const params = tool.parameters;
+    assert.equal(params.type, "object");
+    assert.deepEqual(params.required, ["query"]);
+    assert.equal(params.additionalProperties, false);
+    assert.equal(params.properties.query.type, "string");
+    assert.equal(params.properties.query.minLength, 1);
+    assert.match(params.properties.query.description, /remote-repository research question/i);
+    assert.equal(params.properties.context.type, "string");
+    assert.match(params.properties.context.description, /Do not put secrets or credentials/i);
+  });
+
+  it("description and guidelines steer remote repository research without local mutation", async () => {
+    const { createLibrarianTool, LIBRARIAN_PROMPT_GUIDELINES } = await importSource(LIBRARIAN_MODULE);
+    const tool = createLibrarianTool();
+    assert.match(tool.description, /Research remote repositories with the librarian/i);
+    assert.match(tool.description, /Public repository content reachable through web search/i);
+    assert.match(tool.description, /architecture explanation/i);
+    assert.match(tool.description, /behavior evolution through commits or diffs/i);
+    assert.match(tool.description, /Do not use the librarian when:/i);
+    assert.match(tool.description, /local workspace/i);
+    assert.match(tool.description, /modify files, run code, create branches, or open pull requests/i);
+    assert.match(tool.description, /owner\/repo or a full repository URL/i);
+    assert.match(tool.description, /Preserve the librarian's full answer/i);
+    assert.match(tool.description, /kubernetes\/kubernetes/);
+    assert.match(tool.description, /facebook\/react/);
+    assert.match(tool.description, /vercel\/next\.js/);
+    assert.deepEqual(tool.promptGuidelines, [...LIBRARIAN_PROMPT_GUIDELINES]);
+    for (const guideline of LIBRARIAN_PROMPT_GUIDELINES) {
+      assert.match(guideline, /librarian/i, `every guideline must name librarian; offender: ${guideline}`);
+    }
+  });
+
+  it("worker tools are exactly the initial read-only web allowlist", async () => {
+    const { LIBRARIAN_WORKER_TOOLS } = await importSource(LIBRARIAN_MODULE);
+    assert.deepEqual([...LIBRARIAN_WORKER_TOOLS], ["web_search", "read_web_page"]);
+    for (const forbidden of ["read", "grep", "find", "bash", "edit", "write", "apply_patch", "task_list", "oracle", "Task"]) {
+      assert.equal(LIBRARIAN_WORKER_TOOLS.includes(forbidden), false, `${forbidden} must not be in librarian worker tools`);
+    }
+  });
+});
+
+describe("librarian worker system prompt", () => {
+  it("re-exports the canonical prompt builder", async () => {
+    const { buildLibrarianWorkerSystemPrompt } = await importSource(LIBRARIAN_MODULE);
+    const prompt = buildLibrarianWorkerSystemPrompt("/abs/repo");
+    assert.match(prompt, /You are Librarian, a specialized repository research worker\./);
+    assert.match(prompt, /## Responsibilities/);
+    assert.match(prompt, /## Research guidelines/);
+    assert.match(prompt, /Use the available tools extensively/);
+    assert.match(prompt, /commit history, diffs, and file revisions/i);
+    assert.match(prompt, /It cannot access connected private repositories/i);
+    assert.match(prompt, /Never name tools in the user-facing answer/i);
+    assert.match(prompt, /Use fluent links/);
+    assert.doesNotMatch(prompt, /Working directory:/);
+    assert.doesNotMatch(prompt, /apply_patch|task_list|bash|edit|write/);
+  });
+});
+
+describe("librarian execute() validation and gating", () => {
+  it("returns validation-error for invalid params before spawning", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const { runWorker, calls } = makeRunnerSpy();
+    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const cases = [
+      undefined,
+      null,
+      [],
+      { query: "" },
+      { query: "   " },
+      { query: "ok", context: 42 },
+      { query: "ok", extra: true },
+    ];
+    for (const raw of cases) {
+      const result = await tool.execute("c", raw, undefined, undefined, makeCtx());
+      assert.equal(result.details.status, "validation-error");
+      assert.match(firstText(result), /librarian: invalid parameters:/);
+    }
+    assert.equal(calls.length, 0, "invalid calls must not spawn the worker");
+  });
+
+  it("returns provider-gated when either web tool is not active", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const cases = [
+      { label: "none", active: [] },
+      { label: "missing search", active: ["read_web_page"] },
+      { label: "missing reader", active: ["web_search"] },
+    ];
+    for (const c of cases) {
+      const { runWorker, calls } = makeRunnerSpy();
+      const tool = createLibrarianTool({ runWorker, pi: webHost({ active: c.active }) });
+      const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
+      assert.equal(result.details.status, "provider-gated", c.label);
+      assert.match(firstText(result), /requires mmr-web with web_search and read_web_page active/);
+      assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
+    }
+  });
+
+  it("returns provider-gated when web tool names are active but not owned by mmr-web", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const cases = [
+      { label: "missing sourceInfo", sourcePath: null },
+      { label: "third-party source", sourcePath: "/virtual/other-extension/index.ts" },
+    ];
+    for (const c of cases) {
+      const { runWorker, calls } = makeRunnerSpy();
+      const tool = createLibrarianTool({ runWorker, pi: webHost({ sourcePath: c.sourcePath }) });
+      const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
+      assert.equal(result.details.status, "provider-gated", c.label);
+      assert.match(firstText(result), /requires mmr-web with web_search and read_web_page active/);
+      assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
+    }
+  });
+
+  it("returns activation-error when no librarian model route resolves", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const { runWorker, calls } = makeRunnerSpy();
+    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const result = await tool.execute(
+      "c",
+      { query: "Explain acme/repo routing" },
+      undefined,
+      undefined,
+      makeCtx([{ provider: "openai", id: "gpt-5.1" }]),
+    );
+    assert.equal(result.details.status, "activation-error");
+    assert.match(firstText(result), /could not resolve a model route/i);
+    assert.equal(calls.length, 0, "model route failures must not spawn");
+  });
+});
+
+describe("librarian execute() runner dispatch", () => {
+  it("composes the user prompt, resolves model/tools, replaces system prompt, and spawns once", async () => {
+    const { createLibrarianTool, LIBRARIAN_WORKER_TOOLS } = await importSource(LIBRARIAN_MODULE);
+    const { runWorker, calls } = makeRunnerSpy();
+    const tool = createLibrarianTool({
+      runWorker,
+      pi: webHost(),
+      buildSystemPrompt: () => "LIBRARIAN SYSTEM PROMPT",
+    });
+    const controller = new AbortController();
+    const result = await tool.execute(
+      "call-1",
+      {
+        query: "  Explain acme/repo routing.  ",
+        context: "  Focus on default-branch behavior.  ",
+      },
+      controller.signal,
+      undefined,
+      makeCtx(),
+    );
+    assert.equal(calls.length, 1);
+    const options = calls[0];
+    assert.equal(options.profileName, "librarian");
+    assert.equal(options.prompt, "Context: Focus on default-branch behavior.\n\nQuery: Explain acme/repo routing.");
+    assert.equal(options.cwd, "/abs/project");
+    assert.deepEqual([...options.tools], [...LIBRARIAN_WORKER_TOOLS]);
+    assert.equal(options.model, "claude-subscription/claude-opus-4-6");
+    assert.equal(options.systemPrompt, "LIBRARIAN SYSTEM PROMPT");
+    assert.equal(options.systemPromptDelivery, "replace");
+    assert.equal(options.signal, controller.signal);
+    assert.equal(typeof options.outputByteLimit, "number");
+    assert.equal(result.details.status, "success");
+    assert.equal(result.details.query, "Explain acme/repo routing.");
+    assert.equal(result.details.context, "Focus on default-branch behavior.");
+    assert.equal(result.details.model, "claude-subscription/claude-opus-4-6");
+    assert.deepEqual([...result.details.workerTools], [...LIBRARIAN_WORKER_TOOLS]);
+  });
+
+  it("reads settings-driven subagentModelPreferences.librarian on every execute", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const { runWorker, calls } = makeRunnerSpy();
+    let settingsReads = 0;
+    const tool = createLibrarianTool({
+      runWorker,
+      pi: webHost(),
+      loadSubagentModelPreferences: (cwd) => {
+        settingsReads += 1;
+        assert.equal(cwd, "/abs/project");
+        return { librarian: [{ model: "gpt-5.5" }] };
+      },
+    });
+    const ctx = makeCtx([
+      { provider: "claude-subscription", id: "claude-opus-4-6", contextWindow: 200000 },
+      { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400000 },
+    ]);
+
+    await tool.execute("c1", { query: "Explain acme/repo routing" }, undefined, undefined, ctx);
+    await tool.execute("c2", { query: "Explain acme/repo history" }, undefined, undefined, ctx);
+
+    assert.equal(settingsReads, 2);
+    assert.equal(calls[0].model, "openai-codex/gpt-5.5");
+    assert.equal(calls[1].model, "openai-codex/gpt-5.5");
+  });
+
+  it("uses the bare Query form when context is absent or blank", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const { runWorker, calls } = makeRunnerSpy();
+    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    await tool.execute("c1", { query: "Explain acme/repo routing", context: "   " }, undefined, undefined, makeCtx());
+    assert.equal(calls[0].prompt, "Query: Explain acme/repo routing");
+  });
+
+  it("forwards progress with the librarian placeholder and child trail", async () => {
+    const { createLibrarianTool, LIBRARIAN_PROGRESS_PLACEHOLDER } = await importSource(LIBRARIAN_MODULE);
+    let captured;
+    const runWorker = async (options) => {
+      options.onUpdate?.({
+        messages: [],
+        finalOutput: "",
+        truncatedFinalOutput: "",
+        usage: usage(),
+        trail: [{ type: "tool", toolCallId: "t1", toolName: "web_search", status: "running", argsPreview: '{"objective":"repo"}' }],
+      });
+      return makeWorkerResult();
+    };
+    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    await tool.execute("c", { query: "Explain acme/repo" }, undefined, (partial) => { captured = partial; }, makeCtx());
+    assert.ok(captured);
+    assert.equal(captured.content[0].text, LIBRARIAN_PROGRESS_PLACEHOLDER);
+    assert.equal(captured.details.worker, "mmr-subagents.librarian");
+    assert.equal(captured.details.status, "success");
+    assert.equal(captured.details.query, "Explain acme/repo");
+    assert.equal(captured.details.trail[0].toolName, "web_search");
+  });
+});
+
+describe("librarian failure mapping", () => {
+  it("maps runner activation markers to activation-error", async () => {
+    const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
+    const failure = makeWorkerResult({
+      finalOutput: "",
+      truncatedFinalOutput: "",
+      exitCode: 0,
+      stderr: 'pi-mmr: subagent activation failed: Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.\n',
+      subagentActivationError: 'Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.',
+      errorMessage: 'subagent activation failed: Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.',
+    });
+    const { runWorker } = makeRunnerSpy(failure);
+    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const result = await tool.execute("c", { query: "Explain acme/repo" }, undefined, undefined, makeCtx());
+    assert.equal(result.details.status, "activation-error");
+    assert.match(firstText(result), /subagent activation failed/);
+    assert.match(firstText(result), /resolved worker tool set/);
+    assert.equal(result.details.subagentActivationError, failure.subagentActivationError);
+  });
+
+  it("maps aborts, worker errors, spawn errors, empty output, and context-window errors", async () => {
+    const { createLibrarianTool, MmrLibrarianContextWindowError } = await importSource(LIBRARIAN_MODULE);
+    const scenarios = [
+      {
+        expected: "aborted",
+        result: makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "", aborted: true, exitCode: null, signal: "SIGTERM" }),
+        pattern: /research was cancelled/i,
+      },
+      {
+        expected: "worker-error",
+        result: makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "", exitCode: 7, stderr: "fatal: boom\n" }),
+        pattern: /worker exited with code 7[\s\S]*fatal: boom/,
+      },
+      {
+        expected: "spawn-error",
+        result: makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "", exitCode: 1, spawnError: "spawn ENOENT", errorMessage: "spawn ENOENT" }),
+        pattern: /worker failed to spawn: spawn ENOENT/,
+      },
+      {
+        expected: "empty-output",
+        result: makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "", exitCode: 0 }),
+        pattern: /no repository findings were produced/i,
+      },
+      {
+        expected: "context-window-exhausted",
+        result: new MmrLibrarianContextWindowError("context window exceeded"),
+        pattern: /context window limit reached/i,
+      },
+    ];
+    for (const scenario of scenarios) {
+      const { runWorker } = makeRunnerSpy(scenario.result);
+      const tool = createLibrarianTool({ runWorker, pi: webHost() });
+      const result = await tool.execute("c", { query: "Explain acme/repo" }, undefined, undefined, makeCtx());
+      assert.equal(result.details.status, scenario.expected);
+      assert.match(firstText(result), scenario.pattern, scenario.expected);
+    }
+  });
+});
