@@ -129,7 +129,9 @@ export function createMmrWebExtension(overrides: MmrWebFactoryOverrides = {}) {
 
     pi.on("session_shutdown", async () => {
       // Best-effort: stop any managed SearXNG sidecar this process spawned
-      // so we don't leak a daemon across a session swap or quit. Errors are
+      // so we don't leak a daemon across a session swap or quit. On Pi
+      // 0.77.0+ this handler also runs on SIGTERM/SIGHUP signal exits, so
+      // signal-terminated sessions stop the sidecar too. Errors are
       // swallowed inside shutdownSearxngSidecar; the lifecycle handler
       // must not throw.
       if (settings.searxngManaged) {

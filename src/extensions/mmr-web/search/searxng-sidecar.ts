@@ -5,7 +5,9 @@
  * `mmrWeb.searxngStartCommand` in their settings file, `mmr-web`
  * will spawn a local SearXNG instance on demand before the first
  * `web_search` call, poll it until ready, and stop it after an idle
- * period or on `session_shutdown`.
+ * period or on `session_shutdown`. On Pi 0.77.0+ `session_shutdown` also
+ * fires on `SIGTERM`/`SIGHUP` exits, so signal-terminated sessions stop the
+ * sidecar instead of leaking it.
  *
  * Safety invariants:
  *
