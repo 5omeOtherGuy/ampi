@@ -2,20 +2,20 @@
 
 Pi Multi-Model Routing extensions.
 
-Heavily inspired by [Amp Code](https://ampcode.com/) — because we love its agentic coding workflow — `pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that turns one keystroke into a complete, locked routing profile. Each named **mode** binds together a provider-neutral model preference list, a thinking / max-output policy, a context profile, an active-tool allowlist, and a per-mode system-prompt rewrite — so switching from fast iteration to deep reasoning is a single command, not a pile of flags.
+AMP Code in pi - enjoy! Inspired by Amp Code's agentic coding workflow, `pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that turns one keystroke into a complete, locked routing profile. Each named **mode** binds a provider-neutral model preference list, a thinking / max-output policy, a context profile, a tool allowlist, and a per-mode system-prompt rewrite — so moving from fast iteration to deep reasoning is one command, not a pile of flags.
 
-It brings that inspiration into Pi by routing across whichever providers and subscriptions are already registered in your installation, preferring subscription/OAuth routes over API keys and falling back across model families automatically. Routing is **fail-closed**: a mode never activates with no usable model or zero active tools.
+Routing works across whichever providers and subscriptions are already registered in your installation, preferring subscription/OAuth routes over API keys and falling back across model families automatically. It is **fail-closed**: a mode never activates without a usable model and at least one active tool.
 
-On top of routing, `pi-mmr` ships a toolbox of capabilities that go well beyond model selection:
+Beyond routing, `pi-mmr` ships a toolbox:
 
 - **Subagents & workers** — an `oracle` advisor for deep reasoning and review, a `finder` for concept-based codebase search, a `Task` worker for bounded sub-jobs, and a `librarian` for read-only GitHub repository research.
 - **Web reach** — `web_search` and `read_web_page` backed by SearXNG, Brave, or DuckDuckGo.
 - **GitHub reach** — read-only repository tools (file reads, directory and glob listings, code and commit search, ref diffs) over `owner/repo`.
 - **Session memory** — `find_session` / `read_session` to search and reuse prior Pi sessions across every local project.
-- **Editing & planning tools** — `apply_patch` and a session-local `task_list`.
+- **Editing & planning** — `apply_patch` and a session-local `task_list`.
 - **Resilient sessions** — interactive fallback when a subscription route hits a quota or rate-limit error.
 
-Everything is exact-name tool resolution, session-scoped, and reversible: `free` mode releases the locks and gives you back stock Pi.
+Everything uses exact-name tool resolution, is session-scoped, and is reversible: `free` mode releases the locks and gives you back stock Pi.
 
 ## Extensions
 
