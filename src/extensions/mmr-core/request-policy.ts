@@ -94,7 +94,10 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
   smart: {
     anthropic: {
       maxTokens: 32000,
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
+      // Anthropic adaptive effort follows the native Opus route's Pi-level map
+      // (Option 1: Pi medium -> Anthropic high). The medium toggle preset pins
+      // the same value; the high preset maps Pi high -> Anthropic xhigh.
+      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "high" },
     },
     openaiResponses: {
       reasoning: { effort: "medium", summary: "auto" },
@@ -178,7 +181,7 @@ export interface MmrModeThinkingOption {
  * not by silently capping the request here.
  */
 export const MMR_MODE_THINKING_TOGGLES = {
-  smart: [{ level: "medium" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }],
+  smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }],
   smartGPT: [{ level: "medium" }, { level: "xhigh" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, readonly [MmrModeThinkingOption, MmrModeThinkingOption]>>;

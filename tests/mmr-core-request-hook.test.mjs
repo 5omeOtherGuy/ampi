@@ -54,7 +54,8 @@ describe("mmr-core before_provider_request hook", () => {
 
     assert.equal(result.max_tokens, 32000);
     assert.deepEqual(result.thinking, { type: "adaptive", display: "summarized" });
-    assert.deepEqual(result.output_config, { effort: "medium" });
+    // Smart default (medium toggle) maps Pi medium -> Anthropic high (Option 1).
+    assert.deepEqual(result.output_config, { effort: "high" });
     assert.deepEqual(result.system, payload.system);
     assert.deepEqual(payload.thinking, undefined, "original payload is not mutated");
   });
