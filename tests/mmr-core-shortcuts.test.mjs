@@ -81,20 +81,20 @@ describe("mmr-core mode shortcuts", () => {
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
-    // smart default toggle level is medium; alt+r flips to high and raises the
-    // Anthropic output budget from 32k to 64k. The mode is preserved.
+    // smart default toggle level is medium; alt+r flips to high while keeping
+    // the Anthropic output budget at the stable 32k policy cap.
     await shortcuts.get("alt+r").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "smart");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "high");
-    assert.equal(runtime.getMmrModeState()?.effectiveMaxOutputTokens, 64000);
+    assert.equal(runtime.getMmrModeState()?.effectiveMaxOutputTokens, 32000);
     assert.deepEqual(calls.setThinkingLevel, ["high"]);
     assert.equal(calls.appendEntry.at(-1)?.[1].mode, "smart");
     // Concise notify, not the full "mode activated" banner.
-    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: smart → high, max out 64k/);
+    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: smart → high, max out 32k/);
     assert.equal(notifications.some((n) => /mode activated/i.test(n.message)), false);
 
-    // Pressing again toggles back to medium with the 32k budget.
+    // Pressing again toggles back to medium with the same 32k budget.
     await shortcuts.get("alt+r").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.mode, "smart");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "medium");

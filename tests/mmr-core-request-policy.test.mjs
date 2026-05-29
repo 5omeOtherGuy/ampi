@@ -280,7 +280,7 @@ describe("mmr-core thinking-level toggle", () => {
       assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
     }
 
-    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium" }, { level: "high", maxTokens: 64000 }]);
+    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium" }, { level: "high" }]);
     assert.deepEqual(getMmrModeThinkingOptions("smartGPT"), [{ level: "medium" }, { level: "xhigh" }]);
     assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
   });
@@ -296,12 +296,12 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
-  it("derives wire effort and Smart's high output budget from the toggle level without mutating the input", async () => {
+  it("derives wire effort from the toggle level without raising Smart's output budget", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
-    assert.equal(smartHigh.anthropic.maxTokens, 64000);
+    assert.equal(smartHigh.anthropic.maxTokens, 32000);
     assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "high");
     assert.equal(smartHigh.openaiResponses.reasoning.effort, "high");
     // Source policy stays at its medium defaults (pure transform).

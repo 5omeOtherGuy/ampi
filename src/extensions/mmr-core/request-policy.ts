@@ -154,8 +154,7 @@ export type MmrToggleThinkingLevel = "medium" | "high" | "xhigh";
 /**
  * One toggle preset for a toggleable mode. `level` drives both the Pi thinking
  * level and the wire reasoning effort; `maxTokens` optionally overrides the
- * mode's Anthropic `max_tokens` for this level (used so Smart's high preset
- * gets a larger output budget than its medium preset).
+ * mode's Anthropic `max_tokens` for this level.
  */
 export interface MmrModeThinkingOption {
   level: MmrToggleThinkingLevel;
@@ -166,11 +165,12 @@ export interface MmrModeThinkingOption {
  * Modes whose thinking level can be toggled between exactly two presets.
  * Index 0 is the default preset (also the mode's static `thinkingLevel`).
  *
- * Smart's high preset raises the Anthropic output budget to 64k (vs the 32k
- * medium default in `MMR_REQUEST_POLICIES.smart`).
+ * Smart's high preset intentionally keeps the stable 32k Anthropic output cap;
+ * the toggle changes effort only so a reasoning increase does not also double
+ * the request's output reservation.
  */
 export const MMR_MODE_THINKING_TOGGLES = {
-  smart: [{ level: "medium" }, { level: "high", maxTokens: 64000 }],
+  smart: [{ level: "medium" }, { level: "high" }],
   smartGPT: [{ level: "medium" }, { level: "xhigh" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, readonly [MmrModeThinkingOption, MmrModeThinkingOption]>>;
