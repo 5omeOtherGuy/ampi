@@ -96,7 +96,7 @@ describe("mmr-subagents tool provider", () => {
       assert.equal(rule.kind, "gated");
       assert.equal(rule.gate, MMR_SUBAGENTS_FEATURE_GATE);
       if (logical === "librarian") {
-        assert.equal(rule.reason, "librarian: requires mmr-web with web_search and read_web_page active.");
+        assert.equal(rule.reason, "librarian: requires mmr-github read-only GitHub tools (set MMR_GITHUB_ENABLE=true).");
       } else {
         assert.match(rule.reason, new RegExp(`${logical}: implementation pending in mmr-subagents`));
       }

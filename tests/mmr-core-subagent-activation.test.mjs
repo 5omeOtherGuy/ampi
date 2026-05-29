@@ -33,23 +33,32 @@ function restoreArgv() {
   }
 }
 
-const MMR_WEB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-web/tool-ownership.ts";
-const WEB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-web/index.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const GITHUB_TOOLS = [
+  "read_github",
+  "list_directory_github",
+  "glob_github",
+  "search_github",
+  "commit_search",
+  "diff_github",
+  "list_repositories",
+];
 
-function webToolInfos(sourcePath = WEB_SOURCE_PATH) {
-  return ["web_search", "read_web_page"].map((name) => ({
+function githubToolInfos(sourcePath = GITHUB_SOURCE_PATH) {
+  return GITHUB_TOOLS.map((name) => ({
     name,
     ...(sourcePath === null ? {} : { sourceInfo: { path: sourcePath } }),
   }));
 }
 
-async function resetMmrWebToolSourcePaths() {
+async function resetMmrGithubToolSourcePaths() {
   const {
-    __resetMmrWebToolSourcePathsForTests,
-    registerMmrWebToolSourcePath,
-  } = await importSource(MMR_WEB_TOOL_OWNERSHIP_MODULE);
-  __resetMmrWebToolSourcePathsForTests();
-  registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
+    __resetMmrGithubToolSourcePathsForTests,
+    registerMmrGithubToolSourcePath,
+  } = await importSource(MMR_GITHUB_TOOL_OWNERSHIP_MODULE);
+  __resetMmrGithubToolSourcePathsForTests();
+  registerMmrGithubToolSourcePath(GITHUB_SOURCE_PATH);
 }
 
 const BASE_PROMPT = [
@@ -535,14 +544,14 @@ describe("mmr-core subagent activation", () => {
     assert.equal(notifications.filter((n) => n.level === "error").length, 0);
   });
 
-  it("activates librarian when child web tools are owned by mmr-web", async () => {
-    await resetMmrWebToolSourcePaths();
-    setMockedArgv(["--mmr-subagent", "librarian", "--tools", "read_web_page,web_search"]);
+  it("activates librarian when child GitHub tools are owned by mmr-github", async () => {
+    await resetMmrGithubToolSourcePaths();
+    setMockedArgv(["--mmr-subagent", "librarian", "--tools", GITHUB_TOOLS.join(",")]);
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
-      activeTools: ["web_search", "read_web_page"],
-      allTools: webToolInfos(),
+      activeTools: [],
+      allTools: githubToolInfos(),
       flags: { "mmr-subagent": "librarian" },
     });
     const { ctx, notifications } = createContext({
@@ -554,11 +563,11 @@ describe("mmr-core subagent activation", () => {
 
     assert.equal(notifications.filter((n) => n.level === "error").length, 0);
     assert.equal(calls.setActiveTools.length, 1);
-    assert.deepEqual(calls.setActiveTools[0], ["web_search", "read_web_page"]);
+    assert.deepEqual(calls.setActiveTools[0], GITHUB_TOOLS);
     assert.equal(runtime.getMmrSubagentState()?.profile, "librarian");
   });
 
-  it("fails closed before mutation when librarian child web tools are not owned by mmr-web", async () => {
+  it("fails closed before mutation when librarian child GitHub tools are not owned by mmr-github", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
     const cases = [
@@ -569,11 +578,11 @@ describe("mmr-core subagent activation", () => {
     for (const c of cases) {
       restoreArgv();
       runtime.setMmrSubagentState(undefined);
-      await resetMmrWebToolSourcePaths();
-      setMockedArgv(["--mmr-subagent", "librarian", "--tools", "read_web_page,web_search"]);
+      await resetMmrGithubToolSourcePaths();
+      setMockedArgv(["--mmr-subagent", "librarian", "--tools", GITHUB_TOOLS.join(",")]);
       const { pi, handlers, calls } = createPi({
-        activeTools: ["web_search", "read_web_page"],
-        allTools: webToolInfos(c.sourcePath),
+        activeTools: [],
+        allTools: githubToolInfos(c.sourcePath),
         flags: { "mmr-subagent": "librarian" },
       });
       const { ctx, notifications } = createContext({
@@ -583,7 +592,7 @@ describe("mmr-core subagent activation", () => {
 
       await assert.rejects(
         handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx),
-        /mmr-web-owned web_search and read_web_page/,
+        /mmr-github-owned read-only GitHub tools/,
         c.label,
       );
 

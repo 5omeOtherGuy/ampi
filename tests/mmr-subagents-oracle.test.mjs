@@ -644,6 +644,38 @@ describe("oracle execute() seam", () => {
     assert.match(result.content[0].text, /spawn ENOENT/);
   });
 
+  it("renders a successful oracle run as completed (warning, not failed) when a non-fatal provider error was preserved", async () => {
+    const { createOracleTool } = await importSource(ORACLE_MODULE);
+    const workerResult = makeWorkerResult({
+      finalOutput: "TL;DR: keep the API small.",
+      truncatedFinalOutput: "TL;DR: keep the API small.",
+      exitCode: 0,
+      stopReason: "end_turn",
+      errorMessage: "provider returned a transient 429 before the final answer",
+    });
+    const { runWorker } = makeRunnerSpy(workerResult);
+    const tool = createOracleTool({ runWorker });
+    const result = await tool.execute("c", { task: "review" }, undefined, undefined, { cwd: "/tmp" });
+    assert.equal(result.details.status, "success");
+    assert.equal(result.details.errorMessage, workerResult.errorMessage);
+    assert.match(result.content[0].text, /keep the API small/);
+
+    const fakeTheme = {
+      fg(color, text) { return `[${color}]${text}`; },
+      bg(_color, text) { return text; },
+      bold(text) { return text; },
+    };
+    const rendered = tool.renderResult(
+      result,
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      { args: { task: "review" }, showImages: false, isError: false },
+    ).render(200).join("\n");
+    assert.match(rendered, /completed/i);
+    assert.doesNotMatch(rendered, /\[error\]/);
+    assert.match(rendered, /\[warning\]provider returned a transient 429/);
+  });
+
   it("surfaces nonzero exit even when the worker produced partial output", async () => {
     // A worker that emits some output and then exits nonzero must not
     // visually look like success.

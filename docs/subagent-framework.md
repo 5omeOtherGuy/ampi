@@ -23,15 +23,20 @@ model policy, result mapping, and capability flags.
 - `oracle` provides advisory review with a broader read-only research surface.
 - `Task` delegates bounded implementation or investigation work through a
   mode-derived worker prompt.
-- `librarian` researches public remote repositories with the read-only
-  `web_search` and `read_web_page` tools. It stays provider-gated until both
-  web tools are registered and active, and reports the gate as
-  `librarian: requires mmr-web with web_search and read_web_page active.`
+- `librarian` researches remote repositories with the read-only GitHub
+  repository tools owned by `mmr-github` (`read_github`,
+  `list_directory_github`, `glob_github`, `search_github`, `commit_search`,
+  `diff_github`, `list_repositories`). It stays provider-gated until those
+  tools are registered and source-owned by `mmr-github`, and reports the gate
+  as `librarian: requires mmr-github read-only GitHub tools (set
+  MMR_GITHUB_ENABLE=true).` The GitHub tools are registered globally but are
+  not part of any user-facing mode's active set; the librarian worker
+  activates them by name through its profile allowlist, so the parent gate
+  checks registration + source ownership rather than parent-active state.
 
-Deferred repository-provider integrations (for example custom GitHub or
-Bitbucket API-backed tooling) should extend the librarian profile/tool surface
-behind their own explicit capability gates instead of broadening the MVP web
-allowlist.
+Additional repository-provider integrations should extend the librarian
+profile/tool surface behind their own explicit capability gates rather than
+broadening an existing provider's allowlist.
 
 ## Profile contract
 

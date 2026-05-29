@@ -3,7 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerMmrOwnedExtensionPath } from "../mmr-core/owned-tools.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../mmr-core/runtime.js";
 import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./finder.js";
-import { type LibrarianToolDeps, isLibrarianWebToolPrerequisiteRegistered, registerLibrarianTool } from "./librarian.js";
+import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./librarian.js";
 import { type MmrAdvisorToolDeps, registerOracleTool } from "./oracle.js";
 import { registerCthuluTool } from "./cthulu.js";
 import { registerMmrSubagentsPromptBuilders } from "./prompts.js";
@@ -48,7 +48,8 @@ export interface MmrSubagentsFactoryOverrides {
  *
  * This slice ships the `finder`, `oracle`, `Task`, and `librarian`
  * workers. `librarian` is registered with the same extension but stays
- * gated until both required mmr-web tools are registered by mmr-web.
+ * gated until the read-only GitHub tools are registered and source-owned
+ * by `mmr-github`.
  */
 export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverrides = {}) {
   return function mmrSubagentsExtension(pi: ExtensionAPI): void {
@@ -68,7 +69,7 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
       oracle: true,
       cthulu: true,
       Task: true,
-      librarian: () => isLibrarianWebToolPrerequisiteRegistered(pi),
+      librarian: () => isLibrarianGithubToolPrerequisiteRegistered(pi),
     };
     registerMmrFeatureGateProvider(createMmrSubagentsFeatureGateProvider(capabilities));
     registerMmrToolProvider(createMmrSubagentsToolProvider(capabilities));
