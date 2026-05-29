@@ -2,7 +2,20 @@
 
 Pi Multi-Model Routing extensions.
 
-`pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that coordinates model selection, thinking level, active tools, and a per-mode system-prompt rewrite behind a small set of named modes. It routes across whichever providers and subscriptions are already registered in the host Pi installation.
+Heavily inspired by [Amp Code](https://ampcode.com/) — because we love its agentic coding workflow — `pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that turns one keystroke into a complete, locked routing profile. Each named **mode** binds together a provider-neutral model preference list, a thinking / max-output policy, a context profile, an active-tool allowlist, and a per-mode system-prompt rewrite — so switching from fast iteration to deep reasoning is a single command, not a pile of flags.
+
+It brings that inspiration into Pi by routing across whichever providers and subscriptions are already registered in your installation, preferring subscription/OAuth routes over API keys and falling back across model families automatically. Routing is **fail-closed**: a mode never activates with no usable model or zero active tools.
+
+On top of routing, `pi-mmr` ships a toolbox of capabilities that go well beyond model selection:
+
+- **Subagents & workers** — an `oracle` advisor for deep reasoning and review, a `finder` for concept-based codebase search, a `Task` worker for bounded sub-jobs, and a `librarian` for read-only GitHub repository research.
+- **Web reach** — `web_search` and `read_web_page` backed by SearXNG, Brave, or DuckDuckGo.
+- **GitHub reach** — read-only repository tools (file reads, directory and glob listings, code and commit search, ref diffs) over `owner/repo`.
+- **Session memory** — `find_session` / `read_session` to search and reuse prior Pi sessions across every local project.
+- **Editing & planning tools** — `apply_patch` and a session-local `task_list`.
+- **Resilient sessions** — interactive fallback when a subscription route hits a quota or rate-limit error.
+
+Everything is exact-name tool resolution, session-scoped, and reversible: `free` mode releases the locks and gives you back stock Pi.
 
 ## Extensions
 
@@ -14,6 +27,7 @@ Pi Multi-Model Routing extensions.
 | [`mmr-session-fallback`](src/extensions/mmr-session-fallback/README.md) | Interactive fallback on subscription-route quota/rate-limit errors | on |
 | [`mmr-web`](src/extensions/mmr-web/README.md) | `web_search` and `read_web_page` (SearXNG / Brave / DuckDuckGo) | off |
 | [`mmr-history`](src/extensions/mmr-history/README.md) | `find_session` / `read_session` over local Pi sessions | off |
+| [`mmr-github`](src/extensions/mmr-github/README.md) | Read-only GitHub repository tools (reads, listings, search, diffs) | off |
 
 ## Where to go next
 
@@ -23,6 +37,7 @@ Pi Multi-Model Routing extensions.
 | Use patch and todo tools          | [`src/extensions/mmr-toolbox/README.md`](src/extensions/mmr-toolbox/README.md) |
 | Use workers and subagents         | [`src/extensions/mmr-subagents/README.md`](src/extensions/mmr-subagents/README.md) |
 | Enable web search and page reads  | [`src/extensions/mmr-web/README.md`](src/extensions/mmr-web/README.md)        |
+| Read GitHub repositories          | [`src/extensions/mmr-github/README.md`](src/extensions/mmr-github/README.md)  |
 | Search and read prior sessions    | [`src/extensions/mmr-history/README.md`](src/extensions/mmr-history/README.md) |
 | Understand exports                | [`docs/public-api.md`](docs/public-api.md)                                    |
 | Understand the architecture       | [`docs/reference-architecture.md`](docs/reference-architecture.md)            |
@@ -109,7 +124,7 @@ Run `/mmr-status` (or `/mmr-status debug`). Common cases:
 
 - `Model applied: no` → see Debug `Model candidates:` for per-candidate `registered/authenticated/applied` flags. Usually unregistered/unauthenticated provider, or Pi-side `setModel` rejection.
 - Mode flipped to Free → native `/model` or `/think` while locked auto-switches with a warning. Re-enter `/mode <key>`.
-- Tool `gated` / `deferred` → owning extension is not loaded or enabled (`librarian` needs active `mmr-web` tools).
+- Tool `gated` / `deferred` → owning extension is not loaded or enabled (`librarian` needs registered `mmr-github` tools, set `MMR_GITHUB_ENABLE=true`).
 - Locked mode refused to activate → resolved zero active tools; inspect `Tool decisions:`.
 
 Full field reference: [`src/extensions/mmr-core/README.md`](src/extensions/mmr-core/README.md#diagnostics--mmr-status).

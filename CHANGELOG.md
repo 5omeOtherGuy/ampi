@@ -20,6 +20,7 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Documentation
 
+- `README.md`: rewrite the introduction to highlight `pi-mmr`'s Amp Code inspiration and full capability surface — locked modes that bundle model preference, thinking policy, context profile, tool allowlist, and prompt rewrite; provider-neutral, fail-closed routing across registered providers/subscriptions; and the toolbox beyond routing (subagents/workers, web and GitHub tools, session memory, editing/planning tools, and session fallback).
 - `AGENTS.md`: trim contributor guidance to public-appropriate content. The internal multi-checkout operational workflow (branch/merge discipline, primary-ref synchronization, and git-hook defenses) moves out of the published file into a local-only, gitignored `CLAUDE.md` that Pi auto-loads alongside `AGENTS.md`. `.gitignore` now excludes `CLAUDE.md` and `AGENTS.local.md` so local agent guidance is never published.
 
 ## 0.1.0 — 2026-05-28
