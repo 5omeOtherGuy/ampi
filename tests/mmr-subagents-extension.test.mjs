@@ -127,13 +127,19 @@ describe("mmr-subagents package wiring", () => {
     assert.equal(typeof root.createFinderTool, "function");
     assert.equal(typeof root.registerFinderTool, "function");
     assert.equal(typeof root.buildFinderWorkerSystemPrompt, "function");
-    assert.equal(typeof root.selectFinderWorkerModel, "function");
+    // selectFinderWorkerModel was removed (issue-#1 "Option A"): finder now
+    // resolves its worker route through the shared selectMmrModelRoute
+    // registry resolver, so the public string selector is no longer exported.
+    assert.equal(root.selectFinderWorkerModel, undefined, "selectFinderWorkerModel must no longer be exported");
     assert.equal(root.FINDER_TOOL_NAME, "finder");
     assert.deepEqual([...root.FINDER_WORKER_TOOLS].sort(), ["find", "grep", "read"]);
     assert.equal(typeof root.createOracleTool, "function");
     assert.equal(typeof root.registerOracleTool, "function");
     assert.equal(typeof root.buildOracleWorkerSystemPrompt, "function");
-    assert.equal(typeof root.selectOracleWorkerModel, "function");
+    // selectOracleWorkerModel was removed (issue-#1 "Option A"): oracle now
+    // resolves its worker route through the shared selectMmrModelRoute
+    // registry resolver, so the public string selector is no longer exported.
+    assert.equal(root.selectOracleWorkerModel, undefined, "selectOracleWorkerModel must no longer be exported");
     assert.equal(root.ORACLE_TOOL_NAME, "oracle");
     assert.deepEqual(
       [...root.ORACLE_WORKER_TOOLS],
@@ -203,7 +209,7 @@ describe("mmr-subagents extension factory", () => {
     assert.equal(typeof handlers.get("tool_result"), "function", "finder installs a read-result normalizer");
     assert.equal(typeof handlers.get("before_agent_start"), "function", "Task captures the parent prompt for mode-derived workers");
     assert.equal(typeof handlers.get("session_shutdown"), "function", "async tasks install a session_shutdown cleanup");
-    assert.equal(handlers.has("session_start"), false, "this slice has no warnings to drain on session_start");
+    assert.equal(typeof handlers.get("session_start"), "function", "clears session-scoped worker-fallback state on new/fork sessions");
   });
 
   it("numbers native read output only while the finder subagent profile is active", async () => {
