@@ -9,3 +9,7 @@ coverage/
 .pi/npm/
 .pi/git/
 docs/private/
+
+# Local-only agent guidance (never publish). Pi auto-loads it alongside AGENTS.md.
+CLAUDE.md
+AGENTS.local.md

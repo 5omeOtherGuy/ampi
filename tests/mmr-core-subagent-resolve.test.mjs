@@ -163,7 +163,7 @@ describe("resolveMmrSubagentRoute", () => {
     });
     assert.equal(result.ok, true);
   });
-  it("selects the librarian primary route, fallback route, and exact web tool allowlist", async () => {
+  it("selects the librarian primary route, fallback route, and exact GitHub tool allowlist", async () => {
     const { resolveMmrSubagentRoute } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("librarian");
@@ -180,7 +180,15 @@ describe("resolveMmrSubagentRoute", () => {
     assert.equal(primary.selected.provider, "claude-subscription");
     assert.equal(primary.selected.model, "claude-opus-4-6");
     assert.equal(primary.selected.thinkingLevel, "medium");
-    assert.deepEqual([...primary.tools], ["web_search", "read_web_page"]);
+    assert.deepEqual([...primary.tools], [
+      "read_github",
+      "list_directory_github",
+      "glob_github",
+      "search_github",
+      "commit_search",
+      "diff_github",
+      "list_repositories",
+    ]);
     assert.equal(primary.promptRoute, "standalone");
 
     const fallback = resolveMmrSubagentRoute({
@@ -209,16 +217,24 @@ describe("resolveMmrSubagentRoute", () => {
     const badTools = resolveMmrSubagentRoute({
       profile,
       registry: makeRegistry([{ provider: "claude-subscription", id: "claude-opus-4-6" }]),
-      explicitTools: ["web_search", "read"],
+      explicitTools: ["read_github", "read"],
     });
     assert.equal(badTools.ok, false);
     assert.equal(badTools.code, "tools.mismatch");
-    assert.match(badTools.message, /web_search,read_web_page/);
+    assert.match(badTools.message, /read_github,list_directory_github,glob_github,search_github,commit_search,diff_github,list_repositories/);
 
     const okTools = resolveMmrSubagentRoute({
       profile,
       registry: makeRegistry([{ provider: "claude-subscription", id: "claude-opus-4-6" }]),
-      explicitTools: ["read_web_page", "web_search"],
+      explicitTools: [
+        "list_repositories",
+        "diff_github",
+        "commit_search",
+        "search_github",
+        "glob_github",
+        "list_directory_github",
+        "read_github",
+      ],
     });
     assert.equal(okTools.ok, true);
   });
@@ -505,7 +521,7 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(ok.ok, true);
   });
 
-  it("fails closed when librarian child activation sees only a partial web-tool set", async () => {
+  it("fails closed when librarian child activation sees only a partial GitHub-tool set", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("librarian");
@@ -514,14 +530,21 @@ describe("resolveMmrSubagentInvocation", () => {
     const result = resolveMmrSubagentInvocation({
       profile,
       registry,
-      registeredTools: ["web_search"],
-      explicitTools: ["web_search", "read_web_page"],
+      registeredTools: ["read_github"],
+      explicitTools: ["read_github", "search_github"],
       invocationContext: "child-activation",
     });
     assert.equal(result.ok, false);
     assert.equal(result.code, "tools.mismatch");
-    assert.deepEqual([...result.workerTools], ["web_search"]);
-    assert.deepEqual([...result.toolResolution.omittedTools], ["read_web_page"]);
+    assert.deepEqual([...result.workerTools], ["read_github"]);
+    assert.deepEqual([...result.toolResolution.omittedTools], [
+      "list_directory_github",
+      "glob_github",
+      "search_github",
+      "commit_search",
+      "diff_github",
+      "list_repositories",
+    ]);
   });
 
   it("honors modelPreferencesOverride without disturbing prompt base or deny set", async () => {

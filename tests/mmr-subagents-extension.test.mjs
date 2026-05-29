@@ -9,16 +9,25 @@ after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const subagentsExtensionPath = "./src/extensions/mmr-subagents/index.ts";
-const MMR_WEB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-web/tool-ownership.ts";
-const WEB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-web/index.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const GITHUB_TOOLS = [
+  "read_github",
+  "list_directory_github",
+  "glob_github",
+  "search_github",
+  "commit_search",
+  "diff_github",
+  "list_repositories",
+];
 
-async function mmrWebToolInfos(names = ["web_search", "read_web_page"], sourcePath = WEB_SOURCE_PATH) {
+async function mmrGithubToolInfos(names = GITHUB_TOOLS, sourcePath = GITHUB_SOURCE_PATH) {
   const {
-    __resetMmrWebToolSourcePathsForTests,
-    registerMmrWebToolSourcePath,
-  } = await importSource(MMR_WEB_TOOL_OWNERSHIP_MODULE);
-  __resetMmrWebToolSourcePathsForTests();
-  registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
+    __resetMmrGithubToolSourcePathsForTests,
+    registerMmrGithubToolSourcePath,
+  } = await importSource(MMR_GITHUB_TOOL_OWNERSHIP_MODULE);
+  __resetMmrGithubToolSourcePathsForTests();
+  registerMmrGithubToolSourcePath(GITHUB_SOURCE_PATH);
   return names.map((name) => ({
     name,
     ...(sourcePath === null ? {} : { sourceInfo: { path: sourcePath } }),
@@ -125,12 +134,19 @@ describe("mmr-subagents package wiring", () => {
     assert.equal(typeof root.createLibrarianTool, "function");
     assert.equal(typeof root.registerLibrarianTool, "function");
     assert.equal(typeof root.buildLibrarianWorkerSystemPrompt, "function");
-    assert.equal(typeof root.isLibrarianWebToolPrerequisiteActive, "function");
-    assert.equal(typeof root.isLibrarianWebToolPrerequisiteRegistered, "function");
+    assert.equal(typeof root.isLibrarianGithubToolPrerequisiteRegistered, "function");
     assert.equal(typeof root.MmrLibrarianContextWindowError, "function");
     assert.equal(root.LIBRARIAN_TOOL_NAME, "librarian");
     assert.equal(root.LIBRARIAN_SUBAGENT_PROFILE_NAME, "librarian");
-    assert.deepEqual([...root.LIBRARIAN_WORKER_TOOLS], ["web_search", "read_web_page"]);
+    assert.deepEqual([...root.LIBRARIAN_WORKER_TOOLS], [
+      "read_github",
+      "list_directory_github",
+      "glob_github",
+      "search_github",
+      "commit_search",
+      "diff_github",
+      "list_repositories",
+    ]);
     assert.equal(typeof root.LIBRARIAN_DESCRIPTION, "string");
     assert.equal(root.LIBRARIAN_PROMPT_SNIPPET, "Research remote repositories and repository history with a read-only librarian worker.");
     assert.ok(Array.isArray(root.LIBRARIAN_PROMPT_GUIDELINES));
@@ -205,10 +221,10 @@ describe("mmr-subagents extension factory", () => {
     }
   });
 
-  it("flips finder, oracle, Task, and librarian to active when both mmr-web tools are registered", async () => {
+  it("flips finder, oracle, Task, and librarian to active when the mmr-github tools are registered", async () => {
     const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
     const runtime = await importRuntime();
-    const { pi, tools } = makePi({ externalTools: await mmrWebToolInfos() });
+    const { pi, tools } = makePi({ externalTools: await mmrGithubToolInfos() });
     createMmrSubagentsExtension()(pi);
 
     const available = ["read", "bash", "edit", "write", "grep", "find", "web_search", "read_web_page", ...tools.map((tool) => tool.name)];
@@ -223,7 +239,7 @@ describe("mmr-subagents extension factory", () => {
     }
   });
 
-  it("keeps librarian gated and provider-attributed when the web tool prerequisite is missing", async () => {
+  it("keeps librarian gated and provider-attributed when the GitHub tool prerequisite is missing", async () => {
     const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
     const runtime = await importRuntime();
     const { pi, tools } = makePi();
@@ -242,35 +258,37 @@ describe("mmr-subagents extension factory", () => {
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "gated", "librarian must be gated, not deferred");
     assert.equal(decision.owner, "mmr-subagents", "librarian must be owned by mmr-subagents");
-    assert.match(decision.diagnostic, /requires mmr-web with web_search and read_web_page active/);
+    assert.match(decision.diagnostic, /requires mmr-github read-only GitHub tools/);
     assert.equal(resolved.gatedTools.includes("librarian"), true);
     assert.equal(resolved.deferredTools.includes("librarian"), false);
   });
 
-  it("keeps librarian gated when web tool names are registered by another source", async () => {
+  it("keeps librarian gated when GitHub tool names are registered by another source", async () => {
     const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
     const runtime = await importRuntime();
-    const { pi, tools } = makePi({ externalTools: await mmrWebToolInfos(["web_search", "read_web_page"], "/virtual/other-extension/index.ts") });
+    const { pi, tools } = makePi({ externalTools: await mmrGithubToolInfos(GITHUB_TOOLS, "/virtual/other-extension/index.ts") });
     createMmrSubagentsExtension()(pi);
 
-    const available = ["read", "bash", "edit", "write", "grep", "find", "web_search", "read_web_page", ...tools.map((tool) => tool.name)];
+    const available = ["read", "bash", "edit", "write", "grep", "find", ...tools.map((tool) => tool.name)];
     const resolved = runtime.resolveMmrTools("smart", available);
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "gated");
-    assert.match(decision.diagnostic, /requires mmr-web with web_search and read_web_page active/);
+    assert.match(decision.diagnostic, /requires mmr-github read-only GitHub tools/);
   });
 
-  it("keeps librarian capability independent from stale parent active-tool snapshots", async () => {
+  it("keeps librarian capability independent from parent active-tool snapshots", async () => {
     const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
     const runtime = await importRuntime();
+    // The GitHub tools are registered + owned but never part of the parent's
+    // active set; the registered-only gate must still flip librarian active.
     const { pi, tools } = makePi({
-      externalTools: await mmrWebToolInfos(),
-      activeTools: ["web_search"],
+      externalTools: await mmrGithubToolInfos(),
+      activeTools: [],
     });
     createMmrSubagentsExtension()(pi);
 
-    const available = ["read", "bash", "edit", "write", "grep", "find", "web_search", "read_web_page", ...tools.map((tool) => tool.name)];
+    const available = ["read", "bash", "edit", "write", "grep", "find", ...tools.map((tool) => tool.name)];
     const resolved = runtime.resolveMmrTools("smart", available);
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");

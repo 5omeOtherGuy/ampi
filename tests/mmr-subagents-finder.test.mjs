@@ -634,6 +634,38 @@ describe("finder execute() seam", () => {
     assert.equal(result.details.worker, "mmr-subagents.finder");
   });
 
+  it("renders a successful finder run as completed (warning, not failed) when a non-fatal provider error was preserved", async () => {
+    const { createFinderTool } = await importSource(FINDER_MODULE);
+    const workerResult = makeWorkerResult({
+      truncatedFinalOutput: "verified settings with file:line evidence",
+      finalOutput: "verified settings with file:line evidence",
+      exitCode: 0,
+      stopReason: "end_turn",
+      errorMessage: "Antigravity request failed with HTTP 429: capacity exhausted. Resets in 0s.",
+    });
+    const { runWorker } = makeRunnerSpy(workerResult);
+    const tool = createFinderTool({ runWorker });
+    const result = await tool.execute("c", { query: "verify settings" }, undefined, undefined, { cwd: "/tmp" });
+    assert.equal(result.details.status, "success");
+    assert.equal(result.details.errorMessage, workerResult.errorMessage);
+    assert.match(result.content[0].text, /verified settings/);
+
+    const fakeTheme = {
+      fg(color, text) { return `[${color}]${text}`; },
+      bg(_color, text) { return text; },
+      bold(text) { return text; },
+    };
+    const rendered = tool.renderResult(
+      result,
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      { args: { query: "verify settings" }, showImages: false, isError: false },
+    ).render(200).join("\n");
+    assert.match(rendered, /completed/i);
+    assert.doesNotMatch(rendered, /\[error\]/);
+    assert.match(rendered, /\[warning\]Antigravity request failed with HTTP 429/);
+  });
+
   it("sanitizes finder trail assistant links so expanded rows do not re-render raw file URLs", async () => {
     const { createFinderTool } = await importSource(FINDER_MODULE);
     const cwd = makeTempDir();

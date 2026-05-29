@@ -166,7 +166,7 @@ describe("mmr-history worker-first read_session", () => {
 
   it("falls back to lexical when the worker runner throws", async () => {
     const { tool, sessions } = await makeReadSessionTool({
-      runner: { async run() { throw new Error("runner exploded"); } },
+      runner: { async run() { throw new Error("worker exploded"); } },
     });
 
     const result = await tool.execute("call", { sessionId: sessions[0].id, goal: "worker error" }, undefined, undefined, {
@@ -175,7 +175,7 @@ describe("mmr-history worker-first read_session", () => {
     });
 
     assert.equal(result.details.analysisUsed, "lexical");
-    assert.match(result.details.analysisFallbackReason, /runner exploded/);
+    assert.match(result.details.analysisFallbackReason, /worker exploded/);
     assert.match(result.content[0].text, /# Session/);
   });
 

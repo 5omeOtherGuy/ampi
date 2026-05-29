@@ -36,6 +36,7 @@ import {
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSpawnedSubagentWorkerDetailsBase,
+  type MmrWorkerOutcomeStatus,
   type MmrSubagentRunOptions,
   type MmrSubagentRunner,
   type MmrWorkerProgressSnapshot,
@@ -154,6 +155,10 @@ export type FinderParams = Static<typeof FINDER_PARAMETERS_SCHEMA>;
 
 export interface FinderDetails extends MmrSpawnedSubagentWorkerDetailsBase {
   worker: "mmr-subagents.finder";
+  // Final-run outcome from the shared classifier. The renderer reads this
+  // first, so a successful run that merely preserved a non-fatal provider
+  // `errorMessage` still renders as completed instead of failed.
+  status?: MmrWorkerOutcomeStatus;
 }
 
 /** Compact "thinking" status surfaced to the model before the worker finishes. */
@@ -239,11 +244,12 @@ function getFinderFileLineCount(absolutePath: string): number | undefined {
   if (finderLineCountCache.has(key)) return finderLineCountCache.get(key);
   let lineCount: number | undefined;
   try {
-    const stat = fs.statSync(key);
-    if (stat.isFile()) {
-      const content = fs.readFileSync(key, "utf8");
-      lineCount = content.length === 0 ? 0 : content.split("\n").length;
-    }
+    // Read directly rather than statSync()-then-readFileSync(): the latter
+    // is a file-system race (the path could change between the two calls).
+    // A directory read throws EISDIR and a missing path throws ENOENT;
+    // both are caught below and leave the line count undefined (no clamp).
+    const content = fs.readFileSync(key, "utf8");
+    lineCount = content.length === 0 ? 0 : content.split("\n").length;
   } catch {
     lineCount = undefined;
   }
@@ -573,7 +579,8 @@ function buildDetails(
     // deterministic spawn-failed line for runner spawn errors.
     trail: sanitizeFinderTrail(result.trail ?? [], cwd),
   });
-  return { worker: "mmr-subagents.finder", ...base };
+  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  return { worker: "mmr-subagents.finder", status, ...base };
 }
 
 function buildFinalContent(result: MmrWorkerResult, cwd: string): string {
