@@ -2,7 +2,9 @@
 
 Pi Multi-Model Routing extensions.
 
-AMP Code in pi - enjoy! Inspired by Amp Code's agentic coding workflow, `pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that turns one keystroke into a complete, locked routing profile. Each named **mode** binds a provider-neutral model preference list, a thinking / max-output policy, a context profile, a tool allowlist, and a per-mode system-prompt rewrite — so moving from fast iteration to deep reasoning is one command, not a pile of flags.
+**AMP Code in pi - enjoy!** 
+
+Inspired by Amp Code's agentic coding workflow, `pi-mmr` is a [Pi](https://github.com/earendil-works/pi-coding-agent) package that turns one keystroke into a complete, locked routing profile. Each named **mode** binds a provider-neutral model preference list, a thinking / max-output policy, a context profile, a tool allowlist, and a per-mode system-prompt rewrite — so moving from fast iteration to deep reasoning is one command, not a pile of flags.
 
 Routing works across whichever providers and subscriptions are already registered in your installation, preferring subscription/OAuth routes over API keys and falling back across model families automatically. It is **fail-closed**: a mode never activates without a usable model and at least one active tool.
 
