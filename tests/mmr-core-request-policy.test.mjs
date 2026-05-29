@@ -280,7 +280,7 @@ describe("mmr-core thinking-level toggle", () => {
       assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
     }
 
-    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }]);
+    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }]);
     assert.deepEqual(getMmrModeThinkingOptions("smartGPT"), [{ level: "medium" }, { level: "xhigh" }]);
     assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
   });
@@ -296,17 +296,17 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
-  it("maps Smart high to Anthropic xhigh effort + 64k output and shrinks max input, without mutating the source", async () => {
+  it("maps Smart high to Anthropic xhigh effort while keeping the 32k output default, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
     // Pi/session level is high; Anthropic adaptive effort is remapped to xhigh
-    // (Pi high -> Anthropic xhigh on the Opus route), output budget 64k, and
-    // the displayed max input shrinks to contextWindow - 64k.
-    assert.equal(smartHigh.anthropic.maxTokens, 64000);
+    // (Pi high -> Anthropic xhigh on the Opus route), but the output budget
+    // stays at the mode default 32k, so the displayed max input is unchanged.
+    assert.equal(smartHigh.anthropic.maxTokens, 32000);
     assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "xhigh");
-    assert.equal(smartHigh.effectiveMaxInputTokens, 936000);
+    assert.equal(smartHigh.effectiveMaxInputTokens, 968000);
     // OpenAI Responses effort tracks the Pi level (high), not the Anthropic remap.
     assert.equal(smartHigh.openaiResponses.reasoning.effort, "high");
     // Source policy stays at its 32k/high Anthropic default (pure transform).

@@ -68,9 +68,8 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
     // Overload is normally transient and handled by Pi's auto-retry. By the
     // time it reaches message_end the auto-retries are exhausted, so a
     // persistent overload of the active Claude route is worth offering an
-    // interactive fallback (e.g. a heavy Smart-high 64k/xhigh shape that the
-    // route keeps rejecting under capacity pressure) instead of dead-ending
-    // the turn. Rate-limit/hard-quota still classify ahead of overload.
+    // interactive fallback instead of dead-ending the turn. Rate-limit/hard-
+    // quota still classify ahead of overload.
     if (includesOverloadOnly(message)) {
       return {
         kind: "anthropic-overload",

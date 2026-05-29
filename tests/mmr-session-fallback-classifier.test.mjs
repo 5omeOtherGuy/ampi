@@ -24,8 +24,7 @@ describe("mmr-session-fallback quota classifier", () => {
     assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "rate_limit_error: 429" }).shouldPrompt, true);
     // Overload reaches message_end only after Pi's auto-retry is exhausted, so a
     // persistent overload of the active Claude route is offered an interactive
-    // fallback instead of dead-ending the turn (e.g. a heavy Smart-high
-    // 64k/xhigh shape the route keeps rejecting under capacity pressure).
+    // fallback instead of dead-ending the turn.
     const overload = classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "overloaded_error: try again" });
     assert.equal(overload.shouldPrompt, true);
     assert.equal(overload.kind, "anthropic-overload");
