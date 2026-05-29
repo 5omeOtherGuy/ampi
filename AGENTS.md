@@ -80,57 +80,42 @@ not expose.
 - Typecheck after dependencies are installed: `npm run check`
 - Pi smoke test from the checkout under test: `pi -e "$PWD" --list-models`
 
-Dependency note for task worktrees:
+Dependency note:
 
-- Git worktrees do not share untracked/ignored `node_modules` directories. The
-  primary checkout may have dependencies installed while a new task worktree
-  does not.
-- Before running `npm run check`, verify `node_modules/.bin/tsc` exists in the
-  checkout under test. If it does not, do not report `tsc: not found` as a
-  product/test failure; ask for dependency-install approval or make
-  dependencies available locally (for example, by using the primary checkout's
-  existing `node_modules` when appropriate).
+- If `node_modules/.bin/tsc` is missing in the checkout, do not report
+  `tsc: not found` as a product/test failure; install dependencies (with
+  approval) or make them available locally first.
 - `npm test` uses `tests/helpers/load-src.mjs`, which symlinks the checkout's
   `node_modules` into temporary source copies so peer imports such as
-  `@earendil-works/pi-coding-agent` resolve. If `npm test` fails from a task
-  worktree with `ERR_MODULE_NOT_FOUND` for a peer package, first check whether
-  that worktree lacks `node_modules`; do not misdiagnose it as a code failure.
+  `@earendil-works/pi-coding-agent` resolve. An `ERR_MODULE_NOT_FOUND` for a
+  peer package usually means the checkout lacks `node_modules`, not a code
+  failure.
 
 Do not install dependencies, publish, push, configure remotes, or perform destructive git operations without explicit approval.
 
 ## Workflow
 
-### Invariants
-
-- **Primary `main` MUST equal `origin/main` after every PR merge.** The post-merge cleanup step below restores this; if it cannot (dirty primary, diverged ref), stop and reconcile before doing anything else.
-- **Never investigate or plan against the primary checkout's working tree without first confirming it is at `origin/main`.** A drifted primary will make any "what's currently shipped" answer wrong. Confirm with `npm run check:primary-fresh` (or `bash scripts/check-primary-fresh.sh`) or read `origin/main` directly via `git show origin/main:<path>` / a fresh detached worktree (`git worktree add --detach /tmp/pi-mmr-readonly origin/main`).
-- **Primary checkout is control-only for files, but the `main` ref MUST stay synchronized.** Editing files in the primary remains forbidden; advancing the `main` ref via `scripts/sync-primary.sh` (fast-forward only, refuses dirty tree) is required.
-
-### Steps
-
-1. Per-task worktree (parallel-agent safe):
-   - Preflight: `git status --short --branch && git worktree list && git fetch origin --prune && npm run check:primary-fresh`. If `check:primary-fresh` reports `behind` or `diverged`, **STOP**: run `npm run sync:primary` (which will refuse if the primary working tree is dirty — reconcile that first), or do all your work from a fresh detached worktree off `origin/main` and never read the stale primary.
-   - Create: `git worktree add ../pi-mmr-<slug> -b <branch> origin/main`.
-   - Do all edits, tests, and commits in the task worktree, not the primary `main` checkout.
-   - Merge: `gh pr merge <N> --squash [--admin]` (no `--delete-branch`; the repo auto-deletes merged head branches).
-   - Cleanup, from outside the worktree: `git worktree remove ../pi-mmr-<slug> && git branch -D <branch> && git fetch origin --prune && npm run sync:primary && git worktree prune`. `sync:primary` is the load-bearing step: it fast-forwards primary `main` to `origin/main` so the next preflight does not surface stale state. It refuses to act on a dirty primary; if it refuses, stop and reconcile.
-   - Inspect all active worktrees before cleanup. Leave worktrees/branches you do not own untouched.
-
-### Mechanical defenses
-
-This repo ships git hooks under `.githooks/` and a `prepare` npm script that wires `core.hooksPath=.githooks` on `npm install`. The hooks are belt-and-suspenders for the steps above:
-
-- `pre-commit` blocks commits on primary `main` while it is behind `origin/main` (encourages a worktree off `origin/main`, or running `sync:primary` first). Bypass: `git commit --no-verify`.
-- `pre-push` blocks pushing `main` while it is behind `origin/main` (a push that would be rejected by the remote anyway, or — worse — a force-push over merged work). Bypass: `git push --no-verify`.
-
-The hooks are scoped to the primary checkout (`.git` is a real directory). They never fire from inside a worktree.
-2. Implement narrowly and verify.
-   - For behavior changes, add/update deterministic tests first; no live provider/API calls.
-   - For docs-only or mechanical changes, use the lightest useful verification (for example `git diff --check`).
-   - Before PRs, merges, or substantial handoffs, run `npm test && npm run check && npm run pack:dry-run`; add the Pi smoke test when extension loading changed: `pi -e "$PWD" --list-models`.
-3. Keep repository automation aligned with `.github/dependabot.yml`, `.github/workflows/codeql.yml`, and `.github/workflows/dependency-review.yml`; Dependabot and CodeQL run on GitHub, not as local preflight gates.
-4. For substantial user-visible or operator-visible changes, update `CHANGELOG.md` under `Unreleased` using `docs/changelog-template.md`. `npm test` runs `scripts/check-changelog.mjs`, which validates the heading template, validates `.github/release.yml` categories for GitHub-generated release notes, and requires a changelog update for monitored source/docs/package changes unless `PI_MMR_CHANGELOG_NOT_NEEDED=1` is deliberately set for a non-user-visible change.
-5. For approved releases, generate GitHub release notes with `npm run release:notes -- vX.Y.Z --previous-tag vA.B.C --output <draft.md>`, review the generated notes for public-safe wording, copy/adapt them into the versioned `CHANGELOG.md` section that Pi displays after update, then align `package.json`, changelog, Git tag `vX.Y.Z`, and GitHub Release.
+- Branch from `main`, implement narrowly, and add or update deterministic tests
+  for behavior changes first (no live provider/API calls). For docs-only or
+  mechanical changes, use the lightest useful verification (for example
+  `git diff --check`).
+- Before opening a PR or merging, run `npm test && npm run check && npm run pack:dry-run`;
+  add the Pi smoke test when extension loading changed: `pi -e "$PWD" --list-models`.
+- Update `CHANGELOG.md` under `Unreleased` (see `docs/changelog-template.md`) for
+  user-visible or operator-visible changes. `npm test` runs
+  `scripts/check-changelog.mjs`, which enforces the heading template, validates
+  `.github/release.yml` categories for GitHub-generated release notes, and
+  requires a changelog entry for monitored source/docs/package changes unless
+  `PI_MMR_CHANGELOG_NOT_NEEDED=1` is deliberately set for a non-user-visible
+  change.
+- Keep repository automation aligned with `.github/dependabot.yml`,
+  `.github/workflows/codeql.yml`, and `.github/workflows/dependency-review.yml`;
+  Dependabot and CodeQL run on GitHub, not as local preflight gates.
+- For approved releases, draft notes with
+  `npm run release:notes -- vX.Y.Z --previous-tag vA.B.C --output <draft.md>`,
+  review them for public-safe wording, update the versioned `CHANGELOG.md`
+  section, then align `package.json`, the changelog, the Git tag `vX.Y.Z`, and
+  the GitHub Release.
 
 ## Coding guidelines
 
