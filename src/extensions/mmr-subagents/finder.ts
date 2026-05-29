@@ -36,6 +36,7 @@ import {
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSpawnedSubagentWorkerDetailsBase,
+  type MmrWorkerOutcomeStatus,
   type MmrSubagentRunOptions,
   type MmrSubagentRunner,
   type MmrWorkerProgressSnapshot,
@@ -154,6 +155,10 @@ export type FinderParams = Static<typeof FINDER_PARAMETERS_SCHEMA>;
 
 export interface FinderDetails extends MmrSpawnedSubagentWorkerDetailsBase {
   worker: "mmr-subagents.finder";
+  // Final-run outcome from the shared classifier. The renderer reads this
+  // first, so a successful run that merely preserved a non-fatal provider
+  // `errorMessage` still renders as completed instead of failed.
+  status?: MmrWorkerOutcomeStatus;
 }
 
 /** Compact "thinking" status surfaced to the model before the worker finishes. */
@@ -573,7 +578,8 @@ function buildDetails(
     // deterministic spawn-failed line for runner spawn errors.
     trail: sanitizeFinderTrail(result.trail ?? [], cwd),
   });
-  return { worker: "mmr-subagents.finder", ...base };
+  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  return { worker: "mmr-subagents.finder", status, ...base };
 }
 
 function buildFinalContent(result: MmrWorkerResult, cwd: string): string {

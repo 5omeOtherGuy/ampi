@@ -262,6 +262,42 @@ export type { UrlValidationResult } from "./extensions/mmr-web/url-policy.js";
 export { createMmrWebExtension } from "./extensions/mmr-web/index.js";
 export type { MmrWebFactoryOverrides } from "./extensions/mmr-web/index.js";
 
+export type { MmrGithubSettings, LoadedMmrGithubSettings } from "./extensions/mmr-github/config.js";
+export {
+  DEFAULT_GITHUB_API_BASE_URL,
+  DEFAULT_GITHUB_MAX_RESULT_BYTES,
+  DEFAULT_GITHUB_TIMEOUT_MS,
+  MMR_GITHUB_ENABLE_ENV,
+  loadMmrGithubSettings,
+} from "./extensions/mmr-github/config.js";
+export {
+  MMR_GITHUB_FEATURE_GATE,
+  MMR_GITHUB_PROVIDER_NAME,
+  createMmrGithubFeatureGateProvider,
+  createMmrGithubToolProvider,
+} from "./extensions/mmr-github/provider.js";
+export {
+  MMR_GITHUB_TOOL_NAMES,
+  hasMmrGithubOwnedTools,
+  isMmrGithubOwnedToolInfo,
+  isMmrGithubToolName,
+} from "./extensions/mmr-github/tool-ownership.js";
+export type { MmrGithubToolName, MmrGithubToolInfoLike } from "./extensions/mmr-github/tool-ownership.js";
+export {
+  GithubApiError,
+  GithubRepoParseError,
+  createGithubClient,
+  parseGithubRepository,
+} from "./extensions/mmr-github/client.js";
+export type { GithubClient, GithubClientOptions, GithubRepoRef } from "./extensions/mmr-github/client.js";
+export {
+  MMR_GITHUB_PROMPT_GUIDELINES,
+  registerMmrGithubTools,
+} from "./extensions/mmr-github/tools.js";
+export type { MmrGithubToolDeps } from "./extensions/mmr-github/tools.js";
+export { createMmrGithubExtension } from "./extensions/mmr-github/index.js";
+export type { MmrGithubFactoryOverrides } from "./extensions/mmr-github/index.js";
+
 export {
   MMR_SUBAGENTS_FEATURE_GATE,
   MMR_SUBAGENTS_OWNED_TOOLS,
@@ -339,8 +375,7 @@ export {
   MmrLibrarianContextWindowError,
   buildLibrarianWorkerSystemPrompt,
   createLibrarianTool,
-  isLibrarianWebToolPrerequisiteActive,
-  isLibrarianWebToolPrerequisiteRegistered,
+  isLibrarianGithubToolPrerequisiteRegistered,
   registerLibrarianTool,
 } from "./extensions/mmr-subagents/librarian.js";
 export type {

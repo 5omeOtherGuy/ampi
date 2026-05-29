@@ -34,6 +34,7 @@ import {
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSpawnedSubagentWorkerDetailsBase,
+  type MmrWorkerOutcomeStatus,
   type MmrSubagentRunOptions,
   type MmrSubagentRunner,
   type MmrWorkerProgressSnapshot,
@@ -206,6 +207,10 @@ export type OracleParams = Static<typeof ORACLE_PARAMETERS_SCHEMA>;
 
 export interface OracleDetails extends MmrSpawnedSubagentWorkerDetailsBase {
   worker: string;
+  // Final-run outcome from the shared classifier. The renderer reads this
+  // first, so a successful run that merely preserved a non-fatal provider
+  // `errorMessage` still renders as completed instead of failed.
+  status?: MmrWorkerOutcomeStatus;
   /** Summary of how each requested `files[]` entry was handled. */
   attachments: readonly OracleAttachmentRecord[];
 }
@@ -559,7 +564,8 @@ function buildDetails(
     ...(resolvedModel !== undefined ? { resolvedModel } : {}),
     ...(contextWindow !== undefined ? { contextWindow } : {}),
   });
-  return { worker: config.workerDiscriminator, ...base, attachments: attachments.map((a) => a.record) };
+  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  return { worker: config.workerDiscriminator, status, ...base, attachments: attachments.map((a) => a.record) };
 }
 
 function buildFinalContent(label: string, result: MmrWorkerResult): string {

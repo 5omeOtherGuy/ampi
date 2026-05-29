@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { hasMmrWebOwnedTools, type MmrWebToolInfoLike } from "../mmr-web/tool-ownership.js";
+import { hasMmrGithubOwnedTools, type MmrGithubToolInfoLike } from "../mmr-github/tool-ownership.js";
 import { isMmrModeKey } from "./modes.js";
 import { setMmrSubagentState, type MmrSubagentState } from "./runtime.js";
 import { loadMmrCoreSettings } from "./settings.js";
@@ -44,7 +44,7 @@ export function failClosedSubagent(message: string, ctx: ExtensionContext): neve
   throw new Error(message);
 }
 
-export function readMmrWebToolInfos(pi: ExtensionAPI): readonly MmrWebToolInfoLike[] | undefined {
+export function readMmrGithubToolInfos(pi: ExtensionAPI): readonly MmrGithubToolInfoLike[] | undefined {
   try {
     const tools = pi.getAllTools();
     if (!Array.isArray(tools)) return undefined;
@@ -62,16 +62,16 @@ export function readMmrWebToolInfos(pi: ExtensionAPI): readonly MmrWebToolInfoLi
   }
 }
 
-export function validateLibrarianWebToolOwnership(
+export function validateLibrarianRepoToolOwnership(
   pi: ExtensionAPI,
   profileName: string,
   ctx: ExtensionContext,
 ): void {
   if (profileName !== "librarian") return;
-  const tools = readMmrWebToolInfos(pi);
-  if (tools && hasMmrWebOwnedTools(tools)) return;
+  const tools = readMmrGithubToolInfos(pi);
+  if (tools && hasMmrGithubOwnedTools(tools)) return;
   failClosedSubagent(
-    'Subagent "librarian" requires mmr-web-owned web_search and read_web_page tools.',
+    'Subagent "librarian" requires mmr-github-owned read-only GitHub tools (set MMR_GITHUB_ENABLE=true).',
     ctx,
   );
 }
@@ -160,7 +160,7 @@ export async function applyMmrSubagentProfile(
     failClosedSubagent(invocation.message, ctx);
   }
 
-  validateLibrarianWebToolOwnership(pi, profile.name, ctx);
+  validateLibrarianRepoToolOwnership(pi, profile.name, ctx);
 
   const activeWorkerTools = [...invocation.workerTools];
 

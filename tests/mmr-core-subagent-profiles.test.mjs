@@ -126,7 +126,15 @@ describe("mmr-core subagent profile registry", () => {
     assert.equal(profile.allowToolbox, false, "librarian must not allow mmr-toolbox surfaces");
     assert.equal(profile.enforceLockedMode, false);
     assert.equal(profile.persistSubagentState, false);
-    assert.deepEqual([...profile.tools], ["web_search", "read_web_page"]);
+    assert.deepEqual([...profile.tools], [
+      "read_github",
+      "list_directory_github",
+      "glob_github",
+      "search_github",
+      "commit_search",
+      "diff_github",
+      "list_repositories",
+    ]);
     assert.equal(profile.thinkingLevel, "medium");
     const prefIds = profile.modelPreferences.map((preference) => preference.model);
     assert.deepEqual(prefIds, ["claude-opus-4-6", "gpt-5.4"]);

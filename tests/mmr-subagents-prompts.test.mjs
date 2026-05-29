@@ -83,11 +83,11 @@ describe("mmr-subagents prompts.ts public surface", () => {
     assert.match(prompt, /Explore remote repository code and directory structure/);
     assert.match(prompt, /Use commit history, diffs, and file revisions/);
     assert.match(prompt, /## Available tools and coverage/);
-    assert.match(prompt, /web_search/);
-    assert.match(prompt, /read_web_page/);
-    assert.match(prompt, /cannot access connected private repositories/);
-    assert.match(prompt, /tools fail to fetch or parse/);
-    assert.match(prompt, /Do not invent findings or provide a memory-based summary/);
+    assert.match(prompt, /reads public GitHub repositories/);
+    assert.match(prompt, /Search code inside a repository/);
+    assert.match(prompt, /Compare two refs/);
+    assert.match(prompt, /github\.com\/<owner>\/<repo>\/blob\/<revision>/);
+    assert.match(prompt, /Do not invent findings or provide a[\s\n]+memory-based summary/);
     assert.match(prompt, /Every code block must include a language identifier/);
     assert.match(prompt, /Never name tools in the user-facing answer/);
     assert.match(prompt, /Use fluent links/);
