@@ -114,7 +114,7 @@ Reload, then `export MMR_WEB_SEARXNG_URL=http://127.0.0.1:8080`. If the instance
 }
 ```
 
-First `web_search` spawns the start command (no shell, args literal); `mmr-web` polls the health URL until 200, capped at `searxngStartTimeoutMs`. Each successful call re-arms the idle timer (`searxngIdleTimeoutMs`, default 15 min; `0` disables). When it fires, the stop command runs; with no stop command, `mmr-web` can only send `SIGTERM` to a still-alive start process. `pi.on('session_shutdown')` also triggers stop.
+First `web_search` spawns the start command (no shell, args literal); `mmr-web` polls the health URL until 200, capped at `searxngStartTimeoutMs`. Each successful call re-arms the idle timer (`searxngIdleTimeoutMs`, default 15 min; `0` disables). When it fires, the stop command runs; with no stop command, `mmr-web` can only send `SIGTERM` to a still-alive start process. `pi.on('session_shutdown')` also triggers stop. On Pi 0.77.0+ this `session_shutdown` cleanup also runs on `SIGTERM`/`SIGHUP` signal exits (not just clean session swaps or quit), so signal-terminated sessions no longer leak the sidecar.
 
 Sidecar is per-process; cross-process coordination is tracked as a follow-up in [`ROADMAP.md`](ROADMAP.md).
 

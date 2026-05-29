@@ -81,8 +81,8 @@ describe("mmr-core mode shortcuts", () => {
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
-    // smart default toggle level is medium; alt+r flips to high and raises the
-    // Anthropic output budget from 32k to 64k. The mode is preserved.
+    // smart default toggle level is medium; alt+r flips to high, which asks
+    // Anthropic for xhigh effort and raises the output budget to 64k.
     await shortcuts.get("alt+r").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "smart");

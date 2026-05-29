@@ -58,7 +58,8 @@ Shipped, disabled by default; opt-in via `MMR_WEB_ENABLE=true`.
 - ✅ Health-poll with backoff up to `searxngStartTimeoutMs`.
 - ✅ Idle-stop after `searxngIdleTimeoutMs` (default 15 min; `0` disables).
 - ✅ `pi.on('session_shutdown')` triggers stop so sessions do not leak the
-  daemon.
+  daemon. On Pi 0.77.0+ this handler also runs on `SIGTERM`/`SIGHUP` signal
+  exits, so signal-terminated sessions release the sidecar too.
 - ✅ Best-effort stop: user `stopCommand` first (bounded by real unref'd
   10-s cap), then `SIGTERM` to the start child only when that process is
   still alive. Detached start commands such as `docker compose up -d` keep

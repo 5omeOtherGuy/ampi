@@ -1,6 +1,7 @@
 export type MmrSessionFallbackQuotaKind =
   | "openai-usage-limit"
   | "anthropic-rate-limit"
+  | "anthropic-overload"
   | "copilot-quota"
   | "generic-hard-quota"
   | "not-quota";
@@ -39,7 +40,7 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
   const message = normalize(input.errorMessage);
   const lowerProvider = provider.toLowerCase();
 
-  if (!message || includesOverloadOnly(message)) {
+  if (!message) {
     return { kind: "not-quota", shouldPrompt: false, friendlyMessage: "No subscription quota condition detected." };
   }
 
@@ -64,6 +65,19 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
   }
 
   if (lowerProvider === "claude-subscription") {
+    // Overload is normally transient and handled by Pi's auto-retry. By the
+    // time it reaches message_end the auto-retries are exhausted, so a
+    // persistent overload of the active Claude route is worth offering an
+    // interactive fallback (e.g. a heavy Smart-high 64k/xhigh shape that the
+    // route keeps rejecting under capacity pressure) instead of dead-ending
+    // the turn. Rate-limit/hard-quota still classify ahead of overload.
+    if (includesOverloadOnly(message)) {
+      return {
+        kind: "anthropic-overload",
+        shouldPrompt: true,
+        friendlyMessage: "The active Claude subscription route is overloaded.",
+      };
+    }
     const prompt = includesRateLimit(message) || includesHardQuota(message);
     return {
       kind: prompt ? "anthropic-rate-limit" : "not-quota",
