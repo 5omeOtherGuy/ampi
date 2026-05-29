@@ -18,11 +18,19 @@ describe("mmr-session-fallback quota classifier", () => {
     assert.match(result.friendlyMessage, /usage limit/i);
   });
 
-  it("prompts for subscription-backed provider rate limits but not plain overloads", async () => {
+  it("prompts for claude-subscription rate limits and for a persistent overload", async () => {
     const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
 
     assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "rate_limit_error: 429" }).shouldPrompt, true);
-    assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "overloaded_error: try again" }).shouldPrompt, false);
+    // Overload reaches message_end only after Pi's auto-retry is exhausted, so a
+    // persistent overload of the active Claude route is offered an interactive
+    // fallback instead of dead-ending the turn (e.g. a heavy Smart-high
+    // 64k/xhigh shape the route keeps rejecting under capacity pressure).
+    const overload = classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "overloaded_error: try again" });
+    assert.equal(overload.shouldPrompt, true);
+    assert.equal(overload.kind, "anthropic-overload");
+    // A non-Claude provider's plain overload is still left to Pi's retry.
+    assert.equal(classifyMmrSessionFallbackError({ provider: "openai-codex", errorMessage: "overloaded_error: try again" }).shouldPrompt, false);
   });
 
   it("recognizes OpenAI Codex rate-limit variants", async () => {
