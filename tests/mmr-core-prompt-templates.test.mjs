@@ -44,7 +44,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
   it("shared prompt modules carry common tool/coding guidance", async () => {
     const { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } = await importSource("extensions/mmr-core/prompt-modules.ts");
     assert.match(SHARED_TOOL_GUIDANCE, /## Tool execution policy/);
-    assert.match(SHARED_TOOL_GUIDANCE, /Run independent read-only calls in parallel/);
+    assert.doesNotMatch(SHARED_TOOL_GUIDANCE, /Run independent read-only calls in parallel/);
     assert.match(SHARED_TOOL_GUIDANCE, /purpose-built worker or subagent tool/);
     assert.match(SHARED_TOOL_GUIDANCE, /direct tools for exact file\/path\/symbol lookups or single-step actions/);
     assert.match(SHARED_CODING_GUIDANCE, /## Executing actions with care/);
