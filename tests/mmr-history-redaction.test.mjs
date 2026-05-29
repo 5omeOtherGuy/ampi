@@ -336,7 +336,7 @@ describe("mmr-history redaction — Slack webhooks", () => {
       { user: "" },
     );
     assert.ok(out.includes(REDACTION_TOKEN));
-    assert.doesNotMatch(out, /hooks\.slack\.com/);
+    assert.equal(out.split("hooks.slack.com").length, 1);
     assert.ok(!out.includes("abcXYZsecret"));
   });
 
@@ -361,7 +361,7 @@ describe("mmr-history redaction — email addresses", () => {
     const out = redactText("send to bob+tag@sub.example.co.uk now", { user: "" });
     assert.ok(out.includes(REDACTION_EMAIL));
     assert.ok(!out.includes("bob+tag"));
-    assert.doesNotMatch(out, /sub\.example\.co\.uk/);
+    assert.equal(out.split("sub.example.co.uk").length, 1);
   });
 
   it("does NOT eat the URL_USERINFO [redacted] marker", async () => {
