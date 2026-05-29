@@ -152,12 +152,17 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
 export type MmrToggleThinkingLevel = "medium" | "high" | "xhigh";
 
 /**
- * One toggle preset for a toggleable mode. `level` drives both the Pi thinking
- * level and the wire reasoning effort; `maxTokens` optionally overrides the
- * mode's Anthropic `max_tokens` for this level.
+ * One toggle preset for a toggleable mode. `level` is the Pi/session thinking
+ * level and the OpenAI Responses `reasoning.effort`. `anthropicEffort`, when
+ * set, overrides the Anthropic adaptive `output_config.effort` so the wire
+ * effort matches the native provider's Pi-level->Anthropic-effort mapping
+ * (Smart maps Pi `high` -> Anthropic `xhigh`) instead of echoing the Pi level
+ * string verbatim. `maxTokens`, when set, overrides the mode's Anthropic
+ * `max_tokens` for this level.
  */
 export interface MmrModeThinkingOption {
   level: MmrToggleThinkingLevel;
+  anthropicEffort?: MmrAnthropicEffort;
   maxTokens?: number;
 }
 
@@ -165,12 +170,15 @@ export interface MmrModeThinkingOption {
  * Modes whose thinking level can be toggled between exactly two presets.
  * Index 0 is the default preset (also the mode's static `thinkingLevel`).
  *
- * Smart's high preset intentionally keeps the stable 32k Anthropic output cap;
- * the toggle changes effort only so a reasoning increase does not also double
- * the request's output reservation.
+ * Smart's high preset asks for Anthropic `xhigh` effort (Pi `high` maps to
+ * Anthropic `xhigh` on the Opus route) and raises the Anthropic output budget
+ * to 64k. The displayed max-input shrinks accordingly (contextWindow - 64k).
+ * This is a best-effort request: if the provider rejects the heavier shape
+ * under capacity pressure, recovery is owned by the provider/session layers,
+ * not by silently capping the request here.
  */
 export const MMR_MODE_THINKING_TOGGLES = {
-  smart: [{ level: "medium" }, { level: "high" }],
+  smart: [{ level: "medium" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }],
   smartGPT: [{ level: "medium" }, { level: "xhigh" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, readonly [MmrModeThinkingOption, MmrModeThinkingOption]>>;
@@ -223,14 +231,23 @@ export function applyMmrThinkingLevelToPolicy(
 ): MmrRequestPolicy {
   const next: MmrRequestPolicy = { ...policy };
   const option = findThinkingOption(modeKey, level);
+  // Anthropic adaptive effort follows the provider's Pi-level->effort mapping
+  // when a preset pins it (Smart high -> xhigh); otherwise it echoes the Pi
+  // level. OpenAI Responses effort always tracks the Pi level below.
+  const anthropicEffort: MmrAnthropicEffort = option?.anthropicEffort ?? level;
 
   if (policy.anthropic) {
     const anthropic = { ...policy.anthropic };
     if (anthropic.thinking?.type === "adaptive") {
-      anthropic.thinking = { ...anthropic.thinking, outputConfigEffort: level };
+      anthropic.thinking = { ...anthropic.thinking, outputConfigEffort: anthropicEffort };
     }
     if (option?.maxTokens !== undefined) {
       anthropic.maxTokens = option.maxTokens;
+      // A larger output reservation reduces the usable input window on the
+      // shared context budget; keep the displayed max-input profile honest.
+      if (typeof policy.contextWindow === "number" && typeof policy.effectiveMaxInputTokens === "number") {
+        next.effectiveMaxInputTokens = Math.max(policy.contextWindow - option.maxTokens, 0);
+      }
     }
     next.anthropic = anthropic;
   }

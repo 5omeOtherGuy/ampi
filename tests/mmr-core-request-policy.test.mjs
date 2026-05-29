@@ -280,7 +280,7 @@ describe("mmr-core thinking-level toggle", () => {
       assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
     }
 
-    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium" }, { level: "high" }]);
+    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }]);
     assert.deepEqual(getMmrModeThinkingOptions("smartGPT"), [{ level: "medium" }, { level: "xhigh" }]);
     assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
   });
@@ -296,22 +296,29 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
-  it("derives wire effort from the toggle level without raising Smart's output budget", async () => {
+  it("maps Smart high to Anthropic xhigh effort + 64k output and shrinks max input, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
-    assert.equal(smartHigh.anthropic.maxTokens, 32000);
-    assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "high");
+    // Pi/session level is high; Anthropic adaptive effort is remapped to xhigh
+    // (Pi high -> Anthropic xhigh on the Opus route), output budget 64k, and
+    // the displayed max input shrinks to contextWindow - 64k.
+    assert.equal(smartHigh.anthropic.maxTokens, 64000);
+    assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "xhigh");
+    assert.equal(smartHigh.effectiveMaxInputTokens, 936000);
+    // OpenAI Responses effort tracks the Pi level (high), not the Anthropic remap.
     assert.equal(smartHigh.openaiResponses.reasoning.effort, "high");
     // Source policy stays at its medium defaults (pure transform).
     assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.maxTokens, 32000);
     assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.thinking.outputConfigEffort, "medium");
+    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 968000);
     assert.equal(MMR_REQUEST_POLICIES.smart.openaiResponses.reasoning.effort, "medium");
 
     const smartMedium = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "medium");
     assert.equal(smartMedium.anthropic.maxTokens, 32000);
     assert.equal(smartMedium.anthropic.thinking.outputConfigEffort, "medium");
+    assert.equal(smartMedium.effectiveMaxInputTokens, 968000);
 
     const gptXhigh = applyMmrThinkingLevelToPolicy("smartGPT", MMR_REQUEST_POLICIES.smartGPT, "xhigh");
     assert.equal(gptXhigh.openaiResponses.reasoning.effort, "xhigh");
