@@ -174,14 +174,14 @@ export interface MmrModeThinkingOption {
  * Index 0 is the default preset (also the mode's static `thinkingLevel`).
  *
  * Smart's high preset asks for Anthropic `xhigh` effort (Pi `high` maps to
- * Anthropic `xhigh` on the Opus route) and raises the Anthropic output budget
- * to 64k. The displayed max-input shrinks accordingly (contextWindow - 64k).
- * This is a best-effort request: if the provider rejects the heavier shape
- * under capacity pressure, recovery is owned by the provider/session layers,
- * not by silently capping the request here.
+ * Anthropic `xhigh` on the Opus route) while keeping the Anthropic output
+ * budget at the mode default (32k). Both Smart presets therefore send the
+ * same 32k admission shape and differ only in adaptive reasoning effort
+ * (`high` vs `xhigh`), avoiding the heavier 64k output reservation that
+ * reduced admission stability under Opus capacity pressure.
  */
 export const MMR_MODE_THINKING_TOGGLES = {
-  smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh", maxTokens: 64000 }],
+  smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }],
   smartGPT: [{ level: "medium" }, { level: "xhigh" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, readonly [MmrModeThinkingOption, MmrModeThinkingOption]>>;
