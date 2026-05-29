@@ -18,6 +18,7 @@ import {
 import {
   expandMmrModelPreferencesToStrings,
   getMmrSubagentProfile,
+  selectFirstMatchingAvailableModel,
   type MmrSubagentProfile,
 } from "../mmr-core/subagent-profiles.js";
 import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../mmr-core/settings.js";
@@ -254,19 +255,7 @@ export function selectOracleWorkerModel(
   availableModels: readonly string[],
   preferences: readonly string[] = ORACLE_DEFAULT_MODEL_PREFERENCES,
 ): string | undefined {
-  const available = availableModels
-    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-    .filter(Boolean);
-  if (available.length === 0) return undefined;
-  for (const preference of preferences) {
-    const target = typeof preference === "string" ? preference.trim() : "";
-    if (target.length === 0) continue;
-    if (available.includes(target)) return target;
-    const tail = target.split("/").pop() ?? target;
-    const match = available.find((entry) => entry === tail || entry.endsWith(`/${tail}`));
-    if (match) return match;
-  }
-  return undefined;
+  return selectFirstMatchingAvailableModel(availableModels, preferences);
 }
 
 const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([

@@ -419,3 +419,60 @@ export function expandMmrModelPreferencesToStrings(
   }
   return expanded;
 }
+
+/**
+ * Options for {@link selectFirstMatchingAvailableModel}.
+ */
+export interface SelectFirstMatchingAvailableModelOptions {
+  /**
+   * When `true`, a preference that already pins a provider route (contains
+   * `/`) is matched strictly: it resolves only to an exact entry or an entry
+   * ending with the full `/provider/model` suffix, and never falls through to
+   * bare-tail matching that could cross provider routes. When the strict
+   * match fails, the preference is skipped rather than loosened.
+   *
+   * Defaults to `false`, which always falls through to bare-tail matching
+   * (matching any entry equal to the tail after the last `/`, or ending with
+   * `/tail`).
+   */
+  strictProviderRoutes?: boolean;
+}
+
+/**
+ * Pick the first preferred model that the parent Pi process actually exposes a
+ * matching route for, walking `preferences` in order. Returns `undefined` when
+ * none match or no models are available.
+ *
+ * Shared matching core for the subagent worker model selectors
+ * (`selectFinderWorkerModel`, `selectOracleWorkerModel`,
+ * `selectHistoryReaderWorkerModel`). Each public selector keeps its own
+ * profile-specific default preference list and chooses the matching policy via
+ * {@link SelectFirstMatchingAvailableModelOptions}; this helper owns only the
+ * common scan: trim and drop empty available entries, then for each preference
+ * try an exact match, then (subject to `strictProviderRoutes`) a
+ * provider-suffix or bare-tail match. Preference order is preserved and entries
+ * are never reordered or deduplicated.
+ */
+export function selectFirstMatchingAvailableModel(
+  availableModels: readonly string[],
+  preferences: readonly string[],
+  options?: SelectFirstMatchingAvailableModelOptions,
+): string | undefined {
+  const available = availableModels.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
+  if (available.length === 0) return undefined;
+  const strictProviderRoutes = options?.strictProviderRoutes ?? false;
+  for (const preference of preferences) {
+    const target = typeof preference === "string" ? preference.trim() : "";
+    if (target.length === 0) continue;
+    if (available.includes(target)) return target;
+    if (strictProviderRoutes && target.includes("/")) {
+      const providerMatch = available.find((entry) => entry.endsWith(`/${target}`));
+      if (providerMatch) return providerMatch;
+      continue;
+    }
+    const tail = target.split("/").pop() ?? target;
+    const match = available.find((entry) => entry === tail || entry.endsWith(`/${tail}`));
+    if (match) return match;
+  }
+  return undefined;
+}
