@@ -2,7 +2,7 @@ import type { ExtensionContext, SessionEntry, SessionInfo, SessionManager } from
 import type { MmrModelPreference } from "../mmr-core/types.js";
 import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../mmr-core/settings.js";
 import { assembleMmrSubagentSurface } from "../mmr-core/subagent-prompt-assembly.js";
-import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
+import { getMmrSubagentProfile, selectFirstMatchingAvailableModel } from "../mmr-core/subagent-profiles.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   classifyMmrWorkerOutcome,
@@ -123,17 +123,7 @@ export function selectHistoryReaderWorkerModel(
   availableModels: readonly string[],
   preferences: readonly string[] = HISTORY_READER_DEFAULT_MODEL_PREFERENCES,
 ): string | undefined {
-  const available = availableModels.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
-  if (available.length === 0) return undefined;
-  for (const preference of preferences) {
-    const target = typeof preference === "string" ? preference.trim() : "";
-    if (!target) continue;
-    if (available.includes(target)) return target;
-    const tail = target.split("/").pop() ?? target;
-    const match = available.find((entry) => entry === tail || entry.endsWith(`/${tail}`));
-    if (match) return match;
-  }
-  return undefined;
+  return selectFirstMatchingAvailableModel(availableModels, preferences);
 }
 
 function listAvailableModelsFromCtx(ctx: ExtensionContext | undefined): string[] {
