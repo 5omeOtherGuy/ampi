@@ -23,9 +23,9 @@ import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../mmr-core/m
 import { loadMmrCoreSettings } from "../mmr-core/settings.js";
 import type { MmrActiveToolManifestEntry, MmrModelPreference } from "../mmr-core/types.js";
 import {
-  hasMmrWebOwnedTools,
-  type MmrWebToolInfoLike,
-} from "../mmr-web/tool-ownership.js";
+  hasMmrGithubOwnedTools,
+  type MmrGithubToolInfoLike,
+} from "../mmr-github/tool-ownership.js";
 import { buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerSystemPromptFromPrompts } from "./prompts.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
@@ -53,7 +53,7 @@ import {
 export const LIBRARIAN_TOOL_NAME = "librarian";
 export const LIBRARIAN_SUBAGENT_PROFILE_NAME = "librarian";
 export const LIBRARIAN_GATING_REASON =
-  "librarian: requires mmr-web with web_search and read_web_page active.";
+  "librarian: requires mmr-github read-only GitHub tools (set MMR_GITHUB_ENABLE=true).";
 
 function requireLibrarianProfile() {
   const profile = getMmrSubagentProfile(LIBRARIAN_SUBAGENT_PROFILE_NAME);
@@ -83,8 +83,10 @@ export const LIBRARIAN_PROMPT_GUIDELINES: readonly string[] = [
 export const LIBRARIAN_DESCRIPTION = [
   "Research remote repositories with the librarian, a read-only repository-understanding worker for code outside the local workspace.",
   "",
-  "Coverage (initial slice):",
-  "- Public repository content reachable through web search and web page reads.",
+  "Coverage:",
+  "- Public GitHub repositories, and connected private repositories when an",
+  "  access token is configured: file reads, directory listings, glob lookups,",
+  "  code search, commit history, and diffs between refs.",
   "",
   "Use the librarian when:",
   "- You need an architecture explanation for a remote repository.",
@@ -243,7 +245,7 @@ function resolveCtxModelRegistry<TModel extends MmrRegisteredModelLike>(
   return registry as MmrModelRegistryLike<TModel>;
 }
 
-function toolInfosFromAllTools(pi: ToolHostLike | undefined): readonly MmrWebToolInfoLike[] | undefined {
+function toolInfosFromAllTools(pi: ToolHostLike | undefined): readonly MmrGithubToolInfoLike[] | undefined {
   if (!pi) return undefined;
   try {
     const tools = pi.getAllTools?.();
@@ -265,29 +267,18 @@ function toolNamesFromAllTools(pi: ToolHostLike | undefined): readonly string[] 
   return toolInfosFromAllTools(pi)?.map((tool) => tool.name);
 }
 
-function toolNamesFromActiveTools(pi: ToolHostLike | undefined): readonly string[] | undefined {
-  if (!pi) return undefined;
-  try {
-    const tools = pi.getActiveTools?.();
-    if (!Array.isArray(tools)) return undefined;
-    return tools.filter((tool): tool is string => typeof tool === "string" && tool.length > 0);
-  } catch {
-    return undefined;
-  }
-}
-
-export function isLibrarianWebToolPrerequisiteRegistered(pi: ToolHostLike | undefined): boolean {
+/**
+ * The librarian's GitHub provider tools are registered globally by
+ * `mmr-github` but are intentionally not part of any user-facing mode's
+ * active tool set. The child worker activates them by name through
+ * `--tools`, so the parent gate checks that every required tool is
+ * registered and source-owned by `mmr-github` rather than active in the
+ * parent.
+ */
+export function isLibrarianGithubToolPrerequisiteRegistered(pi: ToolHostLike | undefined): boolean {
   const registered = toolInfosFromAllTools(pi);
   if (!registered) return false;
-  return hasMmrWebOwnedTools(registered);
-}
-
-export function isLibrarianWebToolPrerequisiteActive(pi: ToolHostLike | undefined): boolean {
-  if (!isLibrarianWebToolPrerequisiteRegistered(pi)) return false;
-  const active = toolNamesFromActiveTools(pi);
-  if (!active) return false;
-  const activeSet = new Set(active);
-  return LIBRARIAN_WORKER_TOOLS.every((tool) => activeSet.has(tool));
+  return hasMmrGithubOwnedTools(registered);
 }
 
 function coerceLibrarianParams(raw: unknown): LibrarianParams {
@@ -652,7 +643,7 @@ export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinitio
         });
       }
 
-      if (!isLibrarianWebToolPrerequisiteActive(deps.pi)) {
+      if (!isLibrarianGithubToolPrerequisiteRegistered(deps.pi)) {
         return makeFailureResult({
           status: "provider-gated",
           query: params.query,

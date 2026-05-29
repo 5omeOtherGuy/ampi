@@ -119,12 +119,48 @@ exposed through this surface.
 
 ---
 
+## `mmr-github`
+
+Read-only GitHub repository tools. Owns the seven repository-provider tool
+names (`read_github`, `list_directory_github`, `glob_github`, `search_github`,
+`commit_search`, `diff_github`, `list_repositories`) and the `mmr-github`
+feature gate. Network access is off by default (`MMR_GITHUB_ENABLE`); the token
+is environment-only (`MMR_GITHUB_TOKEN` / `GITHUB_TOKEN`).
+
+### Stability
+
+Stable for: provider/factory entrypoints, settings loader and defaults, the
+client factory and repository parser, ownership helpers, and the owned tool
+name constants. Tool descriptions and schema text are model-visible behavior
+covered by deterministic tests.
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrGithubExtension` | function | Factory producing the Pi extension. Accepts `MmrGithubFactoryOverrides` for tests. |
+| `loadMmrGithubSettings`, `MMR_GITHUB_ENABLE_ENV`, `DEFAULT_GITHUB_API_BASE_URL`, `DEFAULT_GITHUB_TIMEOUT_MS`, `DEFAULT_GITHUB_MAX_RESULT_BYTES` | function/constants | Settings loader and defaults. |
+| `createMmrGithubToolProvider`, `createMmrGithubFeatureGateProvider`, `MMR_GITHUB_PROVIDER_NAME`, `MMR_GITHUB_FEATURE_GATE` | functions/constants | Provider entrypoints and identifiers. |
+| `MMR_GITHUB_TOOL_NAMES`, `hasMmrGithubOwnedTools`, `isMmrGithubOwnedToolInfo`, `isMmrGithubToolName` | constants/functions | Source-path ownership helpers used by librarian gating and child activation. |
+| `createGithubClient`, `parseGithubRepository`, `GithubApiError`, `GithubRepoParseError` | functions/classes | Read-only client and repository-reference parser. |
+| `registerMmrGithubTools`, `MMR_GITHUB_PROMPT_GUIDELINES` | function/constant | Tool registration and shared prompt guidelines. |
+
+### Usage
+
+The GitHub tools are the repository-provider surface for the `mmr-subagents`
+`librarian` worker. They are read-only (GET requests only) and never expose
+issue, pull request, branch, or write endpoints. See
+[`../src/extensions/mmr-github/README.md`](../src/extensions/mmr-github/README.md).
+
+---
+
 ## `mmr-subagents`
 
 Worker/subagent extension. Owns the `Task`, `finder`, `oracle`, and
 `librarian` logical tool names and the `mmr-subagents` feature gate.
 Concrete workers ship for all four; `librarian` resolves as `active`
-only when both `mmr-web` tools are registered and active.
+only when the read-only `mmr-github` tools are registered and
+source-owned by `mmr-github`.
 
 ### Stability
 
@@ -147,7 +183,7 @@ changes.
 | `MMR_SUBAGENTS_FEATURE_GATE`, `MMR_SUBAGENTS_OWNED_TOOLS`, `MMR_SUBAGENTS_PROVIDER_NAME` | constants | Stable identifiers. |
 | `createFinderTool`, `registerFinderTool`, `selectFinderWorkerModel`, `buildFinderWorkerSystemPrompt` | functions | Finder worker surface. |
 | `createOracleTool`, `registerOracleTool`, `selectOracleWorkerModel`, `buildOracleWorkerSystemPrompt` | functions | Oracle worker surface. |
-| `createLibrarianTool`, `registerLibrarianTool`, `buildLibrarianWorkerSystemPrompt`, `isLibrarianWebToolPrerequisiteActive`, `isLibrarianWebToolPrerequisiteRegistered`, `MmrLibrarianContextWindowError`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_GATING_REASON` | functions/values | Librarian worker surface and gating helpers. |
+| `createLibrarianTool`, `registerLibrarianTool`, `buildLibrarianWorkerSystemPrompt`, `isLibrarianGithubToolPrerequisiteRegistered`, `MmrLibrarianContextWindowError`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_GATING_REASON` | functions/values | Librarian worker surface and gating helpers (gated on `mmr-github` tools). |
 | `createTaskTool`, `registerTaskTool`, `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`, `TASK_SUBAGENT_PROFILE` | functions/values | Task worker surface. |
 | `*_TOOL_NAME`, `*_DESCRIPTION`, `*_PARAMETERS_SCHEMA`, `*_PROGRESS_PLACEHOLDER`, `*_PROMPT_GUIDELINES`, `*_PROMPT_SNIPPET`, `*_WORKER_TOOLS`, `*_DEFAULT_MODEL_PREFERENCES` | constants | Per-worker metadata. Tested directly. |
 | `buildHistoryReaderWorkerSystemPrompt`, `buildLibrarianWorkerRolePrompt` | functions | Cross-extension prompt builders kept in `mmr-subagents/prompts.ts`. |

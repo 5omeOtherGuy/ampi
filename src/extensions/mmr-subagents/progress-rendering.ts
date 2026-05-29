@@ -598,7 +598,7 @@ function addTaskBox(
   const preview = taskPreview(operation ?? "", expanded);
   const hasOperation = addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
   if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
-  const hasDiagnostic = addDiagnostic(box, diagnosticMessage(details, status), theme);
+  const hasDiagnostic = addDiagnostic(box, diagnosticMessage(details, status), status, theme);
   container.addChild(box);
   return hasOperation || hasDiagnostic;
 }
@@ -937,9 +937,18 @@ function renderHeaderLine(
   return `${title}  ${theme.fg(statusColor(status), statusLabel(status))}`;
 }
 
-function addDiagnostic(container: Container, message: string | undefined, theme: SubagentTheme): boolean {
+function addDiagnostic(
+  container: Container,
+  message: string | undefined,
+  status: RenderStatus,
+  theme: SubagentTheme,
+): boolean {
   if (!message) return false;
-  container.addChild(new Text(theme.fg("error", compactOneLine(message)), 0, 0));
+  // A preserved provider `errorMessage` on a non-failed run (e.g. a
+  // transient 429 before a usable final answer) is informational, not a
+  // failure, so render it as a warning rather than an error.
+  const color = status === "failed" ? "error" : "warning";
+  container.addChild(new Text(theme.fg(color, compactOneLine(message)), 0, 0));
   return true;
 }
 

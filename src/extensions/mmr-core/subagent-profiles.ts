@@ -256,7 +256,18 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
       { model: "gpt-5.4" },
     ],
     thinkingLevel: "medium",
-    tools: ["web_search", "read_web_page"],
+    // Read-only GitHub repository provider tools owned by `mmr-github`.
+    // The worker activates these by name through `--tools`; they are not
+    // part of any user-facing mode allowlist.
+    tools: [
+      "read_github",
+      "list_directory_github",
+      "glob_github",
+      "search_github",
+      "commit_search",
+      "diff_github",
+      "list_repositories",
+    ],
     promptRoute: "standalone",
     promptBuilder: "librarian",
     allowMcp: false,

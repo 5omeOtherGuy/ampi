@@ -102,17 +102,47 @@ function buildOracleActiveManifest() {
 
 function buildLibrarianActiveManifest() {
   return [
-    makePiToolManifestEntry("web_search", "Search public repository pages and related documentation.", {
+    makePiToolManifestEntry("read_github", "Read a file or directory listing from a GitHub repository.", {
       type: "object",
       additionalProperties: false,
-      properties: { objective: { type: "string" }, search_queries: { type: "array" } },
-      required: ["objective"],
+      properties: { repository: { type: "string" }, path: { type: "string" } },
+      required: ["repository", "path"],
     }),
-    makePiToolManifestEntry("read_web_page", "Read a public repository URL as Markdown.", {
+    makePiToolManifestEntry("list_directory_github", "List a directory's contents in a GitHub repository.", {
       type: "object",
       additionalProperties: false,
-      properties: { url: { type: "string" }, objective: { type: "string" } },
-      required: ["url"],
+      properties: { repository: { type: "string" }, path: { type: "string" } },
+      required: ["repository"],
+    }),
+    makePiToolManifestEntry("glob_github", "Find repository files by glob pattern.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { repository: { type: "string" }, filePattern: { type: "string" } },
+      required: ["repository", "filePattern"],
+    }),
+    makePiToolManifestEntry("search_github", "Search code inside a single GitHub repository.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { repository: { type: "string" }, pattern: { type: "string" } },
+      required: ["repository", "pattern"],
+    }),
+    makePiToolManifestEntry("commit_search", "Search or list a GitHub repository's commit history.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { repository: { type: "string" }, query: { type: "string" } },
+      required: ["repository"],
+    }),
+    makePiToolManifestEntry("diff_github", "Compare two refs in a GitHub repository.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { repository: { type: "string" }, base: { type: "string" }, head: { type: "string" } },
+      required: ["repository", "base", "head"],
+    }),
+    makePiToolManifestEntry("list_repositories", "List or search GitHub repositories.", {
+      type: "object",
+      additionalProperties: false,
+      properties: { pattern: { type: "string" }, organization: { type: "string" }, language: { type: "string" } },
+      required: [],
     }),
     makePiToolManifestEntry("read", "Read local file contents.", {
       type: "object",
@@ -423,18 +453,21 @@ describe("mmr-subagent-surface: librarian fixture", () => {
 
     assert.match(rendered, /^=== System Messages ===/m);
     assert.match(rendered, /^=== Tools ===/m);
-    assert.match(rendered, /^# web_search$/m);
-    assert.match(rendered, /^# read_web_page$/m);
+    assert.match(rendered, /^# read_github$/m);
+    assert.match(rendered, /^# search_github$/m);
+    assert.match(rendered, /^# diff_github$/m);
+    assert.match(rendered, /^# commit_search$/m);
+    assert.match(rendered, /^# list_repositories$/m);
     assert.doesNotMatch(rendered, /^# read$/m);
     assert.doesNotMatch(rendered, /^# bash$/m);
+    assert.doesNotMatch(rendered, /^# web_search$/m);
     assert.match(rendered, /You are Librarian, a specialized repository research worker\./);
     assert.match(rendered, /Use the available tools extensively/);
-    assert.match(rendered, /cannot access connected private repositories/);
-    assert.match(rendered, /Search public repository pages/);
-    assert.match(rendered, /Read a public repository URL as Markdown/);
+    assert.match(rendered, /reads public GitHub repositories/);
+    assert.match(rendered, /Search code inside a single GitHub repository/);
     assert.doesNotMatch(rendered, /\/home\//);
     assert.doesNotMatch(rendered, /docs\/private\//i);
 
-    assertFixtureMatches("librarian-local-mvp.md", rendered);
+    assertFixtureMatches("librarian-github.md", rendered);
   });
 });

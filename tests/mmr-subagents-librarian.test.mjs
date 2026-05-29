@@ -7,20 +7,30 @@ after(cleanupLoadedSource);
 const LIBRARIAN_MODULE = "extensions/mmr-subagents/librarian.ts";
 const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
-const MMR_WEB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-web/tool-ownership.ts";
-const WEB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-web/index.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+
+const GITHUB_TOOLS = [
+  "read_github",
+  "list_directory_github",
+  "glob_github",
+  "search_github",
+  "commit_search",
+  "diff_github",
+  "list_repositories",
+];
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
   const { registerMmrSubagentsPromptBuilders } = await importSource(PROMPTS_MODULE);
   const {
-    __resetMmrWebToolSourcePathsForTests,
-    registerMmrWebToolSourcePath,
-  } = await importSource(MMR_WEB_TOOL_OWNERSHIP_MODULE);
+    __resetMmrGithubToolSourcePathsForTests,
+    registerMmrGithubToolSourcePath,
+  } = await importSource(MMR_GITHUB_TOOL_OWNERSHIP_MODULE);
   clearMmrSubagentPromptBuilders();
   registerMmrSubagentsPromptBuilders();
-  __resetMmrWebToolSourcePathsForTests();
-  registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
+  __resetMmrGithubToolSourcePathsForTests();
+  registerMmrGithubToolSourcePath(GITHUB_SOURCE_PATH);
 });
 
 function usage(overrides = {}) {
@@ -30,8 +40,8 @@ function usage(overrides = {}) {
 function makeWorkerResult(overrides = {}) {
   return {
     messages: [],
-    finalOutput: "The router lives in [src/router.ts](https://example.com/acme/repo/blob/main/src/router.ts).",
-    truncatedFinalOutput: "The router lives in [src/router.ts](https://example.com/acme/repo/blob/main/src/router.ts).",
+    finalOutput: "The router lives in [src/router.ts](https://github.com/acme/repo/blob/main/src/router.ts).",
+    truncatedFinalOutput: "The router lives in [src/router.ts](https://github.com/acme/repo/blob/main/src/router.ts).",
     usage: usage({ input: 100, output: 50, turns: 1 }),
     model: "claude-opus-4-6",
     stopReason: "end_turn",
@@ -78,10 +88,12 @@ function makeCtx(models = [{ provider: "claude-subscription", id: "claude-opus-4
   };
 }
 
-function webHost({
-  registered = ["web_search", "read_web_page"],
-  active = ["web_search", "read_web_page"],
-  sourcePath = WEB_SOURCE_PATH,
+// The librarian gate is registered + source-owned (not parent-active): the
+// GitHub tools are registered globally by mmr-github but are not part of any
+// user-facing mode's active set; the child worker activates them via --tools.
+function githubHost({
+  registered = GITHUB_TOOLS,
+  sourcePath = GITHUB_SOURCE_PATH,
 } = {}) {
   return {
     getAllTools: () => registered.map((name) => ({
@@ -92,7 +104,7 @@ function webHost({
       parameters: { type: "object" },
       ...(sourcePath === null ? {} : { sourceInfo: { path: sourcePath } }),
     })),
-    getActiveTools: () => [...active],
+    getActiveTools: () => [],
   };
 }
 
@@ -131,7 +143,7 @@ describe("librarian tool definition", () => {
     const { createLibrarianTool, LIBRARIAN_PROMPT_GUIDELINES } = await importSource(LIBRARIAN_MODULE);
     const tool = createLibrarianTool();
     assert.match(tool.description, /Research remote repositories with the librarian/i);
-    assert.match(tool.description, /Public repository content reachable through web search/i);
+    assert.match(tool.description, /Public GitHub repositories/i);
     assert.match(tool.description, /architecture explanation/i);
     assert.match(tool.description, /behavior evolution through commits or diffs/i);
     assert.match(tool.description, /Do not use the librarian when:/i);
@@ -148,10 +160,10 @@ describe("librarian tool definition", () => {
     }
   });
 
-  it("worker tools are exactly the initial read-only web allowlist", async () => {
+  it("worker tools are exactly the read-only GitHub provider allowlist", async () => {
     const { LIBRARIAN_WORKER_TOOLS } = await importSource(LIBRARIAN_MODULE);
-    assert.deepEqual([...LIBRARIAN_WORKER_TOOLS], ["web_search", "read_web_page"]);
-    for (const forbidden of ["read", "grep", "find", "bash", "edit", "write", "apply_patch", "task_list", "oracle", "Task"]) {
+    assert.deepEqual([...LIBRARIAN_WORKER_TOOLS], GITHUB_TOOLS);
+    for (const forbidden of ["read", "grep", "find", "bash", "edit", "write", "apply_patch", "task_list", "oracle", "Task", "web_search", "read_web_page"]) {
       assert.equal(LIBRARIAN_WORKER_TOOLS.includes(forbidden), false, `${forbidden} must not be in librarian worker tools`);
     }
   });
@@ -166,7 +178,8 @@ describe("librarian worker system prompt", () => {
     assert.match(prompt, /## Research guidelines/);
     assert.match(prompt, /Use the available tools extensively/);
     assert.match(prompt, /commit history, diffs, and file revisions/i);
-    assert.match(prompt, /It cannot access connected private repositories/i);
+    assert.match(prompt, /reads public GitHub repositories/i);
+    assert.match(prompt, /github\.com\/<owner>\/<repo>\/blob\/<revision>/);
     assert.match(prompt, /Never name tools in the user-facing answer/i);
     assert.match(prompt, /Use fluent links/);
     assert.doesNotMatch(prompt, /Working directory:/);
@@ -178,7 +191,7 @@ describe("librarian execute() validation and gating", () => {
   it("returns validation-error for invalid params before spawning", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
-    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const tool = createLibrarianTool({ runWorker, pi: githubHost() });
     const cases = [
       undefined,
       null,
@@ -196,24 +209,24 @@ describe("librarian execute() validation and gating", () => {
     assert.equal(calls.length, 0, "invalid calls must not spawn the worker");
   });
 
-  it("returns provider-gated when either web tool is not active", async () => {
+  it("returns provider-gated when any GitHub tool is not registered", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const cases = [
-      { label: "none", active: [] },
-      { label: "missing search", active: ["read_web_page"] },
-      { label: "missing reader", active: ["web_search"] },
+      { label: "none", registered: [] },
+      { label: "missing diff_github", registered: GITHUB_TOOLS.filter((t) => t !== "diff_github") },
+      { label: "missing search_github", registered: GITHUB_TOOLS.filter((t) => t !== "search_github") },
     ];
     for (const c of cases) {
       const { runWorker, calls } = makeRunnerSpy();
-      const tool = createLibrarianTool({ runWorker, pi: webHost({ active: c.active }) });
+      const tool = createLibrarianTool({ runWorker, pi: githubHost({ registered: c.registered }) });
       const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
       assert.equal(result.details.status, "provider-gated", c.label);
-      assert.match(firstText(result), /requires mmr-web with web_search and read_web_page active/);
+      assert.match(firstText(result), /requires mmr-github read-only GitHub tools/);
       assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
     }
   });
 
-  it("returns provider-gated when web tool names are active but not owned by mmr-web", async () => {
+  it("returns provider-gated when GitHub tool names exist but are not owned by mmr-github", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const cases = [
       { label: "missing sourceInfo", sourcePath: null },
@@ -221,10 +234,10 @@ describe("librarian execute() validation and gating", () => {
     ];
     for (const c of cases) {
       const { runWorker, calls } = makeRunnerSpy();
-      const tool = createLibrarianTool({ runWorker, pi: webHost({ sourcePath: c.sourcePath }) });
+      const tool = createLibrarianTool({ runWorker, pi: githubHost({ sourcePath: c.sourcePath }) });
       const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
       assert.equal(result.details.status, "provider-gated", c.label);
-      assert.match(firstText(result), /requires mmr-web with web_search and read_web_page active/);
+      assert.match(firstText(result), /requires mmr-github read-only GitHub tools/);
       assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
     }
   });
@@ -232,7 +245,7 @@ describe("librarian execute() validation and gating", () => {
   it("returns activation-error when no librarian model route resolves", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
-    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const tool = createLibrarianTool({ runWorker, pi: githubHost() });
     const result = await tool.execute(
       "c",
       { query: "Explain acme/repo routing" },
@@ -252,7 +265,7 @@ describe("librarian execute() runner dispatch", () => {
     const { runWorker, calls } = makeRunnerSpy();
     const tool = createLibrarianTool({
       runWorker,
-      pi: webHost(),
+      pi: githubHost(),
       buildSystemPrompt: () => "LIBRARIAN SYSTEM PROMPT",
     });
     const controller = new AbortController();
@@ -290,7 +303,7 @@ describe("librarian execute() runner dispatch", () => {
     let settingsReads = 0;
     const tool = createLibrarianTool({
       runWorker,
-      pi: webHost(),
+      pi: githubHost(),
       loadSubagentModelPreferences: (cwd) => {
         settingsReads += 1;
         assert.equal(cwd, "/abs/project");
@@ -313,7 +326,7 @@ describe("librarian execute() runner dispatch", () => {
   it("uses the bare Query form when context is absent or blank", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
-    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const tool = createLibrarianTool({ runWorker, pi: githubHost() });
     await tool.execute("c1", { query: "Explain acme/repo routing", context: "   " }, undefined, undefined, makeCtx());
     assert.equal(calls[0].prompt, "Query: Explain acme/repo routing");
   });
@@ -327,18 +340,18 @@ describe("librarian execute() runner dispatch", () => {
         finalOutput: "",
         truncatedFinalOutput: "",
         usage: usage(),
-        trail: [{ type: "tool", toolCallId: "t1", toolName: "web_search", status: "running", argsPreview: '{"objective":"repo"}' }],
+        trail: [{ type: "tool", toolCallId: "t1", toolName: "search_github", status: "running", argsPreview: '{"pattern":"router"}' }],
       });
       return makeWorkerResult();
     };
-    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const tool = createLibrarianTool({ runWorker, pi: githubHost() });
     await tool.execute("c", { query: "Explain acme/repo" }, undefined, (partial) => { captured = partial; }, makeCtx());
     assert.ok(captured);
     assert.equal(captured.content[0].text, LIBRARIAN_PROGRESS_PLACEHOLDER);
     assert.equal(captured.details.worker, "mmr-subagents.librarian");
     assert.equal(captured.details.status, "success");
     assert.equal(captured.details.query, "Explain acme/repo");
-    assert.equal(captured.details.trail[0].toolName, "web_search");
+    assert.equal(captured.details.trail[0].toolName, "search_github");
   });
 });
 
@@ -349,12 +362,12 @@ describe("librarian failure mapping", () => {
       finalOutput: "",
       truncatedFinalOutput: "",
       exitCode: 0,
-      stderr: 'pi-mmr: subagent activation failed: Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.\n',
-      subagentActivationError: 'Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.',
-      errorMessage: 'subagent activation failed: Subagent "librarian" was invoked with --tools web_search,read, but the resolved worker tool set is web_search,read_web_page.',
+      stderr: 'pi-mmr: subagent activation failed: Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.\n',
+      subagentActivationError: 'Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.',
+      errorMessage: 'subagent activation failed: Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.',
     });
     const { runWorker } = makeRunnerSpy(failure);
-    const tool = createLibrarianTool({ runWorker, pi: webHost() });
+    const tool = createLibrarianTool({ runWorker, pi: githubHost() });
     const result = await tool.execute("c", { query: "Explain acme/repo" }, undefined, undefined, makeCtx());
     assert.equal(result.details.status, "activation-error");
     assert.match(firstText(result), /subagent activation failed/);
@@ -393,7 +406,7 @@ describe("librarian failure mapping", () => {
     ];
     for (const scenario of scenarios) {
       const { runWorker } = makeRunnerSpy(scenario.result);
-      const tool = createLibrarianTool({ runWorker, pi: webHost() });
+      const tool = createLibrarianTool({ runWorker, pi: githubHost() });
       const result = await tool.execute("c", { query: "Explain acme/repo" }, undefined, undefined, makeCtx());
       assert.equal(result.details.status, scenario.expected);
       assert.match(firstText(result), scenario.pattern, scenario.expected);
