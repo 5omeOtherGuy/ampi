@@ -16,6 +16,10 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-subagents`: a successful `finder` or `oracle` run is now rendered as `completed` even when an earlier worker turn preserved a non-fatal provider `errorMessage` (for example a transient HTTP 429 before the usable final answer). `finder`/`oracle` worker details now carry a `status` from the shared `classifyMmrWorkerOutcome` classifier — matching `librarian` — so the renderer no longer falls back to the legacy heuristic that flagged any preserved `errorMessage` as a failed run, and the preserved message renders as a warning instead of an error. Covered by new render-seam cases in `tests/mmr-subagents-finder.test.mjs` and `tests/mmr-subagents-oracle.test.mjs`.
 
+### Documentation
+
+- `AGENTS.md`: trim contributor guidance to public-appropriate content. The internal multi-checkout operational workflow (branch/merge discipline, primary-ref synchronization, and git-hook defenses) moves out of the published file into a local-only, gitignored `CLAUDE.md` that Pi auto-loads alongside `AGENTS.md`. `.gitignore` now excludes `CLAUDE.md` and `AGENTS.local.md` so local agent guidance is never published.
+
 ## 0.1.0 — 2026-05-28
 
 ### Documentation
