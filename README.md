@@ -129,7 +129,7 @@ Run `/mmr-status` (or `/mmr-status debug`). Common cases:
 - Tool `gated` / `deferred` → owning extension is not loaded or enabled (`librarian` needs registered `mmr-github` tools, set `MMR_GITHUB_ENABLE=true`).
 - Locked mode refused to activate → resolved zero active tools; inspect `Tool decisions:`.
 
-Full field reference: [`src/extensions/mmr-core/README.md`](src/extensions/mmr-core/README.md#diagnostics--mmr-status).
+Full field reference: [`src/extensions/mmr-core/README.md`](src/extensions/mmr-core/README.md#diagnostics--mmr-status). Provider/tool-call stream failures: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ## Development
 
