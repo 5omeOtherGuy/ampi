@@ -68,15 +68,14 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
     registerTaskParentPromptCapture(pi);
     registerTaskTool(pi, overrides.task ?? {});
     registerLibrarianTool(pi, overrides.librarian ?? {});
-    // User ceiling for async completion push: off unless explicitly
-    // enabled. Even when enabled, a task only pushes when the caller opts
-    // in per task (start_task notify:true), and the registry bounds it.
+    // User ceiling for async completion push: on by default; the env gate can
+    // force pull-only behavior. Individual starts can opt out with
+    // start_task({ notify: false }), and the registry bounds pushes.
     // Test overrides win so deterministic tests control the seam.
-    const asyncPushCeiling = parseBoolEnv(process.env[MMR_SUBAGENTS_ASYNC_PUSH_ENV]) ?? false;
+    const asyncPushCeiling = parseBoolEnv(process.env[MMR_SUBAGENTS_ASYNC_PUSH_ENV]) ?? true;
     registerAsyncTaskTools(pi, {
       enableCompletionPush: asyncPushCeiling,
       finderDeps: overrides.finder,
-      oracleDeps: overrides.oracle,
       taskDeps: overrides.task,
       librarianDeps: overrides.librarian,
       ...(overrides.asyncTasks ?? {}),

@@ -271,7 +271,7 @@ describe("start_task", () => {
     assert.equal(result.details.final.status, "empty-output");
   });
 
-  it("runs oracle as a selected background agent and preserves advisor details", async () => {
+  it("rejects oracle as a selected background agent", async () => {
     const tools = await importSource(TOOLS_MODULE);
     const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
     const registry = createMmrAsyncTaskRegistry({ idFactory: () => "oracle-1" });
@@ -279,27 +279,22 @@ describe("start_task", () => {
     const startTask = tools.createStartTaskTool({
       registry,
       sessionKey: "S",
-      oracleDeps: { runner: def.runner, buildSystemPrompt: () => "ORACLE PROMPT" },
+      runner: def.runner,
+      buildSystemPrompt: () => "WORKER PROMPT",
     });
-    const poll = tools.createTaskPollTool({ registry, sessionKey: "S" });
 
-    await startTask.execute(
+    const result = await startTask.execute(
       "o0",
       { agent: "oracle", description: "review design", params: { task: "Review the design" } },
       undefined,
       undefined,
       CTX,
     );
-    assert.equal(def.calls[0].profileName, "oracle");
-    assert.match(def.calls[0].prompt, /Task: Review the design/);
 
-    def.resolve(makeWorkerResult({ finalOutput: "oracle answer", truncatedFinalOutput: "oracle answer" }));
-    await flush();
-    const result = await poll.execute("p0", { task_id: "oracle-1" }, undefined, undefined, CTX);
-    assert.equal(result.details.agent, "oracle");
-    assert.equal(result.details.final.worker, "mmr-subagents.oracle");
-    assert.deepEqual(result.details.final.attachments, []);
-    assert.match(result.content[0].text, /oracle answer/);
+    assert.equal(result.details.taskId, undefined);
+    assert.match(result.content[0].text, /Oracle is always blocking/i);
+    assert.equal(registry.listTasks("S").counts.active, 0);
+    assert.equal(def.calls.length, 0);
   });
 
   it("runs librarian as a selected background agent and uses librarian-specific deps", async () => {
@@ -499,10 +494,13 @@ describe("async task tools model-visible surface", () => {
       assert.ok(Array.isArray(t.promptGuidelines) && t.promptGuidelines.length > 0);
       assert.equal(t.parameters.type, "object");
       assert.equal(t.parameters.additionalProperties, false);
+      assert.equal(t.renderShell, "self");
+      assert.equal(typeof t.renderCall, "function");
+      assert.equal(typeof t.renderResult, "function");
     }
     assert.deepEqual(Object.keys(start.parameters.properties).sort(), ["agent", "description", "notify", "params", "prompt"]);
     assert.equal(start.parameters.properties.notify.type, "boolean");
-    assert.deepEqual(start.parameters.properties.agent.anyOf.map((entry) => entry.const), ["Task", "finder", "oracle", "librarian"]);
+    assert.deepEqual(start.parameters.properties.agent.anyOf.map((entry) => entry.const), ["Task", "finder", "librarian"]);
     assert.equal(start.parameters.required, undefined);
     assert.deepEqual(Object.keys(poll.parameters.properties), ["task_id"]);
     assert.deepEqual(wait.parameters.required, ["task_id"]);
@@ -531,9 +529,9 @@ describe("async task tools completion push", () => {
     return { registry, def, sent, startTask: tools.createStartTaskTool(deps) };
   }
 
-  it("pushes exactly once when the ceiling is on and the task opts in", async () => {
-    const { registry, def, sent, startTask } = await pushHarness({ enableCompletionPush: true });
-    await startTask.execute("c0", { ...GOOD_PARAMS, notify: true }, undefined, undefined, CTX);
+  it("pushes exactly once by default", async () => {
+    const { registry, def, sent, startTask } = await pushHarness();
+    await startTask.execute("c0", GOOD_PARAMS, undefined, undefined, CTX);
     def.resolve(makeWorkerResult());
     await flush();
     assert.equal(sent.length, 1, "exactly one completion push");
@@ -542,18 +540,18 @@ describe("async task tools completion push", () => {
     assert.equal(registry.getTask("S", "t1").completionPush, "sent");
   });
 
-  it("does not push when the ceiling is on but the task did not opt in", async () => {
+  it("does not push when the task opts out", async () => {
     const { registry, def, sent, startTask } = await pushHarness({ enableCompletionPush: true });
-    await startTask.execute("c0", GOOD_PARAMS, undefined, undefined, CTX);
+    await startTask.execute("c0", { ...GOOD_PARAMS, notify: false }, undefined, undefined, CTX);
     def.resolve(makeWorkerResult());
     await flush();
     assert.equal(sent.length, 0);
     assert.equal(registry.getTask("S", "t1").completionPush, "disabled");
   });
 
-  it("does not push when the task opts in but the session ceiling is off", async () => {
-    const { registry, def, sent, startTask } = await pushHarness();
-    await startTask.execute("c0", { ...GOOD_PARAMS, notify: true }, undefined, undefined, CTX);
+  it("does not push when the session ceiling is off", async () => {
+    const { registry, def, sent, startTask } = await pushHarness({ enableCompletionPush: false });
+    await startTask.execute("c0", GOOD_PARAMS, undefined, undefined, CTX);
     def.resolve(makeWorkerResult());
     await flush();
     assert.equal(sent.length, 0);
