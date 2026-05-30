@@ -82,6 +82,15 @@ describe("built-in tool guidance: module", () => {
     assert.equal(block.includes("edit_file"), false, "non-Pi-native tool name edit_file must not appear");
   });
 
+  it("steers edit recovery away from identical retries", async () => {
+    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const block = buildBuiltinToolGuidance(["bash", "edit", "write"]);
+    assert.ok(block);
+    assert.match(block, /empty arguments or missing required fields/);
+    assert.match(block, /do not retry the identical call/);
+    assert.match(block, /Prefer write or bash heredoc for large, whole-file, or escape-dense replacements/);
+  });
+
   it("does not require absolute paths (Pi allows relative paths)", async () => {
     const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["read", "write", "edit"]);
