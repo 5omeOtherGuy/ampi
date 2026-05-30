@@ -22,15 +22,14 @@ import {
   type FinderToolDeps,
 } from "./finder.js";
 import {
-  createOracleTool,
-  ORACLE_WORKER_TOOLS,
-  type OracleToolDeps,
-} from "./oracle.js";
-import {
   createLibrarianTool,
   LIBRARIAN_WORKER_TOOLS,
   type LibrarianToolDeps,
 } from "./librarian.js";
+import {
+  renderMmrBackgroundTaskCall,
+  renderMmrBackgroundTaskResult,
+} from "./progress-rendering.js";
 import {
   getMmrAsyncTaskRegistry,
   MAX_TASK_WAIT_TIMEOUT_MS,
@@ -52,7 +51,9 @@ export const ASYNC_TASK_TOOL_NAMES = [
   TASK_CANCEL_TOOL_NAME,
 ] as const;
 
-export const ASYNC_TASK_AGENT_NAMES = ["Task", "finder", "oracle", "librarian"] as const;
+// Oracle is intentionally excluded: it is always blocking and can never run
+// as a background agent. The blocking `oracle` tool is unchanged.
+export const ASYNC_TASK_AGENT_NAMES = ["Task", "finder", "librarian"] as const;
 export type AsyncTaskAgentName = typeof ASYNC_TASK_AGENT_NAMES[number];
 
 const START_TASK_ALLOWED_TOP_LEVEL_KEYS = new Set(["agent", "params", "prompt", "description", "notify"]);
@@ -65,6 +66,10 @@ export interface AsyncTaskToolDetails {
   taskId?: string;
   status?: MmrAsyncTaskStatus;
   freshness?: MmrAsyncTaskInternalSnapshot["freshness"];
+  /** User-facing invocation label for the background-task renderer. */
+  description?: string;
+  /** Clean terminal worker output for the background-task renderer. */
+  finalOutput?: string;
   timedOut?: boolean;
   /** Final projected subagent details when a polled/awaited task is terminal. */
   final?: unknown;
@@ -80,37 +85,32 @@ export interface AsyncTaskToolDeps extends TaskToolDeps {
   sessionKey?: string;
   /** Tool-specific seams used when start_task launches the finder agent. */
   finderDeps?: FinderToolDeps;
-  /** Tool-specific seams used when start_task launches the oracle agent. */
-  oracleDeps?: OracleToolDeps;
   /** Tool-specific seams used when start_task launches the librarian agent. */
   librarianDeps?: LibrarianToolDeps;
   /** Tool-specific seams used when start_task launches the Task agent. */
   taskDeps?: TaskToolDeps;
   /**
    * Session-level ceiling: whether the at-most-once completion push is
-   * PERMITTED at all this session. Default OFF (pull-only). Even when
-   * true, an individual task only pushes when the caller opts in per
-   * task via `start_task({ notify: true })`. Wired from the
-   * `MMR_SUBAGENTS_ASYNC_PUSH` environment gate in `index.ts`.
+   * PERMITTED at all this session. Default ON. A caller can opt an
+   * individual task out with `start_task({ notify: false })`. Wired from
+   * the `MMR_SUBAGENTS_ASYNC_PUSH` environment gate in `index.ts`.
    */
   enableCompletionPush?: boolean;
 }
 
 /**
- * Environment gate (the user ceiling) for async completion push. Off unless
- * explicitly enabled; mirrors the opt-in posture of other network/autonomy
- * switches in this package.
+ * Environment gate (the user ceiling) for async completion push. On by
+ * default; set false/0/no to force pull-only background tasks for a session.
  */
 export const MMR_SUBAGENTS_ASYNC_PUSH_ENV = "MMR_SUBAGENTS_ASYNC_PUSH";
 
 const START_TASK_AGENT_SCHEMA = Type.Union([
   Type.Literal("Task"),
   Type.Literal("finder"),
-  Type.Literal("oracle"),
   Type.Literal("librarian"),
 ], {
   description:
-    "Background agent to launch. Defaults to Task. Use params for agent-specific inputs: Task {prompt,description}, finder {query}, oracle {task,context?,files?}, librarian {query,context?}.",
+    "Background agent to launch. Defaults to Task. Use params for agent-specific inputs: Task {prompt,description}, finder {query}, librarian {query,context?}. Oracle cannot run in the background; it is always blocking.",
 });
 
 const START_TASK_PARAMETERS = Type.Object(
@@ -122,7 +122,7 @@ const START_TASK_PARAMETERS = Type.Object(
         {
           additionalProperties: true,
           description:
-            "Parameters for the selected background agent. For Task use {prompt, description}; for finder use {query}; for oracle use {task, context?, files?}; for librarian use {query, context?}.",
+            "Parameters for the selected background agent. For Task use {prompt, description}; for finder use {query}; for librarian use {query, context?}.",
         },
       ),
     ),
@@ -134,7 +134,7 @@ const START_TASK_PARAMETERS = Type.Object(
     notify: Type.Optional(
       Type.Boolean({
         description:
-          "Set true ONLY when you are about to end your turn with nothing else to do, to be poked once when this task finishes. Leave unset (default) when you will poll or task_wait yourself. The poke wakes the session only if it is idle; it never interrupts an active turn. Requires the session push ceiling to be enabled, and is bounded per session.",
+          "Completion notification. ON by default: when this task finishes the parent is poked once so it can read the result. Pass false to opt out (pull-only via task_poll/task_wait). The poke wakes the session only if it is idle; it never interrupts an active turn, and it is bounded per session.",
       }),
     ),
   },
@@ -180,21 +180,21 @@ const START_TASK_DESCRIPTION = [
   "Start a bounded subagent worker in the background and return an opaque task_id immediately, so you can keep working while it runs.",
   "",
   "Use start_task only for independent work that can proceed while you do other things (long analysis, broad search, a self-contained implementation unit).",
-  "Set agent to choose the background worker: Task (default), finder, oracle, or librarian. Use params for the selected tool's normal input shape.",
-  "Prefer the blocking Task/finder/oracle/librarian tools when you need the result before your next reasoning step.",
+  "Set agent to choose the background worker: Task (default), finder, or librarian. Use params for the selected tool's normal input shape. Oracle cannot run in the background; it is always blocking.",
+  "Prefer the blocking Task/finder/librarian tools when you need the result before your next reasoning step.",
   "Always follow start_task with task_poll or task_wait before relying on the result; the parent remains responsible for integration and the final answer.",
-  "Pass notify:true only when you are about to end your turn with nothing else to do and want to be poked once when the task finishes; otherwise poll or task_wait yourself.",
+  "By default a background task notifies you once it finishes so you can read its result; pass notify:false to opt out and pull via task_poll/task_wait instead.",
   "",
   "Background tasks are in-memory and session-scoped: they are lost if the Pi process exits, and they cannot spawn further background tasks.",
 ].join("\n");
 
 const ASYNC_TASK_GUIDELINES: readonly string[] = [
-  "Use start_task only for independent work that can run while you continue; prefer the blocking Task/finder/oracle/librarian tools when you need the result immediately.",
+  "Use start_task only for independent work that can run while you continue; prefer the blocking Task/finder/librarian tools when you need the result immediately. Oracle is always blocking and cannot be a background agent.",
   "After start_task, use task_poll (with the task_id) or task_wait to check on the worker; a task_wait timeout is not a failure and does not stop the worker.",
   "Call task_poll with no task_id to list this session's background tasks (active, stalled, finished).",
   "Use task_cancel to stop a duplicate, obsolete, or wrongly-scoped background task.",
   "Do not start multiple code-writing background tasks unless their file targets are clearly disjoint.",
-  "Prefer polling. Use start_task({ notify: true }) only when you will go idle and want a one-time poke on completion; the poke wakes the session only when idle and is bounded per session.",
+  "A background task notifies you once when it finishes (the poke wakes the session only when idle and is bounded per session); pass start_task({ notify: false }) to opt out and pull the result with task_poll/task_wait.",
 ];
 
 function resolveCwd(ctx: ExtensionContext | undefined): string {
@@ -265,7 +265,6 @@ function normalizeAgent(raw: unknown): AsyncTaskAgentName | undefined {
   const normalized = raw.trim().toLowerCase();
   if (normalized === "task" || normalized === "task-subagent") return "Task";
   if (normalized === "finder") return "finder";
-  if (normalized === "oracle") return "oracle";
   if (normalized === "librarian") return "librarian";
   return undefined;
 }
@@ -277,11 +276,9 @@ function firstParamString(params: unknown, key: string): string | undefined {
 }
 
 function summarizeInput(agent: AsyncTaskAgentName, params: unknown): string {
-  const value = agent === "oracle"
-    ? firstParamString(params, "task")
-    : agent === "Task"
-      ? firstParamString(params, "prompt")
-      : firstParamString(params, "query");
+  const value = agent === "Task"
+    ? firstParamString(params, "prompt")
+    : firstParamString(params, "query");
   if (value) return value;
   try {
     return JSON.stringify(params);
@@ -303,7 +300,6 @@ function baseToolDeps(deps: AsyncTaskToolDeps): Record<string, unknown> {
     sessionKey: _sessionKey,
     enableCompletionPush: _enableCompletionPush,
     finderDeps: _finderDeps,
-    oracleDeps: _oracleDeps,
     librarianDeps: _librarianDeps,
     taskDeps: _taskDeps,
     ...base
@@ -389,6 +385,7 @@ function projectRunning(
       taskId: snapshot.taskId,
       status: snapshot.status,
       freshness: snapshot.freshness,
+      description: snapshot.description,
       ...(opts.timedOut !== undefined ? { timedOut: opts.timedOut } : {}),
     },
   };
@@ -400,18 +397,19 @@ function projectTerminal(
   snapshot: MmrAsyncTaskInternalSnapshot,
 ): AgentToolResult<AsyncTaskToolDetails> {
   const statusLine = `${tool}: ${snapshot.agent} task ${snapshot.taskId} ${snapshot.status}.`;
-  let body = snapshot.errorMessage ? `\n\n${snapshot.errorMessage}` : "";
+  let finalOutput = snapshot.errorMessage;
   let final: unknown;
   if (snapshot.finalToolResult) {
     final = snapshot.finalToolResult.details;
     const text = firstText(snapshot.finalToolResult.content);
-    if (text && text.trim().length > 0) body = `\n\n${text}`;
+    if (text && text.trim().length > 0) finalOutput = text.trim();
   } else if (snapshot.finalResult) {
     const projected = buildTaskFinalResult(snapshot.finalResult, detailsContextFromSnapshot(snapshot));
     final = projected.details;
     const text = firstText(projected.content);
-    if (text && text.trim().length > 0) body = `\n\n${text}`;
+    if (text && text.trim().length > 0) finalOutput = text.trim();
   }
+  const body = finalOutput ? `\n\n${finalOutput}` : "";
   return {
     content: [{ type: "text", text: `${statusLine}${body}` }],
     details: {
@@ -421,6 +419,8 @@ function projectTerminal(
       taskId: snapshot.taskId,
       status: snapshot.status,
       freshness: snapshot.freshness,
+      description: snapshot.description,
+      ...(finalOutput !== undefined ? { finalOutput } : {}),
       ...(final !== undefined ? { final } : {}),
       ...(snapshot.errorMessage !== undefined ? { errorMessage: snapshot.errorMessage } : {}),
     },
@@ -495,14 +495,14 @@ function parseStartParams(rawParams: unknown): ParsedStartParams | { error: stri
   }
   const agent = normalizeAgent(rawParams.agent);
   if (!agent) {
-    return { error: "start_task.agent must be one of: Task, finder, oracle, librarian." };
+    return { error: "start_task.agent must be one of: Task, finder, librarian. Oracle is always blocking and cannot run in the background." };
   }
   let params: unknown = rawParams.params;
   if (params === undefined) {
     if (agent === "Task") {
       params = { prompt: rawParams.prompt, description: rawParams.description };
     } else if (typeof rawParams.prompt === "string") {
-      params = agent === "oracle" ? { task: rawParams.prompt } : { query: rawParams.prompt };
+      params = { query: rawParams.prompt };
     } else {
       return { error: `start_task.params is required when agent is ${agent}.` };
     }
@@ -517,7 +517,9 @@ function parseStartParams(rawParams: unknown): ParsedStartParams | { error: stri
     params,
     description: shortDescription(agent, params, rawParams.description),
     promptSummary: summarizeInput(agent, params),
-    wantsNotify: rawParams.notify === true,
+    wantsNotify: rawParams.notify === undefined
+      ? true
+      : typeof rawParams.notify === "boolean" ? rawParams.notify : false,
   };
 }
 
@@ -531,14 +533,12 @@ function validationResult(message: string): AgentToolResult<AsyncTaskToolDetails
 function createSelectedTool(agent: Exclude<AsyncTaskAgentName, "Task">, deps: AsyncTaskToolDeps): ToolDefinition {
   const base = baseToolDeps(deps);
   if (agent === "finder") return createFinderTool({ ...base, ...(deps.finderDeps ?? {}) } as FinderToolDeps);
-  if (agent === "oracle") return createOracleTool({ ...base, ...(deps.oracleDeps ?? {}) } as OracleToolDeps);
   return createLibrarianTool({ ...base, ...(deps.librarianDeps ?? {}) } as LibrarianToolDeps);
 }
 
 function workerToolsForAgent(agent: AsyncTaskAgentName, taskTools: readonly string[] = []): readonly string[] {
   if (agent === "Task") return taskTools;
   if (agent === "finder") return FINDER_WORKER_TOOLS;
-  if (agent === "oracle") return ORACLE_WORKER_TOOLS;
   return LIBRARIAN_WORKER_TOOLS;
 }
 
@@ -551,15 +551,22 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
     promptSnippet: "Start a bounded subagent worker in the background and return an opaque task_id",
     promptGuidelines: [...ASYNC_TASK_GUIDELINES],
     parameters: START_TASK_PARAMETERS,
+    renderShell: "self" as const,
+    renderCall(args, theme, context) {
+      return renderMmrBackgroundTaskCall(START_TASK_TOOL_NAME, args, theme, context);
+    },
+    renderResult(result, options, theme, context) {
+      return renderMmrBackgroundTaskResult(START_TASK_TOOL_NAME, result, options, theme, context);
+    },
     async execute(toolCallId, rawParams, _signal, _onUpdate, ctx): Promise<AgentToolResult<AsyncTaskToolDetails>> {
       const parsed = parseStartParams(rawParams);
       if ("error" in parsed) return validationResult(parsed.error);
       const sessionKey = resolveSessionKey(ctx, deps);
       // Two-layer gate: the session ceiling must permit push AND the caller
-      // must opt this task in. The registry adds at-most-once + a per-session
-      // budget on top. Delivery is `nextTurn` + `triggerTurn`, so a push only
-      // wakes an idle session and otherwise rides the next turn.
-      const notify = deps.enableCompletionPush && parsed.wantsNotify
+      // must not opt this task out. The registry adds at-most-once + a
+      // per-session budget on top. Delivery is `nextTurn` + `triggerTurn`, so a
+      // push only wakes an idle session and otherwise rides the next turn.
+      const notify = (deps.enableCompletionPush ?? true) && parsed.wantsNotify
         ? buildCompletionNotifier(deps.pi)
         : undefined;
 
@@ -665,6 +672,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
           taskId: snapshot.taskId,
           status: snapshot.status,
           freshness: snapshot.freshness,
+          description: snapshot.description,
         },
       };
     },
@@ -704,6 +712,13 @@ export function createTaskPollTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
     promptSnippet: "Poll one background task by task_id, or list all background tasks for this session",
     promptGuidelines: [...ASYNC_TASK_GUIDELINES],
     parameters: TASK_POLL_PARAMETERS,
+    renderShell: "self" as const,
+    renderCall(args, theme, context) {
+      return renderMmrBackgroundTaskCall(TASK_POLL_TOOL_NAME, args, theme, context);
+    },
+    renderResult(result, options, theme, context) {
+      return renderMmrBackgroundTaskResult(TASK_POLL_TOOL_NAME, result, options, theme, context);
+    },
     async execute(_toolCallId, rawParams, _signal, _onUpdate, ctx): Promise<AgentToolResult<AsyncTaskToolDetails>> {
       const sessionKey = resolveSessionKey(ctx, deps);
       const taskId = (rawParams as { task_id?: unknown })?.task_id;
@@ -733,6 +748,13 @@ export function createTaskWaitTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
     promptSnippet: "Wait briefly for a background task to finish without cancelling it on timeout",
     promptGuidelines: [...ASYNC_TASK_GUIDELINES],
     parameters: TASK_WAIT_PARAMETERS,
+    renderShell: "self" as const,
+    renderCall(args, theme, context) {
+      return renderMmrBackgroundTaskCall(TASK_WAIT_TOOL_NAME, args, theme, context);
+    },
+    renderResult(result, options, theme, context) {
+      return renderMmrBackgroundTaskResult(TASK_WAIT_TOOL_NAME, result, options, theme, context);
+    },
     async execute(_toolCallId, rawParams, _signal, _onUpdate, ctx): Promise<AgentToolResult<AsyncTaskToolDetails>> {
       const sessionKey = resolveSessionKey(ctx, deps);
       const params = rawParams as { task_id?: unknown; timeout_ms?: unknown };
@@ -762,6 +784,13 @@ export function createTaskCancelTool(deps: AsyncTaskToolDeps = {}): ToolDefiniti
     promptSnippet: "Cancel a background task by task_id",
     promptGuidelines: [...ASYNC_TASK_GUIDELINES],
     parameters: TASK_CANCEL_PARAMETERS,
+    renderShell: "self" as const,
+    renderCall(args, theme, context) {
+      return renderMmrBackgroundTaskCall(TASK_CANCEL_TOOL_NAME, args, theme, context);
+    },
+    renderResult(result, options, theme, context) {
+      return renderMmrBackgroundTaskResult(TASK_CANCEL_TOOL_NAME, result, options, theme, context);
+    },
     async execute(_toolCallId, rawParams, _signal, _onUpdate, ctx): Promise<AgentToolResult<AsyncTaskToolDetails>> {
       const sessionKey = resolveSessionKey(ctx, deps);
       const params = rawParams as { task_id?: unknown; reason?: unknown };
@@ -783,6 +812,7 @@ export function createTaskCancelTool(deps: AsyncTaskToolDeps = {}): ToolDefiniti
         snapshot.status === "cancelling"
           ? " The worker has not stopped yet; poll task_poll to confirm it terminates."
           : "";
+      const finalOutput = `${summary}${settledNote}`.trim();
       return {
         content: [
           { type: "text", text: `task_cancel: ${snapshot.agent} task ${snapshot.taskId} ${snapshot.status}. ${summary}${settledNote}` },
@@ -794,6 +824,8 @@ export function createTaskCancelTool(deps: AsyncTaskToolDeps = {}): ToolDefiniti
           taskId: snapshot.taskId,
           status: snapshot.status,
           freshness: snapshot.freshness,
+          description: snapshot.description,
+          ...(finalOutput.length > 0 ? { finalOutput } : {}),
         },
       };
     },

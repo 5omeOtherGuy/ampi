@@ -956,3 +956,79 @@ describe("cthulu R'lyehian streamed-content transform", () => {
     assert.match(rendered, /Recommended fix: enforce a global lock ordering\./);
   });
 });
+
+describe("background task rendering", () => {
+  it("renders a running background task as a collapsed subagent-style box", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderMmrBackgroundTaskResult(
+      "start_task",
+      {
+        content: [{ type: "text", text: "start_task: started background worker task_1" }],
+        details: {
+          worker: "mmr-subagents.async-task",
+          tool: "start_task",
+          agent: "finder",
+          taskId: "task_1",
+          status: "running",
+          description: "Find async task rendering",
+        },
+      },
+      { expanded: true, isPartial: false },
+      fakeTheme,
+      makeContext({ agent: "finder" }),
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /finder .* background running in background/);
+    assert.match(rendered, /Find async task rendering/);
+    assert.doesNotMatch(rendered, /started background worker/);
+  });
+
+  it("renders a terminal background task final output without trail details", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderMmrBackgroundTaskResult(
+      "task_poll",
+      {
+        content: [{ type: "text", text: "task_poll: finder task task_1 succeeded.\n\nFinal answer" }],
+        details: {
+          worker: "mmr-subagents.async-task",
+          tool: "task_poll",
+          agent: "finder",
+          taskId: "task_1",
+          status: "succeeded",
+          description: "Find async task rendering",
+          finalOutput: "Final answer",
+          final: { trail: [{ type: "assistant", text: "hidden trail" }] },
+        },
+      },
+      { expanded: true, isPartial: false },
+      fakeTheme,
+      makeContext({ task_id: "task_1" }),
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /finder .* background completed/);
+    assert.match(rendered, /Find async task rendering/);
+    assert.match(rendered, /Final answer/);
+    assert.doesNotMatch(rendered, /hidden trail/);
+    assert.doesNotMatch(rendered, /task_poll: finder task/);
+  });
+
+  it("renders the background-task board as plain text", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderMmrBackgroundTaskResult(
+      "task_poll",
+      {
+        content: [{ type: "text", text: "task_poll: 1 active, 0 stalled, 0 finished." }],
+        details: { worker: "mmr-subagents.async-task", tool: "task_poll", board: { version: 1 } },
+      },
+      { expanded: true, isPartial: false },
+      fakeTheme,
+      makeContext({}),
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /task_poll: 1 active/);
+    assert.doesNotMatch(rendered, /running in background/);
+  });
+});

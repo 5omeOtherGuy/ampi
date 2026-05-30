@@ -101,7 +101,7 @@ export interface StartAsyncTaskArgs {
   sessionKey: string;
   /** Originating Pi tool-call id; used for at-most-once idempotency. */
   originToolCallId: string;
-  /** User-facing worker kind launched by start_task (Task, finder, oracle, librarian). */
+  /** User-facing worker kind launched by start_task (Task, finder, librarian). */
   agent?: string;
   description: string;
   prompt: string;

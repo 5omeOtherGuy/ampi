@@ -51,6 +51,18 @@ const SUBAGENT_DETAILS_STATUS_VALUES = new Set([
   "empty-output",
 ]);
 
+interface BackgroundTaskDetails {
+  worker?: string;
+  tool?: string;
+  agent?: string;
+  taskId?: string;
+  status?: string;
+  board?: unknown;
+  description?: string;
+  finalOutput?: string;
+  errorMessage?: string;
+}
+
 interface SubagentProgressDetails {
   model?: string;
   reportedModel?: string;
@@ -937,6 +949,31 @@ function renderHeaderLine(
   return `${title}  ${theme.fg(statusColor(status), statusLabel(status))}`;
 }
 
+function backgroundTaskRenderStatus(status: string | undefined): RenderStatus | undefined {
+  if (status === "running" || status === "cancelling") return "running";
+  if (status === "succeeded") return "succeeded";
+  if (status === "failed" || status === "cancelled") return "failed";
+  return undefined;
+}
+
+function backgroundTaskStatusLabel(status: string | undefined): string {
+  if (status === "running" || status === "cancelling") return "running in background";
+  if (status === "succeeded") return "completed";
+  if (status === "cancelled") return "cancelled";
+  if (status === "failed") return "failed";
+  return status ?? "background";
+}
+
+function backgroundTaskHeaderLine(
+  details: BackgroundTaskDetails,
+  renderStatus: RenderStatus,
+  theme: SubagentTheme,
+): string {
+  const title = formatTitle(details.agent ?? "background task", undefined, theme);
+  const badge = theme.fg("muted", "background");
+  return `${title} ${theme.fg("muted", "•")} ${badge}  ${theme.fg(statusColor(renderStatus), backgroundTaskStatusLabel(details.status))}`;
+}
+
 function addDiagnostic(
   container: Container,
   message: string | undefined,
@@ -987,6 +1024,59 @@ function markResultRendered(context: RenderContextLike | undefined): void {
 
 function resultAlreadyRendered(context: RenderContextLike | undefined): boolean {
   return renderState(context)?.[RESULT_RENDERED_STATE_KEY] === true;
+}
+
+export function renderMmrBackgroundTaskCall(
+  _toolName: string,
+  _args: unknown,
+  _theme: SubagentTheme,
+  _context?: RenderContextLike,
+): Component {
+  // Background task tools return immediately and their result renderer owns the
+  // stable invocation/running/final surface. Suppressing the default call row
+  // avoids a duplicate plain tool-call frame before the background-task box.
+  return new Container();
+}
+
+export function renderMmrBackgroundTaskResult(
+  _toolName: string,
+  result: AgentToolResult<unknown>,
+  _options: { expanded?: boolean; isPartial?: boolean },
+  theme: SubagentTheme,
+  _context?: RenderContextLike,
+): Component {
+  const details = result.details as BackgroundTaskDetails | undefined;
+  const output = textContent(result).trim();
+
+  if (details?.board || details?.worker !== "mmr-subagents.async-task") {
+    const container = new Container();
+    addMarkdownBlock(container, output, theme, { paddingX: 1 });
+    return container;
+  }
+
+  const renderStatus = backgroundTaskRenderStatus(details.status);
+  if (!renderStatus || !details.taskId || !details.agent) {
+    const container = new Container();
+    addMarkdownBlock(container, output || details.errorMessage, theme, { paddingX: 1 });
+    return container;
+  }
+
+  const container = new Container();
+  const box = new Box(1, 1, statusBgFn(renderStatus, theme));
+  box.addChild(new Text(backgroundTaskHeaderLine(details, renderStatus, theme), 0, 0));
+  addMarkdownBlock(box, details.description ?? details.taskId, theme, { paddingX: 1 });
+  if (details.errorMessage && renderStatus === "failed") {
+    addDiagnostic(box, details.errorMessage, renderStatus, theme);
+  }
+  container.addChild(box);
+
+  const finalOutput = details.finalOutput?.trim();
+  if (finalOutput && renderStatus !== "running") {
+    container.addChild(new Spacer(1));
+    addFinalOutputBox(container, finalOutput, theme);
+  }
+
+  return container;
 }
 
 export function renderMmrSubagentCall(
