@@ -14,33 +14,33 @@ changelog:
   categories:
     - title: Added
       labels:
-        - type: feature
+        - "type: feature"
         - feature
         - enhancement
         - added
     - title: Fixed
       labels:
-        - type: fix
+        - "type: fix"
         - bug
         - fix
         - fixed
     - title: Security
       labels:
         - security
-        - type: security
+        - "type: security"
     - title: Removed
       labels:
         - removed
-        - type: removal
+        - "type: removal"
         - breaking-change
     - title: Documentation
       labels:
         - documentation
         - docs
-        - type: docs
+        - "type: docs"
     - title: Changed
       labels:
-        - type: changed
+        - "type: changed"
         - changed
         - refactor
         - performance
