@@ -27,6 +27,9 @@ import {
   type LibrarianToolDeps,
 } from "./librarian.js";
 import {
+  ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
+  type AsyncTaskCompletionDetails,
+  renderAsyncTaskCompletionMessage,
   renderMmrBackgroundTaskCall,
   renderMmrBackgroundTaskResult,
 } from "./progress-rendering.js";
@@ -458,7 +461,7 @@ function buildCompletionNotifier(
   return (snapshot) => {
     sendMessage(
       {
-        customType: "mmr-subagents.async-task-completion",
+        customType: ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
         content:
           `<task-notification task_id="${escapeXmlAttr(snapshot.taskId)}" status="${snapshot.status}">\n` +
           `Background task "${escapeXmlAttr(snapshot.description)}" ${snapshot.status}. ` +
@@ -467,10 +470,11 @@ function buildCompletionNotifier(
         display: true,
         details: {
           version: 1,
-          kind: "mmr-subagents.async-task-completion",
+          kind: ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
           taskId: snapshot.taskId,
           status: snapshot.status,
-        },
+          description: snapshot.description,
+        } satisfies AsyncTaskCompletionDetails,
       },
       { deliverAs: "nextTurn", triggerTurn: true },
     );
@@ -847,6 +851,13 @@ export function registerAsyncTaskTools(pi: ExtensionAPI, deps: AsyncTaskToolDeps
   for (const definition of definitions) {
     registerMmrOwnedTool(definition.name);
     pi.registerTool(definition);
+  }
+  // Render the async-task completion push as a compact status row instead of
+  // dumping its model-facing `<task-notification>` XML into the transcript.
+  // Feature-detected so headless/JSON hosts without a renderer pipeline are
+  // unaffected (the message still delivers; only its TUI shape changes).
+  if (typeof pi.registerMessageRenderer === "function") {
+    pi.registerMessageRenderer(ASYNC_TASK_COMPLETION_CUSTOM_TYPE, renderAsyncTaskCompletionMessage);
   }
   return definitions;
 }

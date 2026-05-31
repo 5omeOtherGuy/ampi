@@ -10,6 +10,7 @@ import {
   ToolExecutionComponent,
   UserMessageComponent,
   type AgentToolResult,
+  type MessageRenderer,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Markdown, Spacer, Text, truncateToWidth, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import { isRecord } from "../mmr-core/internal/json.js";
@@ -50,6 +51,22 @@ const SUBAGENT_DETAILS_STATUS_VALUES = new Set([
   "no-agent-start",
   "empty-output",
 ]);
+
+export const ASYNC_TASK_COMPLETION_CUSTOM_TYPE = "mmr-subagents.async-task-completion" as const;
+
+/**
+ * Structured payload carried on the async-task completion push message's
+ * `details`. The renderer reads this instead of parsing the model-facing
+ * XML `content`. `description` is included so the row can show the task
+ * label without scraping the XML; older replayed messages may omit it.
+ */
+export interface AsyncTaskCompletionDetails {
+  version: 1;
+  kind: typeof ASYNC_TASK_COMPLETION_CUSTOM_TYPE;
+  taskId: string;
+  status: string;
+  description?: string;
+}
 
 interface BackgroundTaskDetails {
   worker?: string;
@@ -1078,6 +1095,49 @@ export function renderMmrBackgroundTaskResult(
 
   return container;
 }
+
+function asyncTaskCompletionHeaderLine(
+  details: AsyncTaskCompletionDetails | undefined,
+  renderStatus: RenderStatus,
+  theme: SubagentTheme,
+): string {
+  const title = theme.fg("toolTitle", theme.bold("background task"));
+  const badge = theme.fg("muted", "finished");
+  const statusText = theme.fg(statusColor(renderStatus), backgroundTaskStatusLabel(details?.status));
+  return `${title} ${theme.fg("muted", "•")} ${badge}  ${statusText}`;
+}
+
+/**
+ * Renderer for the `mmr-subagents.async-task-completion` push message.
+ *
+ * The message `content` stays the model-facing `<task-notification>` XML
+ * (the agent consumes it next turn); this renderer draws the human-facing
+ * row from the structured `details` instead of dumping that XML into the
+ * transcript. Returning `undefined` (e.g. malformed or legacy details)
+ * makes the host fall back to its default custom-message box.
+ */
+export const renderAsyncTaskCompletionMessage: MessageRenderer<AsyncTaskCompletionDetails> = (
+  message,
+  _options,
+  theme,
+) => {
+  try {
+    const details = message.details;
+    const renderStatus = backgroundTaskRenderStatus(details?.status) ?? "succeeded";
+    const box = new Box(1, 1, statusBgFn(renderStatus, theme));
+    box.addChild(new Text(asyncTaskCompletionHeaderLine(details, renderStatus, theme), 0, 0));
+    addMarkdownBlock(box, details?.description, theme, { paddingX: 1 });
+    const taskId = details?.taskId?.trim();
+    if (taskId) {
+      box.addChild(new Text(theme.fg("muted", `task_poll({task_id:"${taskId}"})`), 0, 0));
+    }
+    const container = new Container();
+    container.addChild(box);
+    return container;
+  } catch {
+    return undefined;
+  }
+};
 
 export function renderMmrSubagentCall(
   toolName: string,

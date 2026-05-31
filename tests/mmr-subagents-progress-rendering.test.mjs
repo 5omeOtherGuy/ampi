@@ -1032,3 +1032,101 @@ describe("background task rendering", () => {
     assert.doesNotMatch(rendered, /running in background/);
   });
 });
+
+describe("renderAsyncTaskCompletionMessage", () => {
+  function completionMessage(details) {
+    return {
+      customType: "mmr-subagents.async-task-completion",
+      content:
+        `<task-notification task_id="${details.taskId}" status="${details.status}">\n` +
+        `Background task "${details.description}" ${details.status}.\n` +
+        `</task-notification>`,
+      display: true,
+      details,
+    };
+  }
+
+  it("renders a succeeded completion as a compact status row, not raw XML", async () => {
+    const { renderAsyncTaskCompletionMessage } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderAsyncTaskCompletionMessage(
+      completionMessage({
+        version: 1,
+        kind: "mmr-subagents.async-task-completion",
+        taskId: "task_9",
+        status: "succeeded",
+        description: "Test background finder",
+      }),
+      { expanded: false },
+      fakeTheme,
+    );
+    assert.ok(component, "expected the renderer to return a component");
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /background task .* completed/);
+    assert.match(rendered, /Test background finder/);
+    assert.match(rendered, /task_poll\(\{task_id:"task_9"\}\)/);
+    assert.doesNotMatch(rendered, /<task-notification/);
+  });
+
+  it("renders failed and cancelled completions with their status label", async () => {
+    const { renderAsyncTaskCompletionMessage } = await importSource(PROGRESS_RENDERING_MODULE);
+    const failed = normalize(
+      renderText(
+        renderAsyncTaskCompletionMessage(
+          completionMessage({
+            version: 1,
+            kind: "mmr-subagents.async-task-completion",
+            taskId: "task_3",
+            status: "failed",
+            description: "Doomed worker",
+          }),
+          { expanded: false },
+          fakeTheme,
+        ),
+      ),
+    );
+    assert.match(failed, /background task .* failed/);
+    assert.match(failed, /Doomed worker/);
+
+    const cancelled = normalize(
+      renderText(
+        renderAsyncTaskCompletionMessage(
+          completionMessage({
+            version: 1,
+            kind: "mmr-subagents.async-task-completion",
+            taskId: "task_4",
+            status: "cancelled",
+            description: "Stopped worker",
+          }),
+          { expanded: false },
+          fakeTheme,
+        ),
+      ),
+    );
+    assert.match(cancelled, /background task .* cancelled/);
+  });
+
+  it("still renders a clean row when legacy details omit the description", async () => {
+    const { renderAsyncTaskCompletionMessage } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderAsyncTaskCompletionMessage(
+      {
+        customType: "mmr-subagents.async-task-completion",
+        content: "<task-notification task_id=\"task_7\" status=\"succeeded\"></task-notification>",
+        display: true,
+        details: {
+          version: 1,
+          kind: "mmr-subagents.async-task-completion",
+          taskId: "task_7",
+          status: "succeeded",
+        },
+      },
+      { expanded: false },
+      fakeTheme,
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /background task .* completed/);
+    assert.match(rendered, /task_poll\(\{task_id:"task_7"\}\)/);
+    assert.doesNotMatch(rendered, /<task-notification/);
+  });
+});
