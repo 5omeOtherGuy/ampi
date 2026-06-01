@@ -416,6 +416,38 @@ describe("async-task-registry wait + completion push", () => {
     assert.equal(reg.getTask("sess-A", "t").completionPush, "sent");
   });
 
+  it("suppresses the completion push when a blocked waitForTask observes the result", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t" });
+    const d = makeDeferredRun();
+    const calls = [];
+    reg.startTask(startArgs({ run: d.run, notify: (snap) => calls.push(snap) }));
+    // Parent is actively blocked in waitForTask: it WILL observe the terminal
+    // result, so an additional push would only duplicate a result in hand.
+    const waitPromise = reg.waitForTask({ sessionKey: "sess-A", taskId: "t", timeoutMs: 5000 });
+    d.resolve(makeWorkerResult({ finalOutput: "done" }));
+    const settled = await waitPromise;
+    await flush();
+    assert.equal(settled.snapshot.status, "succeeded");
+    assert.equal(calls.length, 0, "a result observed by a blocked wait must not also push");
+    assert.equal(reg.getTask("sess-A", "t").completionPush, "observed");
+  });
+
+  it("still pushes when a wait times out before the task settles", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t" });
+    const d = makeDeferredRun();
+    const calls = [];
+    reg.startTask(startArgs({ run: d.run, notify: (snap) => calls.push(snap.taskId) }));
+    // A timed-out wait leaves no active observer, so the push must still fire.
+    const timedOut = await reg.waitForTask({ sessionKey: "sess-A", taskId: "t", timeoutMs: 5 });
+    assert.equal(timedOut.timedOut, true);
+    d.resolve(makeWorkerResult({ finalOutput: "done" }));
+    await flush();
+    assert.deepEqual(calls, ["t"], "a timed-out wait left no observer, so the push must still fire");
+    assert.equal(reg.getTask("sess-A", "t").completionPush, "sent");
+  });
+
   it("does not enable completion push when no notifier is provided", async () => {
     const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
     const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t" });

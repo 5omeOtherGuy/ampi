@@ -66,7 +66,13 @@ export type MmrAsyncTaskCompletionPushState =
   | "sent"
   | "failed"
   /** Push was requested but suppressed because the per-session budget was exhausted. */
-  | "suppressed";
+  | "suppressed"
+  /**
+   * Push was requested but skipped because the parent already observed (or was
+   * actively blocked waiting on) the terminal result via task_wait/task_poll.
+   * The agent already has the result in hand, so a push would only duplicate it.
+   */
+  | "observed";
 
 /**
  * Hard ceiling on how many completion pushes a single session may fire,
@@ -628,6 +634,13 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
   /** Resolve waiters and fire the at-most-once completion push. */
   private settle(record: MmrAsyncTaskRecord): void {
     this.clearWatchdog(record);
+    // Capture observation intent BEFORE draining waiters: an active waiter at
+    // settle time means a blocked task_wait is about to consume this terminal
+    // result, so a completion push would only duplicate a result in hand. The
+    // waiter's continuation sets finalObservedAtMs on a later microtask (after
+    // maybeNotify runs synchronously here), so the live waiter — not
+    // finalObservedAtMs — is the reliable concurrent-observation signal.
+    const observedByWaiter = record.waiters.size > 0;
     for (const waiter of [...record.waiters]) {
       record.waiters.delete(waiter);
       try {
@@ -636,11 +649,19 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         // Waiter resolvers never throw in practice; ignore defensively.
       }
     }
-    this.maybeNotify(record);
+    this.maybeNotify(record, observedByWaiter);
   }
 
-  private maybeNotify(record: MmrAsyncTaskRecord): void {
+  private maybeNotify(record: MmrAsyncTaskRecord, observedByWaiter = false): void {
     if (record.completionPush !== "pending" || !record.notify) return;
+    // Skip the push when the parent already observed (or is actively waiting on)
+    // the terminal result via task_wait/task_poll: the agent has the result in
+    // hand, so pushing would double-surface the same finished task. This does
+    // not consume the per-session push budget.
+    if (observedByWaiter || record.finalObservedAtMs !== undefined) {
+      record.completionPush = "observed";
+      return;
+    }
     // Per-session budget: even with push opted in, a session can only
     // self-wake a bounded number of times so a runaway plan cannot spam
     // (or loop) turns. An over-budget completion is recorded as suppressed.
