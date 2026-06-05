@@ -83,7 +83,32 @@ interface WidgetUILike {
 }
 interface WidgetCtxLike {
   hasUI?: boolean;
+  /**
+   * Pi 0.78+ run mode (`"tui" | "rpc" | "json" | "print"`). Read as an
+   * optional string so the toolbox compiles and runs against both the
+   * 0.77 context (no `mode`) and 0.78+ contexts within our supported peer
+   * range. See {@link isTuiWidgetSurface}.
+   */
+  mode?: string;
   ui?: WidgetUILike;
+}
+
+/**
+ * Whether `ctx` is a terminal UI that can host Pi's pinned custom widget.
+ *
+ * The task-list widget is a TUI-only custom component: Pi's RPC surface
+ * ignores widget factory functions, and Pi's guidance is to guard
+ * terminal-only components with `mode === "tui"`. We feature-detect `mode`
+ * so this stays correct across our `>=0.77.0 <0.79.0` peer range:
+ * - 0.78+: gate strictly on `mode === "tui"` (so RPC/JSON/print get no
+ *   widget traffic, not even clear-only calls).
+ * - 0.77 (no `mode`): fall back to the previous `hasUI` behavior so
+ *   existing terminal sessions still render the widget unchanged.
+ */
+export function isTuiWidgetSurface(ctx: WidgetCtxLike | undefined): boolean {
+  if (!ctx?.ui) return false;
+  if (typeof ctx.mode === "string") return ctx.mode === "tui";
+  return ctx.hasUI === true;
 }
 
 function widgetStatusGlyph(status: TodoStatus): string {
@@ -178,15 +203,15 @@ export interface RefreshTodoWidgetOptions {
 
 /**
  * Project the current session-local todo list onto Pi's persistent widget.
- * Headless surfaces (`ctx.hasUI === false`) are no-ops; the widget is a UI
- * mirror of the just-persisted session entry, not a state source.
+ * Non-TUI surfaces are no-ops (see {@link isTuiWidgetSurface}); the widget
+ * is a UI mirror of the just-persisted session entry, not a state source.
  */
 export function refreshTodoWidget(
   ctx: WidgetCtxLike | undefined,
   tasks: readonly TaskListItem[],
   options: RefreshTodoWidgetOptions = {},
 ): void {
-  if (!ctx?.hasUI || !ctx.ui) return;
+  if (!isTuiWidgetSurface(ctx) || !ctx?.ui) return;
   if (options.isHidden?.()) return;
   try {
     if (tasks.length === 0) {
