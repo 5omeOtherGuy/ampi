@@ -6,6 +6,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+## 0.2.0 — 2026-06-05
+
 ### Added
 
 - `mmr-subagents`: capture the parent turn's structured `systemPromptOptions` (Pi's `BuildSystemPromptOptions`) alongside the parent system-prompt string used to build mode-derived `Task` workers, so worker diagnostics can read the parent surface. `registerTaskParentPromptCapture` now records both atomically — the options are only updated when a non-empty prompt string is seen, so they never desync from a stale earlier turn — and the new `getTaskParentSystemPromptOptions()` exposes a minimal validated view (`selectedTools` filtered to strings with an empty selection preserved as distinct from not-supplied, non-empty `customPrompt`). Metadata only: it is never used to rebuild a prompt, and worker prompt assembly and routing are unchanged. Covered by `tests/mmr-subagents-task-parent-prompt.test.mjs`.
