@@ -130,7 +130,6 @@ function createProfile(definition: MmrCustomSubagentDefinition): MmrSubagentProf
     denyTools: [
       "Task",
       "oracle",
-      "cthulu",
       "librarian",
       "handoff",
       "start_task",

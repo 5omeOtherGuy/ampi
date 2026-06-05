@@ -349,20 +349,6 @@ export type {
   OracleToolDeps,
 } from "./extensions/mmr-subagents/oracle.js";
 export {
-  CTHULU_DEFAULT_MODEL_PREFERENCES,
-  CTHULU_DESCRIPTION,
-  CTHULU_PROGRESS_PLACEHOLDER,
-  CTHULU_PROMPT_GUIDELINES,
-  CTHULU_PROMPT_SNIPPET,
-  CTHULU_SUBAGENT_PROFILE,
-  CTHULU_TOOL_CONFIG,
-  CTHULU_TOOL_NAME,
-  CTHULU_WORKER_TOOLS,
-  buildCthuluWorkerSystemPrompt,
-  createCthuluTool,
-  registerCthuluTool,
-} from "./extensions/mmr-subagents/cthulu.js";
-export {
   LIBRARIAN_DESCRIPTION,
   LIBRARIAN_GATING_REASON,
   LIBRARIAN_PARAMETERS_SCHEMA,

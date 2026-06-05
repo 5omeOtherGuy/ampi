@@ -42,13 +42,11 @@ describe("mmr tool execution-mode policy (#8)", () => {
     const { createFinderTool } = await importSource("extensions/mmr-subagents/finder.ts");
     const { createOracleTool } = await importSource("extensions/mmr-subagents/oracle.ts");
     const { createLibrarianTool } = await importSource("extensions/mmr-subagents/librarian.ts");
-    const { createCthuluTool } = await importSource("extensions/mmr-subagents/cthulu.ts");
 
     for (const [name, tool] of [
       ["finder", createFinderTool()],
       ["oracle", createOracleTool()],
       ["librarian", createLibrarianTool()],
-      ["cthulu", createCthuluTool()],
     ]) {
       assert.notEqual(
         tool.executionMode,

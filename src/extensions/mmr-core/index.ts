@@ -737,8 +737,8 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
         }
       }
       // Subagent workers do not apply locked-mode policy. They may still
-      // carry a profile-declared output-token cap (e.g. the hidden cthulu
-      // worker at 128k), applied here as a minimal output-only policy.
+      // carry a profile-declared output-token cap, applied here as a
+      // minimal output-only policy.
       const subagentOutputPolicy = buildMmrSubagentOutputPolicy(subagentState.maxOutputTokens);
       if (subagentOutputPolicy) {
         return applyMmrRequestPolicy(event.payload, subagentOutputPolicy, { providerId: subagentState.provider });

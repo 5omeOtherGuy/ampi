@@ -49,7 +49,6 @@ export type MmrPromptFragmentId =
   | "shared-coding-guidance"
   | "mode-posture"
   | "response-style"
-  | "sunken-rite"
   | "preserved-tail";
 
 export interface MmrPromptFragmentDefinition {
@@ -94,7 +93,6 @@ export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
   "shared-coding-guidance",
   "mode-posture",
   "response-style",
-  "sunken-rite",
   "preserved-tail",
 ] as const satisfies readonly MmrPromptFragmentId[];
 
@@ -162,12 +160,6 @@ export const MMR_PROMPT_FRAGMENTS = {
     blockKind: "response-style",
     source: "mmr-core",
     summary: "Mode-specific response-style closing under the shared response-style heading.",
-  },
-  "sunken-rite": {
-    id: "sunken-rite",
-    blockKind: "sunken-rite",
-    source: "mmr-core",
-    summary: "Optional user-initiated Cthulhu roleplay gate appended to prompted locked modes.",
   },
   "preserved-tail": {
     id: "preserved-tail",

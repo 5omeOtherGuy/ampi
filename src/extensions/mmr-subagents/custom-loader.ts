@@ -179,7 +179,6 @@ function readBoolean(attributes: Record<string, FrontmatterValue>, key: string):
 export const MMR_CUSTOM_SUBAGENT_DENIED_TOOLS: ReadonlySet<string> = new Set([
   "Task",
   "oracle",
-  "cthulu",
   "librarian",
   "handoff",
   "start_task",
