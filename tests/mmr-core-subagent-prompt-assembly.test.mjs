@@ -329,6 +329,26 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.match(last.text, /## Task Worker Role/);
   });
 
+  it("scopes built-in tool guidance to the worker's filtered manifest, not the parent's rendered tools block", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Task Worker Role\n");
+    // Parent BASE_PROMPT lists read/bash/edit/write/grep/find, but this worker
+    // only resolves read + bash. Guidance must follow the worker, so the
+    // parent-only built-ins (edit/write/grep/find) must not leak.
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptGuidelines: [], description: "Read file contents.", schema: {} },
+        { name: "bash", owner: "pi", promptGuidelines: [], description: "Run shell commands.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const start = result.systemPrompt.indexOf("## Built-in tool guidance");
+    assert.notEqual(start, -1, "expected a built-in tool guidance block");
+    const block = result.systemPrompt.slice(start, result.systemPrompt.indexOf("\n## ", start + 1));
+    assert.deepEqual([...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]), ["bash", "read"]);
+  });
+
   it("fails closed when the mode-derived prompt builder is not registered", () => {
     assert.throws(
       () =>
@@ -550,6 +570,47 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.match(activeToolsBlock.text, /- find: Find files by glob/);
     assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
     assert.doesNotMatch(result.systemPrompt, /- Task:|- oracle:/);
+  });
+
+  it("renders the worker active-tools block from promptSnippet, flattening multiline text and falling back to description", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        // promptSnippet present -> use it, not the (longer) description.
+        { name: "read", owner: "pi", promptSnippet: "Read file contents (snippet)", promptGuidelines: [], description: "FULL read description that should not appear", schema: {} },
+        // no snippet, multiline description -> collapse to a single line.
+        { name: "grep", owner: "pi", promptGuidelines: [], description: "Search file\ncontents   for\npatterns", schema: {} },
+        // empty/whitespace snippet -> treated as absent, fall back to description.
+        { name: "find", owner: "pi", promptSnippet: "   ", promptGuidelines: [], description: "Find files by glob", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const activeToolsBlock = result.blocks.find((block) => block.kind === "active-tools");
+    assert.ok(activeToolsBlock, "mode-derived surfaces must keep an active-tools block");
+    assert.match(activeToolsBlock.text, /- read: Read file contents \(snippet\)/);
+    assert.doesNotMatch(activeToolsBlock.text, /FULL read description/);
+    assert.match(activeToolsBlock.text, /- grep: Search file contents for patterns/);
+    assert.match(activeToolsBlock.text, /- find: Find files by glob/);
+    // Worker tool lines stay single-line: no embedded newline mid-entry.
+    assert.doesNotMatch(activeToolsBlock.text, /- grep: Search file\ncontents/);
+    assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
+  });
+
+  it("renders Pi's (none) placeholder when no worker tool yields a summary line", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptSnippet: "", promptGuidelines: [], description: "   ", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const activeToolsBlock = result.blocks.find((block) => block.kind === "active-tools");
+    assert.ok(activeToolsBlock, "mode-derived surfaces must keep an active-tools block");
+    assert.match(activeToolsBlock.text, /Available tools:\n\(none\)\n/);
   });
 
   it("returns mode-derived results deterministically across runs", () => {

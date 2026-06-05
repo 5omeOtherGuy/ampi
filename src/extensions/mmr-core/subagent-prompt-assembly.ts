@@ -193,11 +193,40 @@ function filterManifestToProfile(
   return manifest.filter((entry) => allowed.has(entry.name));
 }
 
+/**
+ * Collapse a tool snippet/description to the single line Pi uses for its
+ * `Available tools:` entries. Mirrors Pi's own snippet normalization
+ * (`[\r\n]+` and runs of whitespace collapse to a single space, trimmed)
+ * so the worker block lists one `- name: text` line per tool instead of
+ * splicing a multi-paragraph tool description into the prompt head.
+ */
+function toToolSummaryLine(entry: MmrActiveToolManifestEntry): string | undefined {
+  // Prefer the registered one-line `promptSnippet` (the exact text Pi shows
+  // in its own `Available tools:` block) and fall back to the full
+  // description so a granted, callable worker tool is never hidden from the
+  // worker model. The worker prompt is delivered with replacement semantics,
+  // so this block is the only place the worker learns what it can call. An
+  // empty/whitespace-only snippet is treated as absent so it cannot hide the
+  // tool.
+  for (const raw of [entry.promptSnippet, entry.description]) {
+    if (typeof raw !== "string") continue;
+    const oneLine = raw.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+    if (oneLine.length > 0) return oneLine;
+  }
+  return undefined;
+}
+
 function renderWorkerActiveToolsBlock(manifest: readonly MmrActiveToolManifestEntry[]): string {
-  const lines = manifest.map((entry) => `- ${entry.name}: ${entry.description}`);
+  const lines: string[] = [];
+  for (const entry of manifest) {
+    const summary = toToolSummaryLine(entry);
+    if (summary !== undefined) lines.push(`- ${entry.name}: ${summary}`);
+  }
+  // Match Pi's `(none)` placeholder when no worker tool produced a line.
+  const body = lines.length > 0 ? lines : ["(none)"];
   return [
     "Available tools:",
-    ...lines,
+    ...body,
     "",
     MMR_ADDITIONAL_TOOLS_LINE,
     "",
@@ -341,6 +370,11 @@ export function assembleMmrSubagentSurface(
     state: baseState,
     baseSystemPrompt,
     activeToolManifest: filteredManifest,
+    // Built-in tool guidance for a worker must follow the worker's own
+    // (profile-filtered) tool set, not the parent's rendered `Available
+    // tools:` block. Otherwise parent-only built-ins (e.g. grep/find) leak
+    // guidance into a worker that cannot call them.
+    activeToolNames: filteredManifest.map((entry) => entry.name),
   });
 
   const workerRoleText = builder({

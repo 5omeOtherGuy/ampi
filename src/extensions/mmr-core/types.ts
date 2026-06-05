@@ -251,6 +251,44 @@ export interface MmrModeState {
    * act on them; intentionally not persisted.
    */
   settingsWarnings?: string[];
+  /**
+   * Runtime-only observation from the most recent `before_agent_start`
+   * prompt assembly. Captures (a) an unexpected prompt-head passthrough
+   * (anchor drift / section reorder) so the locked-mode posture loss is no
+   * longer silent, and (b) any mismatch between the mode's resolved active
+   * tool set and the tool selection Pi rendered the prompt from. Surfaced by
+   * `/mmr-status` via the policy-diagnostics pipeline; never persisted and
+   * cleared to `undefined` on a clean turn.
+   */
+  promptAssembly?: MmrPromptAssemblyObservation;
+}
+
+/**
+ * Why `assembleActiveSurface` returned Pi's prompt unchanged instead of
+ * splicing in the locked-mode head. `undefined` on the result means the
+ * splice succeeded. `not-prompted-mode` is benign (free / unrecognized
+ * mode); the remaining reasons indicate the Pi-auto head could not be
+ * located in the expected shape.
+ */
+export type MmrPromptPassthroughReason =
+  | "not-prompted-mode"
+  | "identity-anchor-missing"
+  | "section-anchor-missing"
+  | "section-order-invalid"
+  | "section-boundary-missing";
+
+/** Runtime-only prompt-assembly observation recorded per turn. */
+export interface MmrPromptAssemblyObservation {
+  /**
+   * Set when the locked-mode head was dropped for an unexpected reason
+   * (i.e. not a custom system prompt and not free mode). Drives the
+   * `prompt.head-not-applied` diagnostic.
+   */
+  unexpectedPassthroughReason?: MmrPromptPassthroughReason;
+  /** Resolved active tools that are absent from Pi's rendered tool selection. */
+  selectedToolsMissingFromPrompt?: string[];
+  /** Tools Pi rendered the prompt selection around that the mode did not resolve as active. */
+  selectedToolsExtraInPrompt?: string[];
 }
 
 export interface PersistedMmrModeState {
@@ -387,6 +425,13 @@ export interface MmrPromptAssemblyResult {
   blocks: MmrPromptBlock[];
   systemPrompt: string;
   activeToolManifest: MmrActiveToolManifestEntry[];
+  /**
+   * Why the splice fell back to passing Pi's prompt through unchanged, or
+   * `undefined` when the locked-mode head was spliced in successfully. Lets
+   * callers distinguish a benign passthrough (free mode, custom system
+   * prompt) from unexpected anchor drift.
+   */
+  passthroughReason?: MmrPromptPassthroughReason;
 }
 
 export interface MmrCoreSettings {
@@ -430,7 +475,9 @@ export type MmrPolicyDiagnosticCode =
   | "tools.gated"
   | "tools.disabled"
   | "availability"
-  | "context.registered-exceeds-profile";
+  | "context.registered-exceeds-profile"
+  | "prompt.head-not-applied"
+  | "tools.prompt-selection-mismatch";
 
 export type MmrPolicyDiagnosticSeverity = "info" | "warning";
 

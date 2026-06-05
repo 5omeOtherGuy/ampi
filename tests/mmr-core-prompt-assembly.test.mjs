@@ -303,3 +303,86 @@ describe("Phase D: assembleActiveSurface() public API", () => {
     assert.deepEqual(result.activeToolManifest, manifest);
   });
 });
+
+describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", () => {
+  let assembleActiveSurface;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    assembleActiveSurface = assembly.assembleActiveSurface;
+  });
+
+  function guidanceTools(systemPrompt) {
+    const start = systemPrompt.indexOf("## Built-in tool guidance");
+    if (start === -1) return [];
+    const end = systemPrompt.indexOf("\n## ", start + 1);
+    const block = systemPrompt.slice(start, end === -1 ? undefined : end);
+    return [...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]);
+  }
+
+  it("follows activeToolNames instead of the rendered tools block when provided", () => {
+    // BASE_PROMPT's Available tools block lists all six curated built-ins,
+    // but the resolved active set here omits grep/find.
+    const result = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+      activeToolNames: ["read", "bash", "edit", "write"],
+    });
+    assert.deepEqual(guidanceTools(result.systemPrompt), ["bash", "read", "edit", "write"]);
+  });
+
+  it("covers a callable built-in even when it is absent from the rendered tools block", () => {
+    // Strip grep from the rendered Available tools block; selectedTools still
+    // marks it callable, so guidance must still include it.
+    const baseWithoutGrep = BASE_PROMPT.replace(
+      "- grep: Search file contents for patterns (respects .gitignore)\n",
+      "",
+    );
+    assert.ok(!baseWithoutGrep.includes("- grep:"));
+    const result = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: baseWithoutGrep,
+      activeToolManifest: [],
+      activeToolNames: ["read", "grep"],
+    });
+    assert.deepEqual(guidanceTools(result.systemPrompt), ["read", "grep"]);
+  });
+
+  it("ignores non-built-in names in activeToolNames", () => {
+    const result = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+      activeToolNames: ["read", "finder", "task_list", "web_search"],
+    });
+    assert.deepEqual(guidanceTools(result.systemPrompt), ["read"]);
+  });
+
+  it("suppresses the guidance block for an empty activeToolNames set", () => {
+    const result = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+      activeToolNames: [],
+    });
+    assert.equal(result.blocks.some((b) => b.kind === "builtin-tool-guidance"), false);
+    assert.equal(result.systemPrompt.includes("## Built-in tool guidance"), false);
+  });
+
+  it("falls back to the rendered tools block when activeToolNames is omitted", () => {
+    const result = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+    });
+    assert.deepEqual(guidanceTools(result.systemPrompt), [
+      "bash",
+      "read",
+      "edit",
+      "write",
+      "grep",
+      "find",
+    ]);
+  });
+});

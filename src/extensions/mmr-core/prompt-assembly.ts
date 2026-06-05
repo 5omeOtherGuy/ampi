@@ -10,6 +10,7 @@ import type {
   MmrModeState,
   MmrPromptAssemblyResult,
   MmrPromptBlock,
+  MmrPromptPassthroughReason,
 } from "./types.js";
 
 /**
@@ -51,12 +52,27 @@ export interface AssembleActiveSurfaceInput {
    * appear here. Passed through unchanged into the result.
    */
   activeToolManifest: MmrActiveToolManifestEntry[];
+  /**
+   * Built-in tool guidance source. When provided, the `## Built-in tool
+   * guidance` block follows these tool names (the resolved callable/active
+   * set) instead of the names parsed from Pi's rendered `Available tools:`
+   * block, so guidance covers a tool the agent can call even when Pi did
+   * not give it a one-line snippet (snippet-gated tools are omitted from the
+   * rendered block but remain callable). `buildBuiltinToolGuidance` filters
+   * this list to the curated built-ins, so passing the full active set is
+   * safe. An empty array suppresses the block; when omitted, the block falls
+   * back to parsing the rendered tools text (unchanged behavior).
+   */
+  activeToolNames?: readonly string[];
   /** Optional provider/model identifiers forwarded to the result. */
   provider?: string;
   model?: string;
 }
 
-function passthroughResult(input: AssembleActiveSurfaceInput): MmrPromptAssemblyResult {
+function passthroughResult(
+  input: AssembleActiveSurfaceInput,
+  passthroughReason: MmrPromptPassthroughReason,
+): MmrPromptAssemblyResult {
   return {
     mode: input.state.mode,
     provider: input.provider,
@@ -71,6 +87,7 @@ function passthroughResult(input: AssembleActiveSurfaceInput): MmrPromptAssembly
     ],
     systemPrompt: input.baseSystemPrompt,
     activeToolManifest: input.activeToolManifest,
+    passthroughReason,
   };
 }
 
@@ -95,29 +112,29 @@ export function assembleActiveSurface(
   input: AssembleActiveSurfaceInput,
 ): MmrPromptAssemblyResult {
   const mode = input.state.mode;
-  if (!isPromptedMode(mode)) return passthroughResult(input);
+  if (!isPromptedMode(mode)) return passthroughResult(input, "not-prompted-mode");
 
   const base = input.baseSystemPrompt;
   const introStart = base.indexOf(MMR_IDENTITY_LINE);
-  if (introStart === -1) return passthroughResult(input);
+  if (introStart === -1) return passthroughResult(input, "identity-anchor-missing");
 
   const toolsStart = findHeaderStart(base, TOOLS_SECTION_ANCHOR, introStart);
   const guidelinesStart = findHeaderStart(base, GUIDELINES_SECTION_ANCHOR, introStart);
   const piDocsStart = findHeaderStart(base, PI_DOCS_SECTION_ANCHOR, introStart);
 
   if (toolsStart === -1 || guidelinesStart === -1 || piDocsStart === -1) {
-    return passthroughResult(input);
+    return passthroughResult(input, "section-anchor-missing");
   }
 
   if (
     !(introStart < toolsStart && toolsStart < guidelinesStart && guidelinesStart < piDocsStart)
   ) {
-    return passthroughResult(input);
+    return passthroughResult(input, "section-order-invalid");
   }
 
   const toolsEnd = base.indexOf("\n\n", toolsStart);
   const guidelinesEnd = base.indexOf("\n\n", guidelinesStart);
-  if (toolsEnd === -1 || guidelinesEnd === -1) return passthroughResult(input);
+  if (toolsEnd === -1 || guidelinesEnd === -1) return passthroughResult(input, "section-boundary-missing");
 
   const docsBlankIdx = base.indexOf("\n\n", piDocsStart);
   const docsDateIdx = base.indexOf(DATE_TAIL_ANCHOR, piDocsStart);
@@ -174,7 +191,7 @@ export function assembleActiveSurface(
   };
 
   const builtinToolGuidanceText = buildBuiltinToolGuidance(
-    extractActiveBuiltinToolNames(toolsContent),
+    input.activeToolNames ?? extractActiveBuiltinToolNames(toolsContent),
   );
   const builtinToolGuidanceBlock: MmrPromptBlock | null = builtinToolGuidanceText
     ? {

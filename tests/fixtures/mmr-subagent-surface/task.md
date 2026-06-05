@@ -63,14 +63,6 @@ write:
 - Use this tool to create a new file that does not yet exist.
 - For existing files, prefer `edit` instead—even for extensive changes. Only use write to overwrite an existing file when you are replacing nearly all of its content AND the file is small (under ~250 lines).
 
-grep:
-- Scope with `path` first; add `glob` when file type matters.
-- Prefer several focused searches over one repo-wide scan.
-- Use `literal: true` for exact text; keep regex for patterns.
-
-find:
-- Use find to find files by name patterns across your codebase. Results are returned in ripgrep's traversal order, not by modification time.
-
 Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
 - Main documentation: /test/pi/README.md
 - Additional docs: /test/pi/docs
