@@ -1,6 +1,6 @@
 {
   "name": "pi-mmr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pi Multi-Model Routing extensions.",
   "type": "module",
   "license": "MIT",
