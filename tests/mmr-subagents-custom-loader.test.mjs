@@ -69,6 +69,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     assert.equal(definition.description, "Reviews a repository slice.");
     assert.equal(definition.model, "inherit");
     assert.deepEqual([...definition.toolPatterns], ["read", "bash", "write"]);
+    assert.equal(definition.toolsDeclared, true);
     assert.deepEqual([...definition.skills], ["audit", "review"]);
     assert.equal(definition.baseDir, path.dirname(filePath));
     assert.equal(definition.systemPrompt, `Inspect ${path.dirname(filePath)} and report concise findings.`);
@@ -220,7 +221,26 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     });
     assert.ok(definition);
     assert.deepEqual([...definition.toolPatterns], []);
+    assert.equal(definition.toolsDeclared, true, "an empty `tools:` block still counts as a declared (but empty) tool list");
     assert.equal(definition.description, "Stays as a real description.");
+  });
+
+  it("marks toolsDeclared false when no tools field is present at all", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
+    const definition = parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", "agents", "prompt-only.md"),
+      markdown: [
+        "---",
+        "type: subagent",
+        "name: Prompt Only",
+        "description: Answers from its prompt only.",
+        "---",
+        "Respond using only the task prompt.",
+      ].join("\n"),
+    });
+    assert.ok(definition);
+    assert.deepEqual([...definition.toolPatterns], []);
+    assert.equal(definition.toolsDeclared, false);
   });
 
   it("tolerates blank lines and comments inside a block-list", async () => {

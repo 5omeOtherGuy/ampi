@@ -66,6 +66,12 @@ export interface CustomSubagentDetails extends MmrSpawnedSubagentWorkerDetailsBa
   definitionName: string;
   filePath: string;
   prompt: string;
+  /**
+   * User-facing notice emitted when the worker ran with no tools, so the
+   * reader understands the subagent answered from its prompt only.
+   * Absent when the worker had at least one tool.
+   */
+  noToolsNotice?: string;
 }
 
 export interface CustomSubagentToolDeps {
@@ -167,15 +173,52 @@ function getParentAllowedRegisteredTools(pi: ExtensionAPI): string[] {
   return [...active].filter((name) => registered.has(name));
 }
 
+/**
+ * Build the user-facing notice shown when a custom subagent ran with no
+ * tools. pi-mmr keeps least privilege as the default: a custom subagent
+ * with no declared tools gets none, so it can only answer from its prompt
+ * (it cannot read files, search, run commands, or edit). The wording
+ * distinguishes "no tools field" from an explicitly empty list so the
+ * author knows whether the omission was intentional.
+ *
+ * Returns `undefined` when the worker had at least one tool.
+ */
+export function buildMmrCustomSubagentNoToolsNotice(
+  definition: MmrCustomSubagentDefinition,
+  workerTools: readonly string[],
+): string | undefined {
+  if (workerTools.length > 0) return undefined;
+  const grantHint =
+    `Add a \`tools:\` list to ${path.basename(definition.filePath)} (for example \`tools: read, grep\`) to grant capabilities.`;
+  if (definition.toolsDeclared) {
+    return `Note: ${definition.name} ran with no tools because its \`tools\` list is empty. It answered from its prompt only — it could not read files, search, run commands, or edit. ${grantHint}`;
+  }
+  return `Note: ${definition.name} ran with no tools. No \`tools\` field was set, and pi-mmr gives custom subagents no tools by default (least privilege), so it answered from its prompt only — it could not read files, search, run commands, or edit. ${grantHint}`;
+}
+
+function prependNotice(notice: string | undefined, text: string): string {
+  return notice ? `${notice}\n\n${text}` : text;
+}
+
 function buildProgressContent(snapshot: MmrWorkerProgressSnapshot, definition: MmrCustomSubagentDefinition): string {
   return progressTextOrPlaceholder(snapshot, `${definition.name}: worker running…`);
 }
 
-function buildFinalContent(result: MmrWorkerResult, definition: MmrCustomSubagentDefinition): string {
+function buildFinalContent(
+  result: MmrWorkerResult,
+  definition: MmrCustomSubagentDefinition,
+  workerTools: readonly string[],
+): string {
+  const notice = buildMmrCustomSubagentNoToolsNotice(definition, workerTools);
   const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
   const text = result.truncatedFinalOutput || result.finalOutput;
-  if (status === "success") return text.trim().length > 0 ? text : `${definition.name}: completed with no output.`;
-  return `${definition.name}: worker failed (${status}).${result.errorMessage ? ` ${result.errorMessage}` : ""}${text ? `\n\n${text}` : ""}`;
+  if (status === "success") {
+    return prependNotice(notice, text.trim().length > 0 ? text : `${definition.name}: completed with no output.`);
+  }
+  return prependNotice(
+    notice,
+    `${definition.name}: worker failed (${status}).${result.errorMessage ? ` ${result.errorMessage}` : ""}${text ? `\n\n${text}` : ""}`,
+  );
 }
 
 function buildProgressDetails(
@@ -183,12 +226,14 @@ function buildProgressDetails(
   definition: MmrCustomSubagentDefinition,
   ctx: { cwd: string; workerTools: readonly string[]; model?: string; contextWindow?: number; prompt: string },
 ): CustomSubagentDetails {
+  const noToolsNotice = buildMmrCustomSubagentNoToolsNotice(definition, ctx.workerTools);
   return {
     worker: `mmr-subagents.${definition.toolName}`,
     toolName: definition.toolName,
     definitionName: definition.name,
     filePath: definition.filePath,
     prompt: ctx.prompt,
+    ...(noToolsNotice ? { noToolsNotice } : {}),
     ...buildSpawnedProgressDetailsBase({
       snapshot,
       cwd: ctx.cwd,
@@ -204,6 +249,7 @@ function buildFinalDetails(
   definition: MmrCustomSubagentDefinition,
   ctx: { cwd: string; workerTools: readonly string[]; model?: string; contextWindow?: number; prompt: string },
 ): CustomSubagentDetails {
+  const noToolsNotice = buildMmrCustomSubagentNoToolsNotice(definition, ctx.workerTools);
   return {
     worker: `mmr-subagents.${definition.toolName}`,
     status: classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" }),
@@ -211,6 +257,7 @@ function buildFinalDetails(
     definitionName: definition.name,
     filePath: definition.filePath,
     prompt: ctx.prompt,
+    ...(noToolsNotice ? { noToolsNotice } : {}),
     ...buildSpawnedFinalDetailsBase({
       result,
       cwd: ctx.cwd,
@@ -354,7 +401,7 @@ export function createMmrCustomSubagentTool(
           : undefined,
       });
       return {
-        content: [{ type: "text", text: buildFinalContent(result, definition) }],
+        content: [{ type: "text", text: buildFinalContent(result, definition, workerTools) }],
         details: buildFinalDetails(result, definition, { cwd, workerTools, model: modelArg, contextWindow, prompt: parsed.value.task }),
       };
     },

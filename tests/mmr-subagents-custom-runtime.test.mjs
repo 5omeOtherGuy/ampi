@@ -133,5 +133,68 @@ describe("mmr-subagents custom Markdown runtime", () => {
     assert.equal(result.details.model, "openai-codex/gpt-5.5");
     assert.equal(result.details.contextWindow, 1234);
     assert.deepEqual(result.details.workerTools, ["read", "bash"]);
+    assert.equal(result.details.noToolsNotice, undefined, "a worker with tools gets no notice");
+  });
+
+  it("surfaces a user-facing notice when a custom subagent has no tools field", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
+    const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
+    const definition = parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", ".claude", "agents", "prompt-only.md"),
+      markdown: [
+        "---",
+        "type: subagent",
+        "name: Prompt Only",
+        "description: Answers from its prompt only.",
+        "---",
+        "Respond using only the task prompt.",
+      ].join("\n"),
+    });
+    assert.ok(definition);
+    assert.equal(definition.toolsDeclared, false);
+
+    const runCalls = [];
+    const runner = { run: async (options) => { runCalls.push(options); return makeWorkerResult({ prompt: options.prompt, cwd: options.cwd }); } };
+    const { pi, tools } = createMockPi({ activeTools: ["read", "bash"], allTools: ["read", "bash"] });
+    registerMmrCustomSubagentDefinition(pi, definition, { runner });
+
+    const result = await tools.get("sa__prompt_only").execute(
+      "call-1",
+      { task: "summarize the design" },
+      undefined,
+      undefined,
+      {
+        cwd: "/repo",
+        model: { provider: "openai-codex", id: "gpt-5.5", contextWindow: 1234 },
+        modelRegistry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.5", contextWindow: 1234 }]),
+      },
+    );
+
+    assert.deepEqual(runCalls[0].tools, [], "no tools field means the worker runs with no tools");
+    assert.deepEqual(result.details.workerTools, []);
+    assert.ok(typeof result.details.noToolsNotice === "string" && result.details.noToolsNotice.includes("no tools"));
+    assert.match(result.content[0].text, /ran with no tools/);
+    assert.ok(result.content[0].text.includes("custom answer"), "the worker output is preserved after the notice");
+  });
+
+  it("distinguishes an explicitly empty tools list in the no-tools notice", async () => {
+    const { buildMmrCustomSubagentNoToolsNotice } = await importSource(CUSTOM_RUNTIME_MODULE);
+    const base = {
+      name: "Prompt Only",
+      toolName: "sa__prompt_only",
+      description: "d",
+      filePath: "/repo/.claude/agents/prompt-only.md",
+      baseDir: "/repo/.claude/agents",
+      systemPrompt: "p",
+      model: "inherit",
+      toolPatterns: [],
+      skills: [],
+      isolatedContext: false,
+    };
+    const omitted = buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: false }, []);
+    const explicit = buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: true }, []);
+    assert.match(omitted, /No `tools` field was set/);
+    assert.match(explicit, /`tools` list is empty/);
+    assert.equal(buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: false }, ["read"]), undefined);
   });
 });

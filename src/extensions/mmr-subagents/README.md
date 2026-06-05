@@ -100,6 +100,7 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 - The Markdown body is the worker system prompt. `isolatedContext: true` uses exact system-prompt replacement; otherwise the body is appended.
 - `model: <route>` pins the worker route; `model: inherit` forwards the parent model through the existing subagent model-preference override env so parent spawn and child activation agree.
 - `tools:` names exact Pi tools. Execution filters them through the parent-active registered tool set and passes the reduced list explicitly to the child, so unavailable or denied tools do not leak into the custom worker.
+- No tools by default (least privilege): when a definition declares no `tools` (or `allowed-tools`/`allowedTools`) field, the subagent runs with no tools and answers from its prompt only. This is deliberate and differs from Claude Code, which treats an omitted `tools` field as "all tools". When the worker ends up with no tools, the tool result is prefixed with a user-facing notice that distinguishes a missing `tools` field from an explicitly empty list and points at the file to grant capabilities.
 
 ### `history-reader`
 

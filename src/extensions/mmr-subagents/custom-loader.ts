@@ -25,6 +25,15 @@ export interface MmrCustomSubagentDefinition {
   systemPrompt: string;
   model: string;
   toolPatterns: readonly string[];
+  /**
+   * Whether the Markdown frontmatter declared a tools key at all
+   * (`tools`, `allowed-tools`, or `allowedTools`). pi-mmr defaults a
+   * custom subagent to NO tools when none are declared (least
+   * privilege); this flag lets the runtime tell "no tools field" apart
+   * from "explicitly empty tools list" when it surfaces the no-tools
+   * notice to the user.
+   */
+  toolsDeclared: boolean;
   skills: readonly string[];
   isolatedContext: boolean;
 }
@@ -200,6 +209,13 @@ export function isUnsafeMmrCustomSubagentToolPattern(tool: string): boolean {
   return false;
 }
 
+/** Frontmatter keys that declare a custom subagent's allowed tool list. */
+export const MMR_CUSTOM_SUBAGENT_TOOL_KEYS: readonly string[] = [
+  "tools",
+  "allowed-tools",
+  "allowedTools",
+];
+
 function readStringList(attributes: Record<string, FrontmatterValue>, keys: readonly string[]): string[] {
   for (const key of keys) {
     const value = attributes[key];
@@ -207,6 +223,16 @@ function readStringList(attributes: Record<string, FrontmatterValue>, keys: read
     if (typeof value === "string" && value.trim().length > 0) return parseListValue(value);
   }
   return [];
+}
+
+/**
+ * Whether any of the given keys is present in the parsed frontmatter,
+ * regardless of value. Used to distinguish a declared-but-empty tools
+ * list (e.g. `tools:` or `tools: []`) from a tools key that was never
+ * written at all.
+ */
+function hasAnyKey(attributes: Record<string, FrontmatterValue>, keys: readonly string[]): boolean {
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(attributes, key));
 }
 
 function deriveName(filePath: string, attributes: Record<string, FrontmatterValue>): string {
@@ -279,8 +305,9 @@ export function parseMmrCustomSubagentMarkdown(
   const name = deriveName(absoluteFilePath, parsed.attributes);
   const description = readString(parsed.attributes, "description") ?? `Custom subagent ${name}.`;
   const model = readString(parsed.attributes, "model") ?? "inherit";
+  const toolsDeclared = hasAnyKey(parsed.attributes, MMR_CUSTOM_SUBAGENT_TOOL_KEYS);
   const toolPatterns = normalizeMmrCustomSubagentToolPatterns(
-    readStringList(parsed.attributes, ["tools", "allowed-tools", "allowedTools"]),
+    readStringList(parsed.attributes, MMR_CUSTOM_SUBAGENT_TOOL_KEYS),
   );
   if (toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) return undefined;
   const skills = readStringList(parsed.attributes, ["skills"]);
@@ -295,6 +322,7 @@ export function parseMmrCustomSubagentMarkdown(
     systemPrompt,
     model,
     toolPatterns,
+    toolsDeclared,
     skills,
     isolatedContext,
   };
