@@ -98,8 +98,11 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 - Discovery roots: `<cwd>/.claude/agents` and `~/.claude/agents`, matching Claude Code-style Markdown subagent files. Scans are bounded to local-agent scale (100 definitions / 1000 Markdown files by default), skip symlink roots/entries, and recheck realpath containment under the configured root before reading.
 - Valid definitions (`type: subagent` or `isolatedContext: true`) register as `sa__<slug>` Pi tools at extension activation, with descriptions/guidelines derived from frontmatter.
 - The Markdown body is the worker system prompt. `isolatedContext: true` uses exact system-prompt replacement; otherwise the body is appended.
-- `model: <route>` pins the worker route; `model: inherit` forwards the parent model through the existing subagent model-preference override env so parent spawn and child activation agree.
+- `model: <route>` pins the worker route; `model: inherit` forwards the parent model through the existing subagent model-preference override env so parent spawn and child activation agree. An omitted `model` key also inherits the parent model.
+- `thinkingLevel:` (aliases: `thinking:`, `effort:`) pins the worker thinking/effort level to a provider-neutral canonical Pi level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, case-insensitive). Vendor-specific aliases are not accepted. Omitted/invalid values inherit the parent/default level.
 - `tools:` names exact Pi tools. Execution filters them through the parent-active registered tool set and passes the reduced list explicitly to the child, so unavailable or denied tools do not leak into the custom worker.
+- Default toolset (lower friction): when a definition declares no `tools` (or `allowed-tools`/`allowedTools`) field, the subagent defaults to the standard toolset `read, bash, edit, write, find, grep, web_search, read_web_page` (each still intersected with the registered/active tools). A fixed constant is used rather than "all registered tools" so the parent and the spawned child resolve the same set and the worker never fails activation on a tool mismatch; recursive/advisory subagents, toolbox, and MCP tools are excluded by construction. An explicitly empty list (`tools:` or `tools: []`) still runs with no tools so an author can deliberately build a prompt-only subagent.
+- Fallback notice: when the subagent relied on a fallback for `model`, thinking level, or `tools` (including the explicit no-tools case), a single advisory listing each fallback is shown in the rendered tool result and on `details.fallbackNotice`. It is deliberately kept out of the model-consumed `content`, so it reaches the human author without adding noise to the parent model's context.
 
 ### `history-reader`
 
@@ -193,7 +196,7 @@ Prompt routes:
 
 ### Framework-only surfaces
 
-- `custom-loader.ts` parses Markdown definitions into `sa__*` subagent definitions, accepts inline and YAML block-list `tools:` / `skills:`, maps Claude Code tool aliases to Pi-native names, preserves `model: inherit`, and provides sync/async hardened discovery used by runtime registration.
+- `custom-loader.ts` parses Markdown definitions into `sa__*` subagent definitions, accepts inline and YAML block-list `tools:` / `skills:`, maps Claude Code tool aliases to Pi-native names, records `modelDeclared` and preserves `model: inherit`, parses a provider-neutral `thinkingLevel`/`thinking`/`effort` level (reusing `mmr-core`'s `isThinkingLevel`), exposes the `MMR_CUSTOM_SUBAGENT_DEFAULT_TOOLS` standard-toolset constant, and provides sync/async hardened discovery used by runtime registration.
 - `mmr-core/subagent-runner-contract.ts` defines progress, tool-use, and permission-context shapes plus a fail-closed in-process runner placeholder that throws until the host runtime exposes nested in-process execution with filtered shared tool access.
 
 ### Invariants

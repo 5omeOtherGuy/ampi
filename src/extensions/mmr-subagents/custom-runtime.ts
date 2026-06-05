@@ -19,6 +19,7 @@ import { selectMmrModelRoute } from "../mmr-core/model-resolver.js";
 import type { MmrModelPreference } from "../mmr-core/types.js";
 import {
   type MmrCustomSubagentDefinition,
+  MMR_CUSTOM_SUBAGENT_DEFAULT_TOOLS,
   MMR_CUSTOM_SUBAGENT_TOOL_PREFIX,
   discoverMmrCustomSubagentsSync,
   isUnsafeMmrCustomSubagentToolPattern,
@@ -66,6 +67,13 @@ export interface CustomSubagentDetails extends MmrSpawnedSubagentWorkerDetailsBa
   definitionName: string;
   filePath: string;
   prompt: string;
+  /**
+   * User-facing notice emitted when the subagent relied on a fallback for
+   * `model`, thinking/effort level, or `tools` (including running with no
+   * tools). Recommends the author pin those fields. Absent when all three
+   * were declared.
+   */
+  fallbackNotice?: string;
 }
 
 export interface CustomSubagentToolDeps {
@@ -115,12 +123,23 @@ function preferencesForDefinition(definition: MmrCustomSubagentDefinition): read
   return preference ? [preference] : [];
 }
 
+/**
+ * Effective tool intent for a custom subagent: the author's declared
+ * `tools:` list, or the standard default toolset when no `tools` key was
+ * written at all. An explicitly empty list (declared with no entries) stays
+ * empty so an author can deliberately run a prompt-only subagent.
+ */
+function effectiveCustomSubagentToolPatterns(definition: MmrCustomSubagentDefinition): readonly string[] {
+  return definition.toolsDeclared ? definition.toolPatterns : MMR_CUSTOM_SUBAGENT_DEFAULT_TOOLS;
+}
+
 function createProfile(definition: MmrCustomSubagentDefinition): MmrSubagentProfile {
   return {
     name: definition.toolName,
     displayName: definition.name,
     modelPreferences: preferencesForDefinition(definition),
-    tools: [...definition.toolPatterns],
+    tools: [...effectiveCustomSubagentToolPatterns(definition)],
+    ...(definition.thinkingLevel ? { thinkingLevel: definition.thinkingLevel } : {}),
     denyTools: [
       "Task",
       "oracle",
@@ -166,14 +185,70 @@ function getParentAllowedRegisteredTools(pi: ExtensionAPI): string[] {
   return [...active].filter((name) => registered.has(name));
 }
 
+function formatHumanList(items: readonly string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+/**
+ * Build the user-facing notice shown when a custom subagent relied on a
+ * fallback for `model`, thinking/effort level, or `tools`. pi-mmr lowers
+ * friction by defaulting an omitted `tools:` key to the standard toolset
+ * and inheriting the parent model/thinking level, but it surfaces this so
+ * the author can pin the fields for predictable behavior. An explicitly
+ * empty `tools` list is reported as "ran with no tools" (a deliberate
+ * prompt-only subagent) rather than a default.
+ *
+ * Returns `undefined` when `model`, thinking level, and a non-empty tools
+ * set were all resolved without a fallback.
+ */
+export function buildMmrCustomSubagentFallbackNotice(
+  definition: MmrCustomSubagentDefinition,
+  workerTools: readonly string[],
+): string | undefined {
+  const lines: string[] = [];
+  const recommend: string[] = [];
+  if (!definition.modelDeclared) {
+    lines.push("No model selected — falling back to the parent model.");
+    recommend.push("`model`");
+  }
+  if (definition.thinkingLevel === undefined) {
+    lines.push("No effort/thinking level selected — falling back to the parent/default level.");
+    recommend.push("`thinkingLevel`");
+  }
+  if (!definition.toolsDeclared) {
+    lines.push("No tools selected — defaulting to the standard toolset (read, bash, edit, write, find, grep, web).");
+    recommend.push("`tools`");
+  } else if (workerTools.length === 0) {
+    lines.push(
+      "No tools available — the `tools` list is empty, so this subagent ran with no tools and answered from its prompt only (it could not read files, search, run commands, or edit).",
+    );
+    recommend.push("a non-empty `tools` list");
+  }
+  if (lines.length === 0) return undefined;
+  const file = path.basename(definition.filePath);
+  const body = lines.map((line) => `- ${line}`).join("\n");
+  return `Note (${definition.name}):\n${body}\nRecommend setting ${formatHumanList(recommend)} in ${file} for predictable subagent behavior.`;
+}
+
 function buildProgressContent(snapshot: MmrWorkerProgressSnapshot, definition: MmrCustomSubagentDefinition): string {
   return progressTextOrPlaceholder(snapshot, `${definition.name}: worker running…`);
 }
 
-function buildFinalContent(result: MmrWorkerResult, definition: MmrCustomSubagentDefinition): string {
+function buildFinalContent(
+  result: MmrWorkerResult,
+  definition: MmrCustomSubagentDefinition,
+): string {
+  // The fallback notice is intentionally NOT prepended here: it is a
+  // user-facing advisory surfaced only via `details.fallbackNotice` and the
+  // result renderer, so it never enters the model-consumed content.
   const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
   const text = result.truncatedFinalOutput || result.finalOutput;
-  if (status === "success") return text.trim().length > 0 ? text : `${definition.name}: completed with no output.`;
+  if (status === "success") {
+    return text.trim().length > 0 ? text : `${definition.name}: completed with no output.`;
+  }
   return `${definition.name}: worker failed (${status}).${result.errorMessage ? ` ${result.errorMessage}` : ""}${text ? `\n\n${text}` : ""}`;
 }
 
@@ -182,12 +257,14 @@ function buildProgressDetails(
   definition: MmrCustomSubagentDefinition,
   ctx: { cwd: string; workerTools: readonly string[]; model?: string; contextWindow?: number; prompt: string },
 ): CustomSubagentDetails {
+  const fallbackNotice = buildMmrCustomSubagentFallbackNotice(definition, ctx.workerTools);
   return {
     worker: `mmr-subagents.${definition.toolName}`,
     toolName: definition.toolName,
     definitionName: definition.name,
     filePath: definition.filePath,
     prompt: ctx.prompt,
+    ...(fallbackNotice ? { fallbackNotice } : {}),
     ...buildSpawnedProgressDetailsBase({
       snapshot,
       cwd: ctx.cwd,
@@ -203,6 +280,7 @@ function buildFinalDetails(
   definition: MmrCustomSubagentDefinition,
   ctx: { cwd: string; workerTools: readonly string[]; model?: string; contextWindow?: number; prompt: string },
 ): CustomSubagentDetails {
+  const fallbackNotice = buildMmrCustomSubagentFallbackNotice(definition, ctx.workerTools);
   return {
     worker: `mmr-subagents.${definition.toolName}`,
     status: classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" }),
@@ -210,6 +288,7 @@ function buildFinalDetails(
     definitionName: definition.name,
     filePath: definition.filePath,
     prompt: ctx.prompt,
+    ...(fallbackNotice ? { fallbackNotice } : {}),
     ...buildSpawnedFinalDetailsBase({
       result,
       cwd: ctx.cwd,
@@ -242,7 +321,7 @@ export function createMmrCustomSubagentTool(
       "Do not use this custom subagent when a direct tool call or built-in subagent is a better fit.",
     ],
     parameters: CUSTOM_SUBAGENT_PARAMETERS_SCHEMA,
-    executionMode: definition.toolPatterns.some((tool) => ["bash", "edit", "write", "apply_patch"].includes(tool))
+    executionMode: effectiveCustomSubagentToolPatterns(definition).some((tool) => ["bash", "edit", "write", "apply_patch"].includes(tool))
       ? "sequential" as const
       : "parallel" as const,
     renderShell: "self" as const,
@@ -332,7 +411,8 @@ export function createMmrCustomSubagentTool(
           ? selectMmrModelRoute({ modelPreferences: modelPreferencesOverride, registry }).selected
           : undefined;
       const modelArg = typeof model === "string" ? model : model ? `${model.provider}/${model.model}` : undefined;
-      const workerTools = invocation?.workerTools ?? registeredTools.filter((tool) => definition.toolPatterns.includes(tool));
+      const workerTools = invocation?.workerTools
+        ?? registeredTools.filter((tool) => effectiveCustomSubagentToolPatterns(definition).includes(tool));
       const contextWindow = resolveMmrWorkerModelContextWindowFromCtx(ctx, modelArg);
       const result = await resolveRunner(deps).run({
         profileName: definition.toolName,

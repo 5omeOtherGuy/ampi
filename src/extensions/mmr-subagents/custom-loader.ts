@@ -1,6 +1,8 @@
 import fs, { constants as fsConstants } from "node:fs";
 import { lstat, open, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { isThinkingLevel } from "../mmr-core/settings.js";
 
 export const MMR_CUSTOM_SUBAGENT_TOOL_PREFIX = "sa__";
 export const MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH = 64;
@@ -24,7 +26,31 @@ export interface MmrCustomSubagentDefinition {
   baseDir: string;
   systemPrompt: string;
   model: string;
+  /**
+   * Whether the frontmatter declared a `model` key at all. When false the
+   * runtime falls back to the parent model and surfaces a notice
+   * recommending the author pin one. An explicit `model: inherit` counts as
+   * declared, so a deliberate inherit choice does not trigger the notice.
+   */
+  modelDeclared: boolean;
+  /**
+   * Thinking/effort level parsed from the `thinkingLevel`, `thinking`, or
+   * `effort` frontmatter key (provider-neutral canonical Pi levels only).
+   * Undefined when omitted or invalid, in which case the worker uses the
+   * parent/default level and the runtime surfaces a notice.
+   */
+  thinkingLevel?: ThinkingLevel;
   toolPatterns: readonly string[];
+  /**
+   * Whether the Markdown frontmatter declared a tools key at all
+   * (`tools`, `allowed-tools`, or `allowedTools`). When no tools key is
+   * present the runtime grants the standard default toolset
+   * (`MMR_CUSTOM_SUBAGENT_DEFAULT_TOOLS`); an explicitly empty list runs
+   * with no tools. This flag lets the runtime tell "no tools field" apart
+   * from "explicitly empty tools list" when it surfaces the fallback
+   * notice to the user.
+   */
+  toolsDeclared: boolean;
   skills: readonly string[];
   isolatedContext: boolean;
 }
@@ -199,6 +225,57 @@ export function isUnsafeMmrCustomSubagentToolPattern(tool: string): boolean {
   return false;
 }
 
+/** Frontmatter keys that declare a custom subagent's allowed tool list. */
+export const MMR_CUSTOM_SUBAGENT_TOOL_KEYS: readonly string[] = [
+  "tools",
+  "allowed-tools",
+  "allowedTools",
+];
+
+/**
+ * Standard toolset granted to a custom subagent that declares no `tools:`
+ * key. These are the Pi-native coding tools (`read`, `bash`, `edit`,
+ * `write`, `find`, `grep`) plus the pi-mmr web tools (`web_search`,
+ * `read_web_page`). A fixed constant is used rather than "all registered
+ * tools" so the parent and the spawned child resolve the same set and the
+ * worker never fails activation on a tool mismatch; each entry is still
+ * intersected with the tools actually registered/active, so a host missing
+ * one simply drops it. The list deliberately excludes recursive/advisory
+ * subagents, toolbox, and MCP tools.
+ */
+export const MMR_CUSTOM_SUBAGENT_DEFAULT_TOOLS: readonly string[] = [
+  "read",
+  "bash",
+  "edit",
+  "write",
+  "find",
+  "grep",
+  "web_search",
+  "read_web_page",
+];
+
+/** Frontmatter keys that declare a custom subagent's thinking/effort level. */
+const MMR_CUSTOM_SUBAGENT_THINKING_KEYS = ["thinkingLevel", "thinking", "effort"] as const;
+
+/**
+ * Parse a provider-neutral thinking/effort level from frontmatter. Accepts
+ * `thinkingLevel`, `thinking`, or `effort` (first match wins), matched
+ * case-insensitively against the canonical Pi levels (`off`, `minimal`,
+ * `low`, `medium`, `high`, `xhigh`). Vendor-specific aliases are not
+ * supported. Returns undefined when absent or invalid.
+ */
+function readCustomSubagentThinkingLevel(
+  attributes: Record<string, FrontmatterValue>,
+): ThinkingLevel | undefined {
+  for (const key of MMR_CUSTOM_SUBAGENT_THINKING_KEYS) {
+    const value = attributes[key];
+    if (typeof value !== "string") continue;
+    const normalized = value.trim().toLowerCase();
+    if (isThinkingLevel(normalized)) return normalized;
+  }
+  return undefined;
+}
+
 function readStringList(attributes: Record<string, FrontmatterValue>, keys: readonly string[]): string[] {
   for (const key of keys) {
     const value = attributes[key];
@@ -206,6 +283,16 @@ function readStringList(attributes: Record<string, FrontmatterValue>, keys: read
     if (typeof value === "string" && value.trim().length > 0) return parseListValue(value);
   }
   return [];
+}
+
+/**
+ * Whether any of the given keys is present in the parsed frontmatter,
+ * regardless of value. Used to distinguish a declared-but-empty tools
+ * list (e.g. `tools:` or `tools: []`) from a tools key that was never
+ * written at all.
+ */
+function hasAnyKey(attributes: Record<string, FrontmatterValue>, keys: readonly string[]): boolean {
+  return keys.some((key) => Object.prototype.hasOwnProperty.call(attributes, key));
 }
 
 function deriveName(filePath: string, attributes: Record<string, FrontmatterValue>): string {
@@ -278,8 +365,11 @@ export function parseMmrCustomSubagentMarkdown(
   const name = deriveName(absoluteFilePath, parsed.attributes);
   const description = readString(parsed.attributes, "description") ?? `Custom subagent ${name}.`;
   const model = readString(parsed.attributes, "model") ?? "inherit";
+  const modelDeclared = hasAnyKey(parsed.attributes, ["model"]);
+  const thinkingLevel = readCustomSubagentThinkingLevel(parsed.attributes);
+  const toolsDeclared = hasAnyKey(parsed.attributes, MMR_CUSTOM_SUBAGENT_TOOL_KEYS);
   const toolPatterns = normalizeMmrCustomSubagentToolPatterns(
-    readStringList(parsed.attributes, ["tools", "allowed-tools", "allowedTools"]),
+    readStringList(parsed.attributes, MMR_CUSTOM_SUBAGENT_TOOL_KEYS),
   );
   if (toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) return undefined;
   const skills = readStringList(parsed.attributes, ["skills"]);
@@ -293,7 +383,10 @@ export function parseMmrCustomSubagentMarkdown(
     baseDir,
     systemPrompt,
     model,
+    modelDeclared,
+    ...(thinkingLevel ? { thinkingLevel } : {}),
     toolPatterns,
+    toolsDeclared,
     skills,
     isolatedContext,
   };
