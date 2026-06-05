@@ -70,6 +70,8 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     assert.equal(definition.model, "inherit");
     assert.deepEqual([...definition.toolPatterns], ["read", "bash", "write"]);
     assert.equal(definition.toolsDeclared, true);
+    assert.equal(definition.modelDeclared, true, "explicit model: inherit counts as declared");
+    assert.equal(definition.thinkingLevel, undefined, "no thinking key -> undefined");
     assert.deepEqual([...definition.skills], ["audit", "review"]);
     assert.equal(definition.baseDir, path.dirname(filePath));
     assert.equal(definition.systemPrompt, `Inspect ${path.dirname(filePath)} and report concise findings.`);
@@ -241,6 +243,21 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     assert.ok(definition);
     assert.deepEqual([...definition.toolPatterns], []);
     assert.equal(definition.toolsDeclared, false);
+    assert.equal(definition.modelDeclared, false, "no model field -> not declared");
+    assert.equal(definition.thinkingLevel, undefined);
+  });
+
+  it("parses thinkingLevel/thinking/effort aliases and ignores invalid levels", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
+    const make = (line) => parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", "agents", "t.md"),
+      markdown: ["---", "type: subagent", "name: T", "description: d", line, "---", "Body."].join("\n"),
+    });
+    assert.equal(make("thinkingLevel: high")?.thinkingLevel, "high");
+    assert.equal(make("thinking: LOW")?.thinkingLevel, "low", "value is case-insensitive");
+    assert.equal(make("effort: minimal")?.thinkingLevel, "minimal", "effort is an alias");
+    assert.equal(make("thinkingLevel: ludicrous")?.thinkingLevel, undefined, "invalid level is ignored");
+    assert.equal(make("model: inherit")?.thinkingLevel, undefined, "omitted -> undefined");
   });
 
   it("tolerates blank lines and comments inside a block-list", async () => {

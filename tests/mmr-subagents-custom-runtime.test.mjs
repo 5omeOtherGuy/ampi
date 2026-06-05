@@ -96,6 +96,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
         "name: Test Writer",
         "description: Writes focused tests.",
         "model: inherit",
+        "thinkingLevel: high",
         "tools: read, bash, write",
         "isolatedContext: true",
         "---",
@@ -133,10 +134,35 @@ describe("mmr-subagents custom Markdown runtime", () => {
     assert.equal(result.details.model, "openai-codex/gpt-5.5");
     assert.equal(result.details.contextWindow, 1234);
     assert.deepEqual(result.details.workerTools, ["read", "bash"]);
-    assert.equal(result.details.noToolsNotice, undefined, "a worker with tools gets no notice");
+    assert.equal(result.details.fallbackNotice, undefined, "a fully-declared worker gets no fallback notice");
   });
 
-  it("surfaces a user-facing notice when a custom subagent has no tools field", async () => {
+  it("wires a declared thinkingLevel/effort onto the registered profile", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
+    const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
+    const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
+    const definition = parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", ".claude", "agents", "thinker.md"),
+      markdown: [
+        "---",
+        "type: subagent",
+        "name: Deep Thinker",
+        "description: Thinks hard.",
+        "model: inherit",
+        "effort: high",
+        "tools: read",
+        "---",
+        "Think.",
+      ].join("\n"),
+    });
+    assert.ok(definition);
+    assert.equal(definition.thinkingLevel, "high", "effort is an alias for thinkingLevel");
+    const { pi } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
+    registerMmrCustomSubagentDefinition(pi, definition, { runner: { run: async () => makeWorkerResult() } });
+    assert.equal(getMmrSubagentProfile("sa__deep_thinker")?.thinkingLevel, "high");
+  });
+
+  it("defaults to the standard toolset and surfaces a fallback notice when no tools field is present", async () => {
     const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
     const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
     const definition = parseMmrCustomSubagentMarkdown({
@@ -170,15 +196,16 @@ describe("mmr-subagents custom Markdown runtime", () => {
       },
     );
 
-    assert.deepEqual(runCalls[0].tools, [], "no tools field means the worker runs with no tools");
-    assert.deepEqual(result.details.workerTools, []);
-    assert.ok(typeof result.details.noToolsNotice === "string" && result.details.noToolsNotice.includes("no tools"));
-    assert.match(result.content[0].text, /ran with no tools/);
+    assert.deepEqual(runCalls[0].tools, ["read", "bash"], "no tools field defaults to the standard toolset, intersected with active tools");
+    assert.deepEqual(result.details.workerTools, ["read", "bash"]);
+    assert.ok(typeof result.details.fallbackNotice === "string" && result.details.fallbackNotice.includes("standard toolset"));
+    assert.match(result.content[0].text, /defaulting to the standard toolset/);
+    assert.match(result.content[0].text, /No model selected/);
     assert.ok(result.content[0].text.includes("custom answer"), "the worker output is preserved after the notice");
   });
 
-  it("distinguishes an explicitly empty tools list in the no-tools notice", async () => {
-    const { buildMmrCustomSubagentNoToolsNotice } = await importSource(CUSTOM_RUNTIME_MODULE);
+  it("builds a fallback notice covering model, thinking, and tools states", async () => {
+    const { buildMmrCustomSubagentFallbackNotice } = await importSource(CUSTOM_RUNTIME_MODULE);
     const base = {
       name: "Prompt Only",
       toolName: "sa__prompt_only",
@@ -187,14 +214,29 @@ describe("mmr-subagents custom Markdown runtime", () => {
       baseDir: "/repo/.claude/agents",
       systemPrompt: "p",
       model: "inherit",
+      modelDeclared: true,
+      thinkingLevel: "high",
       toolPatterns: [],
       skills: [],
       isolatedContext: false,
     };
-    const omitted = buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: false }, []);
-    const explicit = buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: true }, []);
-    assert.match(omitted, /No `tools` field was set/);
-    assert.match(explicit, /`tools` list is empty/);
-    assert.equal(buildMmrCustomSubagentNoToolsNotice({ ...base, toolsDeclared: false }, ["read"]), undefined);
+    // Tools omitted -> standard toolset default.
+    const omitted = buildMmrCustomSubagentFallbackNotice({ ...base, toolsDeclared: false }, ["read"]);
+    assert.match(omitted, /defaulting to the standard toolset/);
+    // Tools declared but empty -> ran with no tools.
+    const empty = buildMmrCustomSubagentFallbackNotice({ ...base, toolsDeclared: true }, []);
+    assert.match(empty, /ran with no tools/);
+    // Model and thinking omitted -> their own lines.
+    const noModelNoThinking = buildMmrCustomSubagentFallbackNotice(
+      { ...base, modelDeclared: false, thinkingLevel: undefined, toolsDeclared: true },
+      ["read"],
+    );
+    assert.match(noModelNoThinking, /No model selected/);
+    assert.match(noModelNoThinking, /No effort\/thinking level selected/);
+    // Fully declared with tools -> no notice.
+    assert.equal(
+      buildMmrCustomSubagentFallbackNotice({ ...base, toolsDeclared: true }, ["read"]),
+      undefined,
+    );
   });
 });
