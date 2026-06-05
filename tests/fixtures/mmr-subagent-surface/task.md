@@ -17,14 +17,19 @@ Available tools:
 - task_list: Manage the session-local todo list.
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
+
 Guidelines:
-- Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)
+- Use bash for file operations like ls, rg, find
 - Use read to examine files instead of cat or sed.
 - Use edit for precise changes (edits[].oldText must match exactly)
 - When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls
 - Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.
 - Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.
 - Use write only for new files or complete rewrites.
+- Use web_search only for public, non-sensitive research; never include secrets or private data in queries.
+- Use read_web_page only for public http(s) URLs; pass forceRefetch when the latest contents are required.
+- Use finder for multi-step, concept-level code search instead of chaining greps.
+- Submit the full task_list every call (whole-list replacement); keep at most one item in_progress.
 - Be concise in your responses
 - Show file paths clearly when working with files
 
@@ -62,14 +67,6 @@ edit:
 write:
 - Use this tool to create a new file that does not yet exist.
 - For existing files, prefer `edit` instead—even for extensive changes. Only use write to overwrite an existing file when you are replacing nearly all of its content AND the file is small (under ~250 lines).
-
-grep:
-- Scope with `path` first; add `glob` when file type matters.
-- Prefer several focused searches over one repo-wide scan.
-- Use `literal: true` for exact text; keep regex for patterns.
-
-find:
-- Use find to find files by name patterns across your codebase. Results are returned in ripgrep's traversal order, not by modification time.
 
 Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
 - Main documentation: /test/pi/README.md
@@ -251,6 +248,9 @@ Return a compact result, not a transcript:
 
 Owner: pi
 
+Prompt guidelines:
+- Use read to examine files instead of cat or sed.
+
 Description:
 Read file contents.
 
@@ -297,6 +297,12 @@ Parameters:
 
 Owner: pi
 
+Prompt guidelines:
+- Use edit for precise changes (edits[].oldText must match exactly)
+- When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls
+- Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.
+- Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.
+
 Description:
 Edit existing files.
 
@@ -328,6 +334,9 @@ Parameters:
 
 Owner: pi
 
+Prompt guidelines:
+- Use write only for new files or complete rewrites.
+
 Description:
 Create or overwrite files.
 
@@ -355,6 +364,9 @@ Parameters:
 
 Owner: pi
 
+Prompt guidelines:
+- Use web_search only for public, non-sensitive research; never include secrets or private data in queries.
+
 Description:
 Search the web for a topic.
 
@@ -377,6 +389,9 @@ Parameters:
 # read_web_page
 
 Owner: pi
+
+Prompt guidelines:
+- Use read_web_page only for public http(s) URLs; pass forceRefetch when the latest contents are required.
 
 Description:
 Fetch and convert a web page to Markdown.
@@ -401,6 +416,9 @@ Parameters:
 
 Owner: pi
 
+Prompt guidelines:
+- Use finder for multi-step, concept-level code search instead of chaining greps.
+
 Description:
 Search code by behavior or concept.
 
@@ -423,6 +441,9 @@ Parameters:
 # task_list
 
 Owner: pi
+
+Prompt guidelines:
+- Submit the full task_list every call (whole-list replacement); keep at most one item in_progress.
 
 Description:
 Manage the session-local todo list.

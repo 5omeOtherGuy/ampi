@@ -314,7 +314,7 @@ export function resetMmrWorkerFallbackState(): void {
  * stored state — the caller decides whether to apply the selection.
  */
 export async function promptMmrWorkerFallback(args: {
-  ctx: Pick<ExtensionContext, "ui" | "hasUI">;
+  ctx: Pick<ExtensionContext, "ui" | "hasUI" | "signal">;
   scopeKey: string;
   toolName: string;
   candidates: readonly MmrWorkerFallbackCandidate[];
@@ -328,9 +328,16 @@ export async function promptMmrWorkerFallback(args: {
   runtime.promptInFlight.add(args.scopeKey);
   try {
     const byLabel = new Map(args.candidates.map((candidate) => [candidate.label, candidate]));
+    // Bind the dialog to the active abort signal so a torn-down or
+    // interrupted session dismisses the prompt instead of blocking the
+    // worker-fallback path forever — relevant for non-TUI dialog surfaces
+    // (e.g. an RPC host that never returns an extension_ui_response). On
+    // abort, `select` resolves `undefined`, so no fallback is applied and
+    // the worker's original failure is returned unchanged.
     const picked = await args.ctx.ui.select(
       `${args.toolName}: repeated worker-model errors — ${args.reason}. Select a fallback model:`,
       args.candidates.map((candidate) => candidate.label),
+      args.ctx.signal ? { signal: args.ctx.signal } : undefined,
     );
     if (!picked) return undefined;
     return byLabel.get(picked);
@@ -410,7 +417,7 @@ export interface MmrWorkerFallbackOutcome {
  * swapped for an API-key-billed one.
  */
 export async function runMmrWorkerWithModelFallback(args: {
-  ctx: Pick<ExtensionContext, "ui" | "hasUI">;
+  ctx: Pick<ExtensionContext, "ui" | "hasUI" | "signal">;
   sessionId?: string;
   registry: MmrWorkerFallbackRegistry;
   toolName: string;

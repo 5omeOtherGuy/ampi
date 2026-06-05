@@ -385,10 +385,62 @@ describe("mmr-core prompt layer", () => {
 
     const result = await handlers.get("before_agent_start")({
       systemPrompt: BASE_PROMPT,
-      systemPromptOptions: { selectedTools: ["read", "bash"] },
+      // The selection matches BASE_PROMPT's rendered `Available tools:` block,
+      // so built-in guidance is identical to the buildMmrPromptLayer fixture.
+      systemPromptOptions: {
+        selectedTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      },
     });
 
     assert.equal(result.systemPrompt, readModeFixture("deep"));
+  });
+
+  it("records and then clears a tool-selection mismatch on the live mode state across turns", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    const handlers = new Map();
+    runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "bash"] }));
+    extension(buildExtensionStub(handlers));
+
+    // Pi rendered the prompt from only `read`; `bash` is active but absent
+    // from the prompt's tool selection -> reconciliation should flag it.
+    await handlers.get("before_agent_start")({
+      systemPrompt: BASE_PROMPT,
+      systemPromptOptions: { selectedTools: ["read"] },
+    });
+    assert.deepEqual(runtime.getMmrModeState().promptAssembly, {
+      selectedToolsMissingFromPrompt: ["bash"],
+    });
+
+    // A clean turn (selection matches active set) clears the observation.
+    await handlers.get("before_agent_start")({
+      systemPrompt: BASE_PROMPT,
+      systemPromptOptions: { selectedTools: ["bash", "read"] },
+    });
+    assert.equal(runtime.getMmrModeState().promptAssembly, undefined);
+  });
+
+  it("drives built-in tool guidance from the prompt's tool selection, not the rendered tools block", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    const handlers = new Map();
+    runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "grep"] }));
+    extension(buildExtensionStub(handlers));
+
+    // Pi rendered `Available tools:` without grep (snippet-gated), but grep is
+    // in the callable selection -> guidance must still cover grep.
+    const baseWithoutGrep = BASE_PROMPT.replace(
+      "- grep: Search file contents for patterns (respects .gitignore)\n",
+      "",
+    );
+    assert.ok(!baseWithoutGrep.includes("- grep:"));
+    const result = await handlers.get("before_agent_start")({
+      systemPrompt: baseWithoutGrep,
+      systemPromptOptions: { selectedTools: ["read", "grep"] },
+    });
+    const start = result.systemPrompt.indexOf("## Built-in tool guidance");
+    const block = result.systemPrompt.slice(start, result.systemPrompt.indexOf("\n## ", start + 1));
+    assert.deepEqual([...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]), ["read", "grep"]);
   });
 
   it("preserves Pi's appendSystemPrompt content inserted between the Pi docs block and the tail", async () => {

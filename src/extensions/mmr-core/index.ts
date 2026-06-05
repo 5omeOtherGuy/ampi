@@ -4,12 +4,13 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { buildReplayContent, decideAutoCompact } from "./auto-compact.js";
 import { maybeShowMmrChangelogOnSessionStart, showMmrChangelogCommand } from "./changelog.js";
 import { runMmrConfigFlow } from "./config-flow.js";
-import { getMmrPolicyDiagnostics } from "./diagnostics.js";
+import { buildPromptAssemblyObservation, getMmrPolicyDiagnostics } from "./diagnostics.js";
+import { isRecord } from "./internal/json.js";
 import { DEFAULT_MMR_MODE, formatMmrModeList, getMmrMode, isMmrModeKey, MMR_MODE_KEYS } from "./modes.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
 import { resolveAndApplyMmrModel } from "./model-resolver.js";
 import { shouldDropToolForFreeMode } from "./owned-tools.js";
-import { buildMmrPromptLayer } from "./prompt.js";
+import { assembleActiveSurface } from "./prompt-assembly.js";
 import {
   MMR_REQUEST_POLICIES,
   applyMmrRequestPolicy,
@@ -758,13 +759,37 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     const state = getMmrModeState();
     if (!state || state.mode === "free") return;
 
-    const systemPrompt = buildMmrPromptLayer({
+    // Assemble directly (rather than via buildMmrPromptLayer) so we can read
+    // the passthrough reason and reconcile the resolved active tools against
+    // the tool selection Pi rendered the prompt from. `systemPromptOptions`
+    // is present on the event in the supported Pi range, but feature-detect
+    // it so hosts/paths that omit it degrade to no diagnostics rather than
+    // throwing.
+    const options = isRecord(event.systemPromptOptions) ? event.systemPromptOptions : undefined;
+    // Drive built-in tool guidance from the tool selection Pi rendered the
+    // prompt from (the full callable/active set) rather than the snippet-gated
+    // names parsed from the rendered `Available tools:` block. Feature-detect
+    // it: hosts/paths without `selectedTools` fall back to the block parse.
+    const selectedTools = Array.isArray(options?.selectedTools)
+      ? options.selectedTools.filter((name): name is string => typeof name === "string")
+      : undefined;
+    const surface = assembleActiveSurface({
       state,
       baseSystemPrompt: event.systemPrompt,
+      activeToolManifest: [],
+      ...(selectedTools !== undefined ? { activeToolNames: selectedTools } : {}),
     });
+    // Record the runtime-only diagnostics field (never persisted). The live
+    // mode state is deep-frozen, so update it through setMmrModeState with a
+    // copy. Only write on a transition (something to report, or clearing a
+    // prior observation) so clean turns avoid needless state churn.
+    const observation = buildPromptAssemblyObservation(state, surface, options);
+    if (observation !== undefined || state.promptAssembly !== undefined) {
+      setMmrModeState({ ...state, promptAssembly: observation });
+    }
 
-    if (systemPrompt === event.systemPrompt) return;
-    return { systemPrompt };
+    if (surface.systemPrompt === event.systemPrompt) return;
+    return { systemPrompt: surface.systemPrompt };
   });
 
   pi.on("tool_call", async (event) => {

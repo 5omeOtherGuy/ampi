@@ -735,3 +735,83 @@ describe("mmr-toolbox task_list — widget render truncates to TUI width", () =>
       `NaN width must preserve untrimmed content; got ${JSON.stringify(linesNaN)}`);
   });
 });
+
+describe("mmr-toolbox task_list — widget gates on TUI run mode", () => {
+  // Pi 0.78+ exposes `ctx.mode` and makes `hasUI` true in RPC too. The pinned
+  // task-list widget is a terminal-only custom component (Pi's RPC surface
+  // ignores widget factory functions), so it must render only in TUI. The
+  // gate is feature-detected across our `>=0.77.0 <0.79.0` peer range: when
+  // `mode` is present, render iff `mode === "tui"`; when `mode` is absent
+  // (0.77), fall back to the previous `hasUI` behavior.
+
+  function makeWidgetCtxLike(overrides = {}) {
+    const widgetCalls = [];
+    return {
+      widgetCalls,
+      ctx: {
+        ...(overrides.mode !== undefined ? { mode: overrides.mode } : {}),
+        hasUI: overrides.hasUI ?? true,
+        ui: {
+          setWidget(id, value) {
+            widgetCalls.push({ id, value });
+          },
+          theme: { fg: (_n, v) => v, bold: (v) => v },
+        },
+      },
+    };
+  }
+
+  const tasks = [{ content: "Do a thing", activeForm: "Doing a thing", status: "pending" }];
+
+  it("isTuiWidgetSurface: mode-aware on 0.78, hasUI-fallback on 0.77", async () => {
+    const { isTuiWidgetSurface } = await importSource(
+      "extensions/mmr-toolbox/todo-list-tool.ts",
+    );
+    const ui = { setWidget() {} };
+    // 0.78+ contexts: only "tui" is a widget surface.
+    assert.equal(isTuiWidgetSurface({ mode: "tui", hasUI: true, ui }), true);
+    assert.equal(isTuiWidgetSurface({ mode: "rpc", hasUI: true, ui }), false);
+    assert.equal(isTuiWidgetSurface({ mode: "json", hasUI: false, ui }), false);
+    assert.equal(isTuiWidgetSurface({ mode: "print", hasUI: false, ui }), false);
+    // 0.77 contexts (no `mode`): preserve prior hasUI behavior.
+    assert.equal(isTuiWidgetSurface({ hasUI: true, ui }), true);
+    assert.equal(isTuiWidgetSurface({ hasUI: false, ui }), false);
+    // No UI surface is never a widget surface.
+    assert.equal(isTuiWidgetSurface({ mode: "tui", hasUI: true }), false);
+    assert.equal(isTuiWidgetSurface(undefined), false);
+  });
+
+  it("refreshTodoWidget renders in TUI mode", async () => {
+    const { refreshTodoWidget } = await importSource(
+      "extensions/mmr-toolbox/todo-list-tool.ts",
+    );
+    const { ctx, widgetCalls } = makeWidgetCtxLike({ mode: "tui" });
+    refreshTodoWidget(ctx, tasks);
+    assert.equal(widgetCalls.length, 1, "TUI mode must project the widget");
+    assert.equal(typeof widgetCalls[0].value, "function", "widget uses the factory form");
+  });
+
+  it("refreshTodoWidget is a no-op in RPC mode even when hasUI is true", async () => {
+    const { refreshTodoWidget } = await importSource(
+      "extensions/mmr-toolbox/todo-list-tool.ts",
+    );
+    // Non-empty and empty lists must both emit zero widget traffic in RPC —
+    // not even a clear-only call, since RPC ignores the factory anyway.
+    const nonEmpty = makeWidgetCtxLike({ mode: "rpc" });
+    refreshTodoWidget(nonEmpty.ctx, tasks);
+    assert.equal(nonEmpty.widgetCalls.length, 0, "RPC must receive no widget content");
+
+    const empty = makeWidgetCtxLike({ mode: "rpc" });
+    refreshTodoWidget(empty.ctx, []);
+    assert.equal(empty.widgetCalls.length, 0, "RPC must receive no clear-only widget traffic");
+  });
+
+  it("refreshTodoWidget still renders on a 0.77 context (no mode) with hasUI", async () => {
+    const { refreshTodoWidget } = await importSource(
+      "extensions/mmr-toolbox/todo-list-tool.ts",
+    );
+    const { ctx, widgetCalls } = makeWidgetCtxLike({ hasUI: true });
+    refreshTodoWidget(ctx, tasks);
+    assert.equal(widgetCalls.length, 1, "0.77 hasUI:true must still render the widget");
+  });
+});

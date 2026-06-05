@@ -423,3 +423,100 @@ describe("session_start clears worker-fallback state (#3)", () => {
     }
   });
 });
+
+describe("promptMmrWorkerFallback binds the dialog to the active signal", () => {
+  // The fallback prompt can now reach non-TUI dialog surfaces (Pi 0.78 makes
+  // hasUI true in RPC). Bind the dialog to the active abort signal so a
+  // torn-down/interrupted session dismisses it instead of blocking the
+  // worker-fallback path on a host that never returns a UI response.
+  const candidates = [{ label: "openai/gpt-5.5 (API key)" }];
+
+  it("forwards ctx.signal to ui.select as { signal }", async () => {
+    const controller = new AbortController();
+    let receivedOpts = "unset";
+    const ctx = {
+      hasUI: true,
+      signal: controller.signal,
+      ui: {
+        select: async (_title, _options, opts) => {
+          receivedOpts = opts;
+          return undefined;
+        },
+      },
+    };
+    const picked = await mod.promptMmrWorkerFallback({
+      ctx,
+      scopeKey: "sig-1::oracle",
+      toolName: "oracle",
+      candidates,
+      reason: "route claude-subscription/claude-opus-4-8 failed",
+    });
+    assert.equal(picked, undefined);
+    assert.ok(receivedOpts && typeof receivedOpts === "object", "opts must be present");
+    assert.equal(receivedOpts.signal, controller.signal, "opts.signal must be ctx.signal");
+  });
+
+  it("omits opts when no signal is present (0.77 / non-streaming contexts)", async () => {
+    let called = false;
+    let receivedOpts = "unset";
+    const ctx = {
+      hasUI: true,
+      ui: {
+        select: async (_title, _options, opts) => {
+          called = true;
+          receivedOpts = opts;
+          return undefined;
+        },
+      },
+    };
+    await mod.promptMmrWorkerFallback({
+      ctx,
+      scopeKey: "sig-2::oracle",
+      toolName: "oracle",
+      candidates,
+      reason: "route failed",
+    });
+    assert.equal(called, true, "select must still be called");
+    assert.equal(receivedOpts, undefined, "no signal -> select called with undefined opts");
+  });
+
+  it("an aborted signal dismisses the dialog and applies no fallback", async () => {
+    const controller = new AbortController();
+    const ctx = {
+      hasUI: true,
+      signal: controller.signal,
+      ui: {
+        // Mirror Pi's dialog contract: resolve undefined when the signal aborts.
+        select: (_title, _options, opts) =>
+          new Promise((resolve) => {
+            if (opts?.signal?.aborted) return resolve(undefined);
+            opts.signal.addEventListener("abort", () => resolve(undefined), { once: true });
+          }),
+      },
+    };
+    const pending = mod.promptMmrWorkerFallback({
+      ctx,
+      scopeKey: "sig-3::oracle",
+      toolName: "oracle",
+      candidates,
+      reason: "route failed",
+    });
+    controller.abort();
+    assert.equal(await pending, undefined, "aborted prompt must apply no fallback");
+
+    // The in-flight guard must be released in `finally`, so a later prompt
+    // for the same scope can still reach `select`.
+    let rePrompted = false;
+    await mod.promptMmrWorkerFallback({
+      ctx: {
+        hasUI: true,
+        ui: { select: async () => { rePrompted = true; return undefined; } },
+      },
+      scopeKey: "sig-3::oracle",
+      toolName: "oracle",
+      candidates,
+      reason: "route failed again",
+    });
+    assert.equal(rePrompted, true, "the in-flight guard must be released after an aborted prompt");
+  });
+});

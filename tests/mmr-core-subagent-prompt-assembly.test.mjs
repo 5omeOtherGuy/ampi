@@ -118,6 +118,18 @@ function makeFinderManifest() {
   ];
 }
 
+// Slice the rebuilt worker `Guidelines:` block out of an assembled prompt and
+// return its bullet texts (between `Guidelines:\n` and the next blank line).
+function sliceGuidelineBullets(systemPrompt) {
+  const header = "Guidelines:\n";
+  const start = systemPrompt.indexOf(header);
+  assert.notEqual(start, -1, "expected a Guidelines block in the assembled prompt");
+  const bodyStart = start + header.length;
+  const end = systemPrompt.indexOf("\n\n", bodyStart);
+  const body = systemPrompt.slice(bodyStart, end === -1 ? undefined : end);
+  return [...body.matchAll(/^- (.+)$/gm)].map((m) => m[1]);
+}
+
 function replaceAvailableToolsBlock(basePrompt, toolLines) {
   const replacement = [
     "Available tools:",
@@ -327,6 +339,43 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.equal(last.kind, "subagent-worker-role");
     assert.equal(last.source, "mmr-subagents");
     assert.match(last.text, /## Task Worker Role/);
+  });
+
+  it("scopes built-in tool guidance to the worker's filtered manifest, not the parent's rendered tools block", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Task Worker Role\n");
+    // Parent BASE_PROMPT lists read/bash/edit/write/grep/find, but this worker
+    // only resolves read + bash. Guidance must follow the worker, so the
+    // parent-only built-ins (edit/write/grep/find) must not leak.
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptGuidelines: [], description: "Read file contents.", schema: {} },
+        { name: "bash", owner: "pi", promptGuidelines: [], description: "Run shell commands.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const start = result.systemPrompt.indexOf("## Built-in tool guidance");
+    assert.notEqual(start, -1, "expected a built-in tool guidance block");
+    const block = result.systemPrompt.slice(start, result.systemPrompt.indexOf("\n## ", start + 1));
+    assert.deepEqual([...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]), ["bash", "read"]);
+  });
+
+  it("keeps a blank line between the worker Available tools interstitial and Guidelines", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Task Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptGuidelines: [], description: "Read file contents.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    assert.match(
+      result.systemPrompt,
+      /In addition to the tools above[^\n]*\n\nGuidelines:\n/,
+      "worker Available tools block must end with a blank line before Guidelines (matching Pi/parent)",
+    );
   });
 
   it("fails closed when the mode-derived prompt builder is not registered", () => {
@@ -550,6 +599,154 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.match(activeToolsBlock.text, /- find: Find files by glob/);
     assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
     assert.doesNotMatch(result.systemPrompt, /- Task:|- oracle:/);
+  });
+
+  it("renders the worker active-tools block from promptSnippet, flattening multiline text and falling back to description", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        // promptSnippet present -> use it, not the (longer) description.
+        { name: "read", owner: "pi", promptSnippet: "Read file contents (snippet)", promptGuidelines: [], description: "FULL read description that should not appear", schema: {} },
+        // no snippet, multiline description -> collapse to a single line.
+        { name: "grep", owner: "pi", promptGuidelines: [], description: "Search file\ncontents   for\npatterns", schema: {} },
+        // empty/whitespace snippet -> treated as absent, fall back to description.
+        { name: "find", owner: "pi", promptSnippet: "   ", promptGuidelines: [], description: "Find files by glob", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const activeToolsBlock = result.blocks.find((block) => block.kind === "active-tools");
+    assert.ok(activeToolsBlock, "mode-derived surfaces must keep an active-tools block");
+    assert.match(activeToolsBlock.text, /- read: Read file contents \(snippet\)/);
+    assert.doesNotMatch(activeToolsBlock.text, /FULL read description/);
+    assert.match(activeToolsBlock.text, /- grep: Search file contents for patterns/);
+    assert.match(activeToolsBlock.text, /- find: Find files by glob/);
+    // Worker tool lines stay single-line: no embedded newline mid-entry.
+    assert.doesNotMatch(activeToolsBlock.text, /- grep: Search file\ncontents/);
+    assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
+  });
+
+  it("renders Pi's (none) placeholder when no worker tool yields a summary line", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptSnippet: "", promptGuidelines: [], description: "   ", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const activeToolsBlock = result.blocks.find((block) => block.kind === "active-tools");
+    assert.ok(activeToolsBlock, "mode-derived surfaces must keep an active-tools block");
+    assert.match(activeToolsBlock.text, /Available tools:\n\(none\)\n/);
+  });
+
+  it("rebuilds the worker Guidelines block from the worker manifest, dropping parent-only tool guidance", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    // Parent BASE_PROMPT lists read/bash/edit/write/grep/find guidance, but
+    // this worker resolves only `read`. The rebuilt block must contain read's
+    // own bullets plus the two always-on constants, and none of the
+    // parent-only edit/write/grep/find guidance.
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        {
+          name: "read",
+          owner: "pi",
+          promptGuidelines: ["Use read to examine files instead of cat or sed."],
+          description: "Read file contents.",
+          schema: {},
+        },
+      ],
+      cwd: "/abs/repo",
+    });
+    const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.deepEqual(bullets, [
+      "Use read to examine files instead of cat or sed.",
+      "Be concise in your responses",
+      "Show file paths clearly when working with files",
+    ]);
+    // Parent-only guidance must not leak.
+    assert.doesNotMatch(result.systemPrompt.slice(0, result.systemPrompt.indexOf("Pi documentation")), /edits\[\]\.oldText/);
+    assert.ok(!bullets.includes("Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)"));
+  });
+
+  it("emits the conditional bash-exploration guideline when the worker has bash but no grep/find/ls", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "bash", owner: "pi", promptGuidelines: [], description: "Run shell commands.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.ok(bullets.includes("Use bash for file operations like ls, rg, find"));
+    // It comes first (Pi prepends it before the per-tool loop).
+    assert.equal(bullets[0], "Use bash for file operations like ls, rg, find");
+  });
+
+  it("omits the conditional bash-exploration guideline when the worker also has grep/find/ls", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "bash", owner: "pi", promptGuidelines: [], description: "Run shell commands.", schema: {} },
+        { name: "grep", owner: "pi", promptGuidelines: [], description: "Search file contents.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.ok(!bullets.includes("Use bash for file operations like ls, rg, find"));
+  });
+
+  it("keeps the always-on guidelines exactly once even when a tool already lists one", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        {
+          name: "read",
+          owner: "pi",
+          promptGuidelines: ["Be concise in your responses", "Use read to examine files instead of cat or sed."],
+          description: "Read file contents.",
+          schema: {},
+        },
+      ],
+      cwd: "/abs/repo",
+    });
+    const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.equal(bullets.filter((b) => b === "Be concise in your responses").length, 1);
+    assert.equal(bullets.filter((b) => b === "Show file paths clearly when working with files").length, 1);
+    // The deduped always-on bullet keeps its first-occurrence position.
+    assert.deepEqual(bullets, [
+      "Be concise in your responses",
+      "Use read to examine files instead of cat or sed.",
+      "Show file paths clearly when working with files",
+    ]);
+  });
+
+  it("marks the rebuilt active-guidelines block as mmr-core and preserves byte-for-byte flatten", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile(),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "read", owner: "pi", promptGuidelines: ["Use read to examine files instead of cat or sed."], description: "Read file contents.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const guidelinesBlock = result.blocks.find((block) => block.kind === "active-guidelines");
+    assert.ok(guidelinesBlock, "mode-derived surfaces must keep an active-guidelines block");
+    assert.equal(guidelinesBlock.source, "mmr-core");
+    assert.ok(guidelinesBlock.text.startsWith("Guidelines:\n"));
+    assert.ok(guidelinesBlock.text.endsWith("\n\n"));
+    assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
   });
 
   it("returns mode-derived results deterministically across runs", () => {

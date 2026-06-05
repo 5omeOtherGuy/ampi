@@ -3,6 +3,7 @@ import type { KeyId } from "@earendil-works/pi-tui";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import {
   createTodoListTool,
+  isTuiWidgetSurface,
   refreshTodoWidget,
   TASK_LIST_WIDGET_ID,
 } from "./todo-list-tool.js";
@@ -174,7 +175,7 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
         handler: async (ctx) => {
           widgetHidden = !widgetHidden;
           if (widgetHidden) {
-            ctx.ui.setWidget(TASK_LIST_WIDGET_ID, undefined);
+            if (isTuiWidgetSurface(ctx)) ctx.ui.setWidget(TASK_LIST_WIDGET_ID, undefined);
             return;
           }
           // `refreshTodoWidget` already short-circuits when
@@ -221,7 +222,7 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
         }
         case "hide": {
           widgetHidden = true;
-          ctx.ui.setWidget(TASK_LIST_WIDGET_ID, undefined);
+          if (isTuiWidgetSurface(ctx)) ctx.ui.setWidget(TASK_LIST_WIDGET_ID, undefined);
           return;
         }
         case "list": {
