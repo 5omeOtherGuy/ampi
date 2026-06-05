@@ -426,6 +426,7 @@ function buildToolResolution(
   profile: MmrSubagentProfile,
   registeredTools: readonly string[] | undefined,
   parentActiveTools: readonly string[] | undefined,
+  toolCeiling?: readonly string[],
 ): { resolution: MmrSubagentToolResolution; workerTools: readonly string[] } {
   const deniedTools: readonly string[] = profile.denyTools ?? [];
   const denySet = new Set(deniedTools);
@@ -439,6 +440,12 @@ function buildToolResolution(
     const registeredSet = new Set(registeredTools);
     workerTools = intendedTools.filter((t) => registeredSet.has(t));
     omittedTools = intendedTools.filter((t) => !registeredSet.has(t));
+  }
+  if (toolCeiling !== undefined) {
+    const ceilingSet = new Set(toolCeiling);
+    const beforeCeiling = workerTools;
+    workerTools = beforeCeiling.filter((t) => ceilingSet.has(t));
+    omittedTools = [...new Set([...omittedTools, ...beforeCeiling.filter((t) => !ceilingSet.has(t))])];
   }
   const resolution: MmrSubagentToolResolution = {
     intendedTools,
@@ -467,6 +474,7 @@ export function resolveMmrSubagentInvocation<TModel extends MmrRegisteredModelLi
     profile,
     args.registeredTools,
     args.parentActiveTools,
+    invocationContext === "child-activation" ? args.explicitTools : undefined,
   );
 
   if (baseModeFailure) {
@@ -489,6 +497,33 @@ export function resolveMmrSubagentInvocation<TModel extends MmrRegisteredModelLi
       workerTools,
       toolResolution: resolution,
     };
+  }
+
+  if (args.explicitTools !== undefined) {
+    const explicitSorted = [...args.explicitTools].sort();
+    const workerSorted = [...workerTools].sort();
+    const equal = explicitSorted.length === workerSorted.length
+      && explicitSorted.every((t, i) => t === workerSorted[i]);
+    if (!equal) {
+      const explicitList = [...args.explicitTools].join(",");
+      const workerList = [...workerTools].join(",");
+      const message = `Subagent "${profile.name}" was invoked with --tools ${explicitList}, but the resolved worker tool set is ${workerList}.`;
+      diagnostics.push({ code: "tools.mismatch", severity: "error", message });
+      return {
+        ok: false,
+        profile,
+        code: "tools.mismatch",
+        message,
+        tools: profile.tools,
+        promptRoute: profile.promptRoute,
+        candidates: [],
+        diagnostics,
+        ...(parentMode !== undefined ? { parentMode } : {}),
+        ...(promptBaseMode !== undefined ? { promptBaseMode } : {}),
+        workerTools,
+        toolResolution: resolution,
+      };
+    }
   }
 
   // Only fail `tools.empty` when the profile *intended* at least one
@@ -549,34 +584,6 @@ export function resolveMmrSubagentInvocation<TModel extends MmrRegisteredModelLi
       workerTools,
       toolResolution: resolution,
     };
-  }
-
-  // 4. Validate explicit --tools against the effective worker tool set.
-  if (args.explicitTools !== undefined) {
-    const explicitSorted = [...args.explicitTools].sort();
-    const workerSorted = [...workerTools].sort();
-    const equal = explicitSorted.length === workerSorted.length
-      && explicitSorted.every((t, i) => t === workerSorted[i]);
-    if (!equal) {
-      const explicitList = [...args.explicitTools].join(",");
-      const workerList = [...workerTools].join(",");
-      const message = `Subagent "${profile.name}" was invoked with --tools ${explicitList}, but the resolved worker tool set is ${workerList}.`;
-      diagnostics.push({ code: "tools.mismatch", severity: "error", message });
-      return {
-        ok: false,
-        profile,
-        code: "tools.mismatch",
-        message,
-        tools: profile.tools,
-        promptRoute: profile.promptRoute,
-        candidates: route.candidates,
-        diagnostics,
-        ...(parentMode !== undefined ? { parentMode } : {}),
-        ...(promptBaseMode !== undefined ? { promptBaseMode } : {}),
-        workerTools,
-        toolResolution: resolution,
-      };
-    }
   }
 
   const modelArg = `${route.selected.provider}/${route.selected.model}`;

@@ -363,9 +363,23 @@ for (const profile of Object.values(MMR_SUBAGENT_PROFILE_TABLE)) {
  * Frozen, ordered list of registered subagent profile names. Deterministic
  * (Object.keys order at module-load time).
  */
-const MMR_SUBAGENT_PROFILE_NAMES: readonly string[] = Object.freeze(
-  Object.keys(MMR_SUBAGENT_PROFILE_TABLE),
-);
+const MMR_DYNAMIC_SUBAGENT_PROFILES_GLOBAL_KEY = "__pi_mmr_dynamic_subagent_profiles_v1__";
+
+const globalProfileStore = globalThis as typeof globalThis & {
+  [MMR_DYNAMIC_SUBAGENT_PROFILES_GLOBAL_KEY]?: Map<string, MmrSubagentProfile>;
+};
+
+function resolveDynamicProfileRegistry(): Map<string, MmrSubagentProfile> {
+  const existing = globalProfileStore[MMR_DYNAMIC_SUBAGENT_PROFILES_GLOBAL_KEY];
+  if (existing instanceof Map) return existing;
+  const fresh = new Map<string, MmrSubagentProfile>();
+  globalProfileStore[MMR_DYNAMIC_SUBAGENT_PROFILES_GLOBAL_KEY] = fresh;
+  return fresh;
+}
+
+function listStaticMmrSubagentProfiles(): readonly string[] {
+  return Object.keys(MMR_SUBAGENT_PROFILE_TABLE);
+}
 
 /**
  * Look up a subagent profile by name. Returns `undefined` for unknown or
@@ -373,14 +387,48 @@ const MMR_SUBAGENT_PROFILE_NAMES: readonly string[] = Object.freeze(
  */
 export function getMmrSubagentProfile(name: string): MmrSubagentProfile | undefined {
   if (typeof name !== "string" || name.length === 0) return undefined;
-  return MMR_SUBAGENT_PROFILE_TABLE[name];
+  return MMR_SUBAGENT_PROFILE_TABLE[name] ?? resolveDynamicProfileRegistry().get(name);
+}
+
+/**
+ * Register or replace a runtime subagent profile. Used by mmr-subagents for
+ * user-authored Markdown subagents whose profile shape is discovered at
+ * extension activation instead of being shipped in mmr-core's static table.
+ */
+export function registerMmrSubagentProfile(profile: MmrSubagentProfile): void {
+  if (typeof profile.name !== "string" || profile.name.length === 0) {
+    throw new Error("registerMmrSubagentProfile requires a non-empty profile.name");
+  }
+  if (Object.hasOwn(MMR_SUBAGENT_PROFILE_TABLE, profile.name)) {
+    throw new Error(`registerMmrSubagentProfile cannot replace built-in profile "${profile.name}"`);
+  }
+  if (profile.promptRoute === "standalone" && profile.baseMode !== undefined) {
+    throw new Error(`runtime subagent profile "${profile.name}" is standalone but declares baseMode "${profile.baseMode}"`);
+  }
+  if (profile.promptRoute === "mode-derived" && profile.baseMode === undefined) {
+    throw new Error(`runtime subagent profile "${profile.name}" is mode-derived but does not declare a baseMode`);
+  }
+  resolveDynamicProfileRegistry().set(profile.name, deepFreeze({ ...profile }));
+}
+
+/** Remove a runtime profile. Intended for tests and profile reloads. */
+export function unregisterMmrSubagentProfile(name: string): void {
+  resolveDynamicProfileRegistry().delete(name);
+}
+
+/** Test seam: clear runtime profiles without touching built-ins. */
+export function clearMmrDynamicSubagentProfiles(): void {
+  resolveDynamicProfileRegistry().clear();
 }
 
 /**
  * Enumerate registered subagent profile names in stable order.
  */
 export function listMmrSubagentProfiles(): readonly string[] {
-  return MMR_SUBAGENT_PROFILE_NAMES;
+  return Object.freeze([
+    ...listStaticMmrSubagentProfiles(),
+    ...resolveDynamicProfileRegistry().keys(),
+  ]);
 }
 
 /**
