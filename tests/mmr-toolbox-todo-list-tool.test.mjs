@@ -300,9 +300,9 @@ describe("mmr-toolbox task_list — schema (session-local todo)", () => {
     const result = await callTaskList(tool, { tasks }, ctx);
 
     assert.notEqual(result?.isError, true);
-    assert.match(result.content[0].text, /^◐ Implementing feature$/m);
+    assert.match(result.content[0].text, /^→ Implementing feature$/m);
     assert.match(result.content[0].text, /^  ├─ ○ Add tests$/m);
-    assert.match(result.content[0].text, /^  └─ ◐ Running checks$/m);
+    assert.match(result.content[0].text, /^  └─ → Running checks$/m);
     assert.deepEqual(result.details.newTasks, tasks);
   });
 });
@@ -464,7 +464,7 @@ describe("mmr-toolbox task_list — persistence as mmr-toolbox.todo-state Custom
       "current submitted item should be visible");
     assert.match(text, /Previous list \(2 item\(s\)\):/,
       "visible output should expose details.oldTasks, not only bury it in details");
-    assert.match(text, /◐ Doing alpha/,
+    assert.match(text, /→ Doing alpha/,
       "previous in-progress item should use its activeForm in the visible summary");
     assert.match(text, /○ Beta/,
       "previous pending item should be included in the visible summary");
@@ -807,6 +807,24 @@ describe("mmr-toolbox task_list — widget render truncates to TUI width", () =>
         `widget line must fit render width; width=${visibleWidth(line)} line=${JSON.stringify(line)}`,
       );
     }
+  });
+
+  it("render(width) shows a static in-progress marker, not a second animated spinner", async () => {
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const { ctx, widgetCalls } = makeWidgetCtx(session);
+
+    await callTaskList(tool, {
+      tasks: [{ content: "Build", activeForm: "Building", status: "in_progress" }],
+    }, ctx);
+
+    const widget = widgetCalls.at(-1).factory(undefined, ctx.ui.theme);
+    const lines = widget.render(80);
+
+    assert.ok(lines.some((line) => line.includes("→ Building")),
+      `in-progress widget row must use the static marker; got ${JSON.stringify(lines)}`);
+    assert.ok(lines.every((line) => !line.includes("◐")),
+      `widget must not render the old independent spinner glyph; got ${JSON.stringify(lines)}`);
   });
 
   it("render(width) is a no-op for non-finite width (legacy callers)", async () => {

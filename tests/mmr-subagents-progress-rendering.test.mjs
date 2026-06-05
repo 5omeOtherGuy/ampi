@@ -912,6 +912,51 @@ describe("renderMmrSubagentResult", () => {
 });
 
 describe("background task rendering", () => {
+  it("renders a composed start_task frame once with an expanded background-agent body", async () => {
+    const { renderMmrBackgroundTaskCall, renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = new ToolExecutionComponent(
+      "start_task",
+      "start-call-1",
+      { agent: "finder", params: { query: "Find async task rendering" } },
+      { showImages: false },
+      {
+        name: "start_task",
+        renderCall(callArgs, theme, context) {
+          return renderMmrBackgroundTaskCall("start_task", callArgs, theme, context);
+        },
+        renderResult(toolResult, renderOptions, theme, context) {
+          return renderMmrBackgroundTaskResult("start_task", toolResult, renderOptions, theme, context);
+        },
+      },
+      noopTui,
+      `${homedir()}/projects/repo`,
+    );
+    component.setExpanded(false);
+    component.markExecutionStarted();
+    component.updateResult({
+      content: [{ type: "text", text: "start_task: started background worker task_1" }],
+      details: {
+        worker: "mmr-subagents.async-task",
+        tool: "start_task",
+        agent: "finder",
+        taskId: "task_1",
+        status: "running",
+        description:
+          "Render test: locate where the task_list tool renders subtasks and parent items, including\n" +
+          "the spinner/activeForm rendering logic. Return file paths and line numbers for the rendering\n" +
+          "code.",
+      },
+    }, false);
+    const rendered = normalize(renderText(component));
+
+    assert.equal(countOccurrences(rendered, "finder running in background"), 1);
+    assert.match(rendered, /Render test: locate where the task_list tool renders subtasks and parent items/);
+    assert.match(rendered, /spinner\/activeForm rendering logic/);
+    assert.doesNotMatch(rendered, /Task .* background/);
+    assert.doesNotMatch(rendered, /started background worker/);
+    assert.doesNotMatch(rendered, /ctrl\+o to expand/);
+  });
+
   it("renders a running background task as a collapsed subagent-style box", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const component = renderMmrBackgroundTaskResult(
@@ -933,8 +978,9 @@ describe("background task rendering", () => {
     );
     const rendered = normalize(renderText(component));
 
-    assert.match(rendered, /finder .* background running in background/);
+    assert.match(rendered, /finder running in background/);
     assert.match(rendered, /Find async task rendering/);
+    assert.doesNotMatch(rendered, /Task .* background/);
     assert.doesNotMatch(rendered, /started background worker/);
   });
 
@@ -961,8 +1007,9 @@ describe("background task rendering", () => {
     );
     const rendered = normalize(renderText(component));
 
-    assert.match(rendered, /finder .* background completed/);
+    assert.match(rendered, /finder completed/);
     assert.match(rendered, /Find async task rendering/);
+    assert.doesNotMatch(rendered, /Task .* background/);
     assert.match(rendered, /Final answer/);
     assert.doesNotMatch(rendered, /hidden trail/);
     assert.doesNotMatch(rendered, /task_poll: finder task/);

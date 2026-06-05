@@ -75,6 +75,8 @@ interface BackgroundTaskDetails {
   status?: string;
   board?: unknown;
   description?: string;
+  resolvedModel?: string;
+  contextWindow?: number;
   finalOutput?: string;
   errorMessage?: string;
 }
@@ -960,9 +962,12 @@ function backgroundTaskHeaderLine(
   renderStatus: RenderStatus,
   theme: SubagentTheme,
 ): string {
-  const title = formatTitle(details.agent ?? "background task", undefined, theme);
-  const badge = theme.fg("muted", "background");
-  return `${title} ${theme.fg("muted", "•")} ${badge}  ${theme.fg(statusColor(renderStatus), backgroundTaskStatusLabel(details.status))}`;
+  const model = stripProvider(details.resolvedModel);
+  const title = formatTitle(details.agent ?? "background task", model, theme);
+  const statusText = renderStatus === "running"
+    ? "running in background"
+    : backgroundTaskStatusLabel(details.status);
+  return `${title}  ${theme.fg(statusColor(renderStatus), statusText)}`;
 }
 
 function addDiagnostic(
@@ -1055,6 +1060,8 @@ export function renderMmrBackgroundTaskResult(
   const container = new Container();
   const box = new Box(1, 1, statusBgFn(renderStatus, theme));
   box.addChild(new Text(backgroundTaskHeaderLine(details, renderStatus, theme), 0, 0));
+  // Background invocations are already compact by design; keep the task body
+  // expanded so start_task does not duplicate a second collapsed running row.
   addMarkdownBlock(box, details.description ?? details.taskId, theme, { paddingX: 1 });
   if (details.errorMessage && renderStatus === "failed") {
     addDiagnostic(box, details.errorMessage, renderStatus, theme);

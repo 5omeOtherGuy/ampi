@@ -69,6 +69,9 @@ export interface AsyncTaskToolDetails {
   taskId?: string;
   status?: MmrAsyncTaskStatus;
   freshness?: MmrAsyncTaskInternalSnapshot["freshness"];
+  /** Provider-stripped by the renderer; used for the subagent-style header. */
+  resolvedModel?: string;
+  contextWindow?: number;
   /** User-facing invocation label for the background-task renderer. */
   description?: string;
   /** Clean terminal worker output for the background-task renderer. */
@@ -137,7 +140,7 @@ const START_TASK_PARAMETERS = Type.Object(
     notify: Type.Optional(
       Type.Boolean({
         description:
-          "Completion notification. ON by default: when this task finishes the parent is poked once so it can read the result. Pass false to opt out (pull-only via task_poll/task_wait). The poke wakes the session only if it is idle; it never interrupts an active turn, and it is bounded per session.",
+          "Completion notification. ON by default: when this task finishes the parent is poked once so it can read the result. Pass false to opt out (pull-only via task_poll/task_wait). The poke wakes an idle session or queues behind the active turn; it never interrupts streaming, and it is bounded per session.",
       }),
     ),
   },
@@ -197,7 +200,7 @@ const ASYNC_TASK_GUIDELINES: readonly string[] = [
   "Call task_poll with no task_id to list this session's background tasks (active, stalled, finished).",
   "Use task_cancel to stop a duplicate, obsolete, or wrongly-scoped background task.",
   "Do not start multiple code-writing background tasks unless their file targets are clearly disjoint.",
-  "A background task notifies you once when it finishes (the poke wakes the session only when idle and is bounded per session); pass start_task({ notify: false }) to opt out and pull the result with task_poll/task_wait.",
+  "A background task notifies you once when it finishes (the poke wakes an idle session or queues behind the active turn, and is bounded per session); pass start_task({ notify: false }) to opt out and pull the result with task_poll/task_wait.",
 ];
 
 function resolveCwd(ctx: ExtensionContext | undefined): string {
@@ -244,6 +247,31 @@ function detailsContextFromSnapshot(snapshot: MmrAsyncTaskInternalSnapshot): Tas
     ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
     ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
   };
+}
+
+const ASYNC_TASK_STATUS_KEY = "mmr-subagents.async-tasks";
+
+function refreshAsyncTaskFooterStatus(
+  ctx: ExtensionContext | undefined,
+  registry: MmrAsyncTaskRegistry,
+  sessionKey: string,
+): void {
+  const setStatus = ctx?.ui?.setStatus;
+  if (typeof setStatus !== "function") return;
+  try {
+    const board = registry.listTasks(sessionKey);
+    const running = board.counts.active + board.counts.stalled;
+    if (running === 0) {
+      setStatus(ASYNC_TASK_STATUS_KEY, undefined);
+      return;
+    }
+    setStatus(
+      ASYNC_TASK_STATUS_KEY,
+      running === 1 ? "1 background agent running" : `${running} background agents running`,
+    );
+  } catch {
+    // Footer status is advisory; never fail a background-task tool call for it.
+  }
 }
 
 function isTerminal(status: MmrAsyncTaskStatus): boolean {
@@ -389,6 +417,8 @@ function projectRunning(
       status: snapshot.status,
       freshness: snapshot.freshness,
       description: snapshot.description,
+      ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
+      ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
       ...(opts.timedOut !== undefined ? { timedOut: opts.timedOut } : {}),
     },
   };
@@ -423,6 +453,8 @@ function projectTerminal(
       status: snapshot.status,
       freshness: snapshot.freshness,
       description: snapshot.description,
+      ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
+      ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
       ...(finalOutput !== undefined ? { finalOutput } : {}),
       ...(final !== undefined ? { final } : {}),
       ...(snapshot.errorMessage !== undefined ? { errorMessage: snapshot.errorMessage } : {}),
@@ -476,7 +508,7 @@ function buildCompletionNotifier(
           description: snapshot.description,
         } satisfies AsyncTaskCompletionDetails,
       },
-      { deliverAs: "nextTurn", triggerTurn: true },
+      { deliverAs: "followUp", triggerTurn: true },
     );
   };
 }
@@ -566,10 +598,12 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
       const parsed = parseStartParams(rawParams);
       if ("error" in parsed) return validationResult(parsed.error);
       const sessionKey = resolveSessionKey(ctx, deps);
+      const onSettle = () => refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
       // Two-layer gate: the session ceiling must permit push AND the caller
       // must not opt this task out. The registry adds at-most-once + a
-      // per-session budget on top. Delivery is `nextTurn` + `triggerTurn`, so a
-      // push only wakes an idle session and otherwise rides the next turn.
+      // per-session budget on top. Delivery is `followUp` + `triggerTurn`, so a
+      // push wakes an idle session or queues immediately behind the active turn
+      // instead of riding the next user prompt.
       const notify = (deps.enableCompletionPush ?? true) && parsed.wantsNotify
         ? buildCompletionNotifier(deps.pi)
         : undefined;
@@ -605,6 +639,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
                   }
                 },
                 ...(notify !== undefined ? { notify } : {}),
+                onSettle,
               }),
             } as const;
           })()
@@ -637,6 +672,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
                   };
                 },
                 ...(notify !== undefined ? { notify } : {}),
+                onSettle,
               }),
             } as const;
           })();
@@ -662,6 +698,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
         };
       }
       const snapshot = started.started.snapshot;
+      refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
       const dedupNote = started.started.deduplicated ? " (existing task for this call)" : "";
       const message =
         `start_task: started background worker ${snapshot.taskId}${dedupNote} ("${snapshot.description}", agent ${snapshot.agent}). ` +
@@ -677,6 +714,8 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
           status: snapshot.status,
           freshness: snapshot.freshness,
           description: snapshot.description,
+          ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
+          ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
         },
       };
     },
@@ -728,6 +767,7 @@ export function createTaskPollTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
       const taskId = (rawParams as { task_id?: unknown })?.task_id;
       if (typeof taskId !== "string" || taskId.length === 0) {
         const board = registry.listTasks(sessionKey);
+        refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
         return {
           content: [{ type: "text", text: renderBoard(board) }],
           details: { worker: "mmr-subagents.async-task", tool: TASK_POLL_TOOL_NAME, board },
@@ -735,6 +775,7 @@ export function createTaskPollTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
       }
       const snapshot = registry.getTask(sessionKey, taskId);
       if (!snapshot) return notFoundResult(TASK_POLL_TOOL_NAME, taskId);
+      refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
       return projectSnapshot(TASK_POLL_TOOL_NAME, snapshot);
     },
   } satisfies ToolDefinition;
@@ -771,6 +812,7 @@ export function createTaskWaitTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       });
       if (!result.found || !result.snapshot) return notFoundResult(TASK_WAIT_TOOL_NAME, taskId);
+      refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
       return projectSnapshot(TASK_WAIT_TOOL_NAME, result.snapshot, { timedOut: result.timedOut });
     },
   } satisfies ToolDefinition;
@@ -807,6 +849,7 @@ export function createTaskCancelTool(deps: AsyncTaskToolDeps = {}): ToolDefiniti
         ...(reason !== undefined ? { reason } : {}),
       });
       if (!snapshot) return notFoundResult(TASK_CANCEL_TOOL_NAME, taskId);
+      refreshAsyncTaskFooterStatus(ctx, registry, sessionKey);
       const trail = snapshot.finalResult?.trail
         ?? snapshot.latestProgress?.trail
         ?? extractTrailFromToolResult(snapshot.finalToolResult)

@@ -47,7 +47,7 @@ const TASK_LIST_REMINDER_TURNS_BETWEEN_REMINDERS = 10;
 function taskListStatusGlyph(status: TaskListItem["status"]): string {
   switch (status) {
     case "in_progress":
-      return "◐";
+      return "→";
     case "completed":
       return "●";
     case "pending":

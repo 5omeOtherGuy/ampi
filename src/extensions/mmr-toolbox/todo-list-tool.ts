@@ -114,7 +114,7 @@ export function isTuiWidgetSurface(ctx: WidgetCtxLike | undefined): boolean {
 function widgetStatusGlyph(status: TodoStatus): string {
   switch (status) {
     case "in_progress":
-      return "◐";
+      return "→";
     case "pending":
       return "○";
     case "completed":
