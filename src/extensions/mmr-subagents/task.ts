@@ -216,10 +216,43 @@ export function classifyTaskOutcome(input: TaskOutcomeInput): TaskStatus {
 export const TASK_PROGRESS_PLACEHOLDER = "Task: worker running…";
 
 let latestParentSystemPrompt: string | undefined;
+let latestParentSystemPromptOptions: MmrTaskParentPromptOptions | undefined;
 
-export function captureTaskParentSystemPrompt(systemPrompt: unknown): void {
+/**
+ * Minimal structural view of Pi's `BuildSystemPromptOptions` retained for the
+ * most recent parent turn. Captured alongside the parent system-prompt string
+ * so Task-worker diagnostics can classify the parent surface (custom prompt vs
+ * locked-mode head, and the parent's rendered tool selection). Metadata only —
+ * never used to rebuild a prompt.
+ */
+export interface MmrTaskParentPromptOptions {
+  selectedTools?: string[];
+  customPrompt?: string;
+}
+
+function readParentPromptOptions(value: unknown): MmrTaskParentPromptOptions | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: MmrTaskParentPromptOptions = {};
+  if (Array.isArray(value.selectedTools)) {
+    const tools = value.selectedTools.filter((name): name is string => typeof name === "string");
+    if (tools.length > 0) result.selectedTools = tools;
+  }
+  if (typeof value.customPrompt === "string" && value.customPrompt.length > 0) {
+    result.customPrompt = value.customPrompt;
+  }
+  return result.selectedTools !== undefined || result.customPrompt !== undefined ? result : undefined;
+}
+
+/**
+ * Capture the parent turn's system prompt and its structured options together.
+ * The options are only updated when a non-empty prompt string is seen, so the
+ * stored options always correspond to the stored prompt (never desynced from a
+ * stale earlier turn).
+ */
+export function captureTaskParentPrompt(systemPrompt: unknown, systemPromptOptions: unknown): void {
   if (typeof systemPrompt === "string" && systemPrompt.length > 0) {
     latestParentSystemPrompt = systemPrompt;
+    latestParentSystemPromptOptions = readParentPromptOptions(systemPromptOptions);
   }
 }
 
@@ -227,10 +260,34 @@ export function getTaskParentSystemPrompt(): string | undefined {
   return latestParentSystemPrompt;
 }
 
+export function getTaskParentSystemPromptOptions(): MmrTaskParentPromptOptions | undefined {
+  return latestParentSystemPromptOptions;
+}
+
+/** Diagnostic classification of the captured parent prompt options. */
+export interface MmrTaskParentPromptSummary {
+  /** Parent ran with a `--system-prompt`/`SYSTEM.md` custom prompt (so a
+   * mode-derived worker derived from it passes through with no locked-mode
+   * head). */
+  hasCustomPrompt: boolean;
+  /** Number of tools in the parent's rendered selection, when Pi supplied it. */
+  selectedToolCount: number | undefined;
+}
+
+export function summarizeTaskParentPromptOptions(
+  options: MmrTaskParentPromptOptions | undefined,
+): MmrTaskParentPromptSummary {
+  return {
+    hasCustomPrompt: typeof options?.customPrompt === "string" && options.customPrompt.length > 0,
+    selectedToolCount: options?.selectedTools?.length,
+  };
+}
+
 export function registerTaskParentPromptCapture(pi: Pick<ExtensionAPI, "on">): void {
   pi.on("before_agent_start", (event) => {
     if (getMmrSubagentState()) return;
-    captureTaskParentSystemPrompt((event as { systemPrompt?: unknown }).systemPrompt);
+    const e = event as { systemPrompt?: unknown; systemPromptOptions?: unknown };
+    captureTaskParentPrompt(e.systemPrompt, e.systemPromptOptions);
   });
 }
 
