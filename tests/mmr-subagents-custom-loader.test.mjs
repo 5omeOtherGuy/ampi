@@ -24,33 +24,25 @@ async function writeMarkdown(filePath, text) {
 }
 
 describe("mmr-subagents custom sa__ loader framework", () => {
-  it("normalizes custom subagent tool names with the sa__ prefix and a 120 character cap", async () => {
+  it("normalizes custom subagent tool names with the sa__ prefix and a 64 character cap", async () => {
     const { toMmrCustomSubagentToolName, MMR_CUSTOM_SUBAGENT_TOOL_PREFIX, MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH } =
       await importSource(LOADER_MODULE);
     assert.equal(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX, "sa__");
-    assert.equal(toMmrCustomSubagentToolName("Repo Auditor"), "sa__repo-auditor");
+    assert.equal(toMmrCustomSubagentToolName("Repo Auditor"), "sa__repo_auditor");
     assert.equal(toMmrCustomSubagentToolName("---"), "sa__subagent");
     const veryLong = toMmrCustomSubagentToolName("A".repeat(300));
     assert.equal(veryLong.startsWith("sa__"), true);
     assert.ok(veryLong.length <= MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH);
   });
 
-  it("preserves tool tokens verbatim with no alias rewriting", async () => {
+  it("normalizes Claude Code tool aliases and preserves exact Pi tool names", async () => {
     const { normalizeMmrCustomSubagentToolPatterns } = await importSource(LOADER_MODULE);
-    // Tokens are passed through after trim + dedupe; there is no name
-    // translation. Subagent authors must use the exact Pi tool name they
-    // want activated. Non-canonical or legacy names simply fail to
-    // activate at runtime because no Pi tool with that name is registered.
     assert.deepEqual(
-      normalizeMmrCustomSubagentToolPatterns(["read", "write", "edit", "find", "bash", "grep", "web_search", "read_web_page", "Task", "mcp__repo__*"]),
-      ["read", "write", "edit", "find", "bash", "grep", "web_search", "read_web_page", "Task", "mcp__repo__*"],
+      normalizeMmrCustomSubagentToolPatterns(["Read", "Grep", "Glob", "Bash", "Edit", "MultiEdit", "Write", "WebSearch", "WebFetch", "read_github"]),
+      ["read", "grep", "find", "bash", "edit", "write", "web_search", "read_web_page", "read_github"],
     );
-    assert.deepEqual(normalizeMmrCustomSubagentToolPatterns("read, bash, Task"), ["read", "bash", "Task"]);
-    // Legacy/non-canonical names are preserved as-is (no longer rewritten).
-    assert.deepEqual(
-      normalizeMmrCustomSubagentToolPatterns(["Read", "Write", "shell", "browser", "planner"]),
-      ["Read", "Write", "shell", "browser", "planner"],
-    );
+    assert.deepEqual(normalizeMmrCustomSubagentToolPatterns("Read, Bash, read"), ["read", "bash"]);
+    assert.deepEqual(normalizeMmrCustomSubagentToolPatterns(["shell", "browser", "planner"]), ["shell", "browser", "planner"]);
   });
 
   it("parses subagent frontmatter, derives a tool name, substitutes baseDir, and keeps inherit as a model sentinel", async () => {
@@ -64,7 +56,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
         "name: Repo Auditor",
         "description: Reviews a repository slice.",
         "model: inherit",
-        "tools: read, bash, Task",
+        "tools: Read, Bash, Write",
         "skills: [audit, review]",
         "---",
         "Inspect {baseDir} and report concise findings.",
@@ -73,10 +65,10 @@ describe("mmr-subagents custom sa__ loader framework", () => {
 
     assert.ok(definition);
     assert.equal(definition.name, "Repo Auditor");
-    assert.equal(definition.toolName, "sa__repo-auditor");
+    assert.equal(definition.toolName, "sa__repo_auditor");
     assert.equal(definition.description, "Reviews a repository slice.");
     assert.equal(definition.model, "inherit");
-    assert.deepEqual([...definition.toolPatterns], ["read", "bash", "Task"]);
+    assert.deepEqual([...definition.toolPatterns], ["read", "bash", "write"]);
     assert.deepEqual([...definition.skills], ["audit", "review"]);
     assert.equal(definition.baseDir, path.dirname(filePath));
     assert.equal(definition.systemPrompt, `Inspect ${path.dirname(filePath)} and report concise findings.`);
@@ -138,8 +130,8 @@ describe("mmr-subagents custom sa__ loader framework", () => {
 
       const { discoverMmrCustomSubagents } = await importSource(LOADER_MODULE);
       const definitions = await discoverMmrCustomSubagents({ roots: [root] });
-      assert.deepEqual(definitions.map((definition) => definition.toolName).sort(), ["sa__isolated", "sa__repo-auditor"]);
-      const repoAuditor = definitions.find((definition) => definition.toolName === "sa__repo-auditor");
+      assert.deepEqual(definitions.map((definition) => definition.toolName).sort(), ["sa__isolated", "sa__repo_auditor"]);
+      const repoAuditor = definitions.find((definition) => definition.toolName === "sa__repo_auditor");
       assert.ok(repoAuditor);
       assert.equal(repoAuditor.description, "first wins");
       assert.equal(definitions.some((definition) => definition.filePath.includes("node_modules")), false);
@@ -160,7 +152,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
         "tools:",
         "  - read",
         "  - bash",
-        "  - Task",
+        "  - Write",
         "skills:",
         "  - audit",
         "  - review",
@@ -169,7 +161,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
       ].join("\n"),
     });
     assert.ok(definition);
-    assert.deepEqual([...definition.toolPatterns], ["read", "bash", "Task"]);
+    assert.deepEqual([...definition.toolPatterns], ["read", "bash", "write"]);
     assert.deepEqual([...definition.skills], ["audit", "review"]);
   });
 
@@ -285,6 +277,24 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     assert.equal(definition.systemPrompt, "Use this body.");
   });
 
+  it("accepts Claude Code-style frontmatter with name/description/body and no type key", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
+    const definition = parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", ".claude", "agents", "reviewer.md"),
+      markdown: [
+        "---",
+        "name: Code Reviewer",
+        "description: Reviews code changes.",
+        "tools: Read, Grep, Glob",
+        "---",
+        "Review the diff.",
+      ].join("\n"),
+    });
+    assert.ok(definition);
+    assert.equal(definition.toolName, "sa__code_reviewer");
+    assert.deepEqual([...definition.toolPatterns], ["read", "grep", "find"]);
+  });
+
   it("does not include markdown files whose frontmatter does not mark them as a subagent, even with allowMissingFrontmatter", async () => {
     const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
     const definition = parseMmrCustomSubagentMarkdown({
@@ -299,6 +309,24 @@ describe("mmr-subagents custom sa__ loader framework", () => {
       allowMissingFrontmatter: true,
     });
     assert.equal(definition, undefined);
+  });
+
+  it("fails closed on unsafe custom subagent tool requests", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
+    for (const tool of ["Task", "oracle", "start_task", "apply_patch", "mcp__repo__read", "sa__other"]) {
+      const definition = parseMmrCustomSubagentMarkdown({
+        filePath: path.join("/repo", ".claude", "agents", `${tool}.md`),
+        markdown: [
+          "---",
+          "name: Unsafe",
+          "description: Unsafe tool request.",
+          `tools: read, ${tool}`,
+          "---",
+          "Body.",
+        ].join("\n"),
+      });
+      assert.equal(definition, undefined, tool);
+    }
   });
 
   it("drops prototype-polluting frontmatter keys without poisoning the attributes object", async () => {
@@ -345,6 +373,40 @@ describe("mmr-subagents custom sa__ loader framework", () => {
         definitions.map((definition) => definition.toolName).sort(),
         ["sa__ok"],
       );
+    });
+  });
+
+  it("bounds scanned markdown files before parsing definitions", async () => {
+    await withTempDir(async (root) => {
+      for (const name of ["a", "b", "c"]) {
+        await writeMarkdown(
+          path.join(root, "agents", `${name}.md`),
+          ["---", `name: ${name}`, `description: ${name}`, "---", "body"].join("\n"),
+        );
+      }
+      const { discoverMmrCustomSubagents, discoverMmrCustomSubagentsSync } = await importSource(LOADER_MODULE);
+      const asyncDefinitions = await discoverMmrCustomSubagents({ roots: [root], maxFiles: 2 });
+      const syncDefinitions = discoverMmrCustomSubagentsSync({ roots: [root], maxFiles: 2 });
+      assert.equal(asyncDefinitions.length, 2);
+      assert.deepEqual(syncDefinitions.map((definition) => definition.toolName), asyncDefinitions.map((definition) => definition.toolName));
+    });
+  });
+
+  it("bounds registered definitions independently from scanned file count", async () => {
+    await withTempDir(async (root) => {
+      for (const name of ["a", "b", "c"]) {
+        await writeMarkdown(
+          path.join(root, "agents", `${name}.md`),
+          ["---", `name: ${name}`, `description: ${name}`, "---", "body"].join("\n"),
+        );
+      }
+      const { discoverMmrCustomSubagents, discoverMmrCustomSubagentsSync, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_DEFINITIONS, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_FILES } = await importSource(LOADER_MODULE);
+      assert.equal(DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_DEFINITIONS, 100);
+      assert.equal(DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_FILES, 1000);
+      const asyncDefinitions = await discoverMmrCustomSubagents({ roots: [root], maxDefinitions: 1 });
+      const syncDefinitions = discoverMmrCustomSubagentsSync({ roots: [root], maxDefinitions: 1 });
+      assert.deepEqual(asyncDefinitions.map((definition) => definition.toolName), ["sa__a"]);
+      assert.deepEqual(syncDefinitions.map((definition) => definition.toolName), ["sa__a"]);
     });
   });
 
