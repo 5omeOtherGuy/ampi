@@ -3,7 +3,7 @@ import {
   extractActiveBuiltinToolNames,
 } from "./builtin-tool-guidance.js";
 import { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } from "./prompt-modules.js";
-import { MMR_CTHULU_SUMMON_GATE, MMR_MODE_PROMPT_TEMPLATES } from "./prompt-templates.js";
+import { MMR_MODE_PROMPT_TEMPLATES } from "./prompt-templates.js";
 import type {
   MmrActiveToolManifestEntry,
   MmrModeKey,
@@ -40,6 +40,43 @@ const DATE_TAIL_ANCHOR = "\nCurrent date:";
 function findHeaderStart(prompt: string, anchor: string, fromIdx: number): number {
   const idx = prompt.indexOf(anchor, fromIdx);
   return idx === -1 ? -1 : idx + 2;
+}
+
+const MMR_TAIL_SEPARATOR = "\n\n";
+
+/**
+ * Exact-text reconstruction of the MMR-owned tail blocks (shared tool
+ * guidance, shared coding guidance, mode posture) for every known mode
+ * template. Used to detect and strip a previously-injected MMR tail when
+ * `assembleActiveSurface` re-runs on an already-assembled prompt, so the
+ * blocks are replaced rather than duplicated. Mode-independent: the parent
+ * prompt fed into a re-assembly may have been produced for a different mode
+ * (e.g. a `deep` parent aliased to a `smart` Task base).
+ */
+const PREVIOUS_MMR_TAILS: readonly string[] = Object.values(MMR_MODE_PROMPT_TEMPLATES).map(
+  (previousTemplate) =>
+    `${SHARED_TOOL_GUIDANCE}\n\n${SHARED_CODING_GUIDANCE}\n\n${previousTemplate.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${previousTemplate.closingLine}`,
+);
+
+/**
+ * Locate the end of a previously-injected MMR tail that sits immediately
+ * after Pi's docs block. Returns the byte offset just past the prior mode's
+ * closing line (the start of Pi's preserved tail), or `undefined` when the
+ * base prompt has not already been MMR-assembled. Matches by exact tail
+ * text so a preserved Pi tail that merely contains a heading like
+ * `## Response style` cannot trigger a false strip.
+ */
+function findPreviousMmrTailEnd(base: string, docsEnd: number): number | undefined {
+  if (!base.startsWith(MMR_TAIL_SEPARATOR, docsEnd)) return undefined;
+  const tailStart = docsEnd + MMR_TAIL_SEPARATOR.length;
+  for (const previousTail of PREVIOUS_MMR_TAILS) {
+    if (!base.startsWith(previousTail, tailStart)) continue;
+    const end = tailStart + previousTail.length;
+    // Pi's preserved tail is either empty or starts at a newline boundary
+    // (`\n\n...` normal tail, or `\nCurrent date:` minimal Pi tail).
+    if (end === base.length || base[end] === "\n") return end;
+  }
+  return undefined;
 }
 
 export interface AssembleActiveSurfaceInput {
@@ -147,10 +184,7 @@ export function assembleActiveSurface(
   // that case, strip the previous MMR-owned shared/mode blocks and preserve
   // only Pi's docs block plus the original tail; otherwise repeated assembly
   // duplicates every long MMR instruction.
-  const previousMmrGateStart = base.indexOf(MMR_CTHULU_SUMMON_GATE, docsEnd);
-  const headEnd = previousMmrGateStart === -1
-    ? docsEnd
-    : previousMmrGateStart + MMR_CTHULU_SUMMON_GATE.length;
+  const headEnd = findPreviousMmrTailEnd(base, docsEnd) ?? docsEnd;
 
   // Preserve Pi's whole tools block — the `Available tools:` list AND Pi's
   // "In addition to the tools above..." interstitial sentence — byte-for-byte
@@ -231,7 +265,7 @@ export function assembleActiveSurface(
   const modePostureBlock: MmrPromptBlock = {
     id: `mode-posture:${mode}`,
     kind: "mode-posture",
-    text: `${template.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${template.closingLine}\n\n${MMR_CTHULU_SUMMON_GATE}`,
+    text: `${template.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${template.closingLine}`,
     source: "mmr-core",
   };
 

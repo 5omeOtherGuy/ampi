@@ -6,7 +6,6 @@ import { resetMmrWorkerFallbackState } from "./fallback.js";
 import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./finder.js";
 import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./librarian.js";
 import { type MmrAdvisorToolDeps, registerOracleTool } from "./oracle.js";
-import { registerCthuluTool } from "./cthulu.js";
 import { registerMmrSubagentsPromptBuilders } from "./prompts.js";
 import { type TaskToolDeps, registerTaskParentPromptCapture, registerTaskTool } from "./task.js";
 import { type AsyncTaskToolDeps, MMR_SUBAGENTS_ASYNC_PUSH_ENV, registerAsyncTaskTools } from "./async-task-tools.js";
@@ -38,8 +37,6 @@ registerMmrOwnedExtensionPath(fileURLToPath(import.meta.url));
 export interface MmrSubagentsFactoryOverrides {
   finder?: FinderToolDeps;
   oracle?: MmrAdvisorToolDeps;
-  /** Hidden cthulu advisor seams (shares the advisor dependency shape). */
-  cthulu?: MmrAdvisorToolDeps;
   task?: TaskToolDeps;
   librarian?: LibrarianToolDeps;
   asyncTasks?: AsyncTaskToolDeps;
@@ -64,7 +61,6 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
     registerMmrSubagentsPromptBuilders();
     registerFinderTool(pi, overrides.finder ?? {});
     registerOracleTool(pi, overrides.oracle ?? {});
-    registerCthuluTool(pi, overrides.cthulu ?? {});
     registerTaskParentPromptCapture(pi);
     registerTaskTool(pi, overrides.task ?? {});
     registerLibrarianTool(pi, overrides.librarian ?? {});
@@ -103,7 +99,6 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
     const capabilities: MmrSubagentsCapabilities = {
       finder: true,
       oracle: true,
-      cthulu: true,
       Task: true,
       librarian: () => isLibrarianGithubToolPrerequisiteRegistered(pi),
       asyncTasks: true,

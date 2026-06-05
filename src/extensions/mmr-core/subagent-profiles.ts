@@ -217,37 +217,6 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     persistSubagentState: false,
   } satisfies MmrSubagentProfile),
 
-  cthulu: deepFreeze({
-    name: "cthulu",
-    displayName: "Cthulu",
-    // Hidden, summon-gated advisory worker. Highest-capability route at
-    // maximum reasoning effort, with no output-token economy: the worker
-    // is meant to read, iterate, and reason as much as it needs to find
-    // the optimal solution regardless of cost.
-    modelPreferences: [
-      { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
-      { model: "gpt-5.5", thinkingLevel: "xhigh" },
-    ],
-    thinkingLevel: "xhigh",
-    maxOutputTokens: 128000,
-    // Same advisory tool surface as the oracle.
-    tools: [
-      "read",
-      "grep",
-      "find",
-      "web_search",
-      "read_web_page",
-      "read_session",
-      "find_session",
-    ],
-    promptRoute: "standalone",
-    promptBuilder: "cthulu",
-    allowMcp: false,
-    allowToolbox: false,
-    enforceLockedMode: false,
-    persistSubagentState: false,
-  } satisfies MmrSubagentProfile),
-
   librarian: deepFreeze({
     name: "librarian",
     displayName: "Librarian",

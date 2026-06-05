@@ -65,7 +65,7 @@ describe("mmr-subagents tool provider", () => {
     const provider = createMmrSubagentsToolProvider();
     assert.deepEqual(
       [...MMR_SUBAGENTS_OWNED_TOOLS].sort(),
-      ["Task", "cthulu", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
+      ["Task", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
     );
     for (const unowned of [
       "Read",
