@@ -35,12 +35,13 @@ Guidelines:
 - Avoid unanchored insert-only apply_patch hunks: include a nearby context line or an `@@` header so the insertion site is unambiguous.
 - If apply_patch fails or rejects an ambiguous hunk, do not retry blindly. Re-read the affected files, widen context or add an `@@` anchor, then re-author the hunks against the actual file contents.
 - Redact secrets, API keys, and credentials from apply_patch hunks before submission. Patch inputs are echoed in tool results and stored in session logs.
-- Use task_list to plan and track multi-step work in the current session.
+- Use task_list to plan and track multi-step work in the current session: complex work with roughly three or more distinct steps, multiple user requirements, explicit todo-list requests, or new instructions that change the plan. Skip it for single trivial actions or purely informational answers.
 - Submit the full list every call (whole-list replacement). Each item must include content (imperative), activeForm (present-continuous), and status (pending|in_progress|completed); items may include subtasks with content, optional activeForm, and status.
 - Use subtasks for real child work; do not encode subtasks in content text such as 'parent — subtask: child'.
 - Do not submit `tasks: []` unless the user explicitly asks to clear the task_list; empty-list submission persists an empty list immediately.
-- Mark items in_progress when you start and completed the moment you finish. Keep at most one item in_progress at a time.
+- Mark items in_progress before starting that work and completed immediately after finishing it; do not batch completions at the end. Keep at most one item in_progress at a time.
 - Advance subtask status the same way as top-level items: mark each subtask in_progress when you start it and completed when it is done, so the pinned widget shows which child step is currently being worked on.
+- Only mark a task completed when it is fully accomplished. If tests fail, verification is missing, implementation is partial, or required files/dependencies cannot be found, keep the task active or add a blocking follow-up instead.
 - Before sending a final response after using task_list, update task_list first: if the final response completes the active work, submit the full list with that item marked completed; do not leave an item in_progress unless the response is explicitly an interim/status update that says what remains.
 - Use web_search when you need up-to-date or precise documentation. Use read_web_page for fetching full content from a specific URL.
 - Use web_search only for public, non-sensitive research; do not include secrets, API keys, or private data in web_search.objective or web_search.search_queries.
@@ -586,12 +587,13 @@ Owner: mmr-toolbox
 Prompt snippet: Plan and track work as a session-local todo list
 
 Prompt guidelines:
-- Use task_list to plan and track multi-step work in the current session.
+- Use task_list to plan and track multi-step work in the current session: complex work with roughly three or more distinct steps, multiple user requirements, explicit todo-list requests, or new instructions that change the plan. Skip it for single trivial actions or purely informational answers.
 - Submit the full list every call (whole-list replacement). Each item must include content (imperative), activeForm (present-continuous), and status (pending|in_progress|completed); items may include subtasks with content, optional activeForm, and status.
 - Use subtasks for real child work; do not encode subtasks in content text such as 'parent — subtask: child'.
 - Do not submit `tasks: []` unless the user explicitly asks to clear the task_list; empty-list submission persists an empty list immediately.
-- Mark items in_progress when you start and completed the moment you finish. Keep at most one item in_progress at a time.
+- Mark items in_progress before starting that work and completed immediately after finishing it; do not batch completions at the end. Keep at most one item in_progress at a time.
 - Advance subtask status the same way as top-level items: mark each subtask in_progress when you start it and completed when it is done, so the pinned widget shows which child step is currently being worked on.
+- Only mark a task completed when it is fully accomplished. If tests fail, verification is missing, implementation is partial, or required files/dependencies cannot be found, keep the task active or add a blocking follow-up instead.
 - Before sending a final response after using task_list, update task_list first: if the final response completes the active work, submit the full list with that item marked completed; do not leave an item in_progress unless the response is explicitly an interim/status update that says what remains.
 
 Description:
@@ -624,6 +626,16 @@ Every item has three required fields and one optional child-list field:
   sit at `pending` and the pinned widget cannot show which child step is
   currently being worked on.
 - Keep at most one item `in_progress` at a time.
+- Update task status in real time as work progresses: mark the current task
+  `in_progress` before beginning that step, and mark it `completed`
+  immediately after finishing. Do not batch status updates at the end.
+- Use the list proactively for complex work (roughly three or more distinct
+  steps), multiple user requirements, or new instructions that change the
+  plan. Skip it for single trivial actions or purely informational answers.
+- Only mark a task `completed` when the work is fully done. If tests fail,
+  verification is missing, implementation is partial, or required files /
+  dependencies cannot be found, keep the task active or add a blocking
+  follow-up instead.
 - When the entire submitted list is `completed`, the stored list is cleared
   on the next call; the tool result still echoes the list you submitted.
 - Do not submit `tasks: []` unless the user explicitly asks to clear the

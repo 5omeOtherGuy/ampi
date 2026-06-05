@@ -254,6 +254,23 @@ describe("mmr-toolbox task_list — schema (session-local todo)", () => {
     );
   });
 
+  it("prompt guidelines require real-time updates and guarded completion", async () => {
+    const { pi } = await loadToolbox();
+    const tool = getTaskListTool(pi);
+    const guidelines = (tool.promptGuidelines ?? []).join("\n");
+
+    assert.match(guidelines, /three or more|3 or more/i,
+      "guidelines should say when task_list is worthwhile for complex work");
+    assert.match(guidelines, /new instructions/i,
+      "guidelines should tell the model to capture new instructions");
+    assert.match(guidelines, /before starting/i,
+      "guidelines should require marking work in_progress before starting");
+    assert.match(guidelines, /do not batch/i,
+      "guidelines should forbid batched end-of-work completions");
+    assert.match(guidelines, /tests fail|verification is missing|partial/i,
+      "guidelines should prevent completing partial or unverified work");
+  });
+
   it("status enum rejects the legacy `open` value", async () => {
     const { pi } = await loadToolboxLinked();
     const tool = getTaskListTool(pi);
@@ -532,6 +549,50 @@ describe("mmr-toolbox task_list — persistence as mmr-toolbox.todo-state Custom
     );
     // Surface the allCompleted signal so callers/UI can distinguish.
     assert.equal(result.details.allCompleted, true);
+  });
+
+  it("successful writes remind the model to keep task_list current", async () => {
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const ctx = makeCtx(session);
+
+    const result = await callTaskList(tool, {
+      tasks: [{ content: "Plan", activeForm: "Planning", status: "in_progress" }],
+    }, ctx);
+
+    assert.match(result?.content?.[0]?.text ?? "", /Continue updating task_list as work progresses/);
+  });
+
+  it("nudges for verification when closing a 3+ item list without an explicit check", async () => {
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const ctx = makeCtx(session);
+    const tasks = [
+      { content: "Implement alpha", activeForm: "Implementing alpha", status: "completed" },
+      { content: "Update beta", activeForm: "Updating beta", status: "completed" },
+      { content: "Document gamma", activeForm: "Documenting gamma", status: "completed" },
+    ];
+
+    const result = await callTaskList(tool, { tasks }, ctx);
+
+    assert.equal(result?.details?.verificationNudgeNeeded, true);
+    assert.match(result?.content?.[0]?.text ?? "", /without an explicit verification\/check step/i);
+  });
+
+  it("does not nudge for verification when a completed 3+ item list includes a check", async () => {
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const ctx = makeCtx(session);
+    const tasks = [
+      { content: "Implement alpha", activeForm: "Implementing alpha", status: "completed" },
+      { content: "Update beta", activeForm: "Updating beta", status: "completed" },
+      { content: "Run tests", activeForm: "Running tests", status: "completed" },
+    ];
+
+    const result = await callTaskList(tool, { tasks }, ctx);
+
+    assert.equal(result?.details?.verificationNudgeNeeded, undefined);
+    assert.doesNotMatch(result?.content?.[0]?.text ?? "", /without an explicit verification\/check step/i);
   });
 
   it("partial completion does NOT clear the stored list", async () => {

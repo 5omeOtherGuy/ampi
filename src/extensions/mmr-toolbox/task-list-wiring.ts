@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { KeyId } from "@earendil-works/pi-tui";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import {
@@ -40,6 +41,8 @@ const TASK_WIDGET_TOGGLE_FALLBACKS = ["ctrl+shift+t"] as const;
 const TASK_LIST_VISIBLE_LIMIT = 50;
 const TASK_LIST_CONTEXT_VISIBLE_LIMIT = 12;
 const TASK_LIST_CONTEXT_LABEL_LIMIT = 120;
+const TASK_LIST_REMINDER_TURNS_SINCE_WRITE = 10;
+const TASK_LIST_REMINDER_TURNS_BETWEEN_REMINDERS = 10;
 
 function taskListStatusGlyph(status: TaskListItem["status"]): string {
   switch (status) {
@@ -80,6 +83,32 @@ function formatTaskListContextBlock(tasks: readonly TaskListItem[]): string | un
   ].join("\n");
 }
 
+function formatTaskListReminderBlock(tasks: readonly TaskListItem[]): string | undefined {
+  if (tasks.length === 0) return undefined;
+  const visible = tasks.slice(0, TASK_LIST_CONTEXT_VISIBLE_LIMIT);
+  const remaining = tasks.length - visible.length;
+  const rows = visible.map((task, index) =>
+    `${index + 1}. [${task.status}] ${truncateTaskListContextLabel(taskListLabel(task))}`,
+  );
+  if (remaining > 0) {
+    rows.push(`… ${remaining} more`);
+  }
+  return [
+    "## task_list update reminder",
+    "The task_list has not been updated recently. If this work still benefits from progress tracking, update task_list now: mark current work in_progress, complete finished work, add discovered follow-ups, or remove stale items. Ignore this reminder only if the list no longer applies.",
+    "Current task_list:",
+    ...rows,
+  ].join("\n");
+}
+
+function createTaskListReminderMessage(text: string): AgentMessage {
+  return {
+    role: "user",
+    content: [{ type: "text", text }],
+    timestamp: Date.now(),
+  };
+}
+
 export function registerTaskListWiring(pi: ExtensionAPI): void {
   registerMmrOwnedTool("task_list");
 
@@ -94,6 +123,12 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
   // own independent flag. Hide state is session-scoped and not persisted.
   let widgetHidden = false;
   const getIsHidden = (): boolean => widgetHidden;
+  let turnsSinceTaskListWrite = 0;
+  let turnsSinceTaskListReminder = 0;
+  const markTaskListWritten = (): void => {
+    turnsSinceTaskListWrite = 0;
+    turnsSinceTaskListReminder = 0;
+  };
   // Set after the shortcut registration attempt below; `/tasks` reads it
   // to report the live binding (or "disabled") in its status line.
   let boundToggleKey: string | undefined;
@@ -119,9 +154,37 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
   // `pi.appendEntry` state does not normally participate in LLM context, so
   // inject a tiny bounded snapshot only when a non-empty list exists.
   pi.on("before_agent_start", async (event, ctx) => {
-    const block = formatTaskListContextBlock(readSessionTasks(ctx));
-    if (!block) return undefined;
-    return { systemPrompt: `${event.systemPrompt}\n\n${block}` };
+    const tasks = readSessionTasks(ctx);
+    const stateBlock = formatTaskListContextBlock(tasks);
+    if (!stateBlock) return undefined;
+    return { systemPrompt: `${event.systemPrompt}\n\n${stateBlock}` };
+  });
+
+  // Unlike before_agent_start, context fires before every model call in the
+  // agent loop. Use it for a bounded ephemeral reminder when the model keeps
+  // working for many turns without refreshing task_list. The reminder is not
+  // written to the session log; the latest todo-state entry remains the source
+  // of truth and the counter resets on every accepted task_list write.
+  pi.on("context", async (event, ctx) => {
+    const tasks = readSessionTasks(ctx);
+    if (tasks.length === 0) {
+      markTaskListWritten();
+      return undefined;
+    }
+
+    turnsSinceTaskListWrite += 1;
+    turnsSinceTaskListReminder += 1;
+    if (
+      turnsSinceTaskListWrite < TASK_LIST_REMINDER_TURNS_SINCE_WRITE
+      || turnsSinceTaskListReminder < TASK_LIST_REMINDER_TURNS_BETWEEN_REMINDERS
+    ) {
+      return undefined;
+    }
+
+    const reminder = formatTaskListReminderBlock(tasks);
+    if (!reminder) return undefined;
+    turnsSinceTaskListReminder = 0;
+    return { messages: [...event.messages, createTaskListReminderMessage(reminder)] };
   });
 
   // Compaction reloads the session context but should not leave the pinned
@@ -138,7 +201,7 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
   // prototype is preserved on the annotated tag
   // `archive/task-list-coordination-prototype-v1`; see ROADMAP.md for
   // the rationale and the future Task-agent reuse plan.
-  pi.registerTool(createTodoListTool({ pi, getIsHidden }));
+  pi.registerTool(createTodoListTool({ pi, getIsHidden, onAcceptedWrite: markTaskListWritten }));
 
   // CLI flag for the toggle key. Empty string disables the shortcut
   // entirely. The default is `alt+t`: Pi reserves `ctrl+t` for

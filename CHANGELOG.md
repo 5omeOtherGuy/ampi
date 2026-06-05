@@ -13,7 +13,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
-- `mmr-core`: refactor locked-mode prompt assembly around a Pi-native base prompt plus ordered prompt fragments and per-mode recipes. The new `prompt-registry.ts` maps Pi-owned passthrough sections (`Available tools`, `Guidelines`, Pi documentation, preserved tail) separately from MMR-owned fragments (tool lead-in, built-in guidance, shared guidance, mode posture, response style, and the optional summon gate), exposes the registry through the package root, and keeps rendered locked-mode prompts byte-identical to the previous snapshots. Covered by `tests/mmr-core-prompt-registry.test.mjs` and expanded prompt-assembly invariants.
+- `mmr-toolbox`: strengthen `task_list` reliability during long work. The tool prompt now gives stricter usage/completion rules, successful writes remind the agent to keep the list current, all-completed 3+ item lists without an explicit verification/check step produce a verification nudge, and the per-call `context` hook injects a bounded stale-update reminder after repeated model calls without a `task_list` write. Covered by `tests/mmr-toolbox-todo-list-tool.test.mjs` and `tests/mmr-toolbox-todo-list-session-scope.test.mjs`.
+- `mmr-core`: refactor locked-mode prompt assembly around an internal Pi-native base prompt plus ordered prompt fragments and per-mode recipes. The new `prompt-registry.ts` maps Pi-owned passthrough sections (`Available tools`, `Guidelines`, Pi documentation, preserved tail) separately from MMR-owned fragments (tool lead-in, built-in guidance, shared guidance, mode posture, response style, and the optional summon gate), keeps the registry internal to `mmr-core`, and keeps rendered locked-mode prompts byte-identical to the previous snapshots. Covered by `tests/mmr-core-prompt-registry.test.mjs` and expanded prompt-assembly invariants.
 
 ## 0.2.0 — 2026-06-05
 
