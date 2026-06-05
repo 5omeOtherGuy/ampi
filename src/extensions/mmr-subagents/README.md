@@ -16,6 +16,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 - Read-only code search across the workspace via `finder`.
 - Standalone advisory worker for plans, reviews, debugging via `oracle`.
 - Public remote-repository research via `librarian` (when `mmr-web` is active).
+- User-authored Markdown subagents from `.claude/agents` as `sa__*` tools.
 
 ## Status and enablement
 
@@ -91,6 +92,14 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 - Parent spawn passes `--mmr-parent-mode`, resolver-selected `--model`, effective `--tools`, and exact system-prompt replacement.
 - Status values: `success`, `validation-error`, `activation-error`, `aborted`, `spawn-error`, `worker-error`, `no-agent-start`, `empty-output`. Task uses the `prefer-usable-output` policy: nonzero exit with usable final text still classifies as `success`.
 - Execution mode: `Task` declares `executionMode: "sequential"` (issue #8) because a Task child can run `bash`/`edit`/`write` in the workspace. Pi serializes the whole assistant tool-call batch when any called tool is sequential. The read-only research workers (`finder`, `oracle`, `librarian`) stay parallel-eligible, so independent read-only subagent research can still run concurrently.
+
+### Custom Markdown subagents
+
+- Discovery roots: `<cwd>/.claude/agents` and `~/.claude/agents`, matching Claude Code-style Markdown subagent files. Scans are bounded to local-agent scale (100 definitions / 1000 Markdown files by default), skip symlink roots/entries, and recheck realpath containment under the configured root before reading.
+- Valid definitions (`type: subagent` or `isolatedContext: true`) register as `sa__<slug>` Pi tools at extension activation, with descriptions/guidelines derived from frontmatter.
+- The Markdown body is the worker system prompt. `isolatedContext: true` uses exact system-prompt replacement; otherwise the body is appended.
+- `model: <route>` pins the worker route; `model: inherit` forwards the parent model through the existing subagent model-preference override env so parent spawn and child activation agree.
+- `tools:` names exact Pi tools. Execution filters them through the parent-active registered tool set and passes the reduced list explicitly to the child, so unavailable or denied tools do not leak into the custom worker.
 
 ### `history-reader`
 
@@ -184,7 +193,7 @@ Prompt routes:
 
 ### Framework-only surfaces
 
-- `custom-loader.ts` parses Markdown definitions into `sa__*` subagent definitions, accepts inline and YAML block-list `tools:` / `skills:`, preserves `tools:` tokens verbatim after trim/dedup (use exact Pi tool names), preserves `model: inherit`, and leaves registration to a future explicit wiring step.
+- `custom-loader.ts` parses Markdown definitions into `sa__*` subagent definitions, accepts inline and YAML block-list `tools:` / `skills:`, maps Claude Code tool aliases to Pi-native names, preserves `model: inherit`, and provides sync/async hardened discovery used by runtime registration.
 - `mmr-core/subagent-runner-contract.ts` defines progress, tool-use, and permission-context shapes plus a fail-closed in-process runner placeholder that throws until the host runtime exposes nested in-process execution with filtered shared tool access.
 
 ### Invariants

@@ -364,6 +364,7 @@ export type MmrPromptBlockKind =
   | "shared-tool-guidance"
   | "shared-coding-guidance"
   | "mode-posture"
+  | "response-style"
   | "preserved-tail";
 
 export interface MmrPromptBlock {

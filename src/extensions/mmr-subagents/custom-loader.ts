@@ -1,10 +1,15 @@
-import { constants as fsConstants } from "node:fs";
+import fs, { constants as fsConstants } from "node:fs";
 import { lstat, open, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 
 export const MMR_CUSTOM_SUBAGENT_TOOL_PREFIX = "sa__";
-export const MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH = 120;
+export const MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH = 64;
 export const DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH = 5;
+// Match Claude Code's intended local-agent scale: user-authored agent
+// directories are small curated sets, not package registries. Keep the scan
+// bounded even when a workspace accidentally points at a large Markdown tree.
+export const DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_FILES = 1000;
+export const DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_DEFINITIONS = 100;
 // Cap individual Markdown files at 256 KiB. Custom subagent
 // definitions are short human-authored prompts; anything larger is
 // almost certainly not a real subagent file and should not be parsed
@@ -33,6 +38,8 @@ export interface ParseMmrCustomSubagentMarkdownArgs {
 export interface DiscoverMmrCustomSubagentsArgs {
   roots: readonly string[];
   maxDepth?: number;
+  maxFiles?: number;
+  maxDefinitions?: number;
   allowMissingFrontmatter?: boolean;
 }
 
@@ -160,6 +167,38 @@ function readBoolean(attributes: Record<string, FrontmatterValue>, key: string):
   return attributes[key] === true;
 }
 
+export const MMR_CUSTOM_SUBAGENT_DENIED_TOOLS: ReadonlySet<string> = new Set([
+  "Task",
+  "oracle",
+  "librarian",
+  "handoff",
+  "start_task",
+  "task_poll",
+  "task_wait",
+  "task_cancel",
+  "apply_patch",
+  "read_mcp_resource",
+]);
+
+const MMR_CUSTOM_SUBAGENT_TOOL_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["Read", "read"],
+  ["Grep", "grep"],
+  ["Glob", "find"],
+  ["Bash", "bash"],
+  ["Edit", "edit"],
+  ["MultiEdit", "edit"],
+  ["Write", "write"],
+  ["WebSearch", "web_search"],
+  ["WebFetch", "read_web_page"],
+]);
+
+export function isUnsafeMmrCustomSubagentToolPattern(tool: string): boolean {
+  if (MMR_CUSTOM_SUBAGENT_DENIED_TOOLS.has(tool)) return true;
+  if (tool.startsWith(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX)) return true;
+  if (tool.startsWith("mcp__")) return true;
+  return false;
+}
+
 function readStringList(attributes: Record<string, FrontmatterValue>, keys: readonly string[]): string[] {
   for (const key of keys) {
     const value = attributes[key];
@@ -181,20 +220,18 @@ export function toMmrCustomSubagentToolName(name: string): string {
   const slug = name
     .normalize("NFKD")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "subagent";
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "subagent";
   const maxSlugLength = MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH - MMR_CUSTOM_SUBAGENT_TOOL_PREFIX.length;
-  return `${MMR_CUSTOM_SUBAGENT_TOOL_PREFIX}${slug.slice(0, Math.max(1, maxSlugLength)).replace(/-+$/g, "") || "subagent"}`;
+  return `${MMR_CUSTOM_SUBAGENT_TOOL_PREFIX}${slug.slice(0, Math.max(1, maxSlugLength)).replace(/_+$/g, "") || "subagent"}`;
 }
 
 /**
  * Normalize a custom-subagent `tools:` list from frontmatter into a deduped
- * array of token strings. Tokens are preserved exactly as written (after
- * trimming) — there is no alias rewriting. Subagent definitions must name
- * the exact Pi tool they want activated (for example `read`, `bash`,
- * `edit`, `write`, `grep`, `find`, `web_search`, `read_web_page`, `Task`).
- * Unknown or non-canonical names will simply fail to activate at runtime
- * because no Pi tool with that name is registered.
+ * array of token strings. Claude Code tool aliases are rewritten to the
+ * matching Pi tool names (`Read` → `read`, `Grep` → `grep`, `Glob` → `find`,
+ * etc.); other tokens are preserved after trimming so exact Pi tool names
+ * such as `read_github` remain usable.
  */
 export function normalizeMmrCustomSubagentToolPatterns(value: unknown): string[] {
   const raw = Array.isArray(value)
@@ -206,7 +243,7 @@ export function normalizeMmrCustomSubagentToolPatterns(value: unknown): string[]
   const seen = new Set<string>();
   for (const item of raw) {
     if (typeof item !== "string") continue;
-    const token = item.trim();
+    const token = MMR_CUSTOM_SUBAGENT_TOOL_ALIASES.get(item.trim()) ?? item.trim();
     if (token.length === 0) continue;
     if (seen.has(token)) continue;
     normalized.push(token);
@@ -226,8 +263,13 @@ export function parseMmrCustomSubagentMarkdown(
   // with no frontmatter; files that have frontmatter must still mark
   // themselves as a subagent (or set `isolatedContext: true`) before
   // the loader will surface them.
+  const claudeCodeDefinition = Boolean(
+    readString(parsed.attributes, "name")
+    && readString(parsed.attributes, "description")
+    && parsed.body.trim().length > 0,
+  );
   const shouldInclude = parsed.hasFrontmatter
-    ? type === "subagent" || isolatedContext
+    ? type === "subagent" || isolatedContext || claudeCodeDefinition
     : Boolean(args.allowMissingFrontmatter);
   if (!shouldInclude) return undefined;
 
@@ -239,6 +281,7 @@ export function parseMmrCustomSubagentMarkdown(
   const toolPatterns = normalizeMmrCustomSubagentToolPatterns(
     readStringList(parsed.attributes, ["tools", "allowed-tools", "allowedTools"]),
   );
+  if (toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) return undefined;
   const skills = readStringList(parsed.attributes, ["skills"]);
   const systemPrompt = parsed.body.replaceAll("{baseDir}", baseDir).trimEnd();
 
@@ -256,7 +299,18 @@ export function parseMmrCustomSubagentMarkdown(
   };
 }
 
-async function walkMarkdownFiles(root: string, maxDepth: number): Promise<string[]> {
+function normalizeDiscoveryLimit(value: number | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.floor(value));
+}
+
+function isPathInsideRoot(targetPath: string, rootPath: string): boolean {
+  const relative = path.relative(rootPath, targetPath);
+  return relative === "" || (relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function walkMarkdownFiles(root: string, maxDepth: number, maxFiles: number): Promise<string[]> {
   const files: string[] = [];
   const visitedDirs = new Set<string>();
 
@@ -272,14 +326,22 @@ async function walkMarkdownFiles(root: string, maxDepth: number): Promise<string
     return files;
   }
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return files;
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = await realpath(root);
+  } catch {
+    return files;
+  }
 
   async function walk(dir: string, depth: number): Promise<void> {
+    if (files.length >= maxFiles) return;
     let canonicalDir: string;
     try {
       canonicalDir = await realpath(dir);
     } catch {
       return;
     }
+    if (!isPathInsideRoot(canonicalDir, canonicalRoot)) return;
     if (visitedDirs.has(canonicalDir)) return;
     visitedDirs.add(canonicalDir);
 
@@ -292,6 +354,7 @@ async function walkMarkdownFiles(root: string, maxDepth: number): Promise<string
     entries.sort((a, b) => a.name.localeCompare(b.name));
 
     for (const entry of entries) {
+      if (files.length >= maxFiles) return;
       if (entry.name === "node_modules" || entry.name === ".git") continue;
       const fullPath = path.join(dir, entry.name);
       let stat: Awaited<ReturnType<typeof lstat>>;
@@ -306,7 +369,16 @@ async function walkMarkdownFiles(root: string, maxDepth: number): Promise<string
         await walk(fullPath, depth + 1);
         continue;
       }
-      if (stat.isFile() && entry.name.toLowerCase().endsWith(".md")) files.push(fullPath);
+      if (stat.isFile() && entry.name.toLowerCase().endsWith(".md")) {
+        let canonicalFile: string;
+        try {
+          canonicalFile = await realpath(fullPath);
+        } catch {
+          continue;
+        }
+        if (!isPathInsideRoot(canonicalFile, canonicalRoot)) continue;
+        files.push(fullPath);
+      }
     }
   }
 
@@ -314,18 +386,47 @@ async function walkMarkdownFiles(root: string, maxDepth: number): Promise<string
   return files;
 }
 
+function addMmrCustomSubagentDefinition(
+  definitions: MmrCustomSubagentDefinition[],
+  seenToolNames: Set<string>,
+  filePath: string,
+  markdown: string,
+  allowMissingFrontmatter: boolean | undefined,
+): void {
+  let definition: MmrCustomSubagentDefinition | undefined;
+  try {
+    definition = parseMmrCustomSubagentMarkdown({
+      filePath,
+      markdown,
+      allowMissingFrontmatter,
+    });
+  } catch {
+    return;
+  }
+  if (!definition) return;
+  if (seenToolNames.has(definition.toolName)) return;
+  seenToolNames.add(definition.toolName);
+  definitions.push(definition);
+}
+
 export async function discoverMmrCustomSubagents(
   args: DiscoverMmrCustomSubagentsArgs,
 ): Promise<MmrCustomSubagentDefinition[]> {
-  const maxDepth = Math.max(0, Math.floor(args.maxDepth ?? DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH));
+  const maxDepth = normalizeDiscoveryLimit(args.maxDepth, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH);
+  const maxFiles = normalizeDiscoveryLimit(args.maxFiles, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_FILES);
+  const maxDefinitions = normalizeDiscoveryLimit(args.maxDefinitions, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_DEFINITIONS);
   const definitions: MmrCustomSubagentDefinition[] = [];
   const seenToolNames = new Set<string>();
+  let scannedFiles = 0;
 
   for (const root of args.roots) {
+    if (definitions.length >= maxDefinitions || scannedFiles >= maxFiles) break;
     if (typeof root !== "string" || root.trim().length === 0) continue;
     const rootPath = path.resolve(root);
-    const files = await walkMarkdownFiles(rootPath, maxDepth);
+    const files = await walkMarkdownFiles(rootPath, maxDepth, Math.max(0, maxFiles - scannedFiles));
+    scannedFiles += files.length;
     for (const filePath of files) {
+      if (definitions.length >= maxDefinitions) break;
       // Re-check the entry right before reading: bound the file size
       // (avoid loading a multi-megabyte Markdown blob), confirm it is
       // still a regular file, and contain any per-file read or parse
@@ -352,20 +453,119 @@ export async function discoverMmrCustomSubagents(
         await handle?.close();
       }
       if (markdown === undefined) continue;
-      let definition: MmrCustomSubagentDefinition | undefined;
+      addMmrCustomSubagentDefinition(definitions, seenToolNames, filePath, markdown, args.allowMissingFrontmatter);
+    }
+  }
+
+  return definitions;
+}
+
+function walkMarkdownFilesSync(root: string, maxDepth: number, maxFiles: number): string[] {
+  const files: string[] = [];
+  const visitedDirs = new Set<string>();
+  let rootStat: fs.Stats;
+  try {
+    rootStat = fs.lstatSync(root);
+  } catch {
+    return files;
+  }
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return files;
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = fs.realpathSync(root);
+  } catch {
+    return files;
+  }
+
+  function walk(dir: string, depth: number): void {
+    if (files.length >= maxFiles) return;
+    let canonicalDir: string;
+    try {
+      canonicalDir = fs.realpathSync(dir);
+    } catch {
+      return;
+    }
+    if (!isPathInsideRoot(canonicalDir, canonicalRoot)) return;
+    if (visitedDirs.has(canonicalDir)) return;
+    visitedDirs.add(canonicalDir);
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const entry of entries) {
+      if (files.length >= maxFiles) return;
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const fullPath = path.join(dir, entry.name);
+      let stat: fs.Stats;
       try {
-        definition = parseMmrCustomSubagentMarkdown({
-          filePath,
-          markdown,
-          allowMissingFrontmatter: args.allowMissingFrontmatter,
-        });
+        stat = fs.lstatSync(fullPath);
       } catch {
         continue;
       }
-      if (!definition) continue;
-      if (seenToolNames.has(definition.toolName)) continue;
-      seenToolNames.add(definition.toolName);
-      definitions.push(definition);
+      if (stat.isSymbolicLink()) continue;
+      if (stat.isDirectory()) {
+        if (depth >= maxDepth) continue;
+        walk(fullPath, depth + 1);
+        continue;
+      }
+      if (stat.isFile() && entry.name.toLowerCase().endsWith(".md")) {
+        let canonicalFile: string;
+        try {
+          canonicalFile = fs.realpathSync(fullPath);
+        } catch {
+          continue;
+        }
+        if (!isPathInsideRoot(canonicalFile, canonicalRoot)) continue;
+        files.push(fullPath);
+      }
+    }
+  }
+
+  walk(root, 0);
+  return files;
+}
+
+export function discoverMmrCustomSubagentsSync(
+  args: DiscoverMmrCustomSubagentsArgs,
+): MmrCustomSubagentDefinition[] {
+  const maxDepth = normalizeDiscoveryLimit(args.maxDepth, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH);
+  const maxFiles = normalizeDiscoveryLimit(args.maxFiles, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_FILES);
+  const maxDefinitions = normalizeDiscoveryLimit(args.maxDefinitions, DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_DEFINITIONS);
+  const definitions: MmrCustomSubagentDefinition[] = [];
+  const seenToolNames = new Set<string>();
+  let scannedFiles = 0;
+
+  for (const root of args.roots) {
+    if (definitions.length >= maxDefinitions || scannedFiles >= maxFiles) break;
+    if (typeof root !== "string" || root.trim().length === 0) continue;
+    const rootPath = path.resolve(root);
+    const files = walkMarkdownFilesSync(rootPath, maxDepth, Math.max(0, maxFiles - scannedFiles));
+    scannedFiles += files.length;
+    for (const filePath of files) {
+      if (definitions.length >= maxDefinitions) break;
+      let fd: number | undefined;
+      try {
+        fd = fs.openSync(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+        const stat = fs.fstatSync(fd);
+        if (!stat.isFile() || stat.size > MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES) continue;
+        const markdown = fs.readFileSync(fd, "utf8");
+        addMmrCustomSubagentDefinition(definitions, seenToolNames, filePath, markdown, args.allowMissingFrontmatter);
+      } catch {
+        continue;
+      } finally {
+        if (fd !== undefined) {
+          try {
+            fs.closeSync(fd);
+          } catch {
+            // best-effort descriptor cleanup
+          }
+        }
+      }
     }
   }
 

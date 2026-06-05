@@ -1,5 +1,6 @@
 import type { MmrFeatureGateProvider, MmrToolProvider, MmrToolRule } from "../mmr-core/types.js";
 import { LIBRARIAN_GATING_REASON } from "./librarian.js";
+import { MMR_CUSTOM_SUBAGENT_TOOL_PREFIX } from "./custom-loader.js";
 
 export const MMR_SUBAGENTS_PROVIDER_NAME = "mmr-subagents";
 export const MMR_SUBAGENTS_FEATURE_GATE = "mmr-subagents";
@@ -64,6 +65,8 @@ export interface MmrSubagentsCapabilities {
   librarian?: MmrSubagentsCapability;
   /** Gates all four async background task tools together. */
   asyncTasks?: MmrSubagentsCapability;
+  /** Runtime-discovered custom Markdown subagent tool names (`sa__*`). */
+  customTools?: readonly string[] | (() => readonly string[]);
 }
 
 function readCapability(value: MmrSubagentsCapability | undefined): boolean {
@@ -75,6 +78,18 @@ function readCapability(value: MmrSubagentsCapability | undefined): boolean {
     }
   }
   return Boolean(value);
+}
+
+function readCustomTools(capabilities: MmrSubagentsCapabilities): readonly string[] {
+  const tools = capabilities.customTools;
+  if (typeof tools === "function") {
+    try {
+      return tools();
+    } catch {
+      return [];
+    }
+  }
+  return tools ?? [];
 }
 
 function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string): boolean {
@@ -94,7 +109,9 @@ function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string
 }
 
 function formatActiveCapabilities(capabilities: MmrSubagentsCapabilities): string {
-  const active = MMR_SUBAGENTS_OWNED_TOOLS.filter((name) => isCapabilityActive(capabilities, name));
+  const active: string[] = MMR_SUBAGENTS_OWNED_TOOLS.filter((name) => isCapabilityActive(capabilities, name));
+  const custom = readCustomTools(capabilities);
+  if (custom.length > 0) active.push(`${custom.length} custom Markdown subagent${custom.length === 1 ? "" : "s"}`);
   return active.length === 0 ? "" : active.join(", ");
 }
 
@@ -163,6 +180,9 @@ export function createMmrSubagentsToolProvider(
   return {
     name: MMR_SUBAGENTS_PROVIDER_NAME,
     resolve(toolName): MmrToolRule | undefined {
+      if (toolName.startsWith(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX)) {
+        return readCustomTools(capabilities).includes(toolName) ? { kind: "active" } : undefined;
+      }
       if (!OWNED_TOOLS_SET.has(toolName)) return undefined;
       if (isCapabilityActive(capabilities, toolName)) {
         return { kind: "active" };
