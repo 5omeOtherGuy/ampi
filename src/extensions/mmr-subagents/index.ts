@@ -10,6 +10,7 @@ import { registerCthuluTool } from "./cthulu.js";
 import { registerMmrSubagentsPromptBuilders } from "./prompts.js";
 import { type TaskToolDeps, registerTaskParentPromptCapture, registerTaskTool } from "./task.js";
 import { type AsyncTaskToolDeps, MMR_SUBAGENTS_ASYNC_PUSH_ENV, registerAsyncTaskTools } from "./async-task-tools.js";
+import { type RegisterMmrCustomSubagentToolsOptions, registerMmrCustomSubagentTools } from "./custom-runtime.js";
 import { getMmrAsyncTaskRegistry } from "./async-task-registry.js";
 import { parseBoolEnv } from "../mmr-core/internal/env.js";
 import {
@@ -43,6 +44,7 @@ export interface MmrSubagentsFactoryOverrides {
   task?: TaskToolDeps;
   librarian?: LibrarianToolDeps;
   asyncTasks?: AsyncTaskToolDeps;
+  customSubagents?: RegisterMmrCustomSubagentToolsOptions;
 }
 
 /**
@@ -68,6 +70,7 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
     registerTaskParentPromptCapture(pi);
     registerTaskTool(pi, overrides.task ?? {});
     registerLibrarianTool(pi, overrides.librarian ?? {});
+    const customSubagentTools = registerMmrCustomSubagentTools(pi, overrides.customSubagents ?? {});
     // User ceiling for async completion push: on by default; the env gate can
     // force pull-only behavior. Individual starts can opt out with
     // start_task({ notify: false }), and the registry bounds pushes.
@@ -107,6 +110,7 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
       Task: true,
       librarian: () => isLibrarianGithubToolPrerequisiteRegistered(pi),
       asyncTasks: true,
+      customTools: () => customSubagentTools.map((tool) => tool.name),
     };
     registerMmrFeatureGateProvider(createMmrSubagentsFeatureGateProvider(capabilities));
     registerMmrToolProvider(createMmrSubagentsToolProvider(capabilities));
