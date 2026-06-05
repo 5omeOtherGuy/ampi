@@ -2,7 +2,7 @@ import {
   buildBuiltinToolGuidance,
   extractActiveBuiltinToolNames,
 } from "./builtin-tool-guidance.js";
-import { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } from "./prompt-modules.js";
+import { SHARED_CODING_GUIDANCE_FRAGMENTS, SHARED_TOOL_GUIDANCE } from "./prompt-modules.js";
 import { MMR_CTHULU_SUMMON_GATE } from "./prompt-templates.js";
 import {
   getMmrModePromptRecipe,
@@ -225,11 +225,18 @@ export function assembleActiveSurface(
           text: `${SHARED_TOOL_GUIDANCE}\n\n`,
           source: "mmr-core",
         };
-      case "shared-coding-guidance":
+      case "autonomy":
+      case "discovery-discipline":
+      case "pragmatism":
+      case "verification":
+      case "careful-actions":
+      case "diagrams":
+      case "file-links":
+      case "collaboration":
         return {
-          id: "shared-coding-guidance",
-          kind: "shared-coding-guidance",
-          text: `${SHARED_CODING_GUIDANCE}\n\n`,
+          id: fragmentId,
+          kind: fragmentId,
+          text: `${SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId]}\n\n`,
           source: "mmr-core",
         };
       case "mode-posture":
