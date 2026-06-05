@@ -16,7 +16,6 @@ const EXPECTED_SEQUENCE = [
   "shared-coding-guidance",
   "mode-posture",
   "response-style",
-  "sunken-rite",
   "preserved-tail",
 ];
 
@@ -87,7 +86,7 @@ describe("mmr-core prompt registry", () => {
       for (const fragmentId of fragments) {
         assert.ok(MMR_PROMPT_FRAGMENTS[fragmentId], `${mode}: unknown fragment ${fragmentId}`);
       }
-      for (const required of ["active-tools", "active-guidelines", "pi-docs", "sunken-rite"]) {
+      for (const required of ["active-tools", "active-guidelines", "pi-docs", "response-style"]) {
         assert.ok(fragments.includes(required), `${mode}: must include required fragment ${required}`);
       }
     }

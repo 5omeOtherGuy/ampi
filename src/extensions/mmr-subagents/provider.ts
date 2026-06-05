@@ -29,7 +29,6 @@ export const MMR_SUBAGENTS_OWNED_TOOLS: ReadonlyArray<
   | "Task"
   | "finder"
   | "oracle"
-  | "cthulu"
   | "librarian"
   | "start_task"
   | "task_poll"
@@ -39,7 +38,6 @@ export const MMR_SUBAGENTS_OWNED_TOOLS: ReadonlyArray<
   "Task",
   "finder",
   "oracle",
-  "cthulu",
   "librarian",
   "start_task",
   "task_poll",
@@ -63,7 +61,6 @@ type MmrSubagentsCapability = boolean | (() => boolean);
 export interface MmrSubagentsCapabilities {
   finder?: MmrSubagentsCapability;
   oracle?: MmrSubagentsCapability;
-  cthulu?: MmrSubagentsCapability;
   Task?: MmrSubagentsCapability;
   librarian?: MmrSubagentsCapability;
   /** Gates all four async background task tools together. */
@@ -102,8 +99,6 @@ function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string
       return readCapability(capabilities.finder);
     case "oracle":
       return readCapability(capabilities.oracle);
-    case "cthulu":
-      return readCapability(capabilities.cthulu);
     case "Task":
       return readCapability(capabilities.Task);
     case "librarian":

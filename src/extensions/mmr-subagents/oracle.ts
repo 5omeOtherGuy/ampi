@@ -68,9 +68,8 @@ export const ORACLE_SUBAGENT_PROFILE = "oracle";
 export const DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT = 32 * 1024;
 
 /**
- * Look up a subagent profile by name or throw. Shared by the oracle and
- * the hidden cthulu advisor, both of which are attachment-aware advisory
- * workers backed by an mmr-core standalone profile.
+ * Look up a subagent profile by name or throw. Shared by attachment-aware
+ * advisory workers backed by an mmr-core standalone profile.
  */
 export function requireMmrAdvisorProfile(profileName: string): MmrSubagentProfile {
   const profile = getMmrSubagentProfile(profileName);
@@ -452,7 +451,7 @@ export interface OracleToolDeps {
   runnerDeps?: MmrWorkerRunnerDeps;
 }
 
-/** Alias for the advisor tool dependency seam (oracle + cthulu share it). */
+/** Alias for the advisor tool dependency seam. */
 export type MmrAdvisorToolDeps = OracleToolDeps;
 
 function resolveCwd(ctx: ExtensionContext | undefined): string {
@@ -621,11 +620,10 @@ function assembleAdvisorSystemPrompt(
 
 /**
  * Static configuration for an attachment-aware advisory subagent tool.
- * Both the oracle and the hidden cthulu advisor are built from this
- * shape via {@link createMmrAdvisorTool}.
+ * The oracle is built from this shape via {@link createMmrAdvisorTool}.
  */
 export interface MmrAdvisorToolConfig {
-  /** Pi tool name (e.g. `oracle`, `cthulu`). */
+  /** Pi tool name (e.g. `oracle`). */
   toolName: string;
   /** mmr-core subagent profile name driving model/tools/prompt. */
   profileName: string;
@@ -660,8 +658,7 @@ export interface MmrAdvisorToolConfig {
 
 /**
  * Build an attachment-aware advisory subagent tool from a static config
- * plus runtime dependency seams. Shared core for the oracle and the
- * hidden cthulu advisor.
+ * plus runtime dependency seams. Shared core for the oracle.
  */
 export function createMmrAdvisorTool(
   config: MmrAdvisorToolConfig,

@@ -14,7 +14,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Markdown, Spacer, Text, truncateToWidth, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
 import { isRecord } from "../mmr-core/internal/json.js";
-import { toRlyehianBlend } from "./rlyehian.js";
 import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./runner.js";
 import {
   formatMmrWorkerTokens,
@@ -307,45 +306,6 @@ function statusLabel(status: RenderStatus | TrailToolStatus): string {
   return status;
 }
 
-/**
- * Tools whose streamed agent-loop content is cloaked in R'lyehian. Only
- * the hidden cthulu advisor opts in; its final answer (the result output
- * box) is rendered untouched so the user can still act on it.
- */
-const RLYEHIAN_RENDER_TOOL_NAMES: ReadonlySet<string> = new Set(["cthulu"]);
-
-function isRlyehianRenderTool(toolName: string): boolean {
-  return RLYEHIAN_RENDER_TOOL_NAMES.has(toolName);
-}
-
-function maybeRlyehianText(toolName: string, text: string | undefined): string | undefined {
-  if (text === undefined) return undefined;
-  return isRlyehianRenderTool(toolName) ? toRlyehianBlend(text) : text;
-}
-
-// `type` and `status` are union discriminants the trail renderer switches
-// on; never transliterate them or rendering would fall through. Every
-// other string field (assistant/thinking/user text, tool name, arg and
-// result previews, bash command/output, summaries) is cloaked.
-const RLYEHIAN_PRESERVED_TRAIL_KEYS: ReadonlySet<string> = new Set(["type", "status"]);
-
-function rlyehianizeValue(value: unknown): unknown {
-  if (typeof value === "string") return toRlyehianBlend(value);
-  if (Array.isArray(value)) return value.map(rlyehianizeValue);
-  if (isRecord(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value)) {
-      out[key] = RLYEHIAN_PRESERVED_TRAIL_KEYS.has(key) ? child : rlyehianizeValue(child);
-    }
-    return out;
-  }
-  return value;
-}
-
-function rlyehianizeTrail(trail: readonly MmrWorkerTrailItem[]): readonly MmrWorkerTrailItem[] {
-  return trail.map((item) => rlyehianizeValue(item) as MmrWorkerTrailItem);
-}
-
 function formatTitle(toolName: string, model: string | undefined, theme: SubagentTheme): string {
   const title = theme.fg("toolTitle", theme.bold(toolName));
   return model ? `${title} ${theme.fg("muted", "•")} ${theme.fg("accent", model)}` : title;
@@ -365,7 +325,7 @@ function operationLabel(
   const args = context?.args;
   const fromArgs = toolName === "Task"
     ? readStringField(args, "description") ?? readStringField(args, "prompt")
-    : toolName === "oracle" || isRlyehianRenderTool(toolName)
+    : toolName === "oracle"
       ? readStringField(args, "task")
       : readStringField(args, "query");
   return fromArgs
@@ -377,7 +337,7 @@ function operationLabel(
 
 function operationLabelFromArgs(toolName: string, args: unknown): string | undefined {
   if (toolName === "Task") return readStringField(args, "description") ?? readStringField(args, "prompt");
-  if (toolName === "oracle" || isRlyehianRenderTool(toolName)) return readStringField(args, "task");
+  if (toolName === "oracle") return readStringField(args, "task");
   return readStringField(args, "query");
 }
 
@@ -1147,7 +1107,7 @@ export function renderMmrSubagentCall(
 ): Component {
   if (context?.isPartial === false || resultAlreadyRendered(context)) return new Container();
   const title = theme.fg("toolTitle", theme.bold(toolName));
-  const label = maybeRlyehianText(toolName, operationLabelFromArgs(toolName, args));
+  const label = operationLabelFromArgs(toolName, args);
   const component = context?.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, statusBgFn("running", theme));
   component.setBgFn(statusBgFn("running", theme));
   component.clear();
@@ -1172,9 +1132,7 @@ export function renderMmrSubagentResult(
   const isPartial = options.isPartial === true;
   const model = stripProvider(details?.reportedModel ?? details?.model);
   const status = statusFromDetails(details, isPartial, context);
-  // Final answer (`output`) is rendered untouched; only the streamed
-  // agent-loop surface (task label + trail) is cloaked for R'lyehian tools.
-  const operation = maybeRlyehianText(toolName, operationLabel(toolName, details, context));
+  const operation = operationLabel(toolName, details, context);
   const container = new Container();
   clearRenderedCall(context);
   markResultRendered(context);
@@ -1193,8 +1151,7 @@ export function renderMmrSubagentResult(
     return container;
   }
 
-  const rawTrail = details?.trail ?? [];
-  const trail = isRlyehianRenderTool(toolName) ? rlyehianizeTrail(rawTrail) : rawTrail;
+  const trail = details?.trail ?? [];
   const hasTrail = addTrailComponents(
     container,
     trail,

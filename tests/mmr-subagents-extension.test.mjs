@@ -104,7 +104,7 @@ describe("mmr-subagents package wiring", () => {
     assert.equal(root.MMR_SUBAGENTS_FEATURE_GATE, "mmr-subagents");
     assert.deepEqual(
       [...root.MMR_SUBAGENTS_OWNED_TOOLS].sort(),
-      ["Task", "cthulu", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
+      ["Task", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
     );
     assert.equal(root.MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE, "mmr-subagents.async-tasks");
     assert.deepEqual(
@@ -147,16 +147,13 @@ describe("mmr-subagents package wiring", () => {
       [...root.ORACLE_WORKER_TOOLS],
       ["read", "grep", "find", "web_search", "read_web_page", "read_session", "find_session"],
     );
-    // Hidden cthulu advisor shares the oracle's public surface shape.
-    assert.equal(typeof root.createCthuluTool, "function");
-    assert.equal(typeof root.registerCthuluTool, "function");
-    assert.equal(typeof root.buildCthuluWorkerSystemPrompt, "function");
-    assert.equal(root.CTHULU_TOOL_NAME, "cthulu");
-    assert.equal(root.CTHULU_SUBAGENT_PROFILE, "cthulu");
-    assert.deepEqual(
-      [...root.CTHULU_WORKER_TOOLS],
-      ["read", "grep", "find", "web_search", "read_web_page", "read_session", "find_session"],
-    );
+    // The Cthulu advisor has been removed; its public exports must be gone.
+    assert.equal(root.createCthuluTool, undefined);
+    assert.equal(root.registerCthuluTool, undefined);
+    assert.equal(root.buildCthuluWorkerSystemPrompt, undefined);
+    assert.equal(root.CTHULU_TOOL_NAME, undefined);
+    assert.equal(root.CTHULU_SUBAGENT_PROFILE, undefined);
+    assert.equal(root.CTHULU_WORKER_TOOLS, undefined);
     assert.equal(typeof root.createLibrarianTool, "function");
     assert.equal(typeof root.registerLibrarianTool, "function");
     assert.equal(typeof root.buildLibrarianWorkerSystemPrompt, "function");
@@ -205,7 +202,7 @@ describe("mmr-subagents extension factory", () => {
     const names = tools.map((tool) => tool.name).sort();
     assert.deepEqual(
       names,
-      ["Task", "cthulu", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
+      ["Task", "finder", "librarian", "oracle", "start_task", "task_cancel", "task_poll", "task_wait"],
       "this slice registers the shipped mmr-subagents Pi tools plus the async background task tools",
     );
     assert.equal(typeof handlers.get("tool_result"), "function", "finder installs a read-result normalizer");

@@ -7,7 +7,7 @@ import type { MmrWorkerOutcomeStatus, MmrWorkerResult } from "./runner.js";
  *
  * Mirrors the locked-mode quota fallback (`mmr-session-fallback`) but
  * scoped to spawned subagent worker routes (`finder`, `oracle`,
- * `librarian`, `Task`, `cthulu`). When a worker route fails with a
+ * `librarian`, `Task`). When a worker route fails with a
  * model/provider error repeatedly within a session, the parent tool
  * prompts the user to pick a fallback model from the profile's configured
  * fallback chain / locally-authenticated registry, then re-runs the worker

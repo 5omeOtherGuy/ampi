@@ -1050,7 +1050,7 @@ export function createTaskTool(deps: TaskToolDeps = {}): ToolDefinition {
     parameters: taskParameters,
     // Workflow worker: a Task child can run bash/edit/write in the
     // workspace, so force sequential scheduling. Read-only research
-    // workers (finder, oracle, librarian, cthulu) stay parallel-eligible
+    // workers (finder, oracle, librarian) stay parallel-eligible
     // because independent read-only subagent research is safe to run
     // concurrently.
     executionMode: "sequential" as const,

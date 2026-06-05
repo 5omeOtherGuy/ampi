@@ -288,8 +288,7 @@ function formatTokenCount(count: number): string {
  *
  * Used for subagent workers, which are not locked modes and therefore have
  * no `MMR_REQUEST_POLICIES` entry, but whose profile may declare a
- * `maxOutputTokens` hard cap (e.g. the hidden `cthulu` worker at 128k).
- * Sets both the Anthropic (`max_tokens`) and OpenAI Responses
+ * `maxOutputTokens` hard cap. Sets both the Anthropic (`max_tokens`) and OpenAI Responses
  * (`max_output_tokens`) fields so the cap applies regardless of which
  * provider the worker resolved to. Returns `undefined` for non-positive or
  * non-finite inputs so callers can skip applying any policy.
