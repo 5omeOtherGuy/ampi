@@ -82,6 +82,31 @@ function renderToolExecutionFrame(toolName, args, result, options = {}) {
   return normalize(renderText(component));
 }
 
+function renderBackgroundToolExecutionFrame(args, result, options = {}) {
+  const { renderMmrBackgroundTaskCall, renderMmrBackgroundTaskResult } = options.renderers;
+  const component = new ToolExecutionComponent(
+    "start_task",
+    "start-task-call-1",
+    args,
+    { showImages: false },
+    {
+      name: "start_task",
+      renderCall(callArgs, theme, context) {
+        return renderMmrBackgroundTaskCall("start_task", callArgs, theme, context);
+      },
+      renderResult(toolResult, renderOptions, theme, context) {
+        return renderMmrBackgroundTaskResult("start_task", toolResult, renderOptions, theme, context);
+      },
+    },
+    noopTui,
+    `${homedir()}/projects/repo`,
+  );
+  component.setExpanded(options.expanded ?? false);
+  component.markExecutionStarted();
+  component.updateResult(result, options.isPartial ?? false);
+  return normalize(renderText(component));
+}
+
 function childTypes(component) {
   return Array.isArray(component.children) ? component.children.map((child) => child.constructor.name) : [];
 }
@@ -181,6 +206,45 @@ describe("renderMmrSubagentCall", () => {
 });
 
 describe("ToolExecutionComponent integration", () => {
+  it("replaces a background start call with one result-owned running lifecycle card", async () => {
+    const renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    const args = {
+      agent: "finder",
+      description: "Find widget placement call sites",
+      params: {
+        query:
+          "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
+          "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
+      },
+    };
+    const result = {
+      content: [{ type: "text", text: "start_task: started background worker task_1" }],
+      details: {
+        worker: "mmr-subagents.async-task",
+        tool: "start_task",
+        agent: "finder",
+        taskId: "task_1",
+        status: "running",
+        description: "Find widget placement call sites",
+        prompt: args.params.query,
+        resolvedModel: "google/gemini-3.5-flash-extra-low",
+      },
+    };
+
+    const collapsed = renderBackgroundToolExecutionFrame(args, result, { renderers, expanded: false });
+    assert.equal(countOccurrences(collapsed, "background ⠋ running"), 1, collapsed);
+    assert.match(collapsed, /finder • gemini-3\.5-flash-extra-low • background ⠋ running/);
+    assert.match(collapsed, /Find widget placement call sites/);
+    assert.match(collapsed, /ctrl\+o to expand/i);
+    assert.doesNotMatch(collapsed, /start_task: started background worker/);
+    assert.doesNotMatch(collapsed, /renders aboveEditor and the background-task widget renders belowEditor/);
+
+    const expanded = renderBackgroundToolExecutionFrame(args, result, { renderers, expanded: true });
+    assert.equal(countOccurrences(expanded, "background ⠋ running"), 1, expanded);
+    assert.match(expanded, /renders aboveEditor and the background-task widget renders belowEditor/);
+    assert.doesNotMatch(expanded, /ctrl\+o to expand/i);
+  });
+
   it("lets the result renderer own partial rows and suppresses worker prompt echoes for every subagent", async () => {
     const renderers = await importSource(PROGRESS_RENDERING_MODULE);
     const objective = "Complete post-merge audit of subagent trail rendering after PR #45";
@@ -237,6 +301,36 @@ describe("ToolExecutionComponent integration", () => {
 });
 
 describe("renderMmrSubagentResult", () => {
+  it("uses Task description when collapsed and the full prompt when expanded", async () => {
+    const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const result = makeResult({ content: [{ type: "text", text: "partial worker output" }] });
+    const args = {
+      description: "Run the focused widget test",
+      prompt: "Run node --test tests/mmr-subagents-progress-rendering.test.mjs and inspect failures.",
+    };
+
+    const collapsed = normalize(renderText(renderMmrSubagentResult(
+      "Task",
+      result,
+      { expanded: false, isPartial: true },
+      fakeTheme,
+      makeContext(args),
+    )));
+    assert.match(collapsed, /Run the focused widget test/);
+    assert.match(collapsed, /ctrl\+o to expand/i);
+    assert.doesNotMatch(collapsed, /inspect failures/);
+
+    const expanded = normalize(renderText(renderMmrSubagentResult(
+      "Task",
+      result,
+      { expanded: true, isPartial: true },
+      fakeTheme,
+      makeContext(args),
+    )));
+    assert.match(expanded, /Run node --test tests\/mmr-subagents-progress-rendering\.test\.mjs and inspect failures\./);
+    assert.doesNotMatch(expanded, /ctrl\+o to expand/i);
+  });
+
   it("keeps collapsed partial progress compact without hand-rolled shell glyphs", async () => {
     const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const component = renderMmrSubagentResult(
@@ -912,7 +1006,54 @@ describe("renderMmrSubagentResult", () => {
 });
 
 describe("background task rendering", () => {
-  it("renders no transcript card for a successful start_task (the widget owns it)", async () => {
+  it("renders an immediate collapsed running card for a start_task call", async () => {
+    const { renderMmrBackgroundTaskCall } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderMmrBackgroundTaskCall(
+      "start_task",
+      {
+        agent: "finder",
+        description: "Find widget placement call sites",
+        params: {
+          query:
+            "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
+            "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
+        },
+      },
+      fakeTheme,
+      makeContext({ agent: "finder" }),
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /finder • background ⠋ running/);
+    assert.match(rendered, /Find widget placement call sites/);
+    assert.match(rendered, /ctrl\+o to expand/i);
+    assert.doesNotMatch(rendered, /renders aboveEditor and the background-task widget renders belowEditor/);
+  });
+
+  it("expands the immediate start_task call card to the full prompt", async () => {
+    const { renderMmrBackgroundTaskCall } = await importSource(PROGRESS_RENDERING_MODULE);
+    const component = renderMmrBackgroundTaskCall(
+      "start_task",
+      {
+        agent: "finder",
+        description: "Find widget placement call sites",
+        params: {
+          query:
+            "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
+            "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
+        },
+      },
+      fakeTheme,
+      makeContext({ agent: "finder" }, { expanded: true }),
+    );
+    const rendered = normalize(renderText(component));
+
+    assert.match(rendered, /finder • background ⠋ running/);
+    assert.match(rendered, /renders aboveEditor and the background-task widget renders belowEditor/);
+    assert.doesNotMatch(rendered, /ctrl\+o to expand/i);
+  });
+
+  it("renders the start_task result as a running background lifecycle card", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const component = renderMmrBackgroundTaskResult(
       "start_task",
@@ -924,15 +1065,65 @@ describe("background task rendering", () => {
           agent: "finder",
           taskId: "task_1",
           status: "running",
-          description: "Find async task rendering",
+          description: "Find widget placement call sites",
+          prompt:
+            "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
+            "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
+          resolvedModel: "google/gemini-3.5-flash-extra-low",
         },
       },
-      { expanded: true, isPartial: false },
+      { expanded: false, isPartial: false },
       fakeTheme,
       makeContext({ agent: "finder" }),
     );
+    const rendered = normalize(renderText(component));
 
-    assert.equal(renderText(component), "");
+    assert.match(rendered, /finder • gemini-3\.5-flash-extra-low • background ⠋ running/);
+    assert.match(rendered, /Find widget placement call sites/);
+    assert.match(rendered, /ctrl\+o to expand/i);
+    assert.doesNotMatch(rendered, /start_task: started background worker/);
+    assert.doesNotMatch(rendered, /renders aboveEditor and the background-task widget renders belowEditor/);
+  });
+
+  it("uses the short description when collapsed and the full prompt when expanded", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const result = {
+      content: [{ type: "text", text: "task_poll: finder task task_1 is running." }],
+      details: {
+        worker: "mmr-subagents.async-task",
+        tool: "task_poll",
+        agent: "finder",
+        taskId: "task_1",
+        status: "running",
+        description: "Confirm background widget header removed",
+        prompt:
+          "Verify the background-task widget no longer renders a 'Background agents' header and renders " +
+          "agent rows directly. Check src/extensions/mmr-subagents/background-task-widget.ts " +
+          "renderWidgetLines. Return file path and line numbers.",
+        final: { worker: "mmr-subagents.finder", reportedModel: "openai-codex/gpt-5.4-mini" },
+      },
+    };
+
+    const collapsed = normalize(renderText(renderMmrBackgroundTaskResult(
+      "task_poll",
+      result,
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ task_id: "task_1" }),
+    )));
+    assert.match(collapsed, /Confirm background widget header removed/);
+    assert.match(collapsed, /ctrl\+o to expand/i);
+    assert.doesNotMatch(collapsed, /Verify the background-task widget no longer renders/);
+
+    const expanded = normalize(renderText(renderMmrBackgroundTaskResult(
+      "task_poll",
+      result,
+      { expanded: true, isPartial: false },
+      fakeTheme,
+      makeContext({ task_id: "task_1" }),
+    )));
+    assert.match(expanded, /Verify the background-task widget no longer renders a 'Background agents' header/);
+    assert.doesNotMatch(expanded, /ctrl\+o to expand/i);
   });
 
   it("renders a still-running polled task as a subagent-style box with its model", async () => {
@@ -960,7 +1151,9 @@ describe("background task rendering", () => {
 
     assert.match(rendered, /finder • gpt-5\.4-mini • background ⠋ running/);
     assert.doesNotMatch(rendered, /in background/);
-    assert.match(rendered, /Find async task rendering in progress-rendering\.ts/);
+    assert.match(rendered, /Find async task rendering/);
+    assert.match(rendered, /ctrl\+o to expand/i);
+    assert.doesNotMatch(rendered, /Find async task rendering in progress-rendering\.ts/);
     assert.doesNotMatch(rendered, /task_poll: finder task/);
   });
 

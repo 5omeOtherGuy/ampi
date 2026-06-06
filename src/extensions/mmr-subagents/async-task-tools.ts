@@ -726,6 +726,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
           status: snapshot.status,
           freshness: snapshot.freshness,
           description: snapshot.description,
+          prompt: snapshot.prompt,
           ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
           ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
         },
