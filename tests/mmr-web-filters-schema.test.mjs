@@ -83,8 +83,8 @@ describe("web_search execute — filter passthrough and reporting", () => {
     assert.equal(calls[0].url.searchParams.get("freshness"), "pw");
     // include domain post-filtered to example.com only
     assert.deepEqual(result.details.resultCount, 1);
-    assert.match(result.content[0].text, /docs\.example\.com/);
-    assert.doesNotMatch(result.content[0].text, /other\.com/);
+    assert.match(result.content[0].text, /^https:\/\/docs\.example\.com\/a$/m);
+    assert.doesNotMatch(result.content[0].text, /^https:\/\/other\.com\/b$/m);
     // details.filters reports honored enforcement
     const include = result.details.filters.find((f) => f.filter === "include_domains");
     assert.deepEqual({ s: include.support, h: include.honored }, { s: "post_filter", h: "full" });
