@@ -31,6 +31,7 @@ import {
 } from "./fallback.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "./tool-guidance.js";
+import { resolveWorkerCwd } from "./worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -458,12 +459,6 @@ export interface OracleToolDeps {
 /** Alias for the advisor tool dependency seam. */
 export type MmrAdvisorToolDeps = OracleToolDeps;
 
-function resolveCwd(ctx: ExtensionContext | undefined): string {
-  const candidate = (ctx as { cwd?: unknown } | undefined)?.cwd;
-  if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  return process.cwd();
-}
-
 /**
  * Resolve the ordered worker-model preference list used by an advisor
  * parent on every execute. Precedence (top wins):
@@ -702,7 +697,7 @@ export function createMmrAdvisorTool(
       ctx,
     ): Promise<AgentToolResult<OracleDetails>> {
       const params = coerceAdvisorParams(config.toolName, rawParams);
-      const cwd = resolveCwd(ctx);
+      const cwd = resolveWorkerCwd(ctx);
       const attachments: InternalAttachment[] = (params.files ?? []).map((entry) =>
         resolveOracleAttachment(entry, cwd, perFileByteLimit),
       );
