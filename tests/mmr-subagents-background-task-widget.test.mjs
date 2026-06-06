@@ -79,7 +79,7 @@ describe("background-task widget", () => {
     assert.deepEqual(last.options, { placement: "belowEditor" }, "background agents must stay below the editor");
     const widget = last.value(undefined, theme);
     const text = widget.render(80).join("\n");
-    assert.match(text, /Background agents/);
+    assert.doesNotMatch(text, /Background agents/, "background widget must render rows directly without a header");
     assert.match(text, /finder/);
     assert.match(text, /Search the repo/);
     assert.match(text, /Task/);
