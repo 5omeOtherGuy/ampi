@@ -184,17 +184,9 @@ function renderWidgetLines(
       return value;
     }
   };
-  const safeBold = (value: string): string => {
-    if (!theme) return value;
-    try {
-      return theme.bold(value);
-    } catch {
-      return value;
-    }
-  };
   const visible = rows.slice(0, WIDGET_MAX_ROWS);
   const remaining = rows.length - visible.length;
-  const lines: string[] = [safeFg("accent", safeBold("Background agents"))];
+  const lines: string[] = [];
   for (const row of visible) lines.push(renderRowLine(row, theme, activeFrame));
   if (remaining > 0) lines.push(safeFg("dim", `… ${remaining} more`));
   return lines;
