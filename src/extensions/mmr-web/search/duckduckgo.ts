@@ -3,13 +3,21 @@ import {
   readErrorBody,
 } from "../http-utils.js";
 import { readSearchResponseBody } from "./body.js";
+import { applyDomainFilter } from "./filters.js";
 import { validateExternalHttpUrl } from "../url-policy.js";
 import type {
+  AppliedFilter,
   SearchArgs,
   SearchBackend,
   SearchResponse,
   SearchResultEntry,
 } from "./types.js";
+
+/**
+ * Candidate ceiling parsed from a DuckDuckGo page when a domain post-filter
+ * is active, so we narrow a wider pool down to `maxResults`.
+ */
+const DOMAIN_FILTER_CANDIDATE_COUNT = 50;
 
 /**
  * DuckDuckGo HTML fallback search backend for `mmr-web`.
@@ -98,8 +106,11 @@ export function __resetDuckDuckGoStateForTests(): void {
   moduleState.blockedUntil = 0;
 }
 
-function cacheKey(query: string, maxResults: number): string {
-  return `${query}\u0000${maxResults}`;
+function cacheKey(query: string, maxResults: number, args: DuckDuckGoSearchArgs): string {
+  const include = (args.includeDomains ?? []).join(",");
+  const exclude = (args.excludeDomains ?? []).join(",");
+  const recency = args.recency ?? "";
+  return [query, maxResults, include, exclude, recency].join("\u0000");
 }
 
 function readCache(state: DuckDuckGoState, key: string, now: number): DuckDuckGoSearchResponse | undefined {
@@ -252,9 +263,12 @@ export async function duckduckgoSearch(
     throw new Error(`${BLOCK_HINT} (Backoff active for ${Math.ceil((state.blockedUntil - ts) / 1000)}s.)`);
   }
 
-  const key = cacheKey(query, args.maxResults);
+  const key = cacheKey(query, args.maxResults, args);
   const cached = readCache(state, key, ts);
   if (cached) return cached;
+
+  const hasDomainFilter =
+    (args.includeDomains?.length ?? 0) > 0 || (args.excludeDomains?.length ?? 0) > 0;
 
   const fetchImpl = options.fetchImpl ?? fetch;
   const endpoint = options.endpoint ?? DUCKDUCKGO_HTML_ENDPOINT;
@@ -301,18 +315,41 @@ export async function duckduckgoSearch(
     state.blockedUntil = ts + BLOCK_BACKOFF_MS;
     throw new Error(BLOCK_HINT);
   }
-  const results = parseResultRows(text, args.maxResults);
+  const candidates = parseResultRows(
+    text,
+    hasDomainFilter ? DOMAIN_FILTER_CANDIDATE_COUNT : args.maxResults,
+  );
 
   // Empty-result page with no matching markers is a softer block signal:
   // surface the same hint but do not open the backoff window (the user may
-  // legitimately have an obscure query).
-  if (results.length === 0 && !text.toLowerCase().includes("no results")) {
+  // legitimately have an obscure query). This is evaluated on the parsed
+  // page, before domain filtering: a domain filter legitimately yielding
+  // zero matches is not a block signal.
+  if (candidates.length === 0 && !text.toLowerCase().includes("no results")) {
     throw new Error(
       `DuckDuckGo HTML search returned no parseable result rows. ${BLOCK_HINT}`,
     );
   }
 
-  const out: DuckDuckGoSearchResponse = { results, ...responseBody };
+  const domainFiltered = applyDomainFilter(candidates, {
+    includeDomains: args.includeDomains,
+    excludeDomains: args.excludeDomains,
+  });
+  const results = domainFiltered.results.slice(0, args.maxResults);
+  const appliedFilters: AppliedFilter[] = [...domainFiltered.applied];
+  if (args.recency) {
+    // DuckDuckGo's HTML results do not expose reliable publication dates, so
+    // recency cannot be honored without faking it. Report it truthfully.
+    appliedFilters.push({
+      filter: "recency",
+      support: "unsupported",
+      honored: "none",
+      reason:
+        "DuckDuckGo HTML results do not expose reliable publication dates; configure SearXNG or Brave to filter by recency.",
+    });
+  }
+
+  const out: DuckDuckGoSearchResponse = { results, appliedFilters, ...responseBody };
   writeCache(state, key, out, ts);
   return out;
 }

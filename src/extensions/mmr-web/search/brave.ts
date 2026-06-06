@@ -4,12 +4,24 @@ import {
   redactApiKey,
 } from "../http-utils.js";
 import { readSearchResponseBody } from "./body.js";
+import {
+  applyDomainFilter,
+  BRAVE_FRESHNESS_BY_RECENCY,
+} from "./filters.js";
 import type {
+  AppliedFilter,
   SearchArgs,
   SearchBackend,
   SearchResponse,
   SearchResultEntry,
 } from "./types.js";
+
+/**
+ * Upstream candidate ceiling used when a domain post-filter is active, so we
+ * retrieve a wider pool before narrowing to `maxResults`. Brave caps `count`
+ * at 20.
+ */
+const DOMAIN_FILTER_CANDIDATE_COUNT = 20;
 
 /**
  * Brave Search backend for `mmr-web`.
@@ -88,8 +100,15 @@ export async function braveSearch(
   url.searchParams.set("q", query);
   // Brave caps `count` at 20; mmr-web's MAX_MAX_RESULTS is already 10, but
   // clamp defensively in case callers pass a larger value through `maxResults`.
-  url.searchParams.set("count", String(Math.min(Math.max(args.maxResults, 1), 20)));
+  const hasDomainFilter =
+    (args.includeDomains?.length ?? 0) > 0 || (args.excludeDomains?.length ?? 0) > 0;
+  const requestedCount = hasDomainFilter
+    ? DOMAIN_FILTER_CANDIDATE_COUNT
+    : Math.min(Math.max(args.maxResults, 1), 20);
+  url.searchParams.set("count", String(requestedCount));
   if (args.country) url.searchParams.set("country", args.country.toUpperCase());
+  // Recency maps natively to Brave's `freshness` parameter.
+  if (args.recency) url.searchParams.set("freshness", BRAVE_FRESHNESS_BY_RECENCY[args.recency]);
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -114,9 +133,18 @@ export async function braveSearch(
     args.maxResultBytes,
     "Brave search",
   );
-  const results = parseStructuredResults(text, args.maxResults);
+  const candidates = parseStructuredResults(text, hasDomainFilter ? requestedCount : args.maxResults);
+  const domainFiltered = applyDomainFilter(candidates, {
+    includeDomains: args.includeDomains,
+    excludeDomains: args.excludeDomains,
+  });
+  const results = domainFiltered.results.slice(0, args.maxResults);
+  const appliedFilters: AppliedFilter[] = [...domainFiltered.applied];
+  if (args.recency) {
+    appliedFilters.push({ filter: "recency", support: "native", honored: "full" });
+  }
 
-  return { results, ...body };
+  return { results, appliedFilters, ...body };
 }
 
 /**
