@@ -10,6 +10,7 @@ import {
   type MmrToggleThinkingLevel,
 } from "./request-policy.js";
 import type {
+  MmrModeEvent,
   MmrModelCandidateResolution,
   MmrModeState,
   MmrPolicyDiagnostic,
@@ -51,6 +52,12 @@ function getContextOverridesForState(state: MmrModeState) {
 export interface FormatMmrStatusOptions {
   /** Append a Debug section with mode-resolution detail. */
   debug?: boolean;
+  /**
+   * Oldest-to-newest mode/fallback event history. Rendered inside the Debug
+   * section when `debug` is set. Deterministic operator aid only — records
+   * explicit applies and provider-failure fallbacks, not automatic routing.
+   */
+  modeHistory?: readonly MmrModeEvent[];
 }
 
 function formatSelectedModel(state: MmrModeState): string {
@@ -370,7 +377,26 @@ function formatModelCandidate(candidate: MmrModelCandidateResolution): string {
   return `  - ${candidate.requestedModel} -> ${route} [${flags.join(", ")}]${reason}`;
 }
 
-function formatDebugSection(state: MmrModeState): string {
+function formatModeEvent(event: MmrModeEvent): string {
+  const transition = event.previousMode && event.previousMode !== event.mode
+    ? `${event.previousMode} → ${event.mode}`
+    : event.mode;
+  const model = event.model ?? "none";
+  const thinking = event.thinkingLevel ? ` thinking:${event.thinkingLevel}` : "";
+  const fallback = event.fallbackApplied
+    ? ` fallback:yes - ${event.fallbackReason ?? "fallback model applied"}`
+    : "";
+  return `  - ${event.at} ${transition} (source: ${event.source}) model:${model}${thinking}${fallback}`;
+}
+
+function formatModeHistory(history: readonly MmrModeEvent[] | undefined): string | undefined {
+  if (!history || history.length === 0) return undefined;
+  // Newest first for quick scanning.
+  const lines = [...history].reverse().map((event) => formatModeEvent(event));
+  return ["  Mode/fallback history (newest first):", ...lines].join("\n");
+}
+
+function formatDebugSection(state: MmrModeState, options: FormatMmrStatusOptions = {}): string {
   const lines: string[] = ["Debug:"];
   lines.push(`  Selected source: ${state.source}`);
   lines.push(`  ${formatRejectedSources(state)}`);
@@ -380,6 +406,8 @@ function formatDebugSection(state: MmrModeState): string {
     lines.push("  Model preference candidates:");
     for (const candidate of state.modelCandidates) lines.push(`  ${formatModelCandidate(candidate)}`);
   }
+  const history = formatModeHistory(options.modeHistory);
+  if (history) lines.push(history);
   return lines.join("\n");
 }
 
@@ -433,7 +461,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       `Policy warnings: ${formatPolicyWarnings(state)}`,
       `State version: ${state.version}`,
       `Applied at: ${state.appliedAt}`,
-      options.debug ? formatDebugSection(state) : undefined,
+      options.debug ? formatDebugSection(state, options) : undefined,
     ]);
   }
 
@@ -464,6 +492,6 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     formatDiagnosticsBySeverity(state),
     `State version: ${state.version}`,
     `Applied at: ${state.appliedAt}`,
-    options.debug ? formatDebugSection(state) : undefined,
+    options.debug ? formatDebugSection(state, options) : undefined,
   ]);
 }
