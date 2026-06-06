@@ -146,6 +146,8 @@ describe("start_task", () => {
     assert.equal(result.details.tool, "start_task");
     assert.equal(result.details.taskId, "t1");
     assert.equal(result.details.status, "running");
+    assert.equal(result.details.description, "thing");
+    assert.equal(result.details.prompt, "do the thing");
     assert.match(result.content[0].text, /started background worker t1/);
     assert.equal(def.calls.length, 1, "the worker run must have been invoked");
     def.resolve(makeWorkerResult());
@@ -234,6 +236,8 @@ describe("start_task", () => {
     );
     assert.equal(result.details.agent, "Task");
     assert.equal(result.details.taskId, "t1");
+    assert.equal(result.details.description, "thing");
+    assert.equal(result.details.prompt, "do the thing");
     assert.equal(def.calls[0].profileName, "task-subagent");
     def.resolve(makeWorkerResult());
     await flush();

@@ -29,6 +29,7 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Fixed
 
+- `mmr-subagents`: render background `start_task` launches as inline running lifecycle cards immediately while keeping the below-editor status widget, and collapse background cards to their short display label until the user expands them with ctrl+o. Covered by `tests/mmr-subagents-progress-rendering.test.mjs` and `tests/mmr-subagents-async-task-tools.test.mjs`.
 - `mmr-subagents`: remove the `Background agents` header from the below-editor background-agent widget so running background agents render as direct status rows. Covered by `tests/mmr-subagents-background-task-widget.test.mjs`.
 - `mmr-toolbox` / `mmr-subagents`: keep the live task-list and background-subagent widgets in fixed TUI positions by explicitly rendering `task_list` above the editor and background agents below it. This prevents the two widgets from swapping order when either widget refreshes or re-registers. Covered by `tests/mmr-toolbox-todo-list-tool.test.mjs` and `tests/mmr-subagents-background-task-widget.test.mjs`.
 - `mmr-toolbox`: remove the pinned `task_list` widget's redundant `Tasks` header so the widget displays task rows directly and uses less vertical space. Covered by `tests/mmr-toolbox-todo-list-tool.test.mjs`.

@@ -140,6 +140,7 @@ interface RenderContextLike {
   state?: unknown;
   executionStarted?: boolean;
   argsComplete?: boolean;
+  expanded?: boolean;
   lastComponent?: unknown;
 }
 
@@ -354,10 +355,74 @@ function operationLabel(
     ?? details?.prompt;
 }
 
+function expandedOperationLabel(
+  toolName: string,
+  details: SubagentProgressDetails | undefined,
+  context: RenderContextLike | undefined,
+): string | undefined {
+  const args = context?.args;
+  if (toolName === "Task") return readStringField(args, "prompt") ?? details?.prompt ?? operationLabel(toolName, details, context);
+  if (toolName === "oracle") return readStringField(args, "task") ?? details?.task ?? operationLabel(toolName, details, context);
+  return readStringField(args, "query") ?? details?.query ?? operationLabel(toolName, details, context);
+}
+
 function operationLabelFromArgs(toolName: string, args: unknown): string | undefined {
   if (toolName === "Task") return readStringField(args, "description") ?? readStringField(args, "prompt");
   if (toolName === "oracle") return readStringField(args, "task");
   return readStringField(args, "query");
+}
+
+function normalizeStartTaskAgent(raw: unknown): string | undefined {
+  if (raw === undefined) return "Task";
+  if (typeof raw !== "string") return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "task" || normalized === "task-subagent") return "Task";
+  if (normalized === "finder") return "finder";
+  if (normalized === "librarian") return "librarian";
+  return undefined;
+}
+
+function startTaskParamsFromArgs(args: unknown, agent: string): unknown {
+  if (!isRecord(args)) return undefined;
+  if (args.params !== undefined) return args.params;
+  if (agent === "Task") {
+    return { prompt: args.prompt, description: args.description };
+  }
+  const prompt = readStringField(args, "prompt");
+  return prompt ? { query: prompt } : undefined;
+}
+
+function startTaskPromptFromArgs(args: unknown, agent: string): string | undefined {
+  const params = startTaskParamsFromArgs(args, agent);
+  if (agent === "Task") return readStringField(params, "prompt") ?? readStringField(args, "prompt");
+  return readStringField(params, "query") ?? readStringField(args, "prompt");
+}
+
+function startTaskDescriptionFromArgs(args: unknown, agent: string, prompt: string | undefined): string | undefined {
+  const params = startTaskParamsFromArgs(args, agent);
+  return readStringField(args, "description")
+    ?? (agent === "Task" ? readStringField(params, "description") : undefined)
+    ?? `${agent}: ${prompt ? compactOneLine(prompt, 80) : "background run"}`;
+}
+
+function startTaskDisplayFromArgs(args: unknown): { details: BackgroundTaskDetails; collapsed?: string; expanded?: string } | undefined {
+  if (!isRecord(args)) return undefined;
+  const agent = normalizeStartTaskAgent(args.agent);
+  if (!agent) return undefined;
+  const expanded = startTaskPromptFromArgs(args, agent);
+  const collapsed = startTaskDescriptionFromArgs(args, agent, expanded);
+  return {
+    details: {
+      worker: "mmr-subagents.async-task",
+      tool: "start_task",
+      agent,
+      status: "running",
+      description: collapsed,
+      ...(expanded !== undefined ? { prompt: expanded } : {}),
+    },
+    collapsed,
+    expanded,
+  };
 }
 
 function parseArgsPreview(preview: string | undefined): unknown {
@@ -592,6 +657,35 @@ function taskPreview(text: string, expanded: boolean, maxLines = 10): { body: st
   };
 }
 
+function normalizedTaskBody(text: string | undefined): string {
+  return (text ?? "").replace(/\s+/g, " ").trim();
+}
+
+function firstNonEmptyLine(text: string): string {
+  return text.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0) ?? text;
+}
+
+function taskPreviewForDisplay(
+  collapsedText: string | undefined,
+  expandedText: string | undefined,
+  expanded: boolean,
+  maxLines = 10,
+): { body: string; hint?: string } {
+  const collapsed = collapsedText?.trim();
+  const full = expandedText?.trim();
+  if (expanded) return taskPreview(full ?? collapsed ?? "", true, maxLines);
+  if (collapsed && full && normalizedTaskBody(collapsed) !== normalizedTaskBody(full)) {
+    return { body: collapsed, hint: "(ctrl+o to expand)" };
+  }
+  if (collapsed) return taskPreview(collapsed, false, maxLines);
+  if (!full) return { body: "" };
+  const summary = compactOneLine(firstNonEmptyLine(full));
+  if (normalizedTaskBody(summary) !== normalizedTaskBody(full)) {
+    return { body: summary, hint: "(ctrl+o to expand)" };
+  }
+  return taskPreview(full, false, maxLines);
+}
+
 function addTaskBox(
   container: Container,
   toolName: string,
@@ -600,10 +694,11 @@ function addTaskBox(
   expanded: boolean,
   status: RenderStatus,
   theme: SubagentTheme,
+  expandedOperation = operation,
 ): boolean {
   const box = new Box(1, 1, statusBgFn(status, theme));
   box.addChild(new Text(renderHeaderLine(toolName, status, details, theme), 0, 0));
-  const preview = taskPreview(operation ?? "", expanded);
+  const preview = taskPreviewForDisplay(operation, expandedOperation, expanded);
   const hasOperation = addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
   if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
   const hasDiagnostic = addDiagnostic(box, diagnosticMessage(details, status), status, theme);
@@ -1028,6 +1123,28 @@ function backgroundTaskHeaderLine(
   return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(details.status, theme)}`;
 }
 
+function backgroundTaskDisplayText(
+  details: BackgroundTaskDetails,
+  subDetails: SubagentProgressDetails,
+  startDisplay: { collapsed?: string; expanded?: string } | undefined,
+): { collapsed?: string; expanded?: string } {
+  const expanded = details.prompt
+    ?? startDisplay?.expanded
+    ?? subDetails.query
+    ?? subDetails.prompt
+    ?? subDetails.task
+    ?? subDetails.description
+    ?? details.description;
+  const collapsed = details.description
+    ?? startDisplay?.collapsed
+    ?? subDetails.description
+    ?? subDetails.query
+    ?? subDetails.task
+    ?? subDetails.prompt
+    ?? expanded;
+  return { collapsed, expanded };
+}
+
 const BACKGROUND_STATUS_VALUES: ReadonlySet<string> = new Set([
   "running",
   "cancelling",
@@ -1184,15 +1301,21 @@ function resultAlreadyRendered(context: RenderContextLike | undefined): boolean 
 }
 
 export function renderMmrBackgroundTaskCall(
-  _toolName: string,
-  _args: unknown,
-  _theme: SubagentTheme,
-  _context?: RenderContextLike,
+  toolName: string,
+  args: unknown,
+  theme: SubagentTheme,
+  context?: RenderContextLike,
 ): Component {
-  // Background task tools return immediately and their result renderer owns the
-  // stable invocation/running/final surface. Suppressing the default call row
-  // avoids a duplicate plain tool-call frame before the background-task box.
-  return new Container();
+  if (toolName !== "start_task") return new Container();
+  const display = startTaskDisplayFromArgs(args);
+  if (!display) return new Container();
+  const box = new Box(1, 1, backgroundStatusBgFn("running", theme));
+  box.addChild(new Text(backgroundTaskHeaderLine(display.details, undefined, theme), 0, 0));
+  const preview = taskPreviewForDisplay(display.collapsed, display.expanded, context?.expanded === true);
+  addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
+  if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
+  rememberCallComponent(context, box);
+  return box;
 }
 
 export function renderMmrBackgroundTaskResult(
@@ -1219,12 +1342,7 @@ export function renderMmrBackgroundTaskResult(
     return container;
   }
 
-  // start_task's success row is owned by the persistent bottom widget, not the
-  // transcript: returning an empty component avoids a duplicate launch card
-  // (and stops opaque task ids from leading the visible output).
-  if (details.tool === "start_task" && details.taskId && !details.errorMessage) {
-    return new Container();
-  }
+  if (details.tool === "start_task") clearRenderedCall(context);
 
   const renderStatus = backgroundTaskRenderStatus(details.status);
   if (!renderStatus || !details.taskId || !details.agent) {
@@ -1241,17 +1359,13 @@ export function renderMmrBackgroundTaskResult(
   const model = stripProvider(subDetails.reportedModel ?? subDetails.model ?? details.resolvedModel);
   const contextWindow = subDetails.contextWindow ?? details.contextWindow;
   const expanded = options.expanded === true;
-  const operation = details.prompt
-    ?? subDetails.query
-    ?? subDetails.prompt
-    ?? subDetails.task
-    ?? subDetails.description
-    ?? details.description;
+  const startDisplay = details.tool === "start_task" ? startTaskDisplayFromArgs(context?.args) : undefined;
+  const operation = backgroundTaskDisplayText(details, subDetails, startDisplay);
 
   const container = new Container();
   const box = new Box(1, 1, backgroundStatusBgFn(details.status, theme));
   box.addChild(new Text(backgroundTaskHeaderLine(details, model, theme), 0, 0));
-  const preview = taskPreview(operation ?? "", expanded);
+  const preview = taskPreviewForDisplay(operation.collapsed, operation.expanded, expanded);
   addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
   if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
   // Gate the error diagnostic on the raw status, not the coarse renderStatus
@@ -1266,7 +1380,7 @@ export function renderMmrBackgroundTaskResult(
   const trail = subDetails.trail ?? [];
   if (expanded && trail.length > 0) {
     container.addChild(new Spacer(1));
-    addTrailComponents(container, trail, cleanFinal, theme, context, operation, true);
+    addTrailComponents(container, trail, cleanFinal, theme, context, operation.expanded ?? operation.collapsed, true);
   }
 
   if (cleanFinal && renderStatus !== "running") {
@@ -1358,11 +1472,12 @@ export function renderMmrSubagentResult(
   const model = stripProvider(details?.reportedModel ?? details?.model);
   const status = statusFromDetails(details, isPartial, context);
   const operation = operationLabel(toolName, details, context);
+  const expandedOperation = expandedOperationLabel(toolName, details, context);
   const container = new Container();
   clearRenderedCall(context);
   markResultRendered(context);
 
-  const hasTaskBody = addTaskBox(container, toolName, details, operation, expanded, status, theme);
+  const hasTaskBody = addTaskBox(container, toolName, details, operation, expanded, status, theme, expandedOperation);
   addFallbackNoticeBlock(container, details?.fallbackNotice, theme);
 
   if (!expanded) {
