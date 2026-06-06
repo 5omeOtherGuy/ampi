@@ -1,6 +1,6 @@
 # mmr-core roadmap
 
-This roadmap covers the `mmr-core` extension: locked-mode routing, model
+This roadmap covers the `mmr-core` extension: locked modes, model
 resolution, tool registry, prompt assembly, diagnostics, and shared
 contracts for sibling extensions. Cross-cutting concerns (release plan,
 public-safety checklist, planned-but-not-yet-implemented extensions) live
@@ -14,10 +14,10 @@ Sibling extension roadmaps:
 
 ## Current baseline
 
-`mmr-core` provides the routing spine:
+`mmr-core` provides the locked-mode spine:
 
 ```text
-mode → model/thinking → active tools → system prompt note
+selected mode → resolved model/thinking → active tools → system prompt note
 ```
 
 Current modes:
@@ -58,7 +58,7 @@ Implemented surfaces:
 
 ## Guiding boundaries
 
-`mmr-core` owns routing consistency only. It should not implement:
+`mmr-core` owns locked-mode consistency only. It should not implement:
 
 - `Task`, `finder`, `oracle`, or `librarian` (belong to `mmr-subagents`)
 - handoff (belongs to `mmr-history`)
@@ -72,7 +72,7 @@ Those belong in later dedicated MMR extensions.
 
 Status: ✅ Complete.
 
-Goal: make the existing routing spine safe and predictable before adding fidelity.
+Goal: make the existing locked-mode spine safe and predictable before adding fidelity.
 
 Tasks:
 
@@ -97,15 +97,15 @@ Goal: make MMR mode state a stable contract, not just a static table.
 Implemented:
 
 - ✅ Mode definitions include mode key, display name, provider-neutral model preferences, thinking level, prompt route, logical tools, deferred tools, feature gate names, and availability notes.
-- ✅ `MmrModeState` records selected source, requested/selected model route, model fallback status/reason, model candidates, prompt route, active/missing/deferred tools, feature gate names, and availability notes.
+- ✅ `MmrModeState` records selected source, model preference order/resolved model, configured fallback status/reason, model candidates, prompt surface, active/missing/deferred tools, feature gate names, and availability notes.
 - ✅ `mmr-core.mode-state` entries persist explicit mode changes and restore the latest valid mode on session start.
 - ✅ Feature-gate resolver with an ordered provider chain. Built-ins: `mmr-core.reserved` and `mmr-core.unknown`. For shipped extensions (`mmr-subagents`, `mmr-web`) the reserved entry is a fallback only — those extensions ship their own feature-gate providers that take precedence. `MmrFeatureGateProvider` is the documented extension point for future server or package-provided gates; `registerMmrFeatureGateProvider(...)` plugs them into the runtime registry, and later registrations override earlier ones.
-- ✅ Richer mode-resolution decisions in `MmrModeState.resolution`: rejected invalid sources, full tool-resolution decisions (requested → chosen + candidates), and feature-gate decisions tagged with the resolving provider.
+- ✅ Richer mode-resolution diagnostics in `MmrModeState.resolution`: rejected invalid sources, full tool-resolution diagnostics (requested → chosen + candidates), and feature-gate statuses tagged with the resolving provider.
 - ✅ `mmr-core.mode-state` entries are versioned (`MMR_MODE_STATE_VERSION = 1`); legacy unversioned records are normalized to v1, future/malformed versions are rejected.
 
 Acceptance criteria:
 
-- ✅ `getMmrModeState()` returns a complete, versioned, explainable routing state.
+- ✅ `getMmrModeState()` returns a complete, versioned, explainable locked-mode state.
 - ✅ `/mmr-status` can explain why the current mode/model/tools were chosen, including per-gate provider attribution.
 
 ## Milestone 2 — tool registry and allowlist fidelity
@@ -138,7 +138,7 @@ Status: ✅ Complete (assembly maturity extensions tracked in Milestone 6).
 
 Goal: make the model-visible system prompt reflect the resolved mode while keeping all other Pi/extension content authoritative.
 
-Current status: MMR-authored per-mode templates and snapshots are implemented. `before_agent_start` surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) with a custom mode prompt. The only MMR-owned XML-style marker is the initial one-line role marker (`<mmr_mode name="smart">...</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:` and `Guidelines:` are embedded under `## Tool use` so they stay in sync with active tools and are passed through byte-identically. Routing/tool/policy diagnostics are kept out of the prompt and surfaced through `/mmr-status`, activation warnings, and the status bar.
+Current status: MMR-authored per-mode templates and snapshots are implemented. `before_agent_start` surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) with a custom mode prompt. The only MMR-owned XML-style marker is the initial one-line role marker (`<mmr_mode name="smart">...</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:` and `Guidelines:` are embedded under `## Tool use` so they stay in sync with active tools and are passed through byte-identically. Mode/tool/policy diagnostics are kept out of the prompt and surfaced through `/mmr-status`, activation warnings, and the status bar.
 
 Tasks:
 
@@ -146,7 +146,7 @@ Tasks:
 - [x] Keep the rewrite scoped to Pi's auto head; preserve any content prepended by earlier handlers, Pi's `appendSystemPrompt`, `# Project Context` / AGENTS.md, `<available_skills>`, future subagents block, `Current date:`, `Current working directory:`, and any extension-appended tail content byte-for-byte.
 - [x] Embed Pi's auto-rendered `Available tools:` and `Guidelines:` under `## Tool use` so the model never sees a stale or duplicated tool list. (Initial implementation stripped two unconditional Pi bullets the mode prompt covers; current policy is byte-identical passthrough — see Milestone 6.)
 - [x] Add prompt snapshot tests for each mode plus behavioral tests covering free mode, custom-prompt passthrough, prepended-extension preservation, `appendSystemPrompt` preservation, and tail-appended preservation.
-- [x] Keep routing/tool/policy diagnostics out of the model prompt; assert via tests that they do not appear.
+- [x] Keep mode/tool/policy diagnostics out of the model prompt; assert via tests that they do not appear.
 - [x] Define prompt-source provenance in [`../../../docs/prompt-provenance.md`](../../../docs/prompt-provenance.md); do not copy third-party prompt material into this repo.
 
 Acceptance criteria:
@@ -159,7 +159,7 @@ Acceptance criteria:
 
 Status: ✅ Complete.
 
-Goal: let future extensions plug into `mmr-core` without duplicating routing state.
+Goal: let future extensions plug into `mmr-core` without duplicating locked-mode state.
 
 - ✅ Root exports expose shared types and helpers for modes, model resolution, prompt assembly, state lookup, and tool resolution.
 - ✅ Runtime helpers expose current mode state, model planning, tool resolution, tool allow checks, and alias registration.
@@ -186,9 +186,9 @@ Goal: make failures understandable during real interactive use.
 
 Implemented:
 
-- ✅ `/mmr-status` reports mode/source, model found/applied/fallback, thinking, prompt route, active tools, missing logical tools, deferred tools, gated tools, settings files read, and diagnostics grouped by severity.
+- ✅ `/mmr-status` reports active locked mode/source, resolved model/applied/configured fallback, thinking, prompt surface, active tools, missing logical tools, deferred tools, gated tools, settings files read, and diagnostics grouped by severity.
 - ✅ Activation failures for unavailable models and zero active tools preserve previous state and produce actionable diagnostics.
-- ✅ Optional `Debug` section in `/mmr-status` for mode-resolution decisions.
+- ✅ Optional `Debug` section in `/mmr-status` for model/tool resolution diagnostics.
 - ✅ Lifecycle smoke tests cover extension load, session start, `/mode`, and prompt-hook behavior.
 - ✅ Status formatting tests cover warning and no-warning paths.
 - ✅ Malformed settings tests in `mmr-core-settings.test.mjs`.
@@ -360,7 +360,7 @@ Why it is deferred:
 
 - Wrappers replace a stable Pi built-in surface with a pi-mmr-owned surface
   and bring real risk: schema drift, path-handling drift, renderer drift,
-  tool-call routing drift, and session-behavior drift versus what Pi already
+  tool-call resolution drift, and session-behavior drift versus what Pi already
   validates.
 - The phase's trigger ("metadata + shared guidance + effective-surface
   snapshots prove insufficient") has not fired. The current per-built-in

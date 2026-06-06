@@ -123,7 +123,7 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
   },
   smartGPT: {
     tag: "smartGPT",
-    intro: "You are pair programming with the user (smartGPT routing). Treat every message — including corrections and short replies — as a refinement of the spec. Adapt without defensiveness. Follow instructions; verify the result works.",
+    intro: "You are pair programming with the user (smartGPT locked mode). Treat every message — including corrections and short replies — as a refinement of the spec. Adapt without defensiveness. Follow instructions; verify the result works.",
     postureSections: SMART_POSTURE,
     closingLine: "Answer in fewer than 4 lines of prose unless asked for more detail; lean on xhigh reasoning before acting on ambiguous specs.",
   },

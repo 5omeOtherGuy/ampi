@@ -112,7 +112,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode rush, /mode large, or /mode deep to re-enter MMR routing.",
+    "Use /mode smart, /mode rush, /mode large, or /mode deep to re-enter a locked mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
@@ -406,9 +406,9 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
           .map((decision) => decision.diagnostic);
         const warnings = [...policyMessages, ...deferredMessages];
 
-        const selectedModel = state.modelApplied ? `${state.provider}/${state.model} thinking:${state.thinkingLevel ?? "Pi default"}` : "none";
-        const modelLine = `\nSelected model: ${selectedModel}`;
-        const targetLine = `\nTarget models: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`;
+        const resolvedModel = state.modelApplied ? `${state.provider}/${state.model} thinking:${state.thinkingLevel ?? "Pi default"}` : "none";
+        const modelLine = `\nResolved model: ${resolvedModel}`;
+        const targetLine = `\nModel preference order: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`;
         const suffix = warnings.length > 0 ? `\nWarnings:\n- ${warnings.join("\n- ")}` : "";
         ctx.ui.notify(`MMR mode activated: ${mode.displayName} (${mode.key})${targetLine}${modelLine}${suffix}`, warnings.length > 0 ? "warning" : "info");
       }
@@ -586,7 +586,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("mmr-status", {
-    description: "Show current MMR routing state. Pass 'debug' or '--debug' for mode-resolution detail.",
+    description: "Show current MMR locked-mode status. Pass 'debug' or '--debug' for model/tool resolution detail.",
     handler: async (args, ctx) => {
       const debug = parseMmrStatusDebugFlag(args);
       ctx.ui.notify(formatMmrStatus(getMmrModeState(), { debug }), "info");

@@ -126,7 +126,7 @@ describe("mmr-core mode-state snapshot", () => {
   });
 });
 
-describe("mmr-core worker model route selection", () => {
+describe("mmr-core worker model preference resolution", () => {
   it("selectMmrModelRoute picks the highest-priority registered+authenticated route without applying", async () => {
     const { selectMmrModelRoute } = await importSource("extensions/mmr-core/model-resolver.ts");
 

@@ -191,7 +191,7 @@ describe("mmr-core footer status", () => {
 });
 
 describe("mmr-core /mmr-status", () => {
-  it("explains source, model fallback, tool decisions, gates, and state version", async () => {
+  it("explains source, configured fallback, tool resolution, gates, and state version", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const state = await buildState({
       source: "flag",
@@ -224,9 +224,9 @@ describe("mmr-core /mmr-status", () => {
     assert.match(output, /Selected source: flag/);
     assert.match(output, /Rejected sources:/);
     assert.match(output, /settings="fast"/);
-    assert.match(output, /Model fallback: yes/);
+    assert.match(output, /Configured fallback: yes/);
     assert.match(output, /claude-opus-4-8 not registered/);
-    assert.match(output, /Tool decisions:/);
+    assert.match(output, /Tool resolution:/);
     assert.match(output, /Read -> read/);
     assert.match(output, /oracle -> missing/);
     assert.match(output, /Feature gates:/);
@@ -248,7 +248,7 @@ describe("mmr-core /mmr-status", () => {
     assert.match(formatMmrStatus(state), /Baseline captured: yes \(openai\/gpt-5\.4\)/);
   });
 
-  it("reports librarian active and gated tool decisions", async () => {
+  it("reports librarian active and gated tool resolution", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const active = await buildState({
       modeOverrides: { availabilityNotes: [] },
@@ -351,7 +351,7 @@ describe("mmr-core /mmr-status", () => {
     assert.match(formatMmrStatus(smart), /Context cap: 168000 input tokens \(mode profile\)/);
   });
 
-  it("includes policy warnings alongside routing and tool state", async () => {
+  it("includes policy warnings alongside mode and tool state", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const state = await buildState({
       modeOverrides: { availabilityNotes: ["Runtime subagent behavior is not implemented in mmr-core."] },
@@ -372,12 +372,12 @@ describe("mmr-core /mmr-status", () => {
     const status = formatMmrStatus(state);
 
     assert.match(status, /Selected source: command/);
-    assert.match(status, /Model found: yes/);
+    assert.match(status, /Resolved model available: yes/);
     assert.match(status, /Model applied: yes/);
     assert.match(status, /Active tools: read/);
     assert.match(status, /Missing tools: oracle/);
     assert.match(status, /Deferred tools: chart/);
-    assert.match(status, /Tool decisions:/);
+    assert.match(status, /Tool resolution:/);
     assert.match(status, /Feature gates:/);
     assert.match(status, /Policy warnings: model fallback applied: Selected fallback after skipping openai-codex\/gpt-5\.5: not registered\. Using only one provider is not recommended because MMR modes are optimized around model-specific strengths and weaknesses\.; missing tools: oracle; Runtime subagent behavior is not implemented in mmr-core\./);
   });
@@ -390,12 +390,12 @@ describe("mmr-core /mmr-status", () => {
     assert.match(status, /Policy warnings: none/);
   });
 
-  it("does not warn about missing model routing while free mode delegates to native Pi controls", async () => {
+  it("does not warn about missing model resolution while free mode delegates to native Pi controls", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
 
     const status = formatMmrStatus(await buildState({ modeKey: "free" }));
 
-    assert.match(status, /Routing: native Pi controls/);
+    assert.match(status, /Mode control: native Pi controls/);
     assert.match(status, /Policy warnings: none/);
     assert.match(status, /State version: 1/);
   });
@@ -496,7 +496,7 @@ describe("mmr-core /mmr-status", () => {
     assert.doesNotMatch(normal, /Debug:/);
   });
 
-  it("renders mode-resolution debug detail when debug is requested", async () => {
+  it("renders model/tool resolution debug detail when debug is requested", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const state = await buildState({
       source: "flag",
@@ -531,7 +531,7 @@ describe("mmr-core /mmr-status", () => {
     const debug = formatMmrStatus(state, { debug: true });
 
     assert.match(debug, /Debug:/);
-    assert.match(debug, /Model candidates:/);
+    assert.match(debug, /Model preference candidates:/);
     assert.match(debug, /claude-subscription\/claude-opus-4-8[\s\S]*?provider not registered/);
     assert.match(debug, /openai\/gpt-5\.5[\s\S]*?applied/);
     assert.match(debug, /Rejected sources:[\s\S]*?settings="fast"/);

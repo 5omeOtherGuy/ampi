@@ -1,6 +1,6 @@
 # mmr-core
 
-Foundation routing extension for `pi-mmr`. Owns locked modes, model resolution, request policy, tool resolution, and the per-turn system-prompt rewrite.
+Foundation locked-mode extension for `pi-mmr`. Owns locked modes, model resolution, request policy, tool resolution, and the per-turn system-prompt rewrite.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMAP.md`](ROADMAP.md). Public API: [`../../../docs/mmr-core-api.md`](../../../docs/mmr-core-api.md) (full surface) and [`../../../docs/public-api.md`](../../../docs/public-api.md) (package-root re-exports).
 
@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Locked modes, model resolver, tool registry, prompt rewrite, subagent execution route | none | `/mmr-status` (`debug` for full dump) |
+| On | Locked modes, model resolver, tool registry, prompt rewrite, subagent execution profile | none | `/mmr-status` (`debug` for model/tool resolution detail) |
 
 ## When to use it
 
@@ -19,13 +19,13 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 Active by default. Mode resolution: `--mmr-mode` flag → restored session state → `mmrCore.defaultMode` setting → default `smart`. The selected mode is persisted as a `mmr-core.mode-state` custom session entry on every explicit change.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → smartGPT → rush → large → deep`. Subagent execution is a separate route via `--mmr-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → smartGPT → rush → large → deep`. Subagent execution uses a separate profile via `--mmr-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
 ### Locked modes
 
-`smart`, `smartGPT`, `rush`, `large`, `deep` apply a routing profile (model preferences, request policy, context profile, active-tool allowlist, MMR-owned prompt block). `free` releases all enforcement and restores the pre-MMR baseline.
+`smart`, `smartGPT`, `rush`, `large`, `deep` apply a locked-mode profile (model preferences, request policy, context profile, active-tool allowlist, MMR-owned prompt block). `free` releases all enforcement and restores the pre-MMR baseline.
 
 - **Model resolution** is provider-neutral against the live Pi registry. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route; `claude-haiku-4-5` and `claude-haiku-4-5-20251001` are aliases.
 - **Pi baseline thinking** per mode: `smart` medium, `smartGPT` medium, `rush` off, `large` medium, `deep` medium. Request-level thinking is enforced separately by the per-mode request policy hook.
@@ -78,7 +78,7 @@ Free mode disables all MMR enforcement and restores the baseline captured before
 
 ### Prompt assembly
 
-Per-turn rewrite via `before_agent_start` consumes Pi's already-rendered native prompt as the base prompt. The active base/fragment map lives in [`prompt-registry.ts`](prompt-registry.ts): `pi-native-default-v1` records Pi's identity and section anchors, `MMR_PROMPT_FRAGMENTS` describes Pi-native passthrough fragments and MMR-owned fragments, and each prompted mode has a recipe (`basePromptId` + ordered fragment IDs + mode-specific intro/posture/response style). Adding a prompted mode should be a registry entry plus routing/tool policy, not a new ad hoc prompt splice.
+Per-turn rewrite via `before_agent_start` consumes Pi's already-rendered native prompt as the base prompt. The active base/fragment map lives in [`prompt-registry.ts`](prompt-registry.ts): `pi-native-default-v1` records Pi's identity and section anchors, `MMR_PROMPT_FRAGMENTS` describes Pi-native passthrough fragments and MMR-owned fragments, and each prompted mode has a recipe (`basePromptId` + ordered fragment IDs + mode-specific intro/posture/response style). Adding a prompted mode should be a registry entry plus model/tool policy, not a new ad hoc prompt splice.
 
 The renderer surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) by rendering the recipe fragments in order. The only MMR-owned XML marker is the initial one-line role marker (`<mmr_mode name="smart">…</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:`, `Guidelines:`, and `Pi documentation` blocks remain Pi-native fragments and embed byte-identically under `## Tool use`.
 
@@ -143,16 +143,16 @@ Locked-mode fields (Free uses a strict subset):
 | `Mode:` | Display name + key. |
 | `Selected source:` | `flag` / `session` / `settings` / `default` / `native`. |
 | `Rejected sources:` | Sources considered and discarded with reason, or `none`. |
-| `Target models:` | Ordered preference list attempted (mode defaults merged with settings). |
-| `Selected model:` | `provider/model thinking:level` actually applied, or `none`. |
-| `Model found:` / `Model applied:` | Whether a candidate matched a registered model / whether Pi accepted it. Can diverge when Pi rejects. |
-| `Model fallback:` | `no` or `yes - <reason>`. |
+| `Model preference order:` | Ordered preference list attempted (mode defaults merged with settings). |
+| `Resolved model:` | `provider/model thinking:level` actually applied, or `none`. |
+| `Resolved model available:` / `Model applied:` | Whether a candidate matched a registered model / whether Pi accepted it. Can diverge when Pi rejects. |
+| `Configured fallback:` | `no` or `yes - <reason>`. |
 | `Thinking:` | Pi session level plus per-mode request policy. |
 | `Context:` / `Context cap:` | Profile after provider clamping; `none` in Free, `model default` when no MMR input profile, otherwise `<tokens> input tokens (mode profile)`. |
 | `Baseline captured:` | Whether mmr-core has a pre-MMR restore snapshot (no auth detail, never persisted). |
-| `Prompt route:` | `default` (MMR head replacement) / `passthrough` / `disabled` (Free). |
+| `Prompt surface:` | `default` (MMR head replacement) / `passthrough` / `disabled` (Free). |
 | `Active tools:` / `Missing tools:` / `Deferred tools:` / `Gated tools:` / `Disabled tools:` | Outcome of tool resolution per requested tool name. |
-| `Tool decisions:` | Each requested tool's provider, status, candidate list, and diagnostic. |
+| `Tool resolution:` | Each requested tool's provider, status, candidate list, and diagnostic. |
 | `Feature gates:` | Reserved capability gates and resolution. |
 | `Settings files read:` / `Settings warnings:` | Absolute paths that contributed; non-fatal warnings named per file. Runtime-only — not part of `PersistedMmrModeState`. |
 | `Policy warnings:` / `Diagnostics by severity:` | From `getMmrPolicyDiagnostics(state)`. Grouped block sorts by severity; legacy single-line `Policy warnings:` kept for compatibility. |
@@ -161,12 +161,12 @@ Locked-mode fields (Free uses a strict subset):
 
 Common symptoms:
 
-- **`Model applied: no`.** Combine `Selected model:` / `Model found:` / `Model fallback:` with Debug `Model candidates:`. Common reasons: provider not registered, OAuth/API key missing (`authenticated=no`), Pi rejected the id (`attempted, not-applied`).
+- **`Model applied: no`.** Combine `Resolved model:` / `Resolved model available:` / `Configured fallback:` with Debug `Model preference candidates:`. Common reasons: provider not registered, OAuth/API key missing (`authenticated=no`), Pi rejected the id (`attempted, not-applied`).
 - **Auto-switched to Free.** Native `/model` or `/think` from a locked mode is a fail-soft switch with a warning. `Selected source: native` makes it visible. Re-enter `/mode <key>`.
 - **Settings file silently ignored.** Check `Settings files read:`. A present file missing here is unreadable JSON — a `Settings warnings:` entry will name it.
 - **Settings warning naming a block.** The block was discarded but the rest of the file (and the sibling file) still loaded. Fix the shape against the example in [`../../../README.md`](../../../README.md#settings). A `toolAliases` warning means the deprecated alias setting was found and ignored.
-- **Tool stays `missing` / `deferred`.** `Tool decisions:` shows each request's provider and chosen tool. Resolution is identity-only: `missing` means no extension has claimed it and Pi has not registered the name; `deferred` means the catalog credits an owner that has not shipped/registered the concrete tool.
-- **Locked mode refused to activate.** The resolver returned zero active tools; the previous state is kept. Inspect `Tool decisions:` on the previous state.
+- **Tool stays `missing` / `deferred`.** `Tool resolution:` shows each request's provider and chosen tool. Resolution is identity-only: `missing` means no extension has claimed it and Pi has not registered the name; `deferred` means the catalog credits an owner that has not shipped/registered the concrete tool.
+- **Locked mode refused to activate.** The resolver returned zero active tools; the previous state is kept. Inspect `Tool resolution:` on the previous state.
 - **Feature gate `missing` / `disabled` / `gated`.** `missing` = no provider claimed it; `disabled` = owner loaded but off or no active capability; `gated` names the prerequisite (e.g. `librarian` waits on source-owned `mmr-github` tools).
 
 All diagnostic codes come from `getMmrPolicyDiagnostics(state)` so `/mmr-status` and mode-change warning notifications stay in sync. Full list: [`docs/mmr-core-api.md`](../../../docs/mmr-core-api.md#policy-diagnostics).

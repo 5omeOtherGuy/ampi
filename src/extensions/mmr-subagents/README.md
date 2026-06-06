@@ -55,7 +55,7 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 
 ### Finder
 
-- Profile/tool name: `finder`. Prompt route: `standalone`; builder `finder`.
+- Profile/tool name: `finder`. Prompt assembly: `standalone`; builder `finder`.
 - Model preferences: `antigravity/gemini-3.5-flash-extra-low` → `gpt-5.4-mini` → `claude-haiku-4-5`. Gemini primary is provider-pinned; fallbacks expand with standard provider hints against the parent registry.
 - Thinking: `minimal`. `allowMcp: false`, `allowToolbox: false`. Tools: `[grep, find, read]`.
 - Concrete tool registered through `pi.registerTool` and recorded as MMR-owned (Free mode strips it).
@@ -171,7 +171,7 @@ Tool-specific (`create<X>Tool(deps?)` / `register<X>Tool(pi, deps?)` plus consta
 - **Oracle.** Analogous (`ORACLE_*`, `DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT`). Params `{ task, context?, files? }`. Types: `OracleParams`, `OracleDetails`, `OracleToolDeps`, `OracleAttachmentRecord`.
 - **Librarian.** `LIBRARIAN_TOOL_NAME`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_WORKER_TOOLS`, prompt/schema constants, `buildLibrarianWorkerSystemPrompt(cwd)`, `isLibrarianGithubToolPrerequisiteRegistered(pi)`, `LIBRARIAN_GATING_REASON`, `MmrLibrarianContextWindowError`. Types: `LibrarianParams`, `LibrarianDetails`, `LibrarianStatus`, `LibrarianToolDeps`, `ResolveLibrarianInvocationInput`. Params `{ query, context? }`. The worker's read-only repository tools are owned by `mmr-github`; librarian stays gated until those tools are registered and source-owned. See [`../mmr-github/README.md`](../mmr-github/README.md).
 - **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `pi-mmr/src/extensions/mmr-subagents/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
-  - Task does **not** expose `select*WorkerModel` or `TASK_DEFAULT_MODEL_PREFERENCES`. Routing is owned by `resolveMmrSubagentInvocation` against the `task-subagent` profile. Programmatic overrides: `TaskToolDeps.modelPreferencesOverride`. Settings overrides: `mmrCore.subagentModelPreferences.task-subagent`.
+  - Task does **not** expose `select*WorkerModel` or `TASK_DEFAULT_MODEL_PREFERENCES`. Model/tool resolution is owned by `resolveMmrSubagentInvocation` against the `task-subagent` profile. Programmatic overrides: `TaskToolDeps.modelPreferencesOverride`. Settings overrides: `mmrCore.subagentModelPreferences.task-subagent`.
 
 Runner:
 

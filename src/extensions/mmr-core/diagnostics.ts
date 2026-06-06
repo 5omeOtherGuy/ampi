@@ -27,7 +27,7 @@ const FALLBACK_PROVIDER_WARNING =
  * does not re-render diagnostic messages.
  *
  * Free mode never emits diagnostics: native Pi controls are in charge and
- * MMR-specific routing/tool/policy state is intentionally absent.
+ * MMR-specific model/tool/policy state is intentionally absent.
  */
 export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnostic[] {
   if (state.mode === "free") return [];

@@ -38,7 +38,7 @@ Notes per section:
 - **Status and enablement.** Default on/off, opt-in flags, prerequisites, feature gates.
 - **Tools / commands / surfaces.** Table of model-visible tools, slash commands, shortcuts, widgets. One row per surface.
 - **Configuration.** Minimal example first, then env vars, then security note, then reload behavior.
-- **Behavior.** Deeper user-visible behavior (lifecycle, routing, persistence, retries, safety rules). Use subsections for large extensions.
+- **Behavior.** Deeper user-visible behavior (lifecycle, model/tool resolution, persistence, retries, safety rules). Use subsections for large extensions.
 - **Diagnostics and troubleshooting.** Symptom-first bullets.
 - **Public API.** Stable re-exported surfaces only. Link to `docs/public-api.md` for the canonical catalog.
 - **Developer notes.** Tests, fixtures, invariants, ownership, non-goals. Lives at the bottom so casual readers can stop earlier.
@@ -173,7 +173,7 @@ Public docs describe only `pi-mmr` behavior in repo-owned terms.
 Use:
 
 - "Prompt text is authored for `pi-mmr` and assembled through the extension prompt pipeline."
-- "Mode routing", "prompt assembly", "feature gate", "provider-neutral model preferences", "tool allowlist", "fail-closed".
+- "Locked modes", "prompt assembly", "feature gate", "provider-neutral model preferences", "tool allowlist", "fail-closed".
 
 Do not use:
 

@@ -7,7 +7,7 @@ Fast lookup for modes, tools, optional gates, and common troubleshooting.
 | I want to... | Use | Notes |
 | --- | --- | --- |
 | Default balanced coding | `/mode smart` | Default when no flag/session/settings override exists |
-| Balanced coding through GPT-family routing | `/mode smartGPT` | Same intent as `smart`, GPT-preferred route |
+| Balanced coding with GPT-family preferences | `/mode smartGPT` | Same intent as `smart`, GPT-preferred model preference order |
 | Fast, low-token turns | `/mode rush` | Smaller posture for quick edits and short loops |
 | Long-context work | `/mode large` | Use when context capacity matters more than speed |
 | Deep reasoning, planning, review | `/mode deep` | Use for hard debugging and architecture decisions |
@@ -16,8 +16,8 @@ Fast lookup for modes, tools, optional gates, and common troubleshooting.
 ```text
 /mode              # show current mode
 /mode deep         # switch mode
-/mmr-status        # concise routing state
-/mmr-status debug  # model candidates, tool decisions, policy details
+/mmr-status        # concise locked-mode status
+/mmr-status debug  # model preference candidates, tool resolution, policy details
 ```
 
 Mode source precedence: `--mmr-mode` flag → persisted session → `mmrCore.defaultMode` → `smart`.
@@ -101,6 +101,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | `librarian` is `gated` | Enable `mmr-github`; add `MMR_GITHUB_TOKEN` for private repos/search |
 | Web search is unreliable | Configure `MMR_WEB_SEARXNG_URL` or `BRAVE_API_KEY` |
 | Mode unexpectedly became `free` | Re-enter `/mode <key>` after native `/model` or `/think` changes |
-| Locked mode refuses to activate | Check model candidates and active tool decisions in `/mmr-status debug` |
+| Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/mmr-status debug` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

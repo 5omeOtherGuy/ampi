@@ -15,7 +15,7 @@
  *    no tools), distinguishing it from "flag not present".
  *  - `--mmr-parent-mode <value>` — space-separated or
  *    `--mmr-parent-mode=<value>` for mode-derived workers that need to
- *    validate parent-mode-specific routing in the child process.
+ *    validate parent-mode-specific model preferences in the child process.
  *
  * The helper deliberately does not validate values, does not consult
  * the Pi model registry, and does not split `<provider>/<id>` /

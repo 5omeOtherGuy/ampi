@@ -161,7 +161,7 @@ function thinkingLevelFor(modelId: string, preferences: readonly MmrModelPrefere
 /**
  * Build the ranked fallback candidate list from the locally-authenticated
  * registry, excluding the failing route, ranked by the profile fallback
- * chain. The highest-ranked chain match is flagged `suggested`. Each
+ * chain. The highest-ranked chain match is flagged as the preference match. Each
  * candidate carries its billing route type so the prompt can show it
  * before the user commits.
  */
@@ -206,7 +206,7 @@ export function buildMmrWorkerFallbackCandidates<TModel extends MmrWorkerFallbac
       providers: [model.provider],
       ...(thinkingLevel ? { thinkingLevel } : {}),
     };
-    const label = `${suggested ? "Suggested: " : ""}${BILLING_MARKERS[billing]}${model.provider}/${model.id} — ${BILLING_LABELS[billing]}`;
+    const label = `${suggested ? "Preference match: " : ""}${BILLING_MARKERS[billing]}${model.provider}/${model.id} — ${BILLING_LABELS[billing]}`;
     return { provider: model.provider, model: model.id, billing, preference, suggested, label };
   });
 }

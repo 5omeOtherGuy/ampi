@@ -20,7 +20,7 @@ Implemented in `mmr-core`:
 
 - locked modes: `smart`, `smartGPT`, `rush`, `large`, `deep`, and `free`;
 - mode selection via `--mmr-mode`, `/mode`, persisted session state, settings, or default;
-- provider-neutral model preference resolution and subscription-first route selection;
+- provider-neutral model preference resolution with subscription-first preference ordering;
 - thinking-level application for the selected model;
 - per-mode `before_provider_request` policy that rewrites only allowed token/reasoning fields;
 - logical tool resolution, active-tool allowlists, and `tool_call` blocking;
@@ -58,10 +58,10 @@ Not implemented yet:
 
 One Pi package containing multiple narrow extensions.
 
-`mmr-core` owns routing consistency:
+`mmr-core` owns locked-mode consistency:
 
 ```text
-mode -> model/thinking -> tools -> prompt -> persisted state
+selected mode -> resolved model/thinking -> tools -> prompt -> persisted state
 ```
 
 Other extensions own higher-risk or higher-variance capabilities and plug into core through exported helpers, tool providers, feature-gate providers, and current mode state. Core knows that a logical capability exists but does not implement session history, subagent execution, web access, MCP, provider mutation, or toolbox behavior.
@@ -70,9 +70,9 @@ Other extensions own higher-risk or higher-variance capabilities and plug into c
 
 | Extension | Owns | Status |
 |---|---|---|
-| `mmr-core` | Mode registry, mode commands/flags, model and thinking routing, request-policy hook, tool allowlist enforcement, mode prompt rewrite, mode state, session-identity primitive, shared contracts. | Implemented. |
+| `mmr-core` | Mode registry, mode commands/flags, model and thinking resolution, request-policy hook, tool allowlist enforcement, mode prompt rewrite, mode state, session-identity primitive, shared contracts. | Implemented. |
 | `mmr-session-fallback` | Session-scoped quota/rate-limit fallback picker, managed model update, persisted override, retry-message rewrite. | Implemented. |
-| `mmr-toolbox` | Local utility tools that are not routing, history, web, subagents, or provider payload work: `apply_patch`, `task_list`, deferred `chart`. | Implemented (deferred capabilities still deferred). |
+| `mmr-toolbox` | Local utility tools that are not locked-mode state, history, web, subagents, or provider payload work: `apply_patch`, `task_list`, deferred `chart`. | Implemented (deferred capabilities still deferred). |
 | `mmr-web` | `web_search`, `read_web_page`, web/network policy, pluggable SearXNG/Brave/DuckDuckGo backends, custom reader with Readability + Turndown, and the opt-in managed SearXNG sidecar. | Implemented (opt-in). |
 | `mmr-github` | Read-only GitHub repository tools, token/env handling, response bounds, source-owned tool registration for `librarian`. | Implemented (opt-in). |
 | `mmr-subagents` | `Task`, `finder`, `oracle`, `librarian`, worker runner, custom Markdown subagents. Non-GitHub repository-provider variants remain deferred. | Implemented with gated `librarian`. |
@@ -80,7 +80,7 @@ Other extensions own higher-risk or higher-variance capabilities and plug into c
 | `mmr-skills` | Callable `skill` tool that loads and applies skill bodies through Pi-compatible skill discovery. | Planned. |
 | `mmr-toolbox-mcp` | MCP resource/tool discovery and `read_mcp_resource`. Diagnostics belong to user-configured MCP/IDE tools, not a canonical pi-mmr logical tool. | Planned. |
 | `mmr-review` | No pi-mmr-owned surface. Review orchestration is user-owned and out of scope. | Deferred/out of scope. |
-| `mmr-provider-parity` | Model aliases beyond core routing, provider diagnostics, optional provider payload rewrites, payload snapshots. | Planned. |
+| `mmr-provider-parity` | Model aliases beyond core model resolution, provider diagnostics, optional provider payload rewrites, payload snapshots. | Planned. |
 | Future `mmr-prompt` | Prompt profiles or provider-specific prompt block serialization if prompt behavior becomes independently configurable. | Do not split yet. |
 
 ## Dependency direction
@@ -116,12 +116,12 @@ Rules:
 It records:
 
 - active mode and selection source;
-- requested and selected model route;
+- model preference order and resolved provider/model;
 - selected thinking level;
-- prompt route;
+- prompt surface;
 - requested, active, missing, deferred, gated, and disabled tools;
-- feature gates and their provider-attributed decisions;
-- model/tool diagnostic decisions;
+- feature gates and their provider-attributed statuses;
+- model/tool resolution diagnostics;
 - persisted state version and application time.
 
 ### Tool providers
@@ -145,7 +145,7 @@ Core's built-in reserved gate provider reports known future gates as `missing` u
 
 ### Prompt boundary
 
-Prompt assembly stays in `mmr-core` for now because the selected mode, model, thinking level, active tools, and prompt route must stay consistent.
+Prompt assembly stays in `mmr-core` for now because the selected mode, resolved model, thinking level, active tools, and prompt surface must stay consistent.
 
 A future `mmr-prompt` split is allowed only when prompt profiles or provider-specific prompt block serialization become independent product surfaces.
 
@@ -167,10 +167,10 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `chart` | `mmr-toolbox` | Deferred. |
 | `web_search` | `mmr-web` | Active when network is enabled. Uses SearXNG when configured, Brave when keyed, and DuckDuckGo HTML as a no-key fallback. `WebSearchDetails.backend` reports the concrete path. |
 | `read_web_page` | `mmr-web` | Active when network is enabled; uses the custom in-process reader and needs no provider key. |
-| `Task` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Mode-derived bounded worker routed through `mmr-core`'s `task-subagent` profile. |
-| `finder` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Read-only worker (`--tools grep,find,read`) routed through `mmr-core`'s subagent execution profile. |
-| `oracle` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Advisory worker routed through `mmr-core`'s `oracle` profile. |
-| `librarian` | `mmr-subagents` | Gated behind source-owned read-only `mmr-github` tools; routes remote repository research through the `librarian` profile. |
+| `Task` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Mode-derived bounded worker uses `mmr-core`'s `task-subagent` profile. |
+| `finder` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Read-only worker (`--tools grep,find,read`) uses `mmr-core`'s subagent execution profile. |
+| `oracle` | `mmr-subagents` | Active in `smart`/`smartGPT`/`rush`/`large`/`deep` modes. Advisory worker uses `mmr-core`'s `oracle` profile. |
+| `librarian` | `mmr-subagents` | Gated behind source-owned read-only `mmr-github` tools; remote repository research uses the `librarian` profile. |
 | `read_github` | `mmr-github` | Active when GitHub access is enabled; reads files or lists directories. |
 | `list_directory_github` | `mmr-github` | Active when GitHub access is enabled; lists directory entries. |
 | `glob_github` | `mmr-github` | Active when GitHub access is enabled; matches repository paths. |
@@ -186,7 +186,7 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 
 ## `apply_patch` ownership
 
-`apply_patch` is a patch/diff-style file editing primitive, especially useful for single-file edits. Its long-term owner is `mmr-toolbox`, not `mmr-core`, because a real implementation is a local utility tool with safety and file-mutation semantics separate from routing. The `mmr-toolbox` implementation:
+`apply_patch` is a patch/diff-style file editing primitive, especially useful for single-file edits. Its long-term owner is `mmr-toolbox`, not `mmr-core`, because a real implementation is a local utility tool with safety and file-mutation semantics separate from locked-mode resolution. The `mmr-toolbox` implementation:
 
 - accepts a structured patch payload rather than arbitrary shell text;
 - validates target paths against the current workspace (plus sibling worktrees of the same git repository) and Pi safety rules;

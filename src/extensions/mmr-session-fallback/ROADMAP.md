@@ -25,7 +25,7 @@ locked MMR mode is active.
   intentionally treated as `not-quota`.
 - ✅ Authenticated-candidate enumeration that ranks by the active mode's
   `modelPreferences`, drops the failing route, and surfaces a
-  `Suggested:` candidate when a preference match exists.
+  `Preference match:` candidate when a configured preference match exists.
 - ✅ Per-candidate thinking-level enumeration derived from each model's
   `reasoning` flag and `thinkingLevelMap`.
 - ✅ Two-step interactive picker (model, then thinking level) through

@@ -7,7 +7,7 @@ import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../mmr-core/m
  * does not expose a registry with the required `getAll`/`find` methods, so
  * callers degrade to "no route selected" rather than throwing. The same
  * registry the child Pi process resolves against is used here, keeping
- * parent route selection and child activation in agreement.
+ * parent model preference resolution and child activation in agreement.
  */
 export function resolveCtxMmrModelRegistry<TModel extends MmrRegisteredModelLike>(
   ctx: unknown,

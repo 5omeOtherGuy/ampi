@@ -138,7 +138,7 @@ describe("mmr-core lifecycle smoke", () => {
       await commands.get("mmr-status").handler(arg, ctx);
       const message = notifications.at(-1)?.message ?? "";
       assert.match(message, /\nDebug:\n/, `expected Debug section for arg ${JSON.stringify(arg)}`);
-      assert.match(message, /Model candidates:/);
+      assert.match(message, /Model preference candidates:/);
     }
   });
 });

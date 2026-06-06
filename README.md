@@ -4,18 +4,18 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Pi package](https://img.shields.io/badge/Pi-package-7c3aed)
 
-> Amp Code-style mode routing, worker tools, and fail-safe defaults for Pi.
+> Amp Code-style locked modes, worker tools, and fail-safe defaults for Pi.
 
 `pi-mmr` is for Pi users who want Amp Code-style, one-command coding profiles without leaving Pi. Pick a mode — `smart`, `smartGPT`, `rush`, `large`, or `deep` — and `pi-mmr` applies that mode's provider-neutral model preferences, thinking policy, context profile, active-tool set, worker profile, and prompt behavior in a single switch. Change modes mid-session, and use `free` to release the locks and return to stock Pi at any time.
 
 It is a modular Pi extension package, not a fork or a separate IDE: it builds on Pi's native behavior instead of replacing it. Each mode's prompt is assembled from its own fragments and surgically swapped into Pi's auto-rendered prompt head, preserving Pi's own tool list, guidelines, documentation, and tail. Tool resolution is exact-name based and runtime state is session-scoped.
 
-Beyond routing, `pi-mmr` adds Pi-native tools for codebase search, expert review, GitHub repository research, web lookup, prior-session recall, safe patching, todos, and subscription quota fallback — all behind explicit feature gates and listed in the tables below. Bounded work can be delegated to workers (`finder`, `oracle`, `librarian`, `Task`) and to your own Markdown subagents, each running in its own context and returning just the result; longer jobs can run in the background. Workers render in the Pi TUI with their tool, model, status, output previews, an expandable trail, usage counters, and a grouped background-task board, so you can watch what runs instead of guessing. Locked modes are fail-closed, everything is reversible with `free`, and the deterministic test suite never makes live provider calls.
+Beyond locked modes, `pi-mmr` adds Pi-native tools for codebase search, expert review, GitHub repository research, web lookup, prior-session recall, safe patching, todos, and subscription quota fallback — all behind explicit feature gates and listed in the tables below. Bounded work can be delegated to workers (`finder`, `oracle`, `librarian`, `Task`) and to your own Markdown subagents, each running in its own context and returning just the result; longer jobs can run in the background. Workers render in the Pi TUI with their tool, model, status, output previews, an expandable trail, usage counters, and a grouped background-task board, so you can watch what runs instead of guessing. Locked modes are fail-closed, everything is reversible with `free`, and the deterministic test suite never makes live provider calls.
 
 ## Why pi-mmr
 
-- **One command changes the whole harness.** `/mode deep` is not just a model switch; it locks routing, thinking, tools, and prompt behavior together.
-- **Provider-neutral routing.** Modes prefer subscription/OAuth routes first, then API-key routes, then other registered providers.
+- **One command changes the whole harness.** `/mode deep` is not just a model switch; it locks mode, model preference order, thinking, tools, and prompt behavior together.
+- **Provider-neutral model preferences.** Modes use explicit preference order: subscription/OAuth provider entries first, then API-key entries, then other registered providers.
 - **Right-sized worker delegation.** Use `finder`, `oracle`, `Task`, and `librarian` without hand-picking child models and tools.
 - **Fail-closed safety.** A locked mode refuses to activate without a usable model and active tools; `free` releases MMR-owned locks.
 - **Optional reach.** Web, GitHub, and local session history tools stay gated until you explicitly enable them.
@@ -35,7 +35,7 @@ pi install git:github.com/5omeOtherGuy/pi-mmr
 pi install -l git:github.com/5omeOtherGuy/pi-mmr
 ```
 
-Verify the active route inside Pi:
+Verify the active locked mode inside Pi:
 
 ```text
 /mmr-status
@@ -53,7 +53,7 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
    pi -e git:github.com/5omeOtherGuy/pi-mmr --mmr-mode smart
    ```
 
-2. Inspect routing and gates:
+2. Inspect the active locked mode and gates:
 
    ```text
    /mmr-status
@@ -71,7 +71,7 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
 4. Ask Pi to use a worker when the job is bounded:
 
    ```text
-   Use finder to locate where provider routing is resolved.
+   Use finder to locate where provider model preferences are resolved.
    Ask oracle to review the mode activation design.
    Use Task to update the focused docs file and run the narrow check.
    ```
@@ -89,7 +89,7 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
 | I want to... | Use | What changes |
 | --- | --- | --- |
 | Do balanced coding | `smart` | Default locked route and standard tool set |
-| Prefer GPT routing | `smartGPT` | Smart profile routed through GPT-family preferences |
+| Prefer GPT-family models | `smartGPT` | Smart profile with GPT-family model preferences |
 | Move quickly | `rush` | Fast model preferences, lower token posture, smaller tool set |
 | Work with long context | `large` | Long-context model preferences and standard tools |
 | Plan, debug, or review deeply | `deep` | High-reasoning route and deep-specific tools |
@@ -102,7 +102,7 @@ Useful controls:
 ```text
 /mode              # show current mode
 /mode deep         # switch mode
-/mmr-status        # routing state
+/mmr-status        # locked-mode status
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
 Ctrl+Space         # cycle smart → smartGPT → rush → large → deep
 ```
@@ -176,7 +176,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 
 ## Troubleshooting
 
-Run `/mmr-status` first; add `debug` for the full routing dump.
+Run `/mmr-status` first; add `debug` for model/tool resolution details.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
@@ -184,7 +184,7 @@ Run `/mmr-status` first; add `debug` for the full routing dump.
 | Mode flipped to Free | Native `/model` or `/think` changed a locked route | Re-enter `/mode <key>` |
 | Tool is `gated` | Owning extension is disabled or prerequisite missing | Enable the extension and restart Pi |
 | `librarian` is gated | `mmr-github` tools are not registered/source-owned | Set `MMR_GITHUB_ENABLE=true`; add `MMR_GITHUB_TOKEN` for private/search |
-| Locked mode refused activation | No usable model or zero active tools | Check model auth and tool decisions |
+| Locked mode refused activation | No usable model or zero active tools | Check model auth and tool resolution |
 
 Full troubleshooting: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 

@@ -811,7 +811,7 @@ export function resolveTaskRunner(deps: TaskToolDeps): MmrSubagentRunner {
  * Shared Task preparation path: validate params, resolve the invocation
  * (model + tool route), assemble the worker prompt, and build the runner
  * option base. Used by both the blocking `Task` tool and the async
- * `start_task` companion so they share one validation/routing surface
+ * `start_task` companion so they share one validation/model-resolution surface
  * (issue #23). On any pre-spawn failure this returns a complete
  * `AgentToolResult<TaskDetails>` with the correct {@link TaskStatus}.
  *

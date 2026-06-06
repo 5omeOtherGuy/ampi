@@ -47,7 +47,7 @@ const PI_IDENTITY_LINE = "You are an expert coding assistant operating inside pi
 
 const MODE_MARKER_OPENINGS = {
   smart: '<mmr_mode name="smart">You are pair programming with the user.',
-  smartGPT: '<mmr_mode name="smartGPT">You are pair programming with the user (smartGPT routing).',
+  smartGPT: '<mmr_mode name="smartGPT">You are pair programming with the user (smartGPT locked mode).',
   rush: '<mmr_mode name="rush">You and the user share one workspace.',
   large: '<mmr_mode name="large">You are pair programming with the user in Large mode.',
   deep: '<mmr_mode name="deep">You are an autonomous coding agent in Deep mode.',
