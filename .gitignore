@@ -13,6 +13,5 @@ coverage/
 *.mmr-capture.jsonl
 docs/private/
 
-# Local-only agent guidance (never publish). Pi auto-loads it alongside AGENTS.md.
-CLAUDE.md
-AGENTS.local.md
+# Local-only agent guidance (never published; keep your own copy here).
+AGENTS.md
