@@ -57,6 +57,7 @@ function startArgs(overrides = {}) {
     cwd: "/repo",
     resolvedModel: "prov/model",
     workerTools: ["read", "bash"],
+    deliveryOptIn: overrides.deliveryOptIn ?? (overrides.groupId !== undefined ? false : overrides.notify !== undefined),
     ...overrides,
   };
 }
@@ -219,6 +220,23 @@ describe("async-task-registry cancellation", () => {
     await flush();
     assert.equal(snap.status, "cancelled");
     assert.equal(reg.getTask("sess-A", "t").status, "cancelled");
+  });
+
+  it("does not auto-deliver a result returned by cancelTask", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const calls = [];
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t", cancelDeadAfterMs: 50 });
+    const d = makeDeferredRun();
+    reg.startTask(startArgs({ run: d.run, notify: (snap) => calls.push(snap.taskId) }));
+
+    const cancelPromise = reg.cancelTask({ sessionKey: "sess-A", taskId: "t", reason: "obsolete" });
+    d.resolve(makeWorkerResult({ aborted: true, signal: "SIGTERM", exitCode: null }));
+    const snap = await cancelPromise;
+    await flush();
+
+    assert.equal(snap.status, "cancelled");
+    assert.deepEqual(calls, [], "task_cancel consumed the terminal result, so automatic delivery is stale");
+    assert.equal(reg.getTask("sess-A", "t").completionPush, "observed");
   });
 
   it("is idempotent: cancelling a terminal task returns its terminal snapshot", async () => {
@@ -476,7 +494,7 @@ describe("async-task-registry wait + completion push", () => {
     await flush();
     assert.equal(calls.length, 1);
     assert.equal(calls[0].status, "succeeded");
-    assert.equal(reg.getTask("sess-A", "t").completionPush, "sent");
+    assert.equal(reg.getTask("sess-A", "t").completionPush, "observed");
   });
 
   it("suppresses the completion push when a blocked waitForTask observes the result", async () => {
@@ -508,7 +526,7 @@ describe("async-task-registry wait + completion push", () => {
     d.resolve(makeWorkerResult({ finalOutput: "done" }));
     await flush();
     assert.deepEqual(calls, ["t"], "a timed-out wait left no observer, so the push must still fire");
-    assert.equal(reg.getTask("sess-A", "t").completionPush, "sent");
+    assert.equal(reg.listTasks("sess-A").finished[0].completionPush, "announced");
   });
 
   it("does not enable completion push when no notifier is provided", async () => {
@@ -580,7 +598,7 @@ describe("async-task-registry worker groups", () => {
     const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
     let taskN = 0;
     const reg = createMmrAsyncTaskRegistry({ idFactory: () => `t${taskN++}`, groupIdFactory: () => "group_abc123" });
-    const group = reg.openGroup({ sessionKey: "sess-A" });
+    const group = reg.openGroup({ sessionKey: "sess-A", deliveryOptIn: false });
     assert.equal(group.groupId, "group_abc123");
 
     const first = makeDeferredRun();
@@ -633,7 +651,7 @@ describe("async-task-registry worker groups", () => {
     assert.equal(reg.getGroup("sess-A", "group_badbad").status, "failed");
   });
 
-  it("waits for all group children without observing terminal children until the whole group is terminal", async () => {
+  it("waits for all group children and observes only the terminal group", async () => {
     const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
     let clock = 0;
     let n = 0;
@@ -665,7 +683,7 @@ describe("async-task-registry worker groups", () => {
     assert.equal(settled.timedOut, false);
     assert.equal(settled.snapshot.status, "completed");
     clock = 400;
-    assert.equal(reg.listTasks("sess-A").finished.length, 0, "terminal group wait observes all children in one pass");
+    assert.equal(reg.listTasks("sess-A").finished.length, 2, "terminal group wait must not mark child outputs observed");
   });
 
   it("cancels every non-terminal child in a group", async () => {
@@ -692,7 +710,7 @@ describe("async-task-registry worker groups", () => {
     let n = 0;
     const calls = [];
     const reg = createMmrAsyncTaskRegistry({ idFactory: () => `t${n++}`, maxCompletionPushesPerSession: 1 });
-    const group = reg.openGroup({ sessionKey: "sess-A", groupId: "group_beaded", notify: (snap) => calls.push(snap.groupId) });
+    const group = reg.openGroup({ sessionKey: "sess-A", groupId: "group_beaded", deliveryOptIn: true, notify: (snap) => calls.push(snap.groupId) });
     const first = makeDeferredRun();
     const second = makeDeferredRun();
     reg.startTask(startArgs({ run: first.run, originToolCallId: "c0", groupId: group.groupId, notify: (snap) => calls.push(snap.taskId) }));
@@ -702,7 +720,7 @@ describe("async-task-registry worker groups", () => {
     second.resolve(makeWorkerResult());
     await flush();
     assert.deepEqual(calls, ["group_beaded"]);
-    assert.equal(reg.getGroup("sess-A", "group_beaded").completionPush, "sent");
+    assert.equal(reg.getGroup("sess-A", "group_beaded").completionPush, "announced");
     assert.equal(reg.getTask("sess-A", "t0").completionPush, "disabled");
     assert.equal(reg.getTask("sess-A", "t1").completionPush, "disabled");
   });
@@ -750,14 +768,14 @@ describe("async-task-registry completion-push budget", () => {
     d0.resolve(makeWorkerResult());
     await flush();
     assert.deepEqual(calls, ["t0"], "first push fires");
-    assert.equal(reg.getTask("sess-A", "t0").completionPush, "sent");
+    assert.equal(reg.listTasks("sess-A").finished.find((e) => e.taskId === "t0")?.completionPush, "announced");
 
     const d1 = makeDeferredRun();
     reg.startTask(startArgs({ run: d1.run, originToolCallId: "c1", notify: (s) => calls.push(s.taskId) }));
     d1.resolve(makeWorkerResult());
     await flush();
     assert.deepEqual(calls, ["t0"], "second push is suppressed (budget exhausted)");
-    assert.equal(reg.getTask("sess-A", "t1").completionPush, "suppressed");
+    assert.equal(reg.listTasks("sess-A").finished.find((e) => e.taskId === "t1")?.completionPush, "suppressed");
   });
 
   it("resets the per-session push budget on shutdown", async () => {
@@ -770,7 +788,7 @@ describe("async-task-registry completion-push budget", () => {
     reg.startTask(startArgs({ run: d0.run, originToolCallId: "c0", notify: (s) => calls.push(s.taskId) }));
     d0.resolve(makeWorkerResult());
     await flush();
-    assert.equal(reg.getTask("sess-A", "t0").completionPush, "sent");
+    assert.equal(reg.listTasks("sess-A").finished.find((e) => e.taskId === "t0")?.completionPush, "announced");
 
     reg.shutdownSession("sess-A", "quit");
 
@@ -779,6 +797,6 @@ describe("async-task-registry completion-push budget", () => {
     d1.resolve(makeWorkerResult());
     await flush();
     assert.deepEqual(calls, ["t0", "t1"], "budget cleared on shutdown so a fresh task can push again");
-    assert.equal(reg.getTask("sess-A", "t1").completionPush, "sent");
+    assert.equal(reg.listTasks("sess-A").finished.find((e) => e.taskId === "t1")?.completionPush, "announced");
   });
 });

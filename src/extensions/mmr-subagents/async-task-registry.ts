@@ -70,7 +70,17 @@ export type MmrAsyncTaskCompletionPushState =
   | "disabled"
   | "pending"
   | "sending"
+  /**
+   * Successful idle-wake transport (compatibility alias). New code projects a
+   * surfaced terminal item as {@link "announced"}; `"sent"` is retained in the
+   * type for replayed/normalized older shapes.
+   */
   | "sent"
+  /**
+   * The terminal item was surfaced to the model (by an idle-wake push or an
+   * in-turn context pull). Replaces a successful `"sent"` for new code.
+   */
+  | "announced"
   | "failed"
   /** Push was requested but suppressed because the per-session budget was exhausted. */
   | "suppressed"
@@ -80,6 +90,54 @@ export type MmrAsyncTaskCompletionPushState =
    * The agent already has the result in hand, so a push would only duplicate it.
    */
   | "observed";
+
+/**
+ * Internal idle-wake transport status. Distinct from the public
+ * {@link MmrAsyncTaskCompletionPushState}, which is projected from the
+ * timestamp/opt-in fields plus this transport status by
+ * {@link projectCompletionPush}.
+ */
+type MmrAsyncTaskPushOutcome = "sending" | "sent" | "failed" | "suppressed";
+
+/**
+ * Internal-only target shape shared by task and group records for delivery
+ * bookkeeping. Both the eligibility helpers and the claim path operate on this
+ * structural subset so task and group delivery stay in lockstep.
+ */
+interface DeliveryTarget {
+  deliveryOptIn: boolean;
+  finalObservedAtMs?: number;
+  terminalAnnouncedAtMs?: number;
+  pushOutcome?: MmrAsyncTaskPushOutcome;
+}
+
+/**
+ * Eligibility state for surfacing a terminal item to the model. Timestamp-only;
+ * it does not inspect idle-wake transport outcomes.
+ */
+function terminalDeliveryOf(target: {
+  finalObservedAtMs?: number;
+  terminalAnnouncedAtMs?: number;
+}): "pending" | "announced" | "observed" {
+  if (target.finalObservedAtMs !== undefined) return "observed";
+  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
+  return "pending";
+}
+
+/**
+ * Project the single public delivery field from internal delivery state.
+ * `completionPush` is no longer a mutable source of truth on records; it is
+ * computed here for snapshots and board entries.
+ */
+function projectCompletionPush(target: DeliveryTarget): MmrAsyncTaskCompletionPushState {
+  if (!target.deliveryOptIn) return "disabled";
+  if (target.finalObservedAtMs !== undefined) return "observed";
+  if (target.pushOutcome === "failed") return "failed";
+  if (target.pushOutcome === "sending") return "sending";
+  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
+  if (target.pushOutcome === "suppressed") return "suppressed";
+  return "pending";
+}
 
 /**
  * Hard ceiling on how many completion pushes a single session may fire,
@@ -132,9 +190,17 @@ export interface StartAsyncTaskArgs {
   groupId?: string;
   run: MmrAsyncTaskRun;
   /**
-   * Optional at-most-once completion notifier. When provided, the
-   * registry fires it exactly once on terminal transition. Omitted →
-   * pull-only (no push).
+   * Whether automatic model-facing delivery (context pull + idle-wake push) is
+   * permitted for this task. Required: the start handler always computes it
+   * (§6); the registry never guesses delivery eligibility. Grouped child tasks
+   * pass `false` because the group owns automatic delivery.
+   */
+  deliveryOptIn: boolean;
+  /**
+   * Optional at-most-once idle-wake notifier. When provided AND `deliveryOptIn`
+   * is true, the registry fires it exactly once when the task settles while the
+   * session is idle. The notifier is only the idle-wake transport; context pull
+   * works from `deliveryOptIn` alone even when this is absent.
    */
   notify?: MmrAsyncTaskNotifier;
   /** Optional best-effort hook for UI state such as a background-task footer. */
@@ -285,6 +351,8 @@ export interface MmrAsyncTaskBoardEntry {
   terminalOutcome?: MmrAsyncTerminalOutcome;
   capabilityProfile?: string;
   groupId?: string;
+  /** Projected public delivery state (§12.4); same projection as snapshots. */
+  completionPush: MmrAsyncTaskCompletionPushState;
   errorMessage?: string;
 }
 
@@ -320,8 +388,45 @@ export interface WaitForAsyncTaskGroupResult {
 export interface OpenAsyncTaskGroupArgs {
   sessionKey: string;
   groupId?: string;
+  /**
+   * Whether automatic model-facing delivery is permitted for this group. The
+   * opening call owns group-level delivery; sibling child starts do not change
+   * it (§6).
+   */
+  deliveryOptIn: boolean;
   notify?: MmrAsyncTaskGroupNotifier;
   onSettle?: MmrAsyncTaskGroupSettleCallback;
+}
+
+/**
+ * Raw terminal-delivery descriptor claimed by the in-turn context pull. `kind`
+ * is the discriminant: group items always carry `childTaskIds` and `counts`;
+ * task items carry neither. The tool layer formats the model-visible text; the
+ * registry only returns descriptors and never renders text.
+ */
+export interface MmrAsyncTerminalDeliveryItem {
+  kind: "task" | "group";
+  id: string;
+  status: MmrAsyncTaskStatus | MmrAsyncTaskGroupStatus;
+  description: string;
+  completedAtMs?: number;
+  terminalOutcome?: MmrAsyncTerminalOutcome;
+  errorMessage?: string;
+  childTaskIds?: string[];
+  counts?: {
+    running: number;
+    succeeded: number;
+    failed: number;
+    cancelled: number;
+    partial: number;
+    total: number;
+  };
+}
+
+export interface MmrAsyncTerminalDeliveryClaim {
+  items: MmrAsyncTerminalDeliveryItem[];
+  hasMore: boolean;
+  claimedAtMs?: number;
 }
 
 export type MmrAsyncTaskGroupNotifier = (
@@ -336,7 +441,16 @@ export interface MmrAsyncTaskRegistry {
   startTask(args: StartAsyncTaskArgs): StartAsyncTaskResult;
   openGroup(args: OpenAsyncTaskGroupArgs): MmrAsyncTaskGroupSnapshot;
   getTask(sessionKey: string, taskId: string): MmrAsyncTaskInternalSnapshot | undefined;
-  getGroup(sessionKey: string, groupId: string): MmrAsyncTaskGroupSnapshot | undefined;
+  /**
+   * Read a group snapshot. Pass `observe: true` for the model-facing
+   * task_poll path so a polled terminal group is marked observed; the default
+   * is a non-observing read for UI/widget mirrors.
+   */
+  getGroup(
+    sessionKey: string,
+    groupId: string,
+    options?: { observe?: boolean },
+  ): MmrAsyncTaskGroupSnapshot | undefined;
   /**
    * Remove a group only if it currently holds no tasks. Returns true when a
    * group was dropped. Used to roll back a just-opened group when the
@@ -367,6 +481,16 @@ export interface MmrAsyncTaskRegistry {
   }): Promise<MmrAsyncTaskGroupSnapshot | undefined>;
   prune(sessionKey?: string): void;
   shutdownSession(sessionKey?: string, reason?: string): void;
+  /** Mark whether the parent agent loop is currently active for a session. */
+  setSessionAgentActive(sessionKey: string, active: boolean): void;
+  /**
+   * Claim up to `max` pending terminal items for an in-turn context pull,
+   * marking each claimed item announced. Returns raw descriptors plus overflow
+   * metadata; the tool layer renders the model-visible text.
+   */
+  claimPendingForContext(sessionKey: string, max: number): MmrAsyncTerminalDeliveryClaim;
+  /** Flush still-pending terminal items through the idle-wake push path. */
+  flushIdleDeliveries(sessionKey: string): void;
 }
 
 export interface MmrAsyncTaskRegistryDeps {
@@ -410,6 +534,9 @@ interface MmrAsyncTaskRecord {
   cancelReason?: string;
   maxRuntimeAtMs: number;
   finalObservedAtMs?: number;
+  terminalAnnouncedAtMs?: number;
+  deliveryOptIn: boolean;
+  pushOutcome?: MmrAsyncTaskPushOutcome;
   terminalFreshness?: MmrAsyncTaskTerminalFreshness;
   expiredByWatchdog: boolean;
   controller: AbortController;
@@ -424,7 +551,6 @@ interface MmrAsyncTaskRecord {
   errorMessage?: string;
   notify?: MmrAsyncTaskNotifier;
   onSettle?: MmrAsyncTaskSettleCallback;
-  completionPush: MmrAsyncTaskCompletionPushState;
   waiters: Set<() => void>;
   promise?: Promise<void>;
 }
@@ -436,9 +562,11 @@ interface MmrAsyncTaskGroupRecord {
   updatedAtMs: number;
   completedAtMs?: number;
   finalObservedAtMs?: number;
+  terminalAnnouncedAtMs?: number;
+  deliveryOptIn: boolean;
+  pushOutcome?: MmrAsyncTaskPushOutcome;
   notify?: MmrAsyncTaskGroupNotifier;
   onSettle?: MmrAsyncTaskGroupSettleCallback;
-  completionPush: MmrAsyncTaskCompletionPushState;
   waiters: Set<() => void>;
   taskIds: Set<string>;
 }
@@ -508,6 +636,8 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
   private readonly maxCompletionPushesPerSession: number;
   /** sessionKey -> completion pushes already fired this session. */
   private readonly completionPushesUsed = new Map<string, number>();
+  /** sessionKey -> whether the parent agent loop is currently active. */
+  private readonly agentActiveBySession = new Map<string, boolean>();
 
   constructor(deps: MmrAsyncTaskRegistryDeps = {}) {
     this.nowMs = deps.nowMs ?? (() => Date.now());
@@ -541,7 +671,35 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     return map;
   }
 
-  private ensureGroup(args: OpenAsyncTaskGroupArgs): MmrAsyncTaskGroupRecord {
+  setSessionAgentActive(sessionKey: string, active: boolean): void {
+    this.agentActiveBySession.set(sessionKey, active);
+  }
+
+  private isSessionAgentActive(sessionKey: string): boolean {
+    return this.agentActiveBySession.get(sessionKey) === true;
+  }
+
+  /**
+   * Mark a terminal item announced (model-visible) at most once. Used by both
+   * the idle-wake push and the in-turn context pull so the two paths cannot
+   * drift. Budget suppression does NOT call this, so a suppressed idle wake
+   * stays eligible for a later context pull.
+   */
+  private claimTerminalAnnouncement(target: DeliveryTarget, now = this.nowMs()): boolean {
+    if (!target.deliveryOptIn) return false;
+    if (target.finalObservedAtMs !== undefined) return false;
+    if (target.terminalAnnouncedAtMs !== undefined) return false;
+    target.terminalAnnouncedAtMs = now;
+    return true;
+  }
+
+  private ensureGroup(args: {
+    sessionKey: string;
+    groupId?: string;
+    deliveryOptIn?: boolean;
+    notify?: MmrAsyncTaskGroupNotifier;
+    onSettle?: MmrAsyncTaskGroupSettleCallback;
+  }): MmrAsyncTaskGroupRecord {
     const groupId = args.groupId ?? this.groupIdFactory();
     assertValidGroupId(groupId);
     const map = this.groupMap(args.sessionKey);
@@ -553,17 +711,22 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         sessionKey: args.sessionKey,
         createdAtMs: now,
         updatedAtMs: now,
+        deliveryOptIn: args.deliveryOptIn === true,
         ...(args.notify !== undefined ? { notify: args.notify } : {}),
         ...(args.onSettle !== undefined ? { onSettle: args.onSettle } : {}),
-        completionPush: args.notify !== undefined ? "pending" : "disabled",
         waiters: new Set(),
         taskIds: new Set(),
       };
       map.set(groupId, group);
     } else {
-      if (args.notify !== undefined && group.notify === undefined) {
+      // The opener's delivery choice is authoritative; a sibling child start
+      // must not flip it. Only upgrade disabled->enabled when this call also
+      // supplies a group-level delivery owner (§6).
+      if (args.deliveryOptIn === true && args.notify !== undefined && !group.deliveryOptIn) {
+        group.deliveryOptIn = true;
         group.notify = args.notify;
-        if (group.completionPush === "disabled") group.completionPush = "pending";
+      } else if (args.notify !== undefined && group.notify === undefined && group.deliveryOptIn) {
+        group.notify = args.notify;
       }
       if (args.onSettle !== undefined) group.onSettle = args.onSettle;
     }
@@ -627,9 +790,9 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       controller,
       runGeneration: 0,
       runnerSettled: false,
-      ...(args.groupId === undefined && args.notify !== undefined ? { notify: args.notify } : {}),
+      deliveryOptIn: args.deliveryOptIn,
+      ...(args.notify !== undefined ? { notify: args.notify } : {}),
       ...(args.onSettle !== undefined ? { onSettle: args.onSettle } : {}),
-      completionPush: args.groupId === undefined && args.notify !== undefined ? "pending" : "disabled",
       waiters: new Set(),
     };
     map.set(record.taskId, record);
@@ -837,15 +1000,20 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     }
   }
 
-  /** Resolve waiters and fire the at-most-once completion push. */
+  /**
+   * Resolve waiters and decide terminal delivery. The four-way branch (§8.1):
+   * 1. an active waiter is about to consume the result → no delivery (the
+   *    waiter's continuation marks it observed; for grouped children waited via
+   *    a group wait, observe=false leaves child retention intact, §8.3);
+   * 2. already observed → no delivery;
+   * 3. the agent loop is active → leave pending for the next context pull;
+   * 4. otherwise idle → attempt an idle-wake push.
+   */
   private settle(record: MmrAsyncTaskRecord): void {
     this.clearWatchdog(record);
     // Capture observation intent BEFORE draining waiters: an active waiter at
     // settle time means a blocked task_wait is about to consume this terminal
-    // result, so a completion push would only duplicate a result in hand. The
-    // waiter's continuation sets finalObservedAtMs on a later microtask (after
-    // maybeNotify runs synchronously here), so the live waiter — not
-    // finalObservedAtMs — is the reliable concurrent-observation signal.
+    // result, so any delivery would only duplicate a result in hand.
     const observedByWaiter = record.waiters.size > 0;
     for (const waiter of [...record.waiters]) {
       record.waiters.delete(waiter);
@@ -856,7 +1024,13 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       }
     }
     this.fireSettleCallback(record);
-    this.maybeNotify(record, observedByWaiter);
+    if (
+      !observedByWaiter
+      && record.finalObservedAtMs === undefined
+      && !this.isSessionAgentActive(record.sessionKey)
+    ) {
+      this.maybeNotify(record);
+    }
     this.maybeSettleGroup(record.groupId, record.sessionKey);
   }
 
@@ -869,38 +1043,37 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     });
   }
 
-  private maybeNotify(record: MmrAsyncTaskRecord, observedByWaiter = false): void {
-    if (record.completionPush !== "pending" || !record.notify) return;
-    // Skip the push when the parent already observed (or is actively waiting on)
-    // the terminal result via task_wait/task_poll: the agent has the result in
-    // hand, so pushing would double-surface the same finished task. This does
-    // not consume the per-session push budget.
-    if (observedByWaiter || record.finalObservedAtMs !== undefined) {
-      record.completionPush = "observed";
-      return;
-    }
-    // Per-session budget: even with push opted in, a session can only
-    // self-wake a bounded number of times so a runaway plan cannot spam
-    // (or loop) turns. An over-budget completion is recorded as suppressed.
+  /**
+   * Idle-wake push for a terminal task. The caller (settle / flushIdleDeliveries)
+   * has already established the session is idle and the item is not observed.
+   */
+  private maybeNotify(record: MmrAsyncTaskRecord): void {
+    if (!record.deliveryOptIn || !record.notify) return;
+    if (terminalDeliveryOf(record) !== "pending") return;
+    // Per-session budget: even with delivery opted in, a session can only
+    // self-wake a bounded number of times so a runaway plan cannot spam (or
+    // loop) turns. A budget-suppressed item does NOT claim the announcement,
+    // so a later context pull can still surface it.
     const used = this.completionPushesUsed.get(record.sessionKey) ?? 0;
     if (used >= this.maxCompletionPushesPerSession) {
-      record.completionPush = "suppressed";
+      record.pushOutcome = "suppressed";
       return;
     }
+    // Claim before awaiting the notifier so concurrent poll/cancel/prune or a
+    // later context pull can never trigger a second surfacing.
+    if (!this.claimTerminalAnnouncement(record)) return;
     this.completionPushesUsed.set(record.sessionKey, used + 1);
-    // Mutate state synchronously BEFORE awaiting so concurrent
-    // poll/cancel/prune can never trigger a second send.
-    record.completionPush = "sending";
+    record.pushOutcome = "sending";
     const snapshot = this.snapshot(record);
     void Promise.resolve()
       .then(() => record.notify?.(snapshot))
       .then(
         () => {
-          record.completionPush = "sent";
+          record.pushOutcome = "sent";
         },
         () => {
           // Never retry; a failed push must not spam the session.
-          record.completionPush = "failed";
+          record.pushOutcome = "failed";
         },
       );
   }
@@ -933,7 +1106,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       createdAtMs: group.createdAtMs,
       updatedAtMs: group.updatedAtMs,
       ...(group.completedAtMs !== undefined ? { completedAtMs: group.completedAtMs } : {}),
-      completionPush: group.completionPush,
+      completionPush: projectCompletionPush(group),
       taskIds: children.map((child) => child.taskId),
       counts: {
         running: children.filter((child) => !isTerminalStatus(child.status)).length,
@@ -946,12 +1119,14 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     };
   }
 
+  /**
+   * Mark only the group observed (§8.3). A group poll/wait/cancel surfaces the
+   * aggregate group status and child ids, NOT child final outputs, so child
+   * observation is left to per-child getTask/waitForTask. This deliberately
+   * gives grouped child outputs a slightly longer unobserved retention.
+   */
   private markGroupObserved(group: MmrAsyncTaskGroupRecord): void {
-    const now = this.nowMs();
-    group.finalObservedAtMs = now;
-    for (const child of this.groupChildren(group)) {
-      if (isTerminalStatus(child.status) && child.finalObservedAtMs === undefined) child.finalObservedAtMs = now;
-    }
+    if (group.finalObservedAtMs === undefined) group.finalObservedAtMs = this.nowMs();
   }
 
   private fireGroupSettleCallback(group: MmrAsyncTaskGroupRecord): void {
@@ -963,28 +1138,27 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     });
   }
 
-  private maybeNotifyGroup(group: MmrAsyncTaskGroupRecord, observedByWaiter = false): void {
-    if (group.completionPush !== "pending" || !group.notify) return;
-    if (observedByWaiter || group.finalObservedAtMs !== undefined) {
-      group.completionPush = "observed";
-      return;
-    }
+  /** Idle-wake push for a terminal group; mirrors {@link maybeNotify}. */
+  private maybeNotifyGroup(group: MmrAsyncTaskGroupRecord): void {
+    if (!group.deliveryOptIn || !group.notify) return;
+    if (terminalDeliveryOf(group) !== "pending") return;
     const used = this.completionPushesUsed.get(group.sessionKey) ?? 0;
     if (used >= this.maxCompletionPushesPerSession) {
-      group.completionPush = "suppressed";
+      group.pushOutcome = "suppressed";
       return;
     }
+    if (!this.claimTerminalAnnouncement(group)) return;
     this.completionPushesUsed.set(group.sessionKey, used + 1);
-    group.completionPush = "sending";
+    group.pushOutcome = "sending";
     const snapshot = this.groupSnapshot(group);
     void Promise.resolve()
       .then(() => group.notify?.(snapshot))
       .then(
         () => {
-          group.completionPush = "sent";
+          group.pushOutcome = "sent";
         },
         () => {
-          group.completionPush = "failed";
+          group.pushOutcome = "failed";
         },
       );
   }
@@ -998,6 +1172,8 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     if (snapshot.status === "running") return;
     if (group.completedAtMs === undefined) {
       group.completedAtMs = this.nowMs();
+      // Mirror task settlement (§8.1b): an active group wait registers a waiter,
+      // so a group finishing during a group wait is observed, not delivered.
       const observedByWaiter = group.waiters.size > 0;
       for (const waiter of [...group.waiters]) {
         group.waiters.delete(waiter);
@@ -1008,7 +1184,11 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         }
       }
       this.fireGroupSettleCallback(group);
-      this.maybeNotifyGroup(group, observedByWaiter);
+      if (observedByWaiter) {
+        this.markGroupObserved(group);
+      } else if (group.finalObservedAtMs === undefined && !this.isSessionAgentActive(sessionKey)) {
+        this.maybeNotifyGroup(group);
+      }
     }
   }
 
@@ -1024,11 +1204,126 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     return this.snapshot(record);
   }
 
-  getGroup(sessionKey: string, groupId: string): MmrAsyncTaskGroupSnapshot | undefined {
+  getGroup(
+    sessionKey: string,
+    groupId: string,
+    options: { observe?: boolean } = {},
+  ): MmrAsyncTaskGroupSnapshot | undefined {
     this.prune(sessionKey);
     if (!isValidAsyncTaskGroupId(groupId)) return undefined;
     const group = this.groups.get(sessionKey)?.get(groupId);
-    return group ? this.groupSnapshot(group) : undefined;
+    if (!group) return undefined;
+    // A model-facing group poll counts as observing the group only (§8.3);
+    // UI/widget mirrors read non-observingly so they never suppress delivery.
+    if (options.observe === true && this.groupStatus(this.groupChildren(group)) !== "running") {
+      this.markGroupObserved(group);
+    }
+    return this.groupSnapshot(group);
+  }
+
+  claimPendingForContext(sessionKey: string, max: number): MmrAsyncTerminalDeliveryClaim {
+    this.prune(sessionKey);
+    const now = this.nowMs();
+    const candidates = this.pendingDeliveryTargets(sessionKey);
+    if (max <= 0) {
+      return { items: [], hasMore: candidates.length > 0 };
+    }
+    const hasMore = candidates.length > max;
+    const claimed = candidates.slice(0, max);
+    const items: MmrAsyncTerminalDeliveryItem[] = [];
+    for (const candidate of claimed) {
+      if (candidate.kind === "task") {
+        if (!this.claimTerminalAnnouncement(candidate.record, now)) continue;
+        items.push(this.terminalDeliveryItemForTask(candidate.record));
+      } else {
+        if (!this.claimTerminalAnnouncement(candidate.group, now)) continue;
+        items.push(this.terminalDeliveryItemForGroup(candidate.group));
+      }
+    }
+    return { items, hasMore, ...(items.length > 0 ? { claimedAtMs: now } : {}) };
+  }
+
+  flushIdleDeliveries(sessionKey: string): void {
+    this.prune(sessionKey);
+    for (const candidate of this.pendingDeliveryTargets(sessionKey)) {
+      if (candidate.kind === "group") this.maybeNotifyGroup(candidate.group);
+      else this.maybeNotify(candidate.record);
+    }
+  }
+
+  /**
+   * Collect eligible pending terminal groups and ungrouped terminal tasks in a
+   * single deterministic order (completedAt, then kind, then id). Grouped
+   * children are excluded because the group owns automatic delivery.
+   */
+  private pendingDeliveryTargets(
+    sessionKey: string,
+  ): (
+    | { kind: "task"; record: MmrAsyncTaskRecord; sortTime: number; id: string }
+    | { kind: "group"; group: MmrAsyncTaskGroupRecord; sortTime: number; id: string }
+  )[] {
+    const candidates: (
+      | { kind: "task"; record: MmrAsyncTaskRecord; sortTime: number; id: string }
+      | { kind: "group"; group: MmrAsyncTaskGroupRecord; sortTime: number; id: string }
+    )[] = [];
+    const groupMap = this.groups.get(sessionKey);
+    if (groupMap) {
+      for (const group of groupMap.values()) {
+        if (!group.deliveryOptIn) continue;
+        if (this.groupStatus(this.groupChildren(group)) === "running") continue;
+        if (terminalDeliveryOf(group) !== "pending") continue;
+        candidates.push({
+          kind: "group",
+          group,
+          sortTime: group.completedAtMs ?? group.updatedAtMs,
+          id: group.groupId,
+        });
+      }
+    }
+    const taskMap = this.sessions.get(sessionKey);
+    if (taskMap) {
+      for (const record of taskMap.values()) {
+        if (record.groupId !== undefined) continue;
+        if (!record.deliveryOptIn) continue;
+        if (!isTerminalStatus(record.status)) continue;
+        if (terminalDeliveryOf(record) !== "pending") continue;
+        candidates.push({
+          kind: "task",
+          record,
+          sortTime: record.completedAtMs ?? record.updatedAtMs,
+          id: record.taskId,
+        });
+      }
+    }
+    candidates.sort(
+      (a, b) => a.sortTime - b.sortTime || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id),
+    );
+    return candidates;
+  }
+
+  private terminalDeliveryItemForTask(record: MmrAsyncTaskRecord): MmrAsyncTerminalDeliveryItem {
+    return {
+      kind: "task",
+      id: record.taskId,
+      status: record.status,
+      description: record.description,
+      ...(record.completedAtMs !== undefined ? { completedAtMs: record.completedAtMs } : {}),
+      ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
+      ...(record.errorMessage !== undefined ? { errorMessage: record.errorMessage } : {}),
+    };
+  }
+
+  private terminalDeliveryItemForGroup(group: MmrAsyncTaskGroupRecord): MmrAsyncTerminalDeliveryItem {
+    const snapshot = this.groupSnapshot(group);
+    return {
+      kind: "group",
+      id: group.groupId,
+      status: snapshot.status,
+      description: `group ${group.groupId}`,
+      ...(group.completedAtMs !== undefined ? { completedAtMs: group.completedAtMs } : {}),
+      childTaskIds: snapshot.taskIds,
+      counts: snapshot.counts,
+    };
   }
 
   dropEmptyGroup(sessionKey: string, groupId: string): boolean {
@@ -1135,18 +1430,29 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       return { found: true, timedOut: false, snapshot: this.groupSnapshot(group) };
     }
     if (children.length === 0) return { found: true, timedOut: false, snapshot: snapshotBefore };
-    const waits = children
-      .filter((child) => !isTerminalStatus(child.status))
-      .map((child) => this.waitForRecord(child, timeoutMs, false));
+    // Register a group waiter for the duration so a group finishing during this
+    // wait is suppressed via maybeSettleGroup's observedByWaiter check (§8.1b),
+    // independent of agent-active tracking (covers no-pi.on hosts). The waiter
+    // is a sentinel; the actual settle signal is the child-record waits below.
+    const groupWaiter = () => {};
+    group.waiters.add(groupWaiter);
     let groupTimer: ReturnType<typeof setTimeout> | undefined;
-    const allSettled = await Promise.race([
-      Promise.allSettled(waits).then(() => true),
-      new Promise<boolean>((resolve) => {
-        groupTimer = setTimeout(() => resolve(false), timeoutMs);
-        if (typeof groupTimer.unref === "function") groupTimer.unref();
-      }),
-    ]);
-    if (groupTimer) clearTimeout(groupTimer);
+    let allSettled: boolean;
+    try {
+      const waits = children
+        .filter((child) => !isTerminalStatus(child.status))
+        .map((child) => this.waitForRecord(child, timeoutMs, false));
+      allSettled = await Promise.race([
+        Promise.allSettled(waits).then(() => true),
+        new Promise<boolean>((resolve) => {
+          groupTimer = setTimeout(() => resolve(false), timeoutMs);
+          if (typeof groupTimer.unref === "function") groupTimer.unref();
+        }),
+      ]);
+    } finally {
+      if (groupTimer) clearTimeout(groupTimer);
+      group.waiters.delete(groupWaiter);
+    }
     const snapshot = this.groupSnapshot(group);
     const terminal = snapshot.status !== "running";
     if (terminal) this.markGroupObserved(group);
@@ -1162,7 +1468,10 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     const record = this.sessions.get(args.sessionKey)?.get(args.taskId);
     if (!record) return undefined;
     if (isTerminalStatus(record.status)) {
-      // Idempotent: cancelling an already-terminal task is a no-op read.
+      // Idempotent: cancelling an already-terminal task is a no-op read, but the
+      // canceller now holds the terminal snapshot, so mark it observed (§8.2) to
+      // suppress any idle-wake push or later context notice for it.
+      if (record.finalObservedAtMs === undefined) record.finalObservedAtMs = this.nowMs();
       return this.snapshot(record);
     }
     const now = this.nowMs();
@@ -1173,26 +1482,20 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       record.updatedAtMs = now;
       if (!record.controller.signal.aborted) record.controller.abort();
     }
-    // Best-effort bounded wait for the worker to actually settle. Clear the
-    // grace timer when the worker settles first so it does not linger.
-    let graceTimer: ReturnType<typeof setTimeout> | undefined;
-    let timedOut = false;
-    try {
-      await Promise.race([
-        record.promise ?? Promise.resolve(),
-        new Promise<void>((resolve) => {
-          graceTimer = setTimeout(() => {
-            timedOut = true;
-            resolve();
-          }, this.cancelDeadAfterMs);
-          if (typeof graceTimer.unref === "function") graceTimer.unref();
-        }),
-      ]);
-    } finally {
-      if (graceTimer) clearTimeout(graceTimer);
-    }
-    if (timedOut && !isTerminalStatus(record.status)) {
+    // Best-effort bounded wait for the worker to actually settle. Register as
+    // an observing waiter so settle() sees the terminal result is being consumed
+    // by this task_cancel call and suppresses any automatic delivery (§8.2).
+    const settled = await this.waitForRecord(record, this.cancelDeadAfterMs, true);
+    if (!settled && !isTerminalStatus(record.status)) {
+      // This call will return the synthesized terminal snapshot, so mark it
+      // observed BEFORE finalizing; finalizeDead() runs settle() synchronously.
+      if (record.finalObservedAtMs === undefined) record.finalObservedAtMs = this.nowMs();
       this.finalizeDead(record, this.nowMs());
+    }
+    // The canceller holds the terminal snapshot it returns, so mark it observed
+    // (§8.2): an idle-wake push or later context notice would double-surface it.
+    if (isTerminalStatus(record.status) && record.finalObservedAtMs === undefined) {
+      record.finalObservedAtMs = this.nowMs();
     }
     return this.snapshot(record);
   }
@@ -1213,6 +1516,9 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     })));
     this.maybeSettleGroup(args.groupId, args.sessionKey);
+    // The canceller holds the terminal group snapshot; mark the group observed
+    // (§8.3) so no idle-wake/context group notice re-surfaces it.
+    if (this.groupStatus(this.groupChildren(group)) !== "running") this.markGroupObserved(group);
     return this.groupSnapshot(group);
   }
 
@@ -1273,8 +1579,9 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         // push after the session has ended.
         record.runGeneration += 1;
         this.clearWatchdog(record);
-        record.completionPush = "disabled";
+        record.deliveryOptIn = false;
         record.notify = undefined;
+        record.pushOutcome = undefined;
         if (!record.controller.signal.aborted) record.controller.abort();
         if (!isTerminalStatus(record.status)) {
           record.status = "cancelled";
@@ -1297,8 +1604,9 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       const groupMap = this.groups.get(key);
       if (groupMap) {
         for (const group of groupMap.values()) {
-          group.completionPush = "disabled";
+          group.deliveryOptIn = false;
           group.notify = undefined;
+          group.pushOutcome = undefined;
           for (const waiter of [...group.waiters]) {
             group.waiters.delete(waiter);
             try {
@@ -1311,6 +1619,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         this.groups.delete(key);
       }
       this.completionPushesUsed.delete(key);
+      this.agentActiveBySession.delete(key);
       this.sessions.delete(key);
     }
   }
@@ -1353,7 +1662,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       ...(record.cancelReason !== undefined ? { cancelReason: record.cancelReason } : {}),
       runtimeMs: (record.completedAtMs ?? now) - record.startedAtMs,
       ...(lastProgressAt !== undefined ? { lastProgressAgeMs: now - lastProgressAt } : {}),
-      completionPush: record.completionPush,
+      completionPush: projectCompletionPush(record),
       ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
       ...(record.capabilityProfile !== undefined ? { capabilityProfile: record.capabilityProfile } : {}),
       ...(record.groupId !== undefined ? { groupId: record.groupId } : {}),
@@ -1396,6 +1705,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
       ...(record.capabilityProfile !== undefined ? { capabilityProfile: record.capabilityProfile } : {}),
       ...(record.groupId !== undefined ? { groupId: record.groupId } : {}),
+      completionPush: projectCompletionPush(record),
       ...(record.errorMessage !== undefined ? { errorMessage: record.errorMessage } : {}),
     };
   }
@@ -1431,6 +1741,9 @@ const REQUIRED_REGISTRY_METHODS = [
   "cancelGroup",
   "prune",
   "shutdownSession",
+  "setSessionAgentActive",
+  "claimPendingForContext",
+  "flushIdleDeliveries",
 ] as const satisfies readonly (keyof MmrAsyncTaskRegistry)[];
 
 function isRegistryCompatible(value: unknown): value is MmrAsyncTaskRegistry {
