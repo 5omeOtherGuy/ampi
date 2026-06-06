@@ -248,16 +248,23 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   "task-subagent": deepFreeze({
     name: "task-subagent",
     displayName: "Task Subagent",
-    // Pinned Task route order: claude-opus-4-8 at high is the canonical
-    // Task route shared by all
-    // Task-enabled modes (including deep, which aliases to smart through the
-    // resolver). Each preference entry carries its own thinking level so the
-    // resolver returns a deterministic thinkingLevel without consulting any
+    // Pinned Task route order: claude-opus-4-8 is the canonical Task route
+    // shared by all Task-enabled modes (including deep, which aliases to smart
+    // through the resolver). The goal is Anthropic *medium* reasoning effort on
+    // the wire. The canonical thinking level differs per model because the
+    // claude-subscription provider translates levels differently:
+    //  - claude-opus-4-8 is an adaptive-thinking model whose level map shifts
+    //    each level up one notch (low -> effort "medium"), so canonical "low"
+    //    yields Anthropic effort "medium".
+    //  - claude-opus-4-6 uses the manual budget path, where canonical "medium"
+    //    selects the medium-tier thinking budget.
+    // Each preference entry carries its own thinking level so the resolver
+    // returns a deterministic thinkingLevel without consulting any
     // profile-level default.
     modelPreferences: [
-      { model: "claude-opus-4-8", thinkingLevel: "high" },
+      { model: "claude-opus-4-8", thinkingLevel: "low" },
       { model: "gpt-5.5", thinkingLevel: "medium" },
-      { model: "claude-opus-4-6", thinkingLevel: "high" },
+      { model: "claude-opus-4-6", thinkingLevel: "medium" },
       { model: "claude-haiku-4-5-20251001", thinkingLevel: "low" },
       { model: "claude-haiku-4-5", thinkingLevel: "low" },
     ],
