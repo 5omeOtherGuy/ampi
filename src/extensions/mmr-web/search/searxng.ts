@@ -3,13 +3,24 @@ import {
   readErrorBody,
 } from "../http-utils.js";
 import { readSearchResponseBody } from "./body.js";
+import {
+  applyDomainFilter,
+  SEARXNG_TIME_RANGE_BY_RECENCY,
+} from "./filters.js";
 import { validateExternalHttpUrl, validateSearXNGUrl } from "../url-policy.js";
 import type {
+  AppliedFilter,
   SearchArgs,
   SearchBackend,
   SearchResponse,
   SearchResultEntry,
 } from "./types.js";
+
+/**
+ * Candidate ceiling parsed from a SearXNG page when a domain post-filter is
+ * active, so we narrow a wider pool down to `maxResults`.
+ */
+const DOMAIN_FILTER_CANDIDATE_COUNT = 50;
 
 /**
  * SearXNG search backend for `mmr-web`.
@@ -138,6 +149,8 @@ export async function searxngSearch(
   url.searchParams.set("safesearch", "1");
   url.searchParams.set("language", "en");
   if (args.country) url.searchParams.set("country", args.country.toLowerCase());
+  // Recency maps natively to SearXNG's `time_range` parameter.
+  if (args.recency) url.searchParams.set("time_range", SEARXNG_TIME_RANGE_BY_RECENCY[args.recency]);
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -165,11 +178,25 @@ export async function searxngSearch(
       `SearXNG search failed: instance at ${options.url} returned HTML instead of JSON. Enable JSON output in your SearXNG settings.yml under \`search.formats\` (add \`- json\`) and reload the instance.`,
     );
   }
-  const results = parseStructuredResults(text, args.maxResults);
+  const hasDomainFilter =
+    (args.includeDomains?.length ?? 0) > 0 || (args.excludeDomains?.length ?? 0) > 0;
+  const candidates = parseStructuredResults(
+    text,
+    hasDomainFilter ? DOMAIN_FILTER_CANDIDATE_COUNT : args.maxResults,
+  );
+  const domainFiltered = applyDomainFilter(candidates, {
+    includeDomains: args.includeDomains,
+    excludeDomains: args.excludeDomains,
+  });
+  const results = domainFiltered.results.slice(0, args.maxResults);
+  const appliedFilters: AppliedFilter[] = [...domainFiltered.applied];
+  if (args.recency) {
+    appliedFilters.push({ filter: "recency", support: "native", honored: "full" });
+  }
 
   if (options.noteUse) options.noteUse();
 
-  return { results, ...body };
+  return { results, appliedFilters, ...body };
 }
 
 /**
