@@ -349,6 +349,21 @@ function boardSections(
   return sections;
 }
 
+function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined {
+  const delays = board.finished.flatMap((entry) => {
+    if (
+      typeof entry.completedAtMs !== "number" ||
+      !Number.isFinite(entry.completedAtMs)
+    ) {
+      return [];
+    }
+    const remainingMs = entry.completedAtMs + WIDGET_FINISHED_RETENTION_MS - board.generatedAtMs;
+    return remainingMs >= 0 ? [remainingMs] : [];
+  });
+  if (delays.length === 0) return undefined;
+  return Math.max(0, Math.min(...delays));
+}
+
 function makeSafeFg(theme: WidgetThemeLike | undefined) {
   return (name: string, value: string): string => {
     if (!theme) return value;
@@ -432,14 +447,25 @@ function renderWidgetLines(
   const out: string[] = [];
   let omittedRows = 0;
   let used = 0;
-  for (const block of blocks) {
-    if (used + block.lines.length <= WIDGET_MAX_ROWS) {
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    const remainingLineTotal = blocks.slice(i).reduce((sum, b) => sum + b.lines.length, 0);
+    if (used + remainingLineTotal <= WIDGET_MAX_ROWS) {
+      for (let j = i; j < blocks.length; j += 1) out.push(...blocks[j].lines);
+      break;
+    }
+
+    const reserveOverflowLineLimit = WIDGET_MAX_ROWS - 1;
+    if (used + block.lines.length <= reserveOverflowLineLimit) {
       out.push(...block.lines);
       used += block.lines.length;
-    } else if (out.length === 0) {
+      continue;
+    }
+
+    if (out.length === 0) {
       // First section alone exceeds the cap: show as many of its lines as fit
-      // (header + leading rows) rather than rendering an empty widget.
-      const slice = block.lines.slice(0, WIDGET_MAX_ROWS);
+      // (header + leading rows) while still reserving the final overflow line.
+      const slice = block.lines.slice(0, reserveOverflowLineLimit);
       out.push(...slice);
       used += slice.length;
       const shownRows = Math.max(0, slice.length - (block.lines.length - block.rowCount));
@@ -447,6 +473,8 @@ function renderWidgetLines(
     } else {
       omittedRows += block.rowCount;
     }
+    for (let j = i + 1; j < blocks.length; j += 1) omittedRows += blocks[j].rowCount;
+    break;
   }
   if (omittedRows > 0) out.push(safeFg("dim", `… ${omittedRows} more`));
   return out;
@@ -479,14 +507,16 @@ export function refreshBackgroundTaskWidget(
       return;
     }
     const hasActive = board.active.length > 0 || board.stalled.length > 0;
+    const clearDelayMs = hasActive ? undefined : finishedOnlyClearDelayMs(board);
     ctx.ui.setWidget(BACKGROUND_TASK_WIDGET_ID, (tui, theme) => {
-      // Animate running rows with Pi's loader cadence. The interval only runs
-      // while at least one row is active/stalled, so a board of only finished
-      // rows never schedules needless re-renders. Pi disposes the previous
-      // component on replacement/clear, which clears this timer.
+      // Animate running rows with Pi's loader cadence. Finished-only rows use a
+      // one-shot clear timer so the drop-off window expires even when no active
+      // worker remains to drive future widget refreshes.
       let frame = 0;
-      let timer: ReturnType<typeof setInterval> | undefined;
+      let timer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | undefined;
+      let timerKind: "interval" | "timeout" | undefined;
       if (hasActive && typeof tui?.requestRender === "function") {
+        timerKind = "interval";
         timer = setInterval(() => {
           frame = (frame + 1) % PI_LOADER_FRAMES.length;
           try {
@@ -495,9 +525,18 @@ export function refreshBackgroundTaskWidget(
             if (timer !== undefined) {
               clearInterval(timer);
               timer = undefined;
+              timerKind = undefined;
             }
           }
         }, PI_LOADER_INTERVAL_MS);
+        (timer as { unref?: () => void }).unref?.();
+      } else if (clearDelayMs !== undefined) {
+        timerKind = "timeout";
+        timer = setTimeout(() => {
+          timer = undefined;
+          timerKind = undefined;
+          ctx.ui?.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "belowEditor" });
+        }, clearDelayMs);
         (timer as { unref?: () => void }).unref?.();
       }
       return {
@@ -509,8 +548,10 @@ export function refreshBackgroundTaskWidget(
         invalidate: () => {},
         dispose: () => {
           if (timer !== undefined) {
-            clearInterval(timer);
+            if (timerKind === "interval") clearInterval(timer);
+            else clearTimeout(timer);
             timer = undefined;
+            timerKind = undefined;
           }
         },
       };

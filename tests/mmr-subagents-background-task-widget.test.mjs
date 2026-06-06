@@ -210,6 +210,46 @@ describe("background-task widget", () => {
     assert.equal(calls.at(-1).value, undefined, "a finished row past the retention window clears the widget");
   });
 
+  it("auto-clears a finished-only widget after the retention window", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { refreshBackgroundTaskWidget, BACKGROUND_TASK_WIDGET_ID } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    refreshBackgroundTaskWidget(ctx, makeBoard({
+      generatedAtMs: 10_000,
+      counts: { active: 0, stalled: 0, finished: 1 },
+      finished: [makeEntry({ status: "succeeded", freshness: "terminal", description: "Done", completedAtMs: 9_000 })],
+    }));
+
+    const widget = calls.at(-1).value(undefined, theme);
+    assert.equal(typeof widget.render, "function");
+    t.mock.timers.tick(6_999);
+    assert.equal(calls.length, 1, "retained row stays visible until its drop-off deadline");
+    t.mock.timers.tick(1);
+    assert.deepEqual(calls.at(-1), {
+      id: BACKGROUND_TASK_WIDGET_ID,
+      value: undefined,
+      options: { placement: "belowEditor" },
+    });
+  });
+
+  it("keeps the grouped widget within the visible row cap including the overflow line", async () => {
+    const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    refreshBackgroundTaskWidget(ctx, makeBoard({
+      counts: { active: 9, stalled: 0, finished: 0 },
+      active: Array.from({ length: 9 }, (_, i) => makeEntry({
+        taskId: `task_${i}`,
+        groupId: `group_abc00${i}`,
+        description: `grouped task ${i}`,
+        createdAtMs: i,
+      })),
+    }));
+
+    const lines = calls.at(-1).value(undefined, theme).render(120);
+    assert.ok(lines.length <= 8, `expected at most 8 visible rows, got ${lines.length}`);
+    assert.match(lines.at(-1), /… \d+ more/);
+  });
+
   it("renders a flat headerless list when no task belongs to a group", async () => {
     const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
     const { ctx, calls } = makeCtx();
