@@ -252,18 +252,34 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     // Pinned Task route order: claude-opus-4-8 is the canonical Task route
     // shared by all Task-enabled modes (including deep, which aliases to smart
     // through the resolver). The goal is Anthropic *medium* reasoning effort on
-    // the wire. The canonical thinking level differs per model because the
-    // claude-subscription provider translates levels differently:
-    //  - claude-opus-4-8 is an adaptive-thinking model whose level map shifts
-    //    each level up one notch (low -> effort "medium"), so canonical "low"
-    //    yields Anthropic effort "medium".
-    //  - claude-opus-4-6 uses the manual budget path, where canonical "medium"
-    //    selects the medium-tier thinking budget.
+    // the wire whenever the Task worker runs on Opus 4.8.
+    //
+    // The canonical thinking level required to land on Anthropic effort
+    // "medium" is PROVIDER-SPECIFIC, because each provider's Opus 4.8 model
+    // definition carries a different `thinkingLevelMap` while both use the same
+    // adaptive-effort algorithm (mapped = thinkingLevelMap[level]; if unmapped,
+    // default: minimal/low -> "low", medium -> "medium", high -> "high"):
+    //  - claude-subscription/claude-opus-4-8 maps levels up one notch
+    //    (low -> "medium"), so canonical "low" yields Anthropic effort
+    //    "medium".
+    //  - anthropic/claude-opus-4-8 maps only xhigh; every other level hits the
+    //    identity default, so canonical "medium" yields Anthropic effort
+    //    "medium" (canonical "low" would wrongly yield "low").
+    // Opus 4.8 is therefore pinned per provider. A bare (provider-neutral)
+    // Opus 4.8 entry is deliberately NOT listed: it would resolve against any
+    // provider whose level->effort contract we have not verified and silently
+    // produce the wrong effort, so the route falls through to gpt-5.5 instead.
+    //
+    // claude-opus-4-6 uses the manual budget path, where canonical "medium"
+    // selects the medium-tier thinking budget.
+    //
     // Each preference entry carries its own thinking level so the resolver
     // returns a deterministic thinkingLevel without consulting any
-    // profile-level default.
+    // profile-level default. Keep these levels in sync with the per-provider
+    // contract fixtures in tests/mmr-core-subagent-resolve.test.mjs.
     modelPreferences: [
-      { model: "claude-opus-4-8", thinkingLevel: "low" },
+      { model: "claude-opus-4-8", providers: ["claude-subscription"], thinkingLevel: "low" },
+      { model: "claude-opus-4-8", providers: ["anthropic"], thinkingLevel: "medium" },
       { model: "gpt-5.5", thinkingLevel: "medium" },
       { model: "claude-opus-4-6", thinkingLevel: "medium" },
       { model: "claude-haiku-4-5-20251001", thinkingLevel: "low" },

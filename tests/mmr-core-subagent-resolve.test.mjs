@@ -297,6 +297,117 @@ describe("resolveMmrSubagentInvocation", () => {
     }
   });
 
+  // Cross-provider Opus 4.8 -> Anthropic "medium" effort contract.
+  //
+  // This is a CONTRACT test, not a true wire-level test: pi-mmr cannot import
+  // the providers' real level->effort mappers (pi-ai's mapThinkingLevelToEffort
+  // is unexported and nested under pi-coding-agent's node_modules; the
+  // claude-subscription provider package is not a pi-mmr dependency). Instead we
+  // encode each provider's published Opus 4.8 `thinkingLevelMap` plus the shared
+  // adaptive-effort default algorithm both providers use, and assert that the
+  // canonical thinkingLevel pi-mmr actually RESOLVES for that provider maps to
+  // Anthropic effort "medium". If pi-mmr's per-provider levels drift, or a
+  // provider's documented map drifts, this test fails loudly and the fixture
+  // must be re-verified against the provider before updating.
+  //
+  // Keep these maps in sync with the task-subagent profile comment in
+  // src/extensions/mmr-core/subagent-profiles.ts.
+  const OPUS_48_PROVIDER_EFFORT_CONTRACTS = [
+    {
+      provider: "claude-subscription",
+      model: "claude-opus-4-8",
+      expectedThinkingLevel: "low",
+      // minimalcc-pi adaptive opus map: shifts each level up one notch.
+      thinkingLevelMap: { minimal: "low", low: "medium", medium: "high", high: "xhigh", xhigh: "max" },
+    },
+    {
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      expectedThinkingLevel: "medium",
+      // pi-ai native opus map: only xhigh is mapped; everything else falls to
+      // the identity default below.
+      thinkingLevelMap: { xhigh: "xhigh" },
+    },
+  ];
+
+  // Shared adaptive-effort algorithm used by both the claude-subscription and
+  // native anthropic providers: prefer the model's thinkingLevelMap entry,
+  // otherwise fall back to the identity-ish default.
+  function contractEffortForThinkingLevel(level, thinkingLevelMap) {
+    const mapped = thinkingLevelMap[level];
+    if (typeof mapped === "string") return mapped;
+    switch (level) {
+      case "minimal":
+      case "low":
+        return "low";
+      case "medium":
+        return "medium";
+      case "high":
+        return "high";
+      default:
+        return "high";
+    }
+  }
+
+  it("pins Task Opus 4.8 per provider so each contract-maps to Anthropic medium effort", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("task-subagent");
+
+    // The profile must list exactly the per-provider Opus 4.8 routes, with no
+    // bare (provider-neutral) Opus 4.8 entry that could resolve through an
+    // uncontracted provider at the wrong effort.
+    const opusPreferences = profile.modelPreferences.filter((p) => p.model === "claude-opus-4-8");
+    assert.deepEqual(opusPreferences, [
+      { model: "claude-opus-4-8", providers: ["claude-subscription"], thinkingLevel: "low" },
+      { model: "claude-opus-4-8", providers: ["anthropic"], thinkingLevel: "medium" },
+    ]);
+
+    for (const contract of OPUS_48_PROVIDER_EFFORT_CONTRACTS) {
+      const result = resolveMmrSubagentInvocation({
+        profile,
+        registry: makeRegistry([{ provider: contract.provider, id: contract.model }]),
+        parentMode: "smart",
+        registeredTools: TASK_REGISTERED_TOOLS,
+      });
+
+      assert.equal(result.ok, true, `provider "${contract.provider}" must resolve`);
+      assert.equal(result.selected.provider, contract.provider);
+      assert.equal(result.selected.model, contract.model);
+      assert.equal(result.selected.thinkingLevel, contract.expectedThinkingLevel,
+        `provider "${contract.provider}" canonical thinking level`);
+      assert.equal(
+        contractEffortForThinkingLevel(result.selected.thinkingLevel, contract.thinkingLevelMap),
+        "medium",
+        `provider "${contract.provider}" must map to Anthropic effort "medium"`,
+      );
+    }
+  });
+
+  it("does not select Task Opus 4.8 through an uncontracted provider", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("task-subagent");
+
+    // A provider whose Opus 4.8 level->effort contract we have not verified must
+    // not catch the Task route; it falls through to gpt-5.5 instead. This guards
+    // against reintroducing a bare provider-neutral Opus 4.8 preference.
+    const result = resolveMmrSubagentInvocation({
+      profile,
+      registry: makeRegistry([
+        { provider: "openrouter", id: "claude-opus-4-8" },
+        { provider: "openai-codex", id: "gpt-5.5" },
+      ]),
+      parentMode: "smart",
+      registeredTools: TASK_REGISTERED_TOOLS,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.selected.provider, "openai-codex");
+    assert.equal(result.selected.model, "gpt-5.5");
+    assert.equal(result.selected.thinkingLevel, "medium");
+  });
+
   it("uses the prompt-base alias when looking up mode-specific Task worker routes", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
