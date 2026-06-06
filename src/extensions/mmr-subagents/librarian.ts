@@ -34,6 +34,7 @@ import {
 } from "./fallback.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { LIBRARIAN_BACKGROUND_GUIDANCE } from "./tool-guidance.js";
+import { buildWorkerToolManifest, resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
@@ -189,11 +190,6 @@ export class MmrLibrarianContextWindowError extends Error {
   }
 }
 
-interface ToolHostLike {
-  getActiveTools?: () => readonly string[];
-  getAllTools?: () => readonly unknown[];
-}
-
 export interface ResolveLibrarianInvocationInput {
   ctx: ExtensionContext | undefined;
   registeredTools?: readonly string[];
@@ -235,12 +231,6 @@ export interface LibrarianToolDeps {
 
 export function buildLibrarianWorkerSystemPrompt(cwd: string): string {
   return buildLibrarianWorkerSystemPromptFromPrompts(cwd);
-}
-
-function resolveCwd(ctx: ExtensionContext | undefined): string {
-  const candidate = (ctx as { cwd?: unknown } | undefined)?.cwd;
-  if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  return process.cwd();
 }
 
 function resolveCtxModelRegistry<TModel extends MmrRegisteredModelLike>(
@@ -362,41 +352,6 @@ function resolveLibrarianModelPreferencesOverride(
     // activation performs its own settings load and surfaces warnings.
   }
   return undefined;
-}
-
-function buildWorkerToolManifest(
-  pi: ToolHostLike | undefined,
-  workerTools: readonly string[],
-): MmrActiveToolManifestEntry[] {
-  if (!pi || workerTools.length === 0) return [];
-  const wanted = new Set(workerTools);
-  let allTools: readonly unknown[] = [];
-  try {
-    const tools = pi.getAllTools?.();
-    if (Array.isArray(tools)) allTools = tools;
-  } catch {
-    allTools = [];
-  }
-  return allTools.flatMap((tool): MmrActiveToolManifestEntry[] => {
-    if (!isRecord(tool) || typeof tool.name !== "string" || !wanted.has(tool.name)) return [];
-    const promptGuidelines = Array.isArray(tool.promptGuidelines)
-      ? tool.promptGuidelines.filter((entry): entry is string => typeof entry === "string")
-      : [];
-    const description = typeof tool.description === "string"
-      ? tool.description
-      : typeof tool.promptSnippet === "string"
-        ? tool.promptSnippet
-        : "";
-    const promptSnippet = typeof tool.promptSnippet === "string" ? tool.promptSnippet : undefined;
-    return [{
-      name: tool.name,
-      owner: "runtime",
-      ...(promptSnippet !== undefined ? { promptSnippet } : {}),
-      promptGuidelines,
-      description,
-      schema: tool.parameters ?? {},
-    }];
-  });
 }
 
 function assembleLibrarianSystemPrompt(
@@ -634,7 +589,7 @@ export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinitio
       onUpdate,
       ctx,
     ): Promise<AgentToolResult<LibrarianDetails>> {
-      const cwd = resolveCwd(ctx);
+      const cwd = resolveWorkerCwd(ctx);
       let params: LibrarianParams;
       try {
         params = coerceLibrarianParams(rawParams);

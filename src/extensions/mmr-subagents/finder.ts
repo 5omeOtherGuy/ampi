@@ -33,6 +33,7 @@ import {
 } from "./fallback.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { FINDER_BACKGROUND_GUIDANCE } from "./tool-guidance.js";
+import { resolveWorkerCwd } from "./worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -446,12 +447,6 @@ export interface FinderToolDeps {
   runnerDeps?: MmrWorkerRunnerDeps;
 }
 
-function resolveCwd(ctx: ExtensionContext | undefined): string {
-  const candidate = (ctx as { cwd?: unknown } | undefined)?.cwd;
-  if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  return process.cwd();
-}
-
 /**
  * Resolve the ordered worker-model preference list used by the `finder`
  * parent on every execute, as `MmrModelPreference[]` fed straight into the
@@ -662,7 +657,7 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
       ctx,
     ): Promise<AgentToolResult<FinderDetails>> {
       const params = coerceFinderParams(rawParams);
-      const cwd = resolveCwd(ctx);
+      const cwd = resolveWorkerCwd(ctx);
       const profile = requireFinderProfile();
       const registry = resolveCtxMmrModelRegistry(ctx);
       const basePreferences = resolveFinderModelPreferences(cwd, deps);

@@ -53,6 +53,7 @@ import {
 } from "./async-task-registry.js";
 import { refreshBackgroundTaskWidget } from "./background-task-widget.js";
 import { START_TASK_AGENT_EXAMPLES, START_TASK_SELECTION_GUIDANCE } from "./tool-guidance.js";
+import { resolveWorkerCwd } from "./worker-host.js";
 
 export const START_TASK_TOOL_NAME = "start_task";
 export const TASK_POLL_TOOL_NAME = "task_poll";
@@ -298,12 +299,6 @@ function refreshAsyncTaskWidget(
   }
 }
 
-function resolveCwd(ctx: ExtensionContext | undefined): string {
-  const candidate = (ctx as { cwd?: unknown } | undefined)?.cwd;
-  if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  return process.cwd();
-}
-
 function resolveSessionKey(ctx: ExtensionContext | undefined, deps: AsyncTaskToolDeps): string {
   if (deps.sessionKey) return deps.sessionKey;
   // Prefer the session id from THIS call's context so concurrent sessions in
@@ -322,7 +317,7 @@ function resolveSessionKey(ctx: ExtensionContext | undefined, deps: AsyncTaskToo
   } catch {
     // identity is best-effort; fall back to cwd partitioning
   }
-  return `cwd:${resolveCwd(ctx)}`;
+  return `cwd:${resolveWorkerCwd(ctx)}`;
 }
 
 function escapeXmlAttr(value: string): string {
@@ -934,7 +929,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
         : (() => {
             const agent = parsed.agent;
             const tool = createSelectedTool(agent, deps);
-            const cwd = resolveCwd(ctx);
+            const cwd = resolveWorkerCwd(ctx);
             return {
               started: registry.startTask({
                 sessionKey,
