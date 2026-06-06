@@ -350,7 +350,7 @@ export type MmrSessionIdentitySource = "pi-context" | "session-manager" | "manua
  * can stamp provenance without each rediscovering identity.
  *
  * This is intentionally separate from `MmrModeState`: mode state describes
- * routing/policy, identity changes on different lifecycle boundaries, and the
+ * model/tool policy, identity changes on different lifecycle boundaries, and the
  * two should not force each other's schema churn.
  */
 export interface MmrSessionIdentity {

@@ -2,7 +2,7 @@
 
 **Audience.** Developers writing code that imports from `pi-mmr` and wants the stable programmatic surface owned by the non-core extensions.
 
-**Scope.** Package-root re-exports owned by `mmr-toolbox`, `mmr-web`, `mmr-subagents`, `mmr-history`, and `mmr-session-fallback`. The `mmr-core` runtime, routing, prompt assembly, and feature-gate APIs live in [`mmr-core-api.md`](./mmr-core-api.md).
+**Scope.** Package-root re-exports owned by `mmr-toolbox`, `mmr-web`, `mmr-subagents`, `mmr-history`, and `mmr-session-fallback`. The `mmr-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`mmr-core-api.md`](./mmr-core-api.md).
 
 **Related.** Package overview: [`../README.md`](../README.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
@@ -17,7 +17,7 @@ Identical to `mmr-core`:
    live tool inventory is the source of truth for active vs deferred.
 2. State snapshots are deep-cloned; raw event payloads are read-only
    for the duration of an emission.
-3. Each extension keeps its own routing, gating, and persistence
+3. Each extension keeps its own model/tool resolution, gating, and persistence
    invariants. Document any change in the extension's own README and in
    tests before changing the public surface.
 4. Public-safe wording only. Names, statuses, and reasons described
@@ -277,7 +277,7 @@ contract holds across every consumer of these helpers.
 
 Reactive extension that classifies provider quota / rate-limit errors
 and offers a session-scoped fallback override. Persists override state
-in the session log so a resumed session keeps the same routing.
+in the session log so a resumed session keeps the same model preference state.
 
 ### Stability
 

@@ -671,7 +671,7 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
             : runner;
 
       // Session-scoped model fallback (issue #9). The closure owns normal
-      // route selection; under an override it selects from the override and
+      // model preference resolution; under an override it selects from the override and
       // forwards it to the child via the runner.
       const runWorkerOnce = async (
         runArgs: { override?: readonly MmrModelPreference[] },

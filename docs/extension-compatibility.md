@@ -12,7 +12,7 @@ Three locked-mode mechanics drive every interaction below:
 
 - **Tool allowlist.** A locked mode sets the active tool set to its fixed allowlist (plus any `lockedModeExtraTools`) and blocks other tools at `tool_call`.
 - **Native opt-out.** A native model or thinking-level change (`/model`, model-cycle, `shift+tab`) drops you from the locked mode to `free`, by design.
-- **Provider routing.** Locked modes auto-route only across known provider families (`claude-*`, `gpt-*`, `gemini-*`/`gemma-*`) to known provider ids, subscription/OAuth first.
+- **Model preference resolution.** Locked modes use explicit model preference order. Known family names (`claude-*`, `gpt-*`, `gemini-*`/`gemma-*`) expand to known provider ids with subscription/OAuth entries first.
 
 The stance below is per scenario. "Supported" means it works in locked modes today; "Supported (free)" means it works in `free` mode and we recommend `free` for it; "Not supported" means it is intentionally constrained, with the reason.
 
@@ -45,11 +45,11 @@ If your extension registers a name `pi-mmr` also owns (e.g. `handoff`, `Task`), 
 
 ### Mode/model/tool-replacing extensions — Supported (free), not composable in locked modes
 
-`preset` (sets model + tools), interactive `tools` (enable/disable), `plan-mode`, and any extension that calls `setModel`/`setThinkingLevel` take over routing that locked modes own. By design, a native model/thinking change **drops you to `free`**, where the extension then controls model and tools. This is intentional: two systems cannot both own the locked routing profile. Use these in `free` mode.
+`preset` (sets model + tools), interactive `tools` (enable/disable), `plan-mode`, and any extension that calls `setModel`/`setThinkingLevel` take over the model/tool state that locked modes own. By design, a native model/thinking change **drops you to `free`**, where the extension then controls model and tools. This is intentional: two systems cannot both own the locked mode profile. Use these in `free` mode.
 
 ### Custom providers / models — Supported when named to match; otherwise free or per-mode preferences
 
-Custom provider extensions add routes `pi-mmr` will auto-select in locked modes **only** if the model name matches a known family prefix (`claude-*`, `gpt-*`, `gemini-*`/`gemma-*`) and the provider id is one `pi-mmr` expands to. For a novel provider id or model name:
+Custom provider extensions are considered in locked modes **only** when the model name matches a known family prefix (`claude-*`, `gpt-*`, `gemini-*`/`gemma-*`) and the provider id is one `pi-mmr` expands from the explicit preference. For a novel provider id or model name:
 
 - **Supported** via `mmrCore.modelPreferences` — add an explicit `provider/model` route for the relevant mode(s); `pi-mmr` will use it.
 - Otherwise use **`free` mode**, where Pi's native model selection reaches any registered provider.
@@ -68,7 +68,7 @@ Append-style extensions (`pirate`, `claude-rules`, `prompt-customizer`, `system-
 
 ### UI, footer/header, widgets, games, session metadata — Supported
 
-`status-line`, `custom-footer`/`custom-header`, `widget-placement`, `model-status`, editors, overlays, games, `session-name`, `bookmark`, `notify`, autocomplete, `qna`, etc. are orthogonal to routing/tools/prompt. The only minor overlap: footer/status extensions and `pi-mmr`'s status line both write UI; last writer wins.
+`status-line`, `custom-footer`/`custom-header`, `widget-placement`, `model-status`, editors, overlays, games, `session-name`, `bookmark`, `notify`, autocomplete, `qna`, etc. are orthogonal to locked-mode model/tool/prompt state. The only minor overlap: footer/status extensions and `pi-mmr`'s status line both write UI; last writer wins.
 
 ### Git, system, resources, messaging — Supported
 

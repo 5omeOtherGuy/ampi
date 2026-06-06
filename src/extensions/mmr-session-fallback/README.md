@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Interactive quota fallback prompt + session-scoped override | none | `/mmr-status` (`Model fallback:`), session-log custom entries |
+| On | Interactive quota fallback prompt + session-scoped override | none | `/mmr-status` (`Configured fallback:`), session-log custom entries |
 
 ## When to use it
 
@@ -45,7 +45,7 @@ From Pi's registered model registry ([`candidates.ts`](candidates.ts)):
 - drop any model without configured auth (`hasConfiguredAuth`);
 - dedup by `provider/model`;
 - rank by active mode's `modelPreferences` order, then provider, then model id;
-- mark the highest-ranked preference match as `Suggested`.
+- mark the highest-ranked preference match as `Preference match`.
 
 Per-candidate thinking levels come from each model's `reasoning` flag ([`thinking.ts`](thinking.ts)): non-reasoning models surface `off` only; reasoning models surface `off, minimal, low, medium, high`, plus `xhigh` when the model declares it. When no authenticated candidate remains the user is notified and the turn fails closed.
 
@@ -71,7 +71,7 @@ After the user picks ([`ui.ts`](ui.ts)):
 
 ## Diagnostics and troubleshooting
 
-- **Fallback did not trigger.** Error was not classified as quota/rate-limit, the run is inside a subagent worker, the mode is `free`, or a prompt/override is already active for this session. Check `/mmr-status` for `Model fallback:` and inspect the original error against the classifier table above.
+- **Fallback did not trigger.** Error was not classified as quota/rate-limit, the run is inside a subagent worker, the mode is `free`, or a prompt/override is already active for this session. Check `/mmr-status` for `Configured fallback:` and inspect the original error against the classifier table above.
 - **Override did not survive resume.** Persisted entries re-apply only when Pi's reported provider/model still matches the failing route. A different active model on resume is treated as a deliberate user choice and ignored.
 - **`/model` or `/think` did not stick.** Manual model/thinking selections outside the managed guard clear any active fallback. Re-pick the fallback after manual changes.
 

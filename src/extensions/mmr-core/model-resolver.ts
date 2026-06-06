@@ -27,7 +27,7 @@ export interface SelectMmrModelRouteArgs<TModel extends MmrRegisteredModelLike =
 }
 
 /**
- * Non-mutating model route selection for worker tools (subagents, oracle,
+ * Non-mutating model preference resolution for worker tools (subagents, oracle,
  * librarian, etc.) that need to pick a registered+authenticated provider/model
  * route from a preference list without changing Pi's currently active model.
  */

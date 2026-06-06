@@ -661,7 +661,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
       const started = parsed.agent === "Task"
         ? (() => {
             const taskDeps = { ...baseToolDeps(deps), ...(deps.taskDeps ?? {}) } as TaskToolDeps;
-            // Reuse the blocking Task validation/routing path. A pre-spawn
+            // Reuse the blocking Task validation/model-resolution path. A pre-spawn
             // failure returns the same shaped result and creates no record.
             const prep = prepareTaskRun(parsed.params, ctx, taskDeps);
             if (!prep.ok) return { result: prep.result } as const;

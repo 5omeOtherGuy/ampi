@@ -12,7 +12,7 @@
 - `large` has explicit broad-context discipline rather than being identical to `smart`.
 - `rush` uses low-latency, targeted-work guidance.
 - `deep` uses deliberate-investigation guidance with an explicit `## Diagnostic gate` Markdown section.
-- Routing/tool/policy state (active/missing/deferred tools, model fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/mmr-status`, activation warnings, and the status bar.
+- Mode/tool/policy state (active/missing/deferred tools, configured fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/mmr-status`, activation warnings, and the status bar.
 
 ## How the rewrite is scoped
 

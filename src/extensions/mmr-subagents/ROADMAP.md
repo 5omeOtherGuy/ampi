@@ -123,7 +123,7 @@ Concrete worker tools registered: `finder`, `oracle`, `Task`, and
    schema is `{ query: string }`; its worker tool set should stay limited
    to search/read capabilities; its result should return compact file/line
    evidence rather than a transcript. **(Satisfied: `finder` shipped and
-   routed through the `finder` subagent profile in `mmr-core`.)**
+   executed through the `finder` subagent profile in `mmr-core`.)**
 4. ✅ Implement `oracle` as an advisory worker with schema
    `{ task: string; context?: string; files?: string[] }`, worker-model
    resolution, and gated history-backed context until `mmr-history` exists.

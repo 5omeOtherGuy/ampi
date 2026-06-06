@@ -10,7 +10,7 @@ Use this page as the user-facing map for `pi-mmr`. The root [`README.md`](../REA
 | Install and verify the package | [`../README.md#quick-start`](../README.md#quick-start) |
 | Pick the right mode | [`../README.md#choose-a-mode`](../README.md#choose-a-mode) |
 | Pick the right tool | [`../README.md#choose-a-tool`](../README.md#choose-a-tool) |
-| Diagnose routing | [`troubleshooting.md`](troubleshooting.md) |
+| Diagnose model/tool resolution | [`troubleshooting.md`](troubleshooting.md) |
 
 ## User guides by job
 
@@ -28,7 +28,7 @@ Use this page as the user-facing map for `pi-mmr`. The root [`README.md`](../REA
 
 | Extension | Purpose | Default |
 | --- | --- | --- |
-| [`mmr-core`](../src/extensions/mmr-core/README.md) | Locked modes, model routing, prompt rewrite, diagnostics | On |
+| [`mmr-core`](../src/extensions/mmr-core/README.md) | Locked modes, model resolution, prompt rewrite, diagnostics | On |
 | [`mmr-toolbox`](../src/extensions/mmr-toolbox/README.md) | `apply_patch`, `task_list` | On |
 | [`mmr-subagents`](../src/extensions/mmr-subagents/README.md) | `finder`, `oracle`, `Task`, `librarian` | On (`librarian` gated) |
 | [`mmr-session-fallback`](../src/extensions/mmr-session-fallback/README.md) | Interactive quota/rate-limit fallback | On |

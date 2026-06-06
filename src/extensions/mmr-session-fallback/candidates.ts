@@ -78,7 +78,7 @@ export function buildMmrSessionFallbackCandidates<TModel extends MmrSessionFallb
 
   return sorted.map((model, index) => {
     const suggested = index === suggestedIndex;
-    const label = `${suggested ? "Suggested: " : ""}${model.provider}/${model.id}`;
+    const label = `${suggested ? "Preference match: " : ""}${model.provider}/${model.id}`;
     return {
       provider: model.provider,
       model: model.id,

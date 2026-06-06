@@ -96,7 +96,7 @@ The loader:
   (`read`, `bash`, `edit`, `write`, `grep`, `find`, `web_search`,
   `read_web_page`, `Task`, ...). Non-canonical names simply fail to
   activate at runtime because no Pi tool with that name is registered;
-- preserves `model: inherit` as a sentinel for future invocation-time routing.
+- preserves `model: inherit` as a sentinel for future invocation-time model preference resolution.
 
 The loader is framework-only in this slice: it returns parsed definitions for a
 future registrar to consume, but it does not make any user-defined subagent

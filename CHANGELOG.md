@@ -31,6 +31,7 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Fixed
 
+- `mmr-core`: clean up `/mmr-status`, activation, prompt, and docs wording so `pi-mmr` describes explicit locked modes, resolved models, configured fallbacks, and model preference order rather than automatic routing. Covered by `tests/mmr-core-status.test.mjs`, `tests/mmr-core-lifecycle.test.mjs`, `tests/mmr-core-contracts.test.mjs`, `tests/mmr-subagents-fallback.test.mjs`, and session-fallback tests.
 - `mmr-subagents`: include explicit non-normal outcome text in background-task completion notifications, so failed or cancelled background workers still carry their concrete outcome/reason in the model-facing follow-up text that survives compaction. Covered by `tests/mmr-subagents-async-task-tools.test.mjs` and `tests/mmr-subagents-progress-rendering.test.mjs`.
 - `mmr-subagents`: render background `start_task` launches as inline running lifecycle cards immediately while keeping the below-editor status widget, and collapse background cards to their short display label until the user expands them with ctrl+o. Covered by `tests/mmr-subagents-progress-rendering.test.mjs` and `tests/mmr-subagents-async-task-tools.test.mjs`.
 - `mmr-subagents`: remove the `Background agents` header from the below-editor background-agent widget so running background agents render as direct status rows. Covered by `tests/mmr-subagents-background-task-widget.test.mjs`.

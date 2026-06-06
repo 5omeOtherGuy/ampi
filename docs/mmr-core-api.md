@@ -44,7 +44,7 @@ package root are stable.
    The human-readable `message` field is what `/mmr-status` and the
    activation notification's "Warnings:" block render verbatim.
 5. **Free mode is opt-out.** When the active mode is `free`, mmr-core
-   does not enforce model/thinking/request/prompt/tool routing and emits
+   does not enforce model/thinking/request/prompt/tool resolution and emits
    no policy diagnostics.
 
 ## Modes
@@ -254,7 +254,7 @@ allowlist.
     routes while preserving prompt-base aliases such as `deep → smart`;
   - validates any caller-supplied `explicitModel` against the resolved
     route and `explicitTools` against `workerTools` order-independent;
-  - forwards `modelPreferencesOverride` for settings-driven Task routing
+  - forwards `modelPreferencesOverride` for settings-driven Task model preferences
     overrides without mutating `profile.modelPreferences`.
 
   Returns `MmrSubagentInvocationOk` on success (with `modelArg`,
@@ -292,7 +292,7 @@ allowlist.
   explicit `--model`, `--tools`, and `--mmr-parent-mode` values out of a
   Pi-style argv slice (`process.argv.slice(2)`) so activation can
   distinguish runner-supplied flags from Pi's own default/restored model
-  and validate parent-mode-specific routing. Supports `--flag <value>`,
+  and validate parent-mode-specific model preferences. Supports `--flag <value>`,
   `--flag=<value>`, and the `--tools` short alias `-t`.
 - `getMmrSubagentState()` — returns the current process-singleton
   `MmrSubagentState | undefined`. Non-empty inside a subagent worker

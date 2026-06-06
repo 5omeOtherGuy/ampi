@@ -331,7 +331,7 @@ function computeWorkerRoleSeparator(baseText: string): string {
 function buildMinimalBaseModeState(baseMode: MmrModeKey): MmrModeState {
   // Minimal locked-mode state stamped with the parent's key so
   // `assembleActiveSurface` produces the parent's prompt template.
-  // mmr-core does not consult routing/tool fields here; this state is
+  // mmr-core does not consult model/tool fields here; this state is
   // only used to drive the splice path.
   return {
     version: 1,

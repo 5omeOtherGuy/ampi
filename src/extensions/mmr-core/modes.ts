@@ -9,10 +9,10 @@ export const MMR_MODE_KEYS = ["smart", "smartGPT", "rush", "large", "deep", "fre
  * MMR mode table.
  *
  * Model preferences are provider-neutral and per-mode-scoped: each locked
- * mode lists the model families it routes to, including explicit cross-provider
+ * mode lists its model preference order, including explicit cross-provider
  * fallback preferences where a mode has a supported OpenAI or Anthropic
  * substitute. mmr-core resolves each model ID against the local
- * Pi model registry, prefers subscription-backed provider routes (for
+ * Pi model registry, prefers subscription-backed provider entries (for
  * example claude-subscription or openai-codex) over API-key providers, and
  * applies provider/model aliases (see `model-resolver.ts`) so the same
  * preference resolves against either bare or date-suffixed registrations.
@@ -63,7 +63,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
   smartGPT: {
     key: "smartGPT",
     displayName: "SmartGPT",
-    description: "Smart-style balanced mode routed to GPT-5.5. Toggleable thinking (medium/xhigh).",
+    description: "Smart-style balanced mode with GPT-5.5 as its model preference. Toggleable thinking (medium/xhigh).",
     modelPreferences: [
       { model: "gpt-5.5" },
     ],

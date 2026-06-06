@@ -49,7 +49,7 @@ export function formatZeroToolActivationFailure(mode: MmrModeDefinition, toolRes
   return [
     `Could not activate ${mode.displayName} mode.`,
     "",
-    "No active tools resolved for this mode; refusing to apply MMR routing with zero usable tools.",
+    "No active tools resolved for this mode; refusing to apply the locked mode with zero usable tools.",
     `Requested tools: ${requestedTools}`,
     `Missing tools: ${missingTools}`,
     "",

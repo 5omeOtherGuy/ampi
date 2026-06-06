@@ -66,8 +66,8 @@ describe("buildMmrWorkerFallbackCandidates (#9)", () => {
     });
     const ids = candidates.map((c) => `${c.provider}/${c.model}`);
     assert.deepEqual(ids, ["openai/gpt-5.5", "anthropic/claude-opus-4-6"], "failing + unauth dropped; ranked by chain order");
-    assert.equal(candidates[0].suggested, true, "top chain match is suggested");
-    assert.match(candidates[0].label, /Suggested: ⚠ billed · openai\/gpt-5\.5 — API key/);
+    assert.equal(candidates[0].suggested, true, "top chain match is the preference match");
+    assert.match(candidates[0].label, /Preference match: ⚠ billed · openai\/gpt-5\.5 — API key/);
     assert.equal(candidates[1].billing, "api-key");
   });
 

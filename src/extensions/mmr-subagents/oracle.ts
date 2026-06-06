@@ -643,7 +643,7 @@ export interface MmrAdvisorToolConfig {
   workerTools: readonly string[];
   /**
    * @deprecated Retained for compatibility only and no longer used for
-   * route selection. The advisor parent now resolves its route through
+   * model preference resolution. The advisor parent now resolves its provider/model through
    * the shared `selectMmrModelRoute` registry resolver using the
    * profile's `modelPreferences` (see `resolveAdvisorModelPreferences`).
    */
@@ -719,7 +719,7 @@ export function createMmrAdvisorTool(
             : runner;
 
       // Run the worker with session-scoped model fallback (issue #9). The
-      // closure owns normal route selection; when a fallback override is
+      // closure owns normal model preference resolution; when a fallback override is
       // supplied it selects from the override and forwards it to the child.
       const runWorkerOnce = async (
         runArgs: { override?: readonly MmrModelPreference[] },

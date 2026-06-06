@@ -375,9 +375,9 @@ function formatDebugSection(state: MmrModeState): string {
   lines.push(`  Selected source: ${state.source}`);
   lines.push(`  ${formatRejectedSources(state)}`);
   if (state.modelCandidates.length === 0) {
-    lines.push("  Model candidates: none");
+    lines.push("  Model preference candidates: none");
   } else {
-    lines.push("  Model candidates:");
+    lines.push("  Model preference candidates:");
     for (const candidate of state.modelCandidates) lines.push(`  ${formatModelCandidate(candidate)}`);
   }
   return lines.join("\n");
@@ -394,7 +394,7 @@ function decisionTarget(decision: MmrToolResolution["decisions"][number]): strin
 }
 
 function formatToolDecisions(decisions: MmrToolResolution["decisions"]): string {
-  if (decisions.length === 0) return "Tool decisions: none";
+  if (decisions.length === 0) return "Tool resolution: none";
   const lines = decisions.map((decision) => {
     const target = decisionTarget(decision);
     const owner = decision.owner ? ` via ${decision.owner}` : "";
@@ -404,7 +404,7 @@ function formatToolDecisions(decisions: MmrToolResolution["decisions"]): string 
       : "";
     return `  - ${decision.requested} -> ${target} (${decision.status})${owner}${candidateList}${diagnostic}`;
   });
-  return ["Tool decisions:", ...lines].join("\n");
+  return ["Tool resolution:", ...lines].join("\n");
 }
 
 function formatFeatureGates(state: MmrModeState): string {
@@ -422,8 +422,8 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       "Mode: Free (free)",
       `Selected source: ${state.source}`,
       formatRejectedSources(state),
-      "Routing: native Pi controls",
-      "Prompt route: Pi standard prompt (MMR disabled)",
+      "Mode control: native Pi controls",
+      "Prompt surface: Pi standard prompt (MMR disabled)",
       "Tool allowlist: disabled",
       "Context cap: none",
       `Baseline captured: ${formatBaseline(state)}`,
@@ -441,16 +441,16 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     `Mode: ${state.displayName} (${state.mode})`,
     `Selected source: ${state.source}`,
     formatRejectedSources(state),
-    `Target models: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`,
-    `Selected model: ${formatSelectedModel(state)}`,
-    `Model found: ${state.modelFound ? "yes" : "no"}`,
+    `Model preference order: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`,
+    `Resolved model: ${formatSelectedModel(state)}`,
+    `Resolved model available: ${state.modelFound ? "yes" : "no"}`,
     `Model applied: ${state.modelApplied ? "yes" : "no"}`,
-    `Model fallback: ${state.resolution.modelDecision.fallbackApplied ? `yes - ${state.resolution.modelDecision.reason ?? "fallback route selected"}` : "no"}`,
+    `Configured fallback: ${state.resolution.modelDecision.fallbackApplied ? `yes - ${state.resolution.modelDecision.reason ?? "fallback model applied"}` : "no"}`,
     `Thinking: ${state.thinkingLevel ?? "Pi default"} (request policy: ${formatMmrPolicyThinking(getRequestPolicyForState(state))})`,
     `Context: ${formatMmrPolicyContext(getRequestPolicyForState(state), getContextOverridesForState(state))}`,
     `Context cap: ${formatMmrContextCap(state.effectiveMaxInputTokens, state.mode)}`,
     `Baseline captured: ${formatBaseline(state)}`,
-    `Prompt route: ${state.promptRoute}`,
+    `Prompt surface: ${state.promptRoute}`,
     `Active tools: ${state.activeTools.join(", ") || "none"}`,
     `Missing tools: ${state.missingTools.join(", ") || "none"}`,
     `Deferred tools: ${state.deferredTools.join(", ") || "none"}`,

@@ -154,7 +154,7 @@ function describeCandidates(candidates: readonly MmrModelCandidateResolution[]):
  * `pi.setModel` / `pi.setActiveTools` / `pi.setThinkingLevel`.
  *
  * Not re-exported from the package root: this helper validates only
- * the model route and raw profile-tool intent. Routing through
+ * the model route and raw profile-tool intent. Resolving through
  * `resolveMmrSubagentInvocation` also applies the profile's deny set,
  * intersects against the host's registered tools, and resolves the
  * `from-parent` prompt-base mode, so consumers cannot accidentally
@@ -270,7 +270,7 @@ export function resolveMmrSubagentRoute<TModel extends MmrRegisteredModelLike>(
  *  - fail-closed when the worker tool set is empty;
  *  - explicit `--tools` validation against the effective worker tool set
  *    rather than `profile.tools`;
- *  - opt-in `modelPreferencesOverride` for settings-driven Task routing
+ *  - opt-in `modelPreferencesOverride` for settings-driven Task model preferences
  *    overrides (model preferences only; prompt base / deny set are pinned);
  *  - `invocationContext` marker (`"parent-spawn"` ↑ default vs
  *    `"child-activation"`) so the child activation path can validate
@@ -395,7 +395,7 @@ function resolvePromptBaseMode(
     // parent already delivered the worker system prompt via
     // `--system-prompt` before spawning. Older callers may not provide
     // parent-mode metadata, so child validation can still continue
-    // without a prompt-base mode; model routing then uses the profile's
+    // without a prompt-base mode; model resolution then uses the profile's
     // default preferences.
     if (invocationContext === "child-activation") return {};
     return {
