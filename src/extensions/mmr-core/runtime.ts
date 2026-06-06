@@ -8,6 +8,7 @@ import type {
   MmrFeatureGateProvider,
   MmrFeatureGateRegistry,
   MmrLockedModeKey,
+  MmrModeEvent,
   MmrModeExtraToolProvider,
   MmrModeKey,
   MmrModeState,
@@ -17,6 +18,13 @@ import type {
   MmrToolProvider,
   MmrToolResolution,
 } from "./types.js";
+
+/**
+ * Bounded cap on the in-memory mode/fallback event history. Old entries are
+ * dropped FIFO once the cap is reached. Small on purpose: this is an operator
+ * debugging aid surfaced by `/mmr-status debug`, not an audit log.
+ */
+export const MMR_MODE_HISTORY_LIMIT = 16;
 
 /**
  * Live runtime snapshot of an active subagent worker. Set only while a
@@ -270,6 +278,14 @@ export interface MmrCoreRuntime {
   getFeatureGateRegistry(): MmrFeatureGateRegistry;
   isMmrManagedModelUpdateActive(): boolean;
   runMmrManagedModelUpdate<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Append a mode/fallback event to the bounded history. Consecutive
+   * duplicates (same mode, source, model, fallback state, and reason) are
+   * collapsed so a re-apply that changed nothing does not spam the log.
+   */
+  recordMmrModeEvent(event: MmrModeEvent): void;
+  /** Oldest-to-newest snapshot of the bounded mode/fallback event history. */
+  getMmrModeHistory(): readonly MmrModeEvent[];
 }
 
 export function createMmrCoreRuntime(
@@ -282,6 +298,7 @@ export function createMmrCoreRuntime(
   let activeManagedModelOverride: MmrManagedModelOverrideState | undefined;
   let managedModelUpdateDepth = 0;
   const modeExtraToolProviders: MmrModeExtraToolProvider[] = [];
+  const modeHistory: MmrModeEvent[] = [];
 
   return {
     getMmrSubagentState() {
@@ -417,6 +434,31 @@ export function createMmrCoreRuntime(
         managedModelUpdateDepth -= 1;
       }
     },
+
+    recordMmrModeEvent(event) {
+      const last = modeHistory[modeHistory.length - 1];
+      // Collapse exact consecutive duplicates (ignoring timestamp): a re-apply
+      // that changed nothing observable should not grow the log.
+      if (
+        last
+        && last.mode === event.mode
+        && last.previousMode === event.previousMode
+        && last.source === event.source
+        && last.model === event.model
+        && last.thinkingLevel === event.thinkingLevel
+        && last.fallbackApplied === event.fallbackApplied
+        && last.fallbackReason === event.fallbackReason
+      ) {
+        return;
+      }
+      modeHistory.push({ ...event });
+      // FIFO trim to the cap.
+      while (modeHistory.length > MMR_MODE_HISTORY_LIMIT) modeHistory.shift();
+    },
+
+    getMmrModeHistory() {
+      return modeHistory.map((event) => ({ ...event }));
+    },
   };
 }
 
@@ -462,6 +504,8 @@ const REQUIRED_RUNTIME_METHODS = [
   "getFeatureGateRegistry",
   "isMmrManagedModelUpdateActive",
   "runMmrManagedModelUpdate",
+  "recordMmrModeEvent",
+  "getMmrModeHistory",
 ] as const satisfies readonly (keyof MmrCoreRuntime)[];
 
 function isMmrCoreRuntimeCompatible(value: unknown): value is MmrCoreRuntime {
@@ -652,4 +696,17 @@ export function isMmrManagedModelUpdateActive(): boolean {
 
 export async function runMmrManagedModelUpdate<T>(fn: () => Promise<T>): Promise<T> {
   return runtime.runMmrManagedModelUpdate(fn);
+}
+
+/**
+ * Record a mode/fallback event in the bounded, in-memory history surfaced by
+ * `/mmr-status debug`. Consecutive duplicates are collapsed by the runtime.
+ */
+export function recordMmrModeEvent(event: MmrModeEvent): void {
+  runtime.recordMmrModeEvent(event);
+}
+
+/** Oldest-to-newest snapshot of the bounded mode/fallback event history. */
+export function getMmrModeHistory(): readonly MmrModeEvent[] {
+  return runtime.getMmrModeHistory();
 }

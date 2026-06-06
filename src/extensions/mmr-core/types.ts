@@ -12,6 +12,37 @@ export type MmrPromptRoute = "default" | "rush" | "deep";
 
 export type MmrModeSelectionSource = "flag" | "command" | "session" | "settings" | "default" | "native";
 
+/**
+ * One entry in the bounded, session-scoped history of explicit mode
+ * applications and provider-failure fallbacks rendered by `/mmr-status debug`.
+ *
+ * This is a deterministic record of what the operator/config did and what
+ * fallback reacted to — never an inferred or automatic routing decision.
+ * `pi-mmr` does not classify prompts or pick models on its own; every entry
+ * here corresponds to an explicit mode apply (flag/command/session/settings/
+ * default/native) and the deterministic model resolution that followed.
+ *
+ * Process-local and in-memory only: not persisted to disk or session entries.
+ */
+export interface MmrModeEvent {
+  /** ISO-8601 timestamp of the applied state (mirrors `MmrModeState.appliedAt`). */
+  at: string;
+  /** Mode that became active. */
+  mode: MmrModeKey;
+  /** Mode that was active immediately before, if any. */
+  previousMode?: MmrModeKey;
+  /** Explicit selection source that drove this apply. */
+  source: MmrModeSelectionSource;
+  /** Resolved `provider/model` when a model was applied; omitted otherwise (e.g. free mode). */
+  model?: string;
+  /** Resolved thinking level when set. */
+  thinkingLevel?: string;
+  /** Whether deterministic model fallback was applied during resolution. */
+  fallbackApplied: boolean;
+  /** Human-readable fallback reason when `fallbackApplied` is true. */
+  fallbackReason?: string;
+}
+
 export interface MmrModelPreference {
   /** Provider-neutral model ID, e.g. "gpt-5.5" or "claude-opus-4-8". */
   model: string;

@@ -31,8 +31,10 @@ import {
   MMR_EVENT_STATE_CHANGED,
   clearMmrManagedModelOverride,
   getMmrManagedModelOverride,
+  getMmrModeHistory,
   getMmrModeState,
   getMmrSessionIdentity,
+  recordMmrModeEvent,
   getMmrSubagentState,
   isMmrManagedModelUpdateActive,
   isToolAllowed,
@@ -221,6 +223,23 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     pi.events.emit(MMR_EVENT_STATE_CHANGED, getMmrModeState());
   }
 
+  // Append a deterministic mode/fallback history entry for the just-applied
+  // state. Records explicit applies and provider-failure fallbacks only; the
+  // runtime collapses consecutive no-op duplicates. Surfaced by
+  // `/mmr-status debug`.
+  function recordModeTransition(previousState: MmrModeState | undefined, state: MmrModeState): void {
+    recordMmrModeEvent({
+      at: state.appliedAt,
+      mode: state.mode,
+      previousMode: previousState?.mode,
+      source: state.source,
+      model: state.modelApplied ? `${state.provider}/${state.model}` : undefined,
+      thinkingLevel: state.thinkingLevel,
+      fallbackApplied: state.modelFallbackApplied,
+      fallbackReason: state.modelFallbackReason,
+    });
+  }
+
   async function applyFreeMode(ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState> {
     activePolicy = undefined;
     clearMmrManagedModelOverride();
@@ -267,6 +286,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     const state = createFreeModeState(options.source, activeTools, options.rejectedSources);
     setMmrModeState(state);
     publishStateChange();
+    recordModeTransition(previousState, state);
 
     if (options.persist) {
       pi.appendEntry(MMR_MODE_STATE_ENTRY, toPersistedModeState(state));
@@ -388,6 +408,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
       });
       setMmrModeState(state);
       publishStateChange();
+      recordModeTransition(previousState, state);
 
       if (options.persist) {
         pi.appendEntry(MMR_MODE_STATE_ENTRY, toPersistedModeState(state));
@@ -589,7 +610,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     description: "Show current MMR locked-mode status. Pass 'debug' or '--debug' for model/tool resolution detail.",
     handler: async (args, ctx) => {
       const debug = parseMmrStatusDebugFlag(args);
-      ctx.ui.notify(formatMmrStatus(getMmrModeState(), { debug }), "info");
+      ctx.ui.notify(formatMmrStatus(getMmrModeState(), { debug, modeHistory: debug ? getMmrModeHistory() : undefined }), "info");
     },
   });
 
