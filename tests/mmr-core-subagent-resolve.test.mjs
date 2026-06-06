@@ -266,13 +266,13 @@ describe("resolveMmrSubagentInvocation", () => {
     const registry = makeTaskRegistry();
 
     const cases = [
-      { parentMode: "smart",    expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "high" },
-      { parentMode: "smartGPT", expectedBase: "smartGPT", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "high" },
+      { parentMode: "smart",    expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "smartGPT", expectedBase: "smartGPT", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
       { parentMode: "rush",     expectedBase: "rush",     provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
-      { parentMode: "large",    expectedBase: "large",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "high" },
+      { parentMode: "large",    expectedBase: "large",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
       // Spec §6.1: deep aliases to smart for prompt base, route list,
       // selected route, and thinking level.
-      { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "high" },
+      { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
     ];
     for (const c of cases) {
       const result = resolveMmrSubagentInvocation({
@@ -332,7 +332,7 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(large.ok, true);
     assert.equal(large.promptBaseMode, "large");
     assert.equal(large.selected.model, "claude-opus-4-8");
-    assert.equal(large.selected.thinkingLevel, "high");
+    assert.equal(large.selected.thinkingLevel, "low");
   });
 
   it("falls rush Task workers back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {

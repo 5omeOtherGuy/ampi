@@ -51,7 +51,7 @@ function stubTaskInvocation(overrides = {}) {
     selected: {
       provider: overrides.provider ?? "claude-subscription",
       model: overrides.model ?? "claude-opus-4-8",
-      thinkingLevel: overrides.thinkingLevel ?? "high",
+      thinkingLevel: overrides.thinkingLevel ?? "low",
       registeredModel: {
         provider: overrides.provider ?? "claude-subscription",
         id: overrides.model ?? "claude-opus-4-8",
