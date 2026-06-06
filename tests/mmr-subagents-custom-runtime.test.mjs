@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, beforeEach, describe, it } from "node:test";
@@ -164,6 +164,36 @@ describe("mmr-subagents custom Markdown runtime", () => {
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
       createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
       assert.ok(!tools.has("sa__evil"), "a symlinked source escaping the root is refused");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to register an enabled record when the Pi-owned source root is a symlink", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-root-link-"));
+    try {
+      const outsideAgents = path.join(root, "outside-agents");
+      mkdirSync(outsideAgents, { recursive: true });
+      writeFileSync(
+        path.join(outsideAgents, "linked.md"),
+        ["---", "name: Linked Root", "description: Outside root via symlink.", "---", "Body."].join("\n"),
+      );
+      mkdirSync(path.join(root, ".pi"), { recursive: true });
+      try {
+        symlinkSync(outsideAgents, path.join(root, ".pi", "subagents"), "dir");
+      } catch {
+        return; // platform without symlink permission
+      }
+      writeFileSync(
+        path.join(root, ".pi", "settings.json"),
+        JSON.stringify({ mmrSubagents: { custom: { agents: {
+          linked: { enabled: true, source: { root: "project", file: "linked.md" }, toolName: "sa__linked_root", modes: ["deep"], tools: ["read"] },
+        } } } }),
+      );
+      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
+      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      assert.ok(!tools.has("sa__linked_root"), "a symlinked Pi-owned source root is refused");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
