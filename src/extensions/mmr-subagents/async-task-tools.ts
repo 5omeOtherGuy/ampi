@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type, type Static, type TSchema } from "typebox";
 import { checkMmrToolParams, MmrToolParamsError } from "../mmr-core/tool-params.js";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
@@ -47,6 +48,8 @@ import {
   type MmrAsyncTaskRegistry,
   type MmrAsyncTaskInternalSnapshot,
   type MmrAsyncTaskStatus,
+  type MmrAsyncTerminalDeliveryClaim,
+  type MmrAsyncTerminalDeliveryItem,
 } from "./async-task-registry.js";
 import { refreshBackgroundTaskWidget } from "./background-task-widget.js";
 
@@ -65,6 +68,9 @@ export const ASYNC_TASK_TOOL_NAMES = [
 // Oracle is intentionally excluded: it is always blocking and can never run
 // as a background agent. The blocking `oracle` tool is unchanged.
 export const ASYNC_TASK_AGENT_NAMES = ["Task", "finder", "librarian"] as const;
+
+const PULL_NOTICE_MAX_ITEMS = 12;
+const PULL_NOTICE_LABEL_LIMIT = 120;
 export type AsyncTaskAgentName = typeof ASYNC_TASK_AGENT_NAMES[number];
 
 /**
@@ -191,7 +197,7 @@ const START_TASK_PARAMETERS = Type.Object(
     notify: Type.Optional(
       Type.Boolean({
         description:
-          "Completion notification. ON by default: when this task finishes the parent is poked once so it can consume the result. Pass false to opt out and make task_poll/task_wait the only retrieval path. The poke wakes an idle session or queues behind the active turn; it never interrupts streaming, and it is bounded per session.",
+          "Automatic completion delivery. ON by default: during an active agent loop, finished work is surfaced before a later model step; when idle, a completion push may wake the session. Pass false to opt out and pull the result explicitly with task_poll/task_wait.",
       }),
     ),
   },
@@ -242,8 +248,8 @@ const START_TASK_DESCRIPTION = [
   "Use start_task only for independent work that can proceed while you do other things (long analysis, broad search, a self-contained implementation unit).",
   "Set agent to choose the background worker: Task (default), finder, or librarian. Use params for the selected tool's normal input shape. Oracle cannot run in the background; it is always blocking.",
   "Prefer the blocking Task/finder/librarian tools when you need the result before your next reasoning step.",
-  "Default result path is the worker completion notification: when notify is enabled, wait for the follow-up before consuming the worker result.",
-  "Use task_poll/task_wait only as an elapsed-time fallback when no notification arrives, or during fleet orchestration where multiple parallel workers need coordinated status checks.",
+  "With notify enabled, completed background work is surfaced automatically: during an active agent loop it appears at the start of a later model step, and when idle it may wake the session.",
+  "Use task_poll/task_wait for legitimate fleet orchestration: coordinating multiple parallel workers, checking a group, or collecting child results. A task_wait timeout is not a failure and does not stop the worker.",
   "Use group_id:'new' on the first grouped start_task call to mint a worker group, then reuse the returned group_id on sibling start_task calls and task_poll/task_wait/task_cancel. The opening call controls the single grouped notification; sibling tasks in the group do not send individual completion notifications.",
   "For Task workers only, capabilityProfile can narrow tools to read-only or read-write (narrowing only; never widens the default Task surface).",
   "By default a background task notifies you once it finishes; pass notify:false to opt out and make task_poll/task_wait the only retrieval path.",
@@ -253,13 +259,15 @@ const START_TASK_DESCRIPTION = [
 
 const ASYNC_TASK_GUIDELINES: readonly string[] = [
   "Use start_task only for independent work that can run while you continue; prefer the blocking Task/finder/librarian tools when you need the result immediately. Oracle is always blocking and cannot be a background agent.",
-  "Treat the worker completion notification as the default way to receive results; do not immediately poll just to check whether a worker completed.",
-  "Use task_poll or task_wait only after a meaningful elapsed-time fallback interval with no notification, or for fleet orchestration where multiple parallel background workers need coordinated status checks; a task_wait timeout is not a failure and does not stop the worker.",
-  "Call task_poll with no task_id to list this session's background tasks (active, stalled, finished) during fallback checks or multi-worker orchestration.",
-  "For grouped workers, open the group with start_task({ group_id: 'new', ... }), copy the returned group_id into each sibling start_task call, then wait/poll/cancel with group_id (mutually exclusive with task_id). When the group finishes, retrieve each child result with task_poll({ task_id }) for the ids the group result lists.",
+  "With notify enabled, completed background work is surfaced automatically: during an active agent loop it appears at the start of a later model step, and when idle it may wake the session. Do not poll only to discover whether a single task completed.",
+  "Use task_poll or task_wait for legitimate fleet orchestration: coordinating multiple parallel workers, checking a group, or collecting child results. A task_wait timeout is not a failure and does not stop the worker.",
+  "Treat a terminal task_poll/task_wait result as consumed. Do not poll the same task again unless you intentionally need to re-read the same result.",
+  "If a task-notification, task-group-notification, or background-tasks-finished notice appears for a task/group whose terminal result is already present in the transcript, treat it as stale; do not call tools or rewrite your answer solely because of it.",
+  "Call task_poll with no task_id to list this session's background tasks and their delivery state during fallback checks or multi-worker orchestration.",
+  "For grouped workers, open the group with start_task({ group_id: 'new', ... }), copy the returned group_id into each sibling start_task call, then wait/poll/cancel with group_id. When the group finishes, retrieve each needed child output once with task_poll({ task_id }) for the ids the group result lists.",
   "Use task_cancel to stop a duplicate, obsolete, or wrongly-scoped background task or group.",
   "Do not start multiple code-writing background tasks unless their file targets are clearly disjoint.",
-  "A background task notifies you once when it finishes (the poke wakes an idle session or queues behind the active turn, and is bounded per session); pass start_task({ notify: false }) to opt out and pull the result with task_poll/task_wait.",
+  "Pass start_task({ notify: false }) to opt out of automatic delivery and pull the result explicitly with task_poll/task_wait.",
 ];
 
 /**
@@ -371,6 +379,53 @@ function nonNormalOutcomeText(snapshot: MmrAsyncTaskInternalSnapshot): string | 
     ?? toolText
     ?? (snapshot.status === "failed" ? "worker did not complete successfully" : "worker was cancelled before producing a result");
   return `${snapshot.status} — ${withPeriod(compactOneLine(reason))}`;
+}
+
+function createAsyncTaskDeliveryMessage(text: string): AgentMessage {
+  return { role: "user", content: [{ type: "text", text }], timestamp: Date.now() };
+}
+
+function formatCounts(counts: MmrAsyncTerminalDeliveryItem["counts"]): string {
+  if (!counts) return "0 task(s): 0 succeeded, 0 failed, 0 cancelled, 0 partial";
+  return `${counts.total} task(s): ${counts.succeeded} succeeded, ${counts.failed} failed, ${counts.cancelled} cancelled, ${counts.partial} partial`;
+}
+
+function formatAsyncTaskDeliveryItem(item: MmrAsyncTerminalDeliveryItem): string {
+  if (item.kind === "group") {
+    return `- group ${item.id} — ${item.status} (${formatCounts(item.counts)}). Use task_poll({group_id:"${item.id}"}) once to list child task_ids, then task_poll({task_id}) once per child output you still need.`;
+  }
+  const label = compactOneLine(item.description, PULL_NOTICE_LABEL_LIMIT);
+  const outcome = item.terminalOutcome === "partial" ? " partial" : "";
+  const error = item.errorMessage ? ` ${escapeXmlAttr(compactOneLine(item.errorMessage, PULL_NOTICE_LABEL_LIMIT))}` : "";
+  return `- task ${item.id} "${escapeXmlAttr(label)}" — ${item.status}${outcome}.${error} Use task_poll({task_id:"${item.id}"}) once if you need the final result.`;
+}
+
+function formatAsyncTaskDeliveryNotice(claim: MmrAsyncTerminalDeliveryClaim): string {
+  const count = claim.items.length;
+  const lines = [
+    `<background-tasks-finished count="${count}">`,
+    `${count} background task(s)/group(s) finished since your last model step. Retrieve only results that are not already present in this transcript.`,
+    ...claim.items.map(formatAsyncTaskDeliveryItem),
+    "If task_poll/task_wait already returned a terminal result for one of these ids, it is consumed; do not re-poll or rewrite solely because of this notice.",
+  ];
+  if (claim.hasMore) {
+    lines.push("More finished background work may be pending; continue useful work or call task_poll with no arguments to inspect the board.");
+  }
+  lines.push("</background-tasks-finished>");
+  return lines.join("\n");
+}
+
+function formatAsyncTaskDeliveryNoticeSafely(claim: MmrAsyncTerminalDeliveryClaim): string {
+  try {
+    return formatAsyncTaskDeliveryNotice(claim);
+  } catch {
+    const ids = claim.items.map((item) => `${item.kind} ${item.id}`).join(", ");
+    return [
+      `<background-tasks-finished count="${claim.items.length}">`,
+      `Background worker completion notice formatting failed, but these ids were marked announced: ${ids}. Use task_poll once for any id whose result is not already present.`,
+      "</background-tasks-finished>",
+    ].join("\n");
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -500,7 +555,7 @@ function projectRunning(
       : undefined;
   const groupText = snapshot.groupId ? ` (group ${snapshot.groupId})` : "";
   const header = `${tool}: ${snapshot.agent} task ${snapshot.taskId}${groupText} is ${snapshot.status}${freshnessNote(snapshot)}.`;
-  const waitHint = opts.timedOut ? " Wait timed out; the worker is still running. Poll or wait again." : "";
+  const waitHint = opts.timedOut ? " Wait timed out; the worker is still running. No final result was consumed, and the timeout did not cancel the worker." : "";
   const body = progressText && progressText.trim().length > 0 ? `\n\n${progressText}` : "";
   return {
     content: [{ type: "text", text: `${header}${waitHint}${body}` }],
@@ -543,7 +598,8 @@ function projectTerminal(
     const text = firstText(projected.content);
     if (text && text.trim().length > 0) finalOutput = text.trim();
   }
-  const body = finalOutput ? `\n\n${finalOutput}` : "";
+  const consumedNote = `\n\nFinal result retrieved by this tool result. Do not call task_poll for ${snapshot.taskId} again unless you intentionally need to re-read the same result. If a later background-task notification mentions ${snapshot.taskId}, treat it as stale and take no action.`;
+  const body = finalOutput ? `\n\n${finalOutput}${consumedNote}` : consumedNote;
   return {
     content: [{ type: "text", text: `${statusLine}${body}` }],
     details: {
@@ -600,11 +656,11 @@ function buildCompletionNotifier(
       {
         customType: ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
         content:
-          `<task-notification task_id="${escapeXmlAttr(snapshot.taskId)}" status="${snapshot.status}">\n` +
-          `Background task "${escapeXmlAttr(snapshot.description)}" ${snapshot.status}.\n` +
+          `<task-notification task_id="${escapeXmlAttr(snapshot.taskId)}" status="${snapshot.status}" delivery="announced">\n` +
+          `Background task "${escapeXmlAttr(snapshot.description)}" finished with status ${snapshot.status}.\n` +
           (outcomeText ? `Non-normal outcome: ${escapeXmlAttr(outcomeText)}\n` : "") +
-          `The worker result is ready. Call task_poll({task_id:"${escapeXmlAttr(snapshot.taskId)}"}) now to retrieve it. ` +
-          `Polling after completion is the intended retrieval step, not premature polling.\n` +
+          `If this task's final result is not already present in the transcript, call task_poll({task_id:"${escapeXmlAttr(snapshot.taskId)}"}) once to retrieve it.\n` +
+          `If task_poll or task_wait already returned this task's terminal result, this notification is stale; no action, repeat polling, or answer rewrite is needed.\n` +
           `</task-notification>`,
         // The persistent background-agent widget and the eventual task_poll
         // result own the human-facing surface; this push is model-facing only
@@ -634,15 +690,16 @@ function buildGroupCompletionNotifier(
       {
         customType: ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
         content:
-          `<task-group-notification group_id="${escapeXmlAttr(snapshot.groupId)}" status="${snapshot.status}">\n` +
-          `Background task group ${escapeXmlAttr(snapshot.groupId)} ${snapshot.status}.\n` +
-          `Call task_poll({group_id:"${escapeXmlAttr(snapshot.groupId)}"}) to list the child task_ids, then task_poll({task_id}) for each child to retrieve its result. A wait timeout never cancels children.\n` +
+          `<task-group-notification group_id="${escapeXmlAttr(snapshot.groupId)}" status="${snapshot.status}" delivery="announced">\n` +
+          `Background task group ${escapeXmlAttr(snapshot.groupId)} finished with status ${snapshot.status}.\n` +
+          `If this group has not already been observed in the transcript, call task_poll({group_id:"${escapeXmlAttr(snapshot.groupId)}"}) once to list child task_ids.\n` +
+          `Then retrieve only child outputs you still need with task_poll({task_id}). If the group or child results were already retrieved, this notification is stale; no action or answer rewrite is needed. A task_wait timeout never cancels children.\n` +
           `</task-group-notification>`,
         display: false,
         details: {
           version: 1,
           kind: ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
-          taskId: snapshot.groupId,
+          groupId: snapshot.groupId,
           status: snapshot.status,
           description: `group ${snapshot.groupId}`,
         } satisfies AsyncTaskCompletionDetails,
@@ -795,12 +852,10 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
       // instead of riding the next user prompt. The pinned widget is refreshed
       // by `onSettle` on terminal transition, so it stays correct even when the
       // task opts out of (or cannot send) a completion push.
-      const notify = (deps.enableCompletionPush ?? true) && parsed.wantsNotify
-        ? buildCompletionNotifier(deps.pi)
-        : undefined;
-      const groupNotify = (deps.enableCompletionPush ?? true) && parsed.wantsNotify
-        ? buildGroupCompletionNotifier(deps.pi)
-        : undefined;
+      const automaticDeliveryEnabled = deps.enableCompletionPush !== false;
+      const wantsAutomaticDelivery = parsed.wantsNotify && automaticDeliveryEnabled;
+      const notify = wantsAutomaticDelivery ? buildCompletionNotifier(deps.pi) : undefined;
+      const groupNotify = wantsAutomaticDelivery ? buildGroupCompletionNotifier(deps.pi) : undefined;
       // Track whether we are about to create a brand-new group, so a later
       // start rejection (e.g. concurrency cap) can roll back only a group this
       // call minted — never a pre-existing one.
@@ -808,9 +863,19 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
         ? registry.getGroup(sessionKey, parsed.groupId) !== undefined
         : false;
       const groupSnapshot = parsed.groupId === "new"
-        ? registry.openGroup({ sessionKey, ...(groupNotify !== undefined ? { notify: groupNotify } : {}), onSettle })
+        ? registry.openGroup({
+            sessionKey,
+            deliveryOptIn: wantsAutomaticDelivery,
+            ...(groupNotify !== undefined ? { notify: groupNotify } : {}),
+            onSettle,
+          })
         : parsed.groupId !== undefined
-          ? registry.openGroup({ sessionKey, groupId: parsed.groupId, onSettle })
+          ? registry.openGroup({
+              sessionKey,
+              groupId: parsed.groupId,
+              deliveryOptIn: wantsAutomaticDelivery,
+              onSettle,
+            })
           : undefined;
       const groupId = groupSnapshot?.groupId;
       const taskNotify = groupId === undefined ? notify : undefined;
@@ -845,6 +910,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
                     return buildSpawnErrorWorkerResult(err, { prompt: params.prompt, cwd });
                   }
                 },
+                deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
                 ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
                 onSettle,
               }),
@@ -880,6 +946,7 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
                     ...(status === "failed" ? { errorMessage: inferToolErrorMessage(result) } : {}),
                   };
                 },
+                deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
                 ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
                 onSettle,
               }),
@@ -905,10 +972,18 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
       refreshAsyncTaskWidget(ctx, registry, sessionKey);
       const dedupNote = started.started.deduplicated ? " (existing task for this call)" : "";
       const groupNote = snapshot.groupId ? ` in group ${snapshot.groupId}` : "";
+      const groupDeliveryEnabled = groupSnapshot?.completionPush !== "disabled";
+      const deliveryHint = snapshot.groupId
+        ? groupDeliveryEnabled
+          ? "The group owns automatic completion delivery; use task_poll/task_wait for grouped orchestration or to collect needed child outputs."
+          : "Automatic delivery is disabled for this group; use task_poll/task_wait to inspect status and collect needed child outputs."
+        : wantsAutomaticDelivery
+          ? "Automatic delivery is enabled; use task_poll/task_wait only after an elapsed-time fallback or for multi-worker orchestration."
+          : "Automatic delivery is disabled; use task_poll/task_wait to retrieve the result explicitly.";
       const message =
         `start_task: started background worker ${snapshot.taskId}${dedupNote}${groupNote} ("${snapshot.description}", agent ${snapshot.agent}). ` +
-        `It will notify this session on completion by default; use task_poll/task_wait only after an elapsed-time fallback ` +
-        `or for multi-worker orchestration, and task_cancel to stop it. Background tasks are in-memory and lost if the session ends.`;
+        `${deliveryHint} ` +
+        `Use task_cancel to stop it. Background tasks are in-memory and lost if the session ends.`;
       return {
         content: [{ type: "text", text: message }],
         details: {
@@ -939,7 +1014,8 @@ function renderBoard(board: MmrAsyncTaskBoard): string {
     lines.push(`${title}:`);
     for (const e of entries) {
       const fresh = e.freshness !== "healthy" && e.freshness !== "terminal" ? ` [${e.freshness}]` : "";
-      lines.push(`  - ${e.taskId} (${e.status}${fresh}, ${e.agent}) "${e.description}"`);
+      const delivery = isTerminal(e.status) ? `, delivery: ${e.completionPush}` : "";
+      lines.push(`  - ${e.taskId} (${e.status}${fresh}, ${e.agent}${delivery}) "${e.description}"`);
     }
   };
   section("Active", board.active);
@@ -952,13 +1028,13 @@ function renderBoard(board: MmrAsyncTaskBoard): string {
 }
 
 function renderGroup(tool: AsyncTaskToolDetails["tool"], group: MmrAsyncTaskGroupSnapshot, timedOut?: boolean): string {
-  const wait = timedOut ? " Wait timed out; the group is still running." : "";
+  const wait = timedOut ? " Wait timed out; the group is still running. No final result was consumed, and the timeout did not cancel children." : "";
   const head = `${tool}: group ${group.groupId} ${group.status} (${group.counts.total} task(s): ${group.counts.succeeded} succeeded, ${group.counts.failed} failed, ${group.counts.cancelled} cancelled, ${group.counts.partial} partial).${wait}`;
   if (group.taskIds.length === 0) return head;
   const ids = group.taskIds.join(", ");
   const retrieve = group.status === "running"
     ? ` Child task_ids: ${ids}.`
-    : ` Poll each task_id to retrieve final worker outputs: ${ids}.`;
+    : ` Group status observed. This does not include child final outputs. Retrieve each needed child once with task_poll({task_id}): ${ids}. If a later group notification appears, treat it as stale.`;
   return `${head}${retrieve}`;
 }
 
@@ -1037,7 +1113,7 @@ export function createTaskPollTool(deps: AsyncTaskToolDeps = {}): ToolDefinition
       const control = parseTaskOrGroupControl(rawParams);
       if (control.error) return invalidAsyncControlResult(TASK_POLL_TOOL_NAME, control.error);
       if (control.groupId) {
-        const group = registry.getGroup(sessionKey, control.groupId);
+        const group = registry.getGroup(sessionKey, control.groupId, { observe: true });
         if (!group) return groupNotFoundResult(TASK_POLL_TOOL_NAME, control.groupId);
         refreshAsyncTaskWidget(ctx, registry, sessionKey);
         return groupResult(TASK_POLL_TOOL_NAME, group);
@@ -1198,7 +1274,8 @@ export function createTaskCancelTool(deps: AsyncTaskToolDeps = {}): ToolDefiniti
  * registered definitions for tests/inspection.
  */
 export function registerAsyncTaskTools(pi: ExtensionAPI, deps: AsyncTaskToolDeps = {}): ToolDefinition[] {
-  const withPi: AsyncTaskToolDeps = { ...deps, pi };
+  const registry = deps.registry ?? getMmrAsyncTaskRegistry();
+  const withPi: AsyncTaskToolDeps = { ...deps, pi, registry };
   const definitions = [
     createStartTaskTool(withPi),
     createTaskPollTool(withPi),
@@ -1215,6 +1292,30 @@ export function registerAsyncTaskTools(pi: ExtensionAPI, deps: AsyncTaskToolDeps
   // unaffected (the message still delivers; only its TUI shape changes).
   if (typeof pi.registerMessageRenderer === "function") {
     pi.registerMessageRenderer(ASYNC_TASK_COMPLETION_CUSTOM_TYPE, renderAsyncTaskCompletionMessage);
+  }
+  if (typeof pi.on === "function") {
+    pi.on("agent_start", (_event, ctx) => {
+      const sessionKey = resolveSessionKey(ctx, withPi);
+      registry.setSessionAgentActive(sessionKey, true);
+    });
+    pi.on("agent_end", (_event, ctx) => {
+      const sessionKey = resolveSessionKey(ctx, withPi);
+      registry.setSessionAgentActive(sessionKey, false);
+      registry.flushIdleDeliveries(sessionKey);
+      refreshAsyncTaskWidget(ctx, registry, sessionKey);
+    });
+    pi.on("context", async (event, ctx) => {
+      const sessionKey = resolveSessionKey(ctx, withPi);
+      const claim = registry.claimPendingForContext(sessionKey, PULL_NOTICE_MAX_ITEMS);
+      if (claim.items.length === 0) return undefined;
+      const text = formatAsyncTaskDeliveryNoticeSafely(claim);
+      refreshAsyncTaskWidget(ctx, registry, sessionKey);
+      return { messages: [...event.messages, createAsyncTaskDeliveryMessage(text)] };
+    });
+    pi.on("session_shutdown", (_event, ctx) => {
+      const sessionKey = resolveSessionKey(ctx, withPi);
+      registry.shutdownSession(sessionKey, "session_shutdown");
+    });
   }
   return definitions;
 }

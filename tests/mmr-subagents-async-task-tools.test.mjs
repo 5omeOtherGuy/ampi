@@ -154,6 +154,15 @@ describe("start_task", () => {
     await flush();
   });
 
+  it("does not promise automatic delivery when notify:false opts out", async () => {
+    const { startTask, def } = await makeToolset();
+    const result = await startTask.execute("call-1", { ...GOOD_PARAMS, notify: false }, undefined, undefined, CTX);
+    assert.match(result.content[0].text, /Automatic delivery is disabled/);
+    assert.doesNotMatch(result.content[0].text, /will notify this session/i);
+    def.resolve(makeWorkerResult());
+    await flush();
+  });
+
   it("refreshes the bottom-of-window widget while running and retains the settled row briefly", async () => {
     const widgetCalls = [];
     const ctx = {
@@ -524,7 +533,7 @@ describe("async task worker groups", () => {
     assert.match(group.content[0].text, /group_abc999/);
     assert.match(
       group.content[0].text,
-      /Poll each task_id to retrieve final worker outputs: gt0, gt1/,
+      /Retrieve each needed child once with task_poll\(\{task_id\}\): gt0, gt1/,
       "terminal group result names the per-child retrieval step",
     );
   });
@@ -661,8 +670,8 @@ describe("async task tools model-visible surface", () => {
     assert.match(start.description, /background/i);
     assert.match(
       start.description,
-      /Default result path is the worker completion notification/i,
-      "start_task should teach notification-first result handling",
+      /With notify enabled, completed background work is surfaced automatically/i,
+      "start_task should teach automatic delivery handling",
     );
     assert.doesNotMatch(
       start.description,
@@ -670,8 +679,8 @@ describe("async task tools model-visible surface", () => {
       "start_task must not make polling the default completion path",
     );
     assert.ok(
-      start.promptGuidelines.some((g) => /notification/i.test(g) && /fallback/i.test(g) && /elapsed/i.test(g)),
-      "guidelines should reserve polling for elapsed-time fallback checks",
+      start.promptGuidelines.some((g) => /automatic/i.test(g) && /active agent loop/i.test(g) && /idle/i.test(g)),
+      "guidelines should describe active-loop and idle automatic delivery",
     );
     assert.ok(start.promptGuidelines.some((g) => /blocking Task/i.test(g)));
     assert.match(
@@ -683,6 +692,71 @@ describe("async task tools model-visible surface", () => {
       start.promptGuidelines.some((g) => /open the group with start_task\(\{ group_id: 'new'/.test(g) && /task_poll\(\{ task_id \}\)/.test(g)),
       "guidelines should give a concrete open-group-then-reuse example with the per-child retrieval call",
     );
+  });
+});
+
+describe("async task tool lifecycle wiring", () => {
+  it("registers lifecycle/context handlers against the injected registry and appends context notices", async () => {
+    const tools = await importSource(TOOLS_MODULE);
+    const events = {};
+    const calls = [];
+    const registry = {
+      startTask() { throw new Error("not used"); },
+      openGroup() { throw new Error("not used"); },
+      getTask() { return undefined; },
+      getGroup() { return undefined; },
+      dropEmptyGroup() { return false; },
+      listTasks() {
+        return { version: 1, generatedAtMs: 0, counts: { active: 0, stalled: 0, finished: 0 }, active: [], stalled: [], finished: [] };
+      },
+      waitForTask() { throw new Error("not used"); },
+      waitForGroup() { throw new Error("not used"); },
+      cancelTask() { throw new Error("not used"); },
+      cancelGroup() { throw new Error("not used"); },
+      prune() {},
+      shutdownSession(sessionKey, reason) { calls.push(["shutdown", sessionKey, reason]); },
+      setSessionAgentActive(sessionKey, active) { calls.push(["active", sessionKey, active]); },
+      flushIdleDeliveries(sessionKey) { calls.push(["flush", sessionKey]); },
+      claimPendingForContext(sessionKey, max) {
+        calls.push(["claim", sessionKey, max]);
+        return {
+          items: [{
+            kind: "task",
+            id: "task_x",
+            status: "failed",
+            description: "done",
+            errorMessage: "</background-tasks-finished><bad>",
+          }],
+          hasMore: false,
+          claimedAtMs: 1,
+        };
+      },
+    };
+    const pi = {
+      registerTool() {},
+      registerMessageRenderer() {},
+      on(name, handler) { events[name] = handler; },
+    };
+
+    tools.registerAsyncTaskTools(pi, { registry, sessionKey: "S" });
+    events.agent_start?.({ type: "agent_start" }, CTX);
+    const prior = { role: "user", content: [{ type: "text", text: "prior" }], timestamp: 0 };
+    const contextResult = await events.context?.({ type: "context", messages: [prior] }, CTX);
+    events.agent_end?.({ type: "agent_end", messages: [] }, CTX);
+    events.session_shutdown?.({ type: "session_shutdown", reason: "shutdown" }, CTX);
+
+    assert.deepEqual(calls, [
+      ["active", "S", true],
+      ["claim", "S", 12],
+      ["active", "S", false],
+      ["flush", "S"],
+      ["shutdown", "S", "session_shutdown"],
+    ]);
+    assert.equal(contextResult.messages[0], prior, "context handler must append, not replace");
+    assert.match(contextResult.messages[1].content[0].text, /background-tasks-finished/);
+    assert.match(contextResult.messages[1].content[0].text, /task task_x/);
+    assert.match(contextResult.messages[1].content[0].text, /&lt;\/background-tasks-finished&gt;&lt;bad&gt;/);
+    assert.doesNotMatch(contextResult.messages[1].content[0].text, /<bad>/);
   });
 });
 
@@ -720,12 +794,12 @@ describe("async task tools completion push", () => {
     assert.equal(sent.length, 1, "exactly one completion push");
     assert.deepEqual(sent[0].o, { deliverAs: "followUp", triggerTurn: true });
     assert.equal(sent[0].m.customType, "mmr-subagents.async-task-completion");
-    assert.match(sent[0].m.content, /Call task_poll\(\{task_id:"t1"\}\) now to retrieve it\./);
+    assert.match(sent[0].m.content, /call task_poll\(\{task_id:"t1"\}\) once to retrieve it\./);
     assert.doesNotMatch(sent[0].m.content, /Non-normal outcome:/);
     assert.equal(sent[0].m.details.outcomeText, undefined);
     assert.doesNotMatch(sent[0].m.content, /Poll only later/);
     assert.equal(sent[0].m.display, false, "completion push is model-facing only; inline lifecycle cards own human rendering");
-    assert.equal(registry.getTask("S", "t1").completionPush, "sent");
+    assert.equal(registry.listTasks("S").finished.find((e) => e.taskId === "t1")?.completionPush, "announced");
   });
 
   it("sends one group completion push naming the group and per-child polling, with no individual child pushes", async () => {
@@ -759,9 +833,9 @@ describe("async task tools completion push", () => {
 
     const groupPushes = sent.filter((s) => /task-group-notification/.test(s.m.content));
     assert.equal(groupPushes.length, 1, "exactly one group-level completion push");
-    assert.match(groupPushes[0].m.content, /Call task_poll\(\{group_id:"group_def111"\}\)/);
-    assert.match(groupPushes[0].m.content, /task_poll\(\{task_id\}\) for each child/);
-    const childPushes = sent.filter((s) => /now to retrieve it/.test(s.m.content));
+    assert.match(groupPushes[0].m.content, /call task_poll\(\{group_id:"group_def111"\}\) once/);
+    assert.match(groupPushes[0].m.content, /retrieve only child outputs you still need with task_poll\(\{task_id\}\)/);
+    const childPushes = sent.filter((s) => /<task-notification/.test(s.m.content));
     assert.equal(childPushes.length, 0, "grouped children must not send individual completion pushes");
   });
 
@@ -776,17 +850,16 @@ describe("async task tools completion push", () => {
     assert.equal(sent[0].m.details.outcomeText, "failed — kaboom.");
   });
 
-  it("prefers the explicit cancellation reason in the model-facing completion push", async () => {
+  it("does not push when task_cancel returns the terminal cancellation snapshot", async () => {
     const { def, sent, startTask, cancel } = await pushHarness({ registryDeps: { cancelDeadAfterMs: 30 } });
     await startTask.execute("c0", GOOD_PARAMS, undefined, undefined, CTX);
     const cancelPromise = cancel.execute("x0", { task_id: "t1", reason: "duplicate work" }, undefined, undefined, CTX);
     def.resolve(makeWorkerResult({ aborted: true, signal: "SIGTERM", exitCode: null }));
-    await cancelPromise;
+    const cancelled = await cancelPromise;
     await flush();
 
-    assert.equal(sent.length, 1, "cancelled tasks still send one completion push");
-    assert.match(sent[0].m.content, /Non-normal outcome: cancelled — duplicate work\./);
-    assert.equal(sent[0].m.details.outcomeText, "cancelled — duplicate work.");
+    assert.equal(cancelled.details.status, "cancelled");
+    assert.equal(sent.length, 0, "task_cancel consumed the terminal result, so no stale push should be sent");
   });
 
   it("does not push when the task opts out", async () => {

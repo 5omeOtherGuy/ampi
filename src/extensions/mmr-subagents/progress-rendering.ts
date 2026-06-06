@@ -66,7 +66,8 @@ export const ASYNC_TASK_COMPLETION_CUSTOM_TYPE = "mmr-subagents.async-task-compl
 export interface AsyncTaskCompletionDetails {
   version: 1;
   kind: typeof ASYNC_TASK_COMPLETION_CUSTOM_TYPE;
-  taskId: string;
+  taskId?: string;
+  groupId?: string;
   status: string;
   description?: string;
   outcomeText?: string;
@@ -1440,8 +1441,11 @@ export const renderAsyncTaskCompletionMessage: MessageRenderer<AsyncTaskCompleti
     box.addChild(new Text(asyncTaskCompletionHeaderLine(details, theme), 0, 0));
     addMarkdownBlock(box, details?.description, theme, { paddingX: 1 });
     addMarkdownBlock(box, details?.outcomeText, theme, { paddingX: 1 });
+    const groupId = details?.groupId?.trim();
     const taskId = details?.taskId?.trim();
-    if (taskId) {
+    if (groupId) {
+      box.addChild(new Text(theme.fg("muted", `task_poll({group_id:"${groupId}"})`), 0, 0));
+    } else if (taskId) {
       box.addChild(new Text(theme.fg("muted", `task_poll({task_id:"${taskId}"})`), 0, 0));
     }
     const container = new Container();
