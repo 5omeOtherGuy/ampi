@@ -208,15 +208,18 @@ function isInsideRoot(target: string, root: string): boolean {
 /**
  * Read and parse an enabled record's source Markdown with the same filesystem
  * hardening the discovery walker uses: open the final component with
- * `O_NOFOLLOW` (refuse a symlink swapped in for the source file), bound the
- * size from the same descriptor we read, and verify the file's realpath stays
- * inside the Pi-owned root. An enabled record must never let a project point
- * `.pi/subagents/foo.md` at a file outside the Pi-owned root via a symlink.
+ * `O_NOFOLLOW` (refuse a symlink swapped in for the source file), refuse a
+ * symlinked Pi-owned root, bound the size from the same descriptor we read,
+ * and verify the file's realpath stays inside the Pi-owned root. An enabled
+ * record must never let a project point `.pi/subagents/foo.md` at a file
+ * outside the Pi-owned root via a symlink.
  */
 function parseRecordSourceFile(filePath: string, rootDir: string): MmrCustomSubagentDefinition | undefined {
   let markdown: string | undefined;
   let fd: number | undefined;
   try {
+    const rootStat = fs.lstatSync(rootDir);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return undefined;
     fd = fs.openSync(filePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
     const stat = fs.fstatSync(fd);
     if (!stat.isFile() || stat.size > MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES) return undefined;
