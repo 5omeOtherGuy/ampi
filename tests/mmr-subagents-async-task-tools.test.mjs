@@ -152,6 +152,28 @@ describe("start_task", () => {
     await flush();
   });
 
+  it("updates the footer status while background agents are running and clears it on settle", async () => {
+    const statusCalls = [];
+    const ctx = {
+      ...CTX,
+      ui: { setStatus: (key, text) => statusCalls.push({ key, text }) },
+    };
+    const { startTask, def } = await makeToolset();
+
+    await startTask.execute("call-1", GOOD_PARAMS, undefined, undefined, ctx);
+    assert.deepEqual(statusCalls.at(-1), {
+      key: "mmr-subagents.async-tasks",
+      text: "1 background agent running",
+    });
+
+    def.resolve(makeWorkerResult());
+    await flush();
+    assert.deepEqual(statusCalls.at(-1), {
+      key: "mmr-subagents.async-tasks",
+      text: undefined,
+    });
+  });
+
   it("does NOT bind the worker to the per-call tool signal", async () => {
     const { startTask, def } = await makeToolset();
     const aborted = AbortSignal.abort(); // already-aborted per-call signal
@@ -535,7 +557,7 @@ describe("async task tools completion push", () => {
     def.resolve(makeWorkerResult());
     await flush();
     assert.equal(sent.length, 1, "exactly one completion push");
-    assert.deepEqual(sent[0].o, { deliverAs: "nextTurn", triggerTurn: true });
+    assert.deepEqual(sent[0].o, { deliverAs: "followUp", triggerTurn: true });
     assert.equal(sent[0].m.customType, "mmr-subagents.async-task-completion");
     assert.equal(registry.getTask("S", "t1").completionPush, "sent");
   });

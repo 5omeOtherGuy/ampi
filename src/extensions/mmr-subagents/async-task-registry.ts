@@ -103,6 +103,11 @@ export type MmrAsyncTaskNotifier = (
   snapshot: MmrAsyncTaskInternalSnapshot,
 ) => void | Promise<void>;
 
+/** Best-effort lifecycle hook fired after a task reaches a terminal state. */
+export type MmrAsyncTaskSettleCallback = (
+  snapshot: MmrAsyncTaskInternalSnapshot,
+) => void | Promise<void>;
+
 export interface StartAsyncTaskArgs {
   sessionKey: string;
   /** Originating Pi tool-call id; used for at-most-once idempotency. */
@@ -122,6 +127,8 @@ export interface StartAsyncTaskArgs {
    * pull-only (no push).
    */
   notify?: MmrAsyncTaskNotifier;
+  /** Optional best-effort hook for UI state such as a background-task footer. */
+  onSettle?: MmrAsyncTaskSettleCallback;
 }
 
 export type StartAsyncTaskResult =
@@ -329,6 +336,7 @@ interface MmrAsyncTaskRecord {
   finalToolResult?: AgentToolResult<unknown>;
   errorMessage?: string;
   notify?: MmrAsyncTaskNotifier;
+  onSettle?: MmrAsyncTaskSettleCallback;
   completionPush: MmrAsyncTaskCompletionPushState;
   waiters: Set<() => void>;
   promise?: Promise<void>;
@@ -440,6 +448,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       runGeneration: 0,
       runnerSettled: false,
       ...(args.notify !== undefined ? { notify: args.notify } : {}),
+      ...(args.onSettle !== undefined ? { onSettle: args.onSettle } : {}),
       completionPush: args.notify !== undefined ? "pending" : "disabled",
       waiters: new Set(),
     };
@@ -649,7 +658,17 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
         // Waiter resolvers never throw in practice; ignore defensively.
       }
     }
+    this.fireSettleCallback(record);
     this.maybeNotify(record, observedByWaiter);
+  }
+
+  private fireSettleCallback(record: MmrAsyncTaskRecord): void {
+    const onSettle = record.onSettle;
+    if (!onSettle) return;
+    const snapshot = this.snapshot(record);
+    void Promise.resolve().then(() => onSettle(snapshot)).catch(() => {
+      // UI lifecycle hooks are best-effort and must never affect task state.
+    });
   }
 
   private maybeNotify(record: MmrAsyncTaskRecord, observedByWaiter = false): void {
