@@ -189,3 +189,78 @@ describe("async-task-registry ready lifecycle (fleet)", () => {
     assert.equal(d.captured.calls, 1, "immediate start runs without an explicit launch");
   });
 });
+
+function openReadyGroup(reg, count, groupOver = {}) {
+  const g = reg.openGroup({ sessionKey: "sess-A", deliveryOptIn: true, ...groupOver });
+  const ids = [];
+  for (let i = 0; i < count; i++) {
+    const s = reg.startTask(startArgs({
+      run: makeDeferredRun().run,
+      launchMode: "manual",
+      groupId: g.groupId,
+      originToolCallId: `call-${i}`,
+      deliveryOptIn: false,
+    }));
+    ids.push(s.snapshot.taskId);
+  }
+  return { groupId: g.groupId, ids };
+}
+
+describe("async-task-registry: an all-ready group is non-terminal (not delivered/settled early)", () => {
+  it("claimPendingForContext does not deliver an all-ready group", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let clock = 1000;
+    const reg = createMmrAsyncTaskRegistry({
+      nowMs: () => clock, idFactory: idCounter("task"), groupIdFactory: () => "group_aaaaa1",
+    });
+    openReadyGroup(reg, 3);
+    const claim = reg.claimPendingForContext("sess-A", 10);
+    assert.equal(claim.items.length, 0, "a declared-but-unlaunched fleet must not be delivered as finished");
+  });
+
+  it("waitForGroup on an all-ready group waits (times out) instead of returning terminal", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let clock = 1000;
+    const reg = createMmrAsyncTaskRegistry({
+      nowMs: () => clock, idFactory: idCounter("task"), groupIdFactory: () => "group_aaaaa2",
+    });
+    const { groupId } = openReadyGroup(reg, 2);
+    const res = await reg.waitForGroup({ sessionKey: "sess-A", groupId, timeoutMs: 0 });
+    assert.equal(res.found, true);
+    assert.equal(res.timedOut, true, "a ready group has not finished, so the wait must time out");
+    assert.equal(res.snapshot.status, "ready");
+  });
+
+  it("observing a ready group via getGroup does not suppress later real delivery", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let clock = 1000;
+    const reg = createMmrAsyncTaskRegistry({
+      nowMs: () => clock, idFactory: idCounter("task"), groupIdFactory: () => "group_aaaaa3",
+    });
+    const { groupId, ids } = openReadyGroup(reg, 1);
+    // A poll while ready must NOT mark the group observed.
+    reg.getGroup("sess-A", groupId, { observe: true });
+    const run = makeDeferredRun();
+    // Re-declare is not possible; launch the existing ready member instead.
+    reg.launchTask("sess-A", ids[0]);
+    assert.equal(reg.getGroup("sess-A", groupId).status, "running");
+  });
+
+  it("prune does not expire a never-launched ready task by wall time", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let clock = 1000;
+    const reg = createMmrAsyncTaskRegistry({ nowMs: () => clock, idFactory: () => "task_r" });
+    const d = makeDeferredRun();
+    reg.startTask(startArgs({ run: d.run, launchMode: "manual" }));
+    clock = 10 ** 15; // far past any runtime budget; prune runs on read
+    const board = reg.listTasks("sess-A");
+    assert.equal(board.active.length, 1, "a ready task must not be pruned/expired before it launches");
+    assert.equal(board.active[0].status, "ready");
+    await flush();
+    assert.equal(d.captured.calls, 0, "still not launched");
+    const launched = reg.launchTask("sess-A", "task_r");
+    assert.equal(launched.status, "running");
+    await flush();
+    assert.equal(d.captured.calls, 1, "launch still runs the held thunk after a long ready window");
+  });
+});

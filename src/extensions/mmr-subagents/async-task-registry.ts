@@ -338,6 +338,21 @@ export type MmrAsyncTaskGroupStatus =
   | "partial"
   | "completed";
 
+/**
+ * A group is terminal only once every child has finished. `ready` (declared,
+ * not launched) and `running` are both non-terminal: settlement, automatic
+ * delivery, observation, and wait-completion must treat them the same so a
+ * freshly declared fleet is never delivered or "settled" before it launches.
+ */
+export function isTerminalGroupStatus(status: MmrAsyncTaskGroupStatus): boolean {
+  return (
+    status === "completed"
+    || status === "failed"
+    || status === "cancelled"
+    || status === "partial"
+  );
+}
+
 export interface MmrAsyncTaskGroupSnapshot {
   groupId: string;
   status: MmrAsyncTaskGroupStatus;
@@ -681,7 +696,11 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       createdAtMs: now,
       startedAtMs: now,
       updatedAtMs: now,
-      maxRuntimeAtMs: now + this.maxRuntimeMs,
+      // A manual/ready task has no runtime budget until it actually launches
+      // ({@link launchTask} stamps the real deadline); otherwise the prune
+      // backstop could expire a declared-but-unlaunched fleet member by wall
+      // time. An immediate task starts its budget now.
+      maxRuntimeAtMs: manual ? Number.POSITIVE_INFINITY : now + this.maxRuntimeMs,
       expiredByWatchdog: false,
       controller,
       runGeneration: 0,
@@ -1073,7 +1092,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     if (!group) return;
     const snapshot = this.groupSnapshot(group);
     group.updatedAtMs = this.nowMs();
-    if (snapshot.status === "running") return;
+    if (!isTerminalGroupStatus(snapshot.status)) return;
     if (group.completedAtMs === undefined) {
       group.completedAtMs = this.nowMs();
       // Mirror task settlement (§8.1b): an active group wait registers a waiter,
@@ -1119,7 +1138,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     if (!group) return undefined;
     // A model-facing group poll counts as observing the group only (§8.3);
     // UI/widget mirrors read non-observingly so they never suppress delivery.
-    if (options.observe === true && this.groupStatus(this.groupChildren(group)) !== "running") {
+    if (options.observe === true && isTerminalGroupStatus(this.groupStatus(this.groupChildren(group)))) {
       this.markGroupObserved(group);
     }
     return this.groupSnapshot(group);
@@ -1174,7 +1193,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     if (groupMap) {
       for (const group of groupMap.values()) {
         if (!group.deliveryOptIn) continue;
-        if (this.groupStatus(this.groupChildren(group)) === "running") continue;
+        if (!isTerminalGroupStatus(this.groupStatus(this.groupChildren(group)))) continue;
         if (terminalDeliveryOf(group) !== "pending") continue;
         candidates.push({
           kind: "group",
@@ -1319,7 +1338,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     const timeoutMs = Math.max(0, Math.min(rawTimeout, MAX_TASK_WAIT_TIMEOUT_MS));
     const children = this.groupChildren(group);
     const snapshotBefore = this.groupSnapshot(group);
-    if (snapshotBefore.status !== "running") {
+    if (isTerminalGroupStatus(snapshotBefore.status)) {
       this.markGroupObserved(group);
       return { found: true, timedOut: false, snapshot: this.groupSnapshot(group) };
     }
@@ -1348,7 +1367,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       group.waiters.delete(groupWaiter);
     }
     const snapshot = this.groupSnapshot(group);
-    const terminal = snapshot.status !== "running";
+    const terminal = isTerminalGroupStatus(snapshot.status);
     if (terminal) this.markGroupObserved(group);
     return { found: true, timedOut: !allSettled || !terminal, snapshot: this.groupSnapshot(group) };
   }
@@ -1429,7 +1448,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     this.maybeSettleGroup(args.groupId, args.sessionKey);
     // The canceller holds the terminal group snapshot; mark the group observed
     // (§8.3) so no idle-wake/context group notice re-surfaces it.
-    if (this.groupStatus(this.groupChildren(group)) !== "running") this.markGroupObserved(group);
+    if (isTerminalGroupStatus(this.groupStatus(this.groupChildren(group)))) this.markGroupObserved(group);
     return this.groupSnapshot(group);
   }
 

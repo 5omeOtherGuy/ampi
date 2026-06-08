@@ -117,9 +117,10 @@ export interface AsyncTaskToolDeps extends TaskToolDeps {
    */
   enableCompletionPush?: boolean;
   /**
-   * Schedules the deferred launch of a fleet's `ready` members. Default
-   * `setTimeout(fn, 0)`, so the declaration result (and the ready card) is
-   * committed before the workers start. Injectable for deterministic tests.
+   * Schedules the deferred launch of a fleet's `ready` members. Default is a
+   * ref'd `setTimeout(fn, 0)`, so the declaration result (and the ready card)
+   * is committed before the workers start, while still guaranteeing the launch
+   * runs even in a short-lived process. Injectable for deterministic tests.
    */
   launchScheduler?: (fn: () => void) => void;
 }
@@ -450,9 +451,11 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
     // The ready fleet is fully declared; render it before any worker starts.
     refreshAsyncTaskWidget(ctx, registry, sessionKey);
 
+    // Ref'd on purpose: a ready fleet must launch even in a short-lived/headless
+    // run that would otherwise exit before an unref'd tick fired, which would
+    // strand every member in `ready` forever. The hold is a single 0ms tick.
     const schedule = deps.launchScheduler ?? ((fn: () => void) => {
-      const timer = setTimeout(fn, 0);
-      (timer as { unref?: () => void }).unref?.();
+      setTimeout(fn, 0);
     });
     schedule(() => {
       for (const taskId of allTaskIds) registry.launchTask(sessionKey, taskId);
