@@ -26,6 +26,16 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `tests/mmr-subagents-staged-reveal.test.mjs` (including late-sibling,
   terminal-transition, display-order, and finished-only cases) and prep-window
   plus finished-only cases in `tests/mmr-subagents-background-task-widget.test.mjs`.
+- `mmr-subagents`: the inline background-task card drops the `(ctrl+o to
+  expand)` affordance and always renders the rich metadata chips (elapsed,
+  model, turns, context %) on the consolidated group and single-task cards;
+  the collapsed/minimal variant is gone. The card also stages its reveal: a
+  freshly spawned group/single card stays invisible during a brief post-spawn
+  settle window and then reveals one member row at a time, while replayed
+  transcripts (no live registry) show the full card immediately. The transient
+  `start_task` "starting" call row no longer flashes — the result card owns the
+  entire reveal. Covered by deterministic reveal and full-chip tests in
+  `tests/mmr-subagents-progress-rendering.test.mjs`.
 - `mmr-core`: the `smart` context-cap reassertion now defers to an active
   MMR-managed model override (e.g. a session fallback) instead of re-capping
   underneath its owner, matching the `before_provider_request` hook which
