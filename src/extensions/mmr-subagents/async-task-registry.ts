@@ -602,6 +602,11 @@ function isTerminalStatus(status: MmrAsyncTaskStatus): boolean {
   return status === "succeeded" || status === "failed" || status === "cancelled";
 }
 
+// The lowercase-hex id shape is contractually tied to the validators and
+// JSON-schema patterns below (`isValidAsyncTaskGroupId` / `^group_[a-f0-9]{6,}$`
+// and the async-task tool schemas). `crypto.randomUUID()` is intentionally NOT
+// used: its hyphenated form would fail those patterns. If stronger uniqueness
+// is ever needed, widen to `randomBytes(8)` (still hex, still matches `{6,}`).
 function defaultIdFactory(): string {
   return `task_${randomBytes(6).toString("hex")}`;
 }
