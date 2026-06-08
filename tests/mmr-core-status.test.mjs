@@ -559,4 +559,22 @@ describe("mmr-core /mmr-status", () => {
       assert.equal(formatFooterTokens(input), expected, `formatFooterTokens(${input})`);
     }
   });
+
+  // Edge inputs: the lower tiers delegate to mmr-core's compact formatter, so
+  // zero/negatives/non-integers match it byte-for-byte; NaN falls through to
+  // the footer's own >=10M `Math.round(... )M` tail ("NaNM"). Pinned so the
+  // shared-helper refactor cannot drift on non-boundary inputs.
+  it("formats footer edge inputs (zero, negatives, non-integers, NaN) byte-for-byte", async () => {
+    const { formatFooterTokens } = await importSource("extensions/mmr-core/status.ts");
+    const cases = [
+      [0, "0"],
+      [-1, "-1"],
+      [-1500, "-1500"],
+      [1234.5, "1.2k"],
+      [Number.NaN, "NaNM"],
+    ];
+    for (const [input, expected] of cases) {
+      assert.equal(formatFooterTokens(input), expected, `formatFooterTokens(${input})`);
+    }
+  });
 });
