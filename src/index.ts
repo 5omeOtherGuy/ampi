@@ -1,9 +1,12 @@
 /**
  * `pi-mmr` package root barrel — the public export surface.
  *
- * Exports here are organized into stability tiers. The same tiers are
- * documented, with a per-symbol table, in `docs/public-api-surface.md`;
- * keep the two in sync when the surface changes.
+ * Exports here are organized into stability tiers. The same tiers, the
+ * compatibility rule, and a per-tier breakdown of what each covers are
+ * documented in `docs/public-api-surface.md` (the symbol-by-symbol API
+ * reference lives in `docs/public-api.md` and `docs/mmr-core-api.md`);
+ * keep the tier doc, this block, and the section banners below in sync
+ * when the surface changes.
  *
  * Tiers:
  *

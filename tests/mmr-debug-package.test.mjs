@@ -34,16 +34,28 @@ describe("mmr-debug packaging exclusion", () => {
   it("is not reachable through package.json exports", async () => {
     const pkg = await readPackageJson();
     assert.ok(pkg.exports && typeof pkg.exports === "object", "package.json must declare exports");
-    for (const [subpath, target] of Object.entries(pkg.exports)) {
-      assert.ok(
-        !subpath.includes("mmr-debug"),
-        `exports subpath ${subpath} must not reference mmr-debug.`,
-      );
-      assert.ok(
-        typeof target !== "string" || !target.includes("mmr-debug"),
-        `exports target ${String(target)} must not reference mmr-debug.`,
-      );
-    }
+    // Scan keys and string leaves recursively so a future conditional-export
+    // object (e.g. { "./debug": { "default": "...mmr-debug..." } }) cannot
+    // smuggle the dev-only extension into the resolved surface unnoticed.
+    const offenders = [];
+    const walk = (node, where) => {
+      if (typeof node === "string") {
+        if (node.includes("mmr-debug")) offenders.push(`${where} -> ${node}`);
+        return;
+      }
+      if (node && typeof node === "object") {
+        for (const [key, value] of Object.entries(node)) {
+          if (key.includes("mmr-debug")) offenders.push(`${where}${key}`);
+          walk(value, `${where}${key}.`);
+        }
+      }
+    };
+    walk(pkg.exports, "exports.");
+    assert.deepEqual(
+      offenders,
+      [],
+      `package.json exports must not reference mmr-debug; found: ${offenders.join(", ")}`,
+    );
   });
 
   it("declares the .npmignore exclusion rule", async () => {
