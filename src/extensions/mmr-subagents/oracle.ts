@@ -3,7 +3,6 @@ import path from "node:path";
 import type {
   AgentToolResult,
   ExtensionAPI,
-  ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
