@@ -8,6 +8,19 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-subagents`: the background-task widget now staggers each group section
+  into view with a uniform staged reveal instead of snapping every row in at
+  once. A new pure, clock-injected `revealedRowCount(rows, nowMs)` in
+  `background-task-view.ts` (with tunable `SPAWN_SETTLE_MS` and
+  `REVEAL_INTERVAL_MS` constants) is the single source of truth both background
+  surfaces consume: nothing reveals until the newest spawn has settled, then one
+  row appears per interval, so a fanned-out swarm flows in as one lockstep wave.
+  The pinned belowEditor widget clips each section by `revealedRowCount` on a
+  fresh clock every frame and omits a section entirely while it is still in its
+  prep window, while the clear decision and animation-timer selection stay based
+  on the real registry rows so the reveal always runs to completion. Covered by
+  `tests/mmr-subagents-staged-reveal.test.mjs` and an added prep-window case in
+  `tests/mmr-subagents-background-task-widget.test.mjs`.
 - `mmr-core`: the `smart` context-cap reassertion now defers to an active
   MMR-managed model override (e.g. a session fallback) instead of re-capping
   underneath its owner, matching the `before_provider_request` hook which

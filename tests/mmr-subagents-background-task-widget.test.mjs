@@ -321,6 +321,29 @@ describe("background-task widget", () => {
     assert.match(lines[0], /^\S/, "ungrouped-only rows stay flush-left");
   });
 
+  it("omits a section whose rows are still in the invisible prep window", async () => {
+    const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    // createdAtMs in the future => Date.now() < epoch for the test's duration,
+    // so revealedRowCount returns 0 and the whole section (header + rows) is
+    // omitted while the clear/animation decision stays on the real rows.
+    const future = Date.now() + 10_000;
+    refreshBackgroundTaskWidget(ctx, makeBoard({
+      counts: { active: 1, stalled: 0, finished: 0 },
+      active: [makeEntry({
+        taskId: "task_future", agent: "finder", description: "Prep window scout",
+        groupId: "group_prep01", createdAtMs: future, startedAtMs: future, updatedAtMs: future,
+      })],
+    }));
+    const last = calls.at(-1);
+    assert.equal(typeof last.value, "function", "active rows keep the widget mounted during prep");
+    const lines = last.value({ requestRender() {} }, theme).render(120);
+    const text = lines.join("\n");
+    assert.equal(lines.length, 0, "a prep-window section renders no lines at all");
+    assert.doesNotMatch(text, /Prep window scout/, "the row is hidden during prep");
+    assert.doesNotMatch(text, /group_prep01/, "the header is hidden during prep too");
+  });
+
   it("does nothing on a non-TUI surface", async () => {
     const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
     const calls = [];

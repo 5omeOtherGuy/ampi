@@ -25,6 +25,7 @@ import {
   PI_LOADER_INTERVAL_MS,
   renderRowLine,
   renderSectionHeader,
+  revealedRowCount,
   synthesizeGroup,
   toRow,
   truncateWidgetLines,
@@ -168,6 +169,25 @@ function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined 
 }
 
 /**
+ * Stage each section by its uniform reveal cadence (see
+ * {@link revealedRowCount}). `nowMs` is read fresh every frame so the reveal
+ * advances on the animation interval. A section whose revealed count is 0 is
+ * omitted ENTIRELY (header included) during its prep window; otherwise only the
+ * first `revealed` rows render. The clear decision and timer selection upstream
+ * stay based on the ACTUAL registry rows, never on this clipped view, so the
+ * animation interval keeps driving frames throughout the reveal.
+ */
+function revealSections(sections: readonly WidgetSection[], nowMs: number): WidgetSection[] {
+  const out: WidgetSection[] = [];
+  for (const section of sections) {
+    const revealed = revealedRowCount(section.rows, nowMs);
+    if (revealed === 0) continue;
+    out.push({ ...section, rows: section.rows.slice(0, revealed) });
+  }
+  return out;
+}
+
+/**
  * Flatten sections into widget lines: each group prints a header then its
  * indented rows. A lone ungrouped section prints headerless and flush-left, so
  * non-grouped Task usage renders exactly as before. `WIDGET_MAX_ROWS` counts
@@ -283,8 +303,14 @@ export function refreshBackgroundTaskWidget(
       }
       return {
         render: (width) =>
+          // Read a fresh Date.now() each frame so the staged reveal advances on
+          // the animation interval, mirroring currentLoaderFrame()'s clock.
           truncateWidgetLines(
-            renderWidgetLines(sections, theme, hasActive ? currentLoaderFrame() : undefined),
+            renderWidgetLines(
+              revealSections(sections, Date.now()),
+              theme,
+              hasActive ? currentLoaderFrame() : undefined,
+            ),
             width,
           ),
         invalidate: () => {},

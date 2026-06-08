@@ -261,6 +261,40 @@ export function compareRows(a: WidgetRow, b: WidgetRow): number {
 }
 
 /**
+ * Settle delay after the NEWEST spawn before any row is revealed. The reveal
+ * only begins once every member of a fan-out is old enough ("all spawned"),
+ * so a swarm that lands in two near-simultaneous groups reveals as one wave.
+ */
+export const SPAWN_SETTLE_MS = 200;
+
+/** Uniform cadence at which successive rows are revealed once the wave starts. */
+export const REVEAL_INTERVAL_MS = 70;
+
+/**
+ * How many of `rows` are revealed at `nowMs`, the single source of truth both
+ * background surfaces (pinned widget + inline card) consume so they stage in
+ * lockstep. Pure and clock-free: callers always inject `nowMs`.
+ *
+ * The reveal epoch is the newest spawn (`max createdAtMs`) plus
+ * {@link SPAWN_SETTLE_MS} — nothing shows until the whole fan-out has settled.
+ * Before the epoch the count is 0 (an invisible prep window). At and after it,
+ * one row reveals immediately and one more every {@link REVEAL_INTERVAL_MS},
+ * clamped to `rows.length`. The cadence is uniform (not per-row spawn times),
+ * so two groups sharing a near-identical newest-spawn time reveal row `i` in
+ * lockstep.
+ */
+export function revealedRowCount(rows: readonly WidgetRow[], nowMs: number): number {
+  if (rows.length === 0) return 0;
+  let newest = Number.NEGATIVE_INFINITY;
+  for (const r of rows) {
+    if (r.createdAtMs > newest) newest = r.createdAtMs;
+  }
+  const epoch = newest + SPAWN_SETTLE_MS;
+  if (nowMs < epoch) return 0;
+  return Math.min(rows.length, 1 + Math.floor((nowMs - epoch) / REVEAL_INTERVAL_MS));
+}
+
+/**
  * Synthesize a section header when no live group snapshot is available (the
  * resolver is absent or the group has already been pruned from the registry).
  * Status/counts are derived from the rows on hand.
