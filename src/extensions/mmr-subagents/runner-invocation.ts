@@ -8,6 +8,14 @@ export interface MmrWorkerArgsOptions {
   profileName?: string;
   parentMode?: string;
   systemPromptDelivery?: "append" | "replace";
+  /**
+   * When set to a non-empty list of absolute extension entry paths, the child
+   * is spawned with `--no-extensions -e <path>...` so it loads ONLY those
+   * extensions instead of performing full discovery. Resolved by
+   * `computeMmrChildExtensionScope`; omitted (or empty) keeps today's
+   * full-discovery behavior.
+   */
+  childExtensionScope?: readonly string[];
 }
 
 export interface MmrWorkerInvocation {
@@ -21,7 +29,16 @@ export function buildMmrWorkerArgs(
   promptFilePath?: string,
   userPromptFilePath?: string,
 ): string[] {
-  const args = ["--mode", "json", "-p", "--no-session"];
+  const args: string[] = [];
+  // Restrict child extension loading when a keep set was resolved. `-e` paths
+  // still load under `--no-extensions`; skills/prompt-template/theme discovery
+  // are unaffected by this flag, so the worker's prompt surface is unchanged.
+  const scope = options.childExtensionScope;
+  if (scope && scope.length > 0) {
+    args.push("--no-extensions");
+    for (const extensionPath of scope) args.push("-e", extensionPath);
+  }
+  args.push("--mode", "json", "-p", "--no-session");
   const profile = options.profileName?.trim();
   if (profile) args.push("--mmr-subagent", profile);
   const parentMode = options.parentMode?.trim();

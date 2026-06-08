@@ -34,6 +34,7 @@ import {
 } from "./worker-fallback-run.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { LIBRARIAN_BACKGROUND_GUIDANCE } from "./tool-guidance.js";
+import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
 import { buildWorkerToolManifest, resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
@@ -639,6 +640,10 @@ export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinitio
         contextWindow: readMmrModelContextWindow(invocation.selected.registeredModel),
       };
       const workerTools = invocation.workerTools;
+      const childExtensionScope = computeMmrChildExtensionScope({
+        profileName: LIBRARIAN_SUBAGENT_PROFILE_NAME,
+        host: deps.pi,
+      });
       const runnerOptions: MmrSubagentRunOptions = {
         profileName: LIBRARIAN_SUBAGENT_PROFILE_NAME,
         prompt: buildLibrarianUserPrompt(params),
@@ -651,6 +656,7 @@ export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinitio
           buildWorkerToolManifest(deps.pi, workerTools),
           workerTools,
         ),
+        ...(childExtensionScope ? { childExtensionScope } : {}),
         systemPromptDelivery: "replace",
         signal,
         outputByteLimit,

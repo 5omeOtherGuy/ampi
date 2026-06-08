@@ -30,7 +30,8 @@ import {
 } from "./worker-fallback-run.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "./tool-guidance.js";
-import { resolveWorkerCwd } from "./worker-host.js";
+import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
+import { resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -453,6 +454,8 @@ export interface OracleToolDeps {
     | undefined;
   /** Override the worker output byte cap. */
   outputByteLimit?: number;
+  /** Pi host, captured by registerOracleTool so child startup can keep provider/extension paths. */
+  pi?: ToolHostLike;
   /** Override the per-file byte cap when inlining text-file contents. */
   perFileByteLimit?: number;
   /** Override prompt text while still flowing through the subagent surface API. Tests inject deterministic text. */
@@ -698,6 +701,10 @@ export function createMmrAdvisorTool(
       );
       const profile = requireMmrAdvisorProfile(config.profileName);
       const registry = resolveCtxMmrModelRegistry(ctx);
+      const childExtensionScope = computeMmrChildExtensionScope({
+        profileName: config.profileName,
+        host: deps.pi,
+      });
 
       // Run the worker with session-scoped model fallback (issue #9). The
       // closure owns normal model preference resolution; when a fallback override is
@@ -740,6 +747,7 @@ export function createMmrAdvisorTool(
             : undefined,
         };
         if (model) runnerOptions.model = model;
+        if (childExtensionScope) runnerOptions.childExtensionScope = childExtensionScope;
         if (runArgs.override) runnerOptions.modelPreferencesOverride = runArgs.override;
         const result = await effectiveRunner.run(runnerOptions);
         return { result, route: model };
@@ -792,7 +800,7 @@ export function createOracleTool(deps: OracleToolDeps = {}): ToolDefinition {
  * tool.
  */
 export function registerOracleTool(pi: ExtensionAPI, deps: OracleToolDeps = {}): ToolDefinition {
-  const definition = createOracleTool(deps);
+  const definition = createOracleTool({ ...deps, pi });
   registerMmrOwnedTool(ORACLE_TOOL_NAME);
   pi.registerTool(definition);
   return definition;

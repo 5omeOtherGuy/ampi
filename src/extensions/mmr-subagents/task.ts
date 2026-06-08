@@ -33,6 +33,7 @@ import {
 } from "./fallback.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { TASK_BACKGROUND_GUIDANCE } from "./tool-guidance.js";
+import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
 import { buildWorkerToolManifest, resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
@@ -892,6 +893,10 @@ export function prepareTaskRun(
   };
   const runnerParentMode = invocation.parentMode ?? parentMode;
   const outputByteLimit = deps.outputByteLimit ?? DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT;
+  const childExtensionScope = computeMmrChildExtensionScope({
+    profileName: TASK_SUBAGENT_PROFILE,
+    host: deps.pi,
+  });
   const runnerOptionsBase: Omit<MmrSubagentRunOptions, "signal" | "onProgress"> = {
     profileName: TASK_SUBAGENT_PROFILE,
     prompt: params.prompt,
@@ -899,6 +904,7 @@ export function prepareTaskRun(
     tools: invocation.workerTools,
     model: invocation.modelArg,
     ...(runnerParentMode !== undefined ? { parentMode: runnerParentMode } : {}),
+    ...(childExtensionScope ? { childExtensionScope } : {}),
     systemPrompt: deps.buildSystemPrompt
       ? deps.buildSystemPrompt(promptInput)
       : buildTaskWorkerSystemPrompt(promptInput),

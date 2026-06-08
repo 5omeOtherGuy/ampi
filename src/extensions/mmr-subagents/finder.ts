@@ -32,7 +32,8 @@ import {
 } from "./worker-fallback-run.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { FINDER_BACKGROUND_GUIDANCE } from "./tool-guidance.js";
-import { resolveWorkerCwd } from "./worker-host.js";
+import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
+import { resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -434,6 +435,8 @@ export interface FinderToolDeps {
   outputByteLimit?: number;
   /** Override prompt text while still flowing through the subagent surface API. Tests inject deterministic text. */
   buildSystemPrompt?: (cwd: string) => string;
+  /** Pi host, captured by registerFinderTool so child startup can keep provider/extension paths. */
+  pi?: ToolHostLike;
   /**
    * Forwarded to {@link runMmrSubagentWorker} as its second argument. Used
    * by tests and smoke scripts that need to inject a custom subprocess
@@ -649,6 +652,10 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
       const profile = requireFinderProfile();
       const registry = resolveCtxMmrModelRegistry(ctx);
       const basePreferences = resolveFinderModelPreferences(cwd, deps);
+      const childExtensionScope = computeMmrChildExtensionScope({
+        profileName: FINDER_SUBAGENT_PROFILE,
+        host: deps.pi,
+      });
 
       // Session-scoped model fallback (issue #9). The closure owns normal
       // model preference resolution; under an override it selects from the override and
@@ -689,6 +696,7 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
             : undefined,
         };
         if (model) runnerOptions.model = model;
+        if (childExtensionScope) runnerOptions.childExtensionScope = childExtensionScope;
         if (runArgs.override) runnerOptions.modelPreferencesOverride = runArgs.override;
         const result = await effectiveRunner.run(runnerOptions);
         return { result, route: model };
@@ -718,7 +726,7 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
  * MMR-owned so Free mode strips it like every other MMR-authored tool.
  */
 export function registerFinderTool(pi: ExtensionAPI, deps: FinderToolDeps = {}): ToolDefinition {
-  const definition = createFinderTool(deps);
+  const definition = createFinderTool({ ...deps, pi });
   registerMmrOwnedTool(FINDER_TOOL_NAME);
   pi.registerTool(definition);
   return definition;

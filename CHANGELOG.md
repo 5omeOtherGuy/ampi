@@ -37,6 +37,12 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   a fenced block or prose summary — the live card and the settled card are the
   status surface. `group_id` is reframed as the legacy incremental path that
   defers to `fleet`. Covered by `tests/mmr-subagents-fleet-parse.test.mjs`.
+- `mmr-subagents`: spawned workers now start faster by launching child Pi
+  processes with a restricted extension keep-set for built-in profiles. The
+  runner keeps external/unknown provider extensions discovered from the parent
+  host, drops only positively identified unneeded `pi-mmr` extensions, preserves
+  full discovery for custom/uncertain/debug-capture cases, and retries once with
+  full discovery on restricted activation/model-resolution failures.
 - `mmr-core`: the active-model context-window cap now applies to every locked
   mode, not just `smart`. `withMmrModeContextCap` derives each mode's cap from
   its own request policy (`smart` 300k, `smartGPT`/`rush`/`deep` 256k, `large`

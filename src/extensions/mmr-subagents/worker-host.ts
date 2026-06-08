@@ -30,6 +30,12 @@ export function resolveWorkerCwd(ctx: ExtensionContext | undefined): string {
 export interface ToolHostLike {
   getActiveTools?: () => readonly string[];
   getAllTools?: () => readonly unknown[];
+  /**
+   * Registered slash commands with `sourceInfo` metadata. Used by
+   * `computeMmrChildExtensionScope` to enumerate loaded extensions that
+   * register a command (e.g. external model-provider packages) but no tool.
+   */
+  getCommands?: () => readonly unknown[];
 }
 
 /**
