@@ -44,6 +44,7 @@ import {
   groupMembersFromBoard,
   renderRowLine,
   renderSectionHeader,
+  revealedRowCount,
   singleRowFromBoard,
   synthesizeGroup,
   truncateWidgetLines,
@@ -136,10 +137,19 @@ function renderBackgroundGroupCard(
     : members.length > 0 ? synthesizeGroup(members) : undefined;
   const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
 
+  // Staged reveal: a freshly spawned live card stays invisible during the brief
+  // post-spawn settle window, then reveals one member row per cadence tick until
+  // every row is shown. Replay / no live registry (members.length === 0) shows
+  // the whole card immediately and is never clipped.
+  const revealedMembers = members.length > 0
+    ? members.slice(0, revealedRowCount(members, Date.now()))
+    : members;
+  if (members.length > 0 && revealedMembers.length === 0) return new Container();
+
   const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
   const metadata: RowMetadataLevel = "full";
   const lines: string[] = [renderSectionHeader(section, theme)];
-  for (const row of members) {
+  for (const row of revealedMembers) {
     lines.push(renderRowLine(row, theme, frame, { indent: "  ", metadata }));
   }
   if (members.length === 0) {
@@ -167,6 +177,8 @@ function renderBackgroundSingleCard(
   const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
   const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
     ?? rowFromDetails(details);
+  // Same staged reveal as the group card: invisible during the settle window.
+  if (revealedRowCount([row], Date.now()) === 0) return new Container();
   const frame = rowsAnyRunning([row]) ? currentLoaderFrame() : undefined;
   const metadata: RowMetadataLevel = "full";
   return new BackgroundCardComponent([renderRowLine(row, theme, frame, { metadata })]);
@@ -226,24 +238,10 @@ export function renderMmrBackgroundTaskCall(
   context?: RenderContextLike,
 ): Component {
   if (toolName !== "start_task") return new Container();
-  const display = startTaskDisplayFromArgs(args);
-  if (!display) return new Container();
-  // Transient borderless "starting" row; the result lands immediately and the
-  // consolidated group/single card takes over (clearRenderedCall blanks this).
-  const row: WidgetRow = {
-    taskId: "",
-    status: "running",
-    freshness: "healthy",
-    agent: display.details.agent ?? "background task",
-    description: display.collapsed ?? "",
-    runtimeMs: 0,
-    createdAtMs: 0,
-  };
-  const component = new BackgroundCardComponent([
-    renderRowLine(row, theme, currentLoaderFrame(), { metadata: "none" }),
-  ]);
-  rememberCallComponent(context, component);
-  return component;
+  // The result card owns the entire staged reveal, so the call renders nothing:
+  // suppressing the transient "starting" row keeps it from flashing during the
+  // post-spawn prep window before the result card takes over.
+  return new Container();
 }
 
 export function renderMmrBackgroundTaskResult(
