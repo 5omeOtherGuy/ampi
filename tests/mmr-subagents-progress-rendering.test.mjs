@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
+import path from "node:path";
 import { after, describe, it } from "node:test";
+import { pathToFileURL } from "node:url";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
-import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 initTheme(undefined, false);
 
@@ -1198,11 +1200,13 @@ describe("background task rendering", () => {
     assert.doesNotMatch(singleCard, /ctrl\+o to expand/i);
   });
 
-  it("keeps the freshly spawned group/single card invisible during the post-spawn settle window", async () => {
+  it("keeps the freshly spawned group/single card mounted-but-invisible during the post-spawn settle window", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     // ACTIVE rows with createdAtMs in the future relative to Date.now() => still
     // inside the post-spawn settle window => revealedRows reveals nothing => the
-    // card is empty.
+    // card renders no lines. It stays a mounted BackgroundCardComponent (NOT a
+    // static Container) so a later widget render tick re-runs its thunk and
+    // reveals it once the settle window has elapsed.
     const now = Date.now();
     const groupBoard = {
       version: 1, generatedAtMs: 0, counts: { active: 2, stalled: 0, finished: 0 },
@@ -1221,7 +1225,7 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => groupBoard, resolveGroup: () => group },
     );
-    assert.equal(groupCard.constructor.name, "Container");
+    assert.equal(groupCard.constructor.name, "BackgroundCardComponent");
     assert.equal(normalize(renderText(groupCard)).trim(), "", "prep group card must render no header and no rows");
 
     const singleBoard = {
@@ -1237,7 +1241,7 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => singleBoard },
     );
-    assert.equal(singleCard.constructor.name, "Container");
+    assert.equal(singleCard.constructor.name, "BackgroundCardComponent");
     assert.equal(normalize(renderText(singleCard)).trim(), "", "prep single card must render nothing");
   });
 
@@ -1764,5 +1768,84 @@ describe("renderAsyncTaskCompletionMessage", () => {
     assert.match(rendered, /background task .* completed/);
     assert.match(rendered, /task_poll\(\{task_id:"task_7"\}\)/);
     assert.doesNotMatch(rendered, /<task-notification/);
+  });
+});
+
+describe("inline background card animation", () => {
+  const VIEW_MODULE = "extensions/mmr-subagents/background-task-view.ts";
+  const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] finder/;
+
+  function singleBoard(rowOverrides = {}) {
+    const row = {
+      taskId: "task_1", status: "running", freshness: "healthy", agent: "finder",
+      description: "Find widget placement call sites", createdAtMs: 0, startedAtMs: 0,
+      updatedAtMs: 0, runtimeMs: 0, ...rowOverrides,
+    };
+    const terminal = row.status === "succeeded" || row.status === "failed" || row.status === "cancelled";
+    return {
+      version: 1, generatedAtMs: 0, counts: { active: terminal ? 0 : 1, stalled: 0, finished: terminal ? 1 : 0 },
+      active: terminal ? [] : [row], stalled: [], finished: terminal ? [row] : [],
+    };
+  }
+
+  function singleCard(resolveBoard) {
+    const { renderMmrBackgroundTaskResult } = renderers;
+    return renderMmrBackgroundTaskResult(
+      "start_task",
+      { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "start_task", agent: "finder", taskId: "task_1", status: "running", description: "Find widget placement call sites", sessionKey: "s1" } },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ agent: "finder" }),
+      { resolveBoard },
+    );
+  }
+
+  let renderers;
+
+  it("recomputes live lines on every render() call so the spinner advances (host never re-runs renderResult)", async () => {
+    renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    // Advance the loader frame on the SHARED background-task-view singleton (the
+    // stable URL progress-rendering imports internally), not a cache-busted
+    // importSource copy, so the card under test reads the frame we advance.
+    const viewUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-subagents/background-task-view.ts")).href;
+    const { advanceLoaderFrame } = await import(viewUrl);
+    const now = Date.now();
+    const board = singleBoard({ createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });
+    const card = singleCard(() => board);
+
+    const frame1 = stripAnsi(renderText(card));
+    assert.match(frame1, SPINNER, "a running row renders an animated spinner glyph");
+    advanceLoaderFrame();
+    const frame2 = stripAnsi(renderText(card));
+    assert.notEqual(frame1, frame2, "the same card instance advances its spinner across render() calls");
+    assert.match(frame2, SPINNER);
+  });
+
+  it("stays mounted-but-empty during the settle window and reveals on a later render once it elapses", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: 50_000 });
+    renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    const { SPAWN_SETTLE_MS } = await importSource(VIEW_MODULE);
+    // Row spawned at the current (mocked) clock => inside its settle window.
+    const board = singleBoard({ createdAtMs: 50_000, startedAtMs: 50_000, updatedAtMs: 50_000 });
+    const card = singleCard(() => board);
+
+    assert.equal(card.constructor.name, "BackgroundCardComponent");
+    assert.equal(card.render(120).join(""), "", "the card renders no lines while settling");
+    t.mock.timers.tick(SPAWN_SETTLE_MS + 1);
+    assert.match(stripAnsi(renderText(card)), /finder Find widget placement call sites/, "the card reveals on a later render after the settle window");
+  });
+
+  it("flips a running row glyph to ✓ as the live board transitions, without re-running renderResult", async () => {
+    renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    const now = Date.now();
+    let board = singleBoard({ createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });
+    const card = singleCard(() => board);
+
+    assert.match(stripAnsi(renderText(card)), SPINNER, "the row spins while running");
+    // The worker finishes: the live board now reports the row as succeeded.
+    board = singleBoard({ status: "succeeded", freshness: "terminal", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 5_000, completedAtMs: now });
+    const done = stripAnsi(renderText(card));
+    assert.match(done, /✓ finder/, "the same card flips ⠋→✓ on the next render once the row settles");
+    assert.doesNotMatch(done, SPINNER, "no spinner glyph remains after the row completes");
   });
 });
