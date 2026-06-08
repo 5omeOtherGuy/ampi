@@ -1200,8 +1200,9 @@ describe("background task rendering", () => {
 
   it("keeps the freshly spawned group/single card invisible during the post-spawn settle window", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // createdAtMs in the future relative to Date.now() => still inside the
-    // post-spawn settle window => revealedRowCount is 0 => the card is empty.
+    // ACTIVE rows with createdAtMs in the future relative to Date.now() => still
+    // inside the post-spawn settle window => revealedRows reveals nothing => the
+    // card is empty.
     const now = Date.now();
     const groupBoard = {
       version: 1, generatedAtMs: 0, counts: { active: 2, stalled: 0, finished: 0 },
@@ -1295,6 +1296,34 @@ describe("background task rendering", () => {
     )));
     assert.match(replay, /▸ swarm review · group_abc123 +● running · 0\/2/);
     assert.match(replay, /2 tasks/);
+  });
+
+  it("reveals a settled group/single card immediately even with recent createdAtMs (no active worker)", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    // A group that just settled has recent createdAtMs (would be inside the prep
+    // window if it were staged) but NO active worker, so the inline card has no
+    // animation clock to re-render it. Staging it would leave it stuck blank, so
+    // every row reveals at once.
+    const now = Date.now();
+    const groupBoard = {
+      version: 1, generatedAtMs: 0, counts: { active: 0, stalled: 0, finished: 2 },
+      active: [], stalled: [],
+      finished: [
+        { taskId: "t1", status: "succeeded", freshness: "terminal", agent: "finder", description: "mmr-core integration points", createdAtMs: now, startedAtMs: now, updatedAtMs: now, runtimeMs: 5000, completedAtMs: now, groupId: "group_abc123" },
+        { taskId: "t2", status: "succeeded", freshness: "terminal", agent: "finder", description: "subagents wiring", createdAtMs: now, startedAtMs: now, updatedAtMs: now, runtimeMs: 4000, completedAtMs: now, groupId: "group_abc123" },
+      ],
+    };
+    const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "observed", taskIds: ["t1", "t2"], counts: { running: 0, succeeded: 2, failed: 0, cancelled: 0, partial: 0, total: 2 } };
+    const groupCard = normalize(renderText(renderMmrBackgroundTaskResult(
+      "task_poll",
+      { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "task_poll", groupId: "group_abc123", group, sessionKey: "s1" } },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ group_id: "group_abc123" }),
+      { resolveBoard: () => groupBoard, resolveGroup: () => group },
+    )));
+    assert.match(groupCard, /✓ finder mmr-core integration points/, "a settled group is never stuck blank");
+    assert.match(groupCard, /✓ finder subagents wiring/);
   });
 
   it("uses the short description when collapsed and the full prompt when expanded", async () => {

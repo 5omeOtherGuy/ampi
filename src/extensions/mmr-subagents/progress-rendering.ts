@@ -44,7 +44,7 @@ import {
   groupMembersFromBoard,
   renderRowLine,
   renderSectionHeader,
-  revealedRowCount,
+  revealedRows,
   singleRowFromBoard,
   synthesizeGroup,
   truncateWidgetLines,
@@ -138,12 +138,12 @@ function renderBackgroundGroupCard(
   const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
 
   // Staged reveal: a freshly spawned live card stays invisible during the brief
-  // post-spawn settle window, then reveals one member row per cadence tick until
-  // every row is shown. Replay / no live registry (members.length === 0) shows
-  // the whole card immediately and is never clipped.
-  const revealedMembers = members.length > 0
-    ? members.slice(0, revealedRowCount(members, Date.now()))
-    : members;
+  // post-spawn settle window, then reveals member rows on the shared cadence
+  // until every row is shown. `revealedRows` reveals everything at once when no
+  // member is active (a finished/settled group has no animation clock to tick
+  // the card again, so staging it could leave it stuck blank). Replay / no live
+  // registry (members.length === 0) shows the whole card immediately.
+  const revealedMembers = members.length > 0 ? revealedRows(members, Date.now()) : members;
   if (members.length > 0 && revealedMembers.length === 0) return new Container();
 
   const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
@@ -178,7 +178,7 @@ function renderBackgroundSingleCard(
   const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
     ?? rowFromDetails(details);
   // Same staged reveal as the group card: invisible during the settle window.
-  if (revealedRowCount([row], Date.now()) === 0) return new Container();
+  if (revealedRows([row], Date.now()).length === 0) return new Container();
   const frame = rowsAnyRunning([row]) ? currentLoaderFrame() : undefined;
   const metadata: RowMetadataLevel = "full";
   return new BackgroundCardComponent([renderRowLine(row, theme, frame, { metadata })]);
