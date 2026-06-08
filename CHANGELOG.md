@@ -91,6 +91,7 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Documentation
 
+- Root package surface: annotate `src/index.ts` with an export-tier doc block (Stable vs Internal/prompt-assembly vs Test seam) plus in-file section banner comments, and add `docs/public-api-surface.md` with the tiers table. The doc block documents that any future export removal requires a staged compatibility plan (changelog deprecation note, transition window, and a `@deprecated` JSDoc tag first for type-only members). Comment- and docs-only: no package-root export is added or removed.
 - Add `docs/whats-new.md`, a user-facing "what's new" summary of the features merged on 2026-06-05 and 2026-06-06 (Pi-native task and background-task rendering, custom Markdown subagents and the `/mmr-config` setup/import wizard, `task_list` reliability nudges, hardened `/mmr-config` writes, Pi `0.78.x` compatibility, the `edit` guidance refinement, the opt-in `mmr-debug` capture extension, and the `cthulu` removal). Scoped to the last-two-days PRs with a pointer to the changelog for the rest of the `0.2.0` release.
 
 ## 0.2.0 — 2026-06-05
