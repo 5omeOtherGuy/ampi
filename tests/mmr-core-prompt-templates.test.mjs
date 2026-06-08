@@ -69,9 +69,9 @@ describe("mmr-core prompt templates - structural invariants", () => {
     assert.match(MMR_MODE_PROMPT_TEMPLATES.smart.postureSections, /## Smart mode/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.smart.postureSections, /balanced autonomy/);
 
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush contract/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush discovery/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush communication/);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush mode/);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Discovery: use minimum evidence/);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Communicate outcome-first/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Do not compensate for no reasoning/);
 
     assert.match(MMR_MODE_PROMPT_TEMPLATES.large.postureSections, /## Large mode/);
