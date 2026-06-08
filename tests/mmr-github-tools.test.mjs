@@ -42,6 +42,14 @@ function text(result) {
 }
 
 describe("mmr-github tool schemas", () => {
+  it("re-exports descriptions and prompt guidelines through the tools module", async () => {
+    const mod = await importSource(TOOLS_MODULE);
+    assert.equal(typeof mod.READ_GITHUB_DESCRIPTION, "string");
+    assert.ok(mod.READ_GITHUB_DESCRIPTION.length > 0);
+    assert.ok(Array.isArray(mod.MMR_GITHUB_PROMPT_GUIDELINES));
+    assert.ok(mod.MMR_GITHUB_PROMPT_GUIDELINES.length > 0);
+  });
+
   it("read_github requires repository + path with optional read_range", async () => {
     const { mod } = await makeTool("createReadGithubTool");
     const schema = mod.READ_GITHUB_PARAMETERS_SCHEMA;
