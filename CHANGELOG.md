@@ -37,6 +37,39 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   a fenced block or prose summary — the live card and the settled card are the
   status surface. `group_id` is reframed as the legacy incremental path that
   defers to `fleet`. Covered by `tests/mmr-subagents-fleet-parse.test.mjs`.
+- `mmr-core`: the active-model context-window cap now applies to every locked
+  mode, not just `smart`. `withMmrModeContextCap` derives each mode's cap from
+  its own request policy (`smart` 300k, `smartGPT`/`rush`/`deep` 256k, `large`
+  1M) instead of hardcoding `smart`/300k, so Pi's native compaction, overflow,
+  footer, percent, and `getContextUsage()` all trigger at the window the mode
+  advertises even when the route's native window is larger (e.g. a 1M Opus or
+  GPT route). Capping stays cap-down only — a smaller custom route stays
+  authoritative — and `free` (no policy) is never capped. The defensive
+  reassertion on `input`/`before_provider_request` is now mode-aware
+  (`withMmrModeContextCap(state.mode, ...)`) so a non-smart locked mode also
+  re-caps after a transient provider re-resolution (e.g. `/login`). A new
+  exported `getMmrModeContextWindowCap(modeKey)` resolves a mode's cap (or
+  `undefined`), and `MMR_SMART_CONTEXT_WINDOW` is now derived from the smart
+  policy so it cannot drift. Covered by expanded
+  `tests/mmr-core-context-cap.test.mjs` (per-mode pure caps plus a smartGPT
+  reassertion case).
+- `mmr-core`: `smartGPT`, `rush`, and `deep` now declare a `256k` context
+  profile (`contextWindow` 256000, `effectiveMaxInputTokens` 128000) instead of
+  `400k`/`272k`. The `openai-codex` `gpt-5.5` route advertises a 300k window but
+  Codex enforces a lower real input ceiling (~272k), so Pi's native compaction —
+  which fired at `registry window - 16k reserve` ≈ 283.6k — triggered above
+  Codex's limit and overflowed with `context_length_exceeded`, and the
+  compaction summary request then failed too. With the generalized per-mode cap
+  now enforcing 256k, Pi compacts at ~240k and the summary request stays under
+  Codex's real ceiling, fixing the GPT autocompaction overflow. `/mode` shows
+  the provider-neutral `256k total / 128k max out / 128k max in` profile;
+  `/mmr-status` on `openai-codex` now shows `256k total` only, omitting both
+  `max out` (never sent) and the derived `max in` (Codex streams output
+  in-window, so `total - max_output` understates real usable input). Tests
+  updated in
+  `tests/mmr-core-modes.test.mjs`, `tests/mmr-core-status.test.mjs`,
+  `tests/mmr-core-request-policy.test.mjs`, and
+  `tests/mmr-core-context-cap.test.mjs`.
 
 - `mmr-subagents`: the background-task widget now staggers each group section
   into view with a staged reveal instead of snapping every row in at once. A new
@@ -66,6 +99,24 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `start_task` "starting" call row no longer flashes — the result card owns the
   entire reveal. Covered by deterministic reveal and full-chip tests in
   `tests/mmr-subagents-progress-rendering.test.mjs`.
+- `mmr-core`: compress the `rush` mode posture prompt into a single `## Rush
+  mode` section, cutting it from ~635 to ~350 posture words (~45% smaller) so
+  the token-economy mode no longer renders the longest prompt of any mode. The
+  rewrite preserves every behavioral rule (bounded-ticket scoping with the
+  ask-one-question-or-state-an-assumption guard, shell-first minimum-evidence
+  discovery, direct minimal edits, narrow verification and stopping,
+  outcome-first communication, and project-guidance ground truth) while
+  collapsing the eight prior `## Rush ...` headings. Model-visible prompt
+  behavior change; covered by updated `tests/mmr-core-prompt-templates.test.mjs`
+  assertions and regenerated `rush` prompt and effective-surface fixtures.
+- `mmr-core`: harden the prompt-tail drift invariant with stricter tests. New
+  `tests/mmr-core-prompt-reassembly.test.mjs` asserts byte-stable idempotence
+  per prompted mode (re-assembling an already MMR-rewritten prompt reproduces
+  the same bytes and stays a real rewrite, not a passthrough) and a cross-mode
+  strip (a `deep` parent re-assembled as a `smart` Task base carries the smart
+  tail exactly once with no leftover deep posture). No model-visible prompt
+  bytes change; this guards `assembleActiveSurface`'s forward render and the
+  backward `PREVIOUS_MMR_TAILS` strip table against silent divergence.
 - `mmr-core`: the `smart` context-cap reassertion now defers to an active
   MMR-managed model override (e.g. a session fallback) instead of re-capping
   underneath its owner, matching the `before_provider_request` hook which
