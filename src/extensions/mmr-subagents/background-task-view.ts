@@ -261,6 +261,61 @@ export function compareRows(a: WidgetRow, b: WidgetRow): number {
 }
 
 /**
+ * Per-row settle delay before a freshly spawned row is revealed. A row only
+ * begins its reveal once it is this old, so the brief spawn spread of a one-step
+ * fan-out is absorbed and the wave reads as "all spawned" before anything shows.
+ */
+export const SPAWN_SETTLE_MS = 200;
+
+/** Uniform cadence at which successive rows are revealed once the wave starts. */
+export const REVEAL_INTERVAL_MS = 70;
+
+/**
+ * The subset of `rows` revealed at `nowMs`, the single source of truth both
+ * background surfaces (pinned widget + inline card) consume so they stage in
+ * lockstep. Pure and clock-free: callers always inject `nowMs`. The returned
+ * rows preserve the caller's display order (e.g. running-first); reveal timing
+ * is decoupled from display order so a row settling mid-reveal never reorders
+ * or hides an already-shown row.
+ *
+ * Reveal is staged ONLY while at least one row is active (running/cancelling),
+ * because the staging depends on an animation clock re-rendering the surface at
+ * the reveal cadence — the widget only animates while it has active rows, and
+ * the inline card has no clock of its own and rides that same cadence. With no
+ * active row there is no guaranteed future tick, so a settle window could leave
+ * a surface permanently blank; in that case every row is revealed immediately.
+ *
+ * When staging, reveal thresholds are assigned in spawn order (ascending
+ * `createdAtMs`, `taskId` as a stable tiebreak): the row at spawn-index `i`
+ * reveals once `nowMs >= createdAtMs_i + SPAWN_SETTLE_MS + i * REVEAL_INTERVAL_MS`.
+ * Because `createdAtMs` is sorted ascending and the index term grows, the
+ * thresholds are monotonic, so the revealed set is always a stable prefix in
+ * spawn order — a late sibling only delays itself and never collapses rows that
+ * are already visible. Two groups whose members share the same spawn times
+ * reveal in lockstep.
+ */
+export function revealedRows(rows: readonly WidgetRow[], nowMs: number): WidgetRow[] {
+  if (rows.length === 0) return [];
+  const anyActive = rows.some((r) => r.status === "running" || r.status === "cancelling");
+  if (!anyActive) return [...rows];
+  const bySpawn = [...rows].sort(
+    (a, b) => a.createdAtMs - b.createdAtMs || a.taskId.localeCompare(b.taskId),
+  );
+  // Thresholds are monotonically increasing (createdAtMs sorted ascending plus a
+  // growing index term), so the revealed set is exactly a prefix of spawn order:
+  // stop at the first row whose threshold has not yet passed.
+  let count = 0;
+  for (let i = 0; i < bySpawn.length; i += 1) {
+    if (nowMs < bySpawn[i].createdAtMs + SPAWN_SETTLE_MS + i * REVEAL_INTERVAL_MS) break;
+    count += 1;
+  }
+  // Identify revealed rows by object reference (not taskId) so the filter is
+  // robust even if ids are absent or collide, then return them in display order.
+  const revealed = new Set<WidgetRow>(bySpawn.slice(0, count));
+  return rows.filter((r) => revealed.has(r));
+}
+
+/**
  * Synthesize a section header when no live group snapshot is available (the
  * resolver is absent or the group has already been pruned from the registry).
  * Status/counts are derived from the rows on hand.

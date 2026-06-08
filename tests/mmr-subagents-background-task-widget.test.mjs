@@ -321,6 +321,51 @@ describe("background-task widget", () => {
     assert.match(lines[0], /^\S/, "ungrouped-only rows stay flush-left");
   });
 
+  it("omits a section whose rows are still in the invisible prep window", async () => {
+    const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    // An ACTIVE row with createdAtMs in the future => Date.now() is before its
+    // settle window for the test's duration, so revealedRows reveals nothing and
+    // the whole section (header + rows) is omitted while the clear/animation
+    // decision stays on the real rows.
+    const future = Date.now() + 10_000;
+    refreshBackgroundTaskWidget(ctx, makeBoard({
+      counts: { active: 1, stalled: 0, finished: 0 },
+      active: [makeEntry({
+        taskId: "task_future", agent: "finder", description: "Prep window scout",
+        groupId: "group_prep01", createdAtMs: future, startedAtMs: future, updatedAtMs: future,
+      })],
+    }));
+    const last = calls.at(-1);
+    assert.equal(typeof last.value, "function", "active rows keep the widget mounted during prep");
+    const lines = last.value({ requestRender() {} }, theme).render(120);
+    const text = lines.join("\n");
+    assert.equal(lines.length, 0, "a prep-window section renders no lines at all");
+    assert.doesNotMatch(text, /Prep window scout/, "the row is hidden during prep");
+    assert.doesNotMatch(text, /group_prep01/, "the header is hidden during prep too");
+  });
+
+  it("reveals a finished-only section immediately even with a recent createdAtMs (no animation clock)", async () => {
+    const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    // A group that just settled has recent createdAtMs but NO active row, so the
+    // widget runs no animation interval. Staging it would leave it blank with no
+    // future tick to reveal it, so revealedRows shows every row at once.
+    const recent = Date.now();
+    refreshBackgroundTaskWidget(ctx, makeBoard({
+      generatedAtMs: recent,
+      counts: { active: 0, stalled: 0, finished: 1 },
+      finished: [makeEntry({
+        taskId: "task_settled", agent: "finder", description: "Just finished scout",
+        status: "succeeded", freshness: "terminal", groupId: "group_done01",
+        createdAtMs: recent, startedAtMs: recent, updatedAtMs: recent, completedAtMs: recent,
+      })],
+    }));
+    const text = calls.at(-1).value({ requestRender() {} }, theme).render(120).join("\n");
+    assert.match(text, /Just finished scout/, "a finished-only section is never stuck blank");
+    assert.match(text, /group_done01/, "its header renders immediately too");
+  });
+
   it("does nothing on a non-TUI surface", async () => {
     const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
     const calls = [];

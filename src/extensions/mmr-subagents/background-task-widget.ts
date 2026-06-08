@@ -25,6 +25,7 @@ import {
   PI_LOADER_INTERVAL_MS,
   renderRowLine,
   renderSectionHeader,
+  revealedRows,
   synthesizeGroup,
   toRow,
   truncateWidgetLines,
@@ -168,6 +169,28 @@ function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined 
 }
 
 /**
+ * Stage each section by its reveal cadence (see {@link revealedRows}). `nowMs`
+ * is read fresh every frame so the reveal advances on the animation interval. A
+ * section that reveals no rows is omitted ENTIRELY (header included) during its
+ * prep window; otherwise only the revealed rows render, in section display
+ * order. `revealedRows` reveals every row immediately when the section has no
+ * active worker (no animation clock is guaranteed to tick it again), so a
+ * finished-only section never gets stuck blank. The clear decision and timer
+ * selection upstream stay based on the ACTUAL registry rows, never on this
+ * staged view, so the animation interval keeps driving frames throughout the
+ * reveal.
+ */
+function revealSections(sections: readonly WidgetSection[], nowMs: number): WidgetSection[] {
+  const out: WidgetSection[] = [];
+  for (const section of sections) {
+    const rows = revealedRows(section.rows, nowMs);
+    if (rows.length === 0) continue;
+    out.push({ ...section, rows });
+  }
+  return out;
+}
+
+/**
  * Flatten sections into widget lines: each group prints a header then its
  * indented rows. A lone ungrouped section prints headerless and flush-left, so
  * non-grouped Task usage renders exactly as before. `WIDGET_MAX_ROWS` counts
@@ -283,8 +306,14 @@ export function refreshBackgroundTaskWidget(
       }
       return {
         render: (width) =>
+          // Read a fresh Date.now() each frame so the staged reveal advances on
+          // the animation interval, mirroring currentLoaderFrame()'s clock.
           truncateWidgetLines(
-            renderWidgetLines(sections, theme, hasActive ? currentLoaderFrame() : undefined),
+            renderWidgetLines(
+              revealSections(sections, Date.now()),
+              theme,
+              hasActive ? currentLoaderFrame() : undefined,
+            ),
             width,
           ),
         invalidate: () => {},
