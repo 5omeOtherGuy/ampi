@@ -122,7 +122,6 @@ function rowsAnyRunning(rows: readonly WidgetRow[]): boolean {
 function renderBackgroundGroupCard(
   details: BackgroundTaskDetails,
   theme: SubagentTheme,
-  options: { expanded?: boolean },
   extras: BackgroundCardExtras | undefined,
 ): Component {
   const groupId = details.groupId;
@@ -137,9 +136,8 @@ function renderBackgroundGroupCard(
     : members.length > 0 ? synthesizeGroup(members) : undefined;
   const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
 
-  const expanded = options.expanded === true;
   const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
-  const metadata: RowMetadataLevel = expanded ? "full" : "minimal";
+  const metadata: RowMetadataLevel = "full";
   const lines: string[] = [renderSectionHeader(section, theme)];
   for (const row of members) {
     lines.push(renderRowLine(row, theme, frame, { indent: "  ", metadata }));
@@ -151,8 +149,6 @@ function renderBackgroundGroupCard(
     if (typeof total === "number" && total > 0) {
       lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
     }
-  } else if (!expanded) {
-    lines.push(`  ${theme.fg("muted", "(ctrl+o to expand)")}`);
   }
   return new BackgroundCardComponent(lines);
 }
@@ -165,7 +161,6 @@ function renderBackgroundGroupCard(
 function renderBackgroundSingleCard(
   details: BackgroundTaskDetails,
   theme: SubagentTheme,
-  options: { expanded?: boolean },
   extras: BackgroundCardExtras | undefined,
 ): Component {
   const sessionKey = details.sessionKey;
@@ -173,7 +168,7 @@ function renderBackgroundSingleCard(
   const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
     ?? rowFromDetails(details);
   const frame = rowsAnyRunning([row]) ? currentLoaderFrame() : undefined;
-  const metadata: RowMetadataLevel = options.expanded ? "full" : "minimal";
+  const metadata: RowMetadataLevel = "full";
   return new BackgroundCardComponent([renderRowLine(row, theme, frame, { metadata })]);
 }
 
@@ -276,7 +271,7 @@ export function renderMmrBackgroundTaskResult(
   //    carried in `content` is intentionally never drawn into the transcript.
   if (details?.group !== undefined) {
     clearRenderedCall(context);
-    return renderBackgroundGroupCard(details, theme, options, extras);
+    return renderBackgroundGroupCard(details, theme, extras);
   }
 
   if (details?.worker !== "mmr-subagents.async-task") {
@@ -292,10 +287,10 @@ export function renderMmrBackgroundTaskResult(
     clearRenderedCall(context);
     if (details.groupId) {
       return details.groupOpener
-        ? renderBackgroundGroupCard(details, theme, options, extras)
+        ? renderBackgroundGroupCard(details, theme, extras)
         : new Container();
     }
-    return renderBackgroundSingleCard(details, theme, options, extras);
+    return renderBackgroundSingleCard(details, theme, extras);
   }
 
   // 4. Single-task task_poll / task_wait / task_cancel → rich result card

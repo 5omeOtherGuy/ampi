@@ -1131,6 +1131,7 @@ describe("background task rendering", () => {
     assert.match(opener, /✓ finder tool registration/);
     assert.match(opener, /✓ finder package wiring/);
     assert.doesNotMatch(opener, /start_task: started background worker/);
+    assert.doesNotMatch(opener, /ctrl\+o to expand/i);
 
     // A sibling start in the same group renders nothing — one card per group.
     const sibling = renderMmrBackgroundTaskResult(
@@ -1142,6 +1143,59 @@ describe("background task rendering", () => {
       extras,
     );
     assert.equal(normalize(renderText(sibling)).trim(), "");
+  });
+
+  it("always renders full metadata chips and no ctrl+o affordance on the group and single cards", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    // Grouped opener card: a board-backed member carrying turns + ctx must show
+    // the rich chips unconditionally — the card no longer has a collapsed level.
+    const groupBoard = {
+      version: 1,
+      generatedAtMs: 0,
+      counts: { active: 1, stalled: 0, finished: 0 },
+      active: [
+        { taskId: "t1", status: "running", freshness: "healthy", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, groupId: "group_abc123", resolvedModel: "google/gemini-3.5-flash", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 30000, turns: 2 } },
+      ],
+      stalled: [],
+      finished: [],
+    };
+    const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1"], counts: { running: 1, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 1 } };
+    const groupCard = normalize(renderText(renderMmrBackgroundTaskResult(
+      "start_task",
+      { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "start_task", agent: "finder", taskId: "t1", status: "running", description: "mmr-core integration points", groupId: "group_abc123", groupOpener: true, sessionKey: "s1" } },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ agent: "finder" }),
+      { resolveBoard: () => groupBoard, resolveGroup: () => group },
+    )));
+    assert.match(groupCard, /⠋ finder mmr-core integration points/);
+    assert.match(groupCard, /· 2 turns/);
+    assert.match(groupCard, /10\.0% ctx/);
+    assert.doesNotMatch(groupCard, /ctrl\+o to expand/i);
+
+    // Single ungrouped card: same rich-chip guarantee, no collapsed variant.
+    const singleBoard = {
+      version: 1,
+      generatedAtMs: 0,
+      counts: { active: 1, stalled: 0, finished: 0 },
+      active: [
+        { taskId: "task_1", status: "running", freshness: "healthy", agent: "finder", description: "Find widget placement call sites", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 4000, resolvedModel: "google/gemini-3.5-flash-extra-low", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 45000, turns: 3 } },
+      ],
+      stalled: [],
+      finished: [],
+    };
+    const singleCard = normalize(renderText(renderMmrBackgroundTaskResult(
+      "start_task",
+      { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "start_task", agent: "finder", taskId: "task_1", status: "running", description: "Find widget placement call sites", resolvedModel: "google/gemini-3.5-flash-extra-low", sessionKey: "s1" } },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ agent: "finder" }),
+      { resolveBoard: () => singleBoard },
+    )));
+    assert.match(singleCard, /⠋ finder Find widget placement call sites/);
+    assert.match(singleCard, /· 3 turns/);
+    assert.match(singleCard, /15\.0% ctx/);
+    assert.doesNotMatch(singleCard, /ctrl\+o to expand/i);
   });
 
   it("uses the short description when collapsed and the full prompt when expanded", async () => {
