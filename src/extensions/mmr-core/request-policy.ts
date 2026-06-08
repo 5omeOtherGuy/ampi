@@ -86,9 +86,13 @@ export interface MmrRequestPolicy {
  * - DEEP uses OpenAI Responses with `reasoning.effort=medium` and
  *   `summary=auto`, plus `max_output_tokens=128000`.
  * - Context triples are the mode's total context window / max output / max
- *   input. They are surfaced in `/mode` and `/mmr-status`; Pi's native
- *   compaction behavior comes from the selected provider model metadata.
- *   This module does not write any context fields into provider payloads.
+ *   input. They are surfaced in `/mode` and `/mmr-status`. This module does
+ *   not write any context fields into provider payloads. For most modes Pi's
+ *   native compaction follows the selected provider model metadata; `smart`
+ *   is the explicit exception — it caps the active model's `contextWindow`
+ *   to 300k at the `setModel` call site (see `context-cap.ts`), so Pi's
+ *   native compaction/overflow/footer all run at 300k and these display
+ *   numbers match what Pi actually enforces.
  */
 export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrRequestPolicy> = {
   smart: {
@@ -102,8 +106,10 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
     openaiResponses: {
       reasoning: { effort: "medium", summary: "auto" },
     },
-    contextWindow: 1_000_000,
-    effectiveMaxInputTokens: 968_000,
+    // smart caps the active Opus route to a 300k window (see context-cap.ts);
+    // keep the display metadata consistent: 300k total - 32k max-output = 268k.
+    contextWindow: 300_000,
+    effectiveMaxInputTokens: 268_000,
   },
   smartGPT: {
     openaiResponses: {
@@ -416,13 +422,15 @@ export function formatMmrPolicyStatus(policy: MmrRequestPolicy | undefined, over
  * Returns a new policy object only when the displayed metadata changed;
  * otherwise returns the input policy for cheap identity comparisons.
  *
- * Display-clamp only: since context-cap shim removal, this function only
- * shapes `/mmr-status` and footer numbers. It does not enforce a soft cap on
- * provider sends and does not influence Pi-native compaction. Provider
- * metadata (the registered route's `contextWindow`/`maxTokens`) governs what
- * is actually transmitted on the wire and when Pi compacts. When the
- * registered window exceeds the mode profile, the
- * `context.registered-exceeds-profile` diagnostic surfaces that mismatch.
+ * Display-clamp only: this function shapes `/mmr-status` and footer numbers.
+ * It does not enforce a soft cap on provider sends. For most modes Pi-native
+ * compaction follows the registered route's `contextWindow`/`maxTokens`
+ * verbatim. `smart` is the exception: it caps the *active* model's window to
+ * 300k via `withMmrModeContextCap` at the `setModel` call site, and callers
+ * pass that already-capped model here, so the clamped display numbers and the
+ * window Pi compacts against agree. When a route's (post-cap) window still
+ * exceeds the mode profile, the `context.registered-exceeds-profile`
+ * diagnostic surfaces that mismatch.
  */
 export function clampPolicyToRegisteredModel(
   policy: MmrRequestPolicy,

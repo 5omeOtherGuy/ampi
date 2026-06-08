@@ -1,6 +1,5 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { buildReplayContent, decideAutoCompact } from "./auto-compact.js";
 import { maybeShowMmrChangelogOnSessionStart } from "./changelog.js";
 import { buildPromptAssemblyObservation } from "./diagnostics.js";
 import { isRecord } from "./internal/json.js";
@@ -99,9 +98,13 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
 
     controller.captureBaseline(ctx, { force: true });
     await controller.resolveInitialMode(ctx);
+    // Covers resume/reload/fork: if a restored active model came back with its
+    // uncapped window, reassert the smart-mode cap. No-op when the cap is
+    // already in effect or the mode does not cap.
+    await controller.reassertActiveModelInvariants(ctx);
   });
 
-  pi.on("before_provider_request", (event) => {
+  pi.on("before_provider_request", async (event, ctx) => {
     // Optional diagnostics: when MMR_DEBUG_CAPTURE_SYSTEM_PROMPT_FILE is
     // set, write the assembled system prompt that Pi is about to send to
     // the provider to that path (subagent-only). This is intentionally
@@ -150,6 +153,11 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
       }
       return;
     }
+    // Last-chance repair before Pi's post-run / overflow compaction paths read
+    // `model.contextWindow`: reassert the smart-mode context cap if the active
+    // model drifted back to its uncapped window. No-op outside smart and when
+    // the cap is already in effect.
+    await controller.reassertActiveModelInvariants(ctx);
     const activePolicy = controller.getActivePolicy();
     if (!activePolicy) return;
     if (getMmrManagedModelOverride()) return;
@@ -227,38 +235,14 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     await controller.switchLockedModeToFreeForNativeControl(ctx, { nativeModel: event.model });
   });
 
-  pi.on("input", async (event, ctx) => {
-    // Smart-mode pre-prompt auto-compact for the Opus route. See
-    // `auto-compact.ts` for the gating rules and replay-loop guard.
-    const state = getMmrModeState();
-    const usage = ctx.getContextUsage();
-    const decision = decideAutoCompact({
-      source: event.source,
-      text: event.text,
-      images: event.images,
-      modeState: state ? { mode: state.mode, model: state.model } : undefined,
-      subagentActive: Boolean(getMmrSubagentState()),
-      usageTokens: usage?.tokens,
-    });
-    if (decision.kind === "noop") return;
-
-    const replayContent = buildReplayContent(decision.text, decision.images);
-    ctx.compact({
-      onComplete: () => {
-        pi.sendUserMessage(replayContent as string | { type: "text"; text: string }[]);
-      },
-      onError: (error) => {
-        // Surface a notification when compaction fails so the user knows the
-        // prompt was dropped and can resubmit. The original text is also
-        // re-queued via pi.sendUserMessage so the work is not lost.
-        ctx.ui.notify(
-          `mmr-core: auto-compact failed (${error.message}); replaying original prompt.`,
-          "warning",
-        );
-        pi.sendUserMessage(replayContent as string | { type: "text"; text: string }[]);
-      },
-    });
-    return { action: "handled" };
+  pi.on("input", async (_event, ctx) => {
+    // Reassert the smart-mode context cap before Pi runs its pre-prompt
+    // compaction check, in case a provider (re)registration (e.g. `/login`)
+    // transiently re-resolved the active model to its uncapped window. Native
+    // Pi now owns the compaction threshold, pre-prompt/post-run triggers,
+    // overflow handling, footer, and `getContextUsage()` — all at the capped
+    // 300k window. No-op outside smart and when the cap is already in effect.
+    await controller.reassertActiveModelInvariants(ctx);
   });
 
   pi.on("thinking_level_select", async (event, ctx) => {

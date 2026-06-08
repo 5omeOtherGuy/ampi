@@ -43,7 +43,7 @@ function buildPi(setModelCalls, notifications, handlers, flagValue) {
   };
 }
 
-function buildCtx(models, notifications) {
+function buildCtx(models, notifications, setModelCalls = []) {
   return {
     cwd: createTempCwd(),
     hasUI: false,
@@ -54,7 +54,12 @@ function buildCtx(models, notifications) {
       hasConfiguredAuth: () => true,
       isUsingOAuth: () => true,
     },
-    model: models[0],
+    // Mirror Pi: the active model reflects the last pi.setModel(...) call (the
+    // capped clone), so the defensive reassertion sees the capped window and
+    // is a no-op rather than re-applying the cap.
+    get model() {
+      return setModelCalls.at(-1) ?? models[0];
+    },
     getContextUsage: () => ({ tokens: 0, contextWindow: 300_000, percent: 0 }),
     ui: {
       notify: (message, level) => notifications.push({ message, level }),
@@ -65,7 +70,7 @@ function buildCtx(models, notifications) {
 }
 
 describe("mmr-core provider-managed context selection", () => {
-  it("selects the registered smart Opus route without cloning or shimmed context windows", async () => {
+  it("caps the smart Opus route to a 300k context window via a shallow clone", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
@@ -74,7 +79,7 @@ describe("mmr-core provider-managed context selection", () => {
     const setModelCalls = [];
     const notifications = [];
     const pi = buildPi(setModelCalls, notifications, handlers, undefined);
-    const ctx = buildCtx(models, notifications);
+    const ctx = buildCtx(models, notifications, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
@@ -82,8 +87,14 @@ describe("mmr-core provider-managed context selection", () => {
     assert.equal(handlers.has("turn_end"), false, "MMR must not use extension manual compaction after turns");
     assert.equal(handlers.has("agent_end"), false, "MMR must leave auto-compaction to Pi and the selected provider route");
     assert.equal(setModelCalls.length, 1);
-    assert.equal(setModelCalls[0], models[0], "smart must pass the provider-registered Opus model through unchanged");
-    assert.equal(setModelCalls[0].contextWindow, 1_000_000);
+    // smart caps the active model to 300k so Pi's native compaction/footer run
+    // at 300k. The cap is a shallow clone: provider/id preserved, original
+    // registry object left untouched.
+    assert.notEqual(setModelCalls[0], models[0], "smart must pass a capped clone, not the registry object");
+    assert.equal(setModelCalls[0].provider, "claude-subscription");
+    assert.equal(setModelCalls[0].id, "claude-opus-4-8");
+    assert.equal(setModelCalls[0].contextWindow, 300_000);
+    assert.equal(models[0].contextWindow, 1_000_000, "registry model object must not be mutated");
   });
 
   it("falls back to GPT when the smart Opus route is absent", async () => {
@@ -97,20 +108,28 @@ describe("mmr-core provider-managed context selection", () => {
     const setModelCalls = [];
     const notifications = [];
     const pi = buildPi(setModelCalls, notifications, handlers, "smart");
-    const ctx = buildCtx(models, notifications);
+    const ctx = buildCtx(models, notifications, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     assert.equal(setModelCalls.length, 1);
-    assert.equal(setModelCalls[0], models[0]);
+    // The smart cap is mode-keyed, so the GPT fallback's 400k window is also
+    // capped down to 300k (a shallow clone), not the registry object.
+    assert.notEqual(setModelCalls[0], models[0]);
+    assert.equal(setModelCalls[0].provider, "openai-codex");
+    assert.equal(setModelCalls[0].id, "gpt-5.5");
+    assert.equal(setModelCalls[0].contextWindow, 300_000);
+    assert.equal(models[0].contextWindow, 400_000, "registry model object must not be mutated");
 
     const state = runtime.getMmrModeState();
     assert.equal(state?.mode, "smart");
     assert.equal(state?.provider, "openai-codex");
     assert.equal(state?.model, "gpt-5.5");
     assert.equal(state?.thinkingLevel, "medium");
-    assert.equal(state?.effectiveContextWindow, 400_000, "smart fallback clamps to the selected GPT route's registered context");
+    // smart caps the active window to 300k regardless of route, so the display
+    // profile is min(300k profile, 300k capped) = 300k.
+    assert.equal(state?.effectiveContextWindow, 300_000, "smart caps the active window to 300k on any route");
 
     const activation = notifications.find((entry) => /MMR mode activated: Smart/.test(entry.message));
     assert.ok(activation, "activation notification must be emitted on flag source");
@@ -130,19 +149,22 @@ describe("mmr-core provider-managed context selection", () => {
     const setModelCalls = [];
     const notifications = [];
     const pi = buildPi(setModelCalls, notifications, handlers, undefined);
-    const ctx = buildCtx(models, notifications);
+    const ctx = buildCtx(models, notifications, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     const state = runtime.getMmrModeState();
-    assert.equal(state?.registeredContextWindow, 1_000_000);
-    assert.equal(state?.effectiveContextWindow, 1_000_000);
+    // smart caps the active Opus window to 300k, so both the recorded window
+    // and the display profile collapse to 300k and the mismatch diagnostic
+    // stays quiet.
+    assert.equal(state?.registeredContextWindow, 300_000);
+    assert.equal(state?.effectiveContextWindow, 300_000);
     const diagnostics = getMmrPolicyDiagnostics(state);
     assert.equal(
       diagnostics.find((diag) => diag.code === "context.registered-exceeds-profile"),
       undefined,
-      "diagnostic must not fire when registered window matches the mode profile",
+      "diagnostic must not fire when the capped window matches the mode profile",
     );
   });
 });

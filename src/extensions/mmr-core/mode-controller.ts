@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { withMmrModeContextCap } from "./context-cap.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { DEFAULT_MMR_MODE, getMmrMode, isMmrModeKey, MMR_MODE_KEYS } from "./modes.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
@@ -22,6 +23,8 @@ import {
   MMR_EVENT_STATE_CHANGED,
   clearMmrManagedModelOverride,
   getMmrModeState,
+  getMmrSubagentState,
+  isMmrManagedModelUpdateActive,
   recordMmrModeEvent,
   resolveMmrFeatureGates,
   resolveMmrModeExtraTools,
@@ -78,6 +81,7 @@ export interface MmrModeController {
     ctx: ExtensionContext,
     options?: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">,
   ): Promise<void>;
+  reassertActiveModelInvariants(ctx: ExtensionContext): Promise<void>;
   captureBaseline(
     ctx: ExtensionContext,
     options?: { force?: boolean; model?: Parameters<ExtensionAPI["setModel"]>[0]; thinkingLevel?: ThinkingLevel },
@@ -359,7 +363,13 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         modelPreferences,
         modeThinkingLevel: effectiveThinkingLevel,
         registry: ctx.modelRegistry,
-        setModel: async (model) => pi.setModel(model),
+        // Cap the active model's context window for modes that declare one
+        // (currently only `smart`, 300k). Native Pi stores the passed object
+        // directly and keys all compaction/overflow/footer/usage off
+        // `model.contextWindow`, so a capped clone makes Pi compact and
+        // display exactly as it would at the capped window. No-op for modes
+        // without a cap and for routes already at/under the cap.
+        setModel: async (model) => pi.setModel(withMmrModeContextCap(mode.key, model)),
       });
 
       if (!modelResolution.modelApplied) {
@@ -373,9 +383,15 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         pi.setThinkingLevel(modelResolution.selectedThinkingLevel);
       }
 
-      const selectedModel = modelResolution.selectedProvider && modelResolution.selectedModel
+      const registeredModel = modelResolution.selectedProvider && modelResolution.selectedModel
         ? ctx.modelRegistry.find(modelResolution.selectedProvider, modelResolution.selectedModel)
         : undefined;
+      // Apply the same mode cap used at the setModel call site so policy
+      // clamping and the recorded `registeredContextWindow` reflect the
+      // window Pi will actually compact against, not the uncapped registry
+      // value. Truthful status: for smart this collapses both to 300k, so the
+      // `context.registered-exceeds-profile` diagnostic stays quiet.
+      const selectedModel = registeredModel ? withMmrModeContextCap(mode.key, registeredModel) : undefined;
       const basePolicy = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode.key], selectedModel);
       activePolicy = toggleableKey && toggleLevel
         ? applyMmrThinkingLevelToPolicy(toggleableKey, basePolicy, toggleLevel)
@@ -490,6 +506,50 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     });
   }
 
+  /**
+   * Re-apply the smart-mode context cap if the active model drifted back to an
+   * uncapped window. The only Pi path that re-resolves the active model from
+   * the registry (wiping our capped clone) is `_refreshCurrentModelFromRegistry`,
+   * reached from provider (un)registration — e.g. `/login` or another
+   * extension registering a provider. mmr-core never calls Pi's
+   * `registerProvider`, so the override normally survives; this is the narrow,
+   * self-healing repair for the transient drift case.
+   *
+   * Guards (ALL must hold before acting), so this never fights a genuine
+   * native model change (which opts out to Free mode) or a subagent/in-flight
+   * MMR transaction:
+   *   - active mode is `smart`
+   *   - no subagent worker is active
+   *   - no MMR-managed model update is in flight and we are not mid-apply
+   *   - the active model still matches the locked-mode provider/id
+   *   - capping the active model would actually change its window
+   */
+  async function reassertActiveModelInvariants(ctx: ExtensionContext): Promise<void> {
+    const state = getMmrModeState();
+    if (!state || state.mode !== "smart") return;
+    if (getMmrSubagentState()) return;
+    if (applyingMmrMode || isMmrManagedModelUpdateActive()) return;
+
+    const active = ctx.model;
+    if (!active) return;
+    // Do not fight a genuine native model change; that path releases to Free.
+    if (active.provider !== state.provider || active.id !== state.model) return;
+
+    const capped = withMmrModeContextCap("smart", active);
+    if (capped === active) return;
+
+    applyingMmrMode = true;
+    try {
+      await pi.setModel(capped);
+    } finally {
+      // Mirror applyMode's microtask defer so any model_select Pi delivers
+      // synchronously after setModel still sees applyingMmrMode === true and
+      // bypasses the native-control opt-out.
+      await Promise.resolve();
+      applyingMmrMode = false;
+    }
+  }
+
   async function selectModeFromShortcut(ctx: ExtensionContext): Promise<void> {
     if (ctx.hasUI === false) return;
 
@@ -584,6 +644,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     applyMode,
     resolveInitialMode,
     switchLockedModeToFreeForNativeControl,
+    reassertActiveModelInvariants,
     captureBaseline,
     selectModeFromShortcut,
     cycleModeFromShortcut,

@@ -268,12 +268,16 @@ export interface MmrModeState {
   /** Runtime-only MMR max-input cap; undefined means model default/no MMR cap. */
   effectiveMaxInputTokens?: number;
   /**
-   * Runtime-only registered context window of the selected provider model, as
-   * declared by Pi's model registry. Captured so diagnostics can detect when
-   * the registered window exceeds the mode's profile (`effectiveContextWindow`);
-   * Pi-native compaction follows the registered window, not the mode profile,
-   * so a smaller mode profile becomes a cosmetic display budget rather than a
-   * compaction trigger. Not persisted.
+   * Runtime-only context window of the selected provider model that Pi will
+   * actually compact against. This is the registry-declared window after the
+   * mode's active-model cap (`withMmrModeContextCap`) is applied: for `smart`
+   * it is the 300k cap, for other modes it is the raw registry window.
+   * Captured so diagnostics can detect when this effective window exceeds the
+   * mode's display profile (`effectiveContextWindow`). Pi-native compaction
+   * follows this window, so when it exceeds the profile the profile is a
+   * cosmetic display budget rather than a compaction trigger. For `smart` the
+   * cap collapses both to 300k, so the mismatch diagnostic stays quiet. Not
+   * persisted.
    */
   registeredContextWindow?: number;
   /** Runtime-only baseline diagnostics used by /mmr-status; not persisted. */
