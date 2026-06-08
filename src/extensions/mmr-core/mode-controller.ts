@@ -364,12 +364,13 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         modelPreferences,
         modeThinkingLevel: effectiveThinkingLevel,
         registry: ctx.modelRegistry,
-        // Cap the active model's context window for modes that declare one
-        // (currently only `smart`, 300k). Native Pi stores the passed object
-        // directly and keys all compaction/overflow/footer/usage off
-        // `model.contextWindow`, so a capped clone makes Pi compact and
-        // display exactly as it would at the capped window. No-op for modes
-        // without a cap and for routes already at/under the cap.
+        // Cap the active model's context window to the mode's advertised
+        // profile window (e.g. smart 300k, smartGPT/rush/deep 256k, large 1M).
+        // Native Pi stores the passed object directly and keys all
+        // compaction/overflow/footer/usage off `model.contextWindow`, so a
+        // capped clone makes Pi compact and display exactly as it would at the
+        // capped window. No-op for `free`, for modes without a cap, and for
+        // routes already at/under the cap.
         setModel: async (model) => pi.setModel(withMmrModeContextCap(mode.key, model)),
       });
 
@@ -519,7 +520,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
    * Guards (ALL must hold before acting), so this never fights a genuine
    * native model change (which opts out to Free mode) or a subagent/in-flight
    * MMR transaction:
-   *   - active mode is `smart`
+   *   - a locked mode is active (the per-mode cap below no-ops for `free`)
    *   - no subagent worker is active
    *   - no MMR-managed model update is in flight and we are not mid-apply
    *   - no MMR-managed model override is in effect (defer to its owner; the
@@ -529,7 +530,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
    */
   async function reassertActiveModelInvariants(ctx: ExtensionContext): Promise<void> {
     const state = getMmrModeState();
-    if (!state || state.mode !== "smart") return;
+    if (!state) return;
     if (getMmrSubagentState()) return;
     if (applyingMmrMode || isMmrManagedModelUpdateActive()) return;
     // A managed model override means another MMR path owns the active model;
@@ -541,7 +542,9 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     // Do not fight a genuine native model change; that path releases to Free.
     if (active.provider !== state.provider || active.id !== state.model) return;
 
-    const capped = withMmrModeContextCap("smart", active);
+    // Cap to the active mode's advertised window. No-op for `free`, for modes
+    // whose route is already at/under the profile, and when nothing changes.
+    const capped = withMmrModeContextCap(state.mode, active);
     if (capped === active) return;
 
     applyingMmrMode = true;

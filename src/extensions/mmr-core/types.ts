@@ -270,14 +270,14 @@ export interface MmrModeState {
   /**
    * Runtime-only context window of the selected provider model that Pi will
    * actually compact against. This is the registry-declared window after the
-   * mode's active-model cap (`withMmrModeContextCap`) is applied: for `smart`
-   * it is the 300k cap, for other modes it is the raw registry window.
-   * Captured so diagnostics can detect when this effective window exceeds the
-   * mode's display profile (`effectiveContextWindow`). Pi-native compaction
-   * follows this window, so when it exceeds the profile the profile is a
-   * cosmetic display budget rather than a compaction trigger. For `smart` the
-   * cap collapses both to 300k, so the mismatch diagnostic stays quiet. Not
-   * persisted.
+   * mode's active-model cap (`withMmrModeContextCap`) is applied: every locked
+   * mode caps down to its profile total (e.g. smart 300k, smartGPT/rush/deep
+   * 256k, large 1M), so for a route at/above the profile this equals the
+   * profile window. Captured so diagnostics can detect when this effective
+   * window exceeds the mode's display profile (`effectiveContextWindow`).
+   * Pi-native compaction follows this window; the per-mode cap normally
+   * collapses both to the profile total, so the mismatch diagnostic stays
+   * quiet unless a route declares a window below the profile. Not persisted.
    */
   registeredContextWindow?: number;
   /** Runtime-only baseline diagnostics used by /mmr-status; not persisted. */
