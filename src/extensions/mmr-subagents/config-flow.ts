@@ -181,7 +181,7 @@ function recordIdExists(settingsPath: string, id: string): boolean {
   }
 }
 
-async function pickModes(ctx: ExtensionContext, plan: MmrCustomSubagentImportPlan): Promise<MmrCustomSubagentModeScope | undefined> {
+async function pickModes(ctx: ExtensionContext): Promise<MmrCustomSubagentModeScope | undefined> {
   const choice = await ctx.ui.select("Modes that may call this subagent", [
     "allLocked (every locked mode)",
     "deep",
@@ -291,7 +291,7 @@ export async function runMmrSubagentsConfigFlow(
   const tools = await pickTools(ctx, plan, availableTools);
   if (tools === undefined) return;
 
-  const modes = await pickModes(ctx, plan);
+  const modes = await pickModes(ctx);
   if (!modes) return;
 
   let projects: "all" | readonly string[] | undefined;

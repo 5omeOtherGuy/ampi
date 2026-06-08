@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 import type {
   AgentToolResult,
   ExtensionAPI,
-  ExtensionContext,
   ToolDefinition,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
