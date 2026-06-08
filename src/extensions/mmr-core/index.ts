@@ -72,6 +72,40 @@ interface MmrBaseline {
   activeTools: string[];
 }
 
+/**
+ * The single-source controller that owns all closure-captured mutable mode
+ * state (see {@link createMmrModeController}). The entrypoint and the
+ * registration modules talk to mode activation only through this surface; they
+ * never re-declare the underlying state. Hook read-paths use the live
+ * accessors `getActivePolicy()`/`isApplyingMmrMode()` rather than values
+ * captured at registration time.
+ */
+interface MmrModeController {
+  applyMode(modeKey: MmrModeKey, ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState | undefined>;
+  resolveInitialMode(ctx: ExtensionContext): Promise<void>;
+  switchLockedModeToFreeForNativeControl(
+    ctx: ExtensionContext,
+    options?: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">,
+  ): Promise<void>;
+  captureBaseline(
+    ctx: ExtensionContext,
+    options?: { force?: boolean; model?: Parameters<ExtensionAPI["setModel"]>[0]; thinkingLevel?: ThinkingLevel },
+  ): MmrBaseline;
+  selectModeFromShortcut(ctx: ExtensionContext): Promise<void>;
+  cycleModeFromShortcut(ctx: ExtensionContext): Promise<void>;
+  toggleThinkingFromShortcut(ctx: ExtensionContext): Promise<void>;
+  getActivePolicy(): MmrRequestPolicy | undefined;
+  isApplyingMmrMode(): boolean;
+  getConfiguredModelPreferences(): Partial<Record<MmrModeKey, MmrModelPreference[]>>;
+  getConfiguredSubagentModelPreferences(): Record<string, MmrModelPreference[]>;
+  setConfiguredModePreferences(mode: MmrModeKey, preferences: MmrModelPreference[] | undefined): void;
+  setConfiguredSubagentPreferences(profile: string, preferences: MmrModelPreference[] | undefined): void;
+  setConfiguredSubagentModelPreferences(preferences: Record<string, MmrModelPreference[]>): void;
+  setSettingsFilesRead(files: string[]): void;
+  setSettingsWarnings(warnings: string[]): void;
+  setApplyingMmrMode(value: boolean): void;
+}
+
 function modeCompletions(prefix: string) {
   return MMR_MODE_KEYS.filter((mode) => mode.startsWith(prefix)).map((mode) => ({ value: mode, label: mode }));
 }
@@ -89,22 +123,7 @@ function parseMmrStatusDebugFlag(args: unknown): boolean {
     .some((token) => token === "debug" || token === "--debug");
 }
 
-export default function mmrCoreExtension(pi: ExtensionAPI): void {
-  pi.registerFlag("mmr-mode", {
-    description: "Start with an MMR mode: smart, smartGPT, rush, large, deep, or free",
-    type: "string",
-  });
-
-  pi.registerFlag("mmr-subagent", {
-    description: "Run as an MMR subagent worker with a named profile (e.g. finder). Bypasses user-facing MMR locked modes.",
-    type: "string",
-  });
-
-  pi.registerFlag("mmr-parent-mode", {
-    description: "Parent MMR mode metadata for mode-derived subagent workers.",
-    type: "string",
-  });
-
+function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   const nativeFreeModeWarning = [
     "MMR switched to Free mode because the Pi model/thinking setting changed.",
     "",
@@ -587,6 +606,59 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     await run;
   }
 
+  return {
+    applyMode,
+    resolveInitialMode,
+    switchLockedModeToFreeForNativeControl,
+    captureBaseline,
+    selectModeFromShortcut,
+    cycleModeFromShortcut,
+    toggleThinkingFromShortcut,
+    getActivePolicy: () => activePolicy,
+    isApplyingMmrMode: () => applyingMmrMode,
+    getConfiguredModelPreferences: () => configuredModelPreferences,
+    getConfiguredSubagentModelPreferences: () => configuredSubagentModelPreferences,
+    setConfiguredModePreferences: (mode, preferences) => {
+      if (preferences) configuredModelPreferences[mode] = preferences;
+      else delete configuredModelPreferences[mode];
+    },
+    setConfiguredSubagentPreferences: (profile, preferences) => {
+      if (preferences) configuredSubagentModelPreferences[profile] = preferences;
+      else delete configuredSubagentModelPreferences[profile];
+    },
+    setConfiguredSubagentModelPreferences: (preferences) => {
+      configuredSubagentModelPreferences = preferences;
+    },
+    setSettingsFilesRead: (files) => {
+      settingsFilesRead = files;
+    },
+    setSettingsWarnings: (warnings) => {
+      settingsWarnings = warnings;
+    },
+    setApplyingMmrMode: (value) => {
+      applyingMmrMode = value;
+    },
+  };
+}
+
+export default function mmrCoreExtension(pi: ExtensionAPI): void {
+  pi.registerFlag("mmr-mode", {
+    description: "Start with an MMR mode: smart, smartGPT, rush, large, deep, or free",
+    type: "string",
+  });
+
+  pi.registerFlag("mmr-subagent", {
+    description: "Run as an MMR subagent worker with a named profile (e.g. finder). Bypasses user-facing MMR locked modes.",
+    type: "string",
+  });
+
+  pi.registerFlag("mmr-parent-mode", {
+    description: "Parent MMR mode metadata for mode-derived subagent workers.",
+    type: "string",
+  });
+
+  const controller = createMmrModeController(pi);
+
   pi.registerCommand("mode", {
     description: "Show or switch MMR mode",
     getArgumentCompletions: modeCompletions,
@@ -602,7 +674,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await applyMode(requested, ctx, { source: "command", persist: true, notify: true });
+      await controller.applyMode(requested, ctx, { source: "command", persist: true, notify: true });
     },
   });
 
@@ -625,15 +697,13 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     description: "Pick the model used for an MMR mode or subagent, or configure mmr-web, and persist to project settings.",
     handler: async (_args, ctx) => {
       await runMmrConfigFlow(ctx, {
-        getConfiguredModelPreferences: () => configuredModelPreferences,
-        getConfiguredSubagentModelPreferences: () => configuredSubagentModelPreferences,
+        getConfiguredModelPreferences: () => controller.getConfiguredModelPreferences(),
+        getConfiguredSubagentModelPreferences: () => controller.getConfiguredSubagentModelPreferences(),
         setConfiguredModePreferences: (mode, preferences) => {
-          if (preferences) configuredModelPreferences[mode] = preferences;
-          else delete configuredModelPreferences[mode];
+          controller.setConfiguredModePreferences(mode, preferences);
         },
         setConfiguredSubagentPreferences: (profile, preferences) => {
-          if (preferences) configuredSubagentModelPreferences[profile] = preferences;
-          else delete configuredSubagentModelPreferences[profile];
+          controller.setConfiguredSubagentPreferences(profile, preferences);
         },
         getAvailableTools: () => pi.getAllTools().map((tool) => tool.name),
       });
@@ -644,7 +714,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     pi.registerShortcut(shortcut, {
       description: "Select MMR mode",
       handler: async (ctx) => {
-        await selectModeFromShortcut(ctx);
+        await controller.selectModeFromShortcut(ctx);
       },
     });
   }
@@ -652,7 +722,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerShortcut("ctrl+space", {
     description: "Cycle MMR mode",
     handler: async (ctx) => {
-      await cycleModeFromShortcut(ctx);
+      await controller.cycleModeFromShortcut(ctx);
     },
   });
 
@@ -664,7 +734,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerShortcut("alt+r", {
     description: "Toggle MMR thinking level (smart/smartGPT/deep)",
     handler: async (ctx) => {
-      await toggleThinkingFromShortcut(ctx);
+      await controller.toggleThinkingFromShortcut(ctx);
     },
   });
 
@@ -696,17 +766,17 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
 
   const subagentActivationBindings = {
     setConfiguredSubagentModelPreferences: (preferences: Record<string, MmrModelPreference[]>) => {
-      configuredSubagentModelPreferences = preferences;
+      controller.setConfiguredSubagentModelPreferences(preferences);
     },
     setSettingsFilesRead: (files: string[]) => {
-      settingsFilesRead = files;
+      controller.setSettingsFilesRead(files);
     },
     setSettingsWarnings: (warnings: string[]) => {
-      settingsWarnings = warnings;
+      controller.setSettingsWarnings(warnings);
     },
     notifyWarnings,
     setApplyingMmrMode: (value: boolean) => {
-      applyingMmrMode = value;
+      controller.setApplyingMmrMode(value);
     },
   };
 
@@ -731,8 +801,8 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
 
     await maybeShowMmrChangelogOnSessionStart(_event, ctx);
 
-    captureBaseline(ctx, { force: true });
-    await resolveInitialMode(ctx);
+    controller.captureBaseline(ctx, { force: true });
+    await controller.resolveInitialMode(ctx);
   });
 
   pi.on("before_provider_request", (event) => {
@@ -784,6 +854,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
       }
       return;
     }
+    const activePolicy = controller.getActivePolicy();
     if (!activePolicy) return;
     if (getMmrManagedModelOverride()) return;
     return applyMmrRequestPolicy(event.payload, activePolicy, { providerId: getMmrModeState()?.provider });
@@ -850,14 +921,14 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.on("model_select", async (event, ctx) => {
     // Pi uses source:"set" both for pi.setModel(...) and picker-style model changes;
     // applyingMmrMode separates MMR transactions from native user opt-outs.
-    if (applyingMmrMode || isMmrManagedModelUpdateActive() || event.source === "restore") {
+    if (controller.isApplyingMmrMode() || isMmrManagedModelUpdateActive() || event.source === "restore") {
       updateMmrStatus(ctx, getMmrModeState());
       return;
     }
     // Subagent workers must not trip the locked-mode native opt-out path.
     if (getMmrSubagentState()) return;
 
-    await switchLockedModeToFreeForNativeControl(ctx, { nativeModel: event.model });
+    await controller.switchLockedModeToFreeForNativeControl(ctx, { nativeModel: event.model });
   });
 
   pi.on("input", async (event, ctx) => {
@@ -897,7 +968,7 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.on("thinking_level_select", async (event, ctx) => {
     // Thinking changes have no source field, so the transaction guard is the only
     // signal that a change came from MMR rather than native Pi controls.
-    if (applyingMmrMode || isMmrManagedModelUpdateActive()) {
+    if (controller.isApplyingMmrMode() || isMmrManagedModelUpdateActive()) {
       updateMmrStatus(ctx, getMmrModeState());
       return;
     }
@@ -907,6 +978,6 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
     // override it, so a native thinking change releases the locked mode to Free
     // (matching native model changes). The MMR-owned alt+r shortcut is the
     // in-mode thinking toggle that does not release.
-    await switchLockedModeToFreeForNativeControl(ctx, { nativeThinkingLevel: event.level });
+    await controller.switchLockedModeToFreeForNativeControl(ctx, { nativeThinkingLevel: event.level });
   });
 }
