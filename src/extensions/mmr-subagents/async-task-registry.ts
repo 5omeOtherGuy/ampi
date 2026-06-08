@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import {
   deriveAsyncTerminalOutcome,
@@ -8,6 +7,27 @@ import {
   type MmrWorkerTrailItem,
   type MmrWorkerUsageStats,
 } from "./runner.js";
+import {
+  ASYNC_TASK_GROUP_LABEL_MAX_LEN,
+  assertValidGroupId,
+  defaultGroupIdFactory,
+  defaultIdFactory,
+  isAgentToolResult,
+  isTerminalStatus,
+  isToolRunResult,
+  isValidAsyncTaskGroupId,
+  latestToolFromProgress,
+  normalizeGroupLabel,
+} from "./async-task-internal.js";
+import type {
+  MmrAsyncTaskGroupRecord,
+  MmrAsyncTaskPushOutcome,
+  MmrAsyncTaskRecord,
+} from "./async-task-internal.js";
+
+// Re-export the public group-id validator and label cap from their new home so
+// the entry file remains the stable public surface for them.
+export { ASYNC_TASK_GROUP_LABEL_MAX_LEN, isValidAsyncTaskGroupId };
 
 /**
  * In-memory, session-scoped registry for async background subagent tasks
@@ -90,14 +110,6 @@ export type MmrAsyncTaskCompletionPushState =
    * The agent already has the result in hand, so a push would only duplicate it.
    */
   | "observed";
-
-/**
- * Internal idle-wake transport status. Distinct from the public
- * {@link MmrAsyncTaskCompletionPushState}, which is projected from the
- * timestamp/opt-in fields plus this transport status by
- * {@link projectCompletionPush}.
- */
-type MmrAsyncTaskPushOutcome = "sending" | "sent" | "failed" | "suppressed";
 
 /**
  * Internal-only target shape shared by task and group records for delivery
@@ -523,133 +535,6 @@ export interface MmrAsyncTaskRegistryDeps {
   observedTerminalTtlMs?: number;
   /** Hard cap on completion pushes per session (default {@link DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION}). */
   maxCompletionPushesPerSession?: number;
-}
-
-interface MmrAsyncTaskRecord {
-  taskId: string;
-  sessionKey: string;
-  originToolCallId: string;
-  agent: string;
-  description: string;
-  prompt: string;
-  cwd: string;
-  resolvedModel?: string;
-  contextWindow?: number;
-  workerTools: readonly string[];
-  capabilityProfile?: string;
-  groupId?: string;
-  status: MmrAsyncTaskStatus;
-  createdAtMs: number;
-  startedAtMs: number;
-  updatedAtMs: number;
-  lastProgressAtMs?: number;
-  completedAtMs?: number;
-  cancelRequestedAtMs?: number;
-  cancelReason?: string;
-  maxRuntimeAtMs: number;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  deliveryOptIn: boolean;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-  terminalFreshness?: MmrAsyncTaskTerminalFreshness;
-  expiredByWatchdog: boolean;
-  controller: AbortController;
-  runGeneration: number;
-  runnerSettled: boolean;
-  watchdogTimer?: ReturnType<typeof setTimeout>;
-  latestProgress?: MmrWorkerProgressSnapshot;
-  latestToolResult?: AgentToolResult<unknown>;
-  terminalOutcome?: MmrAsyncTerminalOutcome;
-  finalResult?: MmrWorkerResult;
-  finalToolResult?: AgentToolResult<unknown>;
-  errorMessage?: string;
-  notify?: MmrAsyncTaskNotifier;
-  onSettle?: MmrAsyncTaskSettleCallback;
-  waiters: Set<() => void>;
-  promise?: Promise<void>;
-}
-
-/** Cap on a stored group label so a pathological input can't bloat the header. */
-export const ASYNC_TASK_GROUP_LABEL_MAX_LEN = 120;
-
-function normalizeGroupLabel(label: string | undefined): string | undefined {
-  if (typeof label !== "string") return undefined;
-  const trimmed = label.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed.length > ASYNC_TASK_GROUP_LABEL_MAX_LEN
-    ? trimmed.slice(0, ASYNC_TASK_GROUP_LABEL_MAX_LEN)
-    : trimmed;
-}
-
-interface MmrAsyncTaskGroupRecord {
-  groupId: string;
-  sessionKey: string;
-  label?: string;
-  createdAtMs: number;
-  updatedAtMs: number;
-  completedAtMs?: number;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  deliveryOptIn: boolean;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-  notify?: MmrAsyncTaskGroupNotifier;
-  onSettle?: MmrAsyncTaskGroupSettleCallback;
-  waiters: Set<() => void>;
-  taskIds: Set<string>;
-}
-
-function isTerminalStatus(status: MmrAsyncTaskStatus): boolean {
-  return status === "succeeded" || status === "failed" || status === "cancelled";
-}
-
-// The lowercase-hex id shape is contractually tied to the validators and
-// JSON-schema patterns below (`isValidAsyncTaskGroupId` / `^group_[a-f0-9]{6,}$`
-// and the async-task tool schemas). `crypto.randomUUID()` is intentionally NOT
-// used: its hyphenated form would fail those patterns. If stronger uniqueness
-// is ever needed, widen to `randomBytes(8)` (still hex, still matches `{6,}`).
-function defaultIdFactory(): string {
-  return `task_${randomBytes(6).toString("hex")}`;
-}
-
-function defaultGroupIdFactory(): string {
-  return `group_${randomBytes(6).toString("hex")}`;
-}
-
-export function isValidAsyncTaskGroupId(groupId: string): boolean {
-  return /^group_[a-f0-9]{6,}$/.test(groupId);
-}
-
-function assertValidGroupId(groupId: string): void {
-  if (!isValidAsyncTaskGroupId(groupId)) {
-    throw new Error(`Invalid async task group id "${groupId}"; expected group_<hex>.`);
-  }
-}
-
-function isAgentToolResult(value: unknown): value is AgentToolResult<unknown> {
-  return typeof value === "object"
-    && value !== null
-    && Array.isArray((value as { content?: unknown }).content);
-}
-
-function isToolRunResult(value: MmrAsyncTaskRunResult): value is MmrAsyncTaskToolRunResult {
-  return typeof value === "object"
-    && value !== null
-    && "toolResult" in value
-    && isAgentToolResult((value as { toolResult?: unknown }).toolResult);
-}
-
-function latestToolFromProgress(
-  progress: MmrWorkerProgressSnapshot | undefined,
-): Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined {
-  if (!progress) return undefined;
-  let latest: Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined;
-  let latestRunning: Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined;
-  for (const item of progress.trail) {
-    if (item.type !== "tool") continue;
-    latest = item;
-    if (item.status === "running") latestRunning = item;
-  }
-  return latestRunning ?? latest;
 }
 
 class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
