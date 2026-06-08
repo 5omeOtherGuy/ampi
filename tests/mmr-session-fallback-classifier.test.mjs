@@ -55,4 +55,18 @@ describe("mmr-session-fallback quota classifier", () => {
     assert.equal(classifyMmrSessionFallbackError({ provider: "anthropic", errorMessage: "HTTP 429 rate limit" }).shouldPrompt, false);
     assert.equal(classifyMmrSessionFallbackError({ provider: "openai", errorMessage: "insufficient_quota: billing quota exceeded" }).shouldPrompt, true);
   });
+
+  // Membership-parity guard (Item 1): all three subscription providers still
+  // prompt on a rate-limit message, while a non-subscription API provider does
+  // not. Guards against an accidental edit to the canonical id list shared via
+  // isMmrSubscriptionProvider.
+  it("prompts on rate limits for every subscription provider but not for API providers", async () => {
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+
+    for (const provider of ["claude-subscription", "openai-codex", "github-copilot"]) {
+      const result = classifyMmrSessionFallbackError({ provider, errorMessage: "please slow down: rate limit" });
+      assert.equal(result.shouldPrompt, true, provider);
+    }
+    assert.equal(classifyMmrSessionFallbackError({ provider: "google", errorMessage: "please slow down: rate limit" }).shouldPrompt, false);
+  });
 });

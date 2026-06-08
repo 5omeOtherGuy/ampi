@@ -179,4 +179,16 @@ describe("mmr-core model resolver", () => {
       "Pi rejected model selection",
     );
   });
+
+  // Item 1: the canonical subscription-provider id list is owned once by
+  // mmr-core and exposed only as a predicate (no mutable Set export).
+  it("identifies the canonical subscription providers via the shared predicate", async () => {
+    const { isMmrSubscriptionProvider } = await importSource("extensions/mmr-core/provider-constants.ts");
+    for (const provider of ["claude-subscription", "openai-codex", "github-copilot"]) {
+      assert.equal(isMmrSubscriptionProvider(provider), true, provider);
+    }
+    for (const provider of ["anthropic", "openai", "google", "", "claude-subscription "]) {
+      assert.equal(isMmrSubscriptionProvider(provider), false, provider);
+    }
+  });
 });

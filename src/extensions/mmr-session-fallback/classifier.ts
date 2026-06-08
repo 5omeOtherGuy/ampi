@@ -1,3 +1,5 @@
+import { isMmrSubscriptionProvider } from "../mmr-core/provider-constants.js";
+
 export type MmrSessionFallbackQuotaKind =
   | "openai-usage-limit"
   | "anthropic-rate-limit"
@@ -16,8 +18,6 @@ export interface MmrSessionFallbackErrorClassification {
   shouldPrompt: boolean;
   friendlyMessage: string;
 }
-
-const SUBSCRIPTION_PROVIDERS = new Set(["claude-subscription", "openai-codex", "github-copilot"]);
 
 function normalize(value: string | undefined): string {
   return value ?? "";
@@ -93,7 +93,7 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
     };
   }
 
-  if (SUBSCRIPTION_PROVIDERS.has(lowerProvider) && includesRateLimit(message)) {
+  if (isMmrSubscriptionProvider(lowerProvider) && includesRateLimit(message)) {
     return {
       kind: "generic-hard-quota",
       shouldPrompt: true,
