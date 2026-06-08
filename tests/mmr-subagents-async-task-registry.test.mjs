@@ -854,6 +854,171 @@ describe("toPublicAsyncTaskSnapshot", () => {
   });
 });
 
+describe("async-task-registry Phase 0 characterization gaps", () => {
+  it("notifier rejection keeps the task terminal, never retries, and a later context pull does not re-surface it", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t" });
+    const d = makeDeferredRun();
+    let notifyCalls = 0;
+    reg.startTask(startArgs({
+      run: d.run,
+      notify: async () => {
+        notifyCalls += 1;
+        throw new Error("push boom");
+      },
+    }));
+    // Session is idle (no agent-active flag), so settle fires the idle-wake push.
+    d.resolve(makeWorkerResult({ finalOutput: "done" }));
+    await flush();
+    // The terminal result is unchanged; only the push transport failed.
+    const finished = reg.listTasks("sess-A").finished[0];
+    assert.equal(finished.status, "succeeded", "a failed push must not flip the terminal status");
+    assert.equal(finished.completionPush, "failed");
+    // A failed push is never retried.
+    await flush();
+    assert.equal(notifyCalls, 1, "a rejected push must not be retried");
+    // The announcement was claimed before the push, so an in-turn context pull
+    // must not re-surface the same item (no resurrection of delivery).
+    const claim = reg.claimPendingForContext("sess-A", 10);
+    assert.deepEqual(claim.items, [], "a claimed-then-failed push must not re-surface via context pull");
+    assert.equal(claim.hasMore, false);
+    // Status is still terminal after the pull attempt.
+    assert.equal(reg.listTasks("sess-A").finished[0].status, "succeeded");
+  });
+
+  it("group notifier rejection keeps the group terminal, never retries, and a later context pull does not re-surface it", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let n = 0;
+    let notifyCalls = 0;
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => `t${n++}` });
+    const group = reg.openGroup({
+      sessionKey: "sess-A",
+      groupId: "group_beaded",
+      deliveryOptIn: true,
+      notify: async () => {
+        notifyCalls += 1;
+        throw new Error("group push boom");
+      },
+    });
+    const first = makeDeferredRun();
+    const second = makeDeferredRun();
+    reg.startTask(startArgs({ run: first.run, originToolCallId: "c0", groupId: group.groupId }));
+    reg.startTask(startArgs({ run: second.run, originToolCallId: "c1", groupId: group.groupId }));
+    first.resolve(makeWorkerResult());
+    second.resolve(makeWorkerResult());
+    await flush();
+    // Non-observing read: terminal group state with a failed push.
+    const settled = reg.getGroup("sess-A", "group_beaded");
+    assert.equal(settled.status, "completed", "a failed group push must not change the group status");
+    assert.equal(settled.completionPush, "failed");
+    await flush();
+    assert.equal(notifyCalls, 1, "a rejected group push must not be retried");
+    // The group announcement was claimed before the push, so a context pull must
+    // not re-surface the group item.
+    const claim = reg.claimPendingForContext("sess-A", 10);
+    assert.deepEqual(claim.items, [], "a claimed-then-failed group push must not re-surface via context pull");
+    assert.equal(claim.hasMore, false);
+  });
+
+  it("maps a synchronous runner throw to failed identically to an async rejection", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const reg = createMmrAsyncTaskRegistry({ idFactory: () => "t" });
+    reg.startTask(startArgs({
+      run: () => {
+        throw new Error("sync boom");
+      },
+    }));
+    await flush();
+    const finished = reg.listTasks("sess-A").finished[0];
+    assert.equal(finished.status, "failed", "a synchronous runner throw must finalize as failed");
+    assert.equal(finished.terminalOutcome, "failed");
+    assert.match(finished.errorMessage, /sync boom/);
+  });
+
+  it("projects snapshot/boardEntry/groupSnapshot byte-identically (field-omission drift guard)", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    let clock = 1000;
+    const reg = createMmrAsyncTaskRegistry({
+      nowMs: () => clock,
+      idFactory: () => "t",
+      groupIdFactory: () => "group_abc123",
+    });
+    reg.openGroup({ sessionKey: "sess-A", groupId: "group_abc123", deliveryOptIn: false, label: "Group Label" });
+    const d = makeDeferredRun();
+    reg.startTask(startArgs({
+      run: d.run,
+      originToolCallId: "c0",
+      agent: "finder",
+      description: "do a thing",
+      prompt: "prompt body",
+      cwd: "/repo",
+      resolvedModel: "prov/model",
+      contextWindow: 200_000,
+      workerTools: ["read", "bash"],
+      capabilityProfile: "explore",
+      groupId: "group_abc123",
+    }));
+    clock = 1500;
+    d.captured.onProgress(makeWorkerResult({
+      finalOutput: "partial",
+      truncatedFinalOutput: "partial",
+      usage: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 50_000, turns: 2 },
+      model: "openai/gpt-5.5",
+      trail: [
+        { type: "tool", toolCallId: "tool-1", toolName: "read", status: "completed" },
+        { type: "tool", toolCallId: "tool-2", toolName: "bash", status: "running" },
+      ],
+    }));
+    clock = 2000;
+    d.resolve(makeWorkerResult({ finalOutput: "all done", truncatedFinalOutput: "all done" }));
+    await flush();
+    clock = 3000;
+    const snap = reg.getTask("sess-A", "t");
+    const board = reg.listTasks("sess-A").finished[0];
+    const group = reg.getGroup("sess-A", "group_abc123");
+
+    const expectedProgress = {
+      messages: [], finalOutput: "partial", truncatedFinalOutput: "partial",
+      usage: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 50_000, turns: 2 },
+      prompt: "", cwd: "", command: "pi", args: [], exitCode: 0, signal: null, stderr: "",
+      aborted: false, outputTruncated: false, ignoredJsonLines: 0, agentStarted: true, model: "openai/gpt-5.5",
+      trail: [
+        { type: "tool", toolCallId: "tool-1", toolName: "read", status: "completed" },
+        { type: "tool", toolCallId: "tool-2", toolName: "bash", status: "running" },
+      ],
+    };
+    const expectedFinal = {
+      messages: [], finalOutput: "all done", truncatedFinalOutput: "all done",
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 1, turns: 1 },
+      prompt: "", cwd: "", command: "pi", args: [], exitCode: 0, signal: null, stderr: "",
+      aborted: false, outputTruncated: false, ignoredJsonLines: 0, agentStarted: true, trail: [],
+    };
+    assert.deepEqual(snap, {
+      taskId: "t", status: "succeeded", freshness: "terminal", terminalFreshness: "healthy",
+      agent: "finder", description: "do a thing", prompt: "prompt body", cwd: "/repo",
+      resolvedModel: "prov/model", contextWindow: 200_000, workerTools: ["read", "bash"],
+      createdAtMs: 1000, startedAtMs: 1000, updatedAtMs: 2000, lastProgressAtMs: 1500,
+      completedAtMs: 2000, runtimeMs: 1000, lastProgressAgeMs: 1500, completionPush: "disabled",
+      terminalOutcome: "success", capabilityProfile: "explore", groupId: "group_abc123",
+      latestProgress: expectedProgress, finalResult: expectedFinal,
+    });
+    assert.deepEqual(board, {
+      taskId: "t", status: "succeeded", freshness: "terminal", terminalFreshness: "healthy",
+      agent: "finder", description: "do a thing", createdAtMs: 1000, startedAtMs: 1000,
+      updatedAtMs: 2000, completedAtMs: 2000, runtimeMs: 1000, lastProgressAgeMs: 1500,
+      resolvedModel: "openai/gpt-5.5", contextWindow: 200_000,
+      usage: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 50_000, turns: 2 },
+      latestToolName: "bash", latestToolStatus: "running", toolCount: 2, terminalOutcome: "success",
+      capabilityProfile: "explore", groupId: "group_abc123", completionPush: "disabled",
+    });
+    assert.deepEqual(group, {
+      groupId: "group_abc123", status: "completed", label: "Group Label", generatedAtMs: 3000,
+      createdAtMs: 1000, updatedAtMs: 2000, completedAtMs: 2000, completionPush: "disabled",
+      taskIds: ["t"], counts: { running: 0, succeeded: 1, failed: 0, cancelled: 0, partial: 0, total: 1 },
+    });
+  });
+});
+
 describe("async-task-registry completion-push budget", () => {
   it("suppresses pushes once the per-session budget is exhausted", async () => {
     const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
