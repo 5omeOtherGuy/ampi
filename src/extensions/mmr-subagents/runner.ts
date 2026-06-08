@@ -406,6 +406,13 @@ export interface RunMmrSubagentWorkerOptions {
   /** Concrete Pi tool allowlist passed through `--tools`. */
   tools?: readonly string[];
   /**
+   * Optional restricted child extension keep set. When set to a non-empty
+   * list of absolute extension entry paths the child spawns with
+   * `--no-extensions -e <path>...` (faster startup); omitted/empty keeps full
+   * discovery. Resolved by `computeMmrChildExtensionScope`.
+   */
+  childExtensionScope?: readonly string[];
+  /**
    * Optional session-scoped model-preference override (issue #9). Forwarded
    * to the child Pi worker through the {@link MMR_SUBAGENT_MODEL_PREFERENCES_ENV}
    * env channel for this spawn only (never persisted), so the child's
@@ -843,6 +850,8 @@ export interface MmrSubagentRunOptions {
   cwd: string;
   model?: string;
   tools?: readonly string[];
+  /** See {@link RunMmrSubagentWorkerOptions.childExtensionScope}. */
+  childExtensionScope?: readonly string[];
   systemPrompt?: string;
   /** See {@link RunMmrSubagentWorkerOptions.systemPromptDelivery}. */
   systemPromptDelivery?: "append" | "replace";
@@ -876,6 +885,7 @@ function toRunMmrSubagentWorkerOptions(
   if (options.parentMode !== undefined) mapped.parentMode = options.parentMode;
   if (options.model !== undefined) mapped.model = options.model;
   if (options.tools !== undefined) mapped.tools = options.tools;
+  if (options.childExtensionScope !== undefined) mapped.childExtensionScope = options.childExtensionScope;
   if (options.systemPrompt !== undefined) mapped.systemPrompt = options.systemPrompt;
   if (options.systemPromptDelivery !== undefined) mapped.systemPromptDelivery = options.systemPromptDelivery;
   if (options.modelPreferencesOverride !== undefined) mapped.modelPreferencesOverride = options.modelPreferencesOverride;
@@ -916,10 +926,64 @@ export function createMmrSubagentRunnerFromRunWorker(
   runWorker: typeof runMmrSubagentWorker,
   deps?: MmrWorkerRunnerDeps,
 ): MmrSubagentRunner {
+  const invoke = (mapped: RunMmrSubagentWorkerOptions) =>
+    deps ? runWorker(mapped, deps) : runWorker(mapped);
   return {
-    run(options) {
+    async run(options) {
       const mapped = toRunMmrSubagentWorkerOptions(options);
-      return deps ? runWorker(mapped, deps) : runWorker(mapped);
+      const first = await invoke(mapped);
+      if (!shouldRetryMmrChildWithFullDiscovery(first, mapped.childExtensionScope)) {
+        return first;
+      }
+      // A restricted child failed before/at activation in a way that a missing
+      // extension would explain (activation mismatch or a model route whose
+      // provider extension was not in the keep set). Re-run once with full
+      // discovery so an invisible hook-only/provider extension cannot regress
+      // the worker; the wasted spawn fails fast and is bounded to one retry.
+      const retry: RunMmrSubagentWorkerOptions = { ...mapped };
+      delete retry.childExtensionScope;
+      return invoke(retry);
     },
   };
+}
+
+/**
+ * Decide whether a restricted-child run should be retried once with full
+ * discovery. Only structured discriminators are read; free-form `errorMessage`
+ * text is never inspected.
+ *
+ * Retries when the run was restricted (non-empty `childExtensionScope`) and the
+ * failure is one a missing extension would explain:
+ *  - `subagentActivationError` — the child's activation guard failed closed
+ *    (e.g. `--model`/`--tools` could not be honored against the restricted
+ *    registry); or
+ *  - the child exited non-zero BEFORE the agent loop with no usable output,
+ *    the signature of Pi rejecting an unknown `--model` provider ("Model not
+ *    found").
+ *
+ * Never retries: unrestricted runs, aborts, spawn failures (the binary path is
+ * unchanged by the keep set), in-loop worker errors, or clean empty output.
+ */
+export function shouldRetryMmrChildWithFullDiscovery(
+  result: Pick<
+    MmrWorkerResult,
+    | "spawnError"
+    | "subagentActivationError"
+    | "aborted"
+    | "exitCode"
+    | "finalOutput"
+    | "truncatedFinalOutput"
+  > & { agentStarted?: boolean },
+  childExtensionScope: readonly string[] | undefined,
+): boolean {
+  if (!childExtensionScope || childExtensionScope.length === 0) return false;
+  if (result.aborted) return false;
+  if (result.spawnError) return false;
+  if (result.subagentActivationError) return true;
+  return (
+    result.agentStarted === false &&
+    result.exitCode !== null &&
+    result.exitCode !== 0 &&
+    !hasUsableMmrWorkerFinalOutput(result)
+  );
 }
