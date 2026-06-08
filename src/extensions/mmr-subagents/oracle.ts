@@ -661,7 +661,7 @@ export function createMmrAdvisorTool(
   config: MmrAdvisorToolConfig,
   deps: OracleToolDeps = {},
 ): ToolDefinition {
-  const effectiveRunner = resolveEffectiveRunner(deps);
+  const effectiveRunner = resolveEffectiveRunner(deps, `createMmrAdvisorTool(${config.toolName})`);
   const outputByteLimit = deps.outputByteLimit ?? DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT;
   const perFileByteLimit = deps.perFileByteLimit ?? config.defaultPerFileByteLimit;
   return {

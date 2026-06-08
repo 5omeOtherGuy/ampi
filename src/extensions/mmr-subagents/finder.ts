@@ -621,7 +621,7 @@ function assembleFinderSystemPrompt(
 }
 
 export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
-  const effectiveRunner = resolveEffectiveRunner(deps);
+  const effectiveRunner = resolveEffectiveRunner(deps, "createFinderTool");
   const outputByteLimit = deps.outputByteLimit ?? DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT;
   return {
     name: FINDER_TOOL_NAME,

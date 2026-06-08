@@ -1017,6 +1017,82 @@ describe("async-task-registry Phase 0 characterization gaps", () => {
       taskIds: ["t"], counts: { running: 0, succeeded: 1, failed: 0, cancelled: 0, partial: 0, total: 1 },
     });
   });
+
+  it("projects ungrouped-task and group terminal delivery items byte-identically (claim drift guard)", async () => {
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+
+    // --- ungrouped FAILED task: exercises the completedAtMs + terminalOutcome +
+    // errorMessage conditional spreads in terminalDeliveryItemForTask. Marking
+    // the session agent-active makes settle HOLD the terminal delivery as
+    // pending instead of firing an idle-wake push, so claimPendingForContext
+    // drains the projected item. ---
+    let taskClock = 1000;
+    const taskReg = createMmrAsyncTaskRegistry({ nowMs: () => taskClock, idFactory: () => "t-fail" });
+    taskReg.setSessionAgentActive("sess-A", true);
+    const dTask = makeDeferredRun();
+    taskReg.startTask(startArgs({
+      run: dTask.run,
+      originToolCallId: "c-task",
+      agent: "finder",
+      description: "explore the repo",
+      deliveryOptIn: true,
+      notify: () => {},
+    }));
+    taskClock = 2000;
+    dTask.reject(new Error("worker exploded"));
+    await flush();
+    taskClock = 5000;
+    const taskClaim = taskReg.claimPendingForContext("sess-A", 10);
+    assert.deepEqual(taskClaim.items, [
+      {
+        kind: "task",
+        id: "t-fail",
+        status: "failed",
+        description: "explore the repo",
+        completedAtMs: 2000,
+        terminalOutcome: "failed",
+        errorMessage: "worker exploded",
+      },
+    ]);
+    assert.equal(taskClaim.hasMore, false);
+
+    // --- group: exercises the childTaskIds + counts fields in
+    // terminalDeliveryItemForGroup (separate registry to keep the claim order
+    // unambiguous). ---
+    let groupClock = 1000;
+    let n = 0;
+    const groupReg = createMmrAsyncTaskRegistry({ nowMs: () => groupClock, idFactory: () => `g${n++}` });
+    groupReg.setSessionAgentActive("sess-A", true);
+    groupReg.openGroup({
+      sessionKey: "sess-A",
+      groupId: "group_abc123",
+      deliveryOptIn: true,
+      label: "Group Label",
+      notify: () => {},
+    });
+    const c0 = makeDeferredRun();
+    groupReg.startTask(startArgs({ run: c0.run, originToolCallId: "gc0", groupId: "group_abc123", description: "child zero" }));
+    const c1 = makeDeferredRun();
+    groupReg.startTask(startArgs({ run: c1.run, originToolCallId: "gc1", groupId: "group_abc123", description: "child one" }));
+    groupClock = 2000;
+    c0.resolve(makeWorkerResult());
+    c1.resolve(makeWorkerResult());
+    await flush();
+    groupClock = 5000;
+    const groupClaim = groupReg.claimPendingForContext("sess-A", 10);
+    assert.deepEqual(groupClaim.items, [
+      {
+        kind: "group",
+        id: "group_abc123",
+        status: "completed",
+        description: "group group_abc123",
+        completedAtMs: 2000,
+        childTaskIds: ["g0", "g1"],
+        counts: { running: 0, succeeded: 2, failed: 0, cancelled: 0, partial: 0, total: 2 },
+      },
+    ]);
+    assert.equal(groupClaim.hasMore, false);
+  });
 });
 
 describe("async-task-registry completion-push budget", () => {

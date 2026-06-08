@@ -35,13 +35,18 @@ export interface MmrWorkerRunnerResolutionDeps {
  * Collapse the repeated runner-selection ternary: an explicit `runner` wins
  * (and a one-line warning is emitted if `runWorker` was also supplied), else a
  * `runWorker` adapter, else the child-CLI runner. `runnerDeps` are forwarded so
- * tests can inject a fake spawn or invocation resolver.
+ * tests can inject a fake spawn or invocation resolver. `warnLabel` prefixes the
+ * misconfiguration warning so each caller preserves its original, tool-specific
+ * message (e.g. `createFinderTool`, `createMmrAdvisorTool(<toolName>)`).
  */
-export function resolveEffectiveRunner(deps: MmrWorkerRunnerResolutionDeps): MmrSubagentRunner {
+export function resolveEffectiveRunner(
+  deps: MmrWorkerRunnerResolutionDeps,
+  warnLabel = "MMR subagent tool",
+): MmrSubagentRunner {
   if (deps.runner && deps.runWorker) {
     // eslint-disable-next-line no-console
     console.warn(
-      "MMR subagent tool: both runner and runWorker were provided; the runner takes precedence and runWorker is ignored.",
+      `${warnLabel}: both runner and runWorker were provided; the runner takes precedence and runWorker is ignored.`,
     );
   }
   if (deps.runner) return deps.runner;

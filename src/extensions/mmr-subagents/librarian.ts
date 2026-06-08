@@ -554,7 +554,7 @@ function isContextWindowError(err: unknown): boolean {
 }
 
 export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinition {
-  const effectiveRunner = resolveEffectiveRunner(deps);
+  const effectiveRunner = resolveEffectiveRunner(deps, "createLibrarianTool");
   const outputByteLimit = deps.outputByteLimit ?? DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT;
   const resolveInvocation = deps.resolveInvocation ?? defaultResolveLibrarianInvocation;
   return {
