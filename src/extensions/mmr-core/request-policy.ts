@@ -87,12 +87,15 @@ export interface MmrRequestPolicy {
  *   `summary=auto`, plus `max_output_tokens=128000`.
  * - Context triples are the mode's total context window / max output / max
  *   input. They are surfaced in `/mode` and `/mmr-status`. This module does
- *   not write any context fields into provider payloads. For most modes Pi's
- *   native compaction follows the selected provider model metadata; `smart`
- *   is the explicit exception — it caps the active model's `contextWindow`
- *   to 300k at the `setModel` call site (see `context-cap.ts`), so Pi's
- *   native compaction/overflow/footer all run at 300k and these display
- *   numbers match what Pi actually enforces.
+ *   not write any context fields into provider payloads. Every locked mode
+ *   caps the active model's `contextWindow` to its profile total at the
+ *   `setModel` call site (see `context-cap.ts`), so Pi's native
+ *   compaction/overflow/footer run at the advertised window even when the
+ *   route's native window is larger (e.g. a 1M Opus route, or the openai-codex
+ *   gpt-5.5 route whose 300k registry window exceeds Codex's real ~272k input
+ *   ceiling, under a 300k/256k profile). The cap is cap-down only, so a smaller
+ *   custom route
+ *   stays authoritative, and `free` (no policy) is never capped.
  */
 export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrRequestPolicy> = {
   smart: {
@@ -107,7 +110,8 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
       reasoning: { effort: "medium", summary: "auto" },
     },
     // smart caps the active Opus route to a 300k window (see context-cap.ts);
-    // keep the display metadata consistent: 300k total - 32k max-output = 268k.
+    // every locked mode caps to its profile total this way. Keep the display
+    // metadata consistent: 300k total - 32k max-output = 268k.
     contextWindow: 300_000,
     effectiveMaxInputTokens: 268_000,
   },
@@ -116,8 +120,13 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
       maxOutputTokens: 128000,
       reasoning: { effort: "medium", summary: "auto" },
     },
-    contextWindow: 400000,
-    effectiveMaxInputTokens: 272000,
+    // Codex gpt-5.5 enforces a real input cap around 272k (pi#3641), below the
+    // 300k the openai-codex registry advertises. Cap to 256k so Pi's native
+    // compaction triggers (~256k - 16k reserve = ~240k) and the compaction
+    // summary request both stay under Codex's real ceiling instead of
+    // overflowing with context_length_exceeded.
+    contextWindow: 256000,
+    effectiveMaxInputTokens: 128000,
   },
   large: {
     anthropic: {
@@ -135,8 +144,10 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
       maxOutputTokens: 128000,
       reasoning: { effort: "none" },
     },
-    contextWindow: 400000,
-    effectiveMaxInputTokens: 272000,
+    // 256k cap keeps Pi's compaction under Codex gpt-5.5's real ~272k input
+    // ceiling (pi#3641); see smartGPT above.
+    contextWindow: 256000,
+    effectiveMaxInputTokens: 128000,
   },
   deep: {
     anthropic: {
@@ -146,8 +157,10 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
       maxOutputTokens: 128000,
       reasoning: { effort: "medium", summary: "auto" },
     },
-    contextWindow: 400000,
-    effectiveMaxInputTokens: 272000,
+    // 256k cap keeps Pi's compaction under Codex gpt-5.5's real ~272k input
+    // ceiling (pi#3641); see smartGPT above.
+    contextWindow: 256000,
+    effectiveMaxInputTokens: 128000,
   },
 };
 
@@ -338,7 +351,17 @@ export interface MmrPolicyContextOverrides {
    *   `openai-codex`), so display does not lie about what was sent.
    */
   maxOutputTokens?: number | null;
-  effectiveMaxInputTokens?: number;
+  /**
+   * Mode-policy max input tokens for display.
+   *
+   * - `number` overrides the policy default.
+   * - `undefined` falls back to the policy default.
+   * - `null` explicitly omits the field — used when the resolved provider
+   *   streams output within the context window (e.g. `openai-codex`), where the
+   *   profile's `total - max_output` max-input understates the real usable
+   *   input, so it is omitted rather than displayed misleadingly.
+   */
+  effectiveMaxInputTokens?: number | null;
 }
 
 /**
@@ -383,7 +406,9 @@ export function formatMmrPolicyContext(policy: MmrRequestPolicy | undefined, ove
   const maxOutputTokens = overrides.maxOutputTokens === null
     ? undefined
     : (overrides.maxOutputTokens ?? getMmrPolicyMaxOutputTokens(policy));
-  const maxInputTokens = overrides.effectiveMaxInputTokens ?? policy.effectiveMaxInputTokens;
+  const maxInputTokens = overrides.effectiveMaxInputTokens === null
+    ? undefined
+    : (overrides.effectiveMaxInputTokens ?? policy.effectiveMaxInputTokens);
 
   const parts: string[] = [];
   if (typeof contextWindow === "number") parts.push(`${formatTokenCount(contextWindow)} total`);
@@ -425,10 +450,10 @@ export function formatMmrPolicyStatus(policy: MmrRequestPolicy | undefined, over
  * Display-clamp only: this function shapes `/mmr-status` and footer numbers.
  * It does not enforce a soft cap on provider sends. For most modes Pi-native
  * compaction follows the registered route's `contextWindow`/`maxTokens`
- * verbatim. `smart` is the exception: it caps the *active* model's window to
- * 300k via `withMmrModeContextCap` at the `setModel` call site, and callers
+ * verbatim. Every locked mode caps the *active* model's window to its profile
+ * total via `withMmrModeContextCap` at the `setModel` call site, and callers
  * pass that already-capped model here, so the clamped display numbers and the
- * window Pi compacts against agree. When a route's (post-cap) window still
+ * window Pi compacts against agree. If a route's (post-cap) window still
  * exceeds the mode profile, the `context.registered-exceeds-profile`
  * diagnostic surfaces that mismatch.
  */

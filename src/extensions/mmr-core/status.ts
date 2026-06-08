@@ -42,11 +42,16 @@ function getContextOverridesForState(state: MmrModeState) {
   // For providers whose wire payload does not accept `max_output_tokens`
   // (e.g. openai-codex), explicitly omit the value from display so /mmr-status
   // and the footer status do not advertise a number that is never sent.
-  const maxOutputTokens = providerOmitsMaxOutputTokens(state.provider) ? null : state.effectiveMaxOutputTokens;
+  const omitsMaxOutput = providerOmitsMaxOutputTokens(state.provider);
+  const maxOutputTokens = omitsMaxOutput ? null : state.effectiveMaxOutputTokens;
   return {
     contextWindow: state.effectiveContextWindow,
     maxOutputTokens,
-    effectiveMaxInputTokens: state.effectiveMaxInputTokens,
+    // On those providers output streams within the context window (no separate
+    // max_output reservation), so the profile's `total - max_output` max-input
+    // understates real usable input; omit it and show only the total Pi
+    // compacts against rather than a misleading number.
+    effectiveMaxInputTokens: omitsMaxOutput ? null : state.effectiveMaxInputTokens,
   };
 }
 

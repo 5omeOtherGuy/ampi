@@ -126,9 +126,9 @@ describe("mmr-core footer status", () => {
     const { updateMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const cases = [
       { modeKey: "smart", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 60000, usageContextWindow: 1000000, usagePercent: 20, percent: "20.0", contextWindow: "1.0M", model: "opus-4.8", mode: "smart" },
-      { modeKey: "rush", effectiveContextWindow: 400000, effectiveMaxInputTokens: 272000, tokens: 78000, usageContextWindow: 400000, usagePercent: 19.5, percent: 19.5, contextWindow: "400k", model: "gpt-5.5", mode: "rush" },
+      { modeKey: "rush", effectiveContextWindow: 256000, effectiveMaxInputTokens: 128000, tokens: 78000, usageContextWindow: 256000, usagePercent: 30.5, percent: 30.5, contextWindow: "256k", model: "gpt-5.5", mode: "rush" },
       { modeKey: "large", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 195000, usageContextWindow: 1000000, usagePercent: 19.5, percent: 19.5, contextWindow: "1.0M", model: "opus-4.6", mode: "large" },
-      { modeKey: "deep", effectiveContextWindow: 400000, effectiveMaxInputTokens: 272000, tokens: 78000, usageContextWindow: 1000000, usagePercent: 26, percent: 19.5, contextWindow: "400k", model: "gpt-5.5", mode: "deep" },
+      { modeKey: "deep", effectiveContextWindow: 256000, effectiveMaxInputTokens: 128000, tokens: 78000, usageContextWindow: 1000000, usagePercent: 26, percent: 30.5, contextWindow: "256k", model: "gpt-5.5", mode: "deep" },
     ];
 
     for (const testCase of cases) {
@@ -314,7 +314,7 @@ describe("mmr-core /mmr-status", () => {
     assert.doesNotMatch(formatMmrStatus(free), /Native compaction note:/);
   });
 
-  it("omits 'max out' from /mmr-status Context when the resolved provider does not accept max_output_tokens (openai-codex)", async () => {
+  it("omits 'max out' and 'max in' from /mmr-status Context when the resolved provider does not accept max_output_tokens (openai-codex)", async () => {
     const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
 
     const deepCodex = await buildState({
@@ -328,14 +328,17 @@ describe("mmr-core /mmr-status", () => {
         modelApplied: true,
         fallbackApplied: false,
       },
-      effectiveContextWindow: 400000,
+      effectiveContextWindow: 256000,
       effectiveMaxOutputTokens: 128000,
-      effectiveMaxInputTokens: 272000,
+      effectiveMaxInputTokens: 128000,
     });
 
     const status = formatMmrStatus(deepCodex);
-    assert.match(status, /Context: 400k total \/ 272k max in/);
+    // Codex streams output in-window, so max-out is never sent and the derived
+    // max-in would understate real usable input; show only the total.
+    assert.match(status, /Context: 256k total/);
     assert.doesNotMatch(status, /max out/);
+    assert.doesNotMatch(status, /max in/);
   });
 
   it("uses clamped active context metadata when a selected provider route is smaller", async () => {

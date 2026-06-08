@@ -99,8 +99,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     controller.captureBaseline(ctx, { force: true });
     await controller.resolveInitialMode(ctx);
     // Covers resume/reload/fork: if a restored active model came back with its
-    // uncapped window, reassert the smart-mode cap. No-op when the cap is
-    // already in effect or the mode does not cap.
+    // uncapped window, reassert the active mode's context cap. No-op when the
+    // cap is already in effect or the mode does not cap (`free`).
     await controller.reassertActiveModelInvariants(ctx);
   });
 
@@ -154,9 +154,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
       return;
     }
     // Last-chance repair before Pi's post-run / overflow compaction paths read
-    // `model.contextWindow`: reassert the smart-mode context cap if the active
-    // model drifted back to its uncapped window. No-op outside smart and when
-    // the cap is already in effect.
+    // `model.contextWindow`: reassert the active mode's context cap if the
+    // model drifted back to its uncapped window. No-op for `free` and when the
+    // cap is already in effect.
     await controller.reassertActiveModelInvariants(ctx);
     const activePolicy = controller.getActivePolicy();
     if (!activePolicy) return;
@@ -236,12 +236,12 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("input", async (_event, ctx) => {
-    // Reassert the smart-mode context cap before Pi runs its pre-prompt
+    // Reassert the active mode's context cap before Pi runs its pre-prompt
     // compaction check, in case a provider (re)registration (e.g. `/login`)
     // transiently re-resolved the active model to its uncapped window. Native
-    // Pi now owns the compaction threshold, pre-prompt/post-run triggers,
-    // overflow handling, footer, and `getContextUsage()` — all at the capped
-    // 300k window. No-op outside smart and when the cap is already in effect.
+    // Pi owns the compaction threshold, pre-prompt/post-run triggers, overflow
+    // handling, footer, and `getContextUsage()` — all at the mode's capped
+    // profile window. No-op for `free` and when the cap is already in effect.
     await controller.reassertActiveModelInvariants(ctx);
   });
 

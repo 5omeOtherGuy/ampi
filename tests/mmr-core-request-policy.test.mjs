@@ -250,7 +250,7 @@ describe("mmr-core request policy", () => {
         maxTokens: MMR_REQUEST_POLICIES.rush.openaiResponses.maxOutputTokens,
         maxInput: MMR_REQUEST_POLICIES.rush.effectiveMaxInputTokens,
       },
-      { contextWindow: 400000, maxTokens: 128000, maxInput: 272000 },
+      { contextWindow: 256000, maxTokens: 128000, maxInput: 128000 },
     );
 
     // smart's display profile is now 300k/268k. Callers pass the already-capped

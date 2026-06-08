@@ -8,6 +8,40 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-core`: the active-model context-window cap now applies to every locked
+  mode, not just `smart`. `withMmrModeContextCap` derives each mode's cap from
+  its own request policy (`smart` 300k, `smartGPT`/`rush`/`deep` 256k, `large`
+  1M) instead of hardcoding `smart`/300k, so Pi's native compaction, overflow,
+  footer, percent, and `getContextUsage()` all trigger at the window the mode
+  advertises even when the route's native window is larger (e.g. a 1M Opus or
+  GPT route). Capping stays cap-down only — a smaller custom route stays
+  authoritative — and `free` (no policy) is never capped. The defensive
+  reassertion on `input`/`before_provider_request` is now mode-aware
+  (`withMmrModeContextCap(state.mode, ...)`) so a non-smart locked mode also
+  re-caps after a transient provider re-resolution (e.g. `/login`). A new
+  exported `getMmrModeContextWindowCap(modeKey)` resolves a mode's cap (or
+  `undefined`), and `MMR_SMART_CONTEXT_WINDOW` is now derived from the smart
+  policy so it cannot drift. Covered by expanded
+  `tests/mmr-core-context-cap.test.mjs` (per-mode pure caps plus a smartGPT
+  reassertion case).
+- `mmr-core`: `smartGPT`, `rush`, and `deep` now declare a `256k` context
+  profile (`contextWindow` 256000, `effectiveMaxInputTokens` 128000) instead of
+  `400k`/`272k`. The `openai-codex` `gpt-5.5` route advertises a 300k window but
+  Codex enforces a lower real input ceiling (~272k), so Pi's native compaction —
+  which fired at `registry window - 16k reserve` ≈ 283.6k — triggered above
+  Codex's limit and overflowed with `context_length_exceeded`, and the
+  compaction summary request then failed too. With the generalized per-mode cap
+  now enforcing 256k, Pi compacts at ~240k and the summary request stays under
+  Codex's real ceiling, fixing the GPT autocompaction overflow. `/mode` shows
+  the provider-neutral `256k total / 128k max out / 128k max in` profile;
+  `/mmr-status` on `openai-codex` now shows `256k total` only, omitting both
+  `max out` (never sent) and the derived `max in` (Codex streams output
+  in-window, so `total - max_output` understates real usable input). Tests
+  updated in
+  `tests/mmr-core-modes.test.mjs`, `tests/mmr-core-status.test.mjs`,
+  `tests/mmr-core-request-policy.test.mjs`, and
+  `tests/mmr-core-context-cap.test.mjs`.
+
 - `mmr-subagents`: the background-task widget now staggers each group section
   into view with a staged reveal instead of snapping every row in at once. A new
   pure, clock-injected `revealedRows(rows, nowMs)` in `background-task-view.ts`
