@@ -101,6 +101,20 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Fixed
 
+- `mmr-subagents`: the inline background-task card (single + group) now animates
+  instead of freezing on one frame — the spinner advances ⠋→⠙→…, the elapsed
+  chip ticks up, and rows flip ⠋→✓ as the live board changes.
+  `BackgroundCardComponent` previously baked its lines in the constructor and
+  `render(width)` only truncated those frozen lines, but the host's render loop
+  (`requestRender` → `doRender` → `render(width)`) re-invokes a mounted
+  component's `render` without re-running the tool's `renderResult`, so the card
+  read `currentLoaderFrame()`/`Date.now()` exactly once. The card now takes a
+  `build` thunk that recomputes its lines (board resolution, staged reveal,
+  loader frame, elapsed) on every `render` call, mirroring how the belowEditor
+  widget animates. The staged-reveal settle window now returns no lines from a
+  still-mounted card (so a later widget tick reveals it) instead of a static
+  `Container` that could never reappear. Covered by spinner-advance, settle-then-
+  reveal, and ⠋→✓ flip cases in `tests/mmr-subagents-progress-rendering.test.mjs`.
 - `mmr-subagents`: the below-editor background-task widget's per-worker elapsed
   chip now advances with wall time between worker progress snapshots instead of
   freezing at the last snapshot's runtime. A `liveRuntimeMs` helper in

@@ -69,26 +69,35 @@ export interface BackgroundCardExtras {
 }
 
 /**
- * Borderless inline card body: pre-built, theme-coloured lines truncated to the
- * render width. Mirrors the belowEditor widget's string-line output so the two
- * surfaces render identical rows — the inline card is just a transcript-anchored
- * view of the same board slice.
+ * Borderless inline card body: theme-coloured lines truncated to the render
+ * width. Mirrors the belowEditor widget's string-line output so the two surfaces
+ * render identical rows — the inline card is just a transcript-anchored view of
+ * the same board slice.
+ *
+ * The lines are produced by a `build` thunk called inside {@link render} on
+ * EVERY frame, not baked once at construction. The host's render loop
+ * (`requestRender` → `doRender` → `render(width)`) re-invokes a mounted
+ * component's `render`, but it does NOT re-run the tool's `renderResult`, so a
+ * card that captured `currentLoaderFrame()`/`Date.now()` at construction would
+ * freeze. Recomputing in `render` lets the card animate (⠋→✓, the elapsed chip,
+ * staged reveal) in lockstep with the widget, which uses the same pattern.
  */
 class BackgroundCardComponent implements Component {
-  private lines: readonly string[];
-  constructor(lines: readonly string[]) {
-    this.lines = lines;
+  private build: (() => readonly string[]) | undefined;
+  constructor(build: () => readonly string[]) {
+    this.build = build;
   }
   render(width: number): string[] {
-    return truncateWidgetLines(this.lines, width);
+    if (!this.build) return [];
+    return truncateWidgetLines(this.build(), width);
   }
   /** Blank the card so a remembered call card does not duplicate the result. */
   clear(): void {
-    this.lines = [];
+    this.build = undefined;
   }
   invalidate(): void {
-    // Stateless: lines are computed when the card is built (every render frame,
-    // since the host re-invokes renderResult on each requestRender).
+    // No cached state: the `build` thunk recomputes the lines from the live
+    // board on every render(width) call, so there is nothing to invalidate.
   }
 }
 
@@ -130,39 +139,46 @@ function renderBackgroundGroupCard(
   const groupId = details.groupId;
   if (!groupId) return new Container();
   const sessionKey = details.sessionKey;
-  const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
-  const members = board ? groupMembersFromBoard(board, groupId) : [];
-  const snapshot = (details.group as MmrAsyncTaskGroupSnapshot | undefined)
-    ?? (sessionKey ? extras?.resolveGroup?.(sessionKey, groupId) : undefined);
-  const group = snapshot
-    ? { status: snapshot.status, counts: snapshot.counts, ...(snapshot.label !== undefined ? { label: snapshot.label } : {}) }
-    : members.length > 0 ? synthesizeGroup(members) : undefined;
-  const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
+  // Everything live is computed inside the thunk so the card re-resolves the
+  // board, reveal, loader frame and elapsed on every render(width) frame.
+  const build = (): readonly string[] => {
+    const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
+    const members = board ? groupMembersFromBoard(board, groupId) : [];
+    const snapshot = (details.group as MmrAsyncTaskGroupSnapshot | undefined)
+      ?? (sessionKey ? extras?.resolveGroup?.(sessionKey, groupId) : undefined);
+    const group = snapshot
+      ? { status: snapshot.status, counts: snapshot.counts, ...(snapshot.label !== undefined ? { label: snapshot.label } : {}) }
+      : members.length > 0 ? synthesizeGroup(members) : undefined;
+    const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
 
-  // Staged reveal: a freshly spawned live card stays invisible during the brief
-  // post-spawn settle window, then reveals member rows on the shared cadence
-  // until every row is shown. `revealedRows` reveals everything at once when no
-  // member is active (a finished/settled group has no animation clock to tick
-  // the card again, so staging it could leave it stuck blank). Replay / no live
-  // registry (members.length === 0) shows the whole card immediately.
-  const revealedMembers = members.length > 0 ? revealedRows(members, Date.now()) : members;
-  if (members.length > 0 && revealedMembers.length === 0) return new Container();
+    // Staged reveal: a freshly spawned live card stays invisible during the
+    // brief post-spawn settle window, then reveals member rows on the shared
+    // cadence until every row is shown. `revealedRows` reveals everything at
+    // once when no member is active. During the settle window return NO lines
+    // (the card stays mounted and invisible, so a later widget tick re-runs this
+    // thunk and reveals it) rather than a static Container that would never
+    // reappear. Replay / no live registry (members.length === 0) shows the
+    // whole card immediately.
+    const revealedMembers = members.length > 0 ? revealedRows(members, Date.now()) : members;
+    if (members.length > 0 && revealedMembers.length === 0) return [];
 
-  const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
-  const metadata: RowMetadataLevel = "full";
-  const lines: string[] = [renderSectionHeader(section, theme)];
-  for (const row of revealedMembers) {
-    lines.push(renderRowLine(row, theme, frame, { indent: "  ", metadata }));
-  }
-  if (members.length === 0) {
-    // Replay / no live registry: the header carries status + counts; add a muted
-    // member-count line so the card is not a lone header.
-    const total = snapshot?.counts.total;
-    if (typeof total === "number" && total > 0) {
-      lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
+    const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
+    const metadata: RowMetadataLevel = "full";
+    const lines: string[] = [renderSectionHeader(section, theme)];
+    for (const row of revealedMembers) {
+      lines.push(renderRowLine(row, theme, frame, { indent: "  ", metadata }));
     }
-  }
-  return new BackgroundCardComponent(lines);
+    if (members.length === 0) {
+      // Replay / no live registry: the header carries status + counts; add a
+      // muted member-count line so the card is not a lone header.
+      const total = snapshot?.counts.total;
+      if (typeof total === "number" && total > 0) {
+        lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
+      }
+    }
+    return lines;
+  };
+  return new BackgroundCardComponent(build);
 }
 
 /**
@@ -176,14 +192,21 @@ function renderBackgroundSingleCard(
   extras: BackgroundCardExtras | undefined,
 ): Component {
   const sessionKey = details.sessionKey;
-  const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
-  const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
-    ?? rowFromDetails(details);
-  // Same staged reveal as the group card: invisible during the settle window.
-  if (revealedRows([row], Date.now()).length === 0) return new Container();
-  const frame = rowsAnyRunning([row]) ? currentLoaderFrame() : undefined;
-  const metadata: RowMetadataLevel = "full";
-  return new BackgroundCardComponent([renderRowLine(row, theme, frame, { metadata })]);
+  // Live state recomputed every frame inside the thunk (see
+  // BackgroundCardComponent) so the row animates ⠋→✓ and the elapsed chip ticks.
+  const build = (): readonly string[] => {
+    const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
+    const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
+      ?? rowFromDetails(details);
+    // Same staged reveal as the group card: during the settle window return no
+    // lines (mounted-but-invisible) so a later widget tick reveals the row,
+    // rather than a static Container that would never reappear.
+    if (revealedRows([row], Date.now()).length === 0) return [];
+    const frame = rowsAnyRunning([row]) ? currentLoaderFrame() : undefined;
+    const metadata: RowMetadataLevel = "full";
+    return [renderRowLine(row, theme, frame, { metadata })];
+  };
+  return new BackgroundCardComponent(build);
 }
 
 export const ASYNC_TASK_COMPLETION_CUSTOM_TYPE = "mmr-subagents.async-task-completion" as const;
