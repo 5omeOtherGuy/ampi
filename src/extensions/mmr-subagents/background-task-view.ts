@@ -261,9 +261,9 @@ export function compareRows(a: WidgetRow, b: WidgetRow): number {
 }
 
 /**
- * Settle delay after the NEWEST spawn before any row is revealed. The reveal
- * only begins once every member of a fan-out is old enough ("all spawned"),
- * so a swarm that lands in two near-simultaneous groups reveals as one wave.
+ * Per-row settle delay before a freshly spawned row is revealed. A row only
+ * begins its reveal once it is this old, so the brief spawn spread of a one-step
+ * fan-out is absorbed and the wave reads as "all spawned" before anything shows.
  */
 export const SPAWN_SETTLE_MS = 200;
 
@@ -271,27 +271,48 @@ export const SPAWN_SETTLE_MS = 200;
 export const REVEAL_INTERVAL_MS = 70;
 
 /**
- * How many of `rows` are revealed at `nowMs`, the single source of truth both
+ * The subset of `rows` revealed at `nowMs`, the single source of truth both
  * background surfaces (pinned widget + inline card) consume so they stage in
- * lockstep. Pure and clock-free: callers always inject `nowMs`.
+ * lockstep. Pure and clock-free: callers always inject `nowMs`. The returned
+ * rows preserve the caller's display order (e.g. running-first); reveal timing
+ * is decoupled from display order so a row settling mid-reveal never reorders
+ * or hides an already-shown row.
  *
- * The reveal epoch is the newest spawn (`max createdAtMs`) plus
- * {@link SPAWN_SETTLE_MS} — nothing shows until the whole fan-out has settled.
- * Before the epoch the count is 0 (an invisible prep window). At and after it,
- * one row reveals immediately and one more every {@link REVEAL_INTERVAL_MS},
- * clamped to `rows.length`. The cadence is uniform (not per-row spawn times),
- * so two groups sharing a near-identical newest-spawn time reveal row `i` in
- * lockstep.
+ * Reveal is staged ONLY while at least one row is active (running/cancelling),
+ * because the staging depends on an animation clock re-rendering the surface at
+ * the reveal cadence — the widget only animates while it has active rows, and
+ * the inline card has no clock of its own and rides that same cadence. With no
+ * active row there is no guaranteed future tick, so a settle window could leave
+ * a surface permanently blank; in that case every row is revealed immediately.
+ *
+ * When staging, reveal thresholds are assigned in spawn order (ascending
+ * `createdAtMs`, `taskId` as a stable tiebreak): the row at spawn-index `i`
+ * reveals once `nowMs >= createdAtMs_i + SPAWN_SETTLE_MS + i * REVEAL_INTERVAL_MS`.
+ * Because `createdAtMs` is sorted ascending and the index term grows, the
+ * thresholds are monotonic, so the revealed set is always a stable prefix in
+ * spawn order — a late sibling only delays itself and never collapses rows that
+ * are already visible. Two groups whose members share the same spawn times
+ * reveal in lockstep.
  */
-export function revealedRowCount(rows: readonly WidgetRow[], nowMs: number): number {
-  if (rows.length === 0) return 0;
-  let newest = Number.NEGATIVE_INFINITY;
-  for (const r of rows) {
-    if (r.createdAtMs > newest) newest = r.createdAtMs;
+export function revealedRows(rows: readonly WidgetRow[], nowMs: number): WidgetRow[] {
+  if (rows.length === 0) return [];
+  const anyActive = rows.some((r) => r.status === "running" || r.status === "cancelling");
+  if (!anyActive) return [...rows];
+  const bySpawn = [...rows].sort(
+    (a, b) => a.createdAtMs - b.createdAtMs || a.taskId.localeCompare(b.taskId),
+  );
+  // Thresholds are monotonically increasing (createdAtMs sorted ascending plus a
+  // growing index term), so the revealed set is exactly a prefix of spawn order:
+  // stop at the first row whose threshold has not yet passed.
+  let count = 0;
+  for (let i = 0; i < bySpawn.length; i += 1) {
+    if (nowMs < bySpawn[i].createdAtMs + SPAWN_SETTLE_MS + i * REVEAL_INTERVAL_MS) break;
+    count += 1;
   }
-  const epoch = newest + SPAWN_SETTLE_MS;
-  if (nowMs < epoch) return 0;
-  return Math.min(rows.length, 1 + Math.floor((nowMs - epoch) / REVEAL_INTERVAL_MS));
+  // Identify revealed rows by object reference (not taskId) so the filter is
+  // robust even if ids are absent or collide, then return them in display order.
+  const revealed = new Set<WidgetRow>(bySpawn.slice(0, count));
+  return rows.filter((r) => revealed.has(r));
 }
 
 /**

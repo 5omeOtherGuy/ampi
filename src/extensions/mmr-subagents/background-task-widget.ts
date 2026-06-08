@@ -25,7 +25,7 @@ import {
   PI_LOADER_INTERVAL_MS,
   renderRowLine,
   renderSectionHeader,
-  revealedRowCount,
+  revealedRows,
   synthesizeGroup,
   toRow,
   truncateWidgetLines,
@@ -169,20 +169,23 @@ function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined 
 }
 
 /**
- * Stage each section by its uniform reveal cadence (see
- * {@link revealedRowCount}). `nowMs` is read fresh every frame so the reveal
- * advances on the animation interval. A section whose revealed count is 0 is
- * omitted ENTIRELY (header included) during its prep window; otherwise only the
- * first `revealed` rows render. The clear decision and timer selection upstream
- * stay based on the ACTUAL registry rows, never on this clipped view, so the
- * animation interval keeps driving frames throughout the reveal.
+ * Stage each section by its reveal cadence (see {@link revealedRows}). `nowMs`
+ * is read fresh every frame so the reveal advances on the animation interval. A
+ * section that reveals no rows is omitted ENTIRELY (header included) during its
+ * prep window; otherwise only the revealed rows render, in section display
+ * order. `revealedRows` reveals every row immediately when the section has no
+ * active worker (no animation clock is guaranteed to tick it again), so a
+ * finished-only section never gets stuck blank. The clear decision and timer
+ * selection upstream stay based on the ACTUAL registry rows, never on this
+ * staged view, so the animation interval keeps driving frames throughout the
+ * reveal.
  */
 function revealSections(sections: readonly WidgetSection[], nowMs: number): WidgetSection[] {
   const out: WidgetSection[] = [];
   for (const section of sections) {
-    const revealed = revealedRowCount(section.rows, nowMs);
-    if (revealed === 0) continue;
-    out.push({ ...section, rows: section.rows.slice(0, revealed) });
+    const rows = revealedRows(section.rows, nowMs);
+    if (rows.length === 0) continue;
+    out.push({ ...section, rows });
   }
   return out;
 }
