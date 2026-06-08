@@ -21,9 +21,13 @@ import {
 } from "./async-task-internal.js";
 import type {
   MmrAsyncTaskGroupRecord,
-  MmrAsyncTaskPushOutcome,
   MmrAsyncTaskRecord,
 } from "./async-task-internal.js";
+import {
+  type DeliveryTarget,
+  projectCompletionPush,
+  terminalDeliveryOf,
+} from "./async-task-delivery.js";
 
 // Re-export the public group-id validator and label cap from their new home so
 // the entry file remains the stable public surface for them.
@@ -110,46 +114,6 @@ export type MmrAsyncTaskCompletionPushState =
    * The agent already has the result in hand, so a push would only duplicate it.
    */
   | "observed";
-
-/**
- * Internal-only target shape shared by task and group records for delivery
- * bookkeeping. Both the eligibility helpers and the claim path operate on this
- * structural subset so task and group delivery stay in lockstep.
- */
-interface DeliveryTarget {
-  deliveryOptIn: boolean;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-}
-
-/**
- * Eligibility state for surfacing a terminal item to the model. Timestamp-only;
- * it does not inspect idle-wake transport outcomes.
- */
-function terminalDeliveryOf(target: {
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-}): "pending" | "announced" | "observed" {
-  if (target.finalObservedAtMs !== undefined) return "observed";
-  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
-  return "pending";
-}
-
-/**
- * Project the single public delivery field from internal delivery state.
- * `completionPush` is no longer a mutable source of truth on records; it is
- * computed here for snapshots and board entries.
- */
-function projectCompletionPush(target: DeliveryTarget): MmrAsyncTaskCompletionPushState {
-  if (!target.deliveryOptIn) return "disabled";
-  if (target.finalObservedAtMs !== undefined) return "observed";
-  if (target.pushOutcome === "failed") return "failed";
-  if (target.pushOutcome === "sending") return "sending";
-  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
-  if (target.pushOutcome === "suppressed") return "suppressed";
-  return "pending";
-}
 
 /**
  * Hard ceiling on how many completion pushes a single session may fire,
