@@ -70,6 +70,16 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `start_task` "starting" call row no longer flashes — the result card owns the
   entire reveal. Covered by deterministic reveal and full-chip tests in
   `tests/mmr-subagents-progress-rendering.test.mjs`.
+- `mmr-core`: compress the `rush` mode posture prompt into a single `## Rush
+  mode` section, cutting it from ~635 to ~350 posture words (~45% smaller) so
+  the token-economy mode no longer renders the longest prompt of any mode. The
+  rewrite preserves every behavioral rule (bounded-ticket scoping with the
+  ask-one-question-or-state-an-assumption guard, shell-first minimum-evidence
+  discovery, direct minimal edits, narrow verification and stopping,
+  outcome-first communication, and project-guidance ground truth) while
+  collapsing the eight prior `## Rush ...` headings. Model-visible prompt
+  behavior change; covered by updated `tests/mmr-core-prompt-templates.test.mjs`
+  assertions and regenerated `rush` prompt and effective-surface fixtures.
 - `mmr-core`: the `smart` context-cap reassertion now defers to an active
   MMR-managed model override (e.g. a session fallback) instead of re-capping
   underneath its owner, matching the `before_provider_request` hook which
