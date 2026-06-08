@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import {
   deriveAsyncTerminalOutcome,
@@ -8,6 +7,41 @@ import {
   type MmrWorkerTrailItem,
   type MmrWorkerUsageStats,
 } from "./runner.js";
+import {
+  ASYNC_TASK_GROUP_LABEL_MAX_LEN,
+  assertValidGroupId,
+  defaultGroupIdFactory,
+  defaultIdFactory,
+  isAgentToolResult,
+  isTerminalStatus,
+  isToolRunResult,
+  isValidAsyncTaskGroupId,
+  normalizeGroupLabel,
+} from "./async-task-internal.js";
+import type {
+  MmrAsyncTaskGroupRecord,
+  MmrAsyncTaskRecord,
+} from "./async-task-internal.js";
+import {
+  type DeliveryTarget,
+  terminalDeliveryOf,
+} from "./async-task-delivery.js";
+import {
+  boardEntryOf,
+  groupSnapshotOf,
+  groupStatusOf,
+  snapshotOf,
+  terminalDeliveryItemForGroupOf,
+  terminalDeliveryItemForTaskOf,
+  toPublicAsyncTaskSnapshot,
+  type FreshnessConfig,
+} from "./async-task-projection.js";
+
+// Re-export the public group-id validator, label cap, and the lean-snapshot
+// projection from their new homes so the entry file remains the stable public
+// surface for them.
+export { ASYNC_TASK_GROUP_LABEL_MAX_LEN, isValidAsyncTaskGroupId };
+export { toPublicAsyncTaskSnapshot };
 
 /**
  * In-memory, session-scoped registry for async background subagent tasks
@@ -90,54 +124,6 @@ export type MmrAsyncTaskCompletionPushState =
    * The agent already has the result in hand, so a push would only duplicate it.
    */
   | "observed";
-
-/**
- * Internal idle-wake transport status. Distinct from the public
- * {@link MmrAsyncTaskCompletionPushState}, which is projected from the
- * timestamp/opt-in fields plus this transport status by
- * {@link projectCompletionPush}.
- */
-type MmrAsyncTaskPushOutcome = "sending" | "sent" | "failed" | "suppressed";
-
-/**
- * Internal-only target shape shared by task and group records for delivery
- * bookkeeping. Both the eligibility helpers and the claim path operate on this
- * structural subset so task and group delivery stay in lockstep.
- */
-interface DeliveryTarget {
-  deliveryOptIn: boolean;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-}
-
-/**
- * Eligibility state for surfacing a terminal item to the model. Timestamp-only;
- * it does not inspect idle-wake transport outcomes.
- */
-function terminalDeliveryOf(target: {
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-}): "pending" | "announced" | "observed" {
-  if (target.finalObservedAtMs !== undefined) return "observed";
-  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
-  return "pending";
-}
-
-/**
- * Project the single public delivery field from internal delivery state.
- * `completionPush` is no longer a mutable source of truth on records; it is
- * computed here for snapshots and board entries.
- */
-function projectCompletionPush(target: DeliveryTarget): MmrAsyncTaskCompletionPushState {
-  if (!target.deliveryOptIn) return "disabled";
-  if (target.finalObservedAtMs !== undefined) return "observed";
-  if (target.pushOutcome === "failed") return "failed";
-  if (target.pushOutcome === "sending") return "sending";
-  if (target.terminalAnnouncedAtMs !== undefined) return "announced";
-  if (target.pushOutcome === "suppressed") return "suppressed";
-  return "pending";
-}
 
 /**
  * Hard ceiling on how many completion pushes a single session may fire,
@@ -289,44 +275,6 @@ export interface MmrAsyncTaskSnapshot {
   /** Whether a terminal worker result is available (read it via task_poll). */
   hasFinalResult: boolean;
   errorMessage?: string;
-}
-
-/** Project an internal snapshot down to the lean public surface. */
-export function toPublicAsyncTaskSnapshot(
-  snapshot: MmrAsyncTaskInternalSnapshot,
-): MmrAsyncTaskSnapshot {
-  return {
-    taskId: snapshot.taskId,
-    status: snapshot.status,
-    freshness: snapshot.freshness,
-    ...(snapshot.terminalFreshness !== undefined
-      ? { terminalFreshness: snapshot.terminalFreshness }
-      : {}),
-    agent: snapshot.agent,
-    description: snapshot.description,
-    createdAtMs: snapshot.createdAtMs,
-    startedAtMs: snapshot.startedAtMs,
-    updatedAtMs: snapshot.updatedAtMs,
-    ...(snapshot.lastProgressAtMs !== undefined
-      ? { lastProgressAtMs: snapshot.lastProgressAtMs }
-      : {}),
-    ...(snapshot.completedAtMs !== undefined ? { completedAtMs: snapshot.completedAtMs } : {}),
-    ...(snapshot.cancelRequestedAtMs !== undefined
-      ? { cancelRequestedAtMs: snapshot.cancelRequestedAtMs }
-      : {}),
-    ...(snapshot.cancelReason !== undefined ? { cancelReason: snapshot.cancelReason } : {}),
-    runtimeMs: snapshot.runtimeMs,
-    ...(snapshot.lastProgressAgeMs !== undefined
-      ? { lastProgressAgeMs: snapshot.lastProgressAgeMs }
-      : {}),
-    completionPush: snapshot.completionPush,
-    ...(snapshot.terminalOutcome !== undefined ? { terminalOutcome: snapshot.terminalOutcome } : {}),
-    ...(snapshot.capabilityProfile !== undefined ? { capabilityProfile: snapshot.capabilityProfile } : {}),
-    ...(snapshot.groupId !== undefined ? { groupId: snapshot.groupId } : {}),
-    promptChars: snapshot.prompt.length,
-    hasFinalResult: snapshot.finalResult !== undefined || snapshot.finalToolResult !== undefined,
-    ...(snapshot.errorMessage !== undefined ? { errorMessage: snapshot.errorMessage } : {}),
-  };
 }
 
 export interface MmrAsyncTaskBoardEntry {
@@ -523,133 +471,6 @@ export interface MmrAsyncTaskRegistryDeps {
   observedTerminalTtlMs?: number;
   /** Hard cap on completion pushes per session (default {@link DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION}). */
   maxCompletionPushesPerSession?: number;
-}
-
-interface MmrAsyncTaskRecord {
-  taskId: string;
-  sessionKey: string;
-  originToolCallId: string;
-  agent: string;
-  description: string;
-  prompt: string;
-  cwd: string;
-  resolvedModel?: string;
-  contextWindow?: number;
-  workerTools: readonly string[];
-  capabilityProfile?: string;
-  groupId?: string;
-  status: MmrAsyncTaskStatus;
-  createdAtMs: number;
-  startedAtMs: number;
-  updatedAtMs: number;
-  lastProgressAtMs?: number;
-  completedAtMs?: number;
-  cancelRequestedAtMs?: number;
-  cancelReason?: string;
-  maxRuntimeAtMs: number;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  deliveryOptIn: boolean;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-  terminalFreshness?: MmrAsyncTaskTerminalFreshness;
-  expiredByWatchdog: boolean;
-  controller: AbortController;
-  runGeneration: number;
-  runnerSettled: boolean;
-  watchdogTimer?: ReturnType<typeof setTimeout>;
-  latestProgress?: MmrWorkerProgressSnapshot;
-  latestToolResult?: AgentToolResult<unknown>;
-  terminalOutcome?: MmrAsyncTerminalOutcome;
-  finalResult?: MmrWorkerResult;
-  finalToolResult?: AgentToolResult<unknown>;
-  errorMessage?: string;
-  notify?: MmrAsyncTaskNotifier;
-  onSettle?: MmrAsyncTaskSettleCallback;
-  waiters: Set<() => void>;
-  promise?: Promise<void>;
-}
-
-/** Cap on a stored group label so a pathological input can't bloat the header. */
-export const ASYNC_TASK_GROUP_LABEL_MAX_LEN = 120;
-
-function normalizeGroupLabel(label: string | undefined): string | undefined {
-  if (typeof label !== "string") return undefined;
-  const trimmed = label.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed.length > ASYNC_TASK_GROUP_LABEL_MAX_LEN
-    ? trimmed.slice(0, ASYNC_TASK_GROUP_LABEL_MAX_LEN)
-    : trimmed;
-}
-
-interface MmrAsyncTaskGroupRecord {
-  groupId: string;
-  sessionKey: string;
-  label?: string;
-  createdAtMs: number;
-  updatedAtMs: number;
-  completedAtMs?: number;
-  finalObservedAtMs?: number;
-  terminalAnnouncedAtMs?: number;
-  deliveryOptIn: boolean;
-  pushOutcome?: MmrAsyncTaskPushOutcome;
-  notify?: MmrAsyncTaskGroupNotifier;
-  onSettle?: MmrAsyncTaskGroupSettleCallback;
-  waiters: Set<() => void>;
-  taskIds: Set<string>;
-}
-
-function isTerminalStatus(status: MmrAsyncTaskStatus): boolean {
-  return status === "succeeded" || status === "failed" || status === "cancelled";
-}
-
-// The lowercase-hex id shape is contractually tied to the validators and
-// JSON-schema patterns below (`isValidAsyncTaskGroupId` / `^group_[a-f0-9]{6,}$`
-// and the async-task tool schemas). `crypto.randomUUID()` is intentionally NOT
-// used: its hyphenated form would fail those patterns. If stronger uniqueness
-// is ever needed, widen to `randomBytes(8)` (still hex, still matches `{6,}`).
-function defaultIdFactory(): string {
-  return `task_${randomBytes(6).toString("hex")}`;
-}
-
-function defaultGroupIdFactory(): string {
-  return `group_${randomBytes(6).toString("hex")}`;
-}
-
-export function isValidAsyncTaskGroupId(groupId: string): boolean {
-  return /^group_[a-f0-9]{6,}$/.test(groupId);
-}
-
-function assertValidGroupId(groupId: string): void {
-  if (!isValidAsyncTaskGroupId(groupId)) {
-    throw new Error(`Invalid async task group id "${groupId}"; expected group_<hex>.`);
-  }
-}
-
-function isAgentToolResult(value: unknown): value is AgentToolResult<unknown> {
-  return typeof value === "object"
-    && value !== null
-    && Array.isArray((value as { content?: unknown }).content);
-}
-
-function isToolRunResult(value: MmrAsyncTaskRunResult): value is MmrAsyncTaskToolRunResult {
-  return typeof value === "object"
-    && value !== null
-    && "toolResult" in value
-    && isAgentToolResult((value as { toolResult?: unknown }).toolResult);
-}
-
-function latestToolFromProgress(
-  progress: MmrWorkerProgressSnapshot | undefined,
-): Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined {
-  if (!progress) return undefined;
-  let latest: Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined;
-  let latestRunning: Extract<MmrWorkerTrailItem, { type: "tool" }> | undefined;
-  for (const item of progress.trail) {
-    if (item.type !== "tool") continue;
-    latest = item;
-    if (item.status === "running") latestRunning = item;
-  }
-  return latestRunning ?? latest;
 }
 
 class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
@@ -1126,54 +947,11 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
   }
 
   private groupStatus(children: readonly MmrAsyncTaskRecord[]): MmrAsyncTaskGroupStatus {
-    if (children.length === 0 || children.some((child) => !isTerminalStatus(child.status))) return "running";
-    if (children.some((child) => child.status === "failed" || child.terminalFreshness === "dead")) return "failed";
-    if (children.some((child) => child.status === "cancelled")) return "cancelled";
-    if (children.some((child) => child.terminalOutcome === "partial")) return "partial";
-    return "completed";
-  }
-
-  /**
-   * Resolve the single-source-of-truth group label: the explicit label set at
-   * open time, else the description of the earliest-created child (so the
-   * widget header and the future settlement card stay consistent).
-   */
-  private resolveGroupLabel(
-    group: MmrAsyncTaskGroupRecord,
-    children: readonly MmrAsyncTaskRecord[],
-  ): string | undefined {
-    if (group.label !== undefined) return group.label;
-    let earliest: MmrAsyncTaskRecord | undefined;
-    for (const child of children) {
-      if (!earliest || child.createdAtMs < earliest.createdAtMs) earliest = child;
-    }
-    return normalizeGroupLabel(earliest?.description);
+    return groupStatusOf(children);
   }
 
   private groupSnapshot(group: MmrAsyncTaskGroupRecord): MmrAsyncTaskGroupSnapshot {
-    const now = this.nowMs();
-    const children = this.groupChildren(group);
-    const status = this.groupStatus(children);
-    const label = this.resolveGroupLabel(group, children);
-    return {
-      groupId: group.groupId,
-      status,
-      ...(label !== undefined ? { label } : {}),
-      generatedAtMs: now,
-      createdAtMs: group.createdAtMs,
-      updatedAtMs: group.updatedAtMs,
-      ...(group.completedAtMs !== undefined ? { completedAtMs: group.completedAtMs } : {}),
-      completionPush: projectCompletionPush(group),
-      taskIds: children.map((child) => child.taskId),
-      counts: {
-        running: children.filter((child) => !isTerminalStatus(child.status)).length,
-        succeeded: children.filter((child) => child.status === "succeeded" && child.terminalOutcome !== "partial").length,
-        failed: children.filter((child) => child.status === "failed").length,
-        cancelled: children.filter((child) => child.status === "cancelled").length,
-        partial: children.filter((child) => child.terminalOutcome === "partial").length,
-        total: children.length,
-      },
-    };
+    return groupSnapshotOf(group, this.groupChildren(group), this.nowMs());
   }
 
   /**
@@ -1359,28 +1137,11 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
   }
 
   private terminalDeliveryItemForTask(record: MmrAsyncTaskRecord): MmrAsyncTerminalDeliveryItem {
-    return {
-      kind: "task",
-      id: record.taskId,
-      status: record.status,
-      description: record.description,
-      ...(record.completedAtMs !== undefined ? { completedAtMs: record.completedAtMs } : {}),
-      ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
-      ...(record.errorMessage !== undefined ? { errorMessage: record.errorMessage } : {}),
-    };
+    return terminalDeliveryItemForTaskOf(record);
   }
 
   private terminalDeliveryItemForGroup(group: MmrAsyncTaskGroupRecord): MmrAsyncTerminalDeliveryItem {
-    const snapshot = this.groupSnapshot(group);
-    return {
-      kind: "group",
-      id: group.groupId,
-      status: snapshot.status,
-      description: `group ${group.groupId}`,
-      ...(group.completedAtMs !== undefined ? { completedAtMs: group.completedAtMs } : {}),
-      childTaskIds: snapshot.taskIds,
-      counts: snapshot.counts,
-    };
+    return terminalDeliveryItemForGroupOf(group, this.groupSnapshot(group));
   }
 
   dropEmptyGroup(sessionKey: string, groupId: string): boolean {
@@ -1681,90 +1442,16 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     }
   }
 
-  private freshness(record: MmrAsyncTaskRecord, now: number): MmrAsyncTaskFreshness {
-    if (isTerminalStatus(record.status)) return "terminal";
-    if (
-      record.cancelRequestedAtMs !== undefined &&
-      now - record.cancelRequestedAtMs > this.cancelDeadAfterMs
-    ) {
-      return "dead";
-    }
-    if (now > record.maxRuntimeAtMs + this.cancelDeadAfterMs) return "dead";
-    const observedAt = record.lastProgressAtMs ?? record.startedAtMs ?? record.createdAtMs;
-    if (now - observedAt > this.stalledAfterMs) return "stalled";
-    return "healthy";
+  private get freshnessConfig(): FreshnessConfig {
+    return { stalledAfterMs: this.stalledAfterMs, cancelDeadAfterMs: this.cancelDeadAfterMs };
   }
 
   private snapshot(record: MmrAsyncTaskRecord): MmrAsyncTaskInternalSnapshot {
-    const now = this.nowMs();
-    const lastProgressAt = record.lastProgressAtMs;
-    return {
-      taskId: record.taskId,
-      status: record.status,
-      freshness: this.freshness(record, now),
-      ...(record.terminalFreshness !== undefined ? { terminalFreshness: record.terminalFreshness } : {}),
-      agent: record.agent,
-      description: record.description,
-      prompt: record.prompt,
-      cwd: record.cwd,
-      ...(record.resolvedModel !== undefined ? { resolvedModel: record.resolvedModel } : {}),
-      ...(record.contextWindow !== undefined ? { contextWindow: record.contextWindow } : {}),
-      workerTools: record.workerTools,
-      createdAtMs: record.createdAtMs,
-      startedAtMs: record.startedAtMs,
-      updatedAtMs: record.updatedAtMs,
-      ...(lastProgressAt !== undefined ? { lastProgressAtMs: lastProgressAt } : {}),
-      ...(record.completedAtMs !== undefined ? { completedAtMs: record.completedAtMs } : {}),
-      ...(record.cancelRequestedAtMs !== undefined ? { cancelRequestedAtMs: record.cancelRequestedAtMs } : {}),
-      ...(record.cancelReason !== undefined ? { cancelReason: record.cancelReason } : {}),
-      runtimeMs: (record.completedAtMs ?? now) - record.startedAtMs,
-      ...(lastProgressAt !== undefined ? { lastProgressAgeMs: now - lastProgressAt } : {}),
-      completionPush: projectCompletionPush(record),
-      ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
-      ...(record.capabilityProfile !== undefined ? { capabilityProfile: record.capabilityProfile } : {}),
-      ...(record.groupId !== undefined ? { groupId: record.groupId } : {}),
-      ...(record.latestProgress !== undefined ? { latestProgress: record.latestProgress } : {}),
-      ...(record.latestToolResult !== undefined ? { latestToolResult: record.latestToolResult } : {}),
-      ...(record.finalResult !== undefined ? { finalResult: record.finalResult } : {}),
-      ...(record.finalToolResult !== undefined ? { finalToolResult: record.finalToolResult } : {}),
-      ...(record.errorMessage !== undefined ? { errorMessage: record.errorMessage } : {}),
-    };
+    return snapshotOf(record, this.nowMs(), this.freshnessConfig);
   }
 
   private boardEntry(record: MmrAsyncTaskRecord): MmrAsyncTaskBoardEntry {
-    const now = this.nowMs();
-    const lastProgressAt = record.lastProgressAtMs;
-    const progress = record.latestProgress;
-    const latestTool = latestToolFromProgress(progress);
-    const toolCount = progress?.trail.filter((item) => item.type === "tool").length;
-    return {
-      taskId: record.taskId,
-      status: record.status,
-      freshness: this.freshness(record, now),
-      ...(record.terminalFreshness !== undefined ? { terminalFreshness: record.terminalFreshness } : {}),
-      agent: record.agent,
-      description: record.description,
-      createdAtMs: record.createdAtMs,
-      startedAtMs: record.startedAtMs,
-      updatedAtMs: record.updatedAtMs,
-      ...(record.completedAtMs !== undefined ? { completedAtMs: record.completedAtMs } : {}),
-      runtimeMs: (record.completedAtMs ?? now) - record.startedAtMs,
-      ...(lastProgressAt !== undefined ? { lastProgressAgeMs: now - lastProgressAt } : {}),
-      ...(progress?.model !== undefined || record.resolvedModel !== undefined
-        ? { resolvedModel: progress?.model ?? record.resolvedModel }
-        : {}),
-      ...(record.contextWindow !== undefined ? { contextWindow: record.contextWindow } : {}),
-      ...(progress?.usage !== undefined ? { usage: { ...progress.usage } } : {}),
-      ...(latestTool !== undefined
-        ? { latestToolName: latestTool.toolName, latestToolStatus: latestTool.status }
-        : {}),
-      ...(toolCount !== undefined ? { toolCount } : {}),
-      ...(record.terminalOutcome !== undefined ? { terminalOutcome: record.terminalOutcome } : {}),
-      ...(record.capabilityProfile !== undefined ? { capabilityProfile: record.capabilityProfile } : {}),
-      ...(record.groupId !== undefined ? { groupId: record.groupId } : {}),
-      completionPush: projectCompletionPush(record),
-      ...(record.errorMessage !== undefined ? { errorMessage: record.errorMessage } : {}),
-    };
+    return boardEntryOf(record, this.nowMs(), this.freshnessConfig);
   }
 }
 
