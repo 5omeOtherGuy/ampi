@@ -57,7 +57,7 @@ describe("mmr-core lifecycle smoke", () => {
     const footerLines = footer.render(100);
     assert.equal(footerLines.length, 2);
     assert.match(footerLines[0], /\(main\)$/);
-    assert.match(footerLines[1], /\?%\/1\.0M \(auto\)\s+opus-4\.8 • smart$/);
+    assert.match(footerLines[1], /\?%\/300k \(auto\)\s+opus-4\.8 • smart$/);
 
     await commands.get("mode").handler("rush", ctx);
     assert.equal(runtime.getMmrModeState()?.mode, "rush");

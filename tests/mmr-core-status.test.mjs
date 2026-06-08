@@ -233,7 +233,7 @@ describe("mmr-core /mmr-status", () => {
     assert.match(output, /mmr-subagents: missing/);
     assert.match(output, /Policy warnings:/);
     assert.match(output, /Thinking: medium \(request policy: Anthropic adaptive\/high\)/);
-    assert.match(output, /Context: 1M total \/ 32k max out \/ 968k max in/);
+    assert.match(output, /Context: 300k total \/ 32k max out \/ 268k max in/);
     assert.match(output, /Context cap: model default/);
     assert.doesNotMatch(output, /Native compaction note:/);
     assert.match(output, /Baseline captured: no/);

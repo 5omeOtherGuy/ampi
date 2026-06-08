@@ -8,6 +8,19 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-core`: `smart` mode now runs with a 300k context window instead of the
+  registered route's native window (e.g. 1M on Opus 4.8). The active model's
+  `contextWindow` is capped via a shallow clone at the `setModel` call site
+  (`context-cap.ts`, `withMmrModeContextCap`), so Pi-native auto-compaction,
+  overflow handling, the footer, percent, and `getContextUsage()` all behave
+  exactly as native Pi would at 300k. The previous bespoke 900k pre-prompt
+  auto-compact shim is removed; native Pi now owns the compaction threshold,
+  pre-prompt/post-run triggers, and overflow at the capped window. The cap is
+  reasserted defensively if a provider (re)registration (e.g. `/login`)
+  transiently re-resolves the active model to its uncapped window. `smart`'s
+  displayed context profile is now 300k/268k/32k; other locked modes are
+  unaffected. Covered by `tests/mmr-core-context-cap.test.mjs` and updated
+  request-policy, provider-managed-context, status, and lifecycle tests.
 - `mmr-subagents`: redesign the inline rendering of background subagents into a
   borderless, minimalist live card and consolidate every group spawn into a
   single card instead of one heavy boxed card per `start_task`. A new
