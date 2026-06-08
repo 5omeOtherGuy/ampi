@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { MmrModelCandidateResolution, MmrModelPreference, MmrModelResolution } from "./types.js";
+import { isMmrSubscriptionProvider } from "./provider-constants.js";
 
 export interface MmrRegisteredModelLike {
   provider: string;
@@ -62,7 +63,6 @@ function getModelAliases(model: string): string[] {
   return [];
 }
 
-const SUBSCRIPTION_PROVIDERS = new Set(["claude-subscription", "openai-codex", "github-copilot"]);
 const API_PROVIDERS = new Set(["anthropic", "openai", "azure-openai-responses"]);
 const DEFAULT_PROVIDER_PRIORITY = [
   "claude-subscription",
@@ -102,7 +102,7 @@ function providerPriority(provider: string): number {
 }
 
 function providerGroup(provider: string, subscription: boolean): number {
-  if (subscription || SUBSCRIPTION_PROVIDERS.has(provider)) return 0;
+  if (subscription || isMmrSubscriptionProvider(provider)) return 0;
   if (API_PROVIDERS.has(provider)) return 1;
   return 2;
 }
@@ -133,7 +133,7 @@ function safeHasConfiguredAuth<TModel extends MmrRegisteredModelLike>(registry: 
 }
 
 function safeIsSubscription<TModel extends MmrRegisteredModelLike>(registry: MmrModelRegistryLike<TModel>, model: TModel): RegistryProbe<boolean> {
-  if (SUBSCRIPTION_PROVIDERS.has(model.provider)) return { value: true };
+  if (isMmrSubscriptionProvider(model.provider)) return { value: true };
   if (!registry.isUsingOAuth) return { value: false };
   try {
     return { value: registry.isUsingOAuth(model) };
@@ -188,8 +188,8 @@ function getProvidersForPreference<TModel extends MmrRegisteredModelLike>(
   const sorted = providers.sort((a, b) => {
     const aModel = findRegisteredModelWithAliases(registry, a, model);
     const bModel = findRegisteredModelWithAliases(registry, b, model);
-    const aSubscription = aModel ? safeIsSubscription(registry, aModel).value : SUBSCRIPTION_PROVIDERS.has(a);
-    const bSubscription = bModel ? safeIsSubscription(registry, bModel).value : SUBSCRIPTION_PROVIDERS.has(b);
+    const aSubscription = aModel ? safeIsSubscription(registry, aModel).value : isMmrSubscriptionProvider(a);
+    const bSubscription = bModel ? safeIsSubscription(registry, bModel).value : isMmrSubscriptionProvider(b);
     const groupDelta = providerGroup(a, aSubscription) - providerGroup(b, bSubscription);
     if (groupDelta !== 0) return groupDelta;
     const priorityDelta = providerPriority(a) - providerPriority(b);
@@ -256,7 +256,7 @@ function enumerateCandidates<TModel extends MmrRegisteredModelLike>(
       const authProbe = registeredModel ? safeHasConfiguredAuth(registry, registeredModel) : { value: false };
       const subscriptionProbe = registeredModel
         ? safeIsSubscription(registry, registeredModel)
-        : { value: SUBSCRIPTION_PROVIDERS.has(provider) };
+        : { value: isMmrSubscriptionProvider(provider) };
       // When the candidate matched via an alias, surface the actually-registered
       // model id so `state.model` and `pi.setModel(...)` agree.
       const resolvedModelId = registeredModel ? registeredModel.id : preference.model;
