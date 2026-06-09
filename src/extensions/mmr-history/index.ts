@@ -4,6 +4,7 @@ import { registerMmrOwnedExtensionPath } from "../mmr-core/owned-tools.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../mmr-core/runtime.js";
 import { loadMmrHistorySettings, type MmrHistorySettings } from "./config.js";
 import { createMmrHistoryFeatureGateProvider, createMmrHistoryToolProvider } from "./provider.js";
+import { registerMmrHistoryPromptBuilders } from "./prompts.js";
 import { createDefaultMmrHistoryToolDeps, registerMmrHistoryTools, type MmrHistoryToolDeps } from "./tools.js";
 
 registerMmrOwnedExtensionPath(fileURLToPath(import.meta.url));
@@ -21,6 +22,7 @@ export function createMmrHistoryExtension(overrides: MmrHistoryFactoryOverrides 
 
     registerMmrFeatureGateProvider(createMmrHistoryFeatureGateProvider(getSettings));
     registerMmrToolProvider(createMmrHistoryToolProvider(getSettings));
+    registerMmrHistoryPromptBuilders();
     registerMmrHistoryTools(pi, deps);
 
     pi.on("session_start", async (_event, ctx) => {

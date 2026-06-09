@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+import { createMockPi } from "./helpers/pi-stub.mjs";
 
 function sessionInfo(overrides = {}) {
   return {
@@ -18,6 +19,27 @@ function sessionInfo(overrides = {}) {
 }
 
 after(cleanupLoadedSource);
+
+describe("mmr-history prompt-builder ownership", () => {
+  it("registers history-reader from mmr-history, not mmr-subagents", async () => {
+    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
+    const history = await importSource("extensions/mmr-history/index.ts");
+    const subagents = await importSource("extensions/mmr-subagents/index.ts");
+
+    assembly.clearMmrSubagentPromptBuilders();
+    subagents.default(createMockPi().pi);
+    assert.equal(
+      assembly.getMmrSubagentPromptBuilder("history-reader"),
+      undefined,
+      "mmr-subagents must not own/register the history-reader prompt builder",
+    );
+
+    history.default(createMockPi().pi);
+    const builder = assembly.getMmrSubagentPromptBuilder("history-reader");
+    assert.equal(typeof builder, "function", "mmr-history must register history-reader prompt builder");
+    assert.match(builder({ cwd: "/repo", profile: { name: "history-reader" }, baseSystemPrompt: "" }), /session analysis worker/);
+  });
+});
 
 describe("mmr-history query parsing and catalog search", () => {
   it("parses supported filters including file:, and reports unknown keys as unsupported", async () => {
