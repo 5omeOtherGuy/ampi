@@ -8,6 +8,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-history` / `mmr-subagents`: `mmr-history` now owns and registers the
+  internal `history-reader` subagent prompt builder used by `read_session`.
+  `mmr-subagents` no longer registers `history-reader`, and oracle child
+  workers no longer need the `mmr-subagents` extension solely for nested
+  `read_session` analysis. Covered by history prompt-builder ownership tests,
+  worker-analysis tests, and child-extension-scope tests.
+
 - **Breaking (extension split):** `mmr-toolbox` is split into two focused
   extensions. `mmr-patch` now owns `apply_patch` and `mmr-tasks` now owns
   `task_list` (and the deferred `chart` catalog entry). Both are registered in

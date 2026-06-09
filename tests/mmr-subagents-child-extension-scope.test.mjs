@@ -24,7 +24,7 @@ describe("mmr-subagents child-extension-scope: keep map", () => {
     const mod = await importSource(MODULE);
     const map = mod.MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS;
     assert.deepEqual([...map.finder], ["mmr-core"]);
-    assert.deepEqual([...map.oracle], ["mmr-core", "mmr-web", "mmr-history", "mmr-subagents"]);
+    assert.deepEqual([...map.oracle], ["mmr-core", "mmr-web", "mmr-history"]);
     assert.deepEqual([...map.librarian], ["mmr-core", "mmr-github"]);
     assert.deepEqual([...map["task-subagent"]], ["mmr-core", "mmr-web", "mmr-subagents", "mmr-tasks"]);
     for (const names of Object.values(map)) {
@@ -92,7 +92,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     assert.deepEqual(scope, [piMmr("mmr-core"), EXTERNAL_A, EXTERNAL_B]);
   });
 
-  it("oracle keeps mmr-core/web/history/subagents + externals, drops github/tasks", async () => {
+  it("oracle keeps mmr-core/web/history + externals, drops github/subagents/tasks", async () => {
     const mod = await importSource(MODULE);
     const loadedPaths = [
       piMmr("mmr-web"),
@@ -114,7 +114,6 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
       piMmr("mmr-core"),
       piMmr("mmr-web"),
       piMmr("mmr-history"),
-      piMmr("mmr-subagents"),
       EXTERNAL_A,
     ]);
   });

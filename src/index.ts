@@ -442,6 +442,9 @@ export type {
 } from "./extensions/mmr-subagents/librarian.js";
 export {
   buildHistoryReaderWorkerSystemPrompt,
+  registerMmrHistoryPromptBuilders,
+} from "./extensions/mmr-history/prompts.js";
+export {
   buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerRolePrompt,
 } from "./extensions/mmr-subagents/prompts.js";
 // Note: the worker outcome discriminator type is intentionally NOT

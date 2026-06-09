@@ -67,32 +67,6 @@ export function buildFinderWorkerSystemPrompt(cwd: string): string {
  * `mmr-core`. The framework resolves this through the
  * `registerMmrSubagentsPromptBuilders()` wiring below.
  */
-export function buildHistoryReaderWorkerSystemPrompt(_cwd: string): string {
-  return [
-    "You are a session analysis worker for local Pi session history.",
-    "",
-    "The packet may describe a session from any project recorded on this machine, not just the active workspace. Treat the packet as the only source of truth: do not use tools, external context, provider memory, or assumptions outside it.",
-    "",
-    "## Task",
-    "Extract only information relevant to the requested goal. Prefer concrete decisions, files, errors, commands, plans, and follow-up constraints that are explicitly present in the packet.",
-    "",
-    "## Evidence rules",
-    "- Do not invent files, decisions, actions, owners, timelines, or outcomes not present in the packet.",
-    "- If the packet does not contain enough evidence for the goal, say so clearly.",
-    "- Treat touched files as hints from structured tool calls only; do not infer that a file was edited unless the packet says so.",
-    "- The packet has already been deterministically redacted: project roots appear as the opaque `projectRef` hash, home directories appear as `[home]`, secrets / tokens / keys appear as `[redacted]` / `[token]` / `[pem]` / `[jwt]`, and local storage paths appear as `[pi-session]` or `[pi-data]`. Keep every such marker in your answer; never attempt to reconstruct the original value.",
-    "- Do not surface or speculate about which user, machine, or project the packet came from beyond what the `projectRef` and `scope` fields say.",
-    "",
-    "## Output format",
-    "Return a concise Markdown answer with:",
-    "1. `Summary` — 1-3 bullets answering the goal.",
-    "2. `Evidence` — brief bullets naming the packet section (`session`, `contextMessages`, `entries`, or `touchedFiles`) that supports each point.",
-    "3. `Gaps` — only if evidence is missing or uncertain.",
-    "",
-    "Only your final message is returned to the parent tool.",
-  ].join("\n");
-}
-
 export function buildOracleWorkerSystemPrompt(cwd: string): string {
   const safeCwd = typeof cwd === "string" && cwd.trim().length > 0 ? cwd : "unknown";
   return [
@@ -292,9 +266,6 @@ export function buildTaskWorkerRoleBlock(): string {
  */
 const finderPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildFinderWorkerSystemPrompt(cwd);
 
-/** Prompt-builder seam for the internal `history-reader` standalone subagent. */
-const historyReaderPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildHistoryReaderWorkerSystemPrompt(cwd);
-
 /**
  * Prompt-builder seam for the `oracle` standalone subagent. Oracle
  * also only needs `cwd`; both the working-directory and workspace-root
@@ -315,13 +286,12 @@ const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlo
  * does not change observable output.
  *
  * Called once during extension init (`createMmrSubagentsExtension`) so
- * mmr-core's `assembleMmrSubagentSurface` can resolve finder,
- * history-reader, oracle (and any later shipped subagent) without a
- * separate bootstrap step.
+ * mmr-core's `assembleMmrSubagentSurface` can resolve finder, oracle,
+ * librarian, and Task without a separate bootstrap step. `history-reader`
+ * is owned and registered by `mmr-history`.
  */
 export function registerMmrSubagentsPromptBuilders(): void {
   registerMmrSubagentPromptBuilder("finder", finderPromptBuilder);
-  registerMmrSubagentPromptBuilder("history-reader", historyReaderPromptBuilder);
   registerMmrSubagentPromptBuilder("oracle", oraclePromptBuilder);
   registerMmrSubagentPromptBuilder("librarian", librarianPromptBuilder);
   registerMmrSubagentPromptBuilder("task-subagent", taskPromptBuilder);
