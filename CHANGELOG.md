@@ -8,6 +8,21 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-subagents` / `mmr-toolbox`: the background-task progress surface no longer
+  draws a live inline card during startup or while a run is in flight. The
+  inline `start_task` / `start_task.fleet` / group-opener cards stay invisible
+  while any worker is still in flight — the live, animated status now lives
+  ONLY in the pinned widget — and latch a STATIC completed card once the whole
+  run settles. The pinned background-task widget moved from `belowEditor` to
+  `aboveEditor` and is kept ABOVE the `task_list` widget at all times: a new
+  `mmr-core/above-editor-order` coordinator lets the `task_list` widget register
+  a self-correcting reassert callback that the background widget invokes right
+  after it re-sets itself, so the lower widget re-appends back below it. The
+  explicit group/single `task_poll` / `task_wait` / `task_cancel` result cards
+  are unchanged. Covered by `tests/mmr-subagents-progress-rendering.test.mjs`,
+  `tests/mmr-subagents-background-task-widget.test.mjs`, and
+  `tests/mmr-core-above-editor-order.test.mjs`.
+
 - `mmr-history`: `read_session` / `find_session` content redaction is now
   **opt-in** and OFF by default. For the local same-user case these tools exist
   to recover the user's own artifacts (file paths, config values, identifiers),

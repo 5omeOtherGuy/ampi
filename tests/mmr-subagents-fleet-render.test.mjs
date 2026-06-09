@@ -51,22 +51,18 @@ const boardEntry = (over) => ({
 });
 
 describe("fleet inline card", () => {
-  it("renders all groups in ready state up front, with the launch line (no live board)", async () => {
+  it("renders nothing while no live board is available (run in flight / replay)", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const card = renderMmrBackgroundTaskResult(
       "start_task", fleetResult("s1"), { expanded: false, isPartial: false }, fakeTheme, makeContext(), undefined,
     );
-    const text = renderText(card);
-    assert.match(text, /▸ Group A · group_aaa001 +● ready · 0\/2/);
-    // An unlabeled group borrows its earliest member's description as the label.
-    assert.match(text, /▸ compare repos · group_bbb002 +● ready · 0\/1/);
-    assert.match(text, /- finder find routes/);
-    assert.match(text, /- Task inspect handlers/);
-    assert.match(text, /- librarian compare repos/);
-    assert.match(text, /All 3 agents set up across 2 groups\. Launching them now\./);
+    // Gated spawn card: the live, animated state lives only in the pinned
+    // widget. With no live board (frozen `ready` rows) the inline card is
+    // invisible — it never mirrors startup/ready state.
+    assert.deepEqual(card.render(240), [], "the fleet card renders no lines before the run settles");
   });
 
-  it("animates rows in place once the board shows them running (no launch line)", async () => {
+  it("renders nothing while the board shows the run still running", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const board = {
       version: 1, generatedAtMs: 0, counts: { active: 3, stalled: 0, finished: 0 },
@@ -82,12 +78,10 @@ describe("fleet inline card", () => {
       group_bbb002: { groupId: "group_bbb002", status: "running", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t3"], counts: { running: 1, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 1 } },
     };
     const extras = { resolveBoard: () => board, resolveGroup: (_s, id) => groups[id] };
-    const text = renderText(renderMmrBackgroundTaskResult(
+    const card = renderMmrBackgroundTaskResult(
       "start_task", fleetResult("s1"), { expanded: false, isPartial: false }, fakeTheme, makeContext(), extras,
-    ));
-    assert.match(text, /● running · 0\/2/);
-    assert.doesNotMatch(text, /Launching them now/);
-    assert.doesNotMatch(text, /- finder find routes/, "running rows no longer show the ready dash");
+    );
+    assert.deepEqual(card.render(240), [], "a running fleet stays invisible inline; live status is in the widget");
   });
 
   it("shows completed checks when the board settles", async () => {
@@ -114,15 +108,23 @@ describe("fleet inline card", () => {
     assert.doesNotMatch(text, /Launching them now/);
   });
 
-  it("keeps declared row order even when a later member finishes first", async () => {
+  it("keeps declared row order in the settled static card even when a later member finished first", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    // Both members terminal so the gated card settles; t2 (declared second)
+    // finished earlier, but the static completed card keeps declared order.
     const board = {
-      version: 1, generatedAtMs: 0, counts: { active: 1, stalled: 0, finished: 1 },
-      active: [boardEntry({ taskId: "t1", status: "running", agent: "finder", description: "find routes", groupId: "group_aaa001", deferredLaunch: true })],
-      stalled: [],
-      finished: [boardEntry({ taskId: "t2", status: "succeeded", freshness: "terminal", agent: "Task", description: "inspect handlers", completedAtMs: 0, groupId: "group_aaa001" })],
+      version: 1, generatedAtMs: 0, counts: { active: 0, stalled: 0, finished: 3 },
+      active: [], stalled: [],
+      finished: [
+        boardEntry({ taskId: "t2", status: "succeeded", freshness: "terminal", agent: "Task", description: "inspect handlers", completedAtMs: 0, groupId: "group_aaa001" }),
+        boardEntry({ taskId: "t1", status: "succeeded", freshness: "terminal", agent: "finder", description: "find routes", completedAtMs: 5, groupId: "group_aaa001" }),
+        boardEntry({ taskId: "t3", status: "succeeded", freshness: "terminal", agent: "librarian", description: "compare repos", completedAtMs: 5, groupId: "group_bbb002" }),
+      ],
     };
-    const groups = { group_aaa001: { groupId: "group_aaa001", status: "running", label: "Group A", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 1, succeeded: 1, failed: 0, cancelled: 0, partial: 0, total: 2 } } };
+    const groups = {
+      group_aaa001: { groupId: "group_aaa001", status: "completed", label: "Group A", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 0, succeeded: 2, failed: 0, cancelled: 0, partial: 0, total: 2 } },
+      group_bbb002: { groupId: "group_bbb002", status: "completed", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t3"], counts: { running: 0, succeeded: 1, failed: 0, cancelled: 0, partial: 0, total: 1 } },
+    };
     const extras = { resolveBoard: () => board, resolveGroup: (_s, id) => groups[id] };
     const lines = renderLines(renderMmrBackgroundTaskResult(
       "start_task", fleetResult("s1"), { expanded: false, isPartial: false }, fakeTheme, makeContext(), extras,

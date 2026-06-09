@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { KeyId } from "@earendil-works/pi-tui";
+import { registerLowerAboveEditorWidget } from "../mmr-core/above-editor-order.js";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import {
   createTodoListTool,
@@ -184,6 +185,17 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
   // `refreshTodoWidget` still respects `/tasks hide` via `getIsHidden`.
   pi.on("session_compact", async (_event, ctx) => {
     refreshTodoWidget(ctx, readSessionTasks(ctx), { isHidden: getIsHidden });
+  });
+
+  // The task-list widget shares Pi's aboveEditor stack with the mmr-subagents
+  // background-task widget, which must stay ABOVE it. When that widget re-sets
+  // itself it lands below us, so it asks every lower widget to re-emit; this
+  // reassert re-projects the list from the live session entry (self-correcting
+  // for /tasks hide and emptied lists) so it re-appends back below.
+  registerLowerAboveEditorWidget(TASK_LIST_WIDGET_ID, (ctx) => {
+    const widgetCtx = ctx as Parameters<typeof refreshTodoWidget>[0];
+    const sessionCtx = ctx as { sessionManager?: { getEntries?: () => readonly unknown[] } };
+    refreshTodoWidget(widgetCtx, readSessionTasks(sessionCtx), { isHidden: getIsHidden });
   });
 
   // Register the session-local task_list tool. Persistence is via

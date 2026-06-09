@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import { after, describe, it } from "node:test";
-import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
+import { pathToFileURL } from "node:url";
+import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 const WIDGET_MODULE = "extensions/mmr-subagents/background-task-widget.ts";
+const ABOVE_EDITOR_ORDER_MODULE = "extensions/mmr-core/above-editor-order.ts";
 
 after(cleanupLoadedSource);
 
@@ -61,6 +64,36 @@ describe("background-task widget", () => {
     assert.equal(isTuiWidgetSurface(undefined), false);
   });
 
+  it("re-asserts lower aboveEditor widgets after setting itself, so they re-append below it", async () => {
+    const { refreshBackgroundTaskWidget, BACKGROUND_TASK_WIDGET_ID } = await importSource(WIDGET_MODULE);
+    // Import the SAME coordinator instance the widget module imports (stable
+    // URL, no cache-bust query) so our registration is visible to its reassert.
+    const orderUrl = pathToFileURL(path.join(getPreparedSourceRoot(), ABOVE_EDITOR_ORDER_MODULE)).href;
+    const order = await import(orderUrl);
+    order.resetLowerAboveEditorWidgetsForTest();
+    const { ctx, calls } = makeCtx();
+    order.registerLowerAboveEditorWidget("task_list", (c) => {
+      c.ui.setWidget("task_list", () => ({ render: () => [] }), { placement: "aboveEditor" });
+    });
+    try {
+      refreshBackgroundTaskWidget(
+        ctx,
+        makeBoard({ counts: { active: 1, stalled: 0, finished: 0 }, active: [makeEntry()] }),
+      );
+    } finally {
+      order.resetLowerAboveEditorWidgetsForTest();
+    }
+    // Pi renders aboveEditor widgets in insertion order (top→bottom) and
+    // re-appends the just-set widget to the bottom. The background widget set
+    // itself first, then the lower widget re-emitted, so the task_list lands
+    // AFTER (below) the background widget.
+    const bgIdx = calls.findIndex((c) => c.id === BACKGROUND_TASK_WIDGET_ID && typeof c.value === "function");
+    const tlIdx = calls.findIndex((c) => c.id === "task_list");
+    assert.ok(bgIdx >= 0, "the background widget was set");
+    assert.ok(tlIdx >= 0, "the lower widget re-asserted itself");
+    assert.ok(bgIdx < tlIdx, "the background widget stays above the task_list widget");
+  });
+
   it("registers a factory listing active and stalled agents, not finished ones", async () => {
     const { refreshBackgroundTaskWidget, BACKGROUND_TASK_WIDGET_ID } = await importSource(WIDGET_MODULE);
     const { ctx, calls } = makeCtx();
@@ -76,7 +109,7 @@ describe("background-task widget", () => {
     const last = calls.at(-1);
     assert.equal(last.id, BACKGROUND_TASK_WIDGET_ID);
     assert.equal(typeof last.value, "function");
-    assert.deepEqual(last.options, { placement: "belowEditor" }, "background agents must stay below the editor");
+    assert.deepEqual(last.options, { placement: "aboveEditor" }, "background agents render above the editor, above the task list");
     const widget = last.value(undefined, theme);
     const text = widget.render(80).join("\n");
     assert.doesNotMatch(text, /Background agents/, "background widget must render rows directly without a header");
@@ -287,7 +320,7 @@ describe("background-task widget", () => {
     assert.deepEqual(calls.at(-1), {
       id: BACKGROUND_TASK_WIDGET_ID,
       value: undefined,
-      options: { placement: "belowEditor" },
+      options: { placement: "aboveEditor" },
     });
   });
 

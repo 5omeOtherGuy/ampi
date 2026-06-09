@@ -5,8 +5,9 @@
  * `task_cancel`) register a background run in the in-memory registry and
  * return immediately. Their per-call transcript output is intentionally
  * minimal; the live, at-a-glance state of every background agent is shown
- * here too — pinned below the editor with `ctx.ui.setWidget(...)`, away
- * from the above-editor `task_list` todo widget.
+ * here too — pinned above the editor with `ctx.ui.setWidget(...)`, kept
+ * ABOVE the `task_list` todo widget (which also lives above the editor) via
+ * {@link reassertLowerAboveEditorWidgets}.
  *
  * The row/header/glyph vocabulary and the loader animation clock live in
  * {@link ./background-task-view.ts}; the inline transcript card renders the
@@ -16,6 +17,7 @@
  * the registry board; it owns no state.
  */
 
+import { reassertLowerAboveEditorWidgets } from "../mmr-core/above-editor-order.js";
 import type { MmrAsyncTaskBoard } from "./async-task-registry.js";
 import {
   advanceLoaderFrame,
@@ -267,7 +269,7 @@ export function refreshBackgroundTaskWidget(
     const sections = boardSections(board, resolveGroup, board.generatedAtMs);
     const rowTotal = sections.reduce((sum, s) => sum + s.rows.length, 0);
     if (rowTotal === 0) {
-      ctx.ui.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "belowEditor" });
+      ctx.ui.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "aboveEditor" });
       return;
     }
     const hasActive = board.active.length > 0 || board.stalled.length > 0;
@@ -300,7 +302,7 @@ export function refreshBackgroundTaskWidget(
         timer = setTimeout(() => {
           timer = undefined;
           timerKind = undefined;
-          ctx.ui?.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "belowEditor" });
+          ctx.ui?.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "aboveEditor" });
         }, clearDelayMs);
         (timer as { unref?: () => void }).unref?.();
       }
@@ -326,7 +328,11 @@ export function refreshBackgroundTaskWidget(
           }
         },
       };
-    }, { placement: "belowEditor" });
+    }, { placement: "aboveEditor" });
+    // The background widget must stay ABOVE the task_list widget. Both live in
+    // the aboveEditor stack and Pi re-appends the just-set widget to the
+    // bottom, so re-emit any lower-priority widgets to push them back below.
+    reassertLowerAboveEditorWidgets(ctx);
   } catch {
     // Best-effort: a widget failure must never demote a successful tool call.
   }

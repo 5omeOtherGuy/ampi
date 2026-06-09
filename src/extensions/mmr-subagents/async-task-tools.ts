@@ -146,7 +146,9 @@ function refreshAsyncTaskWidget(
 
 /**
  * Live-state resolvers for the inline background card, reading the SAME registry
- * the belowEditor widget mirrors so the card animates ⠋→✓ in lockstep with it.
+ * the aboveEditor widget uses. The card stays invisible while the run is in
+ * flight (live state lives only in the widget) and reads these resolvers to
+ * detect when the run has settled, then latches a static completed snapshot.
  * The card reads the session partition from `details.sessionKey`; both lookups
  * are copy-on-read and bounded by the running-task cap.
  */
