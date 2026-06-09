@@ -45,4 +45,22 @@ describe("mmr-history parseSessionQuery date filters", () => {
     assert.deepEqual(parsed.invalidFilters, []);
     assert.ok(parsed.appliedFilterTokens.includes("after:2026-01-01"));
   });
+
+  it("requires offset: to be a strict non-negative integer", async () => {
+    const { parseSessionQuery } = await importSource(QUERY_MODULE);
+    const parsed = parseSessionQuery("offset:1abc offset:1.9 offset:-1 offset:2", NOW);
+
+    assert.equal(parsed.offset, 2);
+    assert.deepEqual(parsed.invalidFilters, ["offset:1abc", "offset:1.9", "offset:-1"]);
+    assert.ok(parsed.appliedFilterTokens.includes("offset:2"));
+  });
+
+  it("records invalid sort: and has: values as invalid filters", async () => {
+    const { parseSessionQuery } = await importSource(QUERY_MODULE);
+    const parsed = parseSessionQuery("sort:relevance has:failures has:tools", NOW);
+
+    assert.equal(parsed.sort, "modified");
+    assert.deepEqual(parsed.has, ["tools"]);
+    assert.deepEqual(parsed.invalidFilters, ["sort:relevance", "has:failures"]);
+  });
 });

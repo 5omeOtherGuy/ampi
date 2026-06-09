@@ -46,18 +46,22 @@ Opens one session by exact id, `@id`, or unique id prefix and asks the in-proces
 `find_session` accepts:
 
 - bare keywords / quoted phrases;
-- `id:<prefix>`, `name:<text>`, `after:<YYYY-MM-DD|7d|2w>`, `before:<…>`;
+- `id:<prefix>`, `name:<text>`;
+- date filters: `after:` / `since:` / `before:` / `until:` (modified time), plus `modified_after:`, `modified_before:`, `created_after:`, `created_before:`. Values accept `YYYY-MM-DD`, `7d`, `2w`, `today`, `yesterday`, `week`, and `month`;
 - `file:<partial-path>` — per-session match against that session's own cwd-relative structured tool-call evidence (`read`, `edit`, `write`, `apply_patch`). Bash output, prose, and `grep`/`find` search-directory args are never inspected;
-- `repo:<host/owner/repo | owner/repo | stripped remote URL>` — each session's own canonicalized git remote.
+- `repo:<host/owner/repo | owner/repo | stripped remote URL>` — each session's own canonicalized git remote;
+- `project:<cwd-substring-or-projectRef>`, `cwd:<cwd-substring>`, `projectRef:<opaque-ref>` — matched internally, while raw project roots stay hidden from results;
+- structured metadata filters: `provider:<value>`, `model:<value>`, `tool:<name>`, `label:<value>`, `has:tools`, `has:errors`;
+- pagination/sorting: `offset:<n>`, `sort:modified`, `sort:created`.
 
-Case-insensitive; multiple `file:` / `repo:` tokens combine with implicit AND. Each result carries per-filter `queryDiagnostics`:
+Case-insensitive; repeated filters combine with implicit AND. Each result carries per-filter `queryDiagnostics`:
 
 | Status | Meaning |
 | --- | --- |
 | `applied` | Evaluated against session data. |
 | `unsupported` | Syntax recognized but not implemented (`ref:`, `author:`, `task:`, …). |
 | `non_applicable` | Implemented but no candidate session can be evaluated (e.g. `repo:` with no resolvable remotes). Returns zero matches plus the diagnostic; never silently broadens. |
-| `invalid` | An `after:`/`before:` value that did not parse as a date. The date filter is ignored (results are not constrained by it) and the token is surfaced as `Invalid date filters ignored: …` instead of being dropped silently. |
+| `invalid` | A date/offset/sort/has filter value did not parse. The filter is ignored and the token is surfaced as `Invalid filters ignored: …` instead of being dropped silently. |
 
 ### Worker-first read with lexical fallback
 
@@ -67,14 +71,14 @@ Lexical extraction takes over when the worker route is unauthenticated, missing,
 
 ## Safety and privacy
 
-Every string field that leaves the catalog (worker packet, lexical output, `find_session` previews / names / first-messages, diagnostics) passes through a shared deterministic and idempotent sanitizer:
+When content redaction is opted in (`MMR_HISTORY_REDACT=true`), string fields that leave the catalog (worker packet, lexical output, `find_session` previews / names / first-messages, diagnostics) pass through a shared deterministic and idempotent sanitizer. Raw project roots are always protected: result matches expose only `projectRef`, and `project:` / `cwd:` query echoes are redacted even when content redaction is off.
 
 - **Paths.** Pi-session JSONL → `[pi-session]`; other `~/.pi/...` → `[pi-data]`; `/home/<user>`, `/Users/<user>`, `C:\Users\<user>` → `[home]`; other absolute paths → `[abs-path]/<basename>`.
 - **Secrets.** PEM blocks → `[pem]`; Authorization headers and `authorization=` → `[redacted]`; JWT triples → `[jwt]`; provider tokens (`sk-…`, `sk-ant-…`, `ghp_…`, `gho_…`, `AIza…`, `jina_…`, `xoxb-…`, `xoxa-…`, AWS keys, Slack webhooks) → `[token]`; env-style `KEY=value` where key matches `token|secret|password|api_key|cookie` → `KEY=[redacted]`; URL userinfo → `scheme://[redacted]@host`.
 - **Identity.** Emails → `[email]`; IPv4/IPv6 → `[ip]`; OS username (via `os.userInfo()`) outside already-handled `/home/<user>` paths → `[user]`.
 - **Repo / project.** Raw cwds never leave; each match carries an opaque 8-character `projectRef` hash instead.
 
-There is no per-project consent prompt; redaction is the privacy boundary.
+There is no per-project consent prompt. Content redaction is off by default for local same-user recovery; set `MMR_HISTORY_REDACT=true` when packet/result content should be sanitized before leaving the local catalog.
 
 ## Diagnostics and troubleshooting
 
@@ -90,5 +94,5 @@ Re-exported from `pi-mmr`: `createMmrHistoryExtension`, `MMR_HISTORY_TOOL_NAMES`
 ## Developer notes
 
 - `MMR_HISTORY_MODEL_ANALYSIS_ENABLE` is gone. The legacy `threadID` request alias and `analysis` parameter are accepted with a soft deprecation warning in `details.warnings`. `currentProjectOnly: true` is replaced by `scope: "all_sessions"`.
-- Global enumeration walks `~/.pi/agent/sessions/` behind a 10 s in-process TTL cache; per-session touched-file enrichment is cached by `id|modified|messageCount`. No persistent on-disk index, no filesystem watchers, no cross-process cache, no workspace state, no network sync. Persistent-index follow-up: [#64](https://github.com/5omeOtherGuy/pi-mmr/issues/64).
+- Global enumeration walks `~/.pi/agent/sessions/` behind a 10 s in-process TTL cache; per-session touched-file and metadata enrichment is cached by `id|modified|messageCount|path|cwd`. No persistent on-disk index, no filesystem watchers, no cross-process cache, no workspace state, no network sync. Persistent-index follow-up: [#64](https://github.com/5omeOtherGuy/pi-mmr/issues/64).
 - Tests: `tests/mmr-history*.test.mjs`.

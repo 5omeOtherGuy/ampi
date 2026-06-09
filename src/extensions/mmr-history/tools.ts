@@ -12,6 +12,7 @@ import {
 } from "./analysis-worker.js";
 import type { MmrHistorySettings } from "./config.js";
 import { createGitIdentityResolver } from "./git-identity.js";
+import { tokenizeSessionQuery } from "./query.js";
 import { formatSessionReadResult, readSessionForGoal, type SessionReadResult } from "./read-session.js";
 import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
 import {
@@ -50,6 +51,12 @@ export type FindSessionScope = "all_sessions";
 export interface FindSessionDetails {
   query: string;
   resultCount: number;
+  /** Total matches after filters, before pagination. */
+  totalCount: number;
+  /** Number of sorted matches skipped before this page. */
+  offset: number;
+  /** True when another page exists; call again with a larger offset. */
+  hasMore: boolean;
   scope: FindSessionScope;
   matches: SessionSearchMatch[];
   queryDiagnostics: QueryDiagnostic[];
@@ -72,11 +79,16 @@ export const FIND_SESSION_PARAMETERS_SCHEMA = Type.Object(
   {
     query: Type.String({
       description:
-        "Search query for local Pi sessions across every project cwd Pi has recorded on disk. Supports bare keywords, quoted phrases, id:, name:, after:, before:, file:, and repo: filters. file: and repo: are evaluated per session against that session's own cwd and git remote, not against the active workspace. Unknown filters and filters that cannot be evaluated against any candidate session are reported in queryDiagnostics. Results carry an opaque projectRef per match; raw session file paths and project roots are never surfaced.",
+        "Search query for local Pi sessions across every project cwd Pi has recorded on disk. Supports bare keywords, quoted phrases, id:, name:, date filters (after:/since:/before:/until: plus created_after:/created_before:/modified_after:/modified_before:, with YYYY-MM-DD, 7d, 2w, today, yesterday, week, month), file:, repo:, project:/cwd:/projectRef:, provider:, model:, tool:, label:, has:tools, has:errors, sort:modified|created, and offset:<n>. file:, repo:, provider:, model:, tool:, label:, and has: filters are evaluated per session, not against the active workspace. Unknown filters and filters that cannot be evaluated against any candidate session are reported in queryDiagnostics. Results carry an opaque projectRef per match; raw session file paths and project roots are never surfaced.",
     }),
     limit: Type.Optional(
       Type.Number({
-        description: "Maximum number of sessions to return. Defaults to the mmr-history configured limit and is capped by the extension.",
+        description: "Maximum number of sessions to return for this page. Defaults to the mmr-history configured limit and is capped by the extension.",
+      }),
+    ),
+    offset: Type.Optional(
+      Type.Number({
+        description: "Number of sorted matches to skip before returning results. Use when details.hasMore is true; next offset is details.offset + details.resultCount. The query string also supports offset:<n>.",
       }),
     ),
   },
@@ -122,7 +134,7 @@ export const FIND_SESSION_DESCRIPTION = `Find prior Pi sessions across every loc
 
 Use this when the user asks about prior Pi conversations, sessions, or work history — including history from another project on the same machine. Do not use this for git commit history, blame, or who changed a file; use git commands for those questions.
 
-Supported query syntax: bare keywords and quoted phrases for text search; id:<prefix>; name:<text>; after:<YYYY-MM-DD|7d|2w>; before:<YYYY-MM-DD|7d|2w>; file:<partial-path> (matches against structured tool-call evidence only — read/edit/write/apply_patch — interpreted per-session relative to that session's own cwd); repo:<value> where <value> is one of host/owner/repo, owner/repo, or the credential-stripped remote URL (matched against each candidate session's git remote, not just the active workspace). Matching is case-insensitive. Unknown filters are reported as \`unsupported\`; filters that cannot be evaluated against any candidate session are reported as \`non_applicable\`. Results carry an opaque \`projectRef\` per match; raw session file paths and project roots are never surfaced.`;
+Supported query syntax: bare keywords and quoted phrases for text search; id:<prefix>; name:<text>; recency filters after:/since:/before:/until: (modified time) plus explicit modified_after:/modified_before:/created_after:/created_before: using YYYY-MM-DD, 7d, 2w, today, yesterday, week, or month; file:<partial-path> (structured read/edit/write/apply_patch evidence, cwd-relative per session); repo:<host/owner/repo|owner/repo|credential-stripped-url>; project:<cwd-substring-or-projectRef>, cwd:<cwd-substring>, projectRef:<opaque-ref>; provider:<value>; model:<value>; tool:<name>; label:<value>; has:tools; has:errors; sort:modified|created; offset:<n>. Use the top-level offset parameter (or offset:<n>) plus details.hasMore/details.totalCount for pagination. Matching is case-insensitive. Unknown filters are reported as \`unsupported\`; filters that cannot be evaluated against any candidate session are reported as \`non_applicable\`. Results carry an opaque \`projectRef\` per match; raw session file paths and project roots are never surfaced.`;
 
 export const READ_SESSION_DESCRIPTION = `Read a prior Pi session and extract content relevant to a stated goal.
 
@@ -130,7 +142,7 @@ Use this after find_session returns a relevant session, or when the user gives a
 
 The tool sends a sanitized session packet — including tool calls, tool results, and command output — to the in-process \`history-reader\` subagent, which has no tool allowlist. Session content is sent raw for the local same-user case by default; set \`MMR_HISTORY_REDACT=true\` to deterministically redact packet content first. If the worker route is unauthenticated, missing, cancelled, or empty, the tool falls back to deterministic lexical extraction and sets \`details.analysisFallbackReason\`.`;
 
-export const FIND_SESSION_PROMPT_SNIPPET = "Search local Pi sessions across every project on disk by keywords, id/name filters, date filters, file:, and repo:";
+export const FIND_SESSION_PROMPT_SNIPPET = "Search local Pi sessions across every project on disk by keywords, id/name/date/project/repo/file/model/provider/tool/label filters with pagination";
 export const READ_SESSION_PROMPT_SNIPPET = "Read any local Pi session by id/prefix and return goal-focused excerpts (including tool calls/results) from the history-reader worker, with a lexical fallback";
 
 function coerceObject(raw: unknown): Record<string, unknown> {
@@ -145,6 +157,12 @@ function coerceQuery(raw: unknown): string {
 function coerceLimit(raw: unknown, settings: MmrHistorySettings): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return settings.maxResults;
   return Math.max(1, Math.min(Math.trunc(raw), settings.maxResults));
+}
+
+function coerceOffset(raw: unknown): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
+  return Math.max(0, Math.trunc(raw));
 }
 
 function coerceOptionalModel(raw: unknown): string | undefined {
@@ -191,8 +209,14 @@ function formatDiagnosticsLines(diagnostics: readonly QueryDiagnostic[]): string
   if (applied.length > 0) lines.push(`Applied filters: ${applied.join(", ")}`);
   if (unsupported.length > 0) lines.push(`Unsupported filters: ${unsupported.join(", ")}`);
   if (nonApplicable.length > 0) lines.push(`Non-applicable filters: ${nonApplicable.join(", ")}`);
-  if (invalid.length > 0) lines.push(`Invalid date filters ignored: ${invalid.join(", ")}`);
+  if (invalid.length > 0) lines.push(`Invalid filters ignored: ${invalid.join(", ")}`);
   return lines;
+}
+
+function redactQueryForDisplay(query: string, redactionEnabled: boolean): string {
+  return tokenizeSessionQuery(query)
+    .map((token) => /^(?:project|cwd):/i.test(token) ? maybeRedact(token, true) : maybeRedact(token, redactionEnabled))
+    .join(" ");
 }
 
 function formatFindSessionResults(
@@ -200,10 +224,15 @@ function formatFindSessionResults(
   matches: readonly SessionSearchMatch[],
   diagnostics: readonly QueryDiagnostic[],
   redactionEnabled: boolean,
+  pagination?: { totalCount: number; offset: number; hasMore: boolean },
 ): string {
-  const lines = [`# Session search results for: ${maybeRedact(query, redactionEnabled)}`];
+  const lines = [`# Session search results for: ${redactQueryForDisplay(query, redactionEnabled)}`];
   const diagnosticLines = formatDiagnosticsLines(diagnostics);
   if (diagnosticLines.length > 0) lines.push(...diagnosticLines);
+  if (pagination && (pagination.offset > 0 || pagination.hasMore || pagination.totalCount !== matches.length)) {
+    lines.push(`Results: ${matches.length} of ${pagination.totalCount} (offset ${pagination.offset})`);
+    if (pagination.hasMore) lines.push(`More results available: call again with offset ${pagination.offset + matches.length}.`);
+  }
   lines.push("");
   if (matches.length === 0) {
     lines.push("No local Pi session matched the query.");
@@ -349,8 +378,10 @@ export function createFindSessionTool(deps: MmrHistoryToolDeps): ToolDefinition 
         checkMmrToolParams(FIND_SESSION_TOOL_NAME, FIND_SESSION_PARAMETERS_SCHEMA, params);
       }
       const limit = coerceLimit(params.limit, settings);
-      const { matches, queryDiagnostics } = await searchSessionsWithDiagnostics(deps, query, {
+      const offset = coerceOffset(params.offset);
+      const { matches, queryDiagnostics, totalCount, hasMore, offset: appliedOffset } = await searchSessionsWithDiagnostics(deps, query, {
         limit,
+        offset,
         index: deps.sessionIndex,
         redactionEnabled: settings.redactionEnabled,
       });
@@ -361,14 +392,17 @@ export function createFindSessionTool(deps: MmrHistoryToolDeps): ToolDefinition 
         // user's own raw query is preserved (local same-user default).
         // The formatted text body mirrors this via
         // `formatFindSessionResults`.
-        query: maybeRedact(query, settings.redactionEnabled),
+        query: redactQueryForDisplay(query, settings.redactionEnabled),
         resultCount: matches.length,
+        totalCount,
+        offset: appliedOffset,
+        hasMore,
         scope: "all_sessions",
         matches,
         queryDiagnostics,
       };
       return {
-        content: [{ type: "text", text: formatFindSessionResults(query, matches, queryDiagnostics, settings.redactionEnabled) }],
+        content: [{ type: "text", text: formatFindSessionResults(query, matches, queryDiagnostics, settings.redactionEnabled, { totalCount, offset: appliedOffset, hasMore }) }],
         details,
       };
     },
