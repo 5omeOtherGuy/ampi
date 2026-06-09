@@ -17,6 +17,7 @@
  * the registry board; it owns no state.
  */
 
+import { updateAboveEditorDashboardSlot } from "../mmr-core/above-editor-dashboard.js";
 import { reassertLowerAboveEditorWidgets } from "../mmr-core/above-editor-order.js";
 import type { MmrAsyncTaskBoard } from "./async-task-registry.js";
 import {
@@ -269,12 +270,12 @@ export function refreshBackgroundTaskWidget(
     const sections = boardSections(board, resolveGroup, board.generatedAtMs);
     const rowTotal = sections.reduce((sum, s) => sum + s.rows.length, 0);
     if (rowTotal === 0) {
-      ctx.ui.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "aboveEditor" });
+      updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, undefined);
       return;
     }
     const hasActive = board.active.length > 0 || board.stalled.length > 0;
     const clearDelayMs = hasActive ? undefined : finishedOnlyClearDelayMs(board);
-    ctx.ui.setWidget(BACKGROUND_TASK_WIDGET_ID, (tui, theme) => {
+    updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, (tui, theme) => {
       // Animate running rows with Pi's loader cadence by advancing the shared
       // loader frame (read by the inline card too) and re-rendering the whole
       // tree. Finished-only rows use a one-shot clear timer so the drop-off
@@ -302,7 +303,7 @@ export function refreshBackgroundTaskWidget(
         timer = setTimeout(() => {
           timer = undefined;
           timerKind = undefined;
-          ctx.ui?.setWidget(BACKGROUND_TASK_WIDGET_ID, undefined, { placement: "aboveEditor" });
+          updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, undefined);
         }, clearDelayMs);
         (timer as { unref?: () => void }).unref?.();
       }
@@ -328,7 +329,7 @@ export function refreshBackgroundTaskWidget(
           }
         },
       };
-    }, { placement: "aboveEditor" });
+    });
     // The background widget must stay ABOVE the task_list widget. Both live in
     // the aboveEditor stack and Pi re-appends the just-set widget to the
     // bottom, so re-emit any lower-priority widgets to push them back below.

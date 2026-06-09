@@ -22,6 +22,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   are unchanged. Covered by `tests/mmr-subagents-progress-rendering.test.mjs`,
   `tests/mmr-subagents-background-task-widget.test.mjs`, and
   `tests/mmr-core-above-editor-order.test.mjs`.
+- `mmr-subagents` / `mmr-toolbox`: when the `task_list` widget and the
+  background-task widget are both visible above the editor, they now share a
+  single two-column dashboard with the task list on the left and background
+  agents on the right. Narrow terminals fall back to a stacked layout, and each
+  widget still renders standalone when the other slot is empty. Covered by
+  `tests/mmr-core-above-editor-dashboard.test.mjs` plus the existing task-list
+  and background-widget tests.
 
 - `mmr-history`: `read_session` / `find_session` content redaction is now
   **opt-in** and OFF by default. For the local same-user case these tools exist
