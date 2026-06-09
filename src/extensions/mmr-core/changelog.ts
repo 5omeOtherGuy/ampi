@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { parseBoolEnv } from "./internal/env.js";
 
 export const MMR_CHANGELOG_STATE_VERSION = 1;
 export const MMR_CHANGELOG_STATE_RELATIVE_PATH = "data/pi-mmr/changelog/state.json";
@@ -13,10 +14,7 @@ const UNRELEASED_HEADER_PATTERN = /^##\s+Unreleased\b/i;
 const DEBUG_ENV_VAR = "PI_MMR_CHANGELOG_DEBUG";
 
 function isChangelogDebugEnabled(): boolean {
-  const raw = process.env[DEBUG_ENV_VAR];
-  if (typeof raw !== "string") return false;
-  const normalized = raw.trim().toLowerCase();
-  return normalized === "1" || normalized === "true";
+  return parseBoolEnv(process.env[DEBUG_ENV_VAR]) ?? false;
 }
 
 function emitChangelogDebug(line: string): void {

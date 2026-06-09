@@ -118,6 +118,11 @@ function parseListValue(raw: string): string[] {
     .filter((part) => part.length > 0);
 }
 
+// Intentional YAML *subset* (not full YAML): supports inline `[a, b]` lists,
+// `true`/`false` booleans, and quoted/bare scalars only. This is deliberately
+// narrow for Claude-style agent frontmatter and is distinct from `parseBoolEnv`
+// (env-var truthiness). If users start expecting full YAML frontmatter, replace
+// this with a real YAML parser rather than extending the subset ad hoc.
 function parseFrontmatterScalar(raw: string): FrontmatterValue {
   const trimmed = raw.trim();
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) return parseListValue(trimmed);

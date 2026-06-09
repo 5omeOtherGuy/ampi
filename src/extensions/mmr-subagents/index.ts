@@ -68,7 +68,7 @@ export function createMmrSubagentsExtension(overrides: MmrSubagentsFactoryOverri
     // session resets: "new" and "fork" start clean, while "resume" keeps
     // any in-process state. Skip the reset inside a subagent worker so a
     // child Pi process never wipes the parent's shared in-process map.
-    pi.on("session_start", (event, ctx) => {
+    pi.on("session_start", (event) => {
       if (getMmrSubagentState()) return;
       if (event.reason === "new" || event.reason === "fork") {
         resetMmrWorkerFallbackState();

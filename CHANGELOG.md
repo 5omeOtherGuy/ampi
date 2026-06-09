@@ -8,6 +8,22 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `npm run check` now enforces no unused locals/parameters
+  (`--noUnusedLocals --noUnusedParameters`); `check:unused` is kept as an alias.
+  Dead-code detection is now part of the standard pre-PR/CI gate instead of an
+  opt-in step, preventing unused code from accumulating.
+
+- Removed dead parameters flagged by the stricter check: the unused `ctx` in the
+  `mmr-subagents` `session_start` handler and the unused `args`/`theme`/`context`
+  in `renderMmrBackgroundTaskCall` (underscore-prefixed; signature preserved).
+
+- Unified environment-flag parsing on `mmr-core`'s canonical `parseBoolEnv`:
+  `mmr-debug` (`MMR_DEBUG_CAPTURE_FULL`) and the `mmr-core` changelog debug flag
+  no longer hand-roll divergent truthiness checks, so accepted tokens
+  (`true/1/yes/on`, plus explicit false values) are consistent across the
+  package. The `mmr-custom-subagents` frontmatter parser is documented as an
+  intentional YAML subset, distinct from env parsing.
+
 - `mmr-core` no longer imports `mmr-github` to gate the `librarian` subagent.
   Subagent profiles can now declare owner-scoped tool prerequisites
   (`requiredOwnedTools`), validated fail-closed at activation through a generic

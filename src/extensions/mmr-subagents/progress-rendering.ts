@@ -369,9 +369,9 @@ function resultAlreadyRendered(context: RenderContextLike | undefined): boolean 
 
 export function renderMmrBackgroundTaskCall(
   toolName: string,
-  args: unknown,
-  theme: SubagentTheme,
-  context?: RenderContextLike,
+  _args: unknown,
+  _theme: SubagentTheme,
+  _context?: RenderContextLike,
 ): Component {
   if (toolName !== "start_task") return new Container();
   // The result card owns the entire staged reveal, so the call renders nothing:
