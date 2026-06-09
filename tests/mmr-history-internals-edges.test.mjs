@@ -78,6 +78,78 @@ describe("mmr-history session-catalog edge paths", () => {
     assert.ok(queryDiagnostics.some((d) => d.filter === "id:abc" && d.status === "applied"));
   });
 
+  it("filters by created/modified date aliases and sorts by created time", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const sessions = [
+      sessionInfo({ id: "S-old-created", created: new Date("2026-05-01T00:00:00Z"), modified: new Date("2026-05-29T00:00:00Z"), allMessagesText: "history search" }),
+      sessionInfo({ id: "S-middle", created: new Date("2026-05-15T00:00:00Z"), modified: new Date("2026-05-20T00:00:00Z"), allMessagesText: "history search" }),
+      sessionInfo({ id: "S-new-created", created: new Date("2026-05-25T00:00:00Z"), modified: new Date("2026-05-22T00:00:00Z"), allMessagesText: "history search" }),
+    ];
+
+    const result = await searchSessionsWithDiagnostics(
+      { listSessions: async () => sessions },
+      "history created_after:2026-05-10 modified_before:2026-05-23 sort:created",
+      { limit: 10 },
+    );
+
+    assert.deepEqual(result.matches.map((m) => m.sessionId), ["S-new-created", "S-middle"]);
+    assert.ok(result.queryDiagnostics.some((d) => d.filter === "created_after:2026-05-10" && d.status === "applied"));
+    assert.ok(result.queryDiagnostics.some((d) => d.filter === "modified_before:2026-05-23" && d.status === "applied"));
+    assert.ok(result.queryDiagnostics.some((d) => d.filter === "sort:created" && d.status === "applied"));
+  });
+
+  it("paginates results with query-string offset when no top-level offset is supplied", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const sessions = Array.from({ length: 5 }, (_, i) =>
+      sessionInfo({
+        id: `S-${i}`,
+        modified: new Date(`2026-05-${10 + i}T00:00:00Z`),
+        allMessagesText: "history search",
+      }),
+    );
+
+    const result = await searchSessionsWithDiagnostics({ listSessions: async () => sessions }, "history offset:2", { limit: 2 });
+
+    assert.equal(result.totalCount, 5);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.offset, 2);
+    assert.deepEqual(result.matches.map((m) => m.sessionId), ["S-2", "S-1"]);
+  });
+
+  it("top-level offset overrides query-string offset", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const sessions = Array.from({ length: 5 }, (_, i) =>
+      sessionInfo({
+        id: `S-${i}`,
+        modified: new Date(`2026-05-${10 + i}T00:00:00Z`),
+        allMessagesText: "history search",
+      }),
+    );
+
+    const result = await searchSessionsWithDiagnostics({ listSessions: async () => sessions }, "history offset:4", { limit: 2, offset: 1 });
+
+    assert.equal(result.offset, 1);
+    assert.deepEqual(result.matches.map((m) => m.sessionId), ["S-3", "S-2"]);
+  });
+
+  it("paginates results with offset, totalCount, and hasMore", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const sessions = Array.from({ length: 5 }, (_, i) =>
+      sessionInfo({
+        id: `S-${i}`,
+        modified: new Date(`2026-05-${10 + i}T00:00:00Z`),
+        allMessagesText: "history search",
+      }),
+    );
+
+    const result = await searchSessionsWithDiagnostics({ listSessions: async () => sessions }, "history", { limit: 2, offset: 1 });
+
+    assert.equal(result.totalCount, 5);
+    assert.equal(result.hasMore, true);
+    assert.equal(result.offset, 1);
+    assert.deepEqual(result.matches.map((m) => m.sessionId), ["S-3", "S-2"]);
+  });
+
   it("caps results at the requested limit", async () => {
     const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
     const sessions = Array.from({ length: 5 }, (_, i) =>
@@ -266,7 +338,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
     assert.equal(listCalls, 2, "TTL expiry should trigger a refresh");
   });
 
-  it("SessionIndex.getTouchedFiles memoizes per-session by id|modified|messageCount", async () => {
+  it("SessionIndex.getTouchedFiles memoizes per-session by id|modified|messageCount|path|cwd", async () => {
     const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
     const info = sessionInfo({ id: "S-1" });
     let openCalls = 0;
@@ -292,6 +364,33 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
     assert.deepEqual(Array.from(first).sort(), ["src/x.ts"]);
     assert.equal(second, first, "same session key must reuse the cached set");
     assert.equal(openCalls, 1, "openSession must not be called a second time for an unchanged session");
+  });
+
+  it("SessionIndex does not reuse touched metadata when path or cwd changes", async () => {
+    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const base = sessionInfo({ id: "S-1", modified: new Date("2026-05-21T00:00:00Z"), messageCount: 2, path: "/tmp/old.jsonl", cwd: "/repo/old" });
+    const moved = { ...base, path: "/tmp/new.jsonl", cwd: "/repo/new" };
+    let openCalls = 0;
+    const deps = {
+      listSessions: async () => [base],
+      openSession: (path) => {
+        openCalls += 1;
+        return fakeManager([
+          {
+            type: "message",
+            message: {
+              role: "assistant",
+              content: [{ type: "toolCall", name: "edit", arguments: { path: path.includes("old") ? "/repo/old/src/old.ts" : "/repo/new/src/new.ts" } }],
+            },
+          },
+        ]);
+      },
+    };
+    const index = createSessionIndex(deps);
+
+    assert.deepEqual(Array.from(await index.getTouchedFiles(base)), ["src/old.ts"]);
+    assert.deepEqual(Array.from(await index.getTouchedFiles(moved)), ["src/new.ts"]);
+    assert.equal(openCalls, 2, "changed path/cwd must get a distinct enrichment cache key");
   });
 
   it("SessionIndex discards per-session touched cache when the global fingerprint changes", async () => {
@@ -422,16 +521,16 @@ describe("mmr-history tools edge paths and input validation", () => {
     };
   }
 
-  it("renders the invalid-date diagnostic group in find_session output", async () => {
+  it("renders the invalid-filter diagnostic group in find_session output", async () => {
     const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
     const tool = createFindSessionTool(baseDeps({
       listSessions: async () => [
         sessionInfo({ id: "S-1", modified: new Date("2026-05-21T00:00:00Z"), allMessagesText: "history search" }),
       ],
     }));
-    const result = await tool.execute("call", { query: "history after:not-a-date" }, undefined, undefined, { cwd: "/repo" });
+    const result = await tool.execute("call", { query: "history after:not-a-date sort:unknown" }, undefined, undefined, { cwd: "/repo" });
     const text = result.content.map((c) => c.text).join("\n");
-    assert.match(text, /Invalid date filters ignored: after:not-a-date/);
+    assert.match(text, /Invalid filters ignored: after:not-a-date, sort:unknown/);
     assert.ok(
       result.details.queryDiagnostics.some((d) => d.filter === "after:not-a-date" && d.status === "invalid"),
       "details.queryDiagnostics carries the invalid-date entry",

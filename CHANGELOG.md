@@ -69,6 +69,19 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   (`packetByteBudget`, default 512KB, capped at 4MB) controls the sanitized
   packet budget sent to the `history-reader` worker. Covered by
   `tests/mmr-history-worker-analysis.test.mjs`.
+- `mmr-history`: `find_session` supports richer filters and pagination. New
+  query filters include `provider:`, `model:`, `tool:`, `label:`, `has:tools`,
+  `has:errors`, `project:`, `cwd:`, `projectRef:`, `since:`/`until:` aliases,
+  explicit `created_after:`/`created_before:` and
+  `modified_after:`/`modified_before:`, recency shorthands (`today`,
+  `yesterday`, `week`, `month`), `sort:modified|created`, and `offset:<n>`.
+  The top-level tool schema also adds an `offset` parameter, and details now
+  include `totalCount`, `offset`, and `hasMore`. Project/cwd filters match
+  internally but still expose only opaque `projectRef` values; metadata filters
+  are evaluated from structured session entries and report `non_applicable`
+  when no session index can inspect them. Covered by
+  `tests/mmr-history.test.mjs`, `tests/mmr-history-internals-edges.test.mjs`,
+  and `tests/mmr-history-query.test.mjs`.
 
 - `mmr-subagents`: `start_task` gains a `fleet` form for declaring a whole
   fan-out in one call. `start_task({ fleet: { groups: [{ group_label?, members:

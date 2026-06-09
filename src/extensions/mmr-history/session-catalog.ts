@@ -2,7 +2,7 @@ import type { SessionInfo, SessionManager } from "@earendil-works/pi-coding-agen
 import { createGitIdentityResolver, matchesRepoToken, type GitIdentityResolver, type RepoIdentity } from "./git-identity.js";
 import { includesCaseInsensitive, parseSessionQuery, type SessionQuery } from "./query.js";
 import { maybeRedact, projectRefFromCwd } from "./redaction.js";
-import { createSessionIndex, type SessionIndex, type SessionIndexDeps } from "./session-index.js";
+import { createSessionIndex, type SessionIndex, type SessionIndexDeps, type SessionMetadata } from "./session-index.js";
 
 export interface SessionCatalogDeps {
   /**
@@ -42,6 +42,12 @@ export interface QueryDiagnostic {
 export interface SessionSearchResult {
   matches: SessionSearchMatch[];
   queryDiagnostics: QueryDiagnostic[];
+  /** Total matches after filters, before pagination. */
+  totalCount: number;
+  /** Number of sorted matches skipped before `matches`. */
+  offset: number;
+  /** True when another page exists after this result page. */
+  hasMore: boolean;
 }
 
 export interface ResolvedSession {
@@ -68,8 +74,15 @@ function buildPreview(info: SessionInfo, query: SessionQuery, redactionEnabled: 
 function matchesLexical(info: SessionInfo, query: SessionQuery): string[] | undefined {
   if (query.id && !includesCaseInsensitive(info.id, query.id)) return undefined;
   if (query.name && !includesCaseInsensitive(info.name ?? "", query.name)) return undefined;
-  if (query.after && info.modified < query.after) return undefined;
-  if (query.before && info.modified > query.before) return undefined;
+  if (query.modifiedAfter && info.modified < query.modifiedAfter) return undefined;
+  if (query.modifiedBefore && info.modified > query.modifiedBefore) return undefined;
+  if (query.createdAfter && info.created < query.createdAfter) return undefined;
+  if (query.createdBefore && info.created > query.createdBefore) return undefined;
+  const cwd = (info.cwd || "").toLowerCase();
+  const projectRef = projectRefFromCwd(info.cwd || "").toLowerCase();
+  if (!query.project.every((token) => cwd.includes(token) || projectRef.includes(token))) return undefined;
+  if (!query.cwd.every((token) => cwd.includes(token))) return undefined;
+  if (!query.projectRef.every((token) => projectRef.includes(token))) return undefined;
 
   const text = sessionSearchText(info);
   const matchedTerms = query.terms.filter((term) => includesCaseInsensitive(text, term));
@@ -77,13 +90,13 @@ function matchesLexical(info: SessionInfo, query: SessionQuery): string[] | unde
   return matchedTerms;
 }
 
-function matchesTouchedFiles(touched: ReadonlySet<string>, fileTokens: readonly string[]): boolean {
-  if (fileTokens.length === 0) return true;
-  if (touched.size === 0) return false;
-  for (const token of fileTokens) {
+function matchesSetValues(values: ReadonlySet<string>, tokens: readonly string[]): boolean {
+  if (tokens.length === 0) return true;
+  if (values.size === 0) return false;
+  for (const token of tokens) {
     let found = false;
-    for (const path of touched) {
-      if (path.includes(token)) {
+    for (const value of values) {
+      if (value.includes(token)) {
         found = true;
         break;
       }
@@ -93,21 +106,54 @@ function matchesTouchedFiles(touched: ReadonlySet<string>, fileTokens: readonly 
   return true;
 }
 
+function matchesTouchedFiles(touched: ReadonlySet<string>, fileTokens: readonly string[]): boolean {
+  return matchesSetValues(touched, fileTokens);
+}
+
+function matchesMetadata(metadata: SessionMetadata, query: SessionQuery): boolean {
+  if (!matchesSetValues(metadata.providers, query.provider)) return false;
+  if (!matchesSetValues(metadata.models, query.model)) return false;
+  if (!matchesSetValues(metadata.tools, query.tool)) return false;
+  if (!matchesSetValues(metadata.labels, query.label)) return false;
+  for (const token of query.has) {
+    if (token === "tools" && !metadata.hasTools) return false;
+    if (token === "errors" && !metadata.hasErrors) return false;
+  }
+  return true;
+}
+
+function hasMetadataFilters(query: SessionQuery): boolean {
+  return query.provider.length > 0 || query.model.length > 0 || query.tool.length > 0 || query.label.length > 0 || query.has.length > 0;
+}
+
+function metadataDiagnosticFilter(filter: string): boolean {
+  return filter.startsWith("provider:") || filter.startsWith("model:") || filter.startsWith("tool:") || filter.startsWith("label:") || filter.startsWith("has:");
+}
+
 function buildQueryDiagnostics(query: SessionQuery, redactionEnabled: boolean): QueryDiagnostic[] {
   // Diagnostic filter strings are reproduced from user-typed query
   // tokens, which can carry secrets, home paths, or credentialed
   // URLs (e.g. `repo:https://user:tok@…`). When CONTENT redaction is
   // opted in, route every filter through the same deterministic
   // redaction the rest of the surface uses before it leaves the local
-  // catalog. Idempotent.
+  // catalog. `project:` / `cwd:` are always redacted because the public
+  // contract promises raw project roots are never surfaced. Idempotent.
   const diagnostics: QueryDiagnostic[] = [];
   for (const term of query.terms) diagnostics.push({ filter: maybeRedact(`keyword:${term}`, redactionEnabled), status: "applied" });
   for (const token of query.appliedFilterTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
   for (const token of query.fileTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
   for (const token of query.repoTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.projectTokens) diagnostics.push({ filter: maybeRedact(token, true), status: "applied" });
+  for (const token of query.cwdTokens) diagnostics.push({ filter: maybeRedact(token, true), status: "applied" });
+  for (const token of query.projectRefTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.providerTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.modelTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.toolTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.labelTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.hasTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
   for (const token of query.unsupportedFilters) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "unsupported" });
-  // `after:`/`before:` tokens with an unparseable date: recorded so the tool
-  // can tell the user the date was ignored rather than silently dropping it.
+  // Invalid filters are recorded so the tool can tell the user the token was
+  // ignored rather than silently dropping it.
   for (const token of query.invalidFilters) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "invalid" });
   return diagnostics;
 }
@@ -188,6 +234,8 @@ function promoteToNonApplicable(
 export interface SearchSessionsOptions {
   /** Hard cap on returned matches. */
   limit: number;
+  /** Number of sorted matches to skip before returning a page. */
+  offset?: number;
   /** Clock source for relative date filters (e.g. `after:7d`). */
   now?: Date;
   /**
@@ -236,6 +284,7 @@ export async function searchSessionsWithDiagnostics(
 ): Promise<SessionSearchResult> {
   const { limit, now = new Date(), index, redactionEnabled = true } = options;
   const query = parseSessionQuery(queryText, now);
+  const requestedOffset = Math.max(0, Math.trunc(options.offset ?? query.offset));
   const diagnostics = buildQueryDiagnostics(query, redactionEnabled);
 
   const effectiveIndex: SessionIndex | undefined =
@@ -280,7 +329,7 @@ export async function searchSessionsWithDiagnostics(
         (entry) => entry.filter.startsWith("repo:"),
         "no candidate sessions have a resolvable repo identity",
       );
-      return { matches: [], queryDiagnostics: diagnostics };
+      return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
     }
     filtered = repoChecks.filter((check) => check.matched).map((check) => check.entry);
   }
@@ -293,7 +342,7 @@ export async function searchSessionsWithDiagnostics(
         (entry) => entry.filter.startsWith("file:"),
         "no session index available to evaluate file: filter",
       );
-      return { matches: [], queryDiagnostics: diagnostics };
+      return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
     }
     const fileChecks = await Promise.all(
       filtered.map(async (entry) => {
@@ -308,23 +357,57 @@ export async function searchSessionsWithDiagnostics(
         (entry) => entry.filter.startsWith("file:"),
         "no candidate sessions carry structured tool-call evidence",
       );
-      return { matches: [], queryDiagnostics: diagnostics };
+      return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
     }
     filtered = fileChecks.filter((check) => check.matched).map((check) => check.entry);
   }
 
-  const matches = filtered
-    .sort((a, b) => {
-      const dt = b.info.modified.getTime() - a.info.modified.getTime();
-      if (dt !== 0) return dt;
-      const dc = b.info.created.getTime() - a.info.created.getTime();
-      if (dc !== 0) return dc;
-      return a.info.id.localeCompare(b.info.id);
-    })
-    .slice(0, limit)
+  if (hasMetadataFilters(query)) {
+    if (!effectiveIndex) {
+      promoteToNonApplicable(
+        diagnostics,
+        (entry) => metadataDiagnosticFilter(entry.filter),
+        "no session index available to evaluate metadata filters",
+      );
+      return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
+    }
+    const metadataChecks = await Promise.all(
+      filtered.map(async (entry) => {
+        const metadata = await effectiveIndex.getMetadata(entry.info);
+        return { entry, metadata, matched: matchesMetadata(metadata, query) };
+      }),
+    );
+    const anyMetadata = metadataChecks.some(
+      (check) => check.metadata.providers.size > 0 || check.metadata.models.size > 0 || check.metadata.tools.size > 0 || check.metadata.labels.size > 0 || check.metadata.hasTools || check.metadata.hasErrors,
+    );
+    if (!anyMetadata) {
+      promoteToNonApplicable(
+        diagnostics,
+        (entry) => metadataDiagnosticFilter(entry.filter),
+        "no candidate sessions carry structured metadata for these filters",
+      );
+      return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
+    }
+    filtered = metadataChecks.filter((check) => check.matched).map((check) => check.entry);
+  }
+
+  const sorted = filtered.sort((a, b) => {
+    const primary = query.sort === "created"
+      ? b.info.created.getTime() - a.info.created.getTime()
+      : b.info.modified.getTime() - a.info.modified.getTime();
+    if (primary !== 0) return primary;
+    const secondary = query.sort === "created"
+      ? b.info.modified.getTime() - a.info.modified.getTime()
+      : b.info.created.getTime() - a.info.created.getTime();
+    if (secondary !== 0) return secondary;
+    return a.info.id.localeCompare(b.info.id);
+  });
+  const totalCount = sorted.length;
+  const matches = sorted
+    .slice(requestedOffset, requestedOffset + limit)
     .map(({ info, matchedTerms }) => buildMatch(info, query, matchedTerms, redactionEnabled));
 
-  return { matches, queryDiagnostics: diagnostics };
+  return { matches, queryDiagnostics: diagnostics, totalCount, offset: requestedOffset, hasMore: requestedOffset + matches.length < totalCount };
 }
 
 export async function resolveSessionById(
