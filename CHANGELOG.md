@@ -25,12 +25,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 - `mmr-subagents` / `mmr-toolbox`: when the `task_list` widget and the
   background-task widget are both visible above the editor, they now share a
   single two-column dashboard with the task list on the left and background
-  agents on the right. Very narrow terminals fall back to a stacked layout, and
-  each widget still renders standalone when the other slot is empty. A compact
-  terminal-width regression now pins the split at widths where both panes fit,
-  so ordinary sessions do not unexpectedly keep the old vertical stack. Covered
-  by `tests/mmr-core-above-editor-dashboard.test.mjs` plus the existing
-  task-list and background-widget tests.
+  agents on the right. Narrow terminals fall back to a stacked layout, and each
+  widget still renders standalone when the other slot is empty. The dashboard
+  slot registry is process-wide so cache-isolated `mmr-toolbox` and
+  `mmr-subagents` extension loads still meet in the same dashboard instead of
+  rendering as two separate stacked widgets. Covered by
+  `tests/mmr-core-above-editor-dashboard.test.mjs` plus the existing task-list
+  and background-widget tests.
 
 - `mmr-history`: `read_session` / `find_session` content redaction is now
   **opt-in** and OFF by default. For the local same-user case these tools exist
