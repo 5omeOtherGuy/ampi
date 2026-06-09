@@ -166,7 +166,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
       "librarian",
       "Task",
     ],
-    dynamicTools: true, // custom Markdown `sa__*` subagents
+    dynamicTools: false,
     featureGates: ["mmr-subagents"],
     riskClass: "subprocess",
     childRole: "worker-owner",
@@ -181,6 +181,17 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     featureGates: ["mmr-async-tasks", "mmr-subagents.async-tasks"],
     riskClass: "subprocess",
     childRole: "none",
+  },
+  {
+    name: "mmr-custom-subagents",
+    entrypoint: "./src/extensions/mmr-custom-subagents/index.ts",
+    exportSubpath: "./extensions/mmr-custom-subagents",
+    autoLoaded: true,
+    tools: [],
+    dynamicTools: true,
+    featureGates: ["mmr-custom-subagents"],
+    riskClass: "subprocess",
+    childRole: "worker-owner",
   },
   {
     name: "mmr-history",
@@ -213,14 +224,14 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
  * these documented ones are driven to zero by later chunks:
  *
  *  - `mmr-web`       : `config-flow.ts` dispatches into the web config flow.
- *  - `mmr-subagents` : `config-flow.ts` dispatches into the subagents config flow.
+ *  - `mmr-custom-subagents` : `config-flow.ts` dispatches into the custom subagents config flow.
  *  - `mmr-github`    : `subagent-activation.ts` validates librarian-owned tools.
  *
  * Target: invert these so siblings register into core, leaving the set empty.
  */
 export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([
   "mmr-web",
-  "mmr-subagents",
+  "mmr-custom-subagents",
   "mmr-github",
 ]);
 

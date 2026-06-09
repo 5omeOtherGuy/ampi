@@ -8,8 +8,8 @@ import { createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
 
-const CUSTOM_RUNTIME_MODULE = "extensions/mmr-subagents/custom-runtime.ts";
-const CUSTOM_LOADER_MODULE = "extensions/mmr-subagents/custom-loader.ts";
+const CUSTOM_RUNTIME_MODULE = "extensions/mmr-custom-subagents/custom-runtime.ts";
+const CUSTOM_LOADER_MODULE = "extensions/mmr-custom-subagents/custom-loader.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 
@@ -90,12 +90,12 @@ describe("mmr-subagents custom Markdown runtime", () => {
         }),
       );
 
-      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
       const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
       const { getMmrSubagentPromptBuilder } = await importSource(PROMPT_ASSEMBLY_MODULE);
       const { pi, tools } = createMockPi({ activeTools: ["read", "bash"], allTools: ["read", "bash"] });
 
-      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
 
       const { MMR_SUBAGENT_SHARED_DENY_TOOLS } = await importSource("extensions/mmr-core/subagent-tool-policy.ts");
       const profile = getMmrSubagentProfile("sa__repo_reviewer");
@@ -124,10 +124,10 @@ describe("mmr-subagents custom Markdown runtime", () => {
           deeponly: { enabled: true, source: { root: "project", file: "deeponly.md" }, toolName: "sa__deep_only", modes: ["deep"], tools: ["read"] },
         } } } }),
       );
-      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
       const { resolveMmrModeExtraTools } = await importSource("extensions/mmr-core/runtime.ts");
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
-      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
 
       assert.ok(tools.has("sa__deep_only"), "registered regardless of mode");
       assert.deepEqual(resolveMmrModeExtraTools("deep", root), ["sa__deep_only"]);
@@ -163,9 +163,9 @@ describe("mmr-subagents custom Markdown runtime", () => {
           evil: { enabled: true, source: { root: "project", file: "evil.md" }, toolName: "sa__evil", modes: ["deep"], tools: ["read"] },
         } } } }),
       );
-      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
-      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
       assert.ok(!tools.has("sa__evil"), "a symlinked source escaping the root is refused");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -193,9 +193,9 @@ describe("mmr-subagents custom Markdown runtime", () => {
           linked: { enabled: true, source: { root: "project", file: "linked.md" }, toolName: "sa__linked_root", modes: ["deep"], tools: ["read"] },
         } } } }),
       );
-      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
-      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
       assert.ok(!tools.has("sa__linked_root"), "a symlinked Pi-owned source root is refused");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -211,9 +211,9 @@ describe("mmr-subagents custom Markdown runtime", () => {
         path.join(piAgents, "manual.md"),
         ["---", "name: Manual Drop", "description: Manually dropped, not enabled.", "---", "Body."].join("\n"),
       );
-      const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+      const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
-      createMmrSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
+      createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
       assert.ok(!tools.has("sa__manual_drop"), "a manual drop-in is a candidate, not a registered tool");
     } finally {
       rmSync(root, { recursive: true, force: true });

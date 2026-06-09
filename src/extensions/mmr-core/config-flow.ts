@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { runMmrWebConfigFlow } from "../mmr-web/config-flow.js";
-import { runMmrSubagentsConfigFlow } from "../mmr-subagents/config-flow.js";
+import { runMmrCustomSubagentsConfigFlow } from "../mmr-custom-subagents/config-flow.js";
 import { getProjectMmrSettingsPath, writeMmrCoreConfigFile, type MmrConfigUpdate } from "./config-writer.js";
 import { MMR_MODE_KEYS, getMmrMode, isMmrModeKey } from "./modes.js";
 import { isThinkingLevel, loadMmrCoreSettings } from "./settings.js";
@@ -156,7 +156,7 @@ export async function runMmrConfigFlow(
   }
 
   if (targetChoice === "subagent (setup/import custom)") {
-    await runMmrSubagentsConfigFlow(ctx, bindings.getAvailableTools ? { getAvailableTools: bindings.getAvailableTools } : {});
+    await runMmrCustomSubagentsConfigFlow(ctx, bindings.getAvailableTools ? { getAvailableTools: bindings.getAvailableTools } : {});
     return;
   }
 
