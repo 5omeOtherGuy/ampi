@@ -223,17 +223,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
  * asserts core imports no sibling OUTSIDE this set, so new couplings fail while
  * these documented ones are driven to zero by later chunks:
  *
- *  - `mmr-web`       : `config-flow.ts` dispatches into the web config flow.
- *  - `mmr-custom-subagents` : `config-flow.ts` dispatches into the custom subagents config flow.
+ * The set is now empty: `mmr-core` imports no sibling extension. Sibling
+ * extensions invert the former couplings by registering into core-owned
+ * registries instead:
+ *  - `/mmr-config` sections   -> `registerMmrConfigFlowSection` (was direct
+ *    imports of `mmr-web`/`mmr-custom-subagents` config flows).
+ *  - subagent owned-tool gates -> `registerMmrOwnedToolSourcePath` +
+ *    profile `requiredOwnedTools` (was a direct import of `mmr-github`).
  *
- * Target: invert these so siblings register into core, leaving the set empty.
- * (`mmr-github` was removed once `subagent-activation.ts` switched to the
- * generic owner-scoped owned-tools registry for librarian gating.)
+ * Keep it empty: the architecture guardrail test fails if any `mmr-core`
+ * module imports a sibling extension that is not listed here.
  */
-export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([
-  "mmr-web",
-  "mmr-custom-subagents",
-]);
+export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([]);
 
 /** Convenience: the set of canonical extension directory names. */
 export function getMmrExtensionNames(): readonly string[] {
