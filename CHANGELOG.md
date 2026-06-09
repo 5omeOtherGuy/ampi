@@ -6,6 +6,18 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Added
+
+- `mmr-core`: added a declarative extension capability manifest
+  (`src/extensions/manifest.ts`) describing every `pi-mmr` extension's
+  entrypoint, public export subpath, owned tools, feature gates, risk class, and
+  subagent child role, plus architecture guardrail tests
+  (`tests/mmr-architecture-manifest.test.mjs`) that keep the manifest consistent
+  with `package.json` `pi.extensions`/`exports`, the on-disk extension layout,
+  the subagent child keep-set, and the planned-tool catalog, and that fail when
+  `mmr-core` gains a new sibling-extension import outside the recorded exception
+  set. Internal contributor guardrail; no user-facing behavior change.
+
 ### Changed
 
 - `mmr-subagents` / `mmr-toolbox`: the background-task progress surface no longer
