@@ -69,7 +69,7 @@ async function makeReadSessionTool({ settings = {}, runner, sessions, manager, l
   const activeManager = manager ?? await makeManager();
   const activeSessions = sessions ?? [sessionInfo({ id: activeManager.getSessionId(), messageCount: 2 })];
   const deps = {
-    getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000, ...settings }),
+    getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000, redactionEnabled: false, packetByteBudget: 512_000, ...settings }),
     listSessions: async () => activeSessions,
     openSession: () => activeManager,
   };
@@ -88,15 +88,45 @@ beforeEach(async () => {
 });
 
 describe("mmr-history settings (single gate)", () => {
-  it("loadMmrHistorySettings only honors MMR_HISTORY_ENABLE", async () => {
+  it("loadMmrHistorySettings only honors MMR_HISTORY_ENABLE as the tool gate", async () => {
     const { loadMmrHistorySettings } = await importSource("extensions/mmr-history/config.ts");
     assert.deepEqual(
       loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true" }),
-      { enabled: true, maxResults: 10, maxExcerptBytes: 24_000 },
+      { enabled: true, maxResults: 10, maxExcerptBytes: 24_000, redactionEnabled: false, packetByteBudget: 512_000 },
     );
     assert.equal(loadMmrHistorySettings({}).enabled, false);
     // The old second gate must not silently re-enter the settings shape.
     assert.equal(Object.hasOwn(loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true" }), "modelAnalysisEnabled"), false);
+  });
+
+  it("CONTENT redaction is opt-in: default OFF, MMR_HISTORY_REDACT turns it ON", async () => {
+    const { loadMmrHistorySettings } = await importSource("extensions/mmr-history/config.ts");
+    // Default (unset) => raw content for the local same-user case.
+    assert.equal(loadMmrHistorySettings({}).redactionEnabled, false);
+    assert.equal(loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true" }).redactionEnabled, false);
+    // Explicit opt-in.
+    assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "true" }).redactionEnabled, true);
+    assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "1" }).redactionEnabled, true);
+    assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "false" }).redactionEnabled, false);
+  });
+
+  it("MMR_HISTORY_PACKET_BYTE_BUDGET overrides the default and is capped at the ceiling", async () => {
+    const { loadMmrHistorySettings, MAX_MMR_HISTORY_PACKET_BYTE_BUDGET } = await importSource("extensions/mmr-history/config.ts");
+    // A modest override is honored verbatim.
+    assert.equal(
+      loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true", MMR_HISTORY_PACKET_BYTE_BUDGET: "123456" }).packetByteBudget,
+      123_456,
+    );
+    // Over-the-ceiling requests clamp to the ceiling.
+    assert.equal(
+      loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true", MMR_HISTORY_PACKET_BYTE_BUDGET: "99999999" }).packetByteBudget,
+      MAX_MMR_HISTORY_PACKET_BYTE_BUDGET,
+    );
+    // Garbage / non-positive falls back to the liberal default.
+    assert.equal(
+      loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true", MMR_HISTORY_PACKET_BYTE_BUDGET: "-5" }).packetByteBudget,
+      512_000,
+    );
   });
 
   it("the legacy MMR_HISTORY_MODEL_ANALYSIS_ENABLE env constant is no longer exported", async () => {
@@ -322,7 +352,7 @@ describe("mmr-history worker packet redaction", () => {
       },
     ]);
 
-    const packet = buildHistoryReaderSessionPacket(info, manager, "auth decision", { maxBytes: 16_000 });
+    const packet = buildHistoryReaderSessionPacket(info, manager, "auth decision", { maxBytes: 16_000, redactionEnabled: true });
     const json = JSON.stringify(packet);
 
     // Shape: scope + projectRef replaced the legacy currentProjectOnly flag.
@@ -433,6 +463,7 @@ describe("mmr-history leaving-string redaction (additional)", () => {
       }),
     ];
     const { tool } = await makeReadSessionTool({
+      settings: { redactionEnabled: true },
       runner: { async run() { return makeWorkerResult({ finalOutput: "ok" }); } },
       sessions,
       manager,
@@ -509,7 +540,7 @@ describe("mmr-history leaving-string redaction (additional)", () => {
     });
 
     const info = sessionInfo({ id: manager.getSessionId(), messageCount: 2, cwd: "/repo/private-project" });
-    const packet = buildHistoryReaderSessionPacket(info, manager, "check touched files", { maxBytes: 16_000 });
+    const packet = buildHistoryReaderSessionPacket(info, manager, "check touched files", { maxBytes: 16_000, redactionEnabled: true });
 
     assert.ok(packet.touchedFiles.length > 0, "packet must include the structured tool call's touched file");
     for (const entry of packet.touchedFiles) {
@@ -522,9 +553,248 @@ describe("mmr-history leaving-string redaction (additional)", () => {
   });
 });
 
+describe("mmr-history opt-in content redaction (default OFF)", () => {
+  const SENSITIVE = [
+    "open /home/someuser/projects/private-project/src/Auth.ts",
+    "JINA_API_KEY=jina_AAAAAAAAAAAAAAAAAAAA in env",
+  ].join("\n");
+
+  it("buildHistoryReaderSessionPacket leaves content RAW by default (redactionEnabled omitted => product opt-in is OFF at the tools seam)", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-raw", cwd: "/home/someuser/projects/private-project" });
+    const manager = await makeManager([
+      { role: "user", content: SENSITIVE },
+      { role: "assistant", content: "ack" },
+    ]);
+
+    // Explicitly false: this is the product default the tools seam passes.
+    const packet = buildHistoryReaderSessionPacket(info, manager, "recover /home/someuser/notes", { maxBytes: 16_000, redactionEnabled: false });
+    const json = JSON.stringify(packet);
+
+    // Raw artifacts the user asked to recover survive verbatim.
+    assert.ok(json.includes("/home/someuser/projects/private-project/src/Auth.ts"), `raw path must survive when redaction is OFF: ${json}`);
+    assert.ok(json.includes("jina_AAAAAAAAAAAAAAAAAAAA"), "raw token must survive when redaction is OFF");
+    assert.ok(packet.goal.includes("/home/someuser/notes"), "raw goal must survive when redaction is OFF");
+    // No content markers leaked in.
+    for (const marker of ["[home]", "[token]", "[abs-path]"]) {
+      assert.ok(!json.includes(marker), `no content marker expected when redaction is OFF: ${marker}`);
+    }
+    // projectRef hashing stays ALWAYS on.
+    assert.match(packet.projectRef, /^[0-9a-f]{8}$/);
+    assert.ok(!json.includes("/home/someuser/projects/private-project\""), "raw cwd must never be surfaced as projectRef");
+  });
+
+  it("buildHistoryReaderSessionPacket redacts content when opted in, and projectRef is identical in both modes", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-toggle", cwd: "/home/someuser/projects/private-project" });
+    const rawManager = await makeManager([{ role: "user", content: SENSITIVE }, { role: "assistant", content: "ack" }]);
+    const redManager = await makeManager([{ role: "user", content: SENSITIVE }, { role: "assistant", content: "ack" }]);
+
+    const raw = buildHistoryReaderSessionPacket(info, rawManager, "goal", { maxBytes: 16_000, redactionEnabled: false });
+    const redacted = buildHistoryReaderSessionPacket(info, redManager, "goal", { maxBytes: 16_000, redactionEnabled: true });
+    const redJson = JSON.stringify(redacted);
+
+    assert.ok(!redJson.includes("jina_AAAAAAAAAAAAAAAAAAAA"), "token must be redacted when opted in");
+    assert.ok(!redJson.includes("/home/someuser"), "home path must be redacted when opted in");
+    assert.ok(redJson.includes("[token]"), "token marker must appear when opted in");
+    assert.ok(redJson.includes("[home]"), "home marker must appear when opted in");
+
+    // projectRef is a stable hash of cwd, never gated by the toggle.
+    assert.equal(raw.projectRef, redacted.projectRef);
+    assert.match(raw.projectRef, /^[0-9a-f]{8}$/);
+  });
+
+  it("read_session lexical fallback returns RAW excerpts under default settings (redaction opt-in OFF)", async () => {
+    const { tool, sessions } = await makeReadSessionTool({
+      // default settings: redactionEnabled is unset => false (raw).
+      runner: { async run() { return makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "" }); } },
+      manager: await makeManager([
+        { role: "user", content: "TOKEN=hunter2 and please open /home/alice/secret.ts" },
+        { role: "assistant", content: "ack" },
+      ]),
+    });
+
+    const result = await tool.execute("call", { sessionId: sessions[0].id, goal: "secret token" }, undefined, undefined, {
+      cwd: "/repo/private-project",
+      modelRegistry: makeModelRegistry([["openai-codex", "gpt-5.4-mini"]]),
+    });
+
+    assert.equal(result.details.analysisUsed, "lexical");
+    const text = result.content[0].text;
+    assert.ok(text.includes("hunter2"), `raw token must survive lexical read when redaction is OFF: ${text}`);
+    assert.ok(text.includes("/home/alice/secret.ts"), `raw path must survive lexical read when redaction is OFF: ${text}`);
+    // projectRef hashing is still applied.
+    assert.match(result.details.projectRef, /^[0-9a-f]{8}$/);
+  });
+});
+
+describe("mmr-history worker packet budget-driven selection", () => {
+  function fakeManagerWithEntries(count, { textFor, context = true } = {}) {
+    const entries = [];
+    for (let i = 0; i < count; i++) {
+      const tag = String(i).padStart(4, "0");
+      entries.push({
+        type: "message",
+        id: `m${tag}`,
+        parentId: i === 0 ? null : `m${String(i - 1).padStart(4, "0")}`,
+        timestamp: `2026-05-20T00:00:${tag.slice(-2)}.000Z`,
+        message: { role: i % 2 === 0 ? "user" : "assistant", content: textFor ? textFor(i, tag) : `ENTRY-${tag} content` },
+      });
+    }
+    return {
+      getEntries: () => entries,
+      buildSessionContext: () => ({ messages: context ? entries.map((e) => e.message) : [] }),
+    };
+  }
+
+  it("preserves far more than the old 40/80 caps under the liberal default budget", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-large", cwd: "/repo/private-project" });
+    const manager = fakeManagerWithEntries(300);
+
+    // Default budget (no maxBytes override): liberal, large-context sizing.
+    const packet = buildHistoryReaderSessionPacket(info, manager, "survey the whole session");
+
+    assert.equal(packet.truncated, false, "a 300-entry small-text session fits under the default budget");
+    assert.ok(packet.entries.length >= 300, `expected all 300 entries, got ${packet.entries.length}`);
+    assert.ok(packet.contextMessages.length >= 250, `expected far more than 40 context messages, got ${packet.contextMessages.length}`);
+    // Both the earliest and most recent entries are present — nothing was lost head- or tail-first.
+    const texts = packet.entries.map((e) => e.text);
+    assert.ok(texts.some((t) => t.includes("ENTRY-0000")), "earliest entry must survive");
+    assert.ok(texts.some((t) => t.includes("ENTRY-0299")), "most recent entry must survive");
+  });
+
+  it("keeps both early and recent content when over budget (balanced, not tail-first loss)", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-overflow", cwd: "/repo/private-project" });
+    // Isolate entry selection: empty context so the budget governs entries.
+    const manager = fakeManagerWithEntries(200, { context: false });
+
+    // Small budget forces dropping, but the middle-drop strategy keeps the ends.
+    const packet = buildHistoryReaderSessionPacket(info, manager, "goal", { maxBytes: 8_000 });
+
+    assert.equal(packet.truncated, true, "an over-budget packet must report truncation");
+    assert.ok(packet.entries.length < 200, "some entries must be dropped");
+    assert.ok(packet.entries.length >= 3, "the budget should still preserve a head+tail subset");
+    const texts = packet.entries.map((e) => e.text);
+    assert.ok(texts.some((t) => t.includes("ENTRY-0000")), "earliest entry must survive over-budget trimming");
+    assert.ok(texts.some((t) => t.includes("ENTRY-0199")), "most recent entry must survive over-budget trimming");
+    // Proof it is not pure tail loss: a middle entry was the one dropped.
+    assert.ok(!texts.some((t) => t.includes("ENTRY-0100")), "a middle entry should be dropped first");
+  });
+
+  it("shrinks the largest fields before dropping entries when over budget", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-bigfields", cwd: "/repo/private-project" });
+    // A handful of entries, each with a very large text field.
+    const manager = fakeManagerWithEntries(6, { textFor: (i, tag) => `ENTRY-${tag} ` + "x".repeat(20_000) });
+
+    const packet = buildHistoryReaderSessionPacket(info, manager, "goal", { maxBytes: 20_000 });
+
+    assert.equal(packet.truncated, true);
+    // All entries still present (none dropped) because field-shrink reclaimed enough bytes.
+    assert.equal(packet.entries.length, 6, "field shrink should run before entry drops");
+    for (const entry of packet.entries) {
+      assert.ok(entry.text.length < 20_000, "large fields must be shrunk under budget pressure");
+    }
+  });
+});
+
+describe("mmr-history packet tool-call / tool-result fidelity", () => {
+  // Fabricated manager: only getEntries() and buildSessionContext() are
+  // read by buildHistoryReaderSessionPacket / readSessionForGoal. Carries
+  // an assistant tool call (bash with a SQL query), an apply_patch diff,
+  // a tool result with command output, and a bashExecution with output.
+  function toolActivityManager() {
+    const assistant = {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Running the lookup." },
+        { type: "toolCall", id: "tc1", name: "bash", arguments: { command: "SELECT id FROM users WHERE active = 1" } },
+        { type: "toolCall", id: "tc2", name: "apply_patch", arguments: { patchText: "*** Update File: src/fix.ts\n-old\n+new-line-marker" } },
+      ],
+    };
+    const toolResult = {
+      role: "toolResult",
+      toolCallId: "tc1",
+      toolName: "bash",
+      content: [{ type: "text", text: "id\n42\nstdout-result-marker" }],
+      isError: false,
+    };
+    const bashExecution = {
+      role: "bashExecution",
+      command: "npm run build-step",
+      output: "compiled bash-output-marker",
+      exitCode: 0,
+      cancelled: false,
+      truncated: false,
+    };
+    const entries = [
+      { type: "message", id: "m1", parentId: null, timestamp: "2026-05-20T00:00:00.000Z", message: { role: "user", content: "run the lookup" } },
+      { type: "message", id: "m2", parentId: "m1", timestamp: "2026-05-20T00:01:00.000Z", message: assistant },
+      { type: "message", id: "m3", parentId: "m2", timestamp: "2026-05-20T00:02:00.000Z", message: toolResult },
+      { type: "message", id: "m4", parentId: "m3", timestamp: "2026-05-20T00:03:00.000Z", message: bashExecution },
+    ];
+    return {
+      getEntries: () => entries,
+      buildSessionContext: () => ({ messages: [assistant, toolResult] }),
+    };
+  }
+
+  it("includes assistant tool-call name+arguments and tool-result output in the built packet", async () => {
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const info = sessionInfo({ id: "S-tools", cwd: "/repo/private-project" });
+    const packet = buildHistoryReaderSessionPacket(info, toolActivityManager(), "recover query and diff", { maxBytes: 32_000 });
+
+    const toolCalls = packet.entries.flatMap((e) => e.toolCalls ?? []);
+    const bashCall = toolCalls.find((c) => c.name === "bash");
+    const patchCall = toolCalls.find((c) => c.name === "apply_patch");
+    assert.ok(bashCall, "packet entries must surface the bash tool call");
+    assert.match(bashCall.args, /SELECT id FROM users WHERE active = 1/);
+    assert.ok(patchCall, "packet entries must surface the apply_patch tool call");
+    assert.match(patchCall.args, /Update File: src\/fix\.ts/);
+    assert.match(patchCall.args, /new-line-marker/);
+
+    const toolResults = packet.entries.flatMap((e) => (e.toolResult ? [e.toolResult] : []));
+    assert.ok(
+      toolResults.some((r) => r.name === "bash" && /stdout-result-marker/.test(r.text)),
+      "packet entries must surface the bash tool-result output",
+    );
+    // bashExecution: command kept as text, output carried as a synthetic bash result.
+    assert.ok(
+      packet.entries.some((e) => /npm run build-step/.test(e.text) && e.toolResult && /bash-output-marker/.test(e.toolResult.text)),
+      "packet must surface bashExecution command text and captured output",
+    );
+
+    // Context messages mirror the same tool fidelity.
+    const ctxCalls = packet.contextMessages.flatMap((m) => m.toolCalls ?? []);
+    assert.ok(ctxCalls.some((c) => c.name === "bash" && /SELECT id FROM users/.test(c.args)));
+    assert.ok(packet.contextMessages.some((m) => m.toolResult && /stdout-result-marker/.test(m.toolResult.text)));
+  });
+
+  it("surfaces tool-call args and tool-result output in the lexical fallback excerpts", async () => {
+    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const info = sessionInfo({ id: "S-tools", cwd: "/repo/private-project" });
+    // Each goal token matches a distinct tool-activity excerpt so the
+    // term-filtered selection keeps the assistant call, the tool result,
+    // and the bashExecution rows.
+    const result = readSessionForGoal(info, toolActivityManager(), "select stdout-result-marker build-step bash-output-marker", 32_000);
+
+    const joined = result.excerpts.map((e) => e.text).join("\n");
+    assert.match(joined, /SELECT id FROM users WHERE active = 1/);
+    assert.match(joined, /stdout-result-marker/);
+    assert.match(joined, /npm run build-step/);
+    assert.match(joined, /bash-output-marker/);
+    // Lexical term matching now reaches into tool activity.
+    assert.ok(result.matchedTerms.includes("select"));
+    assert.ok(result.matchedTerms.includes("stdout-result-marker"));
+  });
+});
+
 describe("mmr-history lexical fallback redaction", () => {
   it("lexical excerpts strip secrets and home paths", async () => {
     const { tool, sessions } = await makeReadSessionTool({
+      settings: { redactionEnabled: true },
       runner: { async run() { return makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "" }); } },
       manager: await makeManager([
         { role: "user", content: "TOKEN=hunter2 and please open /home/alice/secret.ts" },

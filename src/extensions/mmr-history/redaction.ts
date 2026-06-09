@@ -318,6 +318,22 @@ export function redactText(input: string, opts?: RedactOptions): string {
   return out;
 }
 
+/**
+ * Conditionally apply {@link redactText}. The single seam used by the
+ * `mmr-history` read/find surface to honor the opt-in `redactionEnabled`
+ * setting: when `enabled` is `true` the input is redacted; when `false`
+ * the raw input is returned verbatim. Centralizing the branch here keeps
+ * call sites from each duplicating an `if`. Returns the input unchanged
+ * for non-strings and empty strings (same contract as `redactText`).
+ *
+ * This gates CONTENT redaction only. Callers that must always redact
+ * (error/fallback strings) or always hash (`projectRefFromCwd`) call
+ * those helpers directly, not through `maybeRedact`.
+ */
+export function maybeRedact(input: string, enabled: boolean, opts?: RedactOptions): string {
+  return enabled ? redactText(input, opts) : input;
+}
+
 /** Remove trailing `/` characters without an unanchored-quantifier regex. */
 function stripTrailingSlashes(value: string): string {
   let end = value.length;

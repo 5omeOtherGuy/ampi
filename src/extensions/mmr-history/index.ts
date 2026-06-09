@@ -26,7 +26,7 @@ export function createMmrHistoryExtension(overrides: MmrHistoryFactoryOverrides 
     pi.on("session_start", async (_event, ctx) => {
       if (!settings.enabled) return undefined;
       ctx.ui.notify(
-        "mmr-history enabled: global local Pi session lookup is on; read_session uses the model-backed history-reader subagent with redacted packets and a deterministic lexical fallback.",
+        "mmr-history enabled: global local Pi session lookup is on; read_session sends a tool-activity-rich packet to the model-backed history-reader subagent (content raw by default; set MMR_HISTORY_REDACT=true to redact) with a deterministic lexical fallback.",
         "info",
       );
       return undefined;
