@@ -11,17 +11,53 @@ import {
   type MmrSubagentWorkerDetailsBase,
   type MmrSubagentWorkerRunResult,
 } from "../mmr-subagents/runner.js";
-import { projectRefFromCwd, redactText } from "./redaction.js";
+import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
 import { extractTouchedFilesFromEntries } from "./session-index.js";
 
 export const HISTORY_READER_SUBAGENT_PROFILE = "history-reader";
-export const DEFAULT_HISTORY_READER_PACKET_BYTE_LIMIT = 48_000;
+// The history-reader subagent runs on a large-context extraction model, so the
+// packet budget is sized to preserve far more of the session than the legacy
+// 48KB cap. 512KB of sanitized JSON is roughly 100-150K tokens — comfortably
+// within a large-context model's window while leaving headroom for the system
+// prompt and the worker's own output. The byte budget (not a fixed message
+// count) drives selection so the packet degrades gracefully as entries grow
+// larger or more numerous, including the tool-call/tool-result content below.
+export const DEFAULT_HISTORY_READER_PACKET_BYTE_LIMIT = 512_000;
+// Per-field char cap applied as content is collected, before budget-driven
+// trimming. Liberal by default; the trimming pass shrinks the largest fields
+// toward MIN_* only when the packet exceeds its byte budget.
+export const DEFAULT_HISTORY_READER_PACKET_FIELD_CHARS = 16_000;
+const MIN_HISTORY_READER_PACKET_FIELD_CHARS = 200;
 
 export type HistoryAnalysisMode = "lexical" | "worker";
+
+/**
+ * One assistant tool call rendered for the packet: the tool name plus a
+ * bounded rendering of its arguments. `args` carries artifact-bearing
+ * payloads such as `apply_patch` diffs, `write` content, or shell commands
+ * so the extraction model can recover them.
+ */
+export interface SanitizedHistoryPacketToolCall {
+  name: string;
+  args?: string;
+}
+
+/**
+ * One tool result rendered for the packet: the producing tool name, its
+ * error flag, and the bounded output text (bash stdout/stderr, file
+ * contents, command output).
+ */
+export interface SanitizedHistoryPacketToolResult {
+  name?: string;
+  isError?: boolean;
+  text: string;
+}
 
 export interface SanitizedHistoryPacketMessage {
   role?: string;
   text: string;
+  toolCalls?: SanitizedHistoryPacketToolCall[];
+  toolResult?: SanitizedHistoryPacketToolResult;
 }
 
 export interface SanitizedHistoryPacketEntry {
@@ -29,6 +65,8 @@ export interface SanitizedHistoryPacketEntry {
   role?: string;
   timestamp?: string;
   text: string;
+  toolCalls?: SanitizedHistoryPacketToolCall[];
+  toolResult?: SanitizedHistoryPacketToolResult;
 }
 
 export interface SanitizedHistoryReaderSessionPacket {
@@ -36,8 +74,9 @@ export interface SanitizedHistoryReaderSessionPacket {
   /**
    * Scope marker. The catalog enumerates every local `~/.pi/agent/sessions/<cwd>`
    * directory, so a single packet may describe a session from a project
-   * unrelated to the active workspace. All string fields are deterministically
-   * redacted before the packet leaves the local process.
+   * unrelated to the active workspace. String fields are deterministically
+   * redacted before the packet leaves the local process only when content
+   * redaction is opted in (MMR_HISTORY_REDACT); by default content is raw.
    */
   scope: "all_sessions";
   /** Opaque 8-char hex ref for the session's project cwd. Never the raw cwd. */
@@ -82,6 +121,14 @@ export interface RunHistoryReaderAnalysisInput {
   loadCoreSettings?: (cwd: string) => Pick<LoadedMmrCoreSettings, "settings">;
   packetByteLimit?: number;
   outputByteLimit?: number;
+  /**
+   * Whether session CONTENT is redacted before assembly. Threaded from
+   * the `redactionEnabled` setting at the tools seam. Default OFF
+   * (opt-in) means raw content reaches the packet. Omitted by direct
+   * callers/tests defaults to redacting (safe), since the product opt-in
+   * is enforced explicitly at the tools layer.
+   */
+  redactionEnabled?: boolean;
 }
 
 function requireHistoryReaderProfile() {
@@ -193,13 +240,34 @@ function compact(value: string): string {
 }
 
 /**
- * Apply the deterministic redaction sanitizer to a string field of the
- * packet, then compact whitespace and truncate to `maxChars`. Truncation
- * happens after redaction so a marker insertion can never push the raw
- * value past the cap silently.
+ * Mutable state threaded through packet assembly so the initial per-field
+ * char cap is reflected in `packet.truncated`. Without this, a field clipped
+ * at `maxChars` during collection would not flip the flag if the assembled
+ * packet still fit under the byte budget.
  */
-function boundedText(value: string, _info: SessionInfo, maxChars = 2_000): string {
-  return compact(redactText(value)).slice(0, maxChars);
+interface PacketBuildState {
+  truncated: boolean;
+}
+
+/**
+ * Optionally apply the deterministic redaction sanitizer to a string
+ * field of the packet, then compact whitespace and truncate to
+ * `maxChars`. Truncation happens after redaction so a marker insertion
+ * can never push the raw value past the cap silently. `redactionEnabled`
+ * is the opt-in CONTENT toggle: when `false` the raw value is compacted
+ * and bounded but not rewritten. When a field is clipped at `maxChars`,
+ * `state.truncated` is set so the packet honestly reports content loss.
+ */
+function boundedText(
+  value: string,
+  _info: SessionInfo,
+  redactionEnabled: boolean,
+  maxChars = DEFAULT_HISTORY_READER_PACKET_FIELD_CHARS,
+  state?: PacketBuildState,
+): string {
+  const text = compact(maybeRedact(value, redactionEnabled));
+  if (state && text.length > maxChars) state.truncated = true;
+  return text.slice(0, maxChars);
 }
 
 function agentMessageRole(message: unknown): string | undefined {
@@ -236,29 +304,148 @@ function entryText(entry: SessionEntry): string {
   return "";
 }
 
-function makeContextMessages(info: SessionInfo, manager: SessionManager): SanitizedHistoryPacketMessage[] {
+/**
+ * Render a tool call's arguments to a single string before bounding/redaction.
+ * Strings pass through verbatim; objects are JSON-serialized so structured
+ * payloads (patch text, write content, query strings) survive as readable text.
+ */
+function renderToolArguments(args: unknown): string {
+  if (args === undefined || args === null) return "";
+  if (typeof args === "string") return args;
+  try {
+    return JSON.stringify(args);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Extract the assistant tool-call content blocks from a message using the same
+ * `blockRecord.type === "toolCall"` shape detection as `session-index.ts`.
+ * Each call's name and rendered arguments are routed through `boundedText`.
+ */
+function extractToolCalls(
+  message: unknown,
+  info: SessionInfo,
+  redactionEnabled: boolean,
+  maxFieldChars: number,
+  state: PacketBuildState,
+): SanitizedHistoryPacketToolCall[] {
+  if (!message || typeof message !== "object") return [];
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  const calls: SanitizedHistoryPacketToolCall[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const record = block as { type?: unknown; name?: unknown; arguments?: unknown };
+    if (record.type !== "toolCall") continue;
+    const name = typeof record.name === "string" ? record.name : "";
+    if (!name) continue;
+    const call: SanitizedHistoryPacketToolCall = { name: boundedText(name, info, redactionEnabled, 200, state) };
+    const args = boundedText(renderToolArguments(record.arguments), info, redactionEnabled, maxFieldChars, state);
+    if (args) call.args = args;
+    calls.push(call);
+  }
+  return calls;
+}
+
+/**
+ * The text, tool calls, and tool result a single message contributes to the
+ * packet. `toolResult` messages carry their output via `toolResult.text`
+ * (not `text`) to avoid duplicating the same content under both fields;
+ * `bashExecution` keeps its command as `text` and its captured output as
+ * a synthetic bash `toolResult`.
+ */
+interface MessagePacketParts {
+  text: string;
+  toolCalls: SanitizedHistoryPacketToolCall[];
+  toolResult?: SanitizedHistoryPacketToolResult;
+}
+
+function messagePacketParts(
+  message: unknown,
+  info: SessionInfo,
+  redactionEnabled: boolean,
+  maxFieldChars: number,
+  state: PacketBuildState,
+): MessagePacketParts {
+  const toolCalls = extractToolCalls(message, info, redactionEnabled, maxFieldChars, state);
+  const role = agentMessageRole(message);
+  if (role === "toolResult") {
+    const result: SanitizedHistoryPacketToolResult = {
+      text: boundedText(textFromContent((message as { content?: unknown }).content), info, redactionEnabled, maxFieldChars, state),
+    };
+    const toolName = (message as { toolName?: unknown }).toolName;
+    if (typeof toolName === "string" && toolName) result.name = boundedText(toolName, info, redactionEnabled, 200, state);
+    const isError = (message as { isError?: unknown }).isError;
+    if (typeof isError === "boolean") result.isError = isError;
+    return { text: "", toolCalls, toolResult: result };
+  }
+  if (role === "bashExecution") {
+    const command = (message as { command?: unknown }).command;
+    const text = typeof command === "string" ? boundedText(command, info, redactionEnabled, maxFieldChars, state) : "";
+    const output = (message as { output?: unknown }).output;
+    const outputText = typeof output === "string" ? boundedText(output, info, redactionEnabled, maxFieldChars, state) : "";
+    return outputText
+      ? { text, toolCalls, toolResult: { name: "bash", text: outputText } }
+      : { text, toolCalls };
+  }
+  return { text: boundedText(agentMessageText(message), info, redactionEnabled, maxFieldChars, state), toolCalls };
+}
+
+// Budget-driven selection: include every context message / allowlisted entry
+// and let the deterministic trimming pass shrink/drop them only if the packet
+// exceeds its byte budget, instead of a fixed head slice that drops recent
+// activity.
+function makeContextMessages(
+  info: SessionInfo,
+  manager: SessionManager,
+  redactionEnabled: boolean,
+  maxFieldChars: number,
+  state: PacketBuildState,
+): SanitizedHistoryPacketMessage[] {
   const messages: SanitizedHistoryPacketMessage[] = [];
-  for (const message of manager.buildSessionContext().messages.slice(0, 40)) {
-    const text = boundedText(agentMessageText(message), info);
-    if (!text) continue;
+  for (const message of manager.buildSessionContext().messages) {
+    const { text, toolCalls, toolResult } = messagePacketParts(message, info, redactionEnabled, maxFieldChars, state);
+    if (!text && toolCalls.length === 0 && !toolResult) continue;
     const role = agentMessageRole(message);
-    messages.push(role ? { role, text } : { text });
+    const record: SanitizedHistoryPacketMessage = role ? { role, text } : { text };
+    if (toolCalls.length > 0) record.toolCalls = toolCalls;
+    if (toolResult) record.toolResult = toolResult;
+    messages.push(record);
   }
   return messages;
 }
 
-function makeEntries(info: SessionInfo, manager: SessionManager): SanitizedHistoryPacketEntry[] {
+function makeEntries(
+  info: SessionInfo,
+  manager: SessionManager,
+  redactionEnabled: boolean,
+  maxFieldChars: number,
+  state: PacketBuildState,
+): SanitizedHistoryPacketEntry[] {
   const entries: SanitizedHistoryPacketEntry[] = [];
-  for (const entry of manager.getEntries().slice(0, 80)) {
+  for (const entry of manager.getEntries()) {
     if (!ALLOWED_ENTRY_TYPES.has(entry.type)) continue;
-    const text = boundedText(entryText(entry), info);
-    if (!text) continue;
+    let text: string;
+    let toolCalls: SanitizedHistoryPacketToolCall[] = [];
+    let toolResult: SanitizedHistoryPacketToolResult | undefined;
+    let role: string | undefined;
+    if (entry.type === "message") {
+      const parts = messagePacketParts(entry.message, info, redactionEnabled, maxFieldChars, state);
+      text = parts.text;
+      toolCalls = parts.toolCalls;
+      toolResult = parts.toolResult;
+      role = agentMessageRole(entry.message);
+    } else {
+      text = boundedText(entryText(entry), info, redactionEnabled, maxFieldChars, state);
+    }
+    if (!text && toolCalls.length === 0 && !toolResult) continue;
     const record: SanitizedHistoryPacketEntry = { type: entry.type, text };
     if (entry.timestamp) record.timestamp = entry.timestamp;
-    if (entry.type === "message") {
-      const role = agentMessageRole(entry.message);
-      if (role) record.role = role;
-    }
+    if (role) record.role = role;
+    if (toolCalls.length > 0) record.toolCalls = toolCalls;
+    if (toolResult) record.toolResult = toolResult;
     entries.push(record);
   }
   return entries;
@@ -268,46 +455,80 @@ function packetBytes(packet: SanitizedHistoryReaderSessionPacket): number {
   return Buffer.byteLength(JSON.stringify(packet), "utf8");
 }
 
-export function buildHistoryReaderSessionPacket(
-  info: SessionInfo,
-  manager: SessionManager,
-  goal: string,
-  options: { maxBytes?: number } = {},
-): SanitizedHistoryReaderSessionPacket {
-  const maxBytes = Math.max(1_000, Math.floor(options.maxBytes ?? DEFAULT_HISTORY_READER_PACKET_BYTE_LIMIT));
-  const entries = manager.getEntries();
-  const packet: SanitizedHistoryReaderSessionPacket = {
-    version: 1,
-    scope: "all_sessions",
-    projectRef: projectRefFromCwd(info.cwd || ""),
-    goal: boundedText(goal, info, 1_000),
-    session: {
-      id: info.id,
-      ...(info.name ? { name: boundedText(info.name, info, 200) } : {}),
-      createdAt: info.created.toISOString(),
-      modifiedAt: info.modified.toISOString(),
-      messageCount: info.messageCount,
-      firstMessage: boundedText(info.firstMessage, info, 1_000),
-    },
-    // Touched-file paths are normalized to lowercase POSIX cwd-relative
-    // form, but the path tail can still carry user-meaningful structure
-    // or repository-internal naming. Route each through the same
-    // deterministic redaction the rest of the packet uses before it
-    // leaves the local catalog.
-    touchedFiles: [...extractTouchedFilesFromEntries(entries, info.cwd || "")]
-      .map((path) => redactText(path))
-      .sort(),
-    contextMessages: makeContextMessages(info, manager),
-    entries: makeEntries(info, manager),
-    truncated: false,
-  };
+/**
+ * Remove the lowest-value element from a list while preserving both ends.
+ * The middle of a session is the least informative slice to drop: the
+ * earliest entries establish context/goal and the most recent entries carry
+ * current activity. Removing the median index repeatedly converges on a
+ * head+tail subset deterministically.
+ */
+function dropMiddle<T>(list: T[]): void {
+  if (list.length === 0) return;
+  list.splice(Math.floor((list.length - 1) / 2), 1);
+}
 
+/** Shrink one packet message/entry's large text fields to `cap`. */
+function shrinkRecordFields(
+  record: { text: string; toolCalls?: SanitizedHistoryPacketToolCall[]; toolResult?: SanitizedHistoryPacketToolResult },
+  cap: number,
+): boolean {
+  let shrank = false;
+  if (record.text.length > cap) {
+    record.text = record.text.slice(0, cap);
+    shrank = true;
+  }
+  if (record.toolResult && record.toolResult.text.length > cap) {
+    record.toolResult.text = record.toolResult.text.slice(0, cap);
+    shrank = true;
+  }
+  for (const call of record.toolCalls ?? []) {
+    if (call.args && call.args.length > cap) {
+      call.args = call.args.slice(0, cap);
+      shrank = true;
+    }
+  }
+  return shrank;
+}
+
+/**
+ * Deterministic, balanced trimming. Strategy, in order, each step only
+ * applied while still over budget:
+ *   1. Proportionally shrink the largest text fields — message/entry text,
+ *      tool-result output, and tool-call arguments — by repeatedly halving a
+ *      per-field char cap down to a floor, so no single field (including a
+ *      large diff or bash dump) dominates the packet.
+ *   2. Drop entries from the middle (see dropMiddle) so early context and
+ *      recent activity both survive instead of popping the tail head-first.
+ *   3. Drop context messages from the middle for the same reason.
+ *   4. Drop touched-file paths, then hard-truncate the goal/firstMessage
+ *      summary fields, as a last resort to honor the byte budget.
+ * Any reduction sets `truncated = true`.
+ */
+function trimPacketToBudget(
+  packet: SanitizedHistoryReaderSessionPacket,
+  maxBytes: number,
+  fieldChars: number,
+): void {
+  let fieldCap = fieldChars;
+  while (packetBytes(packet) > maxBytes && fieldCap > MIN_HISTORY_READER_PACKET_FIELD_CHARS) {
+    fieldCap = Math.max(MIN_HISTORY_READER_PACKET_FIELD_CHARS, Math.floor(fieldCap / 2));
+    for (const entry of packet.entries) {
+      if (shrinkRecordFields(entry, fieldCap)) packet.truncated = true;
+    }
+    for (const message of packet.contextMessages) {
+      if (shrinkRecordFields(message, fieldCap)) packet.truncated = true;
+    }
+  }
   while (packetBytes(packet) > maxBytes && packet.entries.length > 0) {
-    packet.entries.pop();
+    dropMiddle(packet.entries);
     packet.truncated = true;
   }
   while (packetBytes(packet) > maxBytes && packet.contextMessages.length > 0) {
-    packet.contextMessages.pop();
+    dropMiddle(packet.contextMessages);
+    packet.truncated = true;
+  }
+  while (packetBytes(packet) > maxBytes && packet.touchedFiles.length > 0) {
+    packet.touchedFiles.pop();
     packet.truncated = true;
   }
   if (packetBytes(packet) > maxBytes) {
@@ -315,6 +536,56 @@ export function buildHistoryReaderSessionPacket(
     packet.goal = packet.goal.slice(0, 200);
     packet.truncated = true;
   }
+}
+
+export function buildHistoryReaderSessionPacket(
+  info: SessionInfo,
+  manager: SessionManager,
+  goal: string,
+  options: { maxBytes?: number; maxFieldChars?: number; redactionEnabled?: boolean } = {},
+): SanitizedHistoryReaderSessionPacket {
+  const maxBytes = Math.max(1_000, Math.floor(options.maxBytes ?? DEFAULT_HISTORY_READER_PACKET_BYTE_LIMIT));
+  const maxFieldChars = Math.max(
+    MIN_HISTORY_READER_PACKET_FIELD_CHARS,
+    Math.floor(options.maxFieldChars ?? DEFAULT_HISTORY_READER_PACKET_FIELD_CHARS),
+  );
+  // Opt-in CONTENT redaction. Direct callers/tests that omit the flag
+  // default to redacting (safe); the product opt-in default (raw) is
+  // enforced by the tools seam passing the resolved setting explicitly.
+  const redactionEnabled = options.redactionEnabled ?? true;
+  // Tracks whether the initial per-field char cap clipped any field, so the
+  // packet reports truncation even when the assembled packet fits the budget.
+  const state: PacketBuildState = { truncated: false };
+  const entries = manager.getEntries();
+  const packet: SanitizedHistoryReaderSessionPacket = {
+    version: 1,
+    scope: "all_sessions",
+    // projectRef hashing is ALWAYS on, independent of the content toggle.
+    projectRef: projectRefFromCwd(info.cwd || ""),
+    goal: boundedText(goal, info, redactionEnabled, 1_000, state),
+    session: {
+      id: info.id,
+      ...(info.name ? { name: boundedText(info.name, info, redactionEnabled, 200, state) } : {}),
+      createdAt: info.created.toISOString(),
+      modifiedAt: info.modified.toISOString(),
+      messageCount: info.messageCount,
+      firstMessage: boundedText(info.firstMessage, info, redactionEnabled, 1_000, state),
+    },
+    // Touched-file paths are normalized to lowercase POSIX cwd-relative
+    // form, but the path tail can still carry user-meaningful structure
+    // or repository-internal naming. Route each through the same
+    // deterministic redaction the rest of the packet uses before it
+    // leaves the local catalog (only when content redaction is opted in).
+    touchedFiles: [...extractTouchedFilesFromEntries(entries, info.cwd || "")]
+      .map((path) => maybeRedact(path, redactionEnabled))
+      .sort(),
+    contextMessages: makeContextMessages(info, manager, redactionEnabled, maxFieldChars, state),
+    entries: makeEntries(info, manager, redactionEnabled, maxFieldChars, state),
+    truncated: false,
+  };
+  packet.truncated = state.truncated;
+
+  trimPacketToBudget(packet, maxBytes, maxFieldChars);
   return packet;
 }
 
@@ -424,7 +695,10 @@ export async function runHistoryReaderAnalysis(input: RunHistoryReaderAnalysisIn
     return failure(`Could not assemble history-reader system prompt: ${(error as Error).message}`);
   }
 
-  const packet = buildHistoryReaderSessionPacket(input.info, input.manager, input.goal, { maxBytes: input.packetByteLimit });
+  const packet = buildHistoryReaderSessionPacket(input.info, input.manager, input.goal, {
+    maxBytes: input.packetByteLimit,
+    redactionEnabled: input.redactionEnabled,
+  });
   const runner = input.runner ?? createChildCliMmrSubagentRunner();
   try {
     const result = await runner.run({

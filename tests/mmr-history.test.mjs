@@ -187,11 +187,11 @@ describe("mmr-history query parsing and catalog search", () => {
     assert.ok(term.includes("[home]"), `matchedTerms must carry redaction marker: ${term}`);
   });
 
-  it("find_session details.query is the redacted form, not the raw user query", async () => {
+  it("find_session details.query is the redacted form when redaction is opted in", async () => {
     const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
     const sessions = [sessionInfo({ id: "S-1", allMessagesText: "alice" })];
     const deps = {
-      getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000 }),
+      getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000, redactionEnabled: true }),
       listSessions: async () => sessions,
       openSession: () => { throw new Error("unused"); },
     };
@@ -202,6 +202,41 @@ describe("mmr-history query parsing and catalog search", () => {
     assert.ok(typeof result.details.query === "string");
     assert.ok(!result.details.query.includes("/home/alice"), `details.query must redact /home/<user>: ${result.details.query}`);
     assert.ok(result.details.query.includes("[home]"), `details.query must include redaction marker: ${result.details.query}`);
+  });
+
+  it("find_session keeps the RAW user query and raw match fields by default (redaction opt-in OFF), but still hashes projectRef", async () => {
+    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const sessions = [
+      sessionInfo({
+        id: "S-raw",
+        cwd: "/home/alice/projects/foo",
+        name: "Plan for /home/alice/secret",
+        firstMessage: "work in /home/alice/secret.ts here",
+        allMessagesText: "secret work in /home/alice/secret.ts",
+      }),
+    ];
+    const deps = {
+      // Product default settings: redaction opt-in OFF => raw.
+      getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000, redactionEnabled: false }),
+      listSessions: async () => sessions,
+      openSession: () => { throw new Error("unused"); },
+    };
+    const tool = createFindSessionTool(deps);
+
+    const result = await tool.execute("call", { query: "secret /home/alice/secret.ts" }, undefined, undefined, { cwd: "/repo" });
+
+    // Raw query preserved on both details + markdown.
+    assert.equal(result.details.query, "secret /home/alice/secret.ts");
+    assert.ok(result.content[0].text.includes("/home/alice/secret.ts"), "markdown must echo the raw query when redaction is OFF");
+    // Raw match fields survive.
+    const [match] = result.details.matches;
+    assert.ok(match.name.includes("/home/alice/secret"), `name must be raw when redaction is OFF: ${match.name}`);
+    assert.ok(match.firstMessage.includes("/home/alice/secret.ts"), "firstMessage must be raw when redaction is OFF");
+    // No content markers leaked in.
+    assert.ok(!JSON.stringify(result.details).includes("[home]"), "no [home] marker expected when redaction is OFF");
+    // projectRef hashing is ALWAYS on.
+    assert.match(match.projectRef, /^[0-9a-f]{8}$/);
+    assert.ok(!JSON.stringify(result.details).includes("/home/alice/projects/foo\""), "raw cwd must never be surfaced as projectRef");
   });
 
   it("redacts sensitive content in name / firstMessage / preview", async () => {
@@ -221,6 +256,31 @@ describe("mmr-history query parsing and catalog search", () => {
     assert.ok(!match.firstMessage.includes("alice"), `firstMessage must be redacted: ${match.firstMessage}`);
     assert.ok(!match.firstMessage.includes("hunter2"), `firstMessage must be redacted: ${match.firstMessage}`);
     assert.ok(!match.preview.includes("hunter2"), `preview must be redacted: ${match.preview}`);
+  });
+
+  it("searchSessions leaves match fields RAW when redactionEnabled:false, keeps them hashed-projectRef, and redacts when true", async () => {
+    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const sessions = [
+      sessionInfo({
+        id: "S-secret",
+        cwd: "/home/alice/projects/foo",
+        name: "Inspect /home/alice/projects/foo plan",
+        firstMessage: "please read /home/alice/secret.ts",
+        allMessagesText: "history search with /home/alice paths",
+      }),
+    ];
+
+    const [raw] = await searchSessions({ listSessions: async () => sessions }, "history", { limit: 10, redactionEnabled: false });
+    assert.ok(raw.name.includes("/home/alice/projects/foo"), `name must be raw when redaction is OFF: ${raw.name}`);
+    assert.ok(raw.firstMessage.includes("/home/alice/secret.ts"), "firstMessage must be raw when redaction is OFF");
+    assert.ok(!raw.name.includes("[home]"), "no marker expected when redaction is OFF");
+    assert.match(raw.projectRef, /^[0-9a-f]{8}$/);
+
+    const [redacted] = await searchSessions({ listSessions: async () => sessions }, "history", { limit: 10, redactionEnabled: true });
+    assert.ok(!redacted.name.includes("alice"), `name must be redacted when ON: ${redacted.name}`);
+    assert.ok(redacted.name.includes("[home]"), "marker expected when redaction is ON");
+    // projectRef is the same stable hash in both modes.
+    assert.equal(raw.projectRef, redacted.projectRef);
   });
 
   it("find_session.execute returns cross-project matches with deterministic redaction in both markdown and details", async () => {
@@ -252,7 +312,7 @@ describe("mmr-history query parsing and catalog search", () => {
       }),
     ];
     const deps = {
-      getSettings: () => ({ enabled: true, maxResults: 50, maxExcerptBytes: 4_000 }),
+      getSettings: () => ({ enabled: true, maxResults: 50, maxExcerptBytes: 4_000, redactionEnabled: true }),
       listSessions: async () => sessions,
       // find_session does not open sessions for keyword-only queries,
       // but the deps shape still requires an openSession entry. Return

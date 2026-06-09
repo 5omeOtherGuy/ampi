@@ -6,6 +6,39 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Changed
+
+- `mmr-history`: `read_session` / `find_session` content redaction is now
+  **opt-in** and OFF by default. For the local same-user case these tools exist
+  to recover the user's own artifacts (file paths, config values, identifiers),
+  so the deterministic `redactText` sanitizer no longer rewrites session
+  content, previews, goals, excerpts, queries, or match fields unless the
+  operator opts in. Set the new `MMR_HISTORY_REDACT` env var (parsed by the
+  shared `parseBoolEnv` helper into the new `redactionEnabled` setting; default
+  `false`) to a truthy value to restore the previous always-redacted behavior.
+  The toggle is read once at the tools seam and threaded down to packet assembly
+  and result formatting via a single `maybeRedact(text, enabled)` helper. Two
+  protections stay on regardless of the toggle: `projectRefFromCwd` always
+  hashes the project cwd (a raw cwd is never surfaced), and worker spawn/route
+  error and fallback-reason strings are always redacted because they are not
+  user-requested content. Covered by new opt-in cases in
+  `tests/mmr-history-worker-analysis.test.mjs` and `tests/mmr-history.test.mjs`;
+  `tests/mmr-history-redaction.test.mjs` continues to pin the unchanged
+  `redactText` unit behavior. Because content redaction is OFF by default and
+  the packet now also carries tool activity (below), operators who run the
+  history-reader against a remote model should set `MMR_HISTORY_REDACT=true`.
+- `mmr-history`: the `read_session` history-reader packet is sized for a
+  large-context extraction model. The default packet byte budget is raised from
+  48KB to 512KB, the per-field char cap from 2,000 to 16,000, and the fixed
+  40-message / 80-entry slices are removed in favor of budget-driven selection.
+  Over-budget trimming is deterministic and balanced: it first shrinks the
+  largest text fields (message/entry text, tool-result output, and tool-call
+  arguments), then drops entries and context messages from the middle, then
+  touched-file paths, so both early context and recent activity survive instead
+  of popping the tail head-first. The `truncated` flag now also reflects the
+  initial per-field cap, not just byte-budget trimming. Covered by
+  `tests/mmr-history-worker-analysis.test.mjs`.
+
 ### Added
 
 - `mmr-web`: `web_search` gains an optional `country` filter (ISO 3166-1
@@ -20,6 +53,23 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `tests/mmr-web-duckduckgo.test.mjs`, and `tests/mmr-web-tools.test.mjs`, with
   the model-visible schema/description refreshed in the
   `tests/fixtures/mmr-effective-surface/*.core+web.md` snapshots.
+- `mmr-history`: `read_session` now carries tool activity into the sanitized
+  history-reader packet and the lexical fallback. Assistant tool calls (tool
+  name plus a bounded rendering of arguments) and matching tool results (output
+  text including bash stdout/stderr, `apply_patch`/`edit` diffs, and
+  `bashExecution` command output) are surfaced as typed `toolCalls` and
+  `toolResult` fields on packet messages/entries, so the extraction model can
+  recover artifacts (SQL queries, fixes, scripts, command output, diffs) that
+  previously lived only in dropped tool activity. Every new string flows through
+  the same `boundedText` path (redacted only when content redaction is opted
+  in) and is counted by the packet byte budget. The lexical fallback folds the
+  same tool-call/result text into its excerpt scanning for parity. Covered by
+  `tests/mmr-history-worker-analysis.test.mjs`.
+- `mmr-history`: new `MMR_HISTORY_PACKET_BYTE_BUDGET` env-backed setting
+  (`packetByteBudget`, default 512KB, capped at 4MB) controls the sanitized
+  packet budget sent to the `history-reader` worker. Covered by
+  `tests/mmr-history-worker-analysis.test.mjs`.
+
 - `mmr-subagents`: `start_task` gains a `fleet` form for declaring a whole
   fan-out in one call. `start_task({ fleet: { groups: [{ group_label?, members:
   [...] }] } })` creates every group and member up front in a new `ready` state,

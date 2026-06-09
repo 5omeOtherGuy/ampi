@@ -22,7 +22,7 @@ export function createMmrHistoryFeatureGateProvider(getSettings: () => MmrHistor
       return {
         gate,
         status: "enabled",
-        reason: "mmr-history global local Pi session lookup is enabled; read_session uses the model-backed history-reader with redacted packets and lexical fallback.",
+        reason: "mmr-history global local Pi session lookup is enabled; read_session uses the model-backed history-reader (tool calls and results included; content sent raw by default, set MMR_HISTORY_REDACT=true to redact) with a deterministic lexical fallback.",
       };
     },
   };

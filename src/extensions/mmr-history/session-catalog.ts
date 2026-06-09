@@ -1,7 +1,7 @@
 import type { SessionInfo, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createGitIdentityResolver, matchesRepoToken, type GitIdentityResolver, type RepoIdentity } from "./git-identity.js";
 import { includesCaseInsensitive, parseSessionQuery, type SessionQuery } from "./query.js";
-import { projectRefFromCwd, redactText } from "./redaction.js";
+import { maybeRedact, projectRefFromCwd } from "./redaction.js";
 import { createSessionIndex, type SessionIndex, type SessionIndexDeps } from "./session-index.js";
 
 export interface SessionCatalogDeps {
@@ -58,11 +58,11 @@ function compactWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function buildPreview(info: SessionInfo, query: SessionQuery): string {
+function buildPreview(info: SessionInfo, query: SessionQuery, redactionEnabled: boolean): string {
   const chunks = [info.firstMessage, ...info.allMessagesText.split(/\n{2,}/g)].map(compactWhitespace).filter(Boolean);
   const firstMatched = chunks.find((chunk) => query.terms.some((term) => includesCaseInsensitive(chunk, term)));
   const raw = (firstMatched ?? chunks[0] ?? "").slice(0, 280);
-  return redactText(raw);
+  return maybeRedact(raw, redactionEnabled);
 }
 
 function matchesLexical(info: SessionInfo, query: SessionQuery): string[] | undefined {
@@ -93,40 +93,42 @@ function matchesTouchedFiles(touched: ReadonlySet<string>, fileTokens: readonly 
   return true;
 }
 
-function buildQueryDiagnostics(query: SessionQuery): QueryDiagnostic[] {
+function buildQueryDiagnostics(query: SessionQuery, redactionEnabled: boolean): QueryDiagnostic[] {
   // Diagnostic filter strings are reproduced from user-typed query
   // tokens, which can carry secrets, home paths, or credentialed
-  // URLs (e.g. `repo:https://user:tok@…`). Route every filter through
-  // the same deterministic redaction the rest of the surface uses
-  // before it leaves the local catalog. Idempotent.
+  // URLs (e.g. `repo:https://user:tok@…`). When CONTENT redaction is
+  // opted in, route every filter through the same deterministic
+  // redaction the rest of the surface uses before it leaves the local
+  // catalog. Idempotent.
   const diagnostics: QueryDiagnostic[] = [];
-  for (const term of query.terms) diagnostics.push({ filter: redactText(`keyword:${term}`), status: "applied" });
-  for (const token of query.appliedFilterTokens) diagnostics.push({ filter: redactText(token), status: "applied" });
-  for (const token of query.fileTokens) diagnostics.push({ filter: redactText(token), status: "applied" });
-  for (const token of query.repoTokens) diagnostics.push({ filter: redactText(token), status: "applied" });
-  for (const token of query.unsupportedFilters) diagnostics.push({ filter: redactText(token), status: "unsupported" });
+  for (const term of query.terms) diagnostics.push({ filter: maybeRedact(`keyword:${term}`, redactionEnabled), status: "applied" });
+  for (const token of query.appliedFilterTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.fileTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.repoTokens) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "applied" });
+  for (const token of query.unsupportedFilters) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "unsupported" });
   // `after:`/`before:` tokens with an unparseable date: recorded so the tool
   // can tell the user the date was ignored rather than silently dropping it.
-  for (const token of query.invalidFilters) diagnostics.push({ filter: redactText(token), status: "invalid" });
+  for (const token of query.invalidFilters) diagnostics.push({ filter: maybeRedact(token, redactionEnabled), status: "invalid" });
   return diagnostics;
 }
 
-function buildMatch(info: SessionInfo, query: SessionQuery, matchedTerms: string[]): SessionSearchMatch {
+function buildMatch(info: SessionInfo, query: SessionQuery, matchedTerms: string[], redactionEnabled: boolean): SessionSearchMatch {
   // `matchedTerms` and `unsupportedFilters` echo back substrings of
-  // the user-typed query. Route each through the same deterministic
-  // redaction the rest of the match shape uses so a sensitive token
-  // in the query cannot reappear raw in the result.
+  // the user-typed query. When CONTENT redaction is opted in, route
+  // each through the same deterministic redaction the rest of the
+  // match shape uses so a sensitive token in the query cannot reappear
+  // raw in the result. `projectRef` hashing is ALWAYS on regardless.
   return {
     sessionId: info.id,
     projectRef: projectRefFromCwd(info.cwd || ""),
-    name: info.name ? redactText(info.name) : undefined,
+    name: info.name ? maybeRedact(info.name, redactionEnabled) : undefined,
     createdAt: info.created.toISOString(),
     modifiedAt: info.modified.toISOString(),
     messageCount: info.messageCount,
-    firstMessage: redactText(compactWhitespace(info.firstMessage).slice(0, 280)),
-    preview: buildPreview(info, query),
-    matchedTerms: matchedTerms.map((term) => redactText(term)),
-    unsupportedFilters: query.unsupportedFilters.map((token) => redactText(token)),
+    firstMessage: maybeRedact(compactWhitespace(info.firstMessage).slice(0, 280), redactionEnabled),
+    preview: buildPreview(info, query, redactionEnabled),
+    matchedTerms: matchedTerms.map((term) => maybeRedact(term, redactionEnabled)),
+    unsupportedFilters: query.unsupportedFilters.map((token) => maybeRedact(token, redactionEnabled)),
   };
 }
 
@@ -195,6 +197,15 @@ export interface SearchSessionsOptions {
    * built-in TTL actually engages in production.
    */
   index?: SessionIndex;
+  /**
+   * Opt-in CONTENT redaction toggle. When `true`, result strings
+   * (names, previews, matched terms, diagnostics) are run through the
+   * deterministic sanitizer. Omitted defaults to `true` (safe) for
+   * direct callers/tests; the tools seam passes the resolved product
+   * setting, whose default is OFF (raw). `projectRef` hashing is always
+   * applied regardless of this flag.
+   */
+  redactionEnabled?: boolean;
 }
 
 /**
@@ -223,9 +234,9 @@ export async function searchSessionsWithDiagnostics(
   queryText: string,
   options: SearchSessionsOptions,
 ): Promise<SessionSearchResult> {
-  const { limit, now = new Date(), index } = options;
+  const { limit, now = new Date(), index, redactionEnabled = true } = options;
   const query = parseSessionQuery(queryText, now);
-  const diagnostics = buildQueryDiagnostics(query);
+  const diagnostics = buildQueryDiagnostics(query, redactionEnabled);
 
   const effectiveIndex: SessionIndex | undefined =
     index ?? (deps.openSession ? defaultIndexFromCatalogDeps(deps as SessionCatalogDeps) : undefined);
@@ -311,7 +322,7 @@ export async function searchSessionsWithDiagnostics(
       return a.info.id.localeCompare(b.info.id);
     })
     .slice(0, limit)
-    .map(({ info, matchedTerms }) => buildMatch(info, query, matchedTerms));
+    .map(({ info, matchedTerms }) => buildMatch(info, query, matchedTerms, redactionEnabled));
 
   return { matches, queryDiagnostics: diagnostics };
 }
