@@ -8,6 +8,14 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-core` now imports **zero** sibling extensions:
+  `MMR_CORE_SIBLING_IMPORT_EXCEPTIONS` is empty and the architecture guardrail
+  test keeps it that way. `/mmr-config` sections are inverted onto a core-owned
+  registry (`registerMmrConfigFlowSection`): `mmr-web` and `mmr-custom-subagents`
+  register their own `web` and `subagent (setup/import custom)` sections instead
+  of `mmr-core` importing those flows. The `/mmr-config` menu and behavior are
+  unchanged.
+
 - `npm run check` now enforces no unused locals/parameters
   (`--noUnusedLocals --noUnusedParameters`); `check:unused` is kept as an alias.
   Dead-code detection is now part of the standard pre-PR/CI gate instead of an

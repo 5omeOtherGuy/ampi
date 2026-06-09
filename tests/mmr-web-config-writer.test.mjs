@@ -220,6 +220,9 @@ describe("mmr-web config-writer", () => {
 
   it("/mmr-config offers a 'web' branch that dispatches to runMmrWebConfigFlow", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    // mmr-core no longer imports the web flow; loading mmr-web registers its
+    // `web` section into the core /mmr-config registry (as it does at runtime).
+    await importSource("extensions/mmr-web/index.ts");
     const commands = new Map();
     const pi = {
       registerFlag: () => {},

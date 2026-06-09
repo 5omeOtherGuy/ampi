@@ -1,6 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { runMmrWebConfigFlow } from "../mmr-web/config-flow.js";
-import { runMmrCustomSubagentsConfigFlow } from "../mmr-custom-subagents/config-flow.js";
+import { listMmrConfigFlowSections } from "./config-flow-registry.js";
 import { getProjectMmrSettingsPath, writeMmrCoreConfigFile, type MmrConfigUpdate } from "./config-writer.js";
 import { MMR_MODE_KEYS, getMmrMode, isMmrModeKey } from "./modes.js";
 import { isThinkingLevel, loadMmrCoreSettings } from "./settings.js";
@@ -142,21 +141,23 @@ export async function runMmrConfigFlow(
     return;
   }
 
+  // Sibling extensions register their own sections (e.g. `web`, custom
+  // subagents) into the core registry, so `mmr-core` dispatches without
+  // importing them. Built-in `mode`/`subagent` sections stay core-owned.
+  const registeredSections = listMmrConfigFlowSections();
   const targetChoice = await ctx.ui.select("MMR config: what do you want to set?", [
     "mode",
     "subagent",
-    "subagent (setup/import custom)",
-    "web",
+    ...registeredSections.map((section) => section.label),
   ]);
   if (!targetChoice) return;
 
-  if (targetChoice === "web") {
-    await runMmrWebConfigFlow(ctx);
-    return;
-  }
-
-  if (targetChoice === "subagent (setup/import custom)") {
-    await runMmrCustomSubagentsConfigFlow(ctx, bindings.getAvailableTools ? { getAvailableTools: bindings.getAvailableTools } : {});
+  const selectedSection = registeredSections.find((section) => section.label === targetChoice);
+  if (selectedSection) {
+    await selectedSection.run(
+      ctx,
+      bindings.getAvailableTools ? { getAvailableTools: bindings.getAvailableTools } : {},
+    );
     return;
   }
 

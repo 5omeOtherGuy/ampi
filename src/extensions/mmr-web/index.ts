@@ -1,8 +1,10 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerMmrOwnedExtensionPath } from "../mmr-core/owned-tools.js";
+import { registerMmrConfigFlowSection } from "../mmr-core/config-flow-registry.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../mmr-core/runtime.js";
 import { loadMmrWebSettings, type MmrWebSettings } from "./config.js";
+import { runMmrWebConfigFlow } from "./config-flow.js";
 import { registerMmrWebToolSourcePath } from "./tool-ownership.js";
 
 // Pi stamps every tool registered through `pi.registerTool` with the
@@ -15,6 +17,15 @@ import { registerMmrWebToolSourcePath } from "./tool-ownership.js";
 const MMR_WEB_EXTENSION_ENTRYPOINT_PATH = fileURLToPath(import.meta.url);
 registerMmrOwnedExtensionPath(MMR_WEB_EXTENSION_ENTRYPOINT_PATH);
 registerMmrWebToolSourcePath(MMR_WEB_EXTENSION_ENTRYPOINT_PATH);
+
+// Own the `web` section of `/mmr-config` by registering it with mmr-core,
+// rather than mmr-core importing this flow (inverts the core->sibling import).
+registerMmrConfigFlowSection({
+  id: "mmr-web",
+  label: "web",
+  order: 20,
+  run: (ctx) => runMmrWebConfigFlow(ctx),
+});
 import type { BraveClientOptions, DnsLookup } from "./brave.js";
 import { createMmrWebFeatureGateProvider, createMmrWebToolProvider } from "./provider.js";
 import {

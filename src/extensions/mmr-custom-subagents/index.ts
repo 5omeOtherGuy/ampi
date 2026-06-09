@@ -2,11 +2,22 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../mmr-core/runtime.js";
 import { registerMmrOwnedExtensionPath } from "../mmr-core/owned-tools.js";
+import { registerMmrConfigFlowSection } from "../mmr-core/config-flow-registry.js";
 import { type RegisterMmrCustomSubagentToolsOptions, countLegacyClaudeSubagentCandidates, registerMmrCustomSubagentTools } from "./custom-runtime.js";
 import { resolveEnabledMmrCustomSubagents } from "./custom-config.js";
+import { runMmrCustomSubagentsConfigFlow } from "./config-flow.js";
 import { createMmrCustomSubagentsFeatureGateProvider, createMmrCustomSubagentsToolProvider, type MmrCustomSubagentsCapabilities } from "./provider.js";
 
 registerMmrOwnedExtensionPath(fileURLToPath(import.meta.url));
+
+// Own the custom-subagent setup/import section of `/mmr-config` by registering
+// it with mmr-core, rather than mmr-core importing this flow.
+registerMmrConfigFlowSection({
+  id: "mmr-custom-subagents",
+  label: "subagent (setup/import custom)",
+  order: 10,
+  run: (ctx, sectionCtx) => runMmrCustomSubagentsConfigFlow(ctx, sectionCtx),
+});
 
 export interface MmrCustomSubagentsFactoryOverrides {
   customSubagents?: RegisterMmrCustomSubagentToolsOptions;
