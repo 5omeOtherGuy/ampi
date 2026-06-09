@@ -589,6 +589,15 @@ export type {
   RunMmrSubagentWorkerOptions,
 } from "./extensions/mmr-subagents/runner.js";
 export {
+  MMR_CUSTOM_SUBAGENTS_FEATURE_GATE,
+  MMR_CUSTOM_SUBAGENTS_PROVIDER_NAME,
+  createMmrCustomSubagentsFeatureGateProvider,
+  createMmrCustomSubagentsToolProvider,
+} from "./extensions/mmr-custom-subagents/provider.js";
+export { createMmrCustomSubagentsExtension } from "./extensions/mmr-custom-subagents/index.js";
+export type { MmrCustomSubagentsFactoryOverrides } from "./extensions/mmr-custom-subagents/index.js";
+export type { MmrCustomSubagentsCapabilities } from "./extensions/mmr-custom-subagents/provider.js";
+export {
   DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH,
   MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES,
   MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH,
@@ -597,9 +606,9 @@ export {
   normalizeMmrCustomSubagentToolPatterns,
   parseMmrCustomSubagentMarkdown,
   toMmrCustomSubagentToolName,
-} from "./extensions/mmr-subagents/custom-loader.js";
+} from "./extensions/mmr-custom-subagents/custom-loader.js";
 export type {
   DiscoverMmrCustomSubagentsArgs,
   MmrCustomSubagentDefinition,
   ParseMmrCustomSubagentMarkdownArgs,
-} from "./extensions/mmr-subagents/custom-loader.js";
+} from "./extensions/mmr-custom-subagents/custom-loader.js";

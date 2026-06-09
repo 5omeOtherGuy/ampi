@@ -8,6 +8,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- **Breaking (extension split):** `mmr-custom-subagents` now owns custom Markdown
+  subagent loading/config/import/runtime behavior, dynamic `sa__*` tool
+  registration, custom profile/prompt registration, custom mode-extra-tool
+  exposure, and the `/mmr-config` custom-subagent setup/import flow.
+  `mmr-subagents` now owns only the built-in blocking worker tools. The new
+  authoritative feature gate is `mmr-custom-subagents`; existing
+  `mmrSubagents.custom.agents` settings and public `sa__*` tool names are
+  unchanged.
+
 - **Breaking (extension split):** `mmr-async-tasks` now owns the background-task
   tools `start_task`, `task_poll`, `task_wait`, and `task_cancel`, including the
   async task registry, background-task widget, completion delivery, and

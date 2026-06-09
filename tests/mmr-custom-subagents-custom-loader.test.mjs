@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const LOADER_MODULE = "extensions/mmr-subagents/custom-loader.ts";
+const LOADER_MODULE = "extensions/mmr-custom-subagents/custom-loader.ts";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(tmpdir(), "pi-mmr-custom-subagents-"));

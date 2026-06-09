@@ -222,7 +222,7 @@ export interface MmrSubagentsConfigFlowOptions {
   getAvailableTools?: () => readonly string[];
 }
 
-export async function runMmrSubagentsConfigFlow(
+export async function runMmrCustomSubagentsConfigFlow(
   ctx: ExtensionContext,
   options: MmrSubagentsConfigFlowOptions = {},
 ): Promise<void> {
