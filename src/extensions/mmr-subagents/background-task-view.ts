@@ -2,7 +2,7 @@
  * Shared presentation primitives for background subagents.
  *
  * Both surfaces that draw background agents render the SAME rows from here:
- *   - the pinned belowEditor board ({@link ./background-task-widget.ts})
+ *   - the pinned aboveEditor board ({@link ./background-task-widget.ts})
  *   - the inline transcript group/row card ({@link ./progress-rendering.ts})
  *
  * Keeping the glyph/colour/label vocabulary, the row + group-header formatters,
@@ -65,7 +65,7 @@ export const PI_LOADER_FRAMES = [
 /** Frame interval matching Pi's native loader cadence. */
 export const PI_LOADER_INTERVAL_MS = 80;
 
-// Module-global loader frame, advanced by the belowEditor widget's animation
+// Module-global loader frame, advanced by the aboveEditor widget's animation
 // interval and read by BOTH surfaces. Nested transcript components cannot own a
 // timer (the host renders them with a no-op TUI), so they piggyback the widget's
 // re-render cadence: every widget tick advances this frame and re-renders the

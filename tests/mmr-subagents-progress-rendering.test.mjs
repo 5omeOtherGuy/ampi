@@ -208,47 +208,56 @@ describe("renderMmrSubagentCall", () => {
 });
 
 describe("ToolExecutionComponent integration", () => {
-  it("replaces a background start call with one borderless result-owned live row", async () => {
+  it("renders nothing inline while a background start is in flight, then one static row once it settles", async () => {
     const renderers = await importSource(PROGRESS_RENDERING_MODULE);
     const args = {
       agent: "finder",
       description: "Find widget placement call sites",
       params: {
         query:
-          "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
+          "Confirm the task_list widget renders aboveEditor and the background-task widget renders aboveEditor. " +
           "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
       },
     };
-    const result = {
-      content: [{ type: "text", text: "start_task: started background worker task_1" }],
-      details: {
-        worker: "mmr-subagents.async-task",
-        tool: "start_task",
-        agent: "finder",
-        taskId: "task_1",
-        status: "running",
-        description: "Find widget placement call sites",
-        prompt: args.params.query,
-        resolvedModel: "google/gemini-3.5-flash-extra-low",
-      },
+    const baseDetails = {
+      worker: "mmr-subagents.async-task",
+      tool: "start_task",
+      agent: "finder",
+      taskId: "task_1",
+      description: "Find widget placement call sites",
+      prompt: args.params.query,
+      resolvedModel: "google/gemini-3.5-flash-extra-low",
     };
 
-    // One consolidated borderless row owns the lifecycle: the call card is
-    // blanked when the result lands, so the description renders exactly once.
-    // No box "background ⠋ running" header, no raw started-worker text, and a
-    // single row never dumps the full worker prompt.
-    const collapsed = renderBackgroundToolExecutionFrame(args, result, { renderers, expanded: false });
+    // While the run is in flight the inline card is GATED: the live, animated
+    // status lives only in the pinned widget, so the composed Pi row blanks the
+    // call card and renders nothing inline — no description, no prompt echo, no
+    // raw started-worker text.
+    const running = {
+      content: [{ type: "text", text: "start_task: started background worker task_1" }],
+      details: { ...baseDetails, status: "running" },
+    };
+    const collapsedRunning = renderBackgroundToolExecutionFrame(args, running, { renderers, expanded: false });
+    assert.equal(collapsedRunning.trim(), "", `a running spawn renders nothing inline:\n${collapsedRunning}`);
+
+    // Once the run settles the card latches a single static row with its model
+    // chip — still no prompt echo and no started-worker text.
+    const settled = {
+      content: [{ type: "text", text: "start_task: started background worker task_1" }],
+      details: { ...baseDetails, status: "succeeded", terminalOutcome: "succeeded" },
+    };
+    const collapsed = renderBackgroundToolExecutionFrame(args, settled, { renderers, expanded: false });
     assert.equal(countOccurrences(collapsed, "Find widget placement call sites"), 1, collapsed);
-    assert.match(collapsed, /⠋ finder Find widget placement call sites/);
+    assert.match(collapsed, /finder Find widget placement call sites/);
     assert.match(collapsed, /gemini-3\.5-flash-extra-low/);
     assert.doesNotMatch(collapsed, /background ⠋ running/);
     assert.doesNotMatch(collapsed, /ctrl\+o to expand/i);
     assert.doesNotMatch(collapsed, /start_task: started background worker/);
-    assert.doesNotMatch(collapsed, /renders aboveEditor and the background-task widget renders belowEditor/);
+    assert.doesNotMatch(collapsed, /renders aboveEditor and the background-task widget renders aboveEditor/);
 
-    const expanded = renderBackgroundToolExecutionFrame(args, result, { renderers, expanded: true });
+    const expanded = renderBackgroundToolExecutionFrame(args, settled, { renderers, expanded: true });
     assert.equal(countOccurrences(expanded, "Find widget placement call sites"), 1, expanded);
-    assert.doesNotMatch(expanded, /renders aboveEditor and the background-task widget renders belowEditor/);
+    assert.doesNotMatch(expanded, /renders aboveEditor and the background-task widget renders aboveEditor/);
   });
 
   it("lets the result renderer own partial rows and suppresses worker prompt echoes for every subagent", async () => {
@@ -1060,58 +1069,61 @@ describe("background task rendering", () => {
     assert.doesNotMatch(rendered, /renders aboveEditor and the background-task widget renders belowEditor/);
   });
 
-  it("renders an ungrouped start_task result as a borderless live row", async () => {
+  it("renders an ungrouped start_task spawn as nothing while running and a static row once settled", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    const component = renderMmrBackgroundTaskResult(
+    const baseDetails = {
+      worker: "mmr-subagents.async-task",
+      tool: "start_task",
+      agent: "finder",
+      taskId: "task_1",
+      description: "Find widget placement call sites",
+      prompt:
+        "Confirm the task_list widget renders aboveEditor and the background-task widget renders aboveEditor. " +
+        "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
+      resolvedModel: "google/gemini-3.5-flash-extra-low",
+      sessionKey: "s1",
+    };
+    const makeCard = (status) => renderMmrBackgroundTaskResult(
       "start_task",
-      {
-        content: [{ type: "text", text: "start_task: started background worker task_1" }],
-        details: {
-          worker: "mmr-subagents.async-task",
-          tool: "start_task",
-          agent: "finder",
-          taskId: "task_1",
-          status: "running",
-          description: "Find widget placement call sites",
-          prompt:
-            "Confirm the task_list widget renders aboveEditor and the background-task widget renders belowEditor. " +
-            "Return file paths and line numbers for both ctx.ui.setWidget placement options.",
-          resolvedModel: "google/gemini-3.5-flash-extra-low",
-          sessionKey: "s1",
-        },
-      },
+      { content: [{ type: "text", text: "start_task: started background worker task_1" }], details: { ...baseDetails, status } },
       { expanded: false, isPartial: false },
       fakeTheme,
       makeContext({ agent: "finder" }),
     );
-    const rendered = normalize(renderText(component));
 
-    assert.equal(component.constructor.name, "BackgroundCardComponent");
-    assert.match(rendered, /⠋ finder Find widget placement call sites/);
+    // Running spawn card: GATED — nothing inline, the live row lives in the widget.
+    const running = makeCard("running");
+    assert.equal(running.constructor.name, "BackgroundCardComponent");
+    assert.equal(normalize(renderText(running)).trim(), "", "a running spawn renders nothing inline");
+
+    // Settled spawn card: a single static row with its model chip, no prompt echo.
+    const rendered = normalize(renderText(makeCard("succeeded")));
+    assert.match(rendered, /finder Find widget placement call sites/);
     assert.match(rendered, /gemini-3\.5-flash-extra-low/);
     assert.doesNotMatch(rendered, /• background ⠋ running/);
     assert.doesNotMatch(rendered, /ctrl\+o to expand/i);
     assert.doesNotMatch(rendered, /start_task: started background worker/);
-    assert.doesNotMatch(rendered, /renders aboveEditor and the background-task widget renders belowEditor/);
+    assert.doesNotMatch(rendered, /renders aboveEditor and the background-task widget renders aboveEditor/);
   });
 
-  it("renders a grouped start_task opener as a live group card and siblings as nothing", async () => {
+  it("renders a settled grouped start_task opener as a static group card and siblings as nothing", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    // Gated group-opener card: invisible until EVERY member settles, then a
+    // static completed snapshot. All four members are terminal here.
     const board = {
       version: 1,
       generatedAtMs: 0,
-      counts: { active: 2, stalled: 0, finished: 2 },
-      active: [
-        { taskId: "t1", status: "running", freshness: "healthy", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, groupId: "group_abc123" },
-        { taskId: "t2", status: "running", freshness: "healthy", agent: "finder", description: "subagents wiring", createdAtMs: 2, startedAtMs: 2, updatedAtMs: 2, runtimeMs: 4000, groupId: "group_abc123" },
-      ],
+      counts: { active: 0, stalled: 0, finished: 4 },
+      active: [],
       stalled: [],
       finished: [
+        { taskId: "t1", status: "succeeded", freshness: "terminal", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, completedAtMs: 0, groupId: "group_abc123" },
+        { taskId: "t2", status: "succeeded", freshness: "terminal", agent: "finder", description: "subagents wiring", createdAtMs: 2, startedAtMs: 2, updatedAtMs: 2, runtimeMs: 4000, completedAtMs: 0, groupId: "group_abc123" },
         { taskId: "t3", status: "succeeded", freshness: "terminal", agent: "finder", description: "tool registration", createdAtMs: 3, startedAtMs: 3, updatedAtMs: 3, runtimeMs: 9000, completedAtMs: 0, groupId: "group_abc123" },
         { taskId: "t4", status: "succeeded", freshness: "terminal", agent: "finder", description: "package wiring", createdAtMs: 4, startedAtMs: 4, updatedAtMs: 4, runtimeMs: 8000, completedAtMs: 0, groupId: "group_abc123" },
       ],
     };
-    const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2", "t3", "t4"], counts: { running: 2, succeeded: 2, failed: 0, cancelled: 0, partial: 0, total: 4 } };
+    const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2", "t3", "t4"], counts: { running: 0, succeeded: 4, failed: 0, cancelled: 0, partial: 0, total: 4 } };
     const extras = { resolveBoard: () => board, resolveGroup: () => group };
 
     const opener = normalize(renderText(renderMmrBackgroundTaskResult(
@@ -1126,10 +1138,10 @@ describe("background task rendering", () => {
       extras,
     )));
 
-    // One borderless group card: a section header with status + settled/total,
-    // then a row per member that flips ⠋→✓ as children finish.
-    assert.match(opener, /▸ swarm review · group_abc123 +● running · 2\/4/);
-    assert.match(opener, /⠋ finder mmr-core integration points/);
+    // One static group card: a section header with status + settled/total, then
+    // a completed row per member.
+    assert.match(opener, /▸ swarm review · group_abc123 +● completed · 4\/4/);
+    assert.match(opener, /✓ finder mmr-core integration points/);
     assert.match(opener, /✓ finder tool registration/);
     assert.match(opener, /✓ finder package wiring/);
     assert.doesNotMatch(opener, /start_task: started background worker/);
@@ -1147,21 +1159,21 @@ describe("background task rendering", () => {
     assert.equal(normalize(renderText(sibling)).trim(), "");
   });
 
-  it("always renders full metadata chips and no ctrl+o affordance on the group and single cards", async () => {
+  it("renders full metadata chips and no ctrl+o affordance on the settled group and single cards", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // Grouped opener card: a board-backed member carrying turns + ctx must show
-    // the rich chips unconditionally — the card no longer has a collapsed level.
+    // Grouped opener card, settled: a board-backed terminal member carrying
+    // turns + ctx must show the rich chips unconditionally on the static card.
     const groupBoard = {
       version: 1,
       generatedAtMs: 0,
-      counts: { active: 1, stalled: 0, finished: 0 },
-      active: [
-        { taskId: "t1", status: "running", freshness: "healthy", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, groupId: "group_abc123", resolvedModel: "google/gemini-3.5-flash", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 30000, turns: 2 } },
-      ],
+      counts: { active: 0, stalled: 0, finished: 1 },
+      active: [],
       stalled: [],
-      finished: [],
+      finished: [
+        { taskId: "t1", status: "succeeded", freshness: "terminal", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, completedAtMs: 0, groupId: "group_abc123", resolvedModel: "google/gemini-3.5-flash", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 30000, turns: 2 } },
+      ],
     };
-    const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1"], counts: { running: 1, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 1 } };
+    const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1"], counts: { running: 0, succeeded: 1, failed: 0, cancelled: 0, partial: 0, total: 1 } };
     const groupCard = normalize(renderText(renderMmrBackgroundTaskResult(
       "start_task",
       { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "start_task", agent: "finder", taskId: "t1", status: "running", description: "mmr-core integration points", groupId: "group_abc123", groupOpener: true, sessionKey: "s1" } },
@@ -1170,21 +1182,21 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => groupBoard, resolveGroup: () => group },
     )));
-    assert.match(groupCard, /⠋ finder mmr-core integration points/);
+    assert.match(groupCard, /✓ finder mmr-core integration points/);
     assert.match(groupCard, /· 2 turns/);
     assert.match(groupCard, /10\.0% ctx/);
     assert.doesNotMatch(groupCard, /ctrl\+o to expand/i);
 
-    // Single ungrouped card: same rich-chip guarantee, no collapsed variant.
+    // Single ungrouped card, settled: same rich-chip guarantee.
     const singleBoard = {
       version: 1,
       generatedAtMs: 0,
-      counts: { active: 1, stalled: 0, finished: 0 },
-      active: [
-        { taskId: "task_1", status: "running", freshness: "healthy", agent: "finder", description: "Find widget placement call sites", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 4000, resolvedModel: "google/gemini-3.5-flash-extra-low", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 45000, turns: 3 } },
-      ],
+      counts: { active: 0, stalled: 0, finished: 1 },
+      active: [],
       stalled: [],
-      finished: [],
+      finished: [
+        { taskId: "task_1", status: "succeeded", freshness: "terminal", agent: "finder", description: "Find widget placement call sites", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 4000, completedAtMs: 0, resolvedModel: "google/gemini-3.5-flash-extra-low", contextWindow: 300000, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 45000, turns: 3 } },
+      ],
     };
     const singleCard = normalize(renderText(renderMmrBackgroundTaskResult(
       "start_task",
@@ -1194,19 +1206,19 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => singleBoard },
     )));
-    assert.match(singleCard, /⠋ finder Find widget placement call sites/);
+    assert.match(singleCard, /✓ finder Find widget placement call sites/);
     assert.match(singleCard, /· 3 turns/);
     assert.match(singleCard, /15\.0% ctx/);
     assert.doesNotMatch(singleCard, /ctrl\+o to expand/i);
   });
 
-  it("keeps the freshly spawned group/single card mounted-but-invisible during the post-spawn settle window", async () => {
+  it("keeps the freshly spawned group/single card mounted-but-invisible while the run is in flight", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // ACTIVE rows with createdAtMs in the future relative to Date.now() => still
-    // inside the post-spawn settle window => revealedRows reveals nothing => the
-    // card renders no lines. It stays a mounted BackgroundCardComponent (NOT a
-    // static Container) so a later widget render tick re-runs its thunk and
-    // reveals it once the settle window has elapsed.
+    // Gated spawn card: while any member is still running the live, animated
+    // status lives only in the pinned widget => the inline card renders no
+    // lines. It stays a mounted BackgroundCardComponent (NOT a static Container)
+    // so a later widget render tick re-runs its thunk and latches the static
+    // completed snapshot once the run settles.
     const now = Date.now();
     const groupBoard = {
       version: 1, generatedAtMs: 0, counts: { active: 2, stalled: 0, finished: 0 },
@@ -1245,19 +1257,19 @@ describe("background task rendering", () => {
     assert.equal(normalize(renderText(singleCard)).trim(), "", "prep single card must render nothing");
   });
 
-  it("reveals the whole group/single card once the post-spawn settle window has elapsed", async () => {
+  it("renders the static completed group/single card once the run settles", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // createdAtMs well in the past => fully settled => every row reveals.
-    const now = Date.now();
+    // Every member terminal => the gated card settles and renders a static
+    // completed snapshot (✓ rows, no spinner).
     const groupBoard = {
-      version: 1, generatedAtMs: 0, counts: { active: 2, stalled: 0, finished: 0 },
-      active: [
-        { taskId: "t1", status: "running", freshness: "healthy", agent: "finder", description: "mmr-core integration points", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 5000, groupId: "group_abc123" },
-        { taskId: "t2", status: "running", freshness: "healthy", agent: "finder", description: "subagents wiring", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 4000, groupId: "group_abc123" },
+      version: 1, generatedAtMs: 0, counts: { active: 0, stalled: 0, finished: 2 },
+      active: [], stalled: [],
+      finished: [
+        { taskId: "t1", status: "succeeded", freshness: "terminal", agent: "finder", description: "mmr-core integration points", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 5000, completedAtMs: 0, groupId: "group_abc123" },
+        { taskId: "t2", status: "succeeded", freshness: "terminal", agent: "finder", description: "subagents wiring", createdAtMs: 2, startedAtMs: 2, updatedAtMs: 2, runtimeMs: 4000, completedAtMs: 0, groupId: "group_abc123" },
       ],
-      stalled: [], finished: [],
     };
-    const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 2, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 2 } };
+    const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 0, succeeded: 2, failed: 0, cancelled: 0, partial: 0, total: 2 } };
     const groupCard = normalize(renderText(renderMmrBackgroundTaskResult(
       "start_task",
       { content: [{ type: "text", text: "x" }], details: { worker: "mmr-subagents.async-task", tool: "start_task", agent: "finder", taskId: "t1", status: "running", description: "mmr-core integration points", groupId: "group_abc123", groupOpener: true, sessionKey: "s1" } },
@@ -1266,14 +1278,15 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => groupBoard, resolveGroup: () => group },
     )));
-    assert.match(groupCard, /▸ swarm review · group_abc123 +● running · 0\/2/);
-    assert.match(groupCard, /⠋ finder mmr-core integration points/);
-    assert.match(groupCard, /⠋ finder subagents wiring/);
+    assert.match(groupCard, /▸ swarm review · group_abc123 +● completed · 2\/2/);
+    assert.match(groupCard, /✓ finder mmr-core integration points/);
+    assert.match(groupCard, /✓ finder subagents wiring/);
+    assert.doesNotMatch(groupCard, /⠋/, "a settled card shows no spinner");
 
     const singleBoard = {
-      version: 1, generatedAtMs: 0, counts: { active: 1, stalled: 0, finished: 0 },
-      active: [{ taskId: "task_1", status: "running", freshness: "healthy", agent: "finder", description: "Find widget placement call sites", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 4000 }],
-      stalled: [], finished: [],
+      version: 1, generatedAtMs: 0, counts: { active: 0, stalled: 0, finished: 1 },
+      active: [], stalled: [],
+      finished: [{ taskId: "task_1", status: "succeeded", freshness: "terminal", agent: "finder", description: "Find widget placement call sites", createdAtMs: 1, startedAtMs: 1, updatedAtMs: 1, runtimeMs: 4000, completedAtMs: 0 }],
     };
     const singleCard = normalize(renderText(renderMmrBackgroundTaskResult(
       "start_task",
@@ -1283,7 +1296,8 @@ describe("background task rendering", () => {
       makeContext({ agent: "finder" }),
       { resolveBoard: () => singleBoard },
     )));
-    assert.match(singleCard, /⠋ finder Find widget placement call sites/);
+    assert.match(singleCard, /✓ finder Find widget placement call sites/);
+    assert.doesNotMatch(singleCard, /⠋/, "a settled single card shows no spinner");
   });
 
   it("shows the full replay card immediately when no live registry is available (reveal disabled)", async () => {
@@ -1772,7 +1786,6 @@ describe("renderAsyncTaskCompletionMessage", () => {
 });
 
 describe("inline background card animation", () => {
-  const VIEW_MODULE = "extensions/mmr-subagents/background-task-view.ts";
   const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] finder/;
 
   function singleBoard(rowOverrides = {}) {
@@ -1802,7 +1815,7 @@ describe("inline background card animation", () => {
 
   let renderers;
 
-  it("recomputes live lines on every render() call so the spinner advances (host never re-runs renderResult)", async () => {
+  it("keeps a running spawn card empty inline even as the loader frame advances (live state is in the widget)", async () => {
     renderers = await importSource(PROGRESS_RENDERING_MODULE);
     // Advance the loader frame on the SHARED background-task-view singleton (the
     // stable URL progress-rendering imports internally), not a cache-busted
@@ -1814,38 +1827,43 @@ describe("inline background card animation", () => {
     const card = singleCard(() => board);
 
     const frame1 = stripAnsi(renderText(card));
-    assert.match(frame1, SPINNER, "a running row renders an animated spinner glyph");
+    assert.equal(frame1.trim(), "", "a running spawn card renders nothing inline");
     advanceLoaderFrame();
     const frame2 = stripAnsi(renderText(card));
-    assert.notEqual(frame1, frame2, "the same card instance advances its spinner across render() calls");
-    assert.match(frame2, SPINNER);
+    assert.equal(frame2.trim(), "", "advancing the loader frame never makes the gated card appear");
+    assert.doesNotMatch(frame2, SPINNER);
   });
 
-  it("stays mounted-but-empty during the settle window and reveals on a later render once it elapses", async (t) => {
-    t.mock.timers.enable({ apis: ["Date"], now: 50_000 });
-    renderers = await importSource(PROGRESS_RENDERING_MODULE);
-    const { SPAWN_SETTLE_MS } = await importSource(VIEW_MODULE);
-    // Row spawned at the current (mocked) clock => inside its settle window.
-    const board = singleBoard({ createdAtMs: 50_000, startedAtMs: 50_000, updatedAtMs: 50_000 });
-    const card = singleCard(() => board);
-
-    assert.equal(card.constructor.name, "BackgroundCardComponent");
-    assert.equal(card.render(120).join(""), "", "the card renders no lines while settling");
-    t.mock.timers.tick(SPAWN_SETTLE_MS + 1);
-    assert.match(stripAnsi(renderText(card)), /finder Find widget placement call sites/, "the card reveals on a later render after the settle window");
-  });
-
-  it("flips a running row glyph to ✓ as the live board transitions, without re-running renderResult", async () => {
+  it("stays mounted-but-empty while running, then latches the static row once the board settles", async () => {
     renderers = await importSource(PROGRESS_RENDERING_MODULE);
     const now = Date.now();
     let board = singleBoard({ createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });
     const card = singleCard(() => board);
 
-    assert.match(stripAnsi(renderText(card)), SPINNER, "the row spins while running");
+    assert.equal(card.constructor.name, "BackgroundCardComponent");
+    assert.equal(card.render(120).join(""), "", "the card renders no lines while the run is in flight");
     // The worker finishes: the live board now reports the row as succeeded.
     board = singleBoard({ status: "succeeded", freshness: "terminal", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 5_000, completedAtMs: now });
+    assert.match(stripAnsi(renderText(card)), /finder Find widget placement call sites/, "the card latches its static row once the run settles");
+  });
+
+  it("flips from empty to a static ✓ row once the board settles, and stays latched if the board later reverts", async () => {
+    renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    const now = Date.now();
+    let board = singleBoard({ createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });
+    const card = singleCard(() => board);
+
+    assert.equal(stripAnsi(renderText(card)).trim(), "", "the card is empty while running");
+    // The worker finishes: the live board reports the row as succeeded.
+    board = singleBoard({ status: "succeeded", freshness: "terminal", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now, runtimeMs: 5_000, completedAtMs: now });
     const done = stripAnsi(renderText(card));
-    assert.match(done, /✓ finder/, "the same card flips ⠋→✓ on the next render once the row settles");
-    assert.doesNotMatch(done, SPINNER, "no spinner glyph remains after the row completes");
+    assert.match(done, /✓ finder/, "the card latches a static ✓ row once the row settles");
+    assert.doesNotMatch(done, SPINNER, "no spinner glyph appears on the static card");
+    // The live board drops the finished row (retention window elapsed) and the
+    // frozen details fall back to a 'running' row; the latched card must persist.
+    board = singleBoard({ status: "running", createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });
+    const after = stripAnsi(renderText(card));
+    assert.match(after, /✓ finder/, "the latched completed snapshot persists even after the board reverts");
+    assert.doesNotMatch(after, SPINNER);
   });
 });
