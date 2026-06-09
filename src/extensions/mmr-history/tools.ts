@@ -13,7 +13,7 @@ import {
 import type { MmrHistorySettings } from "./config.js";
 import { createGitIdentityResolver } from "./git-identity.js";
 import { formatSessionReadResult, readSessionForGoal, type SessionReadResult } from "./read-session.js";
-import { projectRefFromCwd, redactText } from "./redaction.js";
+import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
 import {
   resolveSessionById,
   searchSessionsWithDiagnostics,
@@ -128,10 +128,10 @@ export const READ_SESSION_DESCRIPTION = `Read a prior Pi session and extract con
 
 Use this after find_session returns a relevant session, or when the user gives a Pi session id/prefix and asks to reuse a plan, decisions, files, errors, or implementation approach from that session — including a session from another project. Do not use this when the needed context is already in the current conversation. Raw session file paths are not accepted.
 
-The tool sends a deterministically redacted session packet to the in-process \`history-reader\` subagent, which has no tool allowlist. If the worker route is unauthenticated, missing, cancelled, or empty, the tool falls back to redacted lexical extraction and sets \`details.analysisFallbackReason\`.`;
+The tool sends a sanitized session packet — including tool calls, tool results, and command output — to the in-process \`history-reader\` subagent, which has no tool allowlist. Session content is sent raw for the local same-user case by default; set \`MMR_HISTORY_REDACT=true\` to deterministically redact packet content first. If the worker route is unauthenticated, missing, cancelled, or empty, the tool falls back to deterministic lexical extraction and sets \`details.analysisFallbackReason\`.`;
 
 export const FIND_SESSION_PROMPT_SNIPPET = "Search local Pi sessions across every project on disk by keywords, id/name filters, date filters, file:, and repo:";
-export const READ_SESSION_PROMPT_SNIPPET = "Read any local Pi session by id/prefix and return goal-focused excerpts from the redacted history-reader worker (with lexical fallback)";
+export const READ_SESSION_PROMPT_SNIPPET = "Read any local Pi session by id/prefix and return goal-focused excerpts (including tool calls/results) from the history-reader worker, with a lexical fallback";
 
 function coerceObject(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
@@ -199,8 +199,9 @@ function formatFindSessionResults(
   query: string,
   matches: readonly SessionSearchMatch[],
   diagnostics: readonly QueryDiagnostic[],
+  redactionEnabled: boolean,
 ): string {
-  const lines = [`# Session search results for: ${redactText(query)}`];
+  const lines = [`# Session search results for: ${maybeRedact(query, redactionEnabled)}`];
   const diagnosticLines = formatDiagnosticsLines(diagnostics);
   if (diagnosticLines.length > 0) lines.push(...diagnosticLines);
   lines.push("");
@@ -247,20 +248,21 @@ function lexicalReadDetails(info: SessionInfo, result: SessionReadResult, fallba
     scope: "all_sessions",
     projectRef: projectRefFromCwd(info.cwd || ""),
     analysisUsed: "lexical",
-    // Worker-side fallback reasons are already routed through
-    // `redactText`, but defense-in-depth: redact again here so a
-    // future caller wiring in a different worker path still cannot
-    // surface a raw error string on `details.analysisFallbackReason`.
-    // Idempotent.
+    // Error/fallback reasons are NOT user-requested session content, so
+    // they stay redacted ALWAYS, independent of the opt-in content
+    // toggle: a worker spawn/route error can carry an incidental home
+    // path, secret, or absolute path the user never asked to read.
+    // Worker-side reasons are already routed through `redactText`;
+    // this is defense-in-depth and idempotent.
     ...(fallbackReason ? { analysisFallbackReason: redactText(fallbackReason) } : {}),
     ...(warnings.length > 0 ? { warnings: [...warnings] } : {}),
   };
 }
 
-function workerReadDetails(info: SessionInfo, worker: HistoryReaderWorkerDetails, warnings: readonly string[]): ReadSessionDetails {
+function workerReadDetails(info: SessionInfo, worker: HistoryReaderWorkerDetails, warnings: readonly string[], redactionEnabled: boolean): ReadSessionDetails {
   return {
     sessionId: info.id,
-    name: info.name ? redactText(info.name) : undefined,
+    name: info.name ? maybeRedact(info.name, redactionEnabled) : undefined,
     messageCount: info.messageCount,
     excerptCount: 0,
     truncated: worker.outputTruncated,
@@ -275,9 +277,9 @@ function workerReadDetails(info: SessionInfo, worker: HistoryReaderWorkerDetails
 }
 
 function readLexical(info: SessionInfo, manager: SessionManagerType, goal: string, settings: MmrHistorySettings, fallbackReason: string | undefined, warnings: readonly string[]): AgentToolResult<ReadSessionDetails> {
-  const result = readSessionForGoal(info, manager, goal, settings.maxExcerptBytes);
+  const result = readSessionForGoal(info, manager, goal, settings.maxExcerptBytes, settings.redactionEnabled);
   return {
-    content: [{ type: "text", text: formatSessionReadResult(result, goal) }],
+    content: [{ type: "text", text: formatSessionReadResult(result, goal, settings.redactionEnabled) }],
     details: lexicalReadDetails(info, result, fallbackReason, warnings),
   };
 }
@@ -311,11 +313,13 @@ async function readWithWorkerThenLexical(
     signal,
     runner: deps.analysisRunner,
     loadCoreSettings: deps.loadCoreSettings,
+    packetByteLimit: settings.packetByteBudget,
+    redactionEnabled: settings.redactionEnabled,
   });
   if (!workerResult.ok) return readLexical(info, manager, goal, settings, workerResult.fallbackReason, warnings);
   return {
     content: [{ type: "text", text: workerResult.text }],
-    details: workerReadDetails(info, workerResult.details, warnings),
+    details: workerReadDetails(info, workerResult.details, warnings, settings.redactionEnabled),
   };
 }
 
@@ -348,21 +352,23 @@ export function createFindSessionTool(deps: MmrHistoryToolDeps): ToolDefinition 
       const { matches, queryDiagnostics } = await searchSessionsWithDiagnostics(deps, query, {
         limit,
         index: deps.sessionIndex,
+        redactionEnabled: settings.redactionEnabled,
       });
       const details: FindSessionDetails = {
         // The raw query is a user-typed string that may carry secrets,
-        // home paths, or other sensitive substrings. The structured
-        // details surface is consumed by other tools/agents, so redact
-        // before storing. The formatted text body already redacts via
+        // home paths, or other sensitive substrings. When CONTENT
+        // redaction is opted in, redact before storing; otherwise the
+        // user's own raw query is preserved (local same-user default).
+        // The formatted text body mirrors this via
         // `formatFindSessionResults`.
-        query: redactText(query),
+        query: maybeRedact(query, settings.redactionEnabled),
         resultCount: matches.length,
         scope: "all_sessions",
         matches,
         queryDiagnostics,
       };
       return {
-        content: [{ type: "text", text: formatFindSessionResults(query, matches, queryDiagnostics) }],
+        content: [{ type: "text", text: formatFindSessionResults(query, matches, queryDiagnostics, settings.redactionEnabled) }],
         details,
       };
     },
