@@ -9,6 +9,7 @@
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { updateAboveEditorDashboardSlot } from "../mmr-core/above-editor-dashboard.js";
 import {
   PI_LOADER_FRAMES,
   renderTaskLines,
@@ -179,7 +180,7 @@ export function refreshTodoWidget(
   if (options.isHidden?.()) return;
   try {
     if (tasks.length === 0) {
-      ctx.ui.setWidget(TASK_LIST_WIDGET_ID, undefined, { placement: "aboveEditor" });
+      updateAboveEditorDashboardSlot(ctx, "left", TASK_LIST_WIDGET_ID, undefined);
       return;
     }
     // Factory form: the captured `theme` is Pi's live theme singleton, so the
@@ -191,7 +192,7 @@ export function refreshTodoWidget(
       subtasks: task.subtasks?.map((subtask) => ({ ...subtask })),
     }));
     const hasActive = hasVisibleInProgress(snapshot, TASK_LIST_WIDGET_MAX_ROWS);
-    ctx.ui.setWidget(TASK_LIST_WIDGET_ID, (tui, theme) => {
+    updateAboveEditorDashboardSlot(ctx, "left", TASK_LIST_WIDGET_ID, (tui, theme) => {
       // Animate in_progress rows with Pi's loader cadence. The interval only
       // runs while at least one row is in_progress, so a resting list never
       // schedules needless re-renders. Pi disposes the previous component on
@@ -233,7 +234,7 @@ export function refreshTodoWidget(
           }
         },
       };
-    }, { placement: "aboveEditor" });
+    });
   } catch {
     // Best-effort: a render/setWidget failure must never demote a
     // successful tool call to an error result.
