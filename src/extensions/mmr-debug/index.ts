@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { parseBoolEnv } from "../mmr-core/internal/env.js";
 import { extractMessageSummary, extractSystemPrompt, extractToolNames } from "./capture.js";
 
 /**
@@ -36,12 +37,6 @@ import { extractMessageSummary, extractSystemPrompt, extractToolNames } from "./
 const CAPTURE_FILE_ENV = "MMR_DEBUG_CAPTURE_FILE";
 const CAPTURE_FULL_ENV = "MMR_DEBUG_CAPTURE_FULL";
 
-function isTruthyEnv(value: string | undefined): boolean {
-  if (typeof value !== "string") return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes";
-}
-
 function getSessionId(ctx: ExtensionContext): string | undefined {
   try {
     return ctx.sessionManager.getSessionId?.();
@@ -64,7 +59,7 @@ export function createMmrDebugExtension() {
       return;
     }
     const resolvedPath = capturePath.trim();
-    const captureFullPayload = isTruthyEnv(process.env[CAPTURE_FULL_ENV]);
+    const captureFullPayload = parseBoolEnv(process.env[CAPTURE_FULL_ENV]) ?? false;
 
     let seq = 0;
     let turn = -1;
