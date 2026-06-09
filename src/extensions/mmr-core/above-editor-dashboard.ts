@@ -46,6 +46,8 @@ interface SlotState {
 const slots: Partial<Record<AboveEditorDashboardSlot, SlotState>> = {};
 let showingCombined = false;
 
+const MIN_COLUMN_DASHBOARD_WIDTH = 60;
+
 function instantiate(
   value: AboveEditorDashboardValue,
   tui: AboveEditorDashboardTui,
@@ -70,7 +72,7 @@ function combineLines(left: readonly string[], right: readonly string[], width: 
 
   const separator = " │ ";
   const separatorWidth = visibleWidth(separator);
-  if (width < 80) {
+  if (width < MIN_COLUMN_DASHBOARD_WIDTH) {
     return [...left, ...right].map((line) => truncateToWidth(line, width));
   }
 

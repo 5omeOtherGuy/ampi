@@ -61,7 +61,17 @@ describe("above-editor dashboard", () => {
     assert.deepEqual(last.value, ["todo"]);
   });
 
-  it("stacks instead of column-splitting on narrow widths", () => {
+  it("still column-splits on compact terminals where both panes fit", () => {
+    const { ctx, calls } = makeCtx();
+    mod.updateAboveEditorDashboardSlot(ctx, "left", "task", ["⠋ Review", "  └─ – Finder 1"]);
+    mod.updateAboveEditorDashboardSlot(ctx, "right", "background", ["▸ Finder group ● running · 0/3", "  ⠋ finder Finder test 1"]);
+    const widget = calls.at(-1).value({}, {});
+    const lines = widget.render(76);
+    assert.match(lines[0], /^⠋ Review +│ ▸ Finder group ● running · 0\/3/);
+    assert.match(lines[1], /^  └─ – Finder 1 +│   ⠋ finder Finder test 1/);
+  });
+
+  it("stacks instead of column-splitting on very narrow widths", () => {
     const { ctx, calls } = makeCtx();
     mod.updateAboveEditorDashboardSlot(ctx, "left", "task", ["todo"]);
     mod.updateAboveEditorDashboardSlot(ctx, "right", "background", ["agent"]);
