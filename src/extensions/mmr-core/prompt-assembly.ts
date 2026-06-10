@@ -2,7 +2,7 @@ import {
   buildBuiltinToolGuidance,
   extractActiveBuiltinToolNames,
 } from "./builtin-tool-guidance.js";
-import { SHARED_CODING_GUIDANCE_FRAGMENTS, SHARED_TOOL_GUIDANCE } from "./prompt-modules.js";
+import { SHARED_CODING_GUIDANCE_FRAGMENTS, SHARED_TOOL_GUIDANCE } from "./prompt-content.js";
 import {
   getMmrModePromptRecipe,
   getMmrPromptBase,
