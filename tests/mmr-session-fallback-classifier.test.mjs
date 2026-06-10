@@ -15,7 +15,19 @@ describe("mmr-session-fallback quota classifier", () => {
 
     assert.equal(result.shouldPrompt, true);
     assert.equal(result.kind, "openai-usage-limit");
+    assert.equal(result.retryable, false, "a hit usage limit is a hard condition, not a transient one");
     assert.match(result.friendlyMessage, /usage limit/i);
+  });
+
+  it("marks transient conditions retryable and hard quotas not retryable", async () => {
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+
+    assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "rate_limit_error: 429" }).retryable, true);
+    assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "overloaded_error: try again" }).retryable, true);
+    assert.equal(classifyMmrSessionFallbackError({ provider: "github-copilot", errorMessage: "too many requests" }).retryable, true);
+    assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "usage_limit_reached" }).retryable, false);
+    assert.equal(classifyMmrSessionFallbackError({ provider: "github-copilot", errorMessage: "quota exceeded" }).retryable, false);
+    assert.equal(classifyMmrSessionFallbackError({ provider: "openai", errorMessage: "insufficient_quota: billing quota exceeded" }).retryable, false);
   });
 
   it("prompts for claude-subscription rate limits and for a persistent overload", async () => {

@@ -64,6 +64,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-session-fallback`: transient provider errors (overload, rate limit,
+  silent stream stalls) no longer trigger the cross-model fallback prompt on
+  the first occurrence. The classifier now reports a `retryable` flag, and a
+  per-session streak counter defers the prompt until a retryable error repeats
+  within a 5-minute window; the first occurrence only notifies that a fallback
+  will be offered if the condition persists. A turn that completes without
+  error resets the streak. Non-retryable hard-quota errors (usage limit
+  reached, insufficient quota) still prompt immediately. (#130)
+
 - `mmr-core`: re-authored the rush-mode prompt fragments (`rush.intro`,
   `RUSH_POSTURE`, `rush.closingLine`). The posture now carries only the
   mode-specific deltas — discovery loop budget, stop conditions, and output
