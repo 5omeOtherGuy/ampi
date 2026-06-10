@@ -132,7 +132,7 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 
 ### `history-reader`
 
-Registered in mmr-core's profile table for `mmr-history`. Not a model-visible Pi tool. Standalone, `tools: []`, `maxTurns: 1`, model prefs `gpt-5.4-mini` → `claude-haiku-4-5`, low thinking. The parent `read_session` sends only a sanitized session packet; the worker never gets direct filesystem, shell, web, or history tools.
+Registered in mmr-core's profile table for `mmr-history`. Not a model-visible Pi tool. Standalone, `tools: []`, `maxTurns: 1`, model prefs `antigravity/gemini-3.5-flash-extra-low` → `gpt-5.4-mini` → `claude-haiku-4-5`, minimal thinking. The parent `read_session` sends only a sanitized session packet; the worker never gets direct filesystem, shell, web, or history tools.
 
 ### Progress / details surface
 

@@ -66,6 +66,39 @@ describe("mmr-core subagent profile registry", () => {
     );
   });
 
+  it("exposes a 'history-reader' profile with finder-equivalent extraction routing and no tools", async () => {
+    const mod = await importSource(MODULE);
+    const profile = mod.getMmrSubagentProfile("history-reader");
+    assert.ok(profile, "history-reader profile must be registered");
+    assert.equal(profile.name, "history-reader");
+    assert.equal(profile.displayName, "History Reader");
+    assert.equal(profile.promptRoute, "standalone");
+    assert.equal(profile.baseMode, undefined);
+    assert.equal(profile.promptBuilder, "history-reader");
+    assert.equal(profile.allowMcp, false, "history-reader must not allow MCP tool surfaces");
+    assert.equal(profile.allowToolbox, false, "history-reader must not allow mmr-toolbox surfaces");
+    assert.equal(profile.enforceLockedMode, false);
+    assert.equal(profile.persistSubagentState, false);
+    assert.deepEqual([...profile.tools], [], "history-reader must remain a prompt-only worker");
+    assert.equal(profile.maxTurns, 1, "history-reader must remain a single-turn extraction worker");
+    assert.equal(
+      profile.thinkingLevel,
+      "minimal",
+      "history-reader should match finder as a low-effort extraction worker",
+    );
+    const ids = profile.modelPreferences.map((preference) => preference.model);
+    assert.deepEqual(
+      ids,
+      ["gemini-3.5-flash-extra-low", "gpt-5.4-mini", "claude-haiku-4-5"],
+      "history-reader profile model preferences must match finder's extraction route",
+    );
+    assert.deepEqual(
+      profile.modelPreferences[0].providers,
+      ["antigravity"],
+      "history-reader must route the provider-pinned Flash preference through antigravity",
+    );
+  });
+
   it("exposes an 'oracle' profile with the canonical execution policy", async () => {
     const mod = await importSource(MODULE);
     const profile = mod.getMmrSubagentProfile("oracle");

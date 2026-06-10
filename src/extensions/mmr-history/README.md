@@ -65,7 +65,7 @@ Case-insensitive; repeated filters combine with implicit AND. Each result carrie
 
 ### Worker-first read with lexical fallback
 
-`read_session` always tries the `history-reader` subagent first. It runs in-process with `tools: []` and receives a sanitized session packet. Model selection: per-call `model` → `mmrCore.subagentModelPreferences["history-reader"]` → profile defaults (`gpt-5.4-mini` → `claude-haiku-4-5`, low thinking). Packet entry-type allowlist: `message`, `compaction`, `branch_summary`, `session_info`; `custom`, `custom_message`, and `extension` entries are dropped.
+`read_session` always tries the `history-reader` subagent first. It runs in-process with `tools: []` and receives a sanitized session packet. Model selection: per-call `model` → `mmrCore.subagentModelPreferences["history-reader"]` → profile defaults (`antigravity/gemini-3.5-flash-extra-low` → `gpt-5.4-mini` → `claude-haiku-4-5`, minimal thinking). Packet entry-type allowlist: `message`, `compaction`, `branch_summary`, `session_info`; `custom`, `custom_message`, and `extension` entries are dropped.
 
 Lexical extraction takes over when the worker route is unauthenticated, missing, cancelled, returns empty, never starts the agent loop, exits nonzero, hits the packet cap, or the runner throws. Fallback runs every excerpt through the same sanitizer and sets `analysisUsed: "lexical"` plus a redacted `analysisFallbackReason`.
 

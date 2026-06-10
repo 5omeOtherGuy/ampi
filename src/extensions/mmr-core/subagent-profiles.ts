@@ -211,10 +211,14 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     name: "history-reader",
     displayName: "History Reader",
     modelPreferences: [
+      // History-reader is a focused extraction worker, so it uses the
+      // same low-effort Flash primary as finder and keeps GPT/Haiku
+      // fallbacks for environments without the provider-pinned route.
+      { model: "gemini-3.5-flash-extra-low", providers: ["antigravity"] },
       { model: "gpt-5.4-mini" },
       { model: "claude-haiku-4-5" },
     ],
-    thinkingLevel: "low",
+    thinkingLevel: "minimal",
     tools: [],
     maxTurns: 1,
     promptRoute: "standalone",

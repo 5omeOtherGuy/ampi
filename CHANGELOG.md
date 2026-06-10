@@ -41,6 +41,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Fixed
 
+- `mmr-session-fallback`: treat `minimalcc-pi` retryable HTTP-200 silent stream stalls (`upstream_capacity_signal=silent_200_stream; retryable=true`) on the `claude-subscription` route as Anthropic overload/capacity failures, so locked-mode sessions can use the existing interactive fallback flow instead of repeatedly dead-ending on the same degraded upstream route. The retry message now says `upstream capacity` for overload-class fallbacks instead of labeling every fallback as a rate limit. Covered by classifier and extension tests.
+
 - Workflow tooling: `npm run gate` no longer reports `PASS` after a failing
   step. The step exit code is now captured immediately instead of from an `if`
   compound (which is `0` when its condition fails), so a failing step is
@@ -61,6 +63,17 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   collision when cleanup ran from a sibling worktree).
 
 ### Changed
+
+- `mmr-history`: the internal `history-reader` profile now uses the same
+  extraction-oriented routing as `finder`: provider-pinned
+  `antigravity/gemini-3.5-flash-extra-low` first, then `gpt-5.4-mini`, then
+  `claude-haiku-4-5`, with `minimal` thinking. `read_session` still runs the
+  worker with `tools: []` and `maxTurns: 1`.
+
+- Contributor tooling: the pull request template now includes a `changelog-sync`
+  marker-block scaffold under a `## Changelog` heading and points the checklist
+  at it, so the PR-body changelog path is the default rather than something to
+  remember.
 
 - Workflow tooling: the pre-test changelog gate no longer forces a manual
   `CHANGELOG.md` edit. `scripts/check-changelog.mjs` now treats a missing entry
@@ -611,6 +624,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 - Root package surface: annotate `src/index.ts` with an export-tier doc block (Stable vs Internal/prompt-assembly vs Test seam) plus in-file section banner comments, and add `docs/public-api-surface.md` with the tiers table. The doc block documents that any future export removal requires a staged compatibility plan (changelog deprecation note, transition window, and a `@deprecated` JSDoc tag first for type-only members). Comment- and docs-only: no package-root export is added or removed.
 - Add `docs/whats-new.md`, a user-facing "what's new" summary of the features merged on 2026-06-05 and 2026-06-06 (Pi-native task and background-task rendering, custom Markdown subagents and the `/mmr-config` setup/import wizard, `task_list` reliability nudges, hardened `/mmr-config` writes, Pi `0.78.x` compatibility, the `edit` guidance refinement, the opt-in `mmr-debug` capture extension, and the `cthulu` removal). Scoped to the last-two-days PRs with a pointer to the changelog for the rest of the `0.2.0` release.
 - Rewrite the root `README.md` intro and lead framing to present `pi-mmr` as a configurable, reversible Pi coding harness — one command swaps the whole profile (model, thinking policy, tools, prompt) — instead of the prior "locked coding profiles" lead. Reframe the "Why pi-mmr" bullets around control, inspectability, provider-neutral routing, and running on your own provider stack; add an `Alt+R` thinking-toggle control, surface thinking policy in the `mmr-core` feature row, and add a "Delegate work to workers" section plus a tool-table row that elevate the background task fleet (`start_task`/`task_poll`/`task_wait`/`task_cancel`) and custom Markdown subagents. Documentation-only: no behavior, API, settings, or tool surface changed.
+- Refreshed `REPOMAP.md` and `INDEX.md` to reflect the current modular extension layout — all twelve source directories (the ten registered extensions plus the deprecated `mmr-toolbox` shim and the developer-only `mmr-debug`), with refreshed per-extension file inventories and entry points — and added per-extension READMEs for `mmr-patch`, `mmr-tasks`, `mmr-async-tasks`, and `mmr-custom-subagents`.
+- Retargeted tool ownership in `README.md` and `docs/` (`README.md`, `quick-reference.md`, `reference-architecture.md`, `public-api.md`, `data-storage-conventions.md`) so `apply_patch`/`task_list` are attributed to `mmr-patch`/`mmr-tasks` and the background-fleet tools to `mmr-async-tasks`, documented the `mmr-async-tasks` and `mmr-custom-subagents` public API, and corrected the persisted todo-state entry type to `mmr-tasks.todo-state`. Documentation-only: no behavior, API, settings, or tool surface changed.
 
 ## 0.2.0 — 2026-06-05
 

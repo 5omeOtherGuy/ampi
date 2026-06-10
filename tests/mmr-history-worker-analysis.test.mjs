@@ -149,13 +149,13 @@ describe("mmr-history worker-first read_session", () => {
 
     const result = await tool.execute("call", { sessionId: sessions[0].id, goal: "worker fallback" }, undefined, undefined, {
       cwd: "/repo/private-project",
-      modelRegistry: makeModelRegistry([["openai-codex", "gpt-5.4-mini"]]),
+      modelRegistry: makeModelRegistry([["antigravity", "gemini-3.5-flash-extra-low"], ["openai-codex", "gpt-5.4-mini"]]),
     });
 
     assert.equal(result.details.analysisUsed, "worker");
     assert.equal(result.details.analysisFallbackReason, undefined);
     assert.equal(captured.profileName, "history-reader");
-    assert.equal(captured.model, "openai-codex/gpt-5.4-mini");
+    assert.equal(captured.model, "antigravity/gemini-3.5-flash-extra-low");
     assert.deepEqual(captured.tools, []);
     assert.equal(result.details.scope, "all_sessions");
     assert.match(result.details.projectRef, /^[0-9a-f]{8}$/);
