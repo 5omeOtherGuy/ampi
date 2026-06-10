@@ -64,6 +64,23 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-core`: re-authored the rush-mode prompt fragments (`rush.intro`,
+  `RUSH_POSTURE`, `rush.closingLine`). The posture now carries only the
+  mode-specific deltas — discovery loop budget, stop conditions, and output
+  shape — and no longer restates rules owned by shared fragments
+  (never-revert, parallel reads, guidance-files-as-constraints) or tool
+  mechanics owned by surface-generated guidance: the `cat`/`sed -n`
+  shell-first read list contradicted the active-guidelines "use read instead
+  of cat or sed" line in every rush surface, and the "no chaining unrelated
+  shell commands" clause weakened the builtin's absolute no-chaining rule;
+  both are removed. New behavior from the rush design spec: check failures
+  are triaged (own breakage vs pre-existing vs environment — fix yours,
+  report the rest), foreign changes touching the task are built on rather
+  than worked around (ask only on conflict), the verification command is
+  taken from AGENTS.md when present, and the closing line gains a
+  report-honestly counterweight; the intro now brackets verification with
+  "verify what you change".
+
 - `mmr-history`: the internal `history-reader` profile now uses the same
   extraction-oriented routing as `finder`: provider-pinned
   `antigravity/gemini-3.5-flash-extra-low` first, then `gpt-5.4-mini`, then
