@@ -25,6 +25,16 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `mmr-subagents` `session_start` handler and the unused `args`/`theme`/`context`
   in `renderMmrBackgroundTaskCall` (underscore-prefixed; signature preserved).
 
+- Internal: split the pure oracle/advisor helpers out of
+  `mmr-subagents/oracle.ts` into two new modules: `oracle-prompt.ts` (the
+  oracle parameters schema, advisor-params coercion, path-containment and
+  image-extension attachment classification, and the worker user-prompt
+  builder) and `oracle-result.ts` (the `OracleDetails`/attachment-record
+  shapes and the progress/final details and content builders). The oracle
+  entry file re-exports the public surface, so every existing import path and
+  the package barrel resolve unchanged; attachment file reads, prompt-builder
+  registration, and tool wiring are untouched. No behavior change.
+
 - Unified environment-flag parsing on `mmr-core`'s canonical `parseBoolEnv`:
   `mmr-debug` (`MMR_DEBUG_CAPTURE_FULL`) and the `mmr-core` changelog debug flag
   no longer hand-roll divergent truthiness checks, so accepted tokens
