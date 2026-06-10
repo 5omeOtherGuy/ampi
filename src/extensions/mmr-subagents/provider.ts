@@ -1,23 +1,8 @@
 import type { MmrFeatureGateProvider, MmrToolProvider, MmrToolRule } from "../mmr-core/types.js";
 import { LIBRARIAN_GATING_REASON } from "./librarian.js";
-import { MMR_CUSTOM_SUBAGENT_TOOL_PREFIX } from "./custom-loader.js";
 
 export const MMR_SUBAGENTS_PROVIDER_NAME = "mmr-subagents";
 export const MMR_SUBAGENTS_FEATURE_GATE = "mmr-subagents";
-/**
- * Distinct feature gate for the async background task tools
- * (`start_task` / `task_poll` / `task_wait` / `task_cancel`). They ship
- * behind their own gate so they are credited and documented separately
- * from the blocking worker tools.
- */
-export const MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE = "mmr-subagents.async-tasks";
-
-/** Async background task tool names owned by this extension. */
-export const MMR_SUBAGENTS_ASYNC_TASK_TOOLS: ReadonlyArray<
-  "start_task" | "task_poll" | "task_wait" | "task_cancel"
-> = ["start_task", "task_poll", "task_wait", "task_cancel"];
-
-const ASYNC_TASK_TOOLS_SET: ReadonlySet<string> = new Set<string>(MMR_SUBAGENTS_ASYNC_TASK_TOOLS);
 
 /**
  * Logical tool names owned by `mmr-subagents`. Mirrors the deferred entries
@@ -30,19 +15,11 @@ export const MMR_SUBAGENTS_OWNED_TOOLS: ReadonlyArray<
   | "finder"
   | "oracle"
   | "librarian"
-  | "start_task"
-  | "task_poll"
-  | "task_wait"
-  | "task_cancel"
 > = [
   "Task",
   "finder",
   "oracle",
   "librarian",
-  "start_task",
-  "task_poll",
-  "task_wait",
-  "task_cancel",
 ];
 
 const OWNED_TOOLS_SET: ReadonlySet<string> = new Set<string>(MMR_SUBAGENTS_OWNED_TOOLS);
@@ -63,10 +40,6 @@ export interface MmrSubagentsCapabilities {
   oracle?: MmrSubagentsCapability;
   Task?: MmrSubagentsCapability;
   librarian?: MmrSubagentsCapability;
-  /** Gates all four async background task tools together. */
-  asyncTasks?: MmrSubagentsCapability;
-  /** Runtime-discovered custom Markdown subagent tool names (`sa__*`). */
-  customTools?: readonly string[] | (() => readonly string[]);
 }
 
 function readCapability(value: MmrSubagentsCapability | undefined): boolean {
@@ -80,20 +53,7 @@ function readCapability(value: MmrSubagentsCapability | undefined): boolean {
   return Boolean(value);
 }
 
-function readCustomTools(capabilities: MmrSubagentsCapabilities): readonly string[] {
-  const tools = capabilities.customTools;
-  if (typeof tools === "function") {
-    try {
-      return tools();
-    } catch {
-      return [];
-    }
-  }
-  return tools ?? [];
-}
-
 function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string): boolean {
-  if (ASYNC_TASK_TOOLS_SET.has(name)) return readCapability(capabilities.asyncTasks);
   switch (name) {
     case "finder":
       return readCapability(capabilities.finder);
@@ -110,8 +70,6 @@ function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string
 
 function formatActiveCapabilities(capabilities: MmrSubagentsCapabilities): string {
   const active: string[] = MMR_SUBAGENTS_OWNED_TOOLS.filter((name) => isCapabilityActive(capabilities, name));
-  const custom = readCustomTools(capabilities);
-  if (custom.length > 0) active.push(`${custom.length} custom Markdown subagent${custom.length === 1 ? "" : "s"}`);
   return active.length === 0 ? "" : active.join(", ");
 }
 
@@ -129,20 +87,6 @@ export function createMmrSubagentsFeatureGateProvider(
   return {
     name: MMR_SUBAGENTS_PROVIDER_NAME,
     evaluate(gate) {
-      if (gate === MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE) {
-        const enabled = readCapability(capabilities.asyncTasks);
-        return enabled
-          ? {
-              gate,
-              status: "enabled",
-              reason: `mmr-subagents async background task tools available: ${MMR_SUBAGENTS_ASYNC_TASK_TOOLS.join(", ")}.`,
-            }
-          : {
-              gate,
-              status: "disabled",
-              reason: "mmr-subagents async background task tools are not enabled.",
-            };
-      }
       if (gate !== MMR_SUBAGENTS_FEATURE_GATE) return undefined;
       const active = formatActiveCapabilities(capabilities);
       if (active.length === 0) {
@@ -180,19 +124,9 @@ export function createMmrSubagentsToolProvider(
   return {
     name: MMR_SUBAGENTS_PROVIDER_NAME,
     resolve(toolName): MmrToolRule | undefined {
-      if (toolName.startsWith(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX)) {
-        return readCustomTools(capabilities).includes(toolName) ? { kind: "active" } : undefined;
-      }
       if (!OWNED_TOOLS_SET.has(toolName)) return undefined;
       if (isCapabilityActive(capabilities, toolName)) {
         return { kind: "active" };
-      }
-      if (ASYNC_TASK_TOOLS_SET.has(toolName)) {
-        return {
-          kind: "gated",
-          gate: MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE,
-          reason: `${toolName}: async background task tools are not enabled.`,
-        };
       }
       return {
         kind: "gated",

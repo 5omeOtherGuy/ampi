@@ -5,9 +5,7 @@ import type {
   ExtensionAPI,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Type, type Static } from "typebox";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
-import { checkMmrToolParams } from "../mmr-core/tool-params.js";
 import {
   assembleMmrSubagentSurface,
   getMmrSubagentPromptBuilder,
@@ -38,21 +36,35 @@ import {
 } from "./worker-model-metadata.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
-  type MmrSpawnedSubagentWorkerDetailsBase,
-  type MmrWorkerOutcomeStatus,
   type MmrSubagentRunOptions,
   type MmrSubagentRunner,
-  type MmrWorkerProgressSnapshot,
-  type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
 } from "./runner.js";
 import {
-  buildSpawnedFinalDetailsBase,
-  buildSpawnedProgressDetailsBase,
-  progressTextOrPlaceholder,
-} from "./worker-result-shaping.js";
+  IMAGE_EXTENSIONS,
+  buildOracleUserPrompt,
+  coerceAdvisorParams,
+  oracleParameters,
+  pathInsideCwd,
+  type InternalAttachment,
+} from "./oracle-prompt.js";
+import {
+  ORACLE_PROGRESS_PLACEHOLDER,
+  buildDetails,
+  buildFinalContent,
+  buildProgressDetails,
+  progressContent,
+  type OracleDetails,
+} from "./oracle-result.js";
+
+// Re-export the oracle params/prompt and result shaping surface from their
+// new homes (`oracle-prompt.ts`, `oracle-result.ts`) so this entry file
+// remains the stable public surface for them.
+export { ORACLE_PARAMETERS_SCHEMA, oracleParameters } from "./oracle-prompt.js";
+export type { OracleParams } from "./oracle-prompt.js";
+export { ORACLE_PROGRESS_PLACEHOLDER } from "./oracle-result.js";
+export type { OracleAttachmentRecord, OracleDetails } from "./oracle-result.js";
 
 export const ORACLE_TOOL_NAME = "oracle";
 
@@ -195,56 +207,6 @@ export const ORACLE_DESCRIPTION = [
   "```",
 ].join("\n");
 
-export const ORACLE_PARAMETERS_SCHEMA = Type.Object(
-  {
-    task: Type.String({
-      description:
-        "The task or question you want the oracle to help with. Be specific about what kind of guidance, review, or planning you need.",
-    }),
-    context: Type.Optional(
-      Type.String({
-        description:
-          "Optional context about the current situation, what you've tried, or background information that would help the oracle provide better guidance.",
-      }),
-    ),
-    files: Type.Optional(
-      Type.Array(Type.String(), {
-        description:
-          "Optional list of specific file paths (text files, images) that the oracle should examine as part of its analysis. These files will be attached to the oracle input.",
-      }),
-    ),
-  },
-  { additionalProperties: false },
-);
-
-export const oracleParameters = ORACLE_PARAMETERS_SCHEMA;
-
-export type OracleParams = Static<typeof ORACLE_PARAMETERS_SCHEMA>;
-
-export interface OracleDetails extends MmrSpawnedSubagentWorkerDetailsBase {
-  worker: string;
-  // Final-run outcome from the shared classifier. The renderer reads this
-  // first, so a successful run that merely preserved a non-fatal provider
-  // `errorMessage` still renders as completed instead of failed.
-  status?: MmrWorkerOutcomeStatus;
-  /** Summary of how each requested `files[]` entry was handled. */
-  attachments: readonly OracleAttachmentRecord[];
-}
-
-export type OracleAttachmentRecord =
-  | {
-      kind: "text";
-      path: string;
-      bytes: number;
-      truncated: boolean;
-      originalBytes: number;
-    }
-  | { kind: "image"; path: string; bytes: number }
-  | { kind: "skipped"; path: string; reason: string };
-
-/** Compact progress status surfaced to the model before the worker finishes. */
-export const ORACLE_PROGRESS_PLACEHOLDER = "oracle: consulting…";
-
 /**
  * Build the oracle worker system prompt. Re-exported here for
  * compatibility with callers that import the builder through the
@@ -254,59 +216,6 @@ export const ORACLE_PROGRESS_PLACEHOLDER = "oracle: consulting…";
  */
 export function buildOracleWorkerSystemPrompt(cwd: string): string {
   return buildOracleWorkerSystemPromptFromPrompts(cwd);
-}
-
-const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-  ".bmp",
-  ".tiff",
-  ".tif",
-  ".svg",
-]);
-
-function coerceAdvisorParams(toolName: string, raw: unknown): OracleParams {
-  if (typeof raw !== "object" || raw === null) {
-    throw new Error(`${toolName} expects an object with a \`task\` field.`);
-  }
-  const validated = checkMmrToolParams(toolName, ORACLE_PARAMETERS_SCHEMA, raw);
-  if (validated.task.trim().length === 0) {
-    throw new Error(`${toolName}.task is required and must be a non-empty string.`);
-  }
-  // Preserve existing files[] normalization: trim each entry and drop
-  // empty strings. TypeBox validates element types but does not
-  // normalize, so this step stays in coerce.
-  let files: string[] | undefined;
-  if (validated.files !== undefined) {
-    const cleaned: string[] = [];
-    for (const entry of validated.files) {
-      const trimmed = entry.trim();
-      if (trimmed.length === 0) continue;
-      cleaned.push(trimmed);
-    }
-    files = cleaned;
-  }
-  const result: OracleParams = { task: validated.task };
-  if (validated.context !== undefined) result.context = validated.context;
-  if (files !== undefined) result.files = files;
-  return result;
-}
-
-interface InternalAttachment {
-  record: OracleAttachmentRecord;
-  /** Text already truncated to the per-file byte cap, if `kind === "text"`. */
-  text?: string;
-}
-
-function pathInsideCwd(absoluteTarget: string, absoluteCwd: string): boolean {
-  const relative = path.relative(absoluteCwd, absoluteTarget);
-  if (relative === "") return true;
-  if (relative.startsWith("..")) return false;
-  if (path.isAbsolute(relative)) return false;
-  return true;
 }
 
 function readTextFileBounded(absolutePath: string, byteLimit: number, totalBytes: number): { text: string; truncated: boolean } {
@@ -384,37 +293,6 @@ function resolveOracleAttachment(
     },
     text: read.text,
   };
-}
-
-function buildOracleUserPrompt(
-  params: OracleParams,
-  attachments: readonly InternalAttachment[],
-): string {
-  const parts: string[] = [`Task: ${params.task.trim()}`];
-  if (params.context && params.context.trim().length > 0) {
-    parts.push("", "Context:", params.context.trim());
-  }
-  if (attachments.length > 0) {
-    parts.push("", "Attached files:");
-    for (const att of attachments) {
-      const record = att.record;
-      if (record.kind === "text") {
-        const header = record.truncated
-          ? `### File: ${record.path} (truncated to first ${record.bytes} bytes of ${record.originalBytes})`
-          : `### File: ${record.path}`;
-        parts.push("", header, "```", att.text ?? "", "```");
-      } else if (record.kind === "image") {
-        parts.push(
-          "",
-          `### Image: ${record.path}`,
-          "(Binary image — open with the `read` tool if you need to view it.)",
-        );
-      } else {
-        parts.push("", `### File: ${record.path} (${record.reason})`);
-      }
-    }
-  }
-  return parts.join("\n");
 }
 
 export interface OracleToolDeps {
@@ -507,93 +385,6 @@ function resolveAdvisorModelPreferences(
     return settingsBlock;
   }
   return requireMmrAdvisorProfile(profileName).modelPreferences;
-}
-
-function progressContent(snapshot: MmrWorkerProgressSnapshot, placeholder: string): string {
-  return progressTextOrPlaceholder(snapshot, placeholder);
-}
-
-function buildProgressDetails(
-  config: MmrAdvisorToolConfig,
-  snapshot: MmrWorkerProgressSnapshot,
-  resolvedModel: string | undefined,
-  cwd: string,
-  attachments: readonly InternalAttachment[],
-  contextWindow: number | undefined,
-): OracleDetails {
-  const base = buildSpawnedProgressDetailsBase({
-    snapshot,
-    cwd,
-    workerTools: config.workerTools,
-    ...(resolvedModel !== undefined ? { resolvedModel } : {}),
-    ...(contextWindow !== undefined ? { contextWindow } : {}),
-  });
-  return { worker: config.workerDiscriminator, ...base, attachments: attachments.map((a) => a.record) };
-}
-
-function buildDetails(
-  config: MmrAdvisorToolConfig,
-  result: MmrWorkerResult,
-  resolvedModel: string | undefined,
-  cwd: string,
-  attachments: readonly InternalAttachment[],
-  contextWindow: number | undefined,
-): OracleDetails {
-  const base = buildSpawnedFinalDetailsBase({
-    result,
-    cwd,
-    workerTools: config.workerTools,
-    ...(resolvedModel !== undefined ? { resolvedModel } : {}),
-    ...(contextWindow !== undefined ? { contextWindow } : {}),
-  });
-  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
-  return { worker: config.workerDiscriminator, status, ...base, attachments: attachments.map((a) => a.record) };
-}
-
-function buildFinalContent(label: string, result: MmrWorkerResult): string {
-  // Failure-state precedence is now owned by `classifyMmrWorkerOutcome`
-  // (fail-on-nonzero policy). The classifier guarantees `spawn-error`
-  // / `activation-error` / `aborted` / `worker-error` win over output
-  // rendering, and the structured `result.spawnError` field takes
-  // precedence over `result.errorMessage` text so spawn-failure reasons
-  // (`spawn ENOENT`, `EACCES`, etc.) are not lost when stderr is empty.
-  const outcome = classifyMmrWorkerOutcome(result, {
-    partialOutputPolicy: "fail-on-nonzero",
-  });
-  if (outcome === "spawn-error") {
-    const reason = result.spawnError ?? result.errorMessage ?? "unknown spawn error";
-    return `${label}: worker spawn failed: ${reason}`;
-  }
-  if (outcome === "activation-error") {
-    return `${label}: subagent activation failed: ${result.subagentActivationError}`;
-  }
-  if (outcome === "aborted") {
-    return `${label}: consultation was cancelled before producing a result.`;
-  }
-  if (outcome === "worker-error") {
-    const tail = result.stderr.trim().split("\n").slice(-3).join("\n");
-    const detailText = tail.length > 0 ? tail : (result.errorMessage ?? "");
-    const detail = detailText.length > 0 ? `\n\n${detailText}` : "";
-    return `${label}: worker exited with code ${result.exitCode ?? "null"}.${detail}`;
-  }
-  if (outcome === "no-agent-start") {
-    // Mirrors finder's diagnostic: the worker exited cleanly without ever
-    // entering the agent loop. Almost always means another Pi extension's
-    // `input` event hook consumed the prompt before any provider call
-    // could happen. Surface the actionable hint instead of the empty
-    // advisory message.
-    const tail = result.stderr.trim().split("\n").slice(-3).join("\n");
-    const detail = tail.length > 0 ? `\n\n${tail}` : "";
-    return `${label}: worker exited before the agent loop started. No advisory output was produced; another Pi extension's input handler likely consumed the prompt. Check stderr for extension diagnostics.${detail}`;
-  }
-  if (outcome === "success") {
-    return result.truncatedFinalOutput || result.finalOutput;
-  }
-  // empty-output
-  if (result.errorMessage && result.errorMessage.length > 0) {
-    return `${label}: worker reported an error: ${result.errorMessage}`;
-  }
-  return `${label}: no advisory output was produced. Re-run with a more specific task or attached files.`;
 }
 
 function assembleAdvisorSystemPrompt(

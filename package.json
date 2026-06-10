@@ -23,10 +23,13 @@
     "extensions": [
       "./src/extensions/mmr-core/index.ts",
       "./src/extensions/mmr-session-fallback/index.ts",
-      "./src/extensions/mmr-toolbox/index.ts",
+      "./src/extensions/mmr-patch/index.ts",
+      "./src/extensions/mmr-tasks/index.ts",
       "./src/extensions/mmr-web/index.ts",
       "./src/extensions/mmr-github/index.ts",
       "./src/extensions/mmr-subagents/index.ts",
+      "./src/extensions/mmr-async-tasks/index.ts",
+      "./src/extensions/mmr-custom-subagents/index.ts",
       "./src/extensions/mmr-history/index.ts"
     ]
   },
@@ -34,10 +37,14 @@
     ".": "./src/index.ts",
     "./extensions/mmr-core": "./src/extensions/mmr-core/index.ts",
     "./extensions/mmr-session-fallback": "./src/extensions/mmr-session-fallback/index.ts",
+    "./extensions/mmr-patch": "./src/extensions/mmr-patch/index.ts",
+    "./extensions/mmr-tasks": "./src/extensions/mmr-tasks/index.ts",
     "./extensions/mmr-toolbox": "./src/extensions/mmr-toolbox/index.ts",
     "./extensions/mmr-web": "./src/extensions/mmr-web/index.ts",
     "./extensions/mmr-github": "./src/extensions/mmr-github/index.ts",
     "./extensions/mmr-subagents": "./src/extensions/mmr-subagents/index.ts",
+    "./extensions/mmr-async-tasks": "./src/extensions/mmr-async-tasks/index.ts",
+    "./extensions/mmr-custom-subagents": "./src/extensions/mmr-custom-subagents/index.ts",
     "./extensions/mmr-history": "./src/extensions/mmr-history/index.ts"
   },
   "scripts": {
@@ -45,8 +52,8 @@
     "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
     "test:cov": "PI_MMR_KEEP_PREPARED_SRC=1 node --test --experimental-test-coverage tests/*.test.mjs",
     "test:cov:clean": "rm -rf .test-src",
-    "check": "tsc --noEmit",
-    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "check": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "check:unused": "npm run check",
     "check:changelog": "node scripts/check-changelog.mjs",
     "check:primary-fresh": "bash scripts/check-primary-fresh.sh",
     "sync:primary": "bash scripts/sync-primary.sh",

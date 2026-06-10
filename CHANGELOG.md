@@ -8,6 +8,124 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- Internal: split the `mmr-async-tasks` public task/group types, registry
+  interfaces, and timing/cap constants out of `async-task-registry.ts` into a
+  new pure-declarations module, `async-task-types.ts`. The registry entry file
+  re-exports everything, so every existing import path and the package barrel
+  resolve unchanged; no behavior change.
+
+- `mmr-core` now imports **zero** sibling extensions:
+  `MMR_CORE_SIBLING_IMPORT_EXCEPTIONS` is empty and the architecture guardrail
+  test keeps it that way. `/mmr-config` sections are inverted onto a core-owned
+  registry (`registerMmrConfigFlowSection`): `mmr-web` and `mmr-custom-subagents`
+  register their own `web` and `subagent (setup/import custom)` sections instead
+  of `mmr-core` importing those flows. The `/mmr-config` menu and behavior are
+  unchanged.
+
+- Internal: split the pure worker-outcome and usage helpers out of
+  `mmr-subagents/runner.ts` into two new modules, `runner-outcome.ts` (outcome
+  classification, final-output extraction/truncation, restricted-child retry
+  predicate) and `worker-usage.ts` (usage-stats shape and accumulation). The
+  runner entry file re-exports the public surface, so every existing import
+  path and the package barrel resolve unchanged; the worker engine
+  (spawn/stream/kill handling) is untouched. No behavior change.
+
+- `npm run check` now enforces no unused locals/parameters
+  (`--noUnusedLocals --noUnusedParameters`); `check:unused` is kept as an alias.
+  Dead-code detection is now part of the standard pre-PR/CI gate instead of an
+  opt-in step, preventing unused code from accumulating.
+
+- Internal: split the pure Task result/outcome shaping out of
+  `mmr-subagents/task.ts` into a new module, `task-result.ts` (the Task status
+  classifier and its types, the `TaskDetails` projection, progress/final
+  `AgentToolResult` builders, and the synthetic failure-result builders shared
+  with the async `start_task` path). The task entry file re-exports the public
+  surface, so every existing import path and the package barrel resolve
+  unchanged; tool registration and run preparation are untouched. No behavior
+  change.
+
+- Removed dead parameters flagged by the stricter check: the unused `ctx` in the
+  `mmr-subagents` `session_start` handler and the unused `args`/`theme`/`context`
+  in `renderMmrBackgroundTaskCall` (underscore-prefixed; signature preserved).
+
+- Internal: split the pure oracle/advisor helpers out of
+  `mmr-subagents/oracle.ts` into two new modules: `oracle-prompt.ts` (the
+  oracle parameters schema, advisor-params coercion, path-containment and
+  image-extension attachment classification, and the worker user-prompt
+  builder) and `oracle-result.ts` (the `OracleDetails`/attachment-record
+  shapes and the progress/final details and content builders). The oracle
+  entry file re-exports the public surface, so every existing import path and
+  the package barrel resolve unchanged; attachment file reads, prompt-builder
+  registration, and tool wiring are untouched. No behavior change.
+
+- Unified environment-flag parsing on `mmr-core`'s canonical `parseBoolEnv`:
+  `mmr-debug` (`MMR_DEBUG_CAPTURE_FULL`) and the `mmr-core` changelog debug flag
+  no longer hand-roll divergent truthiness checks, so accepted tokens
+  (`true/1/yes/on`, plus explicit false values) are consistent across the
+  package. The `mmr-custom-subagents` frontmatter parser is documented as an
+  intentional YAML subset, distinct from env parsing.
+
+- `mmr-core` no longer imports `mmr-github` to gate the `librarian` subagent.
+  Subagent profiles can now declare owner-scoped tool prerequisites
+  (`requiredOwnedTools`), validated fail-closed at activation through a generic
+  owner-scoped owned-tools registry in `mmr-core` (`registerMmrOwnedToolSourcePath`
+  / `hasOwnedToolsFromOwner`). `mmr-github` registers its tool source paths under
+  the `"mmr-github"` owner, so `librarian` still fails closed unless the
+  read-only GitHub tools are present and `mmr-github`-owned. `mmr-github` is
+  removed from the core sibling-import exception list; the librarian gating
+  behavior and message are unchanged.
+
+- **Breaking (extension split):** `mmr-custom-subagents` now owns custom Markdown
+  subagent loading/config/import/runtime behavior, dynamic `sa__*` tool
+  registration, custom profile/prompt registration, custom mode-extra-tool
+  exposure, and the `/mmr-config` custom-subagent setup/import flow.
+  `mmr-subagents` now owns only the built-in blocking worker tools. The new
+  authoritative feature gate is `mmr-custom-subagents`; existing
+  `mmrSubagents.custom.agents` settings and public `sa__*` tool names are
+  unchanged.
+
+- **Breaking (extension split):** `mmr-async-tasks` now owns the background-task
+  tools `start_task`, `task_poll`, `task_wait`, and `task_cancel`, including the
+  async task registry, background-task widget, completion delivery, and
+  `session_shutdown` cleanup. `mmr-subagents` now owns only the blocking worker
+  tools (`finder`, `oracle`, `librarian`, and `Task`) plus custom subagent
+  registration. The new authoritative feature gate is `mmr-async-tasks`; the
+  deprecated `mmr-subagents.async-tasks` gate remains as a compatibility alias.
+  Public tool names and async task ids/status/group semantics are unchanged.
+
+- `mmr-history` / `mmr-subagents`: `mmr-history` now owns and registers the
+  internal `history-reader` subagent prompt builder used by `read_session`.
+  `mmr-subagents` no longer registers `history-reader`, and oracle child
+  workers no longer need the `mmr-subagents` extension solely for nested
+  `read_session` analysis. Covered by history prompt-builder ownership tests,
+  worker-analysis tests, and child-extension-scope tests.
+
+- **Breaking (extension split):** `mmr-toolbox` is split into two focused
+  extensions. `mmr-patch` now owns `apply_patch` and `mmr-tasks` now owns
+  `task_list` (and the deferred `chart` catalog entry). Both are registered in
+  `package.json` `pi.extensions` and exported at `./extensions/mmr-patch` and
+  `./extensions/mmr-tasks`. The tool names `apply_patch` and `task_list` are
+  unchanged. `./extensions/mmr-toolbox` remains as a deprecated compatibility
+  shim that re-exports the former surface (including `registerMmrToolboxProviders`)
+  but is no longer auto-loaded and registers no tools itself; import from
+  `mmr-patch`/`mmr-tasks` (or the package root) instead. The persisted todo-state
+  key is renamed from `mmr-toolbox.todo-state` to `mmr-tasks.todo-state`; existing
+  in-progress task-list widget state is reset once on upgrade.
+
+### Added
+
+- `mmr-core`: added a declarative extension capability manifest
+  (`src/extensions/manifest.ts`) describing every `pi-mmr` extension's
+  entrypoint, public export subpath, owned tools, feature gates, risk class, and
+  subagent child role, plus architecture guardrail tests
+  (`tests/mmr-architecture-manifest.test.mjs`) that keep the manifest consistent
+  with `package.json` `pi.extensions`/`exports`, the on-disk extension layout,
+  the subagent child keep-set, and the planned-tool catalog, and that fail when
+  `mmr-core` gains a new sibling-extension import outside the recorded exception
+  set. Internal contributor guardrail; no user-facing behavior change.
+
+### Changed
+
 - `mmr-subagents` / `mmr-toolbox`: the background-task progress surface no longer
   draws a live inline card during startup or while a run is in flight. The
   inline `start_task` / `start_task.fleet` / group-opener cards stay invisible

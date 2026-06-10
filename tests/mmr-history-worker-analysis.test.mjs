@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPTS_MODULE = "extensions/mmr-history/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 
 function sessionInfo(overrides = {}) {
@@ -82,9 +82,9 @@ after(cleanupLoadedSource);
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
-  const { registerMmrSubagentsPromptBuilders } = await importSource(PROMPTS_MODULE);
+  const { registerMmrHistoryPromptBuilders } = await importSource(PROMPTS_MODULE);
   clearMmrSubagentPromptBuilders();
-  registerMmrSubagentsPromptBuilders();
+  registerMmrHistoryPromptBuilders();
 });
 
 describe("mmr-history settings (single gate)", () => {

@@ -219,28 +219,32 @@ export {
 } from "./extensions/mmr-session-fallback/state.js";
 export type { PersistedMmrSessionFallbackOverride } from "./extensions/mmr-session-fallback/state.js";
 export { getMmrSessionFallbackOverrideSnapshot } from "./extensions/mmr-session-fallback/runtime.js";
-// --- mmr-toolbox (Stable) ---
-export { ApplyPatchError } from "./extensions/mmr-toolbox/apply-patch.js";
-export { registerMmrToolboxProviders } from "./extensions/mmr-toolbox/index.js";
+// --- mmr-patch (Stable) ---
+export { ApplyPatchError } from "./extensions/mmr-patch/apply-patch.js";
+export { registerMmrPatchProviders } from "./extensions/mmr-patch/index.js";
+// --- mmr-tasks (Stable) ---
+export { registerMmrTasksProviders } from "./extensions/mmr-tasks/index.js";
 export {
   TODO_STATE_ENTRY,
   TODO_STATE_VERSION,
   findLatestPersistedTodoState,
   parsePersistedTodoState,
   toPersistedTodoState,
-} from "./extensions/mmr-toolbox/todo-list.js";
+} from "./extensions/mmr-tasks/todo-list.js";
 export type {
   PersistedTodoState,
   TaskListItem,
   TaskListSubtask,
   TodoStatus,
-} from "./extensions/mmr-toolbox/todo-list.js";
+} from "./extensions/mmr-tasks/todo-list.js";
 export {
   TASK_LIST_WIDGET_ID,
   TodoValidationError,
   createTodoListTool,
   refreshTodoWidget,
-} from "./extensions/mmr-toolbox/todo-list-tool.js";
+} from "./extensions/mmr-tasks/todo-list-tool.js";
+// --- mmr-toolbox (Deprecated compatibility shim: split into mmr-patch + mmr-tasks) ---
+export { registerMmrToolboxProviders } from "./extensions/mmr-toolbox/index.js";
 // --- mmr-history (Stable) ---
 export {
   createMmrHistoryExtension,
@@ -307,7 +311,7 @@ export type {
   RefreshTodoWidgetOptions,
   TodoListDetails,
   TodoListErrorDetails,
-} from "./extensions/mmr-toolbox/todo-list-tool.js";
+} from "./extensions/mmr-tasks/todo-list-tool.js";
 
 // --- mmr-web (Stable) ---
 export type { MmrWebSettings, LoadedMmrWebSettings } from "./extensions/mmr-web/config.js";
@@ -364,14 +368,24 @@ export type { MmrGithubFactoryOverrides } from "./extensions/mmr-github/index.js
 //     ORACLE_DEFAULT_MODEL_PREFERENCES is an Internal/legacy convenience
 //     constant) ---
 export {
-  MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE,
-  MMR_SUBAGENTS_ASYNC_TASK_TOOLS,
   MMR_SUBAGENTS_FEATURE_GATE,
   MMR_SUBAGENTS_OWNED_TOOLS,
   MMR_SUBAGENTS_PROVIDER_NAME,
   createMmrSubagentsFeatureGateProvider,
   createMmrSubagentsToolProvider,
 } from "./extensions/mmr-subagents/provider.js";
+export {
+  MMR_ASYNC_TASKS_FEATURE_GATE,
+  MMR_ASYNC_TASKS_PROVIDER_NAME,
+  MMR_ASYNC_TASK_TOOLS,
+  MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE,
+  MMR_SUBAGENTS_ASYNC_TASK_TOOLS,
+  createMmrAsyncTasksFeatureGateProvider,
+  createMmrAsyncTasksToolProvider,
+} from "./extensions/mmr-async-tasks/provider.js";
+export { createMmrAsyncTasksExtension } from "./extensions/mmr-async-tasks/index.js";
+export type { MmrAsyncTasksFactoryOverrides } from "./extensions/mmr-async-tasks/index.js";
+export type { MmrAsyncTasksCapabilities } from "./extensions/mmr-async-tasks/provider.js";
 export { createMmrSubagentsExtension } from "./extensions/mmr-subagents/index.js";
 export type { MmrSubagentsFactoryOverrides } from "./extensions/mmr-subagents/index.js";
 export type { MmrSubagentsCapabilities } from "./extensions/mmr-subagents/provider.js";
@@ -438,6 +452,9 @@ export type {
 } from "./extensions/mmr-subagents/librarian.js";
 export {
   buildHistoryReaderWorkerSystemPrompt,
+  registerMmrHistoryPromptBuilders,
+} from "./extensions/mmr-history/prompts.js";
+export {
   buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerRolePrompt,
 } from "./extensions/mmr-subagents/prompts.js";
 // Note: the worker outcome discriminator type is intentionally NOT
@@ -495,12 +512,12 @@ export {
   createTaskPollTool,
   createTaskWaitTool,
   registerAsyncTaskTools,
-} from "./extensions/mmr-subagents/async-task-tools.js";
+} from "./extensions/mmr-async-tasks/async-task-tools.js";
 export type {
   AsyncTaskAgentName,
   AsyncTaskToolDeps,
   AsyncTaskToolDetails,
-} from "./extensions/mmr-subagents/async-task-tools.js";
+} from "./extensions/mmr-async-tasks/async-task-tools.js";
 export {
   ASYNC_TASK_CANCEL_DEAD_AFTER_MS,
   ASYNC_TASK_MAX_RUNTIME_MS,
@@ -515,7 +532,7 @@ export {
   getMmrAsyncTaskRegistry,
   isValidAsyncTaskGroupId,
   toPublicAsyncTaskSnapshot,
-} from "./extensions/mmr-subagents/async-task-registry.js";
+} from "./extensions/mmr-async-tasks/async-task-registry.js";
 export type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskBoardEntry,
@@ -530,7 +547,7 @@ export type {
   StartAsyncTaskArgs,
   StartAsyncTaskResult,
   WaitForAsyncTaskResult,
-} from "./extensions/mmr-subagents/async-task-registry.js";
+} from "./extensions/mmr-async-tasks/async-task-registry.js";
 export {
   DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS,
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
@@ -572,6 +589,15 @@ export type {
   RunMmrSubagentWorkerOptions,
 } from "./extensions/mmr-subagents/runner.js";
 export {
+  MMR_CUSTOM_SUBAGENTS_FEATURE_GATE,
+  MMR_CUSTOM_SUBAGENTS_PROVIDER_NAME,
+  createMmrCustomSubagentsFeatureGateProvider,
+  createMmrCustomSubagentsToolProvider,
+} from "./extensions/mmr-custom-subagents/provider.js";
+export { createMmrCustomSubagentsExtension } from "./extensions/mmr-custom-subagents/index.js";
+export type { MmrCustomSubagentsFactoryOverrides } from "./extensions/mmr-custom-subagents/index.js";
+export type { MmrCustomSubagentsCapabilities } from "./extensions/mmr-custom-subagents/provider.js";
+export {
   DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH,
   MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES,
   MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH,
@@ -580,9 +606,9 @@ export {
   normalizeMmrCustomSubagentToolPatterns,
   parseMmrCustomSubagentMarkdown,
   toMmrCustomSubagentToolName,
-} from "./extensions/mmr-subagents/custom-loader.js";
+} from "./extensions/mmr-custom-subagents/custom-loader.js";
 export type {
   DiscoverMmrCustomSubagentsArgs,
   MmrCustomSubagentDefinition,
   ParseMmrCustomSubagentMarkdownArgs,
-} from "./extensions/mmr-subagents/custom-loader.js";
+} from "./extensions/mmr-custom-subagents/custom-loader.js";

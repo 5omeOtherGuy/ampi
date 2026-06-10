@@ -47,20 +47,19 @@ import { isRecord } from "../mmr-core/internal/json.js";
  * Tool ownership backing each set:
  *  - finder       — tools read/grep/find are Pi built-ins; only mmr-core needed.
  *  - oracle       — read/grep/find (built-in) + web_search/read_web_page
- *                   (mmr-web) + read_session/find_session (mmr-history). mmr-
- *                   subagents is also required because read_session's model-
- *                   backed `history-reader` assembly resolves the history-reader
- *                   prompt builder registered by mmr-subagents.
+ *                   (mmr-web) + read_session/find_session (mmr-history). The
+ *                   nested model-backed `history-reader` assembly is also
+ *                   owned by mmr-history.
  *  - librarian    — GitHub repository tools owned by mmr-github.
  *  - task-subagent— read/bash/edit/write/skill (built-in) + read_web_page/
  *                   web_search (mmr-web) + finder (mmr-subagents) + task_list
- *                   (mmr-toolbox).
+ *                   (mmr-tasks).
  */
 export const MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   finder: ["mmr-core"],
-  oracle: ["mmr-core", "mmr-web", "mmr-history", "mmr-subagents"],
+  oracle: ["mmr-core", "mmr-web", "mmr-history"],
   librarian: ["mmr-core", "mmr-github"],
-  "task-subagent": ["mmr-core", "mmr-web", "mmr-subagents", "mmr-toolbox"],
+  "task-subagent": ["mmr-core", "mmr-web", "mmr-subagents", "mmr-tasks"],
 };
 
 /** Minimal host surface for enumerating loaded extension source paths. */
