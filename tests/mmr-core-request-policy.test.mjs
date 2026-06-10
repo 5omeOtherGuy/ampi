@@ -353,7 +353,7 @@ describe("mmr-core thinking-level toggle", () => {
     ];
     for (const [input, expected] of cases) {
       const rendered = formatMmrPolicyContext(MMR_REQUEST_POLICIES.smart, { contextWindow: input });
-      assert.match(rendered, new RegExp(`^${expected.replace(/[.]/g, "\\.")} total`), `formatTokenCount(${input})`);
+      assert.ok(rendered.startsWith(`${expected} total`), `formatTokenCount(${input})`);
     }
   });
 });

@@ -171,7 +171,6 @@ describe("mmr-core activation context cap", () => {
 
 describe("mmr-core defensive reassertion", () => {
   it("re-applies the cap when the active model drifts back to an uncapped window", async () => {
-    const runtime = await importRuntime();
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
@@ -248,7 +247,6 @@ describe("mmr-core defensive reassertion", () => {
   });
 
   it("does not reassert when the active model drifted to a different provider/id (genuine native change)", async () => {
-    const runtime = await importRuntime();
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },

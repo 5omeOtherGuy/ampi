@@ -240,7 +240,6 @@ describe("async-task-registry: an all-ready group is non-terminal (not delivered
     const { groupId, ids } = openReadyGroup(reg, 1);
     // A poll while ready must NOT mark the group observed.
     reg.getGroup("sess-A", groupId, { observe: true });
-    const run = makeDeferredRun();
     // Re-declare is not possible; launch the existing ready member instead.
     reg.launchTask("sess-A", ids[0]);
     assert.equal(reg.getGroup("sess-A", groupId).status, "running");
