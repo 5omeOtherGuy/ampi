@@ -189,6 +189,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   key is renamed from `mmr-toolbox.todo-state` to `mmr-tasks.todo-state`; existing
   in-progress task-list widget state is reset once on upgrade.
 
+- `mmr-core`: refined locked-mode prompt body guidance and refreshed deterministic prompt fixtures that cover the rendered surface.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest
