@@ -11,7 +11,7 @@ export const MMR_IDENTITY_LINE =
 export const MMR_TOOL_USE_HEADING = "## Tool use";
 
 export const MMR_TOOL_USE_POSTURE_LINE =
-  "Use context first; reach for a tool only when it would change your answer. Run independent read-only calls in parallel; never parallelize edits to the same file. Avoid repeated reads of the same content.";
+  "Use context first; reach for a tool when it would change your answer — never guess what a tool can tell you. Run independent read-only calls in parallel; never parallelize edits to the same file. Don't re-read content you already have.";
 
 export const MMR_ADDITIONAL_TOOLS_LINE =
   "In addition to the tools above, you may have access to other custom tools depending on the project.";

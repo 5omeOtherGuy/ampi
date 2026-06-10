@@ -61,7 +61,7 @@ const PROMPTED_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 const SMART_POSTURE_HEADING = "## Smart mode";
 const DEEP_POSTURE_HEADING = "## Deep mode";
 const SMART_CLOSING_LINE =
-  "Answer in fewer than 4 lines of prose unless asked for more detail, or unless a complete report needs more space.";
+  "Answer in fewer than 4 lines of prose unless the user asks for more detail or a complete report needs the space.";
 
 describe("assembleActiveSurface() prompt-tail drift hardening", () => {
   let assembleActiveSurface;

@@ -199,7 +199,7 @@ describe("mmr-core prompt layer", () => {
   it("instructs raw diagram output without diagram code fences (rush omits the diagrams fragment)", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
     const diagramSentence =
-      "When a picture beats prose for architecture, flow, state, or relationships, output the raw box-drawing diagram only.";
+      "When a picture beats prose for architecture, flow, state, or relationships, draw it with box-drawing characters";
 
     for (const mode of MODES) {
       const state = createState({ mode });
