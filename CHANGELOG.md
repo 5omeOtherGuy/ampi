@@ -210,6 +210,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-core`: consolidated all static mode-prompt prose (shared tool guidance, shared coding-guidance fragments, mode postures, intros, and closing lines) into a single authoring module, `prompt-content.ts`; `prompt-templates.ts` and `prompt-modules.ts` remain as compatibility shims re-exporting the same names. Fragment ordering, mode recipes, and runtime prompt assembly are unchanged, and every locked-mode prompt stays byte-identical, anchored by the existing prompt snapshot and effective-surface fixtures.
 
+- `mmr-core`: re-authored the deep-mode prompt fragments (intro, posture sections, closing line) for sharper hypothesis-driven guidance; deep prompt fixtures updated to match.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest
