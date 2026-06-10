@@ -62,6 +62,12 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `mmr-history`: the internal `history-reader` profile now uses the same
+  extraction-oriented routing as `finder`: provider-pinned
+  `antigravity/gemini-3.5-flash-extra-low` first, then `gpt-5.4-mini`, then
+  `claude-haiku-4-5`, with `minimal` thinking. `read_session` still runs the
+  worker with `tools: []` and `maxTurns: 1`.
+
 - Contributor tooling: the pull request template now includes a `changelog-sync`
   marker-block scaffold under a `## Changelog` heading and points the checklist
   at it, so the PR-body changelog path is the default rather than something to
