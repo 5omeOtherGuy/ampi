@@ -1,9 +1,9 @@
 import type { MmrModeKey, MmrPromptBlockKind } from "./types.js";
 import {
-  MMR_MODE_PROMPT_TEMPLATES as LEGACY_MODE_PROMPT_TEMPLATES,
+  MMR_MODE_PROMPT_TEMPLATES as AUTHORED_MODE_PROMPT_TEMPLATES,
   type MmrModeBlockTemplate,
-} from "./prompt-templates.js";
-import { SHARED_CODING_GUIDANCE_FRAGMENT_IDS } from "./prompt-modules.js";
+  SHARED_CODING_GUIDANCE_FRAGMENT_IDS,
+} from "./prompt-content.js";
 
 export const MMR_IDENTITY_LINE =
   "You are an expert coding assistant operating inside pi, a coding agent harness.";
@@ -118,7 +118,7 @@ export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQ
 
 /**
  * Forces every registry entry to keep its key, `id`, and `blockKind` identical,
- * so the duplicated fragment-id vocabulary across `prompt-modules.ts`,
+ * so the duplicated fragment-id vocabulary across `prompt-content.ts`,
  * `prompt-registry.ts`, `types.ts`, and `prompt-assembly.ts` cannot drift
  * silently (a mismatched key/id/blockKind fails `tsc`).
  */
@@ -249,7 +249,7 @@ function recipe(
   mode: PromptedMmrModeKey,
   fragments: readonly MmrPromptFragmentId[] = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE,
 ): MmrModePromptRecipe {
-  const template = LEGACY_MODE_PROMPT_TEMPLATES[mode];
+  const template = AUTHORED_MODE_PROMPT_TEMPLATES[mode];
   return {
     mode,
     basePromptId: "pi-native-default-v1",
