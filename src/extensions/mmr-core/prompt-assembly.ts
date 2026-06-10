@@ -10,6 +10,7 @@ import {
   MMR_RESPONSE_STYLE_HEADING,
   MMR_TOOL_USE_HEADING,
   MMR_TOOL_USE_POSTURE_LINE,
+  type MmrModePromptRecipe,
   type MmrPromptFragmentId,
 } from "./prompt-registry.js";
 import type {
@@ -41,24 +42,79 @@ function findHeaderStart(prompt: string, anchor: string, fromIdx: number): numbe
 
 const MMR_TAIL_SEPARATOR = "\n\n";
 
+function renderMmrOwnedTailFragment(
+  fragmentId: MmrPromptFragmentId,
+  previousRecipe: MmrModePromptRecipe,
+): string | undefined {
+  switch (fragmentId) {
+    case "shared-tool-guidance":
+      return SHARED_TOOL_GUIDANCE;
+    case "autonomy":
+    case "discovery-discipline":
+    case "pragmatism":
+    case "verification":
+    case "careful-actions":
+    case "diagrams":
+    case "file-links":
+    case "collaboration":
+      return SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId];
+    case "mode-posture":
+      return previousRecipe.postureSections;
+    case "response-style":
+      return `${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
+    case "identity":
+    case "tool-lead-in":
+    case "active-tools":
+    case "active-guidelines":
+    case "builtin-tool-guidance":
+    case "pi-docs":
+    case "preserved-tail":
+      return undefined;
+    default: {
+      const exhaustive: never = fragmentId;
+      return exhaustive;
+    }
+  }
+}
+
+function renderPostPiDocsMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const piDocsIndex = previousRecipe.fragments.indexOf("pi-docs");
+  if (piDocsIndex === -1) return "";
+  return previousRecipe.fragments
+    .slice(piDocsIndex + 1)
+    .map((fragmentId) => renderMmrOwnedTailFragment(fragmentId, previousRecipe))
+    .filter((fragmentText): fragmentText is string => fragmentText !== undefined)
+    .join("\n\n");
+}
+
+function renderLegacyMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const codingGuidance = previousRecipe.fragments
+    .filter((fragmentId) => Object.hasOwn(SHARED_CODING_GUIDANCE_FRAGMENTS, fragmentId))
+    .map((fragmentId) => SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId as keyof typeof SHARED_CODING_GUIDANCE_FRAGMENTS])
+    .join("\n\n");
+  return `${SHARED_TOOL_GUIDANCE}\n\n${codingGuidance}\n\n${previousRecipe.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
+}
+
 /**
- * Exact-text reconstruction of the MMR-owned tail blocks (shared tool
- * guidance, shared coding guidance, mode posture, response style) for every
- * known mode template. Used to detect and strip a previously-injected MMR tail when
- * `assembleActiveSurface` re-runs on an already-assembled prompt, so the
- * blocks are replaced rather than duplicated. Mode-independent: the parent
- * prompt fed into a re-assembly may have been produced for a different mode
- * (e.g. a `deep` parent aliased to a `smart` Task base).
+ * Exact-text reconstruction of MMR-owned blocks that sit immediately after
+ * Pi's docs block for every known mode template. Used to detect and strip a
+ * previously-injected MMR tail when `assembleActiveSurface` re-runs on an
+ * already-assembled prompt, so the blocks are replaced rather than duplicated.
+ * Mode-independent: the parent prompt fed into a re-assembly may have been
+ * produced for a different mode (e.g. a `deep` parent aliased to a `smart` Task
+ * base). Includes the legacy all-posture tail shape so already-captured parent
+ * prompts from older `pi-mmr` versions still strip cleanly.
  */
-const PREVIOUS_MMR_TAILS: readonly string[] = Object.values(MMR_MODE_PROMPT_RECIPES).map(
-  (previousRecipe) => {
-    const codingGuidance = previousRecipe.fragments
-      .filter((fragmentId) => Object.hasOwn(SHARED_CODING_GUIDANCE_FRAGMENTS, fragmentId))
-      .map((fragmentId) => SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId as keyof typeof SHARED_CODING_GUIDANCE_FRAGMENTS])
-      .join("\n\n");
-    return `${SHARED_TOOL_GUIDANCE}\n\n${codingGuidance}\n\n${previousRecipe.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
-  },
-);
+const PREVIOUS_MMR_TAILS: readonly string[] = [
+  ...new Set(
+    Object.values(MMR_MODE_PROMPT_RECIPES)
+      .flatMap((previousRecipe) => [
+        renderPostPiDocsMmrTail(previousRecipe),
+        renderLegacyMmrTail(previousRecipe),
+      ])
+      .filter((tail) => tail.length > 0),
+  ),
+];
 
 /**
  * Locate the end of a previously-injected MMR tail that sits immediately

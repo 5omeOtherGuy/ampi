@@ -7,21 +7,21 @@ after(cleanupLoadedSource);
 const PROMPTED_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 const EXPECTED_SEQUENCE = [
   "identity",
+  "autonomy",
+  "discovery-discipline",
+  "pragmatism",
+  "verification",
+  "careful-actions",
+  "mode-posture",
   "tool-lead-in",
   "active-tools",
   "active-guidelines",
   "builtin-tool-guidance",
   "pi-docs",
   "shared-tool-guidance",
-  "autonomy",
-  "discovery-discipline",
-  "pragmatism",
-  "verification",
-  "careful-actions",
   "diagrams",
   "file-links",
   "collaboration",
-  "mode-posture",
   "response-style",
   "preserved-tail",
 ];
@@ -139,11 +139,24 @@ describe("mmr-core prompt registry", () => {
     // ids, in order — this is the single source of truth shared with the registry.
     assert.deepEqual([...modules.SHARED_CODING_GUIDANCE_FRAGMENT_IDS], codingIds);
     assert.deepEqual(Object.keys(modules.SHARED_CODING_GUIDANCE_FRAGMENTS), codingIds);
-    // The default sequence embeds the coding ids contiguously, in canonical order.
-    const start = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("autonomy");
-    assert.deepEqual(
-      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.slice(start, start + codingIds.length),
-      codingIds,
+    // The default sequence keeps coding ids in canonical relative order, while
+    // intentionally splitting task/risk posture before tool guidance and
+    // communication-style guidance after it.
+    let previousIndex = -1;
+    for (const id of codingIds) {
+      const index = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf(id);
+      assert.ok(index > previousIndex, `${id}: coding fragment must preserve canonical relative order`);
+      previousIndex = index;
+    }
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("careful-actions") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("tool-lead-in"),
+      "task/risk posture must precede tool guidance",
+    );
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("tool-lead-in") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("diagrams"),
+      "style-oriented guidance must follow tool guidance",
     );
     // Every registry entry keeps key === id === blockKind.
     for (const [key, def] of Object.entries(MMR_PROMPT_FRAGMENTS)) {

@@ -214,6 +214,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-core`: deep-mode method posture now keeps multiple candidate explanations or approaches alive (prompt wording fix); deep prompt fixtures updated.
 
+- `mmr-core`: prompt assembly now places task/risk and mode posture before tool guidance, matching claude-code-style ordering while preserving byte-stable re-assembly for subagent prompts.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest

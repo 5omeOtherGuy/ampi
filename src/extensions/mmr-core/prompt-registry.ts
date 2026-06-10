@@ -2,7 +2,6 @@ import type { MmrModeKey, MmrPromptBlockKind } from "./types.js";
 import {
   MMR_MODE_PROMPT_TEMPLATES as AUTHORED_MODE_PROMPT_TEMPLATES,
   type MmrModeBlockTemplate,
-  SHARED_CODING_GUIDANCE_FRAGMENT_IDS,
 } from "./prompt-content.js";
 
 export const MMR_IDENTITY_LINE =
@@ -92,14 +91,21 @@ export const MMR_PROMPT_BASES = {
 
 export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
   "identity",
+  "autonomy",
+  "discovery-discipline",
+  "pragmatism",
+  "verification",
+  "careful-actions",
+  "mode-posture",
   "tool-lead-in",
   "active-tools",
   "active-guidelines",
   "builtin-tool-guidance",
   "pi-docs",
   "shared-tool-guidance",
-  ...SHARED_CODING_GUIDANCE_FRAGMENT_IDS,
-  "mode-posture",
+  "diagrams",
+  "file-links",
+  "collaboration",
   "response-style",
   "preserved-tail",
 ] as const satisfies readonly MmrPromptFragmentId[];

@@ -63,13 +63,14 @@ const MODE_FOREIGN_MARKERS = {
 // Expected coarse block order. Matches the existing Phase B baseline.
 const EXPECTED_BLOCK_ORDER = [
   '<mmr_mode name="',
+  "## Autonomy and persistence",
+  "## Executing actions with care",
   "## Tool use",
   "Available tools:",
   "Guidelines:",
   "## Built-in tool guidance",
   "Pi documentation (",
   "## Tool execution policy",
-  "## Autonomy and persistence",
   "## Response style",
   "# Project Context",
   "Current date:",
@@ -208,7 +209,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       }
     });
 
-    it(`${mode}: tool-use lead-in precedes active tools, shared guidance follows Pi docs, mode posture follows shared guidance`, async () => {
+    it(`${mode}: posture precedes tools, shared tool policy follows Pi docs, and style precedes response`, async () => {
       const { assembleActiveSurface, MMR_TOOL_USE_HEADING, MMR_TOOL_USE_POSTURE_LINE } = await importSource(
         "extensions/mmr-core/prompt-assembly.ts",
       );
@@ -218,24 +219,30 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
         activeToolManifest: [],
       });
       const sp = result.systemPrompt;
+      const autonomyIdx = sp.indexOf("## Autonomy and persistence");
+      const carefulActionsIdx = sp.indexOf("## Executing actions with care");
+      const postureIdx = sp.indexOf(MODE_MARKERS[mode] === '<mmr_mode name="smart">' || MODE_MARKERS[mode] === '<mmr_mode name="smartGPT">'
+        ? "## Smart mode"
+        : MODE_MARKERS[mode]);
       const toolHeadingIdx = sp.indexOf(MMR_TOOL_USE_HEADING);
       const leadInIdx = sp.indexOf(MMR_TOOL_USE_POSTURE_LINE);
       const availIdx = sp.indexOf("Available tools:");
       const guidelinesIdx = sp.indexOf("Guidelines:");
       const docsIdx = sp.indexOf("Pi documentation (");
       const sharedToolIdx = sp.indexOf("## Tool execution policy");
-      const sharedCodingIdx = sp.indexOf("## Autonomy and persistence");
-      const postureIdx = sp.indexOf(MODE_MARKERS[mode] === '<mmr_mode name="smart">' || MODE_MARKERS[mode] === '<mmr_mode name="smartGPT">'
-        ? "## Smart mode"
-        : MODE_MARKERS[mode]);
+      const styleIdx = mode === "rush" ? sp.indexOf("## File links") : sp.indexOf("## Diagrams");
+      const responseStyleIdx = sp.indexOf("## Response style");
       assert.ok(toolHeadingIdx !== -1 && leadInIdx !== -1, `${mode}: missing tool-use heading or lead-in`);
+      assert.ok(autonomyIdx < carefulActionsIdx, `${mode}: task/risk posture must stay in order`);
+      assert.ok(carefulActionsIdx < postureIdx, `${mode}: shared posture must precede mode posture`);
+      assert.ok(postureIdx < toolHeadingIdx, `${mode}: mode posture must precede tool guidance`);
       assert.ok(toolHeadingIdx < availIdx, `${mode}: ## Tool use must precede Available tools:`);
       assert.ok(leadInIdx < availIdx, `${mode}: tool-use lead-in must precede Available tools:`);
       assert.ok(availIdx < guidelinesIdx, `${mode}: Available tools must precede Guidelines`);
       assert.ok(guidelinesIdx < docsIdx, `${mode}: Guidelines must precede Pi documentation`);
       assert.ok(docsIdx < sharedToolIdx, `${mode}: Pi documentation must precede shared tool guidance`);
-      assert.ok(sharedToolIdx < sharedCodingIdx, `${mode}: shared tool guidance must precede shared coding guidance`);
-      assert.ok(sharedCodingIdx < postureIdx, `${mode}: shared coding guidance must precede mode posture`);
+      assert.ok(sharedToolIdx < styleIdx, `${mode}: shared tool policy must precede style guidance`);
+      assert.ok(styleIdx < responseStyleIdx, `${mode}: style guidance must precede response style`);
     });
   }
 });

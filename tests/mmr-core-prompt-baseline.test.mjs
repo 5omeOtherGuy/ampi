@@ -64,12 +64,13 @@ const MODES = ["smart", "rush", "large", "deep"];
 // preserve this ordering.
 const EXPECTED_BLOCK_ORDER = [
   '<mmr_mode name="',
+  "## Autonomy and persistence",
+  "## Executing actions with care",
   "## Tool use",
   "Available tools:",
   "Guidelines:",
   "Pi documentation (",
   "## Tool execution policy",
-  "## Autonomy and persistence",
   "## Response style",
   "# Project Context",
   "<available_skills>",

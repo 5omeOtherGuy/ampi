@@ -62,6 +62,19 @@ const SMART_POSTURE_HEADING = "## Smart mode";
 const DEEP_POSTURE_HEADING = "## Deep mode";
 const SMART_CLOSING_LINE =
   "Answer in fewer than 4 lines of prose unless the user asks for more detail or a complete report needs the space.";
+const AUTONOMY_HEADING = "## Autonomy and persistence";
+const CAREFUL_ACTIONS_HEADING = "## Executing actions with care";
+const TOOL_USE_HEADING = "## Tool use";
+const DIAGRAMS_HEADING = "## Diagrams";
+const RESPONSE_STYLE_HEADING = "## Response style";
+
+function assertBefore(prompt, before, after, message) {
+  const beforeIndex = prompt.indexOf(before);
+  const afterIndex = prompt.indexOf(after);
+  assert.notEqual(beforeIndex, -1, `${message}: missing ${before}`);
+  assert.notEqual(afterIndex, -1, `${message}: missing ${after}`);
+  assert.ok(beforeIndex < afterIndex, `${message}: expected ${before} before ${after}`);
+}
 
 describe("assembleActiveSurface() prompt-tail drift hardening", () => {
   let assembleActiveSurface;
@@ -69,6 +82,30 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
   beforeEach(async () => {
     const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
+  });
+
+  it("places task/risk posture before tool guidance and preserves that order across re-assembly", () => {
+    const first = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+    });
+    assert.equal(first.passthroughReason, undefined, "first assembly must rewrite Pi's prompt");
+
+    assertBefore(first.systemPrompt, AUTONOMY_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, CAREFUL_ACTIONS_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, TOOL_USE_HEADING, DIAGRAMS_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, DIAGRAMS_HEADING, RESPONSE_STYLE_HEADING, "fresh smart prompt");
+
+    const second = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: first.systemPrompt,
+      activeToolManifest: [],
+    });
+    assert.equal(second.systemPrompt, first.systemPrompt, "posture-first prompt must re-assemble byte-stably");
+    assert.equal(second.passthroughReason, undefined, "re-assembly must remain a real rewrite");
+    assert.equal(second.systemPrompt.split(AUTONOMY_HEADING).length - 1, 1, "autonomy heading must not duplicate");
+    assert.equal(second.systemPrompt.split(TOOL_USE_HEADING).length - 1, 1, "tool-use heading must not duplicate");
   });
 
   for (const mode of PROMPTED_MODES) {
