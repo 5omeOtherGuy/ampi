@@ -8,6 +8,12 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- Internal: split the `mmr-async-tasks` public task/group types, registry
+  interfaces, and timing/cap constants out of `async-task-registry.ts` into a
+  new pure-declarations module, `async-task-types.ts`. The registry entry file
+  re-exports everything, so every existing import path and the package barrel
+  resolve unchanged; no behavior change.
+
 - `mmr-core` now imports **zero** sibling extensions:
   `MMR_CORE_SIBLING_IMPORT_EXCEPTIONS` is empty and the architecture guardrail
   test keeps it that way. `/mmr-config` sections are inverted onto a core-owned
