@@ -68,7 +68,7 @@ describe("mmr-core lifecycle smoke", () => {
     const result = await handlers.get("before_agent_start")({ systemPrompt: BASE_PROMPT, systemPromptOptions: {} });
     assert.match(result.systemPrompt, /^You are an expert coding assistant operating inside pi, a coding agent harness\. <mmr_mode name="rush">You and the user share one workspace\./);
     assert.match(result.systemPrompt, /<\/mmr_mode>\n\n## Tool use/);
-    assert.match(result.systemPrompt, /## Response style\n\nSpeed and low token use are the priority\./);
+    assert.match(result.systemPrompt, /## Response style\n\nSpeed and low token use are the priority:/);
     assert.doesNotMatch(result.systemPrompt, /<!-- mmr-core/);
     assert.doesNotMatch(result.systemPrompt, /### Tool policy/);
   });
