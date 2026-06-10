@@ -98,6 +98,16 @@ function renderPostPiDocsMmrTail(previousRecipe: MmrModePromptRecipe): string {
     : `${ownedTail}\n\n`;
 }
 
+function renderPostureFirstMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const tailFragments: MmrPromptFragmentId[] = ["shared-tool-guidance"];
+  if (previousRecipe.fragments.includes("diagrams")) tailFragments.push("diagrams");
+  tailFragments.push("file-links", "collaboration", "response-style");
+  return tailFragments
+    .map((fragmentId) => renderMmrOwnedTailFragment(fragmentId, previousRecipe))
+    .filter((fragmentText): fragmentText is string => fragmentText !== undefined)
+    .join("\n\n");
+}
+
 function renderLegacyMmrTail(previousRecipe: MmrModePromptRecipe): string {
   const codingGuidance = previousRecipe.fragments
     .filter((fragmentId) => Object.hasOwn(SHARED_CODING_GUIDANCE_FRAGMENTS, fragmentId))
@@ -121,6 +131,7 @@ const PREVIOUS_MMR_TAILS: readonly string[] = [
     Object.values(MMR_MODE_PROMPT_RECIPES)
       .flatMap((previousRecipe) => [
         renderPostPiDocsMmrTail(previousRecipe),
+        renderPostureFirstMmrTail(previousRecipe),
         renderLegacyMmrTail(previousRecipe),
       ])
       .filter((tail) => tail.length > 0),
