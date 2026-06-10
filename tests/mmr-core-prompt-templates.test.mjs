@@ -45,10 +45,10 @@ describe("mmr-core prompt templates - structural invariants", () => {
     const { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } = await importSource("extensions/mmr-core/prompt-modules.ts");
     assert.match(SHARED_TOOL_GUIDANCE, /## Tool execution policy/);
     assert.doesNotMatch(SHARED_TOOL_GUIDANCE, /Run independent read-only calls in parallel/);
-    assert.match(SHARED_TOOL_GUIDANCE, /purpose-built worker or subagent tool/);
-    assert.match(SHARED_TOOL_GUIDANCE, /direct tools for exact file\/path\/symbol lookups or single-step actions/);
+    assert.match(SHARED_TOOL_GUIDANCE, /purpose-built worker fits the job/);
+    assert.match(SHARED_TOOL_GUIDANCE, /direct tools for exact file, path, or symbol lookups and single-step actions/);
     assert.match(SHARED_CODING_GUIDANCE, /## Executing actions with care/);
-    assert.match(SHARED_CODING_GUIDANCE, /Destructive: deleting files\/branches/);
+    assert.match(SHARED_CODING_GUIDANCE, /Destructive: deleting files or branches/);
     assert.match(SHARED_CODING_GUIDANCE, /## Diagrams/);
     assert.match(SHARED_CODING_GUIDANCE, /No Mermaid/);
     assert.match(SHARED_CODING_GUIDANCE, /## File links/);
