@@ -95,8 +95,8 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
 
     assertBefore(first.systemPrompt, AUTONOMY_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
     assertBefore(first.systemPrompt, CAREFUL_ACTIONS_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, RESPONSE_STYLE_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
     assertBefore(first.systemPrompt, TOOL_USE_HEADING, DIAGRAMS_HEADING, "fresh smart prompt");
-    assertBefore(first.systemPrompt, DIAGRAMS_HEADING, RESPONSE_STYLE_HEADING, "fresh smart prompt");
 
     const second = assembleActiveSurface({
       state: createState("smart"),
