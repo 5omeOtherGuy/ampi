@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const USAGE_MODULE = "extensions/mmr-subagents/worker-usage.ts";
-const RUNNER_MODULE = "extensions/mmr-subagents/runner.ts";
+const USAGE_MODULE = "extensions/mmr-workers/worker-usage.ts";
+const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
 
 after(cleanupLoadedSource);
 

@@ -1,11 +1,11 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { MmrWorkerTrailItem } from "../mmr-subagents/worker-trail.js";
+import type { MmrWorkerTrailItem } from "./worker-trail.js";
 import {
   buildTaskFinalResult,
   buildTaskProgressResult,
   type TaskDetailsContext,
-} from "../mmr-subagents/task.js";
+} from "./task.js";
 import {
   isValidAsyncTaskGroupId,
   type MmrAsyncTaskBoard,
@@ -26,7 +26,7 @@ import {
   listMmrBackgroundAgents,
   normalizeMmrBackgroundAgentName,
   type MmrBackgroundAgentDescriptor,
-} from "../mmr-subagents/background-agents.js";
+} from "./background-agents.js";
 import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 
 export function escapeXmlAttr(value: string): string {

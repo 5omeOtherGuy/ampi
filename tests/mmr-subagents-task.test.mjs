@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TASK_MODULE = "extensions/mmr-subagents/task.ts";
+const TASK_MODULE = "extensions/mmr-workers/task.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 
 function makeWorkerResult(overrides = {}) {
@@ -1008,7 +1008,7 @@ describe("Task tool", () => {
     // --no-skills so the assembled worker prompt is the only model-visible
     // system prompt.
     const { createTaskTool, TASK_WORKER_TOOLS } = await importSource(TASK_MODULE);
-    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-subagents/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-workers/runner.ts");
     const calls = [];
     const tool = createTaskTool({
       resolveInvocation: stubTaskInvocation({
@@ -1076,7 +1076,7 @@ describe("Task tool", () => {
   });
 
   it("serializes an empty tools array as an explicit `--tools \"\"` ceiling, but omits the flag when tools is undefined", async () => {
-    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-subagents/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-workers/runner.ts");
 
     // Empty array: the runner explicitly asked for no tools, so the child
     // must receive `--tools ""` (an empty ceiling) instead of falling back to

@@ -12,13 +12,13 @@ import {
   buildTaskFinalResult,
   prepareTaskRun,
   type TaskToolDeps,
-} from "../mmr-subagents/task.js";
-import type { FinderToolDeps } from "../mmr-subagents/finder.js";
-import type { LibrarianToolDeps } from "../mmr-subagents/librarian.js";
+} from "./task.js";
+import type { FinderToolDeps } from "./finder.js";
+import type { LibrarianToolDeps } from "./librarian.js";
 import {
   getMmrBackgroundAgent,
   type MmrBackgroundAgentDescriptor,
-} from "../mmr-subagents/background-agents.js";
+} from "./background-agents.js";
 import {
   ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
   type AsyncTaskCompletionDetails,
@@ -26,7 +26,7 @@ import {
   renderAsyncTaskCompletionMessage,
   renderMmrBackgroundTaskCall,
   renderMmrBackgroundTaskResult,
-} from "../mmr-subagents/progress-rendering.js";
+} from "./progress-rendering.js";
 import {
   getMmrAsyncTaskRegistry,
   type MmrAsyncTaskGroupSnapshot,
@@ -79,7 +79,7 @@ import {
   summarizeTrail,
   validationResult,
 } from "./async-task-tool-format.js";
-import { resolveWorkerCwd } from "../mmr-subagents/worker-host.js";
+import { resolveWorkerCwd } from "./worker-host.js";
 
 export {
   ASYNC_TASK_AGENT_NAMES,

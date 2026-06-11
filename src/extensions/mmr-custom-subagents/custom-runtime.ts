@@ -36,8 +36,8 @@ import {
   resolveEnabledMmrCustomSubagents,
 } from "./custom-config.js";
 import fs, { constants as fsConstants } from "node:fs";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "../mmr-subagents/progress-rendering.js";
-import { registerMmrBackgroundAgent } from "../mmr-subagents/background-agents.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../mmr-workers/progress-rendering.js";
+import { registerMmrBackgroundAgent } from "../mmr-workers/background-agents.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   classifyMmrWorkerOutcomeForProfile,
@@ -50,16 +50,16 @@ import {
   type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "../mmr-subagents/runner.js";
+} from "../mmr-workers/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
   progressTextOrPlaceholder,
-} from "../mmr-subagents/worker-result-shaping.js";
+} from "../mmr-workers/worker-result-shaping.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
-} from "../mmr-subagents/worker-model-metadata.js";
+} from "../mmr-workers/worker-model-metadata.js";
 import { resolveMmrSubagentInvocation } from "../mmr-core/subagent-resolver.js";
 import { MMR_SUBAGENT_SHARED_DENY_TOOLS } from "../mmr-core/subagent-tool-policy.js";
 

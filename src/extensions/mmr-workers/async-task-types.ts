@@ -6,7 +6,7 @@ import type {
   MmrWorkerResult,
   MmrWorkerTrailItem,
   MmrWorkerUsageStats,
-} from "../mmr-subagents/runner.js";
+} from "./runner.js";
 
 /**
  * Public types and tuning constants for the async background-task registry

@@ -11,12 +11,12 @@ import {
   START_TASK_AGENT_EXAMPLES,
   START_TASK_GROUP_FANOUT_GUIDANCE,
   START_TASK_SELECTION_GUIDANCE,
-} from "../mmr-subagents/tool-guidance.js";
+} from "./tool-guidance.js";
 import {
   DEFAULT_MMR_BACKGROUND_AGENT,
   listMmrBackgroundAgents,
   type MmrBackgroundAgentDescriptor,
-} from "../mmr-subagents/background-agents.js";
+} from "./background-agents.js";
 
 export const START_TASK_TOOL_NAME = "start_task";
 export const TASK_POLL_TOOL_NAME = "task_poll";

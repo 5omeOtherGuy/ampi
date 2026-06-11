@@ -38,7 +38,7 @@ import {
   backgroundTaskHeaderLine,
   backgroundTaskRenderStatus,
   renderBackgroundTaskBoard,
-} from "../mmr-async-tasks/background-task-rendering.js";
+} from "./background-task-rendering.js";
 import {
   currentLoaderFrame,
   groupMembersFromBoard,
@@ -51,12 +51,12 @@ import {
   truncateWidgetLines,
   type WidgetRow,
   type WidgetSection,
-} from "../mmr-async-tasks/background-task-view.js";
+} from "./background-task-view.js";
 import type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskGroupSnapshot,
-} from "../mmr-async-tasks/async-task-registry.js";
-import type { AsyncTaskFleetDetails } from "../mmr-async-tasks/async-task-tool-schemas.js";
+} from "./async-task-registry.js";
+import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
 
 /**
  * Live-state resolvers for the inline background card. Supplied by the async

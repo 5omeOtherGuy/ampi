@@ -22,7 +22,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
 

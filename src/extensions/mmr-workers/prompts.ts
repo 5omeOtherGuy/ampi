@@ -285,7 +285,7 @@ const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlo
  * replaces the previous builder reference with an equivalent one and
  * does not change observable output.
  *
- * Called once during extension init (`createMmrSubagentsExtension`) so
+ * Called once during extension init (`createMmrWorkersExtension`) so
  * mmr-core's `assembleMmrSubagentSurface` can resolve finder, oracle,
  * librarian, and Task without a separate bootstrap step. `history-reader`
  * is owned and registered by `mmr-history`.

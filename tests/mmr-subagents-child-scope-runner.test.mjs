@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER = "extensions/mmr-subagents/runner.ts";
-const INVOCATION = "extensions/mmr-subagents/runner-invocation.ts";
+const RUNNER = "extensions/mmr-workers/runner.ts";
+const INVOCATION = "extensions/mmr-workers/runner-invocation.ts";
 
 describe("buildMmrWorkerArgs: childExtensionScope", () => {
   it("prepends --no-extensions and -e <path> before the mode flags", async () => {

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const FORMAT_MODULE = "extensions/mmr-async-tasks/async-task-tool-format.ts";
-const SCHEMA_MODULE = "extensions/mmr-async-tasks/async-task-tool-schemas.ts";
+const FORMAT_MODULE = "extensions/mmr-workers/async-task-tool-format.ts";
+const SCHEMA_MODULE = "extensions/mmr-workers/async-task-tool-schemas.ts";
 
 after(cleanupLoadedSource);
 
@@ -100,7 +100,7 @@ describe("START_TASK_PARAMETERS fleet schema", () => {
 
 describe("fleet-aware model-visible guidance", () => {
   it("routes fan-out to fleet and forbids narration + restating the settled card", async () => {
-    const { START_TASK_GROUP_FANOUT_GUIDANCE } = await importSource("extensions/mmr-subagents/tool-guidance.ts");
+    const { START_TASK_GROUP_FANOUT_GUIDANCE } = await importSource("extensions/mmr-workers/tool-guidance.ts");
     assert.match(START_TASK_GROUP_FANOUT_GUIDANCE, /fleet\.groups\[\]/);
     assert.match(START_TASK_GROUP_FANOUT_GUIDANCE, /do not narrate/i);
     assert.match(START_TASK_GROUP_FANOUT_GUIDANCE, /do not re-emit the card/i);
