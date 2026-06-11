@@ -2,7 +2,7 @@
 
 **Audience.** Maintainers adding or changing subagents in `mmr-subagents`, or extension authors implementing the subagent contracts owned by `mmr-core`.
 
-**Related.** Concrete subagents: [`../src/extensions/mmr-subagents/README.md`](../src/extensions/mmr-subagents/README.md). Profile/registry surface: [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
+**Related.** Concrete subagents: [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md). Profile/registry surface: [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
 `pi-mmr` separates the subagent framework from concrete subagents.
 

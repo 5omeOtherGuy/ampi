@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/mmr-subagents/runner.ts";
+const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
 const ENV_MODULE = "extensions/mmr-core/subagent-model-override-env.ts";
 
 function fakeSpawnCapturing(calls) {

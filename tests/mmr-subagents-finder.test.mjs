@@ -1,5 +1,5 @@
 // Unit tests for the `mmr-subagents` finder tool — written test-first to
-// pin observable behavior before implementing src/extensions/mmr-subagents/finder.ts.
+// pin observable behavior before implementing src/extensions/mmr-workers/finder.ts.
 //
 // Behavior pinned here (does NOT include the subprocess runner, which has
 // its own tests, or the provider/extension wiring, which is exercised in
@@ -43,8 +43,8 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/mmr-subagents/finder.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const MODEL_RESOLVER_MODULE = "extensions/mmr-core/model-resolver.ts";
 const SUBAGENT_RESOLVER_MODULE = "extensions/mmr-core/subagent-resolver.ts";

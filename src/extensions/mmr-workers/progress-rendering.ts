@@ -5,12 +5,19 @@ import {
 import { Box, Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 import { isRecord } from "../mmr-core/internal/json.js";
 import {
+  getAboveEditorDashboardSlotRowBudget,
+  updateAboveEditorDashboardSlot,
+} from "../mmr-core/above-editor-dashboard.js";
+import { reassertLowerAboveEditorWidgets } from "../mmr-core/above-editor-order.js";
+import {
+  formatTitle,
   statusBgFn,
   statusFromDetails,
   stripProvider,
   textContent,
   type BackgroundTaskDetails,
   type RenderContextLike,
+  type RenderStatus,
   type SubagentProgressDetails,
   type SubagentTheme,
 } from "./subagent-render-format.js";
@@ -31,32 +38,37 @@ import {
   taskPreviewForDisplay,
   WorkerStatusLineComponent,
 } from "./subagent-trail-components.js";
+import { getMmrBackgroundCardExtras } from "./background-dispatch.js";
 import {
-  backgroundStatusBadge,
-  backgroundStatusBgFn,
-  backgroundTaskDisplayText,
-  backgroundTaskHeaderLine,
-  backgroundTaskRenderStatus,
-  renderBackgroundTaskBoard,
-} from "../mmr-async-tasks/background-task-rendering.js";
-import {
+  advanceLoaderFrame,
+  backgroundStatusColor,
+  backgroundStatusGlyph,
+  backgroundStatusWord,
+  compareRows,
   currentLoaderFrame,
   groupMembersFromBoard,
   isTerminalRowStatus,
+  makeSafeFg,
+  PI_LOADER_INTERVAL_MS,
+  renderRowLine,
   renderWidgetSection,
   revealedRows,
   singleRowFromBoard,
   staticWidgetRow,
   synthesizeGroup,
+  toRow,
   truncateWidgetLines,
+  type BackgroundViewTheme,
+  type MmrWidgetGroupResolver,
   type WidgetRow,
   type WidgetSection,
-} from "../mmr-async-tasks/background-task-view.js";
+} from "./background-task-view.js";
 import type {
   MmrAsyncTaskBoard,
+  MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
-} from "../mmr-async-tasks/async-task-registry.js";
-import type { AsyncTaskFleetDetails } from "../mmr-async-tasks/async-task-tool-schemas.js";
+} from "./async-task-registry.js";
+import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
 
 /**
  * Live-state resolvers for the inline background card. Supplied by the async
@@ -433,7 +445,7 @@ export function renderMmrBackgroundTaskResult(
   //    is invisible — the live, animated state lives only in the pinned
   //    aboveEditor widget; the card latches a static completed view once the
   //    run settles.
-  if (details.tool === "start_task") {
+  if (details.tool === "start_task" || details.backgroundStart === true) {
     clearRenderedCall(context);
     if (details.groupId && !details.groupOpener) return new Container();
     return renderBackgroundWorkerCard({
@@ -557,6 +569,9 @@ export function renderMmrSubagentCall(
   context?: RenderContextLike,
 ): Component {
   if (context?.isPartial === false || resultAlreadyRendered(context)) return new Container();
+  // v2 background call through a named worker tool: like start_task, the
+  // result card owns the entire staged reveal, so the call renders nothing.
+  if (isRecord(args) && args.background === true) return new Container();
   const title = theme.fg("toolTitle", theme.bold(toolName));
   const label = operationLabelFromArgs(toolName, args);
   const component = context?.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, statusBgFn("running", theme));
@@ -577,6 +592,14 @@ export function renderMmrSubagentResult(
   theme: SubagentTheme,
   context?: RenderContextLike,
 ): Component {
+  // v2 background start through a named worker tool: the result is a
+  // background-task payload, so it renders through the background card path
+  // (live registry resolvers come from the dispatch seam — the named tools'
+  // render wiring has no registry access of its own).
+  const rawDetails = result.details as { worker?: string } | undefined;
+  if (rawDetails?.worker === "mmr-subagents.async-task") {
+    return renderMmrBackgroundTaskResult(toolName, result, options, theme, context, getMmrBackgroundCardExtras());
+  }
   const details = result.details as SubagentProgressDetails | undefined;
   const output = textContent(result).trim();
   const expanded = options.expanded === true;
@@ -626,4 +649,490 @@ export function renderMmrSubagentResult(
   }
 
   return container;
+}
+
+
+// ---------------------------------------------------------------------------
+// Background board + per-call status primitives (folded from the former
+// background-task-rendering module: same consumers, one render module).
+// ---------------------------------------------------------------------------
+
+export function backgroundTaskRenderStatus(status: string | undefined): RenderStatus | undefined {
+  if (status === "running" || status === "cancelling") return "running";
+  if (status === "succeeded") return "succeeded";
+  if (status === "failed" || status === "cancelled") return "failed";
+  return undefined;
+}
+
+export function backgroundStatusBgFn(
+  status: string | undefined,
+  theme: SubagentTheme,
+): (text: string) => string {
+  if (status === "succeeded") return (text) => theme.bg?.("toolSuccessBg", text) ?? text;
+  if (status === "failed") return (text) => theme.bg?.("toolErrorBg", text) ?? text;
+  if (status === "running" || status === "cancelling") {
+    return (text) => theme.bg?.("toolPendingBg", text) ?? text;
+  }
+  // cancelled / unknown: neutral background so an intentional cancel never
+  // reads as a hard failure.
+  return (text) => text;
+}
+
+export function backgroundStatusBadge(
+  status: string | undefined,
+  theme: SubagentTheme,
+): string {
+  // The shared glyph/colour helpers expect a concrete status; an unknown one
+  // resolves to the neutral `•`/muted pair, matching the prior local behavior.
+  const concrete = status ?? "";
+  const color = backgroundStatusColor(concrete);
+  return `${theme.fg(color, backgroundStatusGlyph(concrete))} ${theme.fg(color, backgroundStatusWord(status))}`;
+}
+
+export function backgroundTaskHeaderLine(
+  details: BackgroundTaskDetails,
+  model: string | undefined,
+  theme: SubagentTheme,
+): string {
+  const title = formatTitle(details.agent ?? "background task", model, theme);
+  const badge = theme.fg("muted", "background");
+  const outcome = details.terminalOutcome === "partial" ? ` ${theme.fg("warning", "partial")}` : "";
+  return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(details.status, theme)}${outcome}`;
+}
+
+export function backgroundTaskDisplayText(
+  details: BackgroundTaskDetails,
+  subDetails: SubagentProgressDetails,
+  startDisplay: { collapsed?: string; expanded?: string } | undefined,
+): { collapsed?: string; expanded?: string } {
+  const expanded = details.prompt
+    ?? startDisplay?.expanded
+    ?? subDetails.query
+    ?? subDetails.prompt
+    ?? subDetails.task
+    ?? subDetails.description
+    ?? details.description;
+  const collapsed = details.description
+    ?? startDisplay?.collapsed
+    ?? subDetails.description
+    ?? subDetails.query
+    ?? subDetails.task
+    ?? subDetails.prompt
+    ?? expanded;
+  return { collapsed, expanded };
+}
+
+const BACKGROUND_STATUS_VALUES: ReadonlySet<string> = new Set([
+  "ready",
+  "running",
+  "cancelling",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
+const BACKGROUND_FRESHNESS_VALUES: ReadonlySet<string> = new Set([
+  "healthy",
+  "stalled",
+  "dead",
+  "terminal",
+]);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+// Validate only the fields the board renderer reads. The producer always emits
+// the full entry; this localized narrowing keeps a malformed/replayed payload
+// from reaching the row formatter (which would mis-render or throw).
+function isBackgroundTaskBoardEntry(value: unknown): value is MmrAsyncTaskBoardEntry {
+  return (
+    isRecord(value) &&
+    typeof value.taskId === "string" &&
+    typeof value.agent === "string" &&
+    typeof value.description === "string" &&
+    typeof value.status === "string" &&
+    BACKGROUND_STATUS_VALUES.has(value.status) &&
+    typeof value.freshness === "string" &&
+    BACKGROUND_FRESHNESS_VALUES.has(value.freshness)
+  );
+}
+
+function isBackgroundTaskBoard(value: unknown): value is MmrAsyncTaskBoard {
+  if (!isRecord(value) || value.version !== 1 || !isRecord(value.counts)) return false;
+  const counts = value.counts;
+  if (
+    !isFiniteNumber(counts.active) ||
+    !isFiniteNumber(counts.stalled) ||
+    !isFiniteNumber(counts.finished)
+  ) {
+    return false;
+  }
+  return (
+    Array.isArray(value.active) && value.active.every(isBackgroundTaskBoardEntry) &&
+    Array.isArray(value.stalled) && value.stalled.every(isBackgroundTaskBoardEntry) &&
+    Array.isArray(value.finished) && value.finished.every(isBackgroundTaskBoardEntry)
+  );
+}
+
+function backgroundBoardEntryLine(entry: MmrAsyncTaskBoardEntry, theme: SubagentTheme): string {
+  // The shared row formatter, led by the accent task id (the handle for a
+  // follow-up task_poll) and trailed by the dim group id (the board is a flat
+  // state-bucketed list with no group section headers). A zero board timestamp
+  // keeps the elapsed chip frozen at the entry's recorded runtime — the board
+  // card is a static transcript snapshot, not a live surface.
+  return renderRowLine(toRow(entry, 0), theme, undefined, {
+    indent: "  ",
+    showTaskId: true,
+    showGroupId: true,
+  });
+}
+
+/**
+ * Compact grouped board for `task_poll` with no task id. Renders the same
+ * structured counts/sections the model receives, but as a glyph-led TUI board
+ * instead of a plain-text dump. Returns undefined for malformed/legacy board
+ * payloads so the caller can fall back to the text content.
+ */
+export function renderBackgroundTaskBoard(value: unknown, theme: SubagentTheme): Component | undefined {
+  if (!isBackgroundTaskBoard(value)) return undefined;
+  const board = value;
+  const container = new Container();
+  const total = board.counts.active + board.counts.stalled + board.counts.finished;
+  const headGlyph = board.counts.active > 0
+    ? theme.fg("warning", backgroundStatusGlyph("running"))
+    : theme.fg("muted", "•");
+  const counts = theme.fg(
+    "muted",
+    `${board.counts.active} active • ${board.counts.stalled} stalled • ${board.counts.finished} finished`,
+  );
+  container.addChild(
+    new Text(`${theme.fg("toolTitle", theme.bold("background tasks"))}  ${headGlyph} ${counts}`, 1, 0),
+  );
+  if (total === 0) {
+    container.addChild(new Text(theme.fg("muted", "No background tasks in this session."), 1, 0));
+    return container;
+  }
+  const section = (title: string, entries: readonly MmrAsyncTaskBoardEntry[]): void => {
+    if (entries.length === 0) return;
+    container.addChild(new Text(theme.fg("dim", title), 1, 0));
+    for (const entry of entries) {
+      container.addChild(new Text(backgroundBoardEntryLine(entry, theme), 1, 0));
+    }
+  };
+  section("Active", board.active);
+  section("Stalled", board.stalled);
+  section("Finished", board.finished);
+  return container;
+}
+
+
+// ---------------------------------------------------------------------------
+// Pinned aboveEditor widget (folded from the former background-task-widget
+// module): the live, at-a-glance board for background workers. The widget is
+// a pure UI mirror of the registry; the row/header/glyph vocabulary and the
+// loader animation clock live in ./background-task-view.ts, and the inline
+// transcript cards above render the SAME rows from there.
+// ---------------------------------------------------------------------------
+
+export type { MmrWidgetGroupResolver } from "./background-task-view.js";
+
+/**
+ * Stable widget id used with `ctx.ui.setWidget(...)`. Process-wide unique to
+ * mmr-subagents so it never collides with the mmr-toolbox task-list widget.
+ */
+export const BACKGROUND_TASK_WIDGET_ID = "pi-mmr-background-tasks";
+
+/** Cap visible lines (group headers + rows) so a long backlog never pushes the editor off-screen. */
+const WIDGET_MAX_ROWS = 8;
+
+/**
+ * How long a finished task lingers in its group section before dropping off the
+ * live widget. The registry retains terminal records far longer (for the result
+ * card); this is purely the brief "show the wave settle in place" window so a
+ * completed group flips to ✓/✕ for a beat before the section disappears. The
+ * eventual task_poll/wait card remains the durable record of the outcome.
+ */
+const WIDGET_FINISHED_RETENTION_MS = 8_000;
+
+/** Minimal view of the live Pi TUI the widget factory needs to animate. */
+interface WidgetTuiLike {
+  requestRender?(force?: boolean): void;
+}
+
+type WidgetFactory = (tui: WidgetTuiLike, theme: BackgroundViewTheme) => {
+  render(width: number): string[];
+  invalidate(): void;
+  dispose?(): void;
+};
+
+interface WidgetUILike {
+  setWidget(
+    id: string,
+    value: readonly string[] | WidgetFactory | undefined,
+    options?: { placement?: "aboveEditor" | "belowEditor" },
+  ): void;
+  theme?: BackgroundViewTheme;
+}
+
+interface WidgetCtxLike {
+  hasUI?: boolean;
+  /** Pi 0.78+ run mode (`"tui" | "rpc" | "json" | "print"`). */
+  mode?: string;
+  ui?: WidgetUILike;
+}
+
+/**
+ * Whether `ctx` is a terminal UI that can host Pi's pinned custom widget.
+ * Mirrors the mmr-toolbox task-list widget gate so behavior is identical
+ * across our `>=0.77.0 <0.79.0` peer range: gate strictly on `mode === "tui"`
+ * when `mode` is present (0.78+), else fall back to `hasUI` (0.77).
+ */
+export function isTuiWidgetSurface(ctx: WidgetCtxLike | undefined): boolean {
+  if (!ctx?.ui) return false;
+  if (typeof ctx.mode === "string") return ctx.mode === "tui";
+  return ctx.hasUI === true;
+}
+
+/**
+ * Bucket the board into per-group sections in display order: groups first
+ * (earliest-launched group on top, mirroring how parallel waves stack), then a
+ * trailing ungrouped bucket. In-flight rows (active + stalled) always show;
+ * finished rows show only while within `WIDGET_FINISHED_RETENTION_MS` of
+ * completion, so a settled wave lingers briefly in place before dropping.
+ */
+function boardSections(
+  board: MmrAsyncTaskBoard,
+  resolveGroup: MmrWidgetGroupResolver | undefined,
+  nowMs: number,
+): WidgetSection[] {
+  const retainedFinished = board.finished.filter(
+    (entry) =>
+      typeof entry.completedAtMs === "number" &&
+      Number.isFinite(entry.completedAtMs) &&
+      nowMs - entry.completedAtMs <= WIDGET_FINISHED_RETENTION_MS,
+  );
+  const entries = [...board.active, ...board.stalled, ...retainedFinished];
+
+  const order: (string | undefined)[] = [];
+  const buckets = new Map<string | undefined, WidgetRow[]>();
+  for (const entry of entries) {
+    const key = entry.groupId;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(key, bucket);
+      order.push(key);
+    }
+    bucket.push(toRow(entry, board.generatedAtMs));
+  }
+
+  const grouped: { section: WidgetSection; minCreated: number }[] = [];
+  let ungrouped: WidgetSection | undefined;
+  for (const key of order) {
+    const rows = buckets.get(key)!.slice().sort(compareRows);
+    if (key === undefined) {
+      ungrouped = { groupId: undefined, rows };
+      continue;
+    }
+    const resolved = resolveGroup?.(key);
+    const group = resolved
+      ? {
+          status: resolved.status,
+          counts: resolved.counts,
+          ...(resolved.label !== undefined ? { label: resolved.label } : {}),
+        }
+      : synthesizeGroup(rows);
+    const minCreated = rows.reduce((min, r) => Math.min(min, r.createdAtMs), Number.POSITIVE_INFINITY);
+    grouped.push({ section: { groupId: key, group, rows }, minCreated });
+  }
+  grouped.sort((a, b) => a.minCreated - b.minCreated);
+
+  const sections = grouped.map((g) => g.section);
+  if (ungrouped) sections.push(ungrouped);
+  return sections;
+}
+
+function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined {
+  const delays = board.finished.flatMap((entry) => {
+    if (
+      typeof entry.completedAtMs !== "number" ||
+      !Number.isFinite(entry.completedAtMs)
+    ) {
+      return [];
+    }
+    const remainingMs = entry.completedAtMs + WIDGET_FINISHED_RETENTION_MS - board.generatedAtMs;
+    return remainingMs >= 0 ? [remainingMs] : [];
+  });
+  if (delays.length === 0) return undefined;
+  return Math.max(0, Math.min(...delays));
+}
+
+/**
+ * Stage each section by its reveal cadence (see {@link revealedRows}). `nowMs`
+ * is read fresh every frame so the reveal advances on the animation interval. A
+ * section that reveals no rows is omitted ENTIRELY (header included) during its
+ * prep window; otherwise only the revealed rows render, in section display
+ * order. `revealedRows` reveals every row immediately when the section has no
+ * active worker (no animation clock is guaranteed to tick it again), so a
+ * finished-only section never gets stuck blank. The clear decision and timer
+ * selection upstream stay based on the ACTUAL registry rows, never on this
+ * staged view, so the animation interval keeps driving frames throughout the
+ * reveal.
+ */
+function revealSections(sections: readonly WidgetSection[], nowMs: number): WidgetSection[] {
+  const out: WidgetSection[] = [];
+  for (const section of sections) {
+    const rows = revealedRows(section.rows, nowMs);
+    if (rows.length === 0) continue;
+    out.push({ ...section, rows });
+  }
+  return out;
+}
+
+/**
+ * Flatten sections into widget lines: each group prints a header then its
+ * indented rows. A lone ungrouped section prints headerless and flush-left, so
+ * non-grouped Task usage renders exactly as before. `WIDGET_MAX_ROWS` counts
+ * headers + rows together and never splits a group across the cut — whole
+ * trailing sections drop and collapse into `… N more`.
+ */
+function renderWidgetLines(
+  sections: readonly WidgetSection[],
+  theme: BackgroundViewTheme | undefined,
+  activeFrame: string | undefined,
+  maxRows = WIDGET_MAX_ROWS,
+): string[] {
+  const safeFg = makeSafeFg(theme);
+  const hasGroups = sections.some((s) => s.groupId !== undefined);
+
+  // Build each section as a self-contained block of lines so truncation can
+  // drop whole sections rather than orphaning rows under a header. The
+  // ungrouped bucket gets a header (and indented rows) only when grouped
+  // sections are on screen alongside it.
+  const blocks = sections.map((section) => ({
+    lines: renderWidgetSection(section, theme, activeFrame, {
+      header: section.groupId !== undefined || hasGroups,
+    }),
+    rowCount: section.rows.length,
+  }));
+
+  const out: string[] = [];
+  let omittedRows = 0;
+  let used = 0;
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    const remainingLineTotal = blocks.slice(i).reduce((sum, b) => sum + b.lines.length, 0);
+    if (used + remainingLineTotal <= maxRows) {
+      for (let j = i; j < blocks.length; j += 1) out.push(...blocks[j].lines);
+      break;
+    }
+
+    const reserveOverflowLineLimit = maxRows - 1;
+    if (used + block.lines.length <= reserveOverflowLineLimit) {
+      out.push(...block.lines);
+      used += block.lines.length;
+      continue;
+    }
+
+    if (out.length === 0) {
+      // First section alone exceeds the cap: show as many of its lines as fit
+      // (header + leading rows) while still reserving the final overflow line.
+      const slice = block.lines.slice(0, reserveOverflowLineLimit);
+      out.push(...slice);
+      used += slice.length;
+      const shownRows = Math.max(0, slice.length - (block.lines.length - block.rowCount));
+      omittedRows += block.rowCount - shownRows;
+    } else {
+      omittedRows += block.rowCount;
+    }
+    for (let j = i + 1; j < blocks.length; j += 1) omittedRows += blocks[j].rowCount;
+    break;
+  }
+  if (omittedRows > 0) out.push(safeFg("dim", `… ${omittedRows} more`));
+  return out;
+}
+
+/**
+ * Project the current registry board onto Pi's persistent widget. Non-TUI
+ * surfaces are no-ops; the widget is a UI mirror, not a state source. The
+ * widget clears itself when no background agents remain.
+ */
+export function refreshBackgroundTaskWidget(
+  ctx: WidgetCtxLike | undefined,
+  board: MmrAsyncTaskBoard,
+  resolveGroup?: MmrWidgetGroupResolver,
+): void {
+  if (!isTuiWidgetSurface(ctx) || !ctx?.ui) return;
+  try {
+    const sections = boardSections(board, resolveGroup, board.generatedAtMs);
+    const rowTotal = sections.reduce((sum, s) => sum + s.rows.length, 0);
+    if (rowTotal === 0) {
+      updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, undefined);
+      return;
+    }
+    const hasActive = board.active.length > 0 || board.stalled.length > 0;
+    const clearDelayMs = hasActive ? undefined : finishedOnlyClearDelayMs(board);
+    updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, (tui, theme) => {
+      // Animate running rows with Pi's loader cadence by advancing the shared
+      // loader frame (read by the inline card too) and re-rendering the whole
+      // tree. Finished-only rows use a one-shot clear timer so the drop-off
+      // window expires even when no active worker remains to drive future
+      // widget refreshes.
+      let timer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | undefined;
+      let timerKind: "interval" | "timeout" | undefined;
+      if (hasActive && typeof tui?.requestRender === "function") {
+        timerKind = "interval";
+        timer = setInterval(() => {
+          advanceLoaderFrame();
+          try {
+            tui.requestRender?.();
+          } catch {
+            if (timer !== undefined) {
+              clearInterval(timer);
+              timer = undefined;
+              timerKind = undefined;
+            }
+          }
+        }, PI_LOADER_INTERVAL_MS);
+        (timer as { unref?: () => void }).unref?.();
+      } else if (clearDelayMs !== undefined) {
+        timerKind = "timeout";
+        timer = setTimeout(() => {
+          timer = undefined;
+          timerKind = undefined;
+          updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, undefined);
+        }, clearDelayMs);
+        (timer as { unref?: () => void }).unref?.();
+      }
+      return {
+        render: (width) =>
+          // Read a fresh Date.now() each frame so the staged reveal advances on
+          // the animation interval, mirroring currentLoaderFrame()'s clock.
+          truncateWidgetLines(
+            renderWidgetLines(
+              revealSections(sections, Date.now()),
+              theme,
+              hasActive ? currentLoaderFrame() : undefined,
+              Math.max(WIDGET_MAX_ROWS, getAboveEditorDashboardSlotRowBudget("right") ?? 0),
+            ),
+            width,
+          ),
+        invalidate: () => {},
+        dispose: () => {
+          if (timer !== undefined) {
+            if (timerKind === "interval") clearInterval(timer);
+            else clearTimeout(timer);
+            timer = undefined;
+            timerKind = undefined;
+          }
+        },
+      };
+    });
+    // The background widget must stay ABOVE the task_list widget. Both live in
+    // the aboveEditor stack and Pi re-appends the just-set widget to the
+    // bottom, so re-emit any lower-priority widgets to push them back below.
+    reassertLowerAboveEditorWidgets(ctx);
+  } catch {
+    // Best-effort: a widget failure must never demote a successful tool call.
+  }
 }

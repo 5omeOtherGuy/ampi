@@ -4,11 +4,11 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/mmr-subagents/finder.ts";
-const ORACLE_MODULE = "extensions/mmr-subagents/oracle.ts";
-const RUNNER_MODULE = "extensions/mmr-subagents/runner.ts";
+const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
+const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
+const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
 const ROOT_MODULE = "index.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 
 beforeEach(async () => {

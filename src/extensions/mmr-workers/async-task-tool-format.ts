@@ -1,11 +1,12 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { compactOneLine as sharedCompactOneLine } from "./background-task-view.js";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { MmrWorkerTrailItem } from "../mmr-subagents/worker-trail.js";
+import type { MmrWorkerTrailItem } from "./worker-trail.js";
 import {
   buildTaskFinalResult,
   buildTaskProgressResult,
   type TaskDetailsContext,
-} from "../mmr-subagents/task.js";
+} from "./task.js";
 import {
   isValidAsyncTaskGroupId,
   type MmrAsyncTaskBoard,
@@ -26,7 +27,7 @@ import {
   listMmrBackgroundAgents,
   normalizeMmrBackgroundAgentName,
   type MmrBackgroundAgentDescriptor,
-} from "../mmr-subagents/background-agents.js";
+} from "./background-agents.js";
 import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 
 export function escapeXmlAttr(value: string): string {
@@ -37,11 +38,9 @@ export function escapeXmlAttr(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function compactOneLine(value: string, limit = 220): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  if (compact.length <= limit) return compact;
-  return `${compact.slice(0, Math.max(0, limit - 1))}…`;
-}
+// Shared one-line truncation (single copy in the background view layer);
+// the model-facing texts here keep their wider 220-char default.
+const compactOneLine = (value: string, limit = 220): string => sharedCompactOneLine(value, limit);
 
 function withPeriod(value: string): string {
   return /[.!?…]$/.test(value) ? value : `${value}.`;
@@ -366,7 +365,7 @@ export interface ParsedFleetPlan {
  * capabilityProfile rule. Shared by {@link parseStartParams} (single task) and
  * {@link parseFleet} (each fleet member) so both paths normalize identically.
  */
-function normalizeMember(raw: Record<string, unknown>): ParsedMember | { error: string } {
+export function normalizeMember(raw: Record<string, unknown>): ParsedMember | { error: string } {
   const agent = normalizeMmrBackgroundAgentName(raw.agent);
   const descriptor = agent !== undefined ? getMmrBackgroundAgent(agent) : undefined;
   if (!agent || !descriptor) {
@@ -481,10 +480,10 @@ export function parseStartParams(rawParams: unknown): ParsedStartParams | { erro
   };
 }
 
-export function validationResult(message: string): AgentToolResult<AsyncTaskToolDetails> {
+export function validationResult(message: string, tool: string = START_TASK_TOOL_NAME): AgentToolResult<AsyncTaskToolDetails> {
   return {
-    content: [{ type: "text", text: `start_task: invalid parameters: ${message}` }],
-    details: { worker: "mmr-subagents.async-task", tool: START_TASK_TOOL_NAME, errorMessage: message },
+    content: [{ type: "text", text: `${tool}: invalid parameters: ${message}` }],
+    details: { worker: "mmr-subagents.async-task", tool, errorMessage: message },
   };
 }
 

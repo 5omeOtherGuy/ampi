@@ -39,8 +39,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const ORACLE_MODULE = "extensions/mmr-subagents/oracle.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const MODEL_RESOLVER_MODULE = "extensions/mmr-core/model-resolver.ts";
 const SUBAGENT_RESOLVER_MODULE = "extensions/mmr-core/subagent-resolver.ts";

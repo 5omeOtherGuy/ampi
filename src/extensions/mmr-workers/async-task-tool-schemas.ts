@@ -11,12 +11,12 @@ import {
   START_TASK_AGENT_EXAMPLES,
   START_TASK_GROUP_FANOUT_GUIDANCE,
   START_TASK_SELECTION_GUIDANCE,
-} from "../mmr-subagents/tool-guidance.js";
+} from "./tool-guidance.js";
 import {
   DEFAULT_MMR_BACKGROUND_AGENT,
   listMmrBackgroundAgents,
   type MmrBackgroundAgentDescriptor,
-} from "../mmr-subagents/background-agents.js";
+} from "./background-agents.js";
 
 export const START_TASK_TOOL_NAME = "start_task";
 export const TASK_POLL_TOOL_NAME = "task_poll";
@@ -99,10 +99,17 @@ export interface AsyncTaskFleetDetails {
   groups: AsyncTaskFleetGroupDetails[];
 }
 
-/** Discriminated details for the async task tools' results. */
+/**
+ * Discriminated details for background-task results. `tool` is one of the
+ * async control tools, or a named worker tool when the result is a
+ * `background: true` start through that tool (then `backgroundStart` is set
+ * so the renderer draws the spawn card).
+ */
 export interface AsyncTaskToolDetails {
   worker: "mmr-subagents.async-task";
-  tool: (typeof ASYNC_TASK_TOOL_NAMES)[number];
+  tool: (typeof ASYNC_TASK_TOOL_NAMES)[number] | (string & {});
+  /** Set when a NAMED worker tool started this background run (v2 surface). */
+  backgroundStart?: boolean;
   agent?: AsyncTaskAgentName;
   taskId?: string;
   groupId?: string;
@@ -340,6 +347,8 @@ export const TASK_CANCEL_PARAMETERS = Type.Object(
 export function buildStartTaskDescription(): string {
   return [
   "Start a bounded subagent worker in the background and return an opaque task_id immediately, so you can keep working while it runs.",
+  "",
+  "DEPRECATED compatibility alias: prefer calling the worker tool directly with background: true (e.g. finder({query, background: true})). Parallel background calls can share one worker group via their group parameter. start_task remains for one release.",
   "",
   "Use start_task only for independent work that can proceed while you do other things (long analysis, broad search, a self-contained implementation unit).",
   `Set agent to choose the background worker: ${agentListWithDefault(listMmrBackgroundAgents())}. Use params for the selected tool's normal input shape. Oracle cannot run in the background; it is always blocking.`,

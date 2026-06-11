@@ -61,6 +61,8 @@ export interface SubagentProgressDetails {
 export interface BackgroundTaskDetails {
   worker?: string;
   tool?: string;
+  /** Set when a NAMED worker tool started this background run (v2 surface). */
+  backgroundStart?: boolean;
   agent?: string;
   taskId?: string;
   groupId?: string;
@@ -129,7 +131,7 @@ export function textContent(result: AgentToolResult<unknown>): string {
 // One-line truncation shares the background-view vocabulary module so the
 // inline cards, the pinned widget, and the trail components compact text the
 // same way (single copy; re-exported here for the mmr-subagents call sites).
-export { compactOneLine } from "../mmr-async-tasks/background-task-view.js";
+export { compactOneLine } from "./background-task-view.js";
 
 // Token / model-name formatting is shared with mmr-history's
 // history-reader render path via worker-usage-format.ts. Local aliases

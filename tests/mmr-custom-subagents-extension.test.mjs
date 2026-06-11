@@ -17,7 +17,7 @@ async function readPackageJson() {
 describe("mmr-custom-subagents extension", () => {
   it("is registered as a Pi package extension after mmr-subagents", async () => {
     const pkg = await readPackageJson();
-    const indexOfSubagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-subagents/index.ts");
+    const indexOfSubagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-workers/index.ts");
     const indexOfCustom = pkg.pi.extensions.indexOf(customExtensionPath);
     assert.notEqual(indexOfSubagents, -1, "mmr-subagents must be registered");
     assert.notEqual(indexOfCustom, -1, "mmr-custom-subagents must be registered");

@@ -1,4 +1,4 @@
-import { DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY, deriveAsyncTerminalOutcome } from "../mmr-subagents/runner.js";
+import { DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY, deriveAsyncTerminalOutcome } from "./runner.js";
 import {
   ASYNC_TASK_CANCEL_DEAD_AFTER_MS,
   ASYNC_TASK_MAX_RUNTIME_MS,

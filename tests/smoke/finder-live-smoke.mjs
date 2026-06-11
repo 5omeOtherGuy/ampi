@@ -89,7 +89,7 @@ const FORCED_MODEL_PREFERENCE = FORCED_MODEL
 const TIMEOUT_MS = Number.parseInt(process.env.FINDER_SMOKE_TIMEOUT_MS ?? "120000", 10);
 
 async function main() {
-  const finderMod = await importSource("extensions/mmr-subagents/finder.ts");
+  const finderMod = await importSource("extensions/mmr-workers/finder.ts");
   const { createFinderTool, FINDER_WORKER_TOOLS } = finderMod;
 
   const cwd = path.resolve(import.meta.dirname, "..", "..");

@@ -52,14 +52,14 @@ import { isRecord } from "../mmr-core/internal/json.js";
  *                   owned by mmr-history.
  *  - librarian    — GitHub repository tools owned by mmr-github.
  *  - task-subagent— read/bash/edit/write/skill (built-in) + read_web_page/
- *                   web_search (mmr-web) + finder (mmr-subagents) + task_list
+ *                   web_search (mmr-web) + finder (mmr-workers) + task_list
  *                   (mmr-tasks).
  */
 export const MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   finder: ["mmr-core"],
   oracle: ["mmr-core", "mmr-web", "mmr-history"],
   librarian: ["mmr-core", "mmr-github"],
-  "task-subagent": ["mmr-core", "mmr-web", "mmr-subagents", "mmr-tasks"],
+  "task-subagent": ["mmr-core", "mmr-web", "mmr-workers", "mmr-tasks"],
 };
 
 /** Minimal host surface for enumerating loaded extension source paths. */
