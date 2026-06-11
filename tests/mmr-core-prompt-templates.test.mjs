@@ -72,7 +72,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush mode/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Discovery: minimum evidence/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Communication: outcome first/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /thin reasoning budget/);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /no extended reasoning/);
 
     assert.match(MMR_MODE_PROMPT_TEMPLATES.large.postureSections, /## Large mode/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.large.postureSections, /Broader context should reduce risk/);
