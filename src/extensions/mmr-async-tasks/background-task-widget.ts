@@ -29,8 +29,7 @@ import {
   currentLoaderFrame,
   makeSafeFg,
   PI_LOADER_INTERVAL_MS,
-  renderRowLine,
-  renderSectionHeader,
+  renderWidgetSection,
   revealedRows,
   synthesizeGroup,
   toRow,
@@ -213,15 +212,15 @@ function renderWidgetLines(
   const hasGroups = sections.some((s) => s.groupId !== undefined);
 
   // Build each section as a self-contained block of lines so truncation can
-  // drop whole sections rather than orphaning rows under a header.
-  const blocks = sections.map((section) => {
-    const showHeader = section.groupId !== undefined || hasGroups;
-    const indent = showHeader ? "  " : "";
-    const lines: string[] = [];
-    if (showHeader) lines.push(renderSectionHeader(section, theme));
-    for (const row of section.rows) lines.push(renderRowLine(row, theme, activeFrame, { indent }));
-    return { lines, rowCount: section.rows.length };
-  });
+  // drop whole sections rather than orphaning rows under a header. The
+  // ungrouped bucket gets a header (and indented rows) only when grouped
+  // sections are on screen alongside it.
+  const blocks = sections.map((section) => ({
+    lines: renderWidgetSection(section, theme, activeFrame, {
+      header: section.groupId !== undefined || hasGroups,
+    }),
+    rowCount: section.rows.length,
+  }));
 
   const out: string[] = [];
   let omittedRows = 0;

@@ -43,13 +43,12 @@ import {
   currentLoaderFrame,
   groupMembersFromBoard,
   isTerminalRowStatus,
-  renderRowLine,
-  renderSectionHeader,
+  renderWidgetSection,
   revealedRows,
   singleRowFromBoard,
+  staticWidgetRow,
   synthesizeGroup,
   truncateWidgetLines,
-  type RowMetadataLevel,
   type WidgetRow,
   type WidgetSection,
 } from "../mmr-async-tasks/background-task-view.js";
@@ -57,7 +56,7 @@ import type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskGroupSnapshot,
 } from "../mmr-async-tasks/async-task-registry.js";
-import type { AsyncTaskFleetDetails, AsyncTaskFleetRow } from "../mmr-async-tasks/async-task-tool-schemas.js";
+import type { AsyncTaskFleetDetails } from "../mmr-async-tasks/async-task-tool-schemas.js";
 
 /**
  * Live-state resolvers for the inline background card. Supplied by the async
@@ -131,193 +130,186 @@ class BackgroundCardComponent implements Component {
   }
 }
 
-/** Synthesize a single display row from a frozen `details` snapshot (replay/no registry). */
-function rowFromDetails(details: BackgroundTaskDetails): WidgetRow {
-  return {
-    taskId: details.taskId ?? "",
-    status: details.status ?? "running",
-    freshness: "healthy",
-    agent: details.agent ?? "background task",
-    description: details.description ?? "",
-    runtimeMs: 0,
-    createdAtMs: 0,
-    // Frozen replay snapshot: no live board, so the elapsed chip stays static.
-    boardGeneratedAtMs: 0,
-    ...(details.terminalOutcome !== undefined ? { terminalOutcome: details.terminalOutcome as WidgetRow["terminalOutcome"] } : {}),
-    ...(details.resolvedModel !== undefined ? { resolvedModel: details.resolvedModel } : {}),
-    ...(details.contextWindow !== undefined ? { contextWindow: details.contextWindow } : {}),
-    ...(details.groupId !== undefined ? { groupId: details.groupId } : {}),
-  };
-}
-
 function rowsAnyRunning(rows: readonly WidgetRow[]): boolean {
   return rows.some((r) => r.status === "running" || r.status === "cancelling");
 }
 
-/** A declared fleet row frozen at `ready` (replay / before the live board has it). */
-function fleetRowFromDetails(row: AsyncTaskFleetRow, groupId: string): WidgetRow {
-  return {
-    taskId: row.taskId,
-    status: "ready",
-    freshness: "healthy",
-    agent: row.agent,
-    description: row.description,
-    runtimeMs: 0,
-    createdAtMs: 0,
-    boardGeneratedAtMs: 0,
-    deferredLaunch: true,
-    groupId,
-    ...(row.resolvedModel !== undefined ? { resolvedModel: row.resolvedModel } : {}),
-    ...(row.capabilityProfile !== undefined ? { capabilityProfile: row.capabilityProfile } : {}),
-  };
+/**
+ * Live state for one card render frame. Resolved ONCE per frame by
+ * {@link renderBackgroundWorkerCard} — the single live-vs-replay decision
+ * every card kind shares: the live board when the renderer-only `sessionKey`
+ * resolves, else `undefined`, in which case each section falls back to its
+ * frozen `details` snapshot.
+ */
+interface CardLiveState {
+  board: MmrAsyncTaskBoard | undefined;
+  resolveGroup(groupId: string): MmrAsyncTaskGroupSnapshot | undefined;
 }
 
 /**
- * The fleet card: every declared group rendered up front as its own section,
- * decoupled from execution. Each member row is drawn in DECLARED order (by
- * `group.taskIds`, never the running-first reorder) so a row animates in place
- * through ready→running→terminal instead of jumping. Live rows come from the
- * board; a member the live board does not (yet) have falls back to its frozen
- * `ready` declaration, so a freshly-declared fleet — and a replayed transcript
- * with no live registry — both show the full ready card.
+ * Builds one card section for the current frame: live rows when the board is
+ * available, frozen-fallback rows otherwise. `groupId: undefined` marks the
+ * headerless N=1 section.
+ */
+type CardSectionBuilder = (live: CardLiveState) => WidgetSection;
+
+/**
+ * THE inline background card. Single, group, and fleet cards are this one
+ * component at N=1 (a headerless row), N (one headed section), and N-groups
+ * (a headed section per declared group) — the only thing a card kind supplies
+ * is how its sections resolve rows for a frame.
  *
- * This is a GATED spawn card: while any member is still in flight the live,
- * animated state lives only in the pinned aboveEditor widget and the inline
- * card renders nothing. Once every member across every group settles, the card
- * latches a static completed snapshot.
+ * `gated` cards (every spawn surface: start_task single, group opener, fleet
+ * declaration) render NOTHING while the run is in flight — the live, animated
+ * state lives only in the pinned aboveEditor widget — then latch a static
+ * completed snapshot once every row settles (see
+ * {@link BackgroundCardComponent}). Non-gated cards (an explicit group
+ * task_poll/task_wait/task_cancel result) render live every frame: staged
+ * reveal on the shared cadence, the shared loader frame on running rows, and a
+ * muted member-count fallback when no live registry backs a replayed group.
  */
-function renderBackgroundFleetCard(
-  fleet: AsyncTaskFleetDetails,
-  sessionKey: string | undefined,
-  theme: SubagentTheme,
-  extras: BackgroundCardExtras | undefined,
-): Component {
-  const build = (): CardBuild => {
-    const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
-    const sections: { section: WidgetSection; rows: WidgetRow[] }[] = [];
-    for (const group of fleet.groups) {
-      const rows = group.rows.map((row) => {
-        const live = board && row.taskId ? singleRowFromBoard(board, row.taskId) : undefined;
-        return live ?? fleetRowFromDetails(row, group.groupId);
-      });
-      const snapshot = sessionKey ? extras?.resolveGroup?.(sessionKey, group.groupId) : undefined;
-      const synth = synthesizeGroup(rows);
-      const label = snapshot?.label ?? group.label ?? synth.label;
-      const resolved = {
-        status: snapshot?.status ?? synth.status,
-        counts: snapshot?.counts ?? synth.counts,
-        ...(label !== undefined ? { label } : {}),
-      };
-      sections.push({ section: { groupId: group.groupId, group: resolved, rows }, rows });
-    }
-    // Invisible until the whole fleet settles; then a static completed snapshot.
-    const allRows = sections.flatMap((s) => s.rows);
-    const settled = allRows.length > 0 && allRows.every((r) => isTerminalRowStatus(r.status));
-    if (!settled) return { lines: [], settled: false };
-    const lines: string[] = [];
-    for (const { section, rows } of sections) {
-      lines.push(renderSectionHeader(section, theme));
-      for (const row of rows) lines.push(renderRowLine(row, theme, undefined, { indent: "  ", metadata: "full" }));
-    }
-    return { lines, settled: true };
-  };
-  return new BackgroundCardComponent(build);
-}
-
-/**
- * The consolidated borderless group card: one section header plus a row per
- * member, drawn from the live board when a resolver is available, else the
- * static `details.group` counts. Used for the group-opening start_task and for
- * every group task_poll/task_wait/task_cancel result — the verbose model-facing
- * group text never reaches the transcript.
- */
-function renderBackgroundGroupCard(
-  details: BackgroundTaskDetails,
-  theme: SubagentTheme,
-  extras: BackgroundCardExtras | undefined,
-  gate = false,
-): Component {
-  const groupId = details.groupId;
-  if (!groupId) return new Container();
-  const sessionKey = details.sessionKey;
+function renderBackgroundWorkerCard(options: {
+  sessionKey: string | undefined;
+  extras: BackgroundCardExtras | undefined;
+  theme: SubagentTheme;
+  buildSections: readonly CardSectionBuilder[];
+  gated: boolean;
+}): Component {
+  const { sessionKey, extras, theme, buildSections, gated } = options;
   // Everything live is computed inside the thunk so the card re-resolves the
   // board, reveal, loader frame and elapsed on every render(width) frame.
   const build = (): CardBuild => {
-    const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
-    const members = board ? groupMembersFromBoard(board, groupId) : [];
-    const snapshot = (details.group as MmrAsyncTaskGroupSnapshot | undefined)
-      ?? (sessionKey ? extras?.resolveGroup?.(sessionKey, groupId) : undefined);
-    const group = snapshot
-      ? { status: snapshot.status, counts: snapshot.counts, ...(snapshot.label !== undefined ? { label: snapshot.label } : {}) }
-      : members.length > 0 ? synthesizeGroup(members) : undefined;
-    const section: WidgetSection = { groupId, ...(group ? { group } : {}), rows: members };
+    const live: CardLiveState = {
+      board: sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined,
+      resolveGroup: (groupId) =>
+        sessionKey ? extras?.resolveGroup?.(sessionKey, groupId) : undefined,
+    };
+    const sections = buildSections.map((buildSection) => buildSection(live));
+    const allRows = sections.flatMap((s) => s.rows);
 
-    if (gate) {
-      // Gated group-opener spawn card: invisible until every member settles,
-      // then a static completed snapshot. Live progress lives in the widget.
-      const settled = members.length > 0 && members.every((r) => isTerminalRowStatus(r.status));
+    if (gated) {
+      // Invisible until every row across every section settles; then a static
+      // completed snapshot.
+      const settled = allRows.length > 0 && allRows.every((r) => isTerminalRowStatus(r.status));
       if (!settled) return { lines: [], settled: false };
-      const lines: string[] = [renderSectionHeader(section, theme)];
-      for (const row of members) {
-        lines.push(renderRowLine(row, theme, undefined, { indent: "  ", metadata: "full" }));
-      }
-      return { lines, settled: true };
+      return {
+        lines: sections.flatMap((section) => renderWidgetSection(section, theme, undefined)),
+        settled: true,
+      };
     }
 
-    // Non-gated explicit group result (task_poll / task_wait / task_cancel):
-    // rendered live every frame. Staged reveal keeps a freshly resolved card
-    // invisible during the brief settle window, then reveals member rows on the
-    // shared cadence; `revealedRows` reveals everything at once when no member
-    // is active. During the settle window return NO lines (mounted-but-invisible
-    // so a later tick re-runs this thunk) rather than a static Container that
-    // would never reappear. Replay / no live registry (members.length === 0)
-    // shows the whole card immediately.
-    const revealedMembers = members.length > 0 ? revealedRows(members, Date.now()) : members;
-    if (members.length > 0 && revealedMembers.length === 0) return { lines: [] };
+    // Staged reveal keeps a freshly resolved live card invisible during the
+    // brief settle window, then reveals rows on the shared cadence;
+    // `revealedRows` reveals everything at once when no row is active. During
+    // the settle window return NO lines (mounted-but-invisible so a later tick
+    // re-runs this thunk) rather than a static Container that would never
+    // reappear. Replay / no live registry (a section with zero rows) shows the
+    // whole card immediately.
+    const revealed = sections.map((section) =>
+      section.rows.length > 0 ? revealedRows(section.rows, Date.now()) : section.rows,
+    );
+    if (allRows.length > 0 && revealed.every((rows) => rows.length === 0)) return { lines: [] };
 
-    const frame = (rowsAnyRunning(members) || group?.status === "running") ? currentLoaderFrame() : undefined;
-    const metadata: RowMetadataLevel = "full";
-    const lines: string[] = [renderSectionHeader(section, theme)];
-    for (const row of revealedMembers) {
-      lines.push(renderRowLine(row, theme, frame, { indent: "  ", metadata }));
-    }
-    if (members.length === 0) {
-      // Replay / no live registry: the header carries status + counts; add a
-      // muted member-count line so the card is not a lone header.
-      const total = snapshot?.counts.total;
-      if (typeof total === "number" && total > 0) {
-        lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
+    const frame = sections.some((s) => rowsAnyRunning(s.rows) || s.group?.status === "running")
+      ? currentLoaderFrame()
+      : undefined;
+    const lines: string[] = [];
+    sections.forEach((section, index) => {
+      lines.push(...renderWidgetSection({ ...section, rows: revealed[index] ?? [] }, theme, frame));
+      if (section.rows.length === 0) {
+        // Replay / no live registry: the header carries status + counts; add a
+        // muted member-count line so the card is not a lone header.
+        const total = section.group?.counts.total;
+        if (typeof total === "number" && total > 0) {
+          lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
+        }
       }
-    }
+    });
     return { lines };
   };
   return new BackgroundCardComponent(build);
 }
 
 /**
- * The single ungrouped background task as one borderless live row: `⠋ finder
- * <desc> · <elapsed> · <model>`, animating ⠋→✓ in place. Reads the live board
- * row when a resolver is available, else the frozen `details` snapshot.
- *
- * This is a GATED spawn card: while the task is in flight the live, animated
- * row lives only in the pinned aboveEditor widget and the inline card renders
- * nothing. Once the task settles, the card latches a static completed row.
+ * Fleet sections (N-groups): every declared group is its own section,
+ * decoupled from execution. Each member row is built in DECLARED order (by
+ * the declaration's `rows`, never the running-first reorder) so a row animates
+ * in place through ready→running→terminal instead of jumping. Live rows come
+ * from the board; a member the live board does not (yet) have falls back to
+ * its frozen `ready` declaration, so a freshly-declared fleet — and a replayed
+ * transcript with no live registry — both resolve the full declared shape.
  */
-function renderBackgroundSingleCard(
-  details: BackgroundTaskDetails,
-  theme: SubagentTheme,
-  extras: BackgroundCardExtras | undefined,
-): Component {
-  const sessionKey = details.sessionKey;
-  const build = (): CardBuild => {
-    const board = sessionKey ? extras?.resolveBoard?.(sessionKey) : undefined;
-    const row = (board && details.taskId ? singleRowFromBoard(board, details.taskId) : undefined)
-      ?? rowFromDetails(details);
-    // Invisible until the task settles; then a static completed row.
-    if (!isTerminalRowStatus(row.status)) return { lines: [], settled: false };
-    return { lines: [renderRowLine(row, theme, undefined, { metadata: "full" })], settled: true };
+function fleetSectionBuilders(fleet: AsyncTaskFleetDetails): CardSectionBuilder[] {
+  return fleet.groups.map((group) => (live) => {
+    const rows = group.rows.map((row) => {
+      const liveRow = live.board && row.taskId ? singleRowFromBoard(live.board, row.taskId) : undefined;
+      return liveRow ?? staticWidgetRow({
+        taskId: row.taskId,
+        status: "ready",
+        agent: row.agent,
+        description: row.description,
+        deferredLaunch: true,
+        groupId: group.groupId,
+        resolvedModel: row.resolvedModel,
+        capabilityProfile: row.capabilityProfile,
+      });
+    });
+    const snapshot = live.resolveGroup(group.groupId);
+    const synth = synthesizeGroup(rows);
+    const label = snapshot?.label ?? group.label ?? synth.label;
+    return {
+      groupId: group.groupId,
+      group: {
+        status: snapshot?.status ?? synth.status,
+        counts: snapshot?.counts ?? synth.counts,
+        ...(label !== undefined ? { label } : {}),
+      },
+      rows,
+    };
+  });
+}
+
+/**
+ * Group section (N): one header plus a row per member, drawn from the live
+ * board when a resolver is available, else the static `details.group` counts.
+ * Used for the group-opening start_task and for every group
+ * task_poll/task_wait/task_cancel result — the verbose model-facing group text
+ * never reaches the transcript.
+ */
+function groupSectionBuilder(details: BackgroundTaskDetails, groupId: string): CardSectionBuilder {
+  return (live) => {
+    const members = live.board ? groupMembersFromBoard(live.board, groupId) : [];
+    const snapshot = (details.group as MmrAsyncTaskGroupSnapshot | undefined)
+      ?? live.resolveGroup(groupId);
+    const group = snapshot
+      ? { status: snapshot.status, counts: snapshot.counts, ...(snapshot.label !== undefined ? { label: snapshot.label } : {}) }
+      : members.length > 0 ? synthesizeGroup(members) : undefined;
+    return { groupId, ...(group ? { group } : {}), rows: members };
   };
-  return new BackgroundCardComponent(build);
+}
+
+/**
+ * Single section (N=1): the lone ungrouped task as one headerless row —
+ * `⠋ finder <desc> · <elapsed> · <model>` — from the live board row when
+ * available, else the frozen `details` snapshot.
+ */
+function singleSectionBuilder(details: BackgroundTaskDetails): CardSectionBuilder {
+  return (live) => {
+    const liveRow = live.board && details.taskId
+      ? singleRowFromBoard(live.board, details.taskId)
+      : undefined;
+    const row = liveRow ?? staticWidgetRow({
+      taskId: details.taskId,
+      status: details.status,
+      agent: details.agent,
+      description: details.description,
+      terminalOutcome: details.terminalOutcome as WidgetRow["terminalOutcome"],
+      resolvedModel: details.resolvedModel,
+      contextWindow: details.contextWindow,
+      groupId: details.groupId,
+    });
+    return { groupId: undefined, rows: [row] };
+  };
 }
 
 export const ASYNC_TASK_COMPLETION_CUSTOM_TYPE = "mmr-subagents.async-task-completion" as const;
@@ -391,16 +383,17 @@ export function renderMmrBackgroundTaskResult(
   const details = result.details as BackgroundTaskDetails | undefined;
   const output = textContent(result).trim();
 
-  // 0. Fleet declaration (start_task.fleet) → all group cards rendered up front,
+  // 0. Fleet declaration (start_task.fleet) → all group sections in one card,
   //    decoupled from execution; rows animate ready→running→terminal in place.
   if (details?.fleet !== undefined) {
     clearRenderedCall(context);
-    return renderBackgroundFleetCard(
-      details.fleet as AsyncTaskFleetDetails,
-      details.sessionKey,
-      theme,
+    return renderBackgroundWorkerCard({
+      sessionKey: details.sessionKey,
       extras,
-    );
+      theme,
+      buildSections: fleetSectionBuilders(details.fleet as AsyncTaskFleetDetails),
+      gated: true,
+    });
   }
 
   // 1. No-id board (task_poll list mode) → grouped board view.
@@ -413,11 +406,19 @@ export function renderMmrBackgroundTaskResult(
   }
 
   // 2. Group control result (task_poll / task_wait / task_cancel with group_id)
-  //    → one consolidated member-list card. The verbose model-facing group text
-  //    carried in `content` is intentionally never drawn into the transcript.
+  //    → one consolidated member-list card, rendered live every frame. The
+  //    verbose model-facing group text carried in `content` is intentionally
+  //    never drawn into the transcript.
   if (details?.group !== undefined) {
     clearRenderedCall(context);
-    return renderBackgroundGroupCard(details, theme, extras);
+    if (!details.groupId) return new Container();
+    return renderBackgroundWorkerCard({
+      sessionKey: details.sessionKey,
+      extras,
+      theme,
+      buildSections: [groupSectionBuilder(details, details.groupId)],
+      gated: false,
+    });
   }
 
   if (details?.worker !== "mmr-subagents.async-task") {
@@ -434,12 +435,18 @@ export function renderMmrBackgroundTaskResult(
   //    run settles.
   if (details.tool === "start_task") {
     clearRenderedCall(context);
-    if (details.groupId) {
-      return details.groupOpener
-        ? renderBackgroundGroupCard(details, theme, extras, true)
-        : new Container();
-    }
-    return renderBackgroundSingleCard(details, theme, extras);
+    if (details.groupId && !details.groupOpener) return new Container();
+    return renderBackgroundWorkerCard({
+      sessionKey: details.sessionKey,
+      extras,
+      theme,
+      buildSections: [
+        details.groupId
+          ? groupSectionBuilder(details, details.groupId)
+          : singleSectionBuilder(details),
+      ],
+      gated: true,
+    });
   }
 
   // 4. Single-task task_poll / task_wait / task_cancel → rich result card

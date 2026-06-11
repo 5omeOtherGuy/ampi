@@ -126,11 +126,10 @@ export function textContent(result: AgentToolResult<unknown>): string {
     .join("\n");
 }
 
-export function compactOneLine(value: string, limit = 140): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  if (compact.length <= limit) return compact;
-  return `${compact.slice(0, Math.max(0, limit - 1))}…`;
-}
+// One-line truncation shares the background-view vocabulary module so the
+// inline cards, the pinned widget, and the trail components compact text the
+// same way (single copy; re-exported here for the mmr-subagents call sites).
+export { compactOneLine } from "../mmr-async-tasks/background-task-view.js";
 
 // Token / model-name formatting is shared with mmr-history's
 // history-reader render path via worker-usage-format.ts. Local aliases
