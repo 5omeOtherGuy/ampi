@@ -259,6 +259,19 @@ Parameters:
 {
   "additionalProperties": false,
   "properties": {
+    "background": {
+      "description": "Run this worker as a background task: returns an opaque task_id immediately instead of blocking, so you can keep working while it runs. The result arrives via automatic completion delivery, or explicitly via task_poll/task_wait.",
+      "type": "boolean"
+    },
+    "group": {
+      "description": "Optional worker-group key for background runs. Parallel background calls that share the same group key land in one worker group (one card, one settle, one grouped notification). Requires background: true.",
+      "maxLength": 256,
+      "type": "string"
+    },
+    "notify": {
+      "description": "Automatic completion delivery for a background run (on by default). Pass false to opt out and retrieve the result explicitly with task_poll/task_wait. Requires background: true.",
+      "type": "boolean"
+    },
     "query": {
       "description": "The search query describing to the finder worker what it should find. Be specific and include technical terms, file types, expected code patterns, concrete artifacts, APIs, scoped directories, and explicit success criteria to help the worker find relevant code. Formulate the query in a way that makes it clear to the worker when it has found the right thing.",
       "type": "string"

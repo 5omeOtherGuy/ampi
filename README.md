@@ -116,11 +116,11 @@ Alt+R              # toggle the active mode's thinking preset (where supported)
 | --- | --- | --- |
 | Patch files safely | `apply_patch` | [`mmr-patch`](src/extensions/mmr-patch/README.md) |
 | Track session work | `task_list` | [`mmr-tasks`](src/extensions/mmr-tasks/README.md) |
-| Search the codebase by behavior | `finder` | [`mmr-subagents`](src/extensions/mmr-subagents/README.md) |
-| Ask for deep advice or review | `oracle` | [`mmr-subagents`](src/extensions/mmr-subagents/README.md) |
-| Run bounded child work | `Task` | [`mmr-subagents`](src/extensions/mmr-subagents/README.md) |
-| Run independent work in the background | `start_task` / `task_poll` / `task_wait` / `task_cancel` | [`mmr-async-tasks`](src/extensions/mmr-async-tasks/README.md) |
-| Research GitHub repositories | `librarian` | [`mmr-subagents`](src/extensions/mmr-subagents/README.md) + [`mmr-github`](src/extensions/mmr-github/README.md) |
+| Search the codebase by behavior | `finder` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
+| Ask for deep advice or review | `oracle` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
+| Run bounded child work | `Task` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
+| Run independent work in the background | worker tools with `background: true` (+ `task_poll` / `task_wait` / `task_cancel`) | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
+| Research GitHub repositories | `librarian` | [`mmr-workers`](src/extensions/mmr-workers/README.md) + [`mmr-github`](src/extensions/mmr-github/README.md) |
 | Search the web | `web_search` | [`mmr-web`](src/extensions/mmr-web/README.md) |
 | Read public web pages | `read_web_page` | [`mmr-web`](src/extensions/mmr-web/README.md) |
 | Find old Pi sessions | `find_session` | [`mmr-history`](src/extensions/mmr-history/README.md) |
@@ -138,7 +138,7 @@ Workers run bounded jobs in their own context and return just the result, so the
 - **`Task`** — a general worker for a scoped implementation, investigation, repair, or review; optionally narrowed to `read-only` or `read-write`.
 - **Custom subagents** — your own Markdown-defined workers (`sa__*`), with model, thinking, tools, and skills set in frontmatter.
 
-Independent work can run as a **background fleet**: `start_task` launches a worker (or a named group via `group_id`), and `task_poll`/`task_wait`/`task_cancel` coordinate it. Completed work is surfaced automatically or pulled on demand, and the Pi TUI shows a live, grouped task board. See [`docs/subagent-framework.md`](docs/subagent-framework.md).
+Independent work can run as a **background fleet**: call `finder`, `librarian`, or `Task` with `background: true` (parallel calls can share one worker group via a `group` key), and `task_poll`/`task_wait`/`task_cancel` coordinate the running tasks. `start_task` remains as a deprecated compatibility alias for one release. Completed work is surfaced automatically or pulled on demand, and the Pi TUI shows a live, grouped task board. See [`docs/subagent-framework.md`](docs/subagent-framework.md).
 
 ## Feature map
 
@@ -147,7 +147,7 @@ Independent work can run as a **background fleet**: `start_task` launches a work
 | [`mmr-core`](src/extensions/mmr-core/README.md) | On | Locked modes, model resolution, thinking policy, tool allowlists, prompt rewrite, diagnostics |
 | [`mmr-patch`](src/extensions/mmr-patch/README.md) | On | Safe patching via `apply_patch` |
 | [`mmr-tasks`](src/extensions/mmr-tasks/README.md) | On | Session-local todo tracking via `task_list` |
-| [`mmr-subagents`](src/extensions/mmr-subagents/README.md) | On | `finder`, `oracle`, `Task`, gated `librarian`, background task fleet, and custom Markdown subagents |
+| [`mmr-workers`](src/extensions/mmr-workers/README.md) | On | `finder`, `oracle`, `Task`, gated `librarian`, the background task fleet (`background: true`, `task_poll`/`task_wait`/`task_cancel`), and custom Markdown subagents |
 | [`mmr-session-fallback`](src/extensions/mmr-session-fallback/README.md) | On | Interactive fallback when subscription routes hit quota, rate limits, or Claude subscription capacity stalls |
 | [`mmr-web`](src/extensions/mmr-web/README.md) | Off | `web_search` and `read_web_page` via SearXNG, Brave, or DuckDuckGo |
 | [`mmr-history`](src/extensions/mmr-history/README.md) | Off | Search and summarize prior local Pi sessions with redaction |

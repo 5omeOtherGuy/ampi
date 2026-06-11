@@ -7,6 +7,7 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
 import { getMmrSubagentState } from "../mmr-core/runtime.js";
 import { checkMmrToolParams } from "../mmr-core/tool-params.js";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
@@ -153,6 +154,7 @@ export const FINDER_PARAMETERS_SCHEMA = Type.Object(
       description:
         "The search query describing to the finder worker what it should find. Be specific and include technical terms, file types, expected code patterns, concrete artifacts, APIs, scoped directories, and explicit success criteria to help the worker find relevant code. Formulate the query in a way that makes it clear to the worker when it has found the right thing.",
     }),
+    ...MMR_BACKGROUND_RUN_PARAMETER_FIELDS,
   },
   { additionalProperties: false },
 );
@@ -628,6 +630,7 @@ export function createFinderTool(deps: FinderToolDeps = {}): ToolDefinition {
       progressPlaceholder: FINDER_PROGRESS_PLACEHOLDER,
       // Invalid params propagate as a thrown error to the Pi tool host
       // (the long-standing finder contract), so no paramsFailure here.
+      backgroundCapable: true,
       coerceParams: coerceFinderParams,
       resolveInvocation: resolveFinderInvocation,
       resolutionFailure: "degrade",

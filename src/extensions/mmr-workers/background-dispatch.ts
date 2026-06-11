@@ -11,7 +11,35 @@
  * background surface is not available.
  */
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import type { BackgroundCardExtras } from "./progress-rendering.js";
+
+/**
+ * The shared v2 background fields every backgroundable worker tool's schema
+ * spreads in (finder, librarian, Task — not oracle, which is blocking-only).
+ * One definition so the model-visible wording never drifts between tools.
+ */
+export const MMR_BACKGROUND_RUN_PARAMETER_FIELDS = {
+  background: Type.Optional(
+    Type.Boolean({
+      description:
+        "Run this worker as a background task: returns an opaque task_id immediately instead of blocking, so you can keep working while it runs. The result arrives via automatic completion delivery, or explicitly via task_poll/task_wait.",
+    }),
+  ),
+  group: Type.Optional(
+    Type.String({
+      maxLength: 256,
+      description:
+        "Optional worker-group key for background runs. Parallel background calls that share the same group key land in one worker group (one card, one settle, one grouped notification). Requires background: true.",
+    }),
+  ),
+  notify: Type.Optional(
+    Type.Boolean({
+      description:
+        "Automatic completion delivery for a background run (on by default). Pass false to opt out and retrieve the result explicitly with task_poll/task_wait. Requires background: true.",
+    }),
+  ),
+} as const;
 
 export interface MmrBackgroundDispatchInput {
   /** Public background-agent name; equals the calling worker tool's name. */
@@ -33,16 +61,34 @@ export type MmrBackgroundDispatcher = (
   input: MmrBackgroundDispatchInput,
 ) => Promise<AgentToolResult<unknown>>;
 
-let dispatcher: MmrBackgroundDispatcher | undefined;
-let cardExtras: BackgroundCardExtras | undefined;
+// Stored on globalThis (mirroring the dynamic profile/agent registries) so
+// duplicate module instantiations in one process share one seam.
+const MMR_BACKGROUND_DISPATCH_GLOBAL_KEY = "__pi_mmr_background_dispatch_v1__";
+
+interface BackgroundDispatchStore {
+  dispatcher?: MmrBackgroundDispatcher | undefined;
+  cardExtras?: BackgroundCardExtras | undefined;
+}
+
+const globalDispatchStore = globalThis as typeof globalThis & {
+  [MMR_BACKGROUND_DISPATCH_GLOBAL_KEY]?: BackgroundDispatchStore;
+};
+
+function resolveDispatchStore(): BackgroundDispatchStore {
+  const existing = globalDispatchStore[MMR_BACKGROUND_DISPATCH_GLOBAL_KEY];
+  if (existing) return existing;
+  const fresh: BackgroundDispatchStore = {};
+  globalDispatchStore[MMR_BACKGROUND_DISPATCH_GLOBAL_KEY] = fresh;
+  return fresh;
+}
 
 /** Install (or clear) the background dispatcher. Called by the async-task tool registration. */
 export function registerMmrBackgroundDispatcher(fn: MmrBackgroundDispatcher | undefined): void {
-  dispatcher = fn;
+  resolveDispatchStore().dispatcher = fn;
 }
 
 export function getMmrBackgroundDispatcher(): MmrBackgroundDispatcher | undefined {
-  return dispatcher;
+  return resolveDispatchStore().dispatcher;
 }
 
 /**
@@ -51,9 +97,9 @@ export function getMmrBackgroundDispatcher(): MmrBackgroundDispatcher | undefine
  * registry access; this seam supplies it).
  */
 export function registerMmrBackgroundCardExtras(extras: BackgroundCardExtras | undefined): void {
-  cardExtras = extras;
+  resolveDispatchStore().cardExtras = extras;
 }
 
 export function getMmrBackgroundCardExtras(): BackgroundCardExtras | undefined {
-  return cardExtras;
+  return resolveDispatchStore().cardExtras;
 }

@@ -156,7 +156,7 @@ describe("Task tool", () => {
     assert.equal(tool.name, "Task");
     assert.equal(typeof tool.renderResult, "function");
     assert.equal(tool.parameters, TASK_PARAMETERS_SCHEMA);
-    assert.deepEqual(Object.keys(tool.parameters.properties).sort(), ["capabilityProfile", "description", "prompt"]);
+    assert.deepEqual(Object.keys(tool.parameters.properties).sort(), ["background", "capabilityProfile", "description", "group", "notify", "prompt"]);
     assert.deepEqual(tool.parameters.required, ["prompt", "description"]);
     assert.deepEqual(tool.parameters.properties.capabilityProfile.anyOf.map((entry) => entry.const), ["read-only", "read-write"]);
     assert.equal(tool.parameters.additionalProperties, false);

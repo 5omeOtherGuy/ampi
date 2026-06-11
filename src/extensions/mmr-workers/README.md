@@ -1,6 +1,6 @@
-# mmr-subagents
+# mmr-workers
 
-Worker/subagent extension. Owns the logical tool names `Task`, `finder`, `oracle`, `librarian` and the `mmr-subagents` feature gate.
+The merged worker extension. Owns the blocking worker tools `Task`, `finder`, `oracle`, `librarian` AND the background task surface (`background: true` on finder/librarian/Task, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`, the session-scoped registry, and the live fleet dashboard), behind the single `mmr-workers` feature gate. The pre-merge gate ids (`mmr-subagents`, `mmr-async-tasks`, `mmr-subagents.async-tasks`) remain accepted aliases.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMAP.md`](ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md). Framework boundary: [`../../../docs/subagent-framework.md`](../../../docs/subagent-framework.md).
 
@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `finder`, `oracle`, `Task`, `librarian` (gated) | `mmr-github` active for `librarian` | `/mmr-status`, tool result `details`, subagent fixtures |
+| On | `finder`, `oracle`, `Task`, `librarian` (gated); background runs via `background: true`; `start_task` (deprecated alias), `task_poll`, `task_wait`, `task_cancel`; fleet dashboard | `mmr-github` active for `librarian` | `/mmr-status`, fleet dashboard, tool result `details`, subagent fixtures |
 
 ## When to use it
 
@@ -17,6 +17,23 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 - Standalone advisory worker for plans, reviews, debugging via `oracle`.
 - Remote GitHub repository research via `librarian` (when `mmr-github` is active).
 - User-authored Markdown subagents enabled through config as `sa__*` tools (Pi-owned roots; `.claude/agents` is import-only).
+
+## Background runs (v2 surface)
+
+`finder`, `librarian`, and `Task` accept three optional parameters; `oracle` is always blocking:
+
+- `background: true` — register the run as a background task and return an opaque `task_id` immediately instead of blocking.
+- `group: "<key>"` — caller-chosen group key. Parallel background calls sharing the same key land in one worker group: one card, one settle, one grouped completion notification. Requires `background: true`.
+- `notify: false` — opt a background run out of automatic completion delivery; retrieve the result explicitly with `task_poll`/`task_wait`. Requires `background: true`.
+
+Example fan-out (replaces the old `start_task.fleet` form):
+
+```jsonc
+finder({ "query": "auth flow entry points", "background": true, "group": "auth-review" })
+finder({ "query": "session refresh handling", "background": true, "group": "auth-review" })
+```
+
+`start_task` remains as a deprecated thin alias for one release; its description and results carry a deprecation notice. `task_poll`/`task_wait`/`task_cancel` are unchanged.
 
 ## Status and enablement
 
@@ -163,6 +180,56 @@ Current runner behavior:
 - parent abort propagation via SIGTERM, then SIGKILL after a grace period;
 - detects `pi-mmr: subagent activation failed: <reason>` stderr marker (`MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) and converts it into an unmissable failure even when Pi exits 0, exposing the reason via `MmrWorkerResult.subagentActivationError` and mirroring it into `errorMessage` as `subagent activation failed: <reason>`.
 
+
+## Background task surface
+
+The background surface runs `finder`/`librarian`/`Task` workers (and enabled custom Markdown subagents) without blocking the parent turn. The preferred entry point is the worker tools' `background: true` parameter (see above); the sections below describe the shared runtime: configuration, lifecycle, delivery, and the dashboard.
+
+### Configuration
+
+Background-fleet behavior is on by default and needs no settings. Automatic completion delivery is governed by one environment variable.
+
+```bash
+export MMR_SUBAGENTS_ASYNC_PUSH=false   # disable automatic completion notices/idle-wake
+```
+
+- The variable name is exported as `MMR_SUBAGENTS_ASYNC_PUSH_ENV`. When delivery is disabled you still get results by calling `task_poll`/`task_wait`.
+- Per-call opt-out: `start_task` accepts `notify: false` (single task or top-level fleet) to suppress automatic delivery for that launch while still recording the task.
+- Session ceilings are constants, not settings: `DEFAULT_ASYNC_TASK_MAX_RUNNING_PER_SESSION` bounds concurrently running tasks and `DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION` bounds automatic notices per session.
+- The registry is session-scoped in-memory state; nothing is written into the workspace. Settings/env are sampled at load — restart Pi after changing the delivery variable.
+
+### Behavior
+
+#### Launch and grouping
+
+`start_task` runs the selected `agent` as a background worker through the same child-worker primitive used by the blocking tools. Tasks can be launched singly or as a `fleet` of one or more groups; each member carries its own `agent`, `prompt`, and `description`. A launch may target a fresh group (`group_id: "new"` with an optional `group_label`) or an existing `group_<...>` id, so related workers can be polled and waited on together.
+
+#### Registry and lifecycle
+
+A session-scoped registry (`createMmrAsyncTaskRegistry`/`getMmrAsyncTaskRegistry`) owns task state, status transitions, and freshness. Tasks move through running and terminal states; terminal records are retained for a bounded TTL (`ASYNC_TASK_TERMINAL_TTL_MS`, `ASYNC_TASK_OBSERVED_TERMINAL_TTL_MS`) so a late `task_poll` still sees the outcome. Long-running and stalled workers are bounded by `ASYNC_TASK_MAX_RUNTIME_MS` and `ASYNC_TASK_STALLED_AFTER_MS`; cancellation is finalized after `ASYNC_TASK_CANCEL_DEAD_AFTER_MS`.
+
+#### At-most-once completion delivery
+
+When automatic delivery is enabled, each finished task is announced to the model **at most once** across two paths:
+
+- **In-turn context pull** — while an agent loop is active, finished tasks are surfaced through the context the parent already consumes.
+- **Idle-wake push** — when the session is idle, a follow-up wakes the session so the result is not lost.
+
+Delivery state is tracked per task so the two paths cannot both fire for the same completion, and per-session pushes are capped by `DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION`. Tasks launched with `notify: false`, or when `MMR_SUBAGENTS_ASYNC_PUSH` is disabled, are never auto-announced and must be read with `task_poll`/`task_wait`.
+
+#### Fleet dashboard
+
+A pinned `aboveEditor` widget renders the current board — running, finished, and failed tasks with their groups — and updates as the registry changes, giving an always-current view without polling. Public snapshots exposed to the dashboard and to `task_poll` are produced by `toPublicAsyncTaskSnapshot`.
+
+### Background diagnostics
+
+- **No completion notice arrived.** Automatic delivery is off (`MMR_SUBAGENTS_ASYNC_PUSH` disabled) or the task was launched with `notify: false`. Read the result with `task_poll`/`task_wait`.
+- **Notices stopped mid-session.** The per-session push ceiling (`DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION`) was reached. Remaining results are still available via `task_poll`.
+- **`start_task` refused a launch.** The running-task ceiling (`DEFAULT_ASYNC_TASK_MAX_RUNNING_PER_SESSION`) was hit, or the `agent` was not one of `Task`/`finder`/`librarian`. Wait for in-flight tasks to finish or correct the `agent`.
+- **A task shows as stalled/cancelled.** Runtime exceeded `ASYNC_TASK_MAX_RUNTIME_MS`/`ASYNC_TASK_STALLED_AFTER_MS`, or a cancel was finalized after `ASYNC_TASK_CANCEL_DEAD_AFTER_MS`. Inspect the task `details`.
+- **`task_poll` returns nothing for an old id.** The terminal TTL elapsed and the record was reclaimed. Re-launch if you still need the work.
+
+
 ## Configuration
 
 Subagent model preferences are configured through `mmr-core`'s `/mmr-config` flow and stored under `mmrCore.subagentModelPreferences`. The child-CLI runner has no separate settings surface.
@@ -191,7 +258,7 @@ Tool-specific (`create<X>Tool(deps?)` / `register<X>Tool(pi, deps?)` plus consta
 - **Finder.** `FINDER_TOOL_NAME`, `FINDER_WORKER_TOOLS`, `FINDER_DEFAULT_MODEL_PREFERENCES`, `FINDER_PROMPT_SNIPPET`, `FINDER_PROMPT_GUIDELINES`, `FINDER_DESCRIPTION`, `FINDER_PARAMETERS_SCHEMA`, `FINDER_PROGRESS_PLACEHOLDER`, `buildFinderWorkerSystemPrompt(cwd)`. Types: `FinderParams`, `FinderDetails`, `FinderToolDeps`.
 - **Oracle.** Analogous (`ORACLE_*`, `DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT`). Params `{ task, context?, files? }`. Types: `OracleParams`, `OracleDetails`, `OracleToolDeps`, `OracleAttachmentRecord`.
 - **Librarian.** `LIBRARIAN_TOOL_NAME`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_WORKER_TOOLS`, prompt/schema constants, `buildLibrarianWorkerSystemPrompt(cwd)`, `isLibrarianGithubToolPrerequisiteRegistered(pi)`, `LIBRARIAN_GATING_REASON`, `MmrLibrarianContextWindowError`. Types: `LibrarianParams`, `LibrarianDetails`, `LibrarianStatus`, `LibrarianToolDeps`, `ResolveLibrarianInvocationInput`. Params `{ query, context? }`. The worker's read-only repository tools are owned by `mmr-github`; librarian stays gated until those tools are registered and source-owned. See [`../mmr-github/README.md`](../mmr-github/README.md).
-- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `pi-mmr/src/extensions/mmr-subagents/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
+- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `pi-mmr/src/extensions/mmr-workers/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
   - Task does **not** expose `select*WorkerModel` or `TASK_DEFAULT_MODEL_PREFERENCES`. Model/tool resolution is owned by `resolveMmrSubagentInvocation` against the `task-subagent` profile. Programmatic overrides: `TaskToolDeps.modelPreferencesOverride`. Settings overrides: `mmrCore.subagentModelPreferences.task-subagent`.
 
 Runner:

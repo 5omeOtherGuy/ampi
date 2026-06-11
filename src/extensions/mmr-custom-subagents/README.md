@@ -2,7 +2,7 @@
 
 Discovers project-local and global Markdown subagent definitions and, once enabled through config, registers each as a `sa__<slug>` worker tool for `pi-mmr`.
 
-Package overview: [`../../../README.md`](../../../README.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md). Sibling worker extension: [`../mmr-subagents/README.md`](../mmr-subagents/README.md). Framework boundary: [`../../../docs/subagent-framework.md`](../../../docs/subagent-framework.md).
+Package overview: [`../../../README.md`](../../../README.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md). Sibling worker extension: [`../mmr-workers/README.md`](../mmr-workers/README.md). Framework boundary: [`../../../docs/subagent-framework.md`](../../../docs/subagent-framework.md).
 
 ## At a glance
 

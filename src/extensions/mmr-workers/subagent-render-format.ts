@@ -61,6 +61,8 @@ export interface SubagentProgressDetails {
 export interface BackgroundTaskDetails {
   worker?: string;
   tool?: string;
+  /** Set when a NAMED worker tool started this background run (v2 surface). */
+  backgroundStart?: boolean;
   agent?: string;
   taskId?: string;
   groupId?: string;

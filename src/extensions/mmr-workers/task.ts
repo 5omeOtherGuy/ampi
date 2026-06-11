@@ -5,6 +5,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
 import { isRecord } from "../mmr-core/internal/json.js";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import { getMmrModeStateSnapshot, getMmrSubagentState } from "../mmr-core/runtime.js";
@@ -156,6 +157,7 @@ export const TASK_PARAMETERS_SCHEMA = Type.Object(
       description: "Short display label for the worker task.",
     }),
     capabilityProfile: Type.Optional(TASK_CAPABILITY_PROFILE_SCHEMA),
+    ...MMR_BACKGROUND_RUN_PARAMETER_FIELDS,
   },
   { additionalProperties: false },
 );
@@ -729,6 +731,7 @@ export function createTaskTool(deps: TaskToolDeps = {}): ToolDefinition {
       // concurrently.
       executionMode: "sequential",
       progressPlaceholder: TASK_PROGRESS_PLACEHOLDER,
+      backgroundCapable: true,
       coerceParams: coerceTaskParams,
       paramsFailure: (message, raw, cwd) =>
         makeFailureResult({

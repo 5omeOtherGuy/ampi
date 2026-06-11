@@ -1357,7 +1357,7 @@ describe("background task rendering", () => {
         description: "Confirm background widget header removed",
         prompt:
           "Verify the background-task widget no longer renders a 'Background agents' header and renders " +
-          "agent rows directly. Check src/extensions/mmr-workers/background-task-widget.ts " +
+          "agent rows directly. Check src/extensions/mmr-workers/progress-rendering.ts " +
           "renderWidgetLines. Return file path and line numbers.",
         final: { worker: "mmr-subagents.finder", reportedModel: "openai-codex/gpt-5.4-mini" },
       },

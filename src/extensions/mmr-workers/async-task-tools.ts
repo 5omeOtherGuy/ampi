@@ -23,6 +23,7 @@ import {
   ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
   type AsyncTaskCompletionDetails,
   type BackgroundCardExtras,
+  refreshBackgroundTaskWidget,
   renderAsyncTaskCompletionMessage,
   renderMmrBackgroundTaskCall,
   renderMmrBackgroundTaskResult,
@@ -35,7 +36,7 @@ import {
   type MmrAsyncTaskRun,
   type StartAsyncTaskArgs,
 } from "./async-task-registry.js";
-import { refreshBackgroundTaskWidget } from "./background-task-widget.js";
+
 import {
   ASYNC_TASK_AGENT_NAMES,
   ASYNC_TASK_GUIDELINES,
@@ -58,6 +59,10 @@ import {
   type AsyncTaskToolDetails,
 } from "./async-task-tool-schemas.js";
 import {
+  registerMmrBackgroundCardExtras,
+  registerMmrBackgroundDispatcher,
+} from "./background-dispatch.js";
+import {
   createAsyncTaskDeliveryMessage,
   detailsContextFromSnapshot,
   escapeXmlAttr,
@@ -69,6 +74,7 @@ import {
   inferToolRunStatus,
   invalidAsyncControlResult,
   nonNormalOutcomeText,
+  normalizeMember,
   notFoundResult,
   parseFleet,
   parseStartParams,
@@ -290,6 +296,312 @@ interface FleetMemberBuild {
     run: MmrAsyncTaskRun;
   };
   row: AsyncTaskFleetRow;
+}
+
+/**
+ * Deprecation notice appended to every successful start_task result. The v2
+ * surface is the worker tools' own background parameter; start_task remains a
+ * thin compatibility alias for one release.
+ */
+const START_TASK_DEPRECATION_NOTICE =
+  "Note: start_task is deprecated; call the worker tool directly with background: true (e.g. finder({query, background: true})). Parallel background calls can share a group key via the group parameter.";
+
+/**
+ * Session-scoped v2 group-key table: maps a caller-chosen `group` key to the
+ * registry group it minted, so parallel background calls sharing a key land
+ * in one group. Keyed per registry instance; entries are re-validated against
+ * the live registry on every use, so a pruned group simply mints a fresh one.
+ */
+const groupKeyTables = new WeakMap<MmrAsyncTaskRegistry, Map<string, string>>();
+
+function resolveGroupKeyTable(registry: MmrAsyncTaskRegistry): Map<string, string> {
+  let table = groupKeyTables.get(registry);
+  if (!table) {
+    table = new Map();
+    groupKeyTables.set(registry, table);
+  }
+  return table;
+}
+
+interface BackgroundStartOptions {
+  registry: MmrAsyncTaskRegistry;
+  deps: AsyncTaskToolDeps;
+  ctx: ExtensionContext;
+  toolCallId: string;
+  descriptor: MmrBackgroundAgentDescriptor;
+  /** Normalized worker member (agent, params, description, promptSummary). */
+  member: ParsedMember;
+  wantsNotify: boolean;
+  /** Legacy start_task grouping: `'new'` or a concrete `group_<hex>` id. */
+  legacyGroupId?: string;
+  /** Legacy group label (honored when `legacyGroupId` is `'new'`). */
+  groupLabel?: string;
+  /** v2 caller-chosen group key (the named worker tools' `group` param). */
+  groupKey?: string;
+  /** The calling tool: result-text prefix and `details.tool` discriminator. */
+  resultTool: string;
+  /** Extra sentence appended to the success message (start_task deprecation). */
+  resultNotice?: string;
+}
+
+/**
+ * The ONE background-start path. `start_task` (the deprecated alias) and the
+ * named worker tools' `background: true` calls both run through here:
+ * pre-spawn validation (no record/group on failure), notify wiring, group
+ * resolution (legacy `group_id` semantics or the v2 shared `group` key),
+ * registry start with cap/dedup rollback, and the start result.
+ */
+async function executeBackgroundStart(options: BackgroundStartOptions): Promise<AgentToolResult<AsyncTaskToolDetails>> {
+  const { registry, deps, ctx, toolCallId, descriptor, member, wantsNotify, resultTool } = options;
+  const sessionKey = resolveSessionKey(ctx, deps);
+  const onSettle = () => refreshAsyncTaskWidget(ctx, registry, sessionKey);
+  // Validate the worker payload BEFORE any registry side effect (group open)
+  // so an invalid start cannot mint an orphan group. The Task strategy reuses
+  // the blocking Task validation/model-resolution path; a pre-spawn failure
+  // returns the same shaped result and creates no record and no group.
+  const taskPrep = descriptor.start.kind === "task"
+    ? prepareTaskRun(
+        member.params,
+        ctx,
+        { ...baseToolDeps(deps), ...descriptorDeps(deps, descriptor.start.depsKey) } as TaskToolDeps,
+      )
+    : undefined;
+  if (taskPrep && !taskPrep.ok) {
+    return {
+      content: taskPrep.result.content,
+      details: {
+        worker: "mmr-subagents.async-task",
+        tool: resultTool,
+        agent: member.agent,
+        errorMessage: taskPrep.result.details?.errorMessage,
+      },
+    };
+  }
+  if (descriptor.start.kind === "tool") {
+    const v = validateAsyncToolParams(descriptor.toolName, descriptor.start.parametersSchema, member.params);
+    if (!v.ok) return validationResult(v.message, resultTool);
+  }
+  // Two-layer gate: the session ceiling must permit push AND the caller
+  // must not opt this task out. The registry adds at-most-once + a
+  // per-session budget on top. Delivery is `followUp` + `triggerTurn`, so a
+  // push wakes an idle session or queues immediately behind the active turn
+  // instead of riding the next user prompt. The pinned widget is refreshed
+  // by `onSettle` on terminal transition, so it stays correct even when the
+  // task opts out of (or cannot send) a completion push.
+  const automaticDeliveryEnabled = deps.enableCompletionPush !== false;
+  const wantsAutomaticDelivery = wantsNotify && automaticDeliveryEnabled;
+  const notify = wantsAutomaticDelivery ? buildCompletionNotifier(deps.pi) : undefined;
+  const groupNotify = wantsAutomaticDelivery ? buildGroupCompletionNotifier(deps.pi) : undefined;
+
+  // Group resolution. Track whether this call minted a brand-new group, so a
+  // later start rejection (e.g. concurrency cap) can roll back only a group
+  // this call created — never a pre-existing one.
+  let groupPreexisted = false;
+  let groupSnapshot: MmrAsyncTaskGroupSnapshot | undefined;
+  let openedGroupKey: string | undefined;
+  if (options.legacyGroupId !== undefined) {
+    groupPreexisted = options.legacyGroupId !== "new"
+      ? registry.getGroup(sessionKey, options.legacyGroupId) !== undefined
+      : false;
+    groupSnapshot = options.legacyGroupId === "new"
+      ? registry.openGroup({
+          sessionKey,
+          deliveryOptIn: wantsAutomaticDelivery,
+          ...(options.groupLabel !== undefined ? { label: options.groupLabel } : {}),
+          ...(groupNotify !== undefined ? { notify: groupNotify } : {}),
+          onSettle,
+        })
+      : registry.openGroup({
+          sessionKey,
+          groupId: options.legacyGroupId,
+          deliveryOptIn: wantsAutomaticDelivery,
+          onSettle,
+        });
+  } else if (options.groupKey !== undefined) {
+    // v2 shared group key: the first call with a key mints the group (and the
+    // grouped notification); parallel and later calls sharing the key join it.
+    const table = resolveGroupKeyTable(registry);
+    const mapKey = `${sessionKey}\u0000${options.groupKey}`;
+    const mappedId = table.get(mapKey);
+    const existing = mappedId !== undefined ? registry.getGroup(sessionKey, mappedId) : undefined;
+    if (existing) {
+      groupPreexisted = true;
+      groupSnapshot = registry.openGroup({
+        sessionKey,
+        groupId: existing.groupId,
+        deliveryOptIn: wantsAutomaticDelivery,
+        onSettle,
+      });
+    } else {
+      groupSnapshot = registry.openGroup({
+        sessionKey,
+        deliveryOptIn: wantsAutomaticDelivery,
+        label: options.groupKey,
+        ...(groupNotify !== undefined ? { notify: groupNotify } : {}),
+        onSettle,
+      });
+      table.set(mapKey, groupSnapshot.groupId);
+      openedGroupKey = mapKey;
+    }
+  }
+  const groupId = groupSnapshot?.groupId;
+  const taskNotify = groupId === undefined ? notify : undefined;
+  const rollbackMintedGroup = (): void => {
+    if (groupId === undefined || groupPreexisted) return;
+    registry.dropEmptyGroup(sessionKey, groupId);
+    if (openedGroupKey !== undefined) resolveGroupKeyTable(registry).delete(openedGroupKey);
+  };
+
+  const started = descriptor.start.kind === "task"
+    ? (() => {
+        // Invariant: taskPrep is the ok variant here — the task strategy
+        // implies it was computed and any failure already returned above.
+        if (!taskPrep || !taskPrep.ok) throw new Error("unreachable: Task prep validated before group open");
+        const { params, cwd, detailsContext, runnerOptionsBase, runner } = taskPrep.prepared;
+        return {
+          started: registry.startTask({
+            sessionKey,
+            originToolCallId: toolCallId,
+            agent: descriptor.agent,
+            description: params.description,
+            prompt: params.prompt,
+            cwd,
+            // Raw worker results from the runner classify under the backing
+            // profile's nonzero-exit policy.
+            ...agentPartialOutputPolicyArg(descriptor),
+            ...(detailsContext.resolvedModel !== undefined ? { resolvedModel: detailsContext.resolvedModel } : {}),
+            ...(detailsContext.contextWindow !== undefined ? { contextWindow: detailsContext.contextWindow } : {}),
+            workerTools: detailsContext.workerTools,
+            ...(params.capabilityProfile !== undefined ? { capabilityProfile: params.capabilityProfile } : {}),
+            ...(groupId !== undefined ? { groupId } : {}),
+            // The run thunk never throws: a spawn failure is converted into a
+            // synthetic spawn-error worker result so the background task
+            // finalizes with the SAME `spawn-error` status/shaping as blocking
+            // Task (rather than a generic registry error).
+            run: async ({ signal, onProgress }) => {
+              try {
+                return await runner.run({ ...runnerOptionsBase, signal, onProgress });
+              } catch (err) {
+                return buildSpawnErrorWorkerResult(err, { prompt: params.prompt, cwd });
+              }
+            },
+            deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
+            ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
+            onSettle,
+          }),
+        } as const;
+      })()
+    : (() => {
+        const start = descriptor.start;
+        // Invariant: the task strategy was handled above.
+        if (start.kind !== "tool") throw new Error("unreachable: tool strategy checked before group open");
+        const tool = start.createTool({ ...baseToolDeps(deps), ...descriptorDeps(deps, start.depsKey) });
+        const cwd = resolveWorkerCwd(ctx);
+        return {
+          started: registry.startTask({
+            sessionKey,
+            originToolCallId: toolCallId,
+            agent: descriptor.agent,
+            description: member.description,
+            prompt: member.promptSummary,
+            cwd,
+            workerTools: start.workerTools,
+            ...agentPartialOutputPolicyArg(descriptor),
+            ...(groupId !== undefined ? { groupId } : {}),
+            run: async ({ signal, onProgress }) => {
+              const result = await tool.execute(
+                `${toolCallId}:${descriptor.agent}`,
+                member.params,
+                signal,
+                (update) => onProgress(update),
+                ctx,
+              );
+              const status = inferToolRunStatus(result, signal);
+              return {
+                toolResult: result,
+                status,
+                terminalOutcome: status === "succeeded" ? "success" : status === "failed" ? "failed" : undefined,
+                ...(status === "failed" ? { errorMessage: inferToolErrorMessage(result) } : {}),
+              };
+            },
+            deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
+            ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
+            onSettle,
+          }),
+        } as const;
+      })();
+
+  if (!started.started.ok) {
+    // Roll back a group this call just minted so a cap rejection cannot
+    // leave an empty orphan group; dropEmptyGroup is a no-op on a group
+    // that already holds tasks or that pre-existed.
+    rollbackMintedGroup();
+    const message =
+      `${resultTool}: cannot start; ${started.started.runningCount} background task(s) already running ` +
+      `(cap ${started.started.cap}). Wait for one to finish (task_wait) or stop one (task_cancel) first.`;
+    return {
+      content: [{ type: "text", text: message }],
+      details: { worker: "mmr-subagents.async-task", tool: resultTool, agent: member.agent, errorMessage: message },
+    };
+  }
+  const snapshot = started.started.snapshot;
+  // Idempotent-retry rollback: a deduplicated start returns the pre-existing
+  // task, so a group this call just minted would otherwise linger as an empty
+  // orphan — now a labeled one. Drop it when the dedup'd task is not in it.
+  // Mirrors the cap-rejection rollback above; dropEmptyGroup is a no-op once
+  // a group holds tasks or if it pre-existed.
+  if (
+    started.started.deduplicated
+    && groupId !== undefined
+    && !groupPreexisted
+    && snapshot.groupId !== groupId
+  ) {
+    rollbackMintedGroup();
+  }
+  // Surface the launched agent on the pinned bottom-of-window widget so the
+  // transcript card can stay empty (see renderMmrBackgroundTaskResult).
+  refreshAsyncTaskWidget(ctx, registry, sessionKey);
+  const dedupNote = started.started.deduplicated ? " (existing task for this call)" : "";
+  const groupNote = snapshot.groupId ? ` in group ${snapshot.groupId}` : "";
+  const groupDeliveryEnabled = groupSnapshot?.completionPush !== "disabled";
+  const deliveryHint = snapshot.groupId
+    ? groupDeliveryEnabled
+      ? "The group owns automatic completion delivery; use task_poll/task_wait for grouped orchestration or to collect needed child outputs."
+      : "Automatic delivery is disabled for this group; use task_poll/task_wait to inspect status and collect needed child outputs."
+    : wantsAutomaticDelivery
+      ? "Automatic delivery is enabled; use task_poll/task_wait only after an elapsed-time fallback or for multi-worker orchestration."
+      : "Automatic delivery is disabled; use task_poll/task_wait to retrieve the result explicitly.";
+  const message =
+    `${resultTool}: started background worker ${snapshot.taskId}${dedupNote}${groupNote} ("${snapshot.description}", agent ${snapshot.agent}). ` +
+    `${deliveryHint} ` +
+    `Use task_cancel to stop it. Background tasks are in-memory and lost if the session ends.` +
+    (options.resultNotice !== undefined ? ` ${options.resultNotice}` : "");
+  // The opener (the call that minted the group) owns the consolidated inline
+  // group card; sibling starts in the same group render nothing inline. Guard
+  // on the task actually landing in the freshly minted group so a
+  // deduplicated retry (whose group we rolled back) does not claim openership.
+  const mintedGroup = options.legacyGroupId === "new" || openedGroupKey !== undefined;
+  const groupOpener = groupId !== undefined && mintedGroup && snapshot.groupId === groupId;
+  return {
+    content: [{ type: "text", text: message }],
+    details: {
+      worker: "mmr-subagents.async-task",
+      tool: resultTool,
+      ...(resultTool !== START_TASK_TOOL_NAME ? { backgroundStart: true } : {}),
+      agent: snapshot.agent as AsyncTaskAgentName,
+      taskId: snapshot.taskId,
+      sessionKey,
+      ...(snapshot.groupId !== undefined ? { groupId: snapshot.groupId } : {}),
+      ...(groupOpener ? { groupOpener: true } : {}),
+      status: snapshot.status,
+      ...(snapshot.terminalOutcome !== undefined ? { terminalOutcome: snapshot.terminalOutcome } : {}),
+      freshness: snapshot.freshness,
+      description: snapshot.description,
+      prompt: snapshot.prompt,
+      ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
+      ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
+    },
+  };
 }
 
 export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinition {
@@ -528,221 +840,19 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
       if (!validated.ok) return validationResult(validated.message);
       const descriptor = getMmrBackgroundAgent(parsed.agent);
       if (!descriptor) return validationResult(`unknown background agent "${parsed.agent}".`);
-      const sessionKey = resolveSessionKey(ctx, deps);
-      const onSettle = () => refreshAsyncTaskWidget(ctx, registry, sessionKey);
-      // Validate the Task payload BEFORE any registry side effect (group open)
-      // so an invalid Task start cannot mint an orphan group. Reuses the
-      // blocking Task validation/model-resolution path; a pre-spawn failure
-      // returns the same shaped result and creates no record and no group.
-      const taskPrep = descriptor.start.kind === "task"
-        ? prepareTaskRun(
-            parsed.params,
-            ctx,
-            { ...baseToolDeps(deps), ...descriptorDeps(deps, descriptor.start.depsKey) } as TaskToolDeps,
-          )
-        : undefined;
-      if (taskPrep && !taskPrep.ok) {
-        return {
-          content: taskPrep.result.content,
-          details: {
-            worker: "mmr-subagents.async-task",
-            tool: START_TASK_TOOL_NAME,
-            agent: parsed.agent,
-            errorMessage: taskPrep.result.details?.errorMessage,
-          },
-        };
-      }
-      // Pre-validate generic-agent params before any registry side effect too,
-      // so an invalid background start fails closed without creating a task or
-      // minting a group — the same pre-spawn contract as Task. The run thunk
-      // still validates at execution time as defense.
-      if (descriptor.start.kind === "tool") {
-        const v = validateAsyncToolParams(descriptor.toolName, descriptor.start.parametersSchema, parsed.params);
-        if (!v.ok) return validationResult(v.message);
-      }
-      // Two-layer gate: the session ceiling must permit push AND the caller
-      // must not opt this task out. The registry adds at-most-once + a
-      // per-session budget on top. Delivery is `followUp` + `triggerTurn`, so a
-      // push wakes an idle session or queues immediately behind the active turn
-      // instead of riding the next user prompt. The pinned widget is refreshed
-      // by `onSettle` on terminal transition, so it stays correct even when the
-      // task opts out of (or cannot send) a completion push.
-      const automaticDeliveryEnabled = deps.enableCompletionPush !== false;
-      const wantsAutomaticDelivery = parsed.wantsNotify && automaticDeliveryEnabled;
-      const notify = wantsAutomaticDelivery ? buildCompletionNotifier(deps.pi) : undefined;
-      const groupNotify = wantsAutomaticDelivery ? buildGroupCompletionNotifier(deps.pi) : undefined;
-      // Track whether we are about to create a brand-new group, so a later
-      // start rejection (e.g. concurrency cap) can roll back only a group this
-      // call minted — never a pre-existing one.
-      const groupPreexisted = parsed.groupId !== undefined && parsed.groupId !== "new"
-        ? registry.getGroup(sessionKey, parsed.groupId) !== undefined
-        : false;
-      const groupSnapshot = parsed.groupId === "new"
-        ? registry.openGroup({
-            sessionKey,
-            deliveryOptIn: wantsAutomaticDelivery,
-            ...(parsed.groupLabel !== undefined ? { label: parsed.groupLabel } : {}),
-            ...(groupNotify !== undefined ? { notify: groupNotify } : {}),
-            onSettle,
-          })
-        : parsed.groupId !== undefined
-          ? registry.openGroup({
-              sessionKey,
-              groupId: parsed.groupId,
-              deliveryOptIn: wantsAutomaticDelivery,
-              onSettle,
-            })
-          : undefined;
-      const groupId = groupSnapshot?.groupId;
-      const taskNotify = groupId === undefined ? notify : undefined;
-
-      const started = descriptor.start.kind === "task"
-        ? (() => {
-            // Invariant: taskPrep is the ok variant here — the task strategy
-            // implies it was computed and any failure already returned above.
-            if (!taskPrep || !taskPrep.ok) throw new Error("unreachable: Task prep validated before group open");
-            const { params, cwd, detailsContext, runnerOptionsBase, runner } = taskPrep.prepared;
-            return {
-              started: registry.startTask({
-                sessionKey,
-                originToolCallId: toolCallId,
-                agent: descriptor.agent,
-                description: params.description,
-                prompt: params.prompt,
-                cwd,
-                // Raw worker results from the runner classify under the backing
-                // profile's nonzero-exit policy.
-                ...agentPartialOutputPolicyArg(descriptor),
-                ...(detailsContext.resolvedModel !== undefined ? { resolvedModel: detailsContext.resolvedModel } : {}),
-                ...(detailsContext.contextWindow !== undefined ? { contextWindow: detailsContext.contextWindow } : {}),
-                workerTools: detailsContext.workerTools,
-                ...(params.capabilityProfile !== undefined ? { capabilityProfile: params.capabilityProfile } : {}),
-                ...(groupId !== undefined ? { groupId } : {}),
-                // The run thunk never throws: a spawn failure is converted into a
-                // synthetic spawn-error worker result so the background task
-                // finalizes with the SAME `spawn-error` status/shaping as blocking
-                // Task (rather than a generic registry error).
-                run: async ({ signal, onProgress }) => {
-                  try {
-                    return await runner.run({ ...runnerOptionsBase, signal, onProgress });
-                  } catch (err) {
-                    return buildSpawnErrorWorkerResult(err, { prompt: params.prompt, cwd });
-                  }
-                },
-                deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
-                ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
-                onSettle,
-              }),
-            } as const;
-          })()
-        : (() => {
-            const start = descriptor.start;
-            // Invariant: the task strategy was handled above.
-            if (start.kind !== "tool") throw new Error("unreachable: tool strategy checked before group open");
-            const tool = start.createTool({ ...baseToolDeps(deps), ...descriptorDeps(deps, start.depsKey) });
-            const cwd = resolveWorkerCwd(ctx);
-            return {
-              started: registry.startTask({
-                sessionKey,
-                originToolCallId: toolCallId,
-                agent: descriptor.agent,
-                description: parsed.description,
-                prompt: parsed.promptSummary,
-                cwd,
-                workerTools: start.workerTools,
-                ...agentPartialOutputPolicyArg(descriptor),
-                ...(groupId !== undefined ? { groupId } : {}),
-                run: async ({ signal, onProgress }) => {
-                  const result = await tool.execute(
-                    `${toolCallId}:${descriptor.agent}`,
-                    parsed.params,
-                    signal,
-                    (update) => onProgress(update),
-                    ctx,
-                  );
-                  const status = inferToolRunStatus(result, signal);
-                  return {
-                    toolResult: result,
-                    status,
-                    terminalOutcome: status === "succeeded" ? "success" : status === "failed" ? "failed" : undefined,
-                    ...(status === "failed" ? { errorMessage: inferToolErrorMessage(result) } : {}),
-                  };
-                },
-                deliveryOptIn: groupId === undefined ? wantsAutomaticDelivery : false,
-                ...(taskNotify !== undefined ? { notify: taskNotify } : {}),
-                onSettle,
-              }),
-            } as const;
-          })();
-
-      if (!started.started.ok) {
-        // Roll back a group this call just minted so a cap rejection cannot
-        // leave an empty orphan group; dropEmptyGroup is a no-op on a group
-        // that already holds tasks or that pre-existed.
-        if (groupId !== undefined && !groupPreexisted) registry.dropEmptyGroup(sessionKey, groupId);
-        const message =
-          `start_task: cannot start; ${started.started.runningCount} background task(s) already running ` +
-          `(cap ${started.started.cap}). Wait for one to finish (task_wait) or stop one (task_cancel) first.`;
-        return {
-          content: [{ type: "text", text: message }],
-          details: { worker: "mmr-subagents.async-task", tool: START_TASK_TOOL_NAME, agent: parsed.agent, errorMessage: message },
-        };
-      }
-      const snapshot = started.started.snapshot;
-      // Idempotent-retry rollback: a deduplicated start returns the pre-existing
-      // task, so a group this call just minted (group_id:"new") would otherwise
-      // linger as an empty orphan — now a labeled one. Drop it when the dedup'd
-      // task is not in it. Mirrors the cap-rejection rollback above;
-      // dropEmptyGroup is a no-op once a group holds tasks or if it pre-existed.
-      if (
-        started.started.deduplicated
-        && groupId !== undefined
-        && !groupPreexisted
-        && snapshot.groupId !== groupId
-      ) {
-        registry.dropEmptyGroup(sessionKey, groupId);
-      }
-      // Surface the launched agent on the pinned bottom-of-window widget so the
-      // transcript card can stay empty (see renderMmrBackgroundTaskResult).
-      refreshAsyncTaskWidget(ctx, registry, sessionKey);
-      const dedupNote = started.started.deduplicated ? " (existing task for this call)" : "";
-      const groupNote = snapshot.groupId ? ` in group ${snapshot.groupId}` : "";
-      const groupDeliveryEnabled = groupSnapshot?.completionPush !== "disabled";
-      const deliveryHint = snapshot.groupId
-        ? groupDeliveryEnabled
-          ? "The group owns automatic completion delivery; use task_poll/task_wait for grouped orchestration or to collect needed child outputs."
-          : "Automatic delivery is disabled for this group; use task_poll/task_wait to inspect status and collect needed child outputs."
-        : wantsAutomaticDelivery
-          ? "Automatic delivery is enabled; use task_poll/task_wait only after an elapsed-time fallback or for multi-worker orchestration."
-          : "Automatic delivery is disabled; use task_poll/task_wait to retrieve the result explicitly.";
-      const message =
-        `start_task: started background worker ${snapshot.taskId}${dedupNote}${groupNote} ("${snapshot.description}", agent ${snapshot.agent}). ` +
-        `${deliveryHint} ` +
-        `Use task_cancel to stop it. Background tasks are in-memory and lost if the session ends.`;
-      // The opener (group_id:'new') owns the consolidated inline group card;
-      // sibling starts in the same group render nothing inline. Guard on the
-      // task actually landing in the freshly minted group so a deduplicated
-      // retry (whose group we rolled back) does not claim openership.
-      const groupOpener = groupId !== undefined && parsed.groupId === "new" && snapshot.groupId === groupId;
-      return {
-        content: [{ type: "text", text: message }],
-        details: {
-          worker: "mmr-subagents.async-task",
-          tool: START_TASK_TOOL_NAME,
-          agent: snapshot.agent as AsyncTaskAgentName,
-          taskId: snapshot.taskId,
-          sessionKey,
-          ...(snapshot.groupId !== undefined ? { groupId: snapshot.groupId } : {}),
-          ...(groupOpener ? { groupOpener: true } : {}),
-          status: snapshot.status,
-          ...(snapshot.terminalOutcome !== undefined ? { terminalOutcome: snapshot.terminalOutcome } : {}),
-          freshness: snapshot.freshness,
-          description: snapshot.description,
-          prompt: snapshot.prompt,
-          ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
-          ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
-        },
-      };
+      return executeBackgroundStart({
+        registry,
+        deps,
+        ctx,
+        toolCallId,
+        descriptor,
+        member: parsed,
+        wantsNotify: parsed.wantsNotify,
+        ...(parsed.groupId !== undefined ? { legacyGroupId: parsed.groupId } : {}),
+        ...(parsed.groupLabel !== undefined ? { groupLabel: parsed.groupLabel } : {}),
+        resultTool: START_TASK_TOOL_NAME,
+        resultNotice: START_TASK_DEPRECATION_NOTICE,
+      });
     },
   } satisfies ToolDefinition;
 }
@@ -945,6 +1055,31 @@ export function registerAsyncTaskTools(pi: ExtensionAPI, deps: AsyncTaskToolDeps
     createTaskWaitTool(withPi),
     createTaskCancelTool(withPi),
   ];
+  // v2 surface: the named worker tools' background/group/notify params
+  // delegate here. The dispatcher shares the SAME start path (and registry)
+  // as start_task, so a background finder call and start_task({agent:
+  // "finder"}) are one code path; the card extras let the named tools'
+  // renderer read the live registry for the spawn card.
+  registerMmrBackgroundDispatcher(async (input) => {
+    const descriptor = getMmrBackgroundAgent(input.agent);
+    if (!descriptor) {
+      return validationResult(`unknown background agent "${input.agent}".`, input.agent);
+    }
+    const member = normalizeMember({ agent: input.agent, params: input.params });
+    if ("error" in member) return validationResult(member.error, input.agent);
+    return executeBackgroundStart({
+      registry,
+      deps: withPi,
+      ctx: input.ctx,
+      toolCallId: input.toolCallId,
+      descriptor,
+      member,
+      wantsNotify: input.notify !== false,
+      ...(input.group !== undefined ? { groupKey: input.group } : {}),
+      resultTool: input.agent,
+    });
+  });
+  registerMmrBackgroundCardExtras(backgroundCardExtras(registry));
   for (const definition of definitions) {
     registerMmrOwnedTool(definition.name);
     pi.registerTool(definition);

@@ -8,6 +8,7 @@ import { loadMmrCoreSettings } from "../mmr-core/settings.js";
 import type { MmrSubagentInvocation } from "../mmr-core/subagent-resolver.js";
 import type { MmrModelPreference } from "../mmr-core/types.js";
 import { readMmrWorkerSessionId } from "./fallback.js";
+import { getMmrBackgroundDispatcher } from "./background-dispatch.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
 import { resolveWorkerCwd, type ToolHostLike } from "./worker-host.js";
@@ -115,6 +116,16 @@ export interface MmrWorkerToolSpec<TParams, TDetails, TRun = void> {
   renderResult?(result: unknown, options: unknown, theme: unknown, context: unknown): unknown;
   /** Compact progress text shown before the worker streams any output. */
   progressPlaceholder: string;
+
+  /**
+   * v2 background surface: the tool's schema carries
+   * `background?`/`group?`/`notify?` and a `background: true` call is
+   * delegated to the registered background dispatcher instead of running
+   * the blocking path. The factory strips the three fields before
+   * {@link coerceParams}, so per-tool validation sees only the worker's
+   * own params. Off (undefined) for oracle, which is blocking-only.
+   */
+  backgroundCapable?: boolean;
 
   /**
    * Validate/coerce raw params. Throw to reject; whether the throw
@@ -305,6 +316,58 @@ export function createWorkerTool<TParams, TDetails, TRun = void>(
       ctx,
     ): Promise<AgentToolResult<TDetails>> {
       const cwd = resolveWorkerCwd(ctx);
+
+      // 0. v2 background surface. Strip background/group/notify before the
+      //    per-tool params validation; a background:true call validates the
+      //    worker params fail-closed and then delegates to the background
+      //    dispatcher (no blocking run, no spawn).
+      const fail = (message: string): AgentToolResult<TDetails> => {
+        if (spec.paramsFailure) return spec.paramsFailure(message, rawParams, cwd);
+        throw new Error(message);
+      };
+      if (spec.backgroundCapable && typeof rawParams === "object" && rawParams !== null && !Array.isArray(rawParams)) {
+        const { background, group, notify, ...workerParams } = rawParams as Record<string, unknown>;
+        if (background !== undefined && typeof background !== "boolean") {
+          return fail(`${spec.toolName}: background must be a boolean.`);
+        }
+        if (group !== undefined && (typeof group !== "string" || group.trim().length === 0)) {
+          return fail(`${spec.toolName}: group must be a non-empty string.`);
+        }
+        if (notify !== undefined && typeof notify !== "boolean") {
+          return fail(`${spec.toolName}: notify must be a boolean.`);
+        }
+        if (background !== true && (group !== undefined || notify !== undefined)) {
+          return fail(`${spec.toolName}: group and notify require background: true.`);
+        }
+        if (background === true) {
+          // Fail closed on the worker's own params BEFORE any registry side
+          // effect, mirroring the background surface's pre-spawn contract.
+          try {
+            spec.coerceParams(workerParams);
+          } catch (err) {
+            if (!spec.paramsFailure) throw err;
+            const message = err instanceof Error ? err.message : String(err);
+            return spec.paramsFailure(message, rawParams, cwd);
+          }
+          const dispatch = getMmrBackgroundDispatcher();
+          if (!dispatch) {
+            return fail(
+              `${spec.toolName}: background runs are unavailable (the background task surface is not registered in this session).`,
+            );
+          }
+          return (await dispatch({
+            agent: spec.toolName,
+            params: workerParams,
+            group: group as string | undefined,
+            notify: notify as boolean | undefined,
+            toolCallId: _toolCallId,
+            ctx,
+          })) as AgentToolResult<TDetails>;
+        }
+        // Blocking path: continue with the v2 fields stripped (an explicit
+        // background:false call behaves exactly like an unadorned one).
+        rawParams = workerParams;
+      }
 
       // 1. Params. Specs without paramsFailure keep the throw-to-host contract.
       let params: TParams;

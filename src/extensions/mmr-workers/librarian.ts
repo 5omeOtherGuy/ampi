@@ -5,6 +5,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
 import { isRecord } from "../mmr-core/internal/json.js";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import { checkMmrToolParams } from "../mmr-core/tool-params.js";
@@ -148,6 +149,7 @@ export const LIBRARIAN_PARAMETERS_SCHEMA = Type.Object(
           "Optional background that helps scope the research: why the answer is needed, relevant branch/revision, known files, related repositories, constraints, or prior findings. Do not put secrets or credentials here.",
       }),
     ),
+    ...MMR_BACKGROUND_RUN_PARAMETER_FIELDS,
   },
   { additionalProperties: false },
 );
@@ -551,6 +553,7 @@ export function createLibrarianTool(deps: LibrarianToolDeps = {}): ToolDefinitio
       promptGuidelines: LIBRARIAN_PROMPT_GUIDELINES,
       parameters: librarianParameters,
       progressPlaceholder: LIBRARIAN_PROGRESS_PLACEHOLDER,
+      backgroundCapable: true,
       coerceParams: coerceLibrarianParams,
       paramsFailure: (message, raw, cwd) =>
         makeFailureResult({
