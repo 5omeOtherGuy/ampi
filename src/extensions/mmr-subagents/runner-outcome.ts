@@ -1,4 +1,5 @@
 import { isRecord } from "../mmr-core/internal/json.js";
+import type { MmrSubagentPartialOutputPolicy, MmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 import type { MmrWorkerMessage, MmrWorkerResult } from "./runner.js";
 
 /**
@@ -39,33 +40,61 @@ export const DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT = 50 * 1024;
  *                          agent loop did run.
  *  7. `success`          — otherwise.
  */
-export type MmrWorkerOutcomeStatus =
-  | "success"
-  | "spawn-error"
-  | "activation-error"
-  | "aborted"
-  | "worker-error"
-  | "no-agent-start"
-  | "empty-output";
+export const MMR_WORKER_OUTCOME_STATUS_VALUES = [
+  "success",
+  "spawn-error",
+  "activation-error",
+  "aborted",
+  "worker-error",
+  "no-agent-start",
+  "empty-output",
+] as const;
+
+export type MmrWorkerOutcomeStatus = (typeof MMR_WORKER_OUTCOME_STATUS_VALUES)[number];
+
+/**
+ * Canonical `details.status` discriminator set a subagent tool may stamp
+ * on its result details: every classifier outcome plus the pre-spawn
+ * `validation-error` state tools assign before any worker result exists.
+ * `statusFromDetails` (subagent-render-format.ts) trusts exactly this set
+ * when deciding how a finished worker row renders, so the producing and
+ * consuming sides can never drift.
+ */
+export const MMR_SUBAGENT_DETAILS_STATUS_VALUES = [
+  ...MMR_WORKER_OUTCOME_STATUS_VALUES,
+  "validation-error",
+] as const;
+
+export type MmrSubagentDetailsStatus = (typeof MMR_SUBAGENT_DETAILS_STATUS_VALUES)[number];
 
 /** Terminal outcome projection used by the async background-task layer. */
 export type MmrAsyncTerminalOutcome = "success" | "partial" | "failed";
 
 /**
  * Policy controlling how nonzero exits are classified when usable final
- * text is present:
- *
- *  - `"fail-on-nonzero"` — nonzero exit is always `worker-error`,
- *    regardless of output. Used by finder, oracle, and history-reader,
- *    which treat any nonzero exit as a failed worker run because their
- *    output is consumed verbatim by the parent.
- *  - `"prefer-usable-output"` — nonzero exit with usable final text is
- *    `success`; nonzero exit without usable text is `worker-error`.
- *    Used by `Task`, whose worker may exit nonzero after emitting a
- *    usable final answer (spec §9.4).
+ * text is present. The policy bit itself is declared on the subagent
+ * profile (see {@link MmrSubagentPartialOutputPolicy} in mmr-core):
+ * profiles default to `"fail-on-nonzero"`, and only `task-subagent`
+ * declares `"prefer-usable-output"` (spec §9.4). Callers that hold the
+ * profile should prefer {@link classifyMmrWorkerOutcomeForProfile} over
+ * passing the policy literal here.
  */
 export interface ClassifyMmrWorkerOutcomeOptions {
-  partialOutputPolicy: "fail-on-nonzero" | "prefer-usable-output";
+  partialOutputPolicy: MmrSubagentPartialOutputPolicy;
+}
+
+/** Default nonzero-exit policy for profiles that do not declare the bit. */
+export const DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY: MmrSubagentPartialOutputPolicy = "fail-on-nonzero";
+
+/**
+ * Resolve a profile's nonzero-exit output policy, applying the
+ * `"fail-on-nonzero"` default for profiles (or absent profiles) that do
+ * not declare the bit.
+ */
+export function resolveMmrWorkerPartialOutputPolicy(
+  profile: Pick<MmrSubagentProfile, "partialOutputPolicy"> | undefined,
+): MmrSubagentPartialOutputPolicy {
+  return profile?.partialOutputPolicy ?? DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY;
 }
 
 /**
@@ -127,6 +156,20 @@ export function classifyMmrWorkerOutcome(
   if (usable) return "success";
   if (result.agentStarted === false) return "no-agent-start";
   return "empty-output";
+}
+
+/**
+ * Profile-driven entry point for {@link classifyMmrWorkerOutcome}: reads
+ * the nonzero-exit policy from the worker's subagent profile (default
+ * `"fail-on-nonzero"`) so call sites never restate the policy literal.
+ */
+export function classifyMmrWorkerOutcomeForProfile(
+  result: Parameters<typeof classifyMmrWorkerOutcome>[0],
+  profile: Pick<MmrSubagentProfile, "partialOutputPolicy"> | undefined,
+): MmrWorkerOutcomeStatus {
+  return classifyMmrWorkerOutcome(result, {
+    partialOutputPolicy: resolveMmrWorkerPartialOutputPolicy(profile),
+  });
 }
 
 /** Project a worker result onto the async terminal-outcome triple (undefined when aborted). */

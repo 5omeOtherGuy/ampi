@@ -38,7 +38,7 @@ import { buildWorkerToolManifest, resolveWorkerCwd, type ToolHostLike } from "./
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSubagentRunOptions,
@@ -48,6 +48,7 @@ import {
   runMmrSubagentWorker,
 } from "./runner.js";
 import {
+  TASK_SUBAGENT_PROFILE,
   buildResolverFailureContent,
   buildTaskFinalResult,
   buildTaskProgressResult,
@@ -62,6 +63,7 @@ import {
 // (`task-result.ts`) so this entry file remains the stable public surface.
 export {
   TASK_PROGRESS_PLACEHOLDER,
+  TASK_SUBAGENT_PROFILE,
   buildSpawnErrorWorkerResult,
   buildTaskFinalResult,
   buildTaskProgressResult,
@@ -77,7 +79,6 @@ export type {
 } from "./task-result.js";
 
 export const TASK_TOOL_NAME = "Task";
-export const TASK_SUBAGENT_PROFILE = "task-subagent";
 
 function requireTaskProfile() {
   const profile = getMmrSubagentProfile(TASK_SUBAGENT_PROFILE);
@@ -792,7 +793,7 @@ export function createTaskTool(deps: TaskToolDeps = {}): ToolDefinition {
           candidatePreferences:
             (parentMode !== undefined ? requireTaskProfile().modeModelPreferences?.[parentMode] : undefined)
             ?? requireTaskProfile().modelPreferences,
-          classifyOutcome: (candidate) => classifyMmrWorkerOutcome(candidate, { partialOutputPolicy: "prefer-usable-output" }),
+          classifyOutcome: (candidate) => classifyMmrWorkerOutcomeForProfile(candidate, requireTaskProfile()),
           run: runWorkerOnce,
         });
         result = outcome.result;

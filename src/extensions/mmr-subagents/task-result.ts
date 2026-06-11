@@ -1,11 +1,12 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 import type { MmrSubagentInvocation } from "../mmr-core/subagent-resolver.js";
 import {
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   emptyMmrWorkerUsageStats,
   hasUsableMmrWorkerFinalOutput,
   type MmrSpawnedSubagentWorkerDetailsBase,
-  type MmrWorkerOutcomeStatus,
+  type MmrSubagentDetailsStatus,
   type MmrWorkerProgressSnapshot,
   type MmrWorkerResult,
 } from "./runner.js";
@@ -29,20 +30,24 @@ import type { PreparedTaskRun } from "./task.js";
  */
 
 /**
+ * Subagent profile backing the Task tool. Defined here (the runtime-leaf
+ * module) so both `task.ts` and the pure result shaping can reference it
+ * without a cycle; `task.ts` re-exports it as the stable public name.
+ */
+export const TASK_SUBAGENT_PROFILE = "task-subagent";
+
+/**
  * Discriminator for the outcome of a Task invocation. Pi's `AgentToolResult`
  * has no top-level error flag, so the parent agent infers failure from the
  * Task-prefixed content text plus this status. Precedence is fixed (see
  * `classifyTaskOutcome`) so the parent can rely on it during integration.
+ *
+ * Task stamps the full canonical `details.status` discriminator set
+ * (every shared classifier outcome plus the pre-spawn
+ * `validation-error` state), so the type is the canonical union rather
+ * than a Task-private list.
  */
-export type TaskStatus =
-  | "success"
-  | "validation-error"
-  | "activation-error"
-  | "aborted"
-  | "spawn-error"
-  | "worker-error"
-  | "no-agent-start"
-  | "empty-output";
+export type TaskStatus = MmrSubagentDetailsStatus;
 
 /** Worker-details payload attached to every Task AgentToolResult. */
 export interface TaskDetails extends MmrSpawnedSubagentWorkerDetailsBase {
@@ -87,15 +92,15 @@ export function hasUsableTaskFinalText(input: Pick<TaskOutcomeInput, "finalOutpu
 
 /**
  * Precedence-ordered classifier for Task outcomes (spec §9.4). Thin
- * wrapper around {@link classifyMmrWorkerOutcome} with Task's
- * `partialOutputPolicy: "prefer-usable-output"` baked in so non-zero
- * exit with usable final text still classifies as `success`. Task's
- * additional `validation-error` state is handled by the caller before
- * any worker-result input is available, so it is intentionally not
- * part of this classifier.
+ * wrapper around the shared profile-driven classifier: the
+ * `task-subagent` profile declares `partialOutputPolicy:
+ * "prefer-usable-output"`, so non-zero exit with usable final text
+ * still classifies as `success`. Task's additional `validation-error`
+ * state is handled by the caller before any worker-result input is
+ * available, so it is intentionally not part of this classifier.
  */
 export function classifyTaskOutcome(input: TaskOutcomeInput): TaskStatus {
-  const outcome: MmrWorkerOutcomeStatus = classifyMmrWorkerOutcome(
+  return classifyMmrWorkerOutcomeForProfile(
     {
       ...(input.spawnError !== undefined ? { spawnError: input.spawnError } : {}),
       ...(input.subagentActivationError !== undefined
@@ -108,9 +113,8 @@ export function classifyTaskOutcome(input: TaskOutcomeInput): TaskStatus {
       truncatedFinalOutput: input.truncatedFinalOutput,
       ...(input.agentStarted !== undefined ? { agentStarted: input.agentStarted } : {}),
     },
-    { partialOutputPolicy: "prefer-usable-output" },
+    getMmrSubagentProfile(TASK_SUBAGENT_PROFILE),
   );
-  return outcome;
 }
 
 /** Progress text shown while the worker has not yet streamed any output. */

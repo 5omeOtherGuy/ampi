@@ -5,7 +5,7 @@ import { assembleMmrSubagentSurface } from "../mmr-core/subagent-prompt-assembly
 import { getMmrSubagentProfile, selectFirstMatchingAvailableModel } from "../mmr-core/subagent-profiles.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   createChildCliMmrSubagentRunner,
   type MmrSubagentRunner,
   type MmrSubagentWorkerDetailsBase,
@@ -646,9 +646,10 @@ function failureFromWorkerResult(result: MmrSubagentWorkerRunResult): string | u
   // deterministic precedence (spawn-error → activation-error →
   // aborted → worker-error → empty-output → success); the strings
   // below are history-reader-specific phrasing for the failure modes.
-  const outcome = classifyMmrWorkerOutcome(result, {
-    partialOutputPolicy: "fail-on-nonzero",
-  });
+  const outcome = classifyMmrWorkerOutcomeForProfile(
+    result,
+    getMmrSubagentProfile(HISTORY_READER_SUBAGENT_PROFILE),
+  );
   switch (outcome) {
     case "spawn-error": {
       const reason = result.spawnError ?? result.errorMessage ?? "unknown spawn error";

@@ -1,6 +1,6 @@
 import { type AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./runner.js";
+import { MMR_SUBAGENT_DETAILS_STATUS_VALUES, type MmrWorkerTrailItem, type MmrWorkerUsageStats } from "./runner.js";
 import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,
@@ -11,26 +11,19 @@ type TrailToolStatus = Extract<MmrWorkerTrailItem, { type: "tool" }>["status"];
 /**
  * Subagent-tool status discriminator the producing tool may set on
  * `result.details.status` to make the rendered row reflect the tool's
- * own outcome policy. Task uses this for the spec's §9.4 precedence;
- * other subagents (finder, oracle, history-reader) keep status
- * undefined and the renderer derives status from raw fields.
+ * own outcome policy (e.g. Task's §9.4 precedence). The set of trusted
+ * values is the canonical `MMR_SUBAGENT_DETAILS_STATUS_VALUES` from the
+ * shared outcome classifier, so the producing and consuming sides can
+ * never drift.
  *
  * `"success"` is rendered as the green succeeded row even when the
  * underlying `exitCode` or `signal` would otherwise look like a
  * failure (e.g. Task non-zero exit with usable final text). Any other
- * known value renders as failed. Unknown strings fall back to the
- * raw-field heuristic, which is the existing behavior.
+ * known value renders as failed. Unknown strings (and tools that leave
+ * `status` unset) fall back to the raw-field heuristic, which is the
+ * existing behavior.
  */
-const SUBAGENT_DETAILS_STATUS_VALUES = new Set([
-  "success",
-  "validation-error",
-  "activation-error",
-  "aborted",
-  "spawn-error",
-  "worker-error",
-  "no-agent-start",
-  "empty-output",
-]);
+const SUBAGENT_DETAILS_STATUS_VALUES: ReadonlySet<string> = new Set(MMR_SUBAGENT_DETAILS_STATUS_VALUES);
 
 export interface SubagentProgressDetails {
   model?: string;

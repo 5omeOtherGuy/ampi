@@ -1,4 +1,4 @@
-import { deriveAsyncTerminalOutcome } from "../mmr-subagents/runner.js";
+import { DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY, deriveAsyncTerminalOutcome } from "../mmr-subagents/runner.js";
 import {
   ASYNC_TASK_CANCEL_DEAD_AFTER_MS,
   ASYNC_TASK_MAX_RUNTIME_MS,
@@ -305,6 +305,7 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
       ...(args.contextWindow !== undefined ? { contextWindow: args.contextWindow } : {}),
       workerTools: args.workerTools,
       ...(args.capabilityProfile !== undefined ? { capabilityProfile: args.capabilityProfile } : {}),
+      ...(args.partialOutputPolicy !== undefined ? { partialOutputPolicy: args.partialOutputPolicy } : {}),
       ...(args.groupId !== undefined ? { groupId: args.groupId } : {}),
       status: manual ? "ready" : "running",
       ...(manual ? { deferredLaunch: true } : {}),
@@ -422,7 +423,12 @@ class AsyncTaskRegistry implements MmrAsyncTaskRegistry {
     record.runnerSettled = true;
     record.completedAtMs = now;
     record.updatedAtMs = now;
-    record.terminalOutcome = deriveAsyncTerminalOutcome(result, { partialOutputPolicy: "prefer-usable-output" });
+    // The policy bit comes from the worker's subagent profile (threaded
+    // through StartAsyncTaskArgs), so background classification and the
+    // blocking tools always agree on what a nonzero exit means.
+    record.terminalOutcome = deriveAsyncTerminalOutcome(result, {
+      partialOutputPolicy: record.partialOutputPolicy ?? DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY,
+    });
 
     if (record.cancelRequestedAtMs !== undefined) {
       if (record.expiredByWatchdog) {

@@ -39,7 +39,7 @@ import { buildWorkerToolManifest, resolveWorkerCwd, type ToolHostLike } from "./
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   emptyMmrWorkerUsageStats,
   type MmrSpawnedSubagentWorkerDetailsBase,
   type MmrSubagentRunOptions,
@@ -476,19 +476,7 @@ function buildProgressDetails(
 }
 
 function classifyLibrarianOutcome(result: MmrWorkerResult): LibrarianStatus {
-  const outcome: MmrWorkerOutcomeStatus = classifyMmrWorkerOutcome(
-    {
-      ...(result.spawnError ? { spawnError: result.spawnError } : {}),
-      ...(result.subagentActivationError ? { subagentActivationError: result.subagentActivationError } : {}),
-      aborted: result.aborted,
-      signal: result.signal,
-      exitCode: result.exitCode,
-      finalOutput: result.finalOutput,
-      truncatedFinalOutput: result.truncatedFinalOutput,
-      agentStarted: result.agentStarted,
-    },
-    { partialOutputPolicy: "fail-on-nonzero" },
-  );
+  const outcome: MmrWorkerOutcomeStatus = classifyMmrWorkerOutcomeForProfile(result, requireLibrarianProfile());
   if (outcome === "no-agent-start") return "worker-error";
   return outcome;
 }

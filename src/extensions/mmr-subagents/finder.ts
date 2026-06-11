@@ -40,7 +40,7 @@ import {
 } from "./worker-model-metadata.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   type MmrSpawnedSubagentWorkerDetailsBase,
   type MmrWorkerOutcomeStatus,
   type MmrSubagentRunOptions,
@@ -540,22 +540,21 @@ function buildDetails(
     // deterministic spawn-failed line for runner spawn errors.
     trail: sanitizeFinderTrail(result.trail ?? [], cwd),
   });
-  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  const status = classifyMmrWorkerOutcomeForProfile(result, requireFinderProfile());
   return { worker: "mmr-subagents.finder", status, ...base };
 }
 
 function buildFinalContent(result: MmrWorkerResult, cwd: string): string {
-  // Failure-state precedence is now owned by `classifyMmrWorkerOutcome`
-  // (fail-on-nonzero policy). The classifier guarantees that
-  // `spawn-error`, `activation-error`, `aborted`, and `worker-error`
-  // win over output rendering, and the human-readable message below
-  // mirrors that precedence for finder-specific phrasing. The
-  // structured `result.spawnError` field also takes precedence over
-  // `result.errorMessage` text so spawn-failure reasons (`spawn
-  // ENOENT`, `EACCES`, etc.) are not lost when stderr is empty.
-  const outcome = classifyMmrWorkerOutcome(result, {
-    partialOutputPolicy: "fail-on-nonzero",
-  });
+  // Failure-state precedence is owned by the shared worker-outcome
+  // classifier under the finder profile's nonzero-exit policy. The
+  // classifier guarantees that `spawn-error`, `activation-error`,
+  // `aborted`, and `worker-error` win over output rendering, and the
+  // human-readable message below mirrors that precedence for
+  // finder-specific phrasing. The structured `result.spawnError` field
+  // also takes precedence over `result.errorMessage` text so
+  // spawn-failure reasons (`spawn ENOENT`, `EACCES`, etc.) are not lost
+  // when stderr is empty.
+  const outcome = classifyMmrWorkerOutcomeForProfile(result, requireFinderProfile());
   if (outcome === "spawn-error") {
     const reason = result.spawnError ?? result.errorMessage ?? "unknown spawn error";
     return `finder: worker spawn failed: ${reason}`;
