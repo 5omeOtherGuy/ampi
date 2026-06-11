@@ -220,6 +220,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-core` / `mmr-subagents`: the worker nonzero-exit output policy is now declared on the subagent profile (`partialOutputPolicy`, default `fail-on-nonzero`; `task-subagent` declares `prefer-usable-output`), and all result shaping classifies through one shared profile-driven classifier with a single exported `details.status` discriminator set. No behavior change; covered by deterministic classifier tests.
 
+- `mmr-subagents`: the `finder`, `oracle`, `librarian`, and `Task` tools are now generated from one declarative worker-tool factory with a single parent-side invocation-resolution path and one shared model-fallback wrapper. No behavior change; existing per-tool deterministic tests pin the preserved contracts.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest
