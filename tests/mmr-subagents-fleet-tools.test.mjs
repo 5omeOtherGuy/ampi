@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TOOLS_MODULE = "extensions/mmr-async-tasks/async-task-tools.ts";
-const REGISTRY_MODULE = "extensions/mmr-async-tasks/async-task-registry.ts";
+const TOOLS_MODULE = "extensions/mmr-workers/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/mmr-workers/async-task-registry.ts";
 
 after(cleanupLoadedSource);
 
@@ -78,7 +78,15 @@ function makeClassifiedRunner(failForPrompt) {
     runner: {
       run(options) {
         calls.push(options);
-        return Promise.resolve(makeWorkerResult({ exitCode: failForPrompt(options.prompt) ? 1 : 0 }));
+        // A genuine failure: nonzero exit AND no usable output. Task's
+        // prefer-usable-output policy (§9.4) classifies a nonzero exit WITH
+        // usable output as success, and the registry status follows the same
+        // classifier on every surface.
+        return Promise.resolve(
+          failForPrompt(options.prompt)
+            ? makeWorkerResult({ exitCode: 1, finalOutput: "", truncatedFinalOutput: "" })
+            : makeWorkerResult(),
+        );
       },
     },
     calls,

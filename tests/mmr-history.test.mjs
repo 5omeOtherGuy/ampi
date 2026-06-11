@@ -24,7 +24,7 @@ describe("mmr-history prompt-builder ownership", () => {
   it("registers history-reader from mmr-history, not mmr-subagents", async () => {
     const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
     const history = await importSource("extensions/mmr-history/index.ts");
-    const subagents = await importSource("extensions/mmr-subagents/index.ts");
+    const subagents = await importSource("extensions/mmr-workers/index.ts");
 
     assembly.clearMmrSubagentPromptBuilders();
     subagents.default(createMockPi().pi);

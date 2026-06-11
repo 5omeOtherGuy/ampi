@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-subagents/fallback.ts";
+const MODULE = "extensions/mmr-workers/fallback.ts";
 
 let mod;
 beforeEach(async () => {
@@ -412,7 +412,7 @@ describe("session_start clears worker-fallback state (#3)", () => {
   const scope = () => mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "oracle" });
 
   async function registerExtension() {
-    const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
     const runtime = await importSource("extensions/mmr-core/runtime.ts");
     const handlers = new Map();
     const pi = {
@@ -421,7 +421,7 @@ describe("session_start clears worker-fallback state (#3)", () => {
       getActiveTools: () => [],
       getAllTools: () => [],
     };
-    createMmrSubagentsExtension()(pi);
+    createMmrWorkersExtension()(pi);
     return { handlers, runtime };
   }
 

@@ -36,7 +36,7 @@ after(cleanupLoadedSource);
 
 const ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 
 const promptFixtureDir = path.join(import.meta.dirname, "fixtures/mmr-core-prompts");
 const BASE_PROMPT = readFileSync(path.join(promptFixtureDir, "base.md"), "utf8");

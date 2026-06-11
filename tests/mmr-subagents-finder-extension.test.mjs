@@ -12,7 +12,7 @@
 //   3. `createMmrSubagentsToolProvider({ finder: true })` resolves
 //      `finder` to `{ kind: "oneOf", candidates: ["finder"] }` while
 //      `Task`, `oracle`, and `librarian` stay gated.
-//   4. `createMmrSubagentsExtension()(pi)` actually registers a concrete
+//   4. `createMmrWorkersExtension()(pi)` actually registers a concrete
 //      Pi tool named `finder` via `pi.registerTool`.
 //   5. After loading the extension, `resolveMmrTools("smart", ...)` shows
 //      `finder` as `active` with owner `mmr-subagents` (gated `Task`/
@@ -48,7 +48,7 @@ async function importRuntime() {
 describe("mmr-subagents providers with finder capability", () => {
   it("feature gate flips to enabled when finder is shipped", async () => {
     const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider({ finder: true });
     const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
@@ -59,7 +59,7 @@ describe("mmr-subagents providers with finder capability", () => {
 
   it("feature gate stays disabled with default args (preserves shell behavior)", async () => {
     const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider();
     const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
@@ -69,7 +69,7 @@ describe("mmr-subagents providers with finder capability", () => {
 
   it("tool provider claims finder as active when shipped and keeps others gated", async () => {
     const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     // Capability matrix isolated to finder so this test continues to
     // assert the pre-oracle behavior of the provider switch.
@@ -86,7 +86,7 @@ describe("mmr-subagents providers with finder capability", () => {
   });
 
   it("tool provider with default args keeps every owned tool gated (preserves shell behavior)", async () => {
-    const { createMmrSubagentsToolProvider } = await importSource("extensions/mmr-subagents/provider.ts");
+    const { createMmrSubagentsToolProvider } = await importSource("extensions/mmr-workers/provider.ts");
     const provider = createMmrSubagentsToolProvider();
     for (const logical of ["Task", "finder", "oracle", "librarian"]) {
       const rule = provider.resolve(logical);
@@ -98,9 +98,9 @@ describe("mmr-subagents providers with finder capability", () => {
 
 describe("mmr-subagents extension factory wires up finder", () => {
   it("registers a concrete Pi tool named `finder` via pi.registerTool", async () => {
-    const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
     const { pi, tools } = makePi();
-    createMmrSubagentsExtension()(pi);
+    createMmrWorkersExtension()(pi);
     const finder = tools.find((tool) => tool.name === "finder");
     assert.ok(finder, "extension must register a Pi tool named finder");
     assert.equal(typeof finder.execute, "function");
@@ -109,10 +109,10 @@ describe("mmr-subagents extension factory wires up finder", () => {
   });
 
   it("after loading, smart-mode resolution shows finder as active and owned by mmr-subagents", async () => {
-    const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
-    createMmrSubagentsExtension()(pi);
+    createMmrWorkersExtension()(pi);
 
     const resolved = runtime.resolveMmrTools(
       "smart",
@@ -122,7 +122,7 @@ describe("mmr-subagents extension factory wires up finder", () => {
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision, `smart mode must produce a decision for ${shipped}`);
       assert.equal(decision.status, "active");
-      assert.equal(decision.owner, "mmr-subagents");
+      assert.equal(decision.owner, "mmr-workers");
       assert.equal(resolved.activeTools.includes(shipped), true);
       assert.equal(resolved.gatedTools.includes(shipped), false);
     }
@@ -133,14 +133,14 @@ describe("mmr-subagents extension factory wires up finder", () => {
   });
 
   it("after loading, feature gate decision for mmr-subagents reports enabled", async () => {
-    const { createMmrSubagentsExtension } = await importSource("extensions/mmr-subagents/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
-    createMmrSubagentsExtension()(pi);
+    createMmrWorkersExtension()(pi);
 
     const [decision] = runtime.resolveMmrFeatureGates(["mmr-subagents"]);
     assert.equal(decision.gate, "mmr-subagents");
     assert.equal(decision.status, "enabled");
-    assert.equal(decision.source, "mmr-subagents");
+    assert.equal(decision.source, "mmr-workers");
   });
 });

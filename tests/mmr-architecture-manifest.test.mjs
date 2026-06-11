@@ -160,7 +160,7 @@ describe("architecture manifest guardrails", () => {
   it("subagent child keep-set references only manifested extensions", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const { MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS } = await importSource(
-      "extensions/mmr-subagents/child-extension-scope.ts",
+      "extensions/mmr-workers/child-extension-scope.ts",
     );
     const names = new Set(MMR_EXTENSION_MANIFEST.map((e) => e.name));
     for (const [profile, keep] of Object.entries(MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS)) {

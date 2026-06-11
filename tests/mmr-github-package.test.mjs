@@ -18,7 +18,7 @@ describe("mmr-github package wiring", () => {
     const pkg = await readPackageJson();
     const core = pkg.pi.extensions.indexOf("./src/extensions/mmr-core/index.ts");
     const github = pkg.pi.extensions.indexOf(githubExtensionPath);
-    const subagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-subagents/index.ts");
+    const subagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-workers/index.ts");
     assert.ok(core !== -1 && github !== -1 && subagents !== -1);
     assert.ok(github > core, "mmr-github must load after mmr-core");
     assert.ok(github < subagents, "mmr-github must load before mmr-subagents so librarian gating sees the GitHub tools");
