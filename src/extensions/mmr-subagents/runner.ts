@@ -31,16 +31,22 @@ export type { MmrWorkerTrailItem } from "./worker-trail.js";
 // this entry file remains the stable public surface for them.
 export {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
+  DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY,
+  MMR_SUBAGENT_DETAILS_STATUS_VALUES,
+  MMR_WORKER_OUTCOME_STATUS_VALUES,
   classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   deriveAsyncTerminalOutcome,
   getMmrWorkerFinalOutput,
   hasUsableMmrWorkerFinalOutput,
+  resolveMmrWorkerPartialOutputPolicy,
   shouldRetryMmrChildWithFullDiscovery,
   truncateMmrWorkerOutput,
 } from "./runner-outcome.js";
 export type {
   ClassifyMmrWorkerOutcomeOptions,
   MmrAsyncTerminalOutcome,
+  MmrSubagentDetailsStatus,
   MmrWorkerOutcomeStatus,
 } from "./runner-outcome.js";
 export { emptyMmrWorkerUsageStats } from "./worker-usage.js";

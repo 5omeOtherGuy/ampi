@@ -1,5 +1,6 @@
+import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 import {
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   type MmrSpawnedSubagentWorkerDetailsBase,
   type MmrWorkerOutcomeStatus,
   type MmrWorkerProgressSnapshot,
@@ -93,21 +94,28 @@ export function buildDetails(
     ...(resolvedModel !== undefined ? { resolvedModel } : {}),
     ...(contextWindow !== undefined ? { contextWindow } : {}),
   });
-  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  const status = classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(config.profileName));
   return { worker: config.workerDiscriminator, status, ...base, attachments: attachments.map((a) => a.record) };
 }
 
-/** Model-visible final content text for a completed worker result. */
-export function buildFinalContent(label: string, result: MmrWorkerResult): string {
-  // Failure-state precedence is now owned by `classifyMmrWorkerOutcome`
-  // (fail-on-nonzero policy). The classifier guarantees `spawn-error`
-  // / `activation-error` / `aborted` / `worker-error` win over output
-  // rendering, and the structured `result.spawnError` field takes
-  // precedence over `result.errorMessage` text so spawn-failure reasons
-  // (`spawn ENOENT`, `EACCES`, etc.) are not lost when stderr is empty.
-  const outcome = classifyMmrWorkerOutcome(result, {
-    partialOutputPolicy: "fail-on-nonzero",
-  });
+/**
+ * Model-visible final content text for a completed worker result.
+ * `profileName` selects the advisor profile whose nonzero-exit policy
+ * drives classification; omitted (or unknown) profiles classify under
+ * the `fail-on-nonzero` default, which is every advisor profile today.
+ */
+export function buildFinalContent(label: string, result: MmrWorkerResult, profileName?: string): string {
+  // Failure-state precedence is owned by the shared worker-outcome
+  // classifier under the advisor profile's nonzero-exit policy. The
+  // classifier guarantees `spawn-error` / `activation-error` / `aborted`
+  // / `worker-error` win over output rendering, and the structured
+  // `result.spawnError` field takes precedence over `result.errorMessage`
+  // text so spawn-failure reasons (`spawn ENOENT`, `EACCES`, etc.) are
+  // not lost when stderr is empty.
+  const outcome = classifyMmrWorkerOutcomeForProfile(
+    result,
+    profileName !== undefined ? getMmrSubagentProfile(profileName) : undefined,
+  );
   if (outcome === "spawn-error") {
     const reason = result.spawnError ?? result.errorMessage ?? "unknown spawn error";
     return `${label}: worker spawn failed: ${reason}`;

@@ -1,7 +1,8 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 import type { MmrModelPreference } from "../mmr-core/types.js";
 import {
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSubagentRunner,
@@ -61,10 +62,10 @@ type WorkerFallbackCtx = Pick<ExtensionContext, "ui" | "hasUI" | "signal"> & {
 
 /**
  * Thin pass-through over {@link runMmrWorkerWithModelFallback} that fixes the
- * two bits every subagent caller repeats verbatim: the `fail-on-nonzero`
- * outcome classification and resolving the fallback registry from
- * `ctx.modelRegistry`. The per-subagent `run` closure is passed through
- * unchanged.
+ * two bits every subagent caller repeats verbatim: outcome classification
+ * under the named profile's nonzero-exit policy (default `fail-on-nonzero`)
+ * and resolving the fallback registry from `ctx.modelRegistry`. The
+ * per-subagent `run` closure is passed through unchanged.
  */
 export function runMmrWorkerWithSharedFallback(params: {
   ctx: WorkerFallbackCtx;
@@ -81,7 +82,7 @@ export function runMmrWorkerWithSharedFallback(params: {
     toolName: params.toolName,
     profileName: params.profileName,
     candidatePreferences: params.candidatePreferences,
-    classifyOutcome: (result) => classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" }),
+    classifyOutcome: (result) => classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(params.profileName)),
     run: params.run,
   });
 }

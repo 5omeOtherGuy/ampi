@@ -5,8 +5,10 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
+import { getMmrSubagentProfile } from "../mmr-core/subagent-profiles.js";
 import { getMmrSessionIdentitySnapshot } from "../mmr-core/runtime.js";
 import {
+  TASK_SUBAGENT_PROFILE,
   buildSpawnErrorWorkerResult,
   buildTaskFinalResult,
   prepareTaskRun,
@@ -40,6 +42,7 @@ import {
   type MmrAsyncTaskRegistry,
   type MmrAsyncTaskInternalSnapshot,
   type MmrAsyncTaskRun,
+  type StartAsyncTaskArgs,
 } from "./async-task-registry.js";
 import { refreshBackgroundTaskWidget } from "./background-task-widget.js";
 import {
@@ -269,6 +272,17 @@ function workerToolsForAgent(agent: AsyncTaskAgentName, taskTools: readonly stri
   return LIBRARIAN_WORKER_TOOLS;
 }
 
+/**
+ * Spreadable `partialOutputPolicy` start-arg for background Task runs,
+ * read from the `task-subagent` profile so the registry classifies raw
+ * Task worker results under the same profile-declared nonzero-exit
+ * policy as the blocking `Task` tool.
+ */
+function taskPartialOutputPolicyArg(): Pick<StartAsyncTaskArgs, "partialOutputPolicy"> {
+  const policy = getMmrSubagentProfile(TASK_SUBAGENT_PROFILE)?.partialOutputPolicy;
+  return policy !== undefined ? { partialOutputPolicy: policy } : {};
+}
+
 interface FleetMemberBuild {
   startArgs: {
     agent: AsyncTaskAgentName;
@@ -279,6 +293,7 @@ interface FleetMemberBuild {
     resolvedModel?: string;
     contextWindow?: number;
     capabilityProfile?: string;
+    partialOutputPolicy?: StartAsyncTaskArgs["partialOutputPolicy"];
     run: MmrAsyncTaskRun;
   };
   row: AsyncTaskFleetRow;
@@ -310,6 +325,9 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
           prompt: params.prompt,
           cwd,
           workerTools: detailsContext.workerTools,
+          // Raw worker results from the Task runner classify under the
+          // task-subagent profile's nonzero-exit policy.
+          ...taskPartialOutputPolicyArg(),
           ...(detailsContext.resolvedModel !== undefined ? { resolvedModel: detailsContext.resolvedModel } : {}),
           ...(detailsContext.contextWindow !== undefined ? { contextWindow: detailsContext.contextWindow } : {}),
           ...(params.capabilityProfile !== undefined ? { capabilityProfile: params.capabilityProfile } : {}),
@@ -589,6 +607,9 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
                 description: params.description,
                 prompt: params.prompt,
                 cwd,
+                // Raw worker results from the Task runner classify under the
+                // task-subagent profile's nonzero-exit policy.
+                ...taskPartialOutputPolicyArg(),
                 ...(detailsContext.resolvedModel !== undefined ? { resolvedModel: detailsContext.resolvedModel } : {}),
                 ...(detailsContext.contextWindow !== undefined ? { contextWindow: detailsContext.contextWindow } : {}),
                 workerTools: detailsContext.workerTools,

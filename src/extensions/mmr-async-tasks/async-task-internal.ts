@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import type { MmrSubagentPartialOutputPolicy } from "../mmr-core/subagent-profiles.js";
 import type {
   MmrAsyncTerminalOutcome,
   MmrWorkerProgressSnapshot,
@@ -112,6 +113,8 @@ export interface MmrAsyncTaskRecord {
   contextWindow?: number;
   workerTools: readonly string[];
   capabilityProfile?: string;
+  /** Profile-declared nonzero-exit policy; see {@link StartAsyncTaskArgs}. */
+  partialOutputPolicy?: MmrSubagentPartialOutputPolicy;
   groupId?: string;
   status: MmrAsyncTaskStatus;
   createdAtMs: number;

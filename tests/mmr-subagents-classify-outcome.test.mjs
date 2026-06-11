@@ -370,3 +370,79 @@ describe("classifyTaskOutcome delegates to classifyMmrWorkerOutcome with Task po
     assert.equal(status, "spawn-error");
   });
 });
+
+describe("profile-driven outcome policy (partialOutputPolicy lives on the subagent profile)", () => {
+  const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
+
+  it("declares prefer-usable-output only on the task-subagent profile", async () => {
+    const { getMmrSubagentProfile, listMmrSubagentProfiles } = await importSource(PROFILES_MODULE);
+    assert.equal(getMmrSubagentProfile("task-subagent")?.partialOutputPolicy, "prefer-usable-output");
+    for (const profile of listMmrSubagentProfiles()) {
+      if (profile.name === "task-subagent") continue;
+      assert.equal(
+        profile.partialOutputPolicy,
+        undefined,
+        `profile ${profile.name} must keep the fail-on-nonzero default`,
+      );
+    }
+  });
+
+  it("classifyMmrWorkerOutcomeForProfile applies the profile's declared policy", async () => {
+    const { classifyMmrWorkerOutcomeForProfile } = await importSource(RUNNER_MODULE);
+    const nonzeroWithOutput = makeWorkerResult({ exitCode: 1, finalOutput: "usable output" });
+    assert.equal(
+      classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, { partialOutputPolicy: "prefer-usable-output" }),
+      "success",
+    );
+    assert.equal(
+      classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, { partialOutputPolicy: "fail-on-nonzero" }),
+      "worker-error",
+    );
+  });
+
+  it("classifyMmrWorkerOutcomeForProfile falls back to fail-on-nonzero for profiles without the bit (and absent profiles)", async () => {
+    const { classifyMmrWorkerOutcomeForProfile, resolveMmrWorkerPartialOutputPolicy, DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY } =
+      await importSource(RUNNER_MODULE);
+    const nonzeroWithOutput = makeWorkerResult({ exitCode: 1, finalOutput: "usable output" });
+    assert.equal(classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, {}), "worker-error");
+    assert.equal(classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, undefined), "worker-error");
+    assert.equal(resolveMmrWorkerPartialOutputPolicy(undefined), DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY);
+    assert.equal(DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY, "fail-on-nonzero");
+  });
+
+  it("end-to-end: the real profiles drive Task vs finder classification of the same nonzero-exit result", async () => {
+    const { classifyMmrWorkerOutcomeForProfile } = await importSource(RUNNER_MODULE);
+    const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
+    const nonzeroWithOutput = makeWorkerResult({ exitCode: 1, finalOutput: "usable output" });
+    assert.equal(
+      classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, getMmrSubagentProfile("task-subagent")),
+      "success",
+    );
+    assert.equal(
+      classifyMmrWorkerOutcomeForProfile(nonzeroWithOutput, getMmrSubagentProfile("finder")),
+      "worker-error",
+    );
+  });
+});
+
+describe("canonical details.status discriminator set", () => {
+  it("MMR_SUBAGENT_DETAILS_STATUS_VALUES is every classifier outcome plus validation-error", async () => {
+    const { MMR_WORKER_OUTCOME_STATUS_VALUES, MMR_SUBAGENT_DETAILS_STATUS_VALUES } = await importSource(RUNNER_MODULE);
+    assert.deepEqual(
+      [...MMR_SUBAGENT_DETAILS_STATUS_VALUES].sort(),
+      [...MMR_WORKER_OUTCOME_STATUS_VALUES, "validation-error"].sort(),
+    );
+  });
+
+  it("statusFromDetails trusts exactly the canonical set", async () => {
+    const { MMR_SUBAGENT_DETAILS_STATUS_VALUES } = await importSource(RUNNER_MODULE);
+    const { statusFromDetails } = await importSource("extensions/mmr-subagents/subagent-render-format.ts");
+    for (const status of MMR_SUBAGENT_DETAILS_STATUS_VALUES) {
+      const expected = status === "success" ? "succeeded" : "failed";
+      // exitCode 0 so only the stamped discriminator can drive the verdict.
+      assert.equal(statusFromDetails({ status, exitCode: 0 }, false, undefined), expected);
+    }
+    // Unknown strings fall back to the raw-field heuristic.
+    assert.equal(statusFromDetails({ status: "not-a-real-status", exitCode: 0 }, false, undefined), "succeeded");
+  });
+});

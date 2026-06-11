@@ -1,4 +1,5 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import type { MmrSubagentPartialOutputPolicy } from "../mmr-core/subagent-profiles.js";
 import type {
   MmrAsyncTerminalOutcome,
   MmrWorkerProgressSnapshot,
@@ -135,6 +136,16 @@ export interface StartAsyncTaskArgs {
   contextWindow?: number;
   workerTools: readonly string[];
   capabilityProfile?: string;
+  /**
+   * Nonzero-exit output policy declared by the worker's subagent profile
+   * (see `MmrSubagentPartialOutputPolicy` in mmr-core). Read by the
+   * registry when it classifies a raw `MmrWorkerResult` into a terminal
+   * outcome, so the policy bit has one source of truth (the profile)
+   * across the blocking and background surfaces. Only run thunks that
+   * return raw worker results (the Task agent today) need it; omitted
+   * tasks classify under the `"fail-on-nonzero"` default.
+   */
+  partialOutputPolicy?: MmrSubagentPartialOutputPolicy;
   groupId?: string;
   run: MmrAsyncTaskRun;
   /**

@@ -118,6 +118,7 @@ export {
 } from "./extensions/mmr-core/subagent-profiles.js";
 export type {
   MmrSubagentBaseMode,
+  MmrSubagentPartialOutputPolicy,
   MmrSubagentProfile,
   MmrSubagentPromptRoute,
 } from "./extensions/mmr-core/subagent-profiles.js";
@@ -551,11 +552,16 @@ export type {
 export {
   DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS,
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
+  DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY,
+  MMR_SUBAGENT_DETAILS_STATUS_VALUES,
   MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT,
+  MMR_WORKER_OUTCOME_STATUS_VALUES,
   MMR_WORKER_TRAIL_LIMIT,
   buildMmrWorkerArgs,
   classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   deriveAsyncTerminalOutcome,
+  resolveMmrWorkerPartialOutputPolicy,
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   emptyMmrWorkerUsageStats,
@@ -569,6 +575,7 @@ export {
 export type {
   ClassifyMmrWorkerOutcomeOptions,
   MmrAsyncTerminalOutcome,
+  MmrSubagentDetailsStatus,
   MmrSpawnedSubagentWorkerDetailsBase,
   MmrSubagentRunOptions,
   MmrSubagentRunProgress,

@@ -66,6 +66,25 @@ export interface MmrRequiredOwnedToolGroup {
   readonly unmetHint?: string;
 }
 
+/**
+ * Policy controlling how a worker's nonzero exits are classified when
+ * usable final text is present:
+ *
+ *  - `"fail-on-nonzero"` — nonzero exit is always a worker error,
+ *    regardless of output. The default for workers whose output is
+ *    consumed verbatim by the parent (finder, oracle, librarian,
+ *    history-reader, custom Markdown subagents).
+ *  - `"prefer-usable-output"` — nonzero exit with usable final text
+ *    still counts as success; nonzero exit without usable text is a
+ *    worker error. Declared only by `task-subagent`, whose worker may
+ *    exit nonzero after emitting a usable final answer.
+ *
+ * Consumed by the shared worker-outcome classifier in `mmr-subagents`;
+ * `mmr-core` only declares the bit so every surface (blocking tools,
+ * model fallback, background tasks) reads one source of truth.
+ */
+export type MmrSubagentPartialOutputPolicy = "fail-on-nonzero" | "prefer-usable-output";
+
 export interface MmrSubagentProfile {
   /** Profile identifier used by `--mmr-subagent`. */
   readonly name: string;
@@ -105,6 +124,13 @@ export interface MmrSubagentProfile {
   readonly requiredOwnedTools?: readonly MmrRequiredOwnedToolGroup[];
   /** Optional maximum inference turns for future in-process runners. */
   readonly maxTurns?: number;
+  /**
+   * Optional nonzero-exit output policy; see
+   * {@link MmrSubagentPartialOutputPolicy}. Omitted profiles default to
+   * `"fail-on-nonzero"`; only `task-subagent` declares
+   * `"prefer-usable-output"`.
+   */
+  readonly partialOutputPolicy?: MmrSubagentPartialOutputPolicy;
   /**
    * Prompt-assembly route. `standalone` uses the registered prompt
    * builder for `promptBuilder`; `mode-derived` builds on
@@ -362,6 +388,10 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
       "task_list",
     ],
     denyTools: MMR_SUBAGENT_SHARED_DENY_TOOLS,
+    // Task is the only worker whose nonzero exit with usable final text
+    // still counts as success; every other profile keeps the
+    // fail-on-nonzero default.
+    partialOutputPolicy: "prefer-usable-output",
     promptRoute: "mode-derived",
     baseMode: "from-parent",
     promptBuilder: "task-subagent",

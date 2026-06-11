@@ -556,7 +556,7 @@ export function createMmrAdvisorTool(
       const model = outcome.route;
       const contextWindow = resolveMmrWorkerModelContextWindowFromCtx(ctx, model);
       return {
-        content: [{ type: "text", text: buildFinalContent(config.outputLabel, outcome.result) }],
+        content: [{ type: "text", text: buildFinalContent(config.outputLabel, outcome.result, config.profileName) }],
         details: buildDetails(config, outcome.result, model, cwd, attachments, contextWindow),
       };
     },

@@ -13,6 +13,7 @@ import { getMmrModeStateSnapshot, registerMmrModeExtraToolProvider } from "../mm
 import type { MmrLockedModeKey } from "../mmr-core/types.js";
 import { registerMmrSubagentPromptBuilder } from "../mmr-core/subagent-prompt-assembly.js";
 import {
+  getMmrSubagentProfile,
   registerMmrSubagentProfile,
   type MmrSubagentProfile,
 } from "../mmr-core/subagent-profiles.js";
@@ -38,7 +39,7 @@ import fs, { constants as fsConstants } from "node:fs";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "../mmr-subagents/progress-rendering.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile,
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSpawnedSubagentWorkerDetailsBase,
@@ -390,7 +391,7 @@ function buildFinalContent(
   // The fallback notice is intentionally NOT prepended here: it is a
   // user-facing advisory surfaced only via `details.fallbackNotice` and the
   // result renderer, so it never enters the model-consumed content.
-  const status = classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" });
+  const status = classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(definition.toolName));
   const text = result.truncatedFinalOutput || result.finalOutput;
   if (status === "success") {
     return text.trim().length > 0 ? text : `${definition.name}: completed with no output.`;
@@ -429,7 +430,7 @@ function buildFinalDetails(
   const fallbackNotice = buildMmrCustomSubagentFallbackNotice(definition, ctx.workerTools);
   return {
     worker: `mmr-subagents.${definition.toolName}`,
-    status: classifyMmrWorkerOutcome(result, { partialOutputPolicy: "fail-on-nonzero" }),
+    status: classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(definition.toolName)),
     toolName: definition.toolName,
     definitionName: definition.name,
     filePath: definition.filePath,
