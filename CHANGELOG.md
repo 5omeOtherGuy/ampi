@@ -8,6 +8,18 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Added
 
+- Developer tooling: added the Biome linter (`npm run lint`, `npm run lint:fix`)
+  configured linter-only in `biome.json` — the formatter stays disabled so the
+  repo's hand-formatted style and `.editorconfig` continue to govern layout.
+  Three rules that conflict with established house idioms are disabled
+  (`noNonNullAssertion`, `noControlCharactersInRegex`, `noAssignInExpressions`)
+  so the repo lints clean today; lint fails only on errors, with warnings/infos
+  left advisory. `npm run gate` now runs `lint` ahead of test/check/pack, and
+  CI runs `npm run lint` before the test job. Added focused test runners
+  `npm run test:one` and `npm run test:watch`, which pass through `node --test`
+  flags (file paths and `--test-name-pattern`) so a single file or named test
+  can be run or watched without the full suite.
+
 - Workflow tooling: new npm scripts make parallel-worktree development
   token-cheap while preserving every existing safety check.
   `npm run link:node-modules` symlinks a task worktree's `node_modules` at the

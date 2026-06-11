@@ -14,6 +14,7 @@ coverage/
 # inside a pi-mmr git checkout; they have no purpose when pi-mmr is
 # installed as a Pi extension into a downstream environment.
 .githooks/
+biome.json
 scripts/sync-primary.sh
 scripts/check-primary-fresh.sh
 scripts/install-hooks.mjs

@@ -9,9 +9,12 @@ Thanks for improving `pi-mmr`.
 3. Make the smallest focused change.
 4. Add or update deterministic tests for behavior changes.
 5. Run the relevant checks:
-   - `npm test`
+   - `npm run lint` (Biome linter; `npm run lint:fix` applies safe fixes)
+   - `npm test` (use `npm run test:one -- tests/<file>.test.mjs` to focus a
+     single file, or `npm run test:watch -- tests/<file>.test.mjs` while iterating)
    - `npm run check`
    - `npm run pack:dry-run` when package contents or exports change
+   - `npm run gate` runs lint, test, check, and pack:dry-run together
 6. Open a pull request into `main`.
 
 ## Pull request workflow

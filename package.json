@@ -50,9 +50,13 @@
   "scripts": {
     "prepare": "node scripts/install-hooks.mjs",
     "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
+    "test:one": "node --test",
+    "test:watch": "node --test --watch",
     "test:cov": "PI_MMR_KEEP_PREPARED_SRC=1 node --test --experimental-test-coverage tests/*.test.mjs",
     "test:cov:clean": "rm -rf .test-src",
     "check": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
     "check:unused": "npm run check",
     "check:changelog": "node scripts/check-changelog.mjs",
     "check:primary-fresh": "bash scripts/check-primary-fresh.sh",
@@ -74,6 +78,7 @@
     "@earendil-works/pi-tui": ">=0.77.0 <0.79.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "typescript": "^6.0.3"
   },
   "dependencies": {
