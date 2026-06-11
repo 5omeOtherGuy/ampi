@@ -132,10 +132,8 @@ const USING_WORKERS_PARTS: readonly UsingWorkersPart[] = [
     requiresAnyOf: ["task_poll", "task_wait"],
     text: WORKER_RESULT_DELIVERY_GUIDANCE,
   },
-  {
-    requiresAnyOf: ["task_cancel"],
-    text: "Use task_cancel to stop a duplicate, obsolete, or wrongly-scoped background task or group.",
-  },
+  // task_cancel has no part here: its single sentence is per-tool routing
+  // guidance and renders once as the tool's Guidelines bullet.
 ];
 
 /**
