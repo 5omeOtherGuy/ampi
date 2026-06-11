@@ -671,32 +671,27 @@ describe("async task tools model-visible surface", () => {
     assert.match(start.description, /background/i);
     assert.match(
       start.description,
-      /With notify enabled, completed background work is surfaced automatically/i,
-      "start_task should teach automatic delivery handling",
+      /notifies you once it finishes/i,
+      "start_task should teach the notify-by-default delivery path",
     );
     assert.doesNotMatch(
       start.description,
       /Always follow start_task with task_poll or task_wait/i,
       "start_task must not make polling the default completion path",
     );
-    // Per-tool guidelines carry routing only: the shared orchestration
-    // policy (delivery semantics, fan-out, the two-sided blocking rule)
-    // renders once in the `## Using workers` block, and the start_task
-    // description keeps the full mechanics for the deprecated alias.
-    assert.match(
-      start.description,
-      /automatic/i,
-      "start_task description should describe automatic delivery",
-    );
+    // Per-tool guidelines carry routing only, and the description carries
+    // only start_task-specific mechanics: the shared orchestration policy
+    // (delivery semantics, the two-sided blocking rule, oracle's blocking
+    // constraint) renders once in the `## Using workers` block.
     assert.match(
       start.description,
       /single grouped notification/i,
       "start_task should document the single grouped-notification policy",
     );
-    assert.match(
+    assert.doesNotMatch(
       start.description,
       /does not by itself mean background/i,
-      "start_task description should carry the two-sided blocking-vs-background rule",
+      "the two-sided blocking-vs-background rule renders once, in Using workers",
     );
     assert.doesNotMatch(
       start.description,
@@ -709,7 +704,7 @@ describe("async task tools model-visible surface", () => {
     assert.equal(poll.promptGuidelines.length, 1);
     assert.match(poll.promptGuidelines[0], /task_poll/);
     assert.equal(wait.promptGuidelines.length, 1);
-    assert.match(wait.promptGuidelines[0], /timeout is not a failure/);
+    assert.match(wait.promptGuidelines[0], /without cancelling it on timeout/);
     assert.equal(cancel.promptGuidelines.length, 1);
     assert.match(cancel.promptGuidelines[0], /task_cancel/);
   });

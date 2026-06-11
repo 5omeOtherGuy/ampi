@@ -108,6 +108,19 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- **Model-visible prompt:** the worker-guidance single-render invariant now
+  holds on the full tool surface (post-#181 wire captures still showed three
+  leaks). The `task_cancel` sentence no longer renders twice — it stays a
+  `Guidelines:` bullet and its duplicate `## Using workers` paragraph is
+  removed; `task_wait`'s bullet drops the timeout-semantics clause already
+  stated by the result-delivery paragraph (now "settle without cancelling it
+  on timeout"); and the deprecated `start_task` description no longer
+  re-embeds the shared cross-worker policy (two-sided blocking-vs-background
+  rule, oracle's always-blocking constraint, delivery restatements) and
+  states the fleet fan-out mechanics once instead of in two near-identical
+  paragraphs. A new test (`mmr-worker-guidance-dedup.test.mjs`) pins the
+  invariant: no routing bullet may also render inside `## Using workers`,
+  and the `start_task` description must stay free of the shared policy text.
 - **Breaking (model-visible prompt + module layout):** worker tool guidance
   is de-duplicated. Each worker tool (`Task`, `finder`, `librarian`,
   `oracle`) and orchestration tool (`start_task`, `task_poll`, `task_wait`,

@@ -8,10 +8,6 @@ import {
   type MmrAsyncTaskStatus,
 } from "./async-task-registry.js";
 import {
-  ORACLE_ALWAYS_BLOCKING_GUIDANCE,
-  WORKER_BACKGROUND_SELECTION_GUIDANCE,
-} from "../mmr-core/worker-tool-guidance.js";
-import {
   DEFAULT_MMR_BACKGROUND_AGENT,
   listMmrBackgroundAgents,
   type MmrBackgroundAgentDescriptor,
@@ -358,13 +354,10 @@ export function buildStartTaskDescription(): string {
   "DEPRECATED compatibility alias: prefer calling the worker tool directly with background: true (e.g. finder({query, background: true})). Parallel background calls can share one worker group via their group parameter. start_task remains for one release.",
   "",
   "Use start_task only for independent work that can proceed while you do other things (long analysis, broad search, a self-contained implementation unit).",
-  `Set agent to choose the background worker: ${agentListWithDefault(listMmrBackgroundAgents())}. Use params for the selected tool's normal input shape. ${ORACLE_ALWAYS_BLOCKING_GUIDANCE}`,
-  WORKER_BACKGROUND_SELECTION_GUIDANCE,
-  "With notify enabled, completed background work is surfaced automatically: during an active agent loop it appears at the start of a later model step, and when idle it may wake the session.",
-  "Use task_poll/task_wait for legitimate fleet orchestration: coordinating multiple parallel workers, checking a group, or collecting child results. A task_wait timeout is not a failure and does not stop the worker.",
-  "To launch several workers at once, pass fleet.groups[] (each group lists its members) in one call: the runtime mints the group ids, renders every group card up front in a ready state, and launches them together. Omit group_id inside fleet, and do not combine fleet with the single-task fields.",
-  "group_id is the legacy incremental path: use group_id:'new' to mint a group on one call and a returned concrete group id to add a later sibling. The opening call controls the single grouped notification; sibling tasks in the group do not send individual completion notifications. Prefer fleet for same-step fan-out.",
+  `Set agent to choose the background worker: ${agentListWithDefault(listMmrBackgroundAgents())}. Use params for the selected tool's normal input shape.`,
   START_TASK_GROUP_FANOUT_GUIDANCE,
+  "Omit group_id inside fleet, and do not combine fleet with the single-task fields.",
+  "group_id is the legacy incremental path: use group_id:'new' to mint a group on one call and a returned concrete group id to add a later sibling. The opening call controls the single grouped notification; sibling tasks in the group do not send individual completion notifications. Prefer fleet for same-step fan-out.",
   "For Task workers only, capabilityProfile can narrow tools to read-only or read-write (narrowing only; never widens the default Task surface).",
   "By default a background task notifies you once it finishes; pass notify:false to opt out and make task_poll/task_wait the only retrieval path.",
   "",
@@ -395,7 +388,7 @@ export const TASK_POLL_PROMPT_GUIDELINES: readonly string[] = [
 ];
 
 export const TASK_WAIT_PROMPT_GUIDELINES: readonly string[] = [
-  "Use task_wait to wait briefly for a background task or group to settle; a timeout is not a failure and does not stop the worker.",
+  "Use task_wait to wait briefly for a background task or group to settle without cancelling it on timeout.",
 ];
 
 export const TASK_CANCEL_PROMPT_GUIDELINES: readonly string[] = [
