@@ -8,6 +8,17 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Added
 
+- Developer tooling: added the Biome linter (`npm run lint`, `npm run lint:fix`)
+  configured linter-only in `biome.json` — the formatter stays disabled so the
+  repo's hand-formatted style and `.editorconfig` continue to govern layout.
+  Three rules that conflict with established house idioms are disabled
+  (`noNonNullAssertion`, `noControlCharactersInRegex`, `noAssignInExpressions`)
+  so the repo lints clean today; lint fails only on errors, with warnings/infos
+  left advisory. `npm run gate` now runs `lint` ahead of test/check/pack, and
+  CI runs `npm run lint` before the test job. Added focused test runners
+  `npm run test:one` and `npm run test:watch`, which pass through `node --test`
+  flags (file paths and `--test-name-pattern`) so a single file or named test
+  can be run or watched without the full suite.
 - mmr-workers: new `code_review` worker tool. An independent expert reviewer
   runs in a fresh subagent context, computes the diff itself from a
   natural-language `diff_description` (merge-base `origin/HEAD` git command
@@ -34,31 +45,6 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   instead of repeating them inside every worker tool's `Guidelines:` bullets.
   Each paragraph gates on the active tool set, and the module documents the
   single-entry recipe for adding future worker tools.
-
-### Changed
-
-- **Breaking (model-visible prompt + module layout):** worker tool guidance
-  is de-duplicated. Each worker tool (`Task`, `finder`, `librarian`,
-  `oracle`) and orchestration tool (`start_task`, `task_poll`, `task_wait`,
-  `task_cancel`) now contributes exactly one routing guideline to Pi's
-  `Guidelines:` block; the full when/how guidance lives only in the tool's
-  schema description, which the model already receives. Previously the same
-  text rendered up to three times per request (snippet, guideline bullets,
-  schema description) and the flat `Guidelines:` list ran to dozens of
-  undifferentiated worker bullets.
-- mmr-workers: blocking-vs-background wording now matches the
-  `background: true` surface. The per-tool background lines, the selection
-  rule, and the fan-out guidance no longer route background runs through the
-  deprecated `start_task` alias (`start_task`'s own description still
-  documents the alias and its `fleet` shape). Task's description also gains
-  the missing worker-contract lines (single final report, no mid-run
-  communication, role framing) and teaches grouped `background: true` calls
-  as the fan-out mechanism.
-- mmr-workers: `tool-guidance.ts` is removed; the shared worker-policy
-  constants moved to `mmr-core/worker-tool-guidance.ts` (mmr-core renders
-  the new block and must not import tool modules), and the start_task
-  fleet fan-out text moved next to its only consumer in
-  `async-task-tool-schemas.ts`.
 
 - Workflow tooling: new npm scripts make parallel-worktree development
   token-cheap while preserving every existing safety check.
@@ -122,6 +108,28 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- **Breaking (model-visible prompt + module layout):** worker tool guidance
+  is de-duplicated. Each worker tool (`Task`, `finder`, `librarian`,
+  `oracle`) and orchestration tool (`start_task`, `task_poll`, `task_wait`,
+  `task_cancel`) now contributes exactly one routing guideline to Pi's
+  `Guidelines:` block; the full when/how guidance lives only in the tool's
+  schema description, which the model already receives. Previously the same
+  text rendered up to three times per request (snippet, guideline bullets,
+  schema description) and the flat `Guidelines:` list ran to dozens of
+  undifferentiated worker bullets.
+- mmr-workers: blocking-vs-background wording now matches the
+  `background: true` surface. The per-tool background lines, the selection
+  rule, and the fan-out guidance no longer route background runs through the
+  deprecated `start_task` alias (`start_task`'s own description still
+  documents the alias and its `fleet` shape). Task's description also gains
+  the missing worker-contract lines (single final report, no mid-run
+  communication, role framing) and teaches grouped `background: true` calls
+  as the fan-out mechanism.
+- mmr-workers: `tool-guidance.ts` is removed; the shared worker-policy
+  constants moved to `mmr-core/worker-tool-guidance.ts` (mmr-core renders
+  the new block and must not import tool modules), and the start_task
+  fleet fan-out text moved next to its only consumer in
+  `async-task-tool-schemas.ts`.
 - `mmr-session-fallback`: transient provider errors (overload, rate limit,
   silent stream stalls) no longer trigger the cross-model fallback prompt on
   the first occurrence. The classifier now reports a `retryable` flag, and a
