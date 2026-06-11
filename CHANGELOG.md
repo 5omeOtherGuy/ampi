@@ -222,6 +222,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-subagents`: the `finder`, `oracle`, `librarian`, and `Task` tools are now generated from one declarative worker-tool factory with a single parent-side invocation-resolution path and one shared model-fallback wrapper. No behavior change; existing per-tool deterministic tests pin the preserved contracts.
 
+- `mmr-subagents` / `mmr-async-tasks`: background worker activity renders through one shared section/card/row path (`background-task-view.ts`); the single, group, and fleet inline cards are the same component, and the live-vs-replay decision is made in one place. No model-visible change; the existing render tests pin the preserved card behavior.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest
