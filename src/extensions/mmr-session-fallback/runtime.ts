@@ -1,15 +1,18 @@
+import type { MmrSessionFallbackTransientState } from "./escalation.js";
 import type { PersistedMmrSessionFallbackOverride } from "./state.js";
 
 export type MmrSessionFallbackOverride = PersistedMmrSessionFallbackOverride;
 
 interface MmrSessionFallbackRuntime {
   overrides: Map<string, MmrSessionFallbackOverride>;
+  transients: Map<string, MmrSessionFallbackTransientState>;
   promptInFlight?: Promise<unknown>;
 }
 
-// Bumped to v2 when the runtime gained a shape guard. The predicate below also
-// rebuilds the singleton if an older build's instance is still on `globalThis`.
-const RUNTIME_KEY = "__pi_mmr_session_fallback_runtime_v2__";
+// Bumped to v3 when the runtime gained per-session transient-error tracking.
+// The predicate below also rebuilds the singleton if an older build's instance
+// is still on `globalThis`.
+const RUNTIME_KEY = "__pi_mmr_session_fallback_runtime_v3__";
 
 const globalStore = globalThis as typeof globalThis & {
   [RUNTIME_KEY]?: MmrSessionFallbackRuntime;
@@ -26,7 +29,8 @@ const globalStore = globalThis as typeof globalThis & {
  */
 function isMmrSessionFallbackRuntimeCompatible(value: unknown): value is MmrSessionFallbackRuntime {
   if (!value || typeof value !== "object") return false;
-  return (value as { overrides?: unknown }).overrides instanceof Map;
+  const candidate = value as { overrides?: unknown; transients?: unknown };
+  return candidate.overrides instanceof Map && candidate.transients instanceof Map;
 }
 
 /**
@@ -40,7 +44,7 @@ function isMmrSessionFallbackRuntimeCompatible(value: unknown): value is MmrSess
 function getRuntime(): MmrSessionFallbackRuntime {
   const existing = globalStore[RUNTIME_KEY];
   if (isMmrSessionFallbackRuntimeCompatible(existing)) return existing;
-  const fresh: MmrSessionFallbackRuntime = { overrides: new Map() };
+  const fresh: MmrSessionFallbackRuntime = { overrides: new Map(), transients: new Map() };
   globalStore[RUNTIME_KEY] = fresh;
   return fresh;
 }
@@ -69,7 +73,21 @@ export function clearMmrSessionFallbackOverride(sessionId?: string): void {
 export function clearMmrSessionFallbackOverrides(): void {
   const runtime = getRuntime();
   runtime.overrides.clear();
+  runtime.transients.clear();
   runtime.promptInFlight = undefined;
+}
+
+export function getMmrSessionFallbackTransientState(sessionId?: string): MmrSessionFallbackTransientState | undefined {
+  const found = getRuntime().transients.get(fallbackKey(sessionId));
+  return found ? { ...found } : undefined;
+}
+
+export function setMmrSessionFallbackTransientState(sessionId: string | undefined, state: MmrSessionFallbackTransientState): void {
+  getRuntime().transients.set(fallbackKey(sessionId), { ...state });
+}
+
+export function clearMmrSessionFallbackTransientState(sessionId?: string): void {
+  getRuntime().transients.delete(fallbackKey(sessionId));
 }
 
 export function getMmrSessionFallbackPromptInFlight(): Promise<unknown> | undefined {
