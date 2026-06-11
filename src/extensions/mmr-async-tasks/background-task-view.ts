@@ -182,7 +182,7 @@ export function backgroundStatusWord(status: string | undefined): string {
   return status ?? "background";
 }
 
-export function compactOneLine(value: string, limit: number): string {
+export function compactOneLine(value: string, limit = 140): string {
   const compact = value.replace(/\s+/g, " ").trim();
   if (compact.length <= limit) return compact;
   return `${compact.slice(0, Math.max(0, limit - 1))}…`;
@@ -284,6 +284,49 @@ export function toRow(entry: MmrAsyncTaskBoardEntry, boardGeneratedAtMs: number)
     ...(entry.capabilityProfile !== undefined ? { capabilityProfile: entry.capabilityProfile } : {}),
     ...(entry.groupId !== undefined ? { groupId: entry.groupId } : {}),
     ...(entry.deferredLaunch !== undefined ? { deferredLaunch: entry.deferredLaunch } : {}),
+  };
+}
+
+/**
+ * Frozen inputs for {@link staticWidgetRow}. Every field is optional so the
+ * two static sources (a replayed `details` snapshot and a declared-but-not-
+ * launched fleet row) can both feed the same builder.
+ */
+export interface StaticWidgetRowSnapshot {
+  taskId?: string | undefined;
+  status?: string | undefined;
+  agent?: string | undefined;
+  description?: string | undefined;
+  resolvedModel?: string | undefined;
+  contextWindow?: number | undefined;
+  capabilityProfile?: string | undefined;
+  groupId?: string | undefined;
+  terminalOutcome?: WidgetRow["terminalOutcome"] | undefined;
+  deferredLaunch?: boolean | undefined;
+}
+
+/**
+ * The single static-fallback row builder: synthesizes a {@link WidgetRow} from
+ * a frozen snapshot when no live board row is available (transcript replay, no
+ * registry, or a declared fleet member the board does not have yet). Timing
+ * fields are zeroed so the elapsed chip never ticks on a frozen row.
+ */
+export function staticWidgetRow(snapshot: StaticWidgetRowSnapshot): WidgetRow {
+  return {
+    taskId: snapshot.taskId ?? "",
+    status: snapshot.status ?? "running",
+    freshness: "healthy",
+    agent: snapshot.agent ?? "background task",
+    description: snapshot.description ?? "",
+    runtimeMs: 0,
+    createdAtMs: 0,
+    boardGeneratedAtMs: 0,
+    ...(snapshot.terminalOutcome !== undefined ? { terminalOutcome: snapshot.terminalOutcome } : {}),
+    ...(snapshot.resolvedModel !== undefined ? { resolvedModel: snapshot.resolvedModel } : {}),
+    ...(snapshot.contextWindow !== undefined ? { contextWindow: snapshot.contextWindow } : {}),
+    ...(snapshot.capabilityProfile !== undefined ? { capabilityProfile: snapshot.capabilityProfile } : {}),
+    ...(snapshot.groupId !== undefined ? { groupId: snapshot.groupId } : {}),
+    ...(snapshot.deferredLaunch !== undefined ? { deferredLaunch: snapshot.deferredLaunch } : {}),
   };
 }
 
@@ -410,20 +453,26 @@ export function makeSafeFg(theme: BackgroundViewTheme | undefined) {
 }
 
 /**
- * One background row: `<glyph> <agent> <desc> · <metadata> [fresh]`. `indent`
- * prefixes grouped rows; `activeFrame` animates running rows when supplied.
+ * One background row: `<glyph> [taskId] <agent> <desc> · <metadata> [groupId]
+ * [fresh]`. `indent` prefixes grouped rows; `activeFrame` animates running
+ * rows when supplied. `showTaskId` leads with the accent task id (the board
+ * view, where the id is the handle for follow-up `task_poll` calls);
+ * `showGroupId` trails the dim group id (flat lists with no section headers).
  */
 export function renderRowLine(
   row: WidgetRow,
   theme: BackgroundViewTheme | undefined,
   activeFrame: string | undefined,
-  options: { indent?: string; metadata?: RowMetadataLevel } = {},
+  options: { indent?: string; metadata?: RowMetadataLevel; showTaskId?: boolean; showGroupId?: boolean } = {},
 ): string {
   const indent = options.indent ?? "";
   const metadataLevel = options.metadata ?? "full";
   const safeFg = makeSafeFg(theme);
   const color = backgroundStatusColor(row.status);
   const glyph = safeFg(color, backgroundStatusGlyph(row.status, activeFrame));
+  const taskId = options.showTaskId === true && row.taskId
+    ? ` ${safeFg("accent", row.taskId)}`
+    : "";
   const agent = safeFg("accent", row.agent);
   const desc = row.description
     ? ` ${safeFg("muted", compactOneLine(row.description, 60))}`
@@ -432,10 +481,13 @@ export function renderRowLine(
   const metadata = metadataParts.length > 0
     ? ` ${safeFg("dim", `· ${metadataParts.join(" · ")}`)}`
     : "";
+  const groupId = options.showGroupId === true && row.groupId
+    ? ` ${safeFg("dim", row.groupId)}`
+    : "";
   const fresh = row.freshness === "stalled" || row.freshness === "dead"
     ? ` ${safeFg(row.freshness === "dead" ? "error" : "warning", `[${row.freshness}]`)}`
     : "";
-  return `${indent}${glyph} ${agent}${desc}${metadata}${fresh}`;
+  return `${indent}${glyph}${taskId} ${agent}${desc}${metadata}${groupId}${fresh}`;
 }
 
 /**
@@ -465,6 +517,34 @@ export function renderSectionHeader(
   const settled = succeeded + failed + cancelled + partial;
   const count = safeFg("dim", `${settled}/${total}`);
   return `${head}  ${dot} ${word} ${safeFg("dim", "·")} ${count}`;
+}
+
+/**
+ * One section as lines: the group header (when shown) followed by its rows.
+ * This is THE section shape every surface draws — the pinned widget and the
+ * inline single/group/fleet cards all flow through here, so a grouped section
+ * always reads as a header plus indented rows and a headerless (ungrouped,
+ * N=1) section as flush-left rows. `header` defaults to "grouped sections show
+ * a header"; the widget overrides it to also label its ungrouped bucket when
+ * grouped sections are on screen.
+ */
+export function renderWidgetSection(
+  section: WidgetSection,
+  theme: BackgroundViewTheme | undefined,
+  activeFrame: string | undefined,
+  options: { header?: boolean; metadata?: RowMetadataLevel } = {},
+): string[] {
+  const showHeader = options.header ?? section.groupId !== undefined;
+  const indent = showHeader ? "  " : "";
+  const lines: string[] = [];
+  if (showHeader) lines.push(renderSectionHeader(section, theme));
+  for (const row of section.rows) {
+    lines.push(renderRowLine(row, theme, activeFrame, {
+      indent,
+      ...(options.metadata !== undefined ? { metadata: options.metadata } : {}),
+    }));
+  }
+  return lines;
 }
 
 export function truncateWidgetLines(lines: readonly string[], width: number): string[] {

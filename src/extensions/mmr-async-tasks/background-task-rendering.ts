@@ -8,9 +8,10 @@ import {
   backgroundStatusColor,
   backgroundStatusGlyph,
   backgroundStatusWord,
+  renderRowLine,
+  toRow,
 } from "./background-task-view.js";
 import {
-  compactOneLine,
   formatTitle,
   type BackgroundTaskDetails,
   type RenderStatus,
@@ -136,19 +137,16 @@ function isBackgroundTaskBoard(value: unknown): value is MmrAsyncTaskBoard {
 }
 
 function backgroundBoardEntryLine(entry: MmrAsyncTaskBoardEntry, theme: SubagentTheme): string {
-  const color = backgroundStatusColor(entry.status);
-  const glyph = theme.fg(color, backgroundStatusGlyph(entry.status));
-  const id = theme.fg("accent", entry.taskId);
-  const agent = theme.fg("muted", entry.agent);
-  const desc = entry.description
-    ? ` ${theme.fg("muted", `"${compactOneLine(entry.description, 60)}"`)}`
-    : "";
-  const fresh = entry.freshness !== "healthy" && entry.freshness !== "terminal"
-    ? ` ${theme.fg(entry.freshness === "dead" ? "error" : "warning", `[${entry.freshness}]`)}`
-    : "";
-  const group = entry.groupId ? ` ${theme.fg("dim", entry.groupId)}` : "";
-  const partial = entry.terminalOutcome === "partial" ? ` ${theme.fg("warning", "[partial]")}` : "";
-  return `  ${glyph} ${id} ${agent}${desc}${group}${partial}${fresh}`;
+  // The shared row formatter, led by the accent task id (the handle for a
+  // follow-up task_poll) and trailed by the dim group id (the board is a flat
+  // state-bucketed list with no group section headers). A zero board timestamp
+  // keeps the elapsed chip frozen at the entry's recorded runtime — the board
+  // card is a static transcript snapshot, not a live surface.
+  return renderRowLine(toRow(entry, 0), theme, undefined, {
+    indent: "  ",
+    showTaskId: true,
+    showGroupId: true,
+  });
 }
 
 /**
