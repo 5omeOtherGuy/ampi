@@ -46,10 +46,10 @@ const MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 const PI_IDENTITY_LINE = "You are an expert coding assistant operating inside pi, a coding agent harness.";
 
 const MODE_MARKER_OPENINGS = {
-  smart: '<mmr_mode name="smart">You are pair programming with the user.',
-  smartGPT: '<mmr_mode name="smartGPT">You are pair programming with the user (smartGPT locked mode).',
+  smart: '<mmr_mode name="smart">You are pair programming with the user to solve their coding task.',
+  smartGPT: '<mmr_mode name="smartGPT">You are pair programming with the user to solve their coding task.',
   rush: '<mmr_mode name="rush">You and the user share one workspace.',
-  large: '<mmr_mode name="large">You are pair programming with the user in Large mode.',
+  large: '<mmr_mode name="large">You are pair programming with the user to solve their coding task.',
   deep: '<mmr_mode name="deep">You are an autonomous coding agent in Deep mode.',
 };
 
@@ -199,7 +199,7 @@ describe("mmr-core prompt layer", () => {
   it("instructs raw diagram output without diagram code fences (rush omits the diagrams fragment)", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
     const diagramSentence =
-      "When a picture beats prose for architecture, flow, state, or relationships, output the raw box-drawing diagram only.";
+      "When a picture beats prose for architecture, flow, state, or relationships, draw it with box-drawing characters";
 
     for (const mode of MODES) {
       const state = createState({ mode });

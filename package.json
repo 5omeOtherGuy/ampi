@@ -27,8 +27,7 @@
       "./src/extensions/mmr-tasks/index.ts",
       "./src/extensions/mmr-web/index.ts",
       "./src/extensions/mmr-github/index.ts",
-      "./src/extensions/mmr-subagents/index.ts",
-      "./src/extensions/mmr-async-tasks/index.ts",
+      "./src/extensions/mmr-workers/index.ts",
       "./src/extensions/mmr-custom-subagents/index.ts",
       "./src/extensions/mmr-history/index.ts"
     ]
@@ -42,17 +41,20 @@
     "./extensions/mmr-toolbox": "./src/extensions/mmr-toolbox/index.ts",
     "./extensions/mmr-web": "./src/extensions/mmr-web/index.ts",
     "./extensions/mmr-github": "./src/extensions/mmr-github/index.ts",
-    "./extensions/mmr-subagents": "./src/extensions/mmr-subagents/index.ts",
-    "./extensions/mmr-async-tasks": "./src/extensions/mmr-async-tasks/index.ts",
+    "./extensions/mmr-workers": "./src/extensions/mmr-workers/index.ts",
     "./extensions/mmr-custom-subagents": "./src/extensions/mmr-custom-subagents/index.ts",
     "./extensions/mmr-history": "./src/extensions/mmr-history/index.ts"
   },
   "scripts": {
     "prepare": "node scripts/install-hooks.mjs",
     "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
+    "test:one": "node --test",
+    "test:watch": "node --test --watch",
     "test:cov": "PI_MMR_KEEP_PREPARED_SRC=1 node --test --experimental-test-coverage tests/*.test.mjs",
     "test:cov:clean": "rm -rf .test-src",
     "check": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
     "check:unused": "npm run check",
     "check:changelog": "node scripts/check-changelog.mjs",
     "check:primary-fresh": "bash scripts/check-primary-fresh.sh",
@@ -74,6 +76,7 @@
     "@earendil-works/pi-tui": ">=0.77.0 <0.79.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "typescript": "^6.0.3"
   },
   "dependencies": {

@@ -36,7 +36,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/mmr-subagents/runner.ts";
+const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
 
 class MockProcess extends EventEmitter {
   constructor() {

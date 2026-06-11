@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const RUNTIME_KEY = "__pi_mmr_session_fallback_runtime_v2__";
+const RUNTIME_KEY = "__pi_mmr_session_fallback_runtime_v3__";
 
 after(cleanupLoadedSource);
 afterEach(() => {
@@ -14,7 +14,7 @@ describe("mmr-session-fallback runtime reload guard", () => {
     const runtime = await importSource("extensions/mmr-session-fallback/runtime.ts");
 
     // Simulate an in-place reload leaving an incompatible instance behind:
-    // `overrides` is a plain object, not a Map.
+    // `overrides` is a plain object, not a Map, and `transients` is missing.
     globalThis[RUNTIME_KEY] = { overrides: {} };
 
     // Accessors read the global at call time; a stale shape must not throw.

@@ -2,7 +2,16 @@ import {
   buildBuiltinToolGuidance,
   extractActiveBuiltinToolNames,
 } from "./builtin-tool-guidance.js";
-import { SHARED_CODING_GUIDANCE_FRAGMENTS, SHARED_TOOL_GUIDANCE } from "./prompt-modules.js";
+import {
+  buildUsingWorkersGuidance,
+  extractActiveWorkerToolNames,
+} from "./worker-tool-guidance.js";
+import {
+  DEEP_ENGINEERING_JUDGMENT,
+  resolveModeCodingGuidanceFragment,
+  SHARED_CODING_GUIDANCE_FRAGMENTS,
+  SHARED_TOOL_GUIDANCE,
+} from "./prompt-content.js";
 import {
   getMmrModePromptRecipe,
   getMmrPromptBase,
@@ -10,6 +19,7 @@ import {
   MMR_RESPONSE_STYLE_HEADING,
   MMR_TOOL_USE_HEADING,
   MMR_TOOL_USE_POSTURE_LINE,
+  type MmrModePromptRecipe,
   type MmrPromptFragmentId,
 } from "./prompt-registry.js";
 import type {
@@ -41,24 +51,104 @@ function findHeaderStart(prompt: string, anchor: string, fromIdx: number): numbe
 
 const MMR_TAIL_SEPARATOR = "\n\n";
 
+function renderMmrOwnedTailFragment(
+  fragmentId: MmrPromptFragmentId,
+  previousRecipe: MmrModePromptRecipe,
+): string | undefined {
+  switch (fragmentId) {
+    case "shared-tool-guidance":
+      return SHARED_TOOL_GUIDANCE;
+    case "autonomy":
+    case "discovery-discipline":
+    case "pragmatism":
+    case "verification":
+    case "careful-actions":
+    case "diagrams":
+    case "file-links":
+    case "collaboration":
+      return resolveModeCodingGuidanceFragment(previousRecipe.mode, fragmentId);
+    case "engineering-judgment":
+      return DEEP_ENGINEERING_JUDGMENT;
+    case "mode-posture":
+      return previousRecipe.postureSections === "" ? undefined : previousRecipe.postureSections;
+    case "response-style":
+      return `${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
+    case "identity":
+    case "tool-lead-in":
+    case "active-tools":
+    case "active-guidelines":
+    case "builtin-tool-guidance":
+    case "using-workers":
+    case "pi-docs":
+    case "preserved-tail":
+      return undefined;
+    default: {
+      const exhaustive: never = fragmentId;
+      return exhaustive;
+    }
+  }
+}
+
+function renderPostPiDocsMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const piDocsIndex = previousRecipe.fragments.indexOf("pi-docs");
+  if (piDocsIndex === -1) return "";
+  const tailFragments = previousRecipe.fragments.slice(piDocsIndex + 1);
+  const ownedTail = tailFragments
+    .map((fragmentId) => renderMmrOwnedTailFragment(fragmentId, previousRecipe))
+    .filter((fragmentText): fragmentText is string => fragmentText !== undefined)
+    .join("\n\n");
+  let lastOwnedTailFragment: MmrPromptFragmentId | undefined;
+  for (let i = tailFragments.length - 1; i >= 0; i -= 1) {
+    const fragmentId = tailFragments[i];
+    if (fragmentId === undefined) continue;
+    if (renderMmrOwnedTailFragment(fragmentId, previousRecipe) === undefined) continue;
+    lastOwnedTailFragment = fragmentId;
+    break;
+  }
+  return lastOwnedTailFragment === undefined || lastOwnedTailFragment === "response-style"
+    ? ownedTail
+    : `${ownedTail}\n\n`;
+}
+
+function renderPostureFirstMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const tailFragments: MmrPromptFragmentId[] = ["shared-tool-guidance"];
+  if (previousRecipe.fragments.includes("diagrams")) tailFragments.push("diagrams");
+  tailFragments.push("file-links", "collaboration", "response-style");
+  return tailFragments
+    .map((fragmentId) => renderMmrOwnedTailFragment(fragmentId, previousRecipe))
+    .filter((fragmentText): fragmentText is string => fragmentText !== undefined)
+    .join("\n\n");
+}
+
+function renderLegacyMmrTail(previousRecipe: MmrModePromptRecipe): string {
+  const codingGuidance = previousRecipe.fragments
+    .filter((fragmentId) => Object.hasOwn(SHARED_CODING_GUIDANCE_FRAGMENTS, fragmentId))
+    .map((fragmentId) => SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId as keyof typeof SHARED_CODING_GUIDANCE_FRAGMENTS])
+    .join("\n\n");
+  return `${SHARED_TOOL_GUIDANCE}\n\n${codingGuidance}\n\n${previousRecipe.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
+}
+
 /**
- * Exact-text reconstruction of the MMR-owned tail blocks (shared tool
- * guidance, shared coding guidance, mode posture, response style) for every
- * known mode template. Used to detect and strip a previously-injected MMR tail when
- * `assembleActiveSurface` re-runs on an already-assembled prompt, so the
- * blocks are replaced rather than duplicated. Mode-independent: the parent
- * prompt fed into a re-assembly may have been produced for a different mode
- * (e.g. a `deep` parent aliased to a `smart` Task base).
+ * Exact-text reconstruction of MMR-owned blocks that sit immediately after
+ * Pi's docs block for every known mode template. Used to detect and strip a
+ * previously-injected MMR tail when `assembleActiveSurface` re-runs on an
+ * already-assembled prompt, so the blocks are replaced rather than duplicated.
+ * Mode-independent: the parent prompt fed into a re-assembly may have been
+ * produced for a different mode (e.g. a `deep` parent aliased to a `smart` Task
+ * base). Includes the legacy all-posture tail shape so already-captured parent
+ * prompts from older `pi-mmr` versions still strip cleanly.
  */
-const PREVIOUS_MMR_TAILS: readonly string[] = Object.values(MMR_MODE_PROMPT_RECIPES).map(
-  (previousRecipe) => {
-    const codingGuidance = previousRecipe.fragments
-      .filter((fragmentId) => Object.hasOwn(SHARED_CODING_GUIDANCE_FRAGMENTS, fragmentId))
-      .map((fragmentId) => SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId as keyof typeof SHARED_CODING_GUIDANCE_FRAGMENTS])
-      .join("\n\n");
-    return `${SHARED_TOOL_GUIDANCE}\n\n${codingGuidance}\n\n${previousRecipe.postureSections}\n\n${MMR_RESPONSE_STYLE_HEADING}\n\n${previousRecipe.closingLine}`;
-  },
-);
+const PREVIOUS_MMR_TAILS: readonly string[] = [
+  ...new Set(
+    Object.values(MMR_MODE_PROMPT_RECIPES)
+      .flatMap((previousRecipe) => [
+        renderPostPiDocsMmrTail(previousRecipe),
+        renderPostureFirstMmrTail(previousRecipe),
+        renderLegacyMmrTail(previousRecipe),
+      ])
+      .filter((tail) => tail.length > 0),
+  ),
+].sort((a, b) => b.length - a.length);
 
 /**
  * Locate the end of a previously-injected MMR tail that sits immediately
@@ -209,10 +299,13 @@ export function assembleActiveSurface(
   const builtinToolGuidanceText = buildBuiltinToolGuidance(
     input.activeToolNames ?? extractActiveBuiltinToolNames(toolsBlockText),
   );
+  const usingWorkersText = buildUsingWorkersGuidance(
+    input.activeToolNames ?? extractActiveWorkerToolNames(toolsBlockText),
+  );
 
   // Each fragment owns its trailing separators so that concatenating all
   // rendered blocks reproduces the systemPrompt byte-for-byte.
-  const renderFragment = (fragmentId: MmrPromptFragmentId): MmrPromptBlock | null => {
+  const renderFragment = (fragmentId: MmrPromptFragmentId, index: number): MmrPromptBlock | null => {
     switch (fragmentId) {
       case "identity":
         return {
@@ -251,6 +344,15 @@ export function assembleActiveSurface(
               source: "mmr-core",
             }
           : null;
+      case "using-workers":
+        return usingWorkersText
+          ? {
+              id: "using-workers",
+              kind: "using-workers",
+              text: `${usingWorkersText}\n\n`,
+              source: "mmr-core",
+            }
+          : null;
       case "pi-docs":
         return {
           id: "pi-docs",
@@ -276,27 +378,34 @@ export function assembleActiveSurface(
         return {
           id: fragmentId,
           kind: fragmentId,
-          text: `${SHARED_CODING_GUIDANCE_FRAGMENTS[fragmentId]}\n\n`,
+          text: `${resolveModeCodingGuidanceFragment(mode, fragmentId)}\n\n`,
+          source: "mmr-core",
+        };
+      case "engineering-judgment":
+        return {
+          id: "engineering-judgment",
+          kind: "engineering-judgment",
+          text: `${DEEP_ENGINEERING_JUDGMENT}\n\n`,
           source: "mmr-core",
         };
       case "mode-posture":
-        return {
-          id: `mode-posture:${mode}`,
-          kind: "mode-posture",
-          text: `${recipe.postureSections}\n\n`,
-          source: "mmr-core",
-        };
-      case "response-style":
-        // Last MMR-owned fragment before Pi's preserved tail; the tail's
-        // leading blank line supplies the separator, so this fragment must
-        // not add its own trailing `\n\n` (keeps the byte-exact boundary the
-        // removed easter-egg fragment previously held).
+        return recipe.postureSections === ""
+          ? null
+          : {
+              id: `mode-posture:${mode}`,
+              kind: "mode-posture",
+              text: `${recipe.postureSections}\n\n`,
+              source: "mmr-core",
+            };
+      case "response-style": {
+        const isBeforePreservedTail = recipe.fragments[index + 1] === "preserved-tail";
         return {
           id: `response-style:${mode}`,
           kind: "response-style",
-          text: `${MMR_RESPONSE_STYLE_HEADING}\n\n${recipe.closingLine}`,
+          text: `${MMR_RESPONSE_STYLE_HEADING}\n\n${recipe.closingLine}${isBeforePreservedTail ? "" : "\n\n"}`,
           source: "mmr-core",
         };
+      }
       case "preserved-tail":
         return {
           id: "preserved-tail",
@@ -312,7 +421,7 @@ export function assembleActiveSurface(
   };
 
   const blocks = recipe.fragments
-    .map((fragmentId) => renderFragment(fragmentId))
+    .map((fragmentId, index) => renderFragment(fragmentId, index))
     .filter((block): block is MmrPromptBlock => block !== null);
 
   const systemPrompt = blocks.map((b) => b.text).join("");

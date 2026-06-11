@@ -1,9 +1,8 @@
 import type { MmrModeKey, MmrPromptBlockKind } from "./types.js";
 import {
-  MMR_MODE_PROMPT_TEMPLATES as LEGACY_MODE_PROMPT_TEMPLATES,
+  MMR_MODE_PROMPT_TEMPLATES as AUTHORED_MODE_PROMPT_TEMPLATES,
   type MmrModeBlockTemplate,
-} from "./prompt-templates.js";
-import { SHARED_CODING_GUIDANCE_FRAGMENT_IDS } from "./prompt-modules.js";
+} from "./prompt-content.js";
 
 export const MMR_IDENTITY_LINE =
   "You are an expert coding assistant operating inside pi, a coding agent harness.";
@@ -11,7 +10,7 @@ export const MMR_IDENTITY_LINE =
 export const MMR_TOOL_USE_HEADING = "## Tool use";
 
 export const MMR_TOOL_USE_POSTURE_LINE =
-  "Use context first; reach for a tool only when it would change your answer. Run independent read-only calls in parallel; never parallelize edits to the same file. Avoid repeated reads of the same content.";
+  "Use context first; reach for a tool when it would change your answer — never guess what a tool can tell you. Run independent read-only calls in parallel; never parallelize edits to the same file. Don't re-read content you already have.";
 
 export const MMR_ADDITIONAL_TOOLS_LINE =
   "In addition to the tools above, you may have access to other custom tools depending on the project.";
@@ -45,11 +44,13 @@ export type MmrPromptFragmentId =
   | "active-tools"
   | "active-guidelines"
   | "builtin-tool-guidance"
+  | "using-workers"
   | "pi-docs"
   | "shared-tool-guidance"
   | "autonomy"
   | "discovery-discipline"
   | "pragmatism"
+  | "engineering-judgment"
   | "verification"
   | "careful-actions"
   | "diagrams"
@@ -92,15 +93,51 @@ export const MMR_PROMPT_BASES = {
 
 export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
   "identity",
+  "autonomy",
+  "discovery-discipline",
+  "pragmatism",
+  "verification",
+  "careful-actions",
+  "mode-posture",
+  "collaboration",
+  "response-style",
   "tool-lead-in",
   "active-tools",
   "active-guidelines",
   "builtin-tool-guidance",
+  "using-workers",
   "pi-docs",
   "shared-tool-guidance",
-  ...SHARED_CODING_GUIDANCE_FRAGMENT_IDS,
+  "diagrams",
+  "file-links",
+  "preserved-tail",
+] as const satisfies readonly MmrPromptFragmentId[];
+
+/**
+ * Deep reorders the body to the authoritative deep-template sequence
+ * (autonomy, pragmatism, discovery, engineering judgment, verification) and is
+ * the only mode that renders the deep-only `engineering-judgment` fragment.
+ */
+export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = [
+  "identity",
+  "autonomy",
+  "pragmatism",
+  "discovery-discipline",
+  "engineering-judgment",
+  "verification",
+  "careful-actions",
   "mode-posture",
+  "collaboration",
   "response-style",
+  "tool-lead-in",
+  "active-tools",
+  "active-guidelines",
+  "builtin-tool-guidance",
+  "using-workers",
+  "pi-docs",
+  "shared-tool-guidance",
+  "diagrams",
+  "file-links",
   "preserved-tail",
 ] as const satisfies readonly MmrPromptFragmentId[];
 
@@ -109,8 +146,7 @@ export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
  * optimizes for latency and token economy with terse output, so the
  * multi-line box-drawing example is the lowest-value shared section for it.
  * Every other shared coding fragment (autonomy, discovery, pragmatism,
- * verification, careful actions, file links, collaboration) is retained, and
- * all other modes keep the full default sequence.
+ * verification, careful actions, file links, collaboration) is retained.
  */
 export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.filter(
   (fragmentId) => fragmentId !== "diagrams",
@@ -118,7 +154,7 @@ export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQ
 
 /**
  * Forces every registry entry to keep its key, `id`, and `blockKind` identical,
- * so the duplicated fragment-id vocabulary across `prompt-modules.ts`,
+ * so the duplicated fragment-id vocabulary across `prompt-content.ts`,
  * `prompt-registry.ts`, `types.ts`, and `prompt-assembly.ts` cannot drift
  * silently (a mismatched key/id/blockKind fails `tsc`).
  */
@@ -163,6 +199,13 @@ export const MMR_PROMPT_FRAGMENTS = {
     optional: true,
     summary: "MMR-owned augmentation for active Pi built-in tools; omitted when no curated built-in is active.",
   },
+  "using-workers": {
+    id: "using-workers",
+    blockKind: "using-workers",
+    source: "mmr-core",
+    optional: true,
+    summary: "MMR-owned cross-worker policy block (delegation, blocking vs background, fan-out, result delivery); omitted when no worker tool is active.",
+  },
   "pi-docs": {
     id: "pi-docs",
     blockKind: "pi-docs",
@@ -193,6 +236,12 @@ export const MMR_PROMPT_FRAGMENTS = {
     blockKind: "pragmatism",
     source: "mmr-core",
     summary: "Shared pragmatism-and-scope guidance: smallest correct change, avoid one-use abstractions.",
+  },
+  "engineering-judgment": {
+    id: "engineering-judgment",
+    blockKind: "engineering-judgment",
+    source: "mmr-core",
+    summary: "Deep-only engineering-judgment guidance: choose conservatively when implementation details are open, scale test coverage with blast radius.",
   },
   verification: {
     id: "verification",
@@ -249,7 +298,7 @@ function recipe(
   mode: PromptedMmrModeKey,
   fragments: readonly MmrPromptFragmentId[] = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE,
 ): MmrModePromptRecipe {
-  const template = LEGACY_MODE_PROMPT_TEMPLATES[mode];
+  const template = AUTHORED_MODE_PROMPT_TEMPLATES[mode];
   return {
     mode,
     basePromptId: "pi-native-default-v1",
@@ -266,7 +315,7 @@ export const MMR_MODE_PROMPT_RECIPES = {
   smartGPT: recipe("smartGPT"),
   rush: recipe("rush", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
   large: recipe("large"),
-  deep: recipe("deep"),
+  deep: recipe("deep", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
 
 function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {

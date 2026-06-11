@@ -1,6 +1,6 @@
 # pi-mmr repository map
 
-`pi-mmr` is a Pi package containing modular multi-model-routing extensions. The package registers ten extensions: `mmr-core`, `mmr-session-fallback`, `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-github`, `mmr-subagents`, `mmr-async-tasks`, `mmr-custom-subagents`, and `mmr-history`. Two further directories ship in source but are not registered in `pi.extensions`: `mmr-toolbox` (a deprecated compatibility shim) and `mmr-debug` (a developer-only capture extension excluded from the published package).
+`pi-mmr` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `mmr-core`, `mmr-session-fallback`, `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-github`, `mmr-workers`, `mmr-custom-subagents`, and `mmr-history`. Two further directories ship in source but are not registered in `pi.extensions`: `mmr-toolbox` (a deprecated compatibility shim) and `mmr-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -30,8 +30,7 @@
   "./src/extensions/mmr-tasks/index.ts",
   "./src/extensions/mmr-web/index.ts",
   "./src/extensions/mmr-github/index.ts",
-  "./src/extensions/mmr-subagents/index.ts",
-  "./src/extensions/mmr-async-tasks/index.ts",
+  "./src/extensions/mmr-workers/index.ts",
   "./src/extensions/mmr-custom-subagents/index.ts",
   "./src/extensions/mmr-history/index.ts"
 ]
@@ -54,8 +53,7 @@ src/
     mmr-tasks/
     mmr-web/
     mmr-github/
-    mmr-subagents/
-    mmr-async-tasks/
+    mmr-workers/
     mmr-custom-subagents/
     mmr-history/
     mmr-toolbox/     # deprecated shim, unregistered
@@ -93,7 +91,7 @@ Important files:
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
 
-Registered surface: slash commands (`/mode`, `/mmr-status`, `/mmr-changelog`, `/mmr-config`), mode shortcuts, the `pi-mmr-above-editor-dashboard` widget, and the feature gates for `mmr-subagents`, `mmr-async-tasks`, `mmr-history`, `mmr-web`, `mmr-patch`, and `mmr-tasks`.
+Registered surface: slash commands (`/mode`, `/mmr-status`, `/mmr-changelog`, `/mmr-config`), mode shortcuts, the `pi-mmr-above-editor-dashboard` widget, and the feature gates for `mmr-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `mmr-history`, `mmr-web`, `mmr-patch`, and `mmr-tasks`.
 
 ### `src/extensions/mmr-session-fallback/`
 
@@ -157,31 +155,25 @@ Important files:
 - `provider.ts`, `tool-ownership.ts` — feature-gate/tool-provider ownership checks and `librarian` gating.
 - `README.md` — tool reference, configuration, safety, and public API.
 
-### `src/extensions/mmr-subagents/`
+### `src/extensions/mmr-workers/`
 
-Worker/subagent extension. Owns the `finder`, `oracle`, `Task`, and `librarian` workers, the child-CLI runner, and the `mmr-subagents` feature gate. Worker model/tool/prompt policy is resolved through `mmr-core` profiles. Background fleet tooling and custom Markdown subagents were extracted into `mmr-async-tasks` and `mmr-custom-subagents`.
-
-Important files:
-
-- `index.ts` — Pi extension entry point.
-- `finder.ts`, `oracle.ts`, `task.ts`, `librarian.ts` — concrete worker tools.
-- `runner.ts` — child-CLI subagent runner and worker lifecycle.
-- `provider.ts` — tool-provider and feature-gate-provider factories.
-- `prompts.ts` — worker prompt builders.
-- `README.md`, `ROADMAP.md` — behavior, public API, and milestones.
-
-### `src/extensions/mmr-async-tasks/`
-
-Background fleet extension extracted from `mmr-subagents`. Runs independent subagent workers (`finder`, `librarian`, `Task`) in the background with a session-scoped registry, automated completion delivery, and a live TUI dashboard.
+Merged worker extension. Owns the blocking `finder`, `oracle`, `Task`, and `librarian` workers, the background task surface (`background: true` on the named worker tools, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`), the child-CLI runner, the session-scoped background registry, the live TUI fleet dashboard, and the `mmr-workers` feature gate (the pre-merge `mmr-subagents`/`mmr-async-tasks` gate ids remain accepted aliases). Worker model/tool/prompt policy is resolved through `mmr-core` profiles. Custom Markdown subagents live in `mmr-custom-subagents`.
 
 Important files:
 
 - `index.ts` — Pi extension entry point and provider registration.
-- `async-task-tools.ts` — `start_task`, `task_poll`, `task_wait`, and `task_cancel` implementations.
+- `finder.ts`, `oracle.ts`, `task.ts`, `librarian.ts` — concrete worker tools (finder/librarian/Task accept `background`/`group`/`notify`).
+- `worker-tool-factory.ts` — the declarative factory the worker tools are generated from.
+- `background-agents.ts` — the profile-derived background-agent registry behind the background surface.
+- `runner.ts` — child-CLI subagent runner and worker lifecycle.
+- `async-task-tools.ts` — background start path plus `task_poll`, `task_wait`, and `task_cancel`.
 - `async-task-registry.ts` — in-memory, session-scoped registry of worker lifecycles and concurrency caps.
 - `async-task-delivery.ts` — at-most-once completion notices and idle-wake pushes.
-- `background-task-widget.ts` — pinned `aboveEditor` fleet dashboard (`pi-mmr-background-tasks`).
+- `progress-rendering.ts` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`pi-mmr-background-tasks`) over the `background-task-view.ts` vocabulary.
 - `async-task-tool-format.ts` — tool-result, board-snapshot, and fleet-status formatting.
+- `provider.ts` — unified tool-provider and feature-gate-provider factories.
+- `prompts.ts` — worker prompt builders.
+- `README.md`, `ROADMAP.md` — behavior, public API, and milestones.
 
 ### `src/extensions/mmr-custom-subagents/`
 

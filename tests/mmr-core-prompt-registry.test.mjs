@@ -7,22 +7,48 @@ after(cleanupLoadedSource);
 const PROMPTED_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 const EXPECTED_SEQUENCE = [
   "identity",
-  "tool-lead-in",
-  "active-tools",
-  "active-guidelines",
-  "builtin-tool-guidance",
-  "pi-docs",
-  "shared-tool-guidance",
   "autonomy",
   "discovery-discipline",
   "pragmatism",
   "verification",
   "careful-actions",
+  "mode-posture",
+  "collaboration",
+  "response-style",
+  "tool-lead-in",
+  "active-tools",
+  "active-guidelines",
+  "builtin-tool-guidance",
+  "using-workers",
+  "pi-docs",
+  "shared-tool-guidance",
   "diagrams",
   "file-links",
-  "collaboration",
+  "preserved-tail",
+];
+
+// Deep reorders the body to the authoritative deep-template sequence and is
+// the only mode that renders the deep-only engineering-judgment fragment.
+const EXPECTED_DEEP_SEQUENCE = [
+  "identity",
+  "autonomy",
+  "pragmatism",
+  "discovery-discipline",
+  "engineering-judgment",
+  "verification",
+  "careful-actions",
   "mode-posture",
+  "collaboration",
   "response-style",
+  "tool-lead-in",
+  "active-tools",
+  "active-guidelines",
+  "builtin-tool-guidance",
+  "using-workers",
+  "pi-docs",
+  "shared-tool-guidance",
+  "diagrams",
+  "file-links",
   "preserved-tail",
 ];
 
@@ -75,13 +101,21 @@ describe("mmr-core prompt registry", () => {
       const recipe = MMR_MODE_PROMPT_RECIPES[mode];
       assert.equal(recipe.mode, mode);
       assert.equal(recipe.basePromptId, "pi-native-default-v1");
-      const expectedFragments = mode === "rush" ? EXPECTED_RUSH_SEQUENCE : MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE;
+      const expectedFragments = mode === "rush"
+        ? EXPECTED_RUSH_SEQUENCE
+        : mode === "deep"
+          ? EXPECTED_DEEP_SEQUENCE
+          : MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE;
       assert.deepEqual(recipe.fragments, expectedFragments, `${mode}: expected fragment sequence`);
       assert.equal(recipe.tag, mode);
       assert.equal(typeof recipe.intro, "string");
       assert.ok(recipe.intro.length > 20, `${mode}: intro must be substantive`);
       assert.equal(typeof recipe.postureSections, "string");
-      assert.ok(recipe.postureSections.length > 100, `${mode}: postureSections must be substantive`);
+      if (mode === "rush" || mode === "deep") {
+        assert.ok(recipe.postureSections.length > 100, `${mode}: postureSections must be substantive`);
+      } else {
+        assert.equal(recipe.postureSections, "", `${mode}: smart-family modes render no posture section`);
+      }
       assert.equal(typeof recipe.closingLine, "string");
       assert.ok(recipe.closingLine.length > 10, `${mode}: closingLine must be substantive`);
     }
@@ -104,8 +138,8 @@ describe("mmr-core prompt registry", () => {
     }
   });
 
-  it("lets a mode recipe drop a shared coding fragment (rush omits diagrams)", () => {
-    const { MMR_MODE_PROMPT_RECIPES, MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE, MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE } = registry;
+  it("lets mode recipes specialize the shared fragment sequence", () => {
+    const { MMR_MODE_PROMPT_RECIPES, MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE, MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE, MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE } = registry;
     assert.equal(MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE.includes("diagrams"), false, "rush sequence must omit diagrams");
     assert.deepEqual(
       MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE,
@@ -113,6 +147,13 @@ describe("mmr-core prompt registry", () => {
       "rush must keep every default fragment except diagrams",
     );
     assert.deepEqual(MMR_MODE_PROMPT_RECIPES.rush.fragments, MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE);
+    assert.deepEqual(MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_DEEP_SEQUENCE);
+    assert.deepEqual(MMR_MODE_PROMPT_RECIPES.deep.fragments, MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE);
+    assert.equal(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.includes("engineering-judgment"),
+      false,
+      "engineering-judgment is deep-only",
+    );
     for (const mode of ["smart", "smartGPT", "large", "deep"]) {
       assert.equal(
         MMR_MODE_PROMPT_RECIPES[mode].fragments.includes("diagrams"),
@@ -139,11 +180,31 @@ describe("mmr-core prompt registry", () => {
     // ids, in order — this is the single source of truth shared with the registry.
     assert.deepEqual([...modules.SHARED_CODING_GUIDANCE_FRAGMENT_IDS], codingIds);
     assert.deepEqual(Object.keys(modules.SHARED_CODING_GUIDANCE_FRAGMENTS), codingIds);
-    // The default sequence embeds the coding ids contiguously, in canonical order.
-    const start = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("autonomy");
-    assert.deepEqual(
-      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.slice(start, start + codingIds.length),
-      codingIds,
+    // The default sequence intentionally splits coding guidance: task/risk
+    // posture and user-collaboration style sit before tool guidance, while
+    // diagrams/file-link style remains after the tool policy.
+    for (const id of codingIds) {
+      assert.notEqual(MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf(id), -1, `${id}: coding fragment must be present`);
+    }
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("careful-actions") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("collaboration"),
+      "task/risk posture must precede collaboration style",
+    );
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("collaboration") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("tool-lead-in"),
+      "collaboration style must precede tool guidance",
+    );
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("response-style") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("tool-lead-in"),
+      "response style must precede tool guidance",
+    );
+    assert.ok(
+      MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("tool-lead-in") <
+        MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.indexOf("diagrams"),
+      "diagrams/file-link style must follow tool guidance",
     );
     // Every registry entry keeps key === id === blockKind.
     for (const [key, def] of Object.entries(MMR_PROMPT_FRAGMENTS)) {

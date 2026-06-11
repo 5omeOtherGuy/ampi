@@ -132,15 +132,24 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       // BASE_PROMPT carries Pi built-ins, so the optional builtin-tool-guidance
       // fragment is rendered. The rendered block kinds must therefore equal the
       // active recipe's fragment list exactly — this is what makes per-mode
-      // fragment selection (e.g. rush dropping diagrams) observable.
+      // fragment selection (e.g. rush dropping diagrams) observable. Smart-family
+      // recipes declare mode-posture but render no block for their empty posture,
+      // and BASE_PROMPT lists no worker tools, so the optional using-workers
+      // fragment renders no block either.
+      const recipe = MMR_MODE_PROMPT_RECIPES[mode];
+      const expectedKinds = recipe.fragments.filter(
+        (fragmentId) =>
+          (fragmentId !== "mode-posture" || recipe.postureSections !== "") &&
+          fragmentId !== "using-workers",
+      );
       assert.deepEqual(
         kinds,
-        [...MMR_MODE_PROMPT_RECIPES[mode].fragments],
+        expectedKinds,
         `mode ${mode}: rendered block kinds must equal the recipe fragment list`,
       );
     });
 
-    it(`emits shared guidance blocks exactly once after Pi docs and before mode posture for ${mode}`, () => {
+    it(`emits posture before tools and style before response for ${mode}`, () => {
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -174,17 +183,30 @@ describe("Phase D: assembleActiveSurface() public API", () => {
         mode === "rush" ? 0 : 1,
         `mode ${mode}: diagrams fragment count`,
       );
+      const autonomyIdx = kinds.indexOf("autonomy");
+      const carefulActionsIdx = kinds.indexOf("careful-actions");
+      const modePostureIdx = kinds.indexOf("mode-posture");
+      const toolLeadInIdx = kinds.indexOf("tool-lead-in");
       const piDocsIdx = kinds.indexOf("pi-docs");
       const sharedToolIdx = kinds.indexOf("shared-tool-guidance");
-      const autonomyIdx = kinds.indexOf("autonomy");
+      const fileLinksIdx = kinds.indexOf("file-links");
       const collaborationIdx = kinds.indexOf("collaboration");
-      const modePostureIdx = kinds.indexOf("mode-posture");
       const responseStyleIdx = kinds.indexOf("response-style");
-      assert.ok(piDocsIdx < sharedToolIdx, `mode ${mode}: Pi docs must precede shared tool guidance`);
-      assert.ok(sharedToolIdx < autonomyIdx, `mode ${mode}: shared tool guidance must precede shared coding guidance`);
-      assert.ok(autonomyIdx < collaborationIdx, `mode ${mode}: coding fragments must stay in order`);
-      assert.ok(collaborationIdx < modePostureIdx, `mode ${mode}: shared coding guidance must precede mode posture`);
-      assert.ok(modePostureIdx < responseStyleIdx, `mode ${mode}: mode posture must precede response style`);
+      assert.ok(autonomyIdx < carefulActionsIdx, `mode ${mode}: task/risk posture must stay in order`);
+      // Only rush and deep render a mode posture; the smart family's empty
+      // posture is skipped by the renderer.
+      if (mode === "rush" || mode === "deep") {
+        assert.ok(carefulActionsIdx < modePostureIdx, `mode ${mode}: shared posture must precede mode posture`);
+        assert.ok(modePostureIdx < collaborationIdx, `mode ${mode}: mode posture must precede collaboration style`);
+      } else {
+        assert.equal(modePostureIdx, -1, `mode ${mode}: smart-family modes render no mode-posture block`);
+        assert.ok(carefulActionsIdx < collaborationIdx, `mode ${mode}: shared posture must precede collaboration style`);
+      }
+      assert.ok(collaborationIdx < responseStyleIdx, `mode ${mode}: collaboration style must precede response style`);
+      assert.ok(responseStyleIdx < toolLeadInIdx, `mode ${mode}: response style must precede tool guidance`);
+      assert.ok(toolLeadInIdx < piDocsIdx, `mode ${mode}: Pi tool/docs blocks must stay in order`);
+      assert.ok(piDocsIdx < sharedToolIdx, `mode ${mode}: Pi docs must precede shared tool execution policy`);
+      assert.ok(sharedToolIdx < fileLinksIdx, `mode ${mode}: tool execution policy must precede remaining style guidance`);
       assert.match(result.blocks[sharedToolIdx].text, /## Tool execution policy/);
       assert.match(result.blocks[autonomyIdx].text, /## Autonomy and persistence/);
       assert.match(result.blocks[collaborationIdx].text, /## Working with the user/);

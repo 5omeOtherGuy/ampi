@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const LIBRARIAN_MODULE = "extensions/mmr-subagents/librarian.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const LIBRARIAN_MODULE = "extensions/mmr-workers/librarian.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
 const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
@@ -288,7 +288,12 @@ describe("librarian execute() runner dispatch", () => {
     assert.equal(options.model, "claude-subscription/claude-opus-4-6");
     assert.equal(options.systemPrompt, "LIBRARIAN SYSTEM PROMPT");
     assert.equal(options.systemPromptDelivery, "replace");
-    assert.equal(options.signal, controller.signal);
+    // Every run registers in the async-task registry, which owns the worker
+    // AbortController; the runner receives the registry signal (adapted from
+    // the tool-call signal), never the tool-call signal itself.
+    assert.ok(options.signal instanceof AbortSignal, "runner must receive the registry-owned task signal");
+    assert.notEqual(options.signal, controller.signal);
+    assert.equal(options.signal.aborted, false);
     assert.equal(typeof options.outputByteLimit, "number");
     assert.equal(result.details.status, "success");
     assert.equal(result.details.query, "Explain acme/repo routing.");
@@ -415,22 +420,31 @@ describe("librarian failure mapping", () => {
 });
 
 describe("librarian blocking-vs-background guidance", () => {
-  it("states librarian is blocking and names start_task(agent librarian) for background", async () => {
+  it("keeps guidelines to a single routing line and states blocking/background in the description", async () => {
     const { createLibrarianTool } = await importSource(LIBRARIAN_MODULE);
     const tool = createLibrarianTool();
-    assert.ok(
-      tool.promptGuidelines.some((g) => /blocking/i.test(g)),
-      "a librarian guideline must state librarian is blocking",
-    );
-    assert.ok(
-      tool.promptGuidelines.some((g) => /start_task/.test(g) && /agent: "librarian"/.test(g)),
-      "a librarian guideline must name start_task with agent librarian for background",
-    );
-    assert.match(tool.description, /blocking/i, "librarian description must state it is blocking");
+    // The Guidelines block carries exactly one routing line; the
+    // blocking-vs-background policy renders once in the `## Using workers`
+    // block and in the schema description, never in per-tool guidelines.
+    assert.equal(tool.promptGuidelines.length, 1);
+    assert.match(tool.promptGuidelines[0], /understanding outside the local workspace/);
+    for (const guideline of tool.promptGuidelines) {
+      assert.doesNotMatch(guideline, /start_task|blocking/i);
+    }
     assert.match(
       tool.description,
-      /start_task with agent: "librarian"/,
-      "librarian description must name the start_task background path",
+      /blocking by default/i,
+      "librarian description must state it is blocking by default",
+    );
+    assert.match(
+      tool.description,
+      /background: true/,
+      "librarian description must name the background: true path",
+    );
+    assert.doesNotMatch(
+      tool.description,
+      /start_task/,
+      "librarian description must not route background runs to the deprecated start_task alias",
     );
   });
 });

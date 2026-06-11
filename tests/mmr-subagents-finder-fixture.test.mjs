@@ -55,7 +55,7 @@ function createState(mode) {
 }
 
 async function finderManifestEntry() {
-  const mod = await importSource("extensions/mmr-subagents/finder.ts");
+  const mod = await importSource("extensions/mmr-workers/finder.ts");
   return {
     name: "finder",
     owner: "mmr-subagents",

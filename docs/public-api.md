@@ -183,20 +183,54 @@ issue, pull request, branch, or write endpoints. See
 
 ---
 
-## `mmr-subagents`
+## `mmr-workers`
 
-Worker/subagent extension. Owns the `Task`, `finder`, `oracle`, and
-`librarian` logical tool names and the `mmr-subagents` feature gate.
-Concrete workers ship for all four; `librarian` resolves as `active`
-only when the read-only `mmr-github` tools are registered and
-source-owned by `mmr-github`.
+The merged worker extension (formerly the separate `mmr-subagents` and
+`mmr-async-tasks` extensions). It owns the blocking `Task`, `finder`,
+`oracle`, and `librarian` worker tools, the background task surface
+(`background: true` on finder/librarian/Task, the deprecated `start_task`
+alias, and `task_poll`/`task_wait`/`task_cancel`), the session-scoped
+background registry, and the `mmr-workers` feature gate. The pre-merge
+gate ids (`mmr-subagents`, `mmr-async-tasks`, `mmr-subagents.async-tasks`)
+remain accepted aliases answered by the same provider. `librarian`
+resolves as `active` only when the read-only `mmr-github` tools are
+registered and source-owned by `mmr-github`.
+
+### v2 background parameters
+
+`finder`, `librarian`, and `Task` accept three optional parameters
+(`oracle` stays blocking-only):
+
+- `background?: boolean` — run the worker as a background task and return
+  an opaque task id immediately instead of blocking.
+- `group?: string` — caller-chosen group key for background runs;
+  parallel calls sharing a key land in one worker group (one card, one
+  grouped completion notification). Requires `background: true`.
+- `notify?: boolean` — automatic completion delivery opt-out for a
+  background run. Requires `background: true`.
+
+`start_task` is deprecated and remains as a thin compatibility alias for
+one release; its description and results carry a deprecation notice.
+
+### Removed in the merge (breaking)
+
+- `createMmrSubagentsExtension` and `createMmrAsyncTasksExtension` →
+  use `createMmrWorkersExtension`.
+- `MmrSubagentsFactoryOverrides` and `MmrAsyncTasksFactoryOverrides` →
+  use `MmrWorkersFactoryOverrides`.
+- The package subpaths `pi-mmr/extensions/mmr-subagents` and
+  `pi-mmr/extensions/mmr-async-tasks` → use
+  `pi-mmr/extensions/mmr-workers`.
+
+Every other package-root symbol below kept its name.
 
 ### Stability
 
 Stable for: provider/factory entrypoints, owned-tool name constants,
-worker model-preference defaults, prompt-builder functions, and worker
+worker model-preference defaults, prompt-builder functions, worker
 runner contracts (`MmrSubagentRunner`, `MmrSubagentWorkerRunResult`,
-`MmrWorkerInvocation`).
+`MmrWorkerInvocation`), registry constructors and snapshot helpers, and
+registry/board types.
 
 Worker prompt text and tool descriptions are model-visible behavior
 covered by deterministic tests; treat changes to them as behavior
@@ -206,22 +240,29 @@ changes.
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `createMmrSubagentsExtension` | function | Factory producing the Pi extension. |
-| `createMmrSubagentsToolProvider` | function | MMR tool provider for the four owned tool names. |
-| `createMmrSubagentsFeatureGateProvider` | function | Feature-gate provider for `mmr-subagents`. |
-| `MMR_SUBAGENTS_FEATURE_GATE`, `MMR_SUBAGENTS_OWNED_TOOLS`, `MMR_SUBAGENTS_PROVIDER_NAME` | constants | Stable identifiers. |
+| `createMmrWorkersExtension` | function | Factory producing the merged Pi extension. |
+| `createMmrWorkersToolProvider`, `createMmrWorkersFeatureGateProvider` | functions | Unified providers covering the whole worker surface. |
+| `MMR_WORKERS_FEATURE_GATE`, `MMR_WORKERS_LEGACY_FEATURE_GATES`, `MMR_WORKERS_OWNED_TOOLS`, `MMR_WORKERS_PROVIDER_NAME` | constants | Unified identifiers. |
+| `createMmrSubagentsToolProvider`, `createMmrSubagentsFeatureGateProvider`, `createMmrAsyncTasksToolProvider`, `createMmrAsyncTasksFeatureGateProvider` | functions | Pre-merge provider factories, kept for callers that compose providers manually. |
+| `MMR_SUBAGENTS_FEATURE_GATE`, `MMR_SUBAGENTS_OWNED_TOOLS`, `MMR_SUBAGENTS_PROVIDER_NAME`, `MMR_ASYNC_TASKS_FEATURE_GATE`, `MMR_ASYNC_TASKS_PROVIDER_NAME`, `MMR_ASYNC_TASK_TOOLS` | constants | Pre-merge identifiers (still answered/claimed by the unified provider). |
+| `MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE`, `MMR_SUBAGENTS_ASYNC_TASK_TOOLS`, `MMR_SUBAGENTS_ASYNC_PUSH_ENV` | constants | Backward-compatible aliases. |
 | `createFinderTool`, `registerFinderTool`, `buildFinderWorkerSystemPrompt` | functions | Finder worker surface. |
 | `createOracleTool`, `registerOracleTool`, `buildOracleWorkerSystemPrompt` | functions | Oracle worker surface. |
 | `createLibrarianTool`, `registerLibrarianTool`, `buildLibrarianWorkerSystemPrompt`, `isLibrarianGithubToolPrerequisiteRegistered`, `MmrLibrarianContextWindowError`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_GATING_REASON` | functions/values | Librarian worker surface and gating helpers (gated on `mmr-github` tools). |
 | `createTaskTool`, `registerTaskTool`, `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`, `TASK_SUBAGENT_PROFILE` | functions/values | Task worker surface. |
 | `*_TOOL_NAME`, `*_DESCRIPTION`, `*_PARAMETERS_SCHEMA`, `*_PROGRESS_PLACEHOLDER`, `*_PROMPT_GUIDELINES`, `*_PROMPT_SNIPPET`, `*_WORKER_TOOLS`, `*_DEFAULT_MODEL_PREFERENCES` | constants | Per-worker metadata. Tested directly. |
-| `buildHistoryReaderWorkerSystemPrompt`, `buildLibrarianWorkerRolePrompt` | functions | Cross-extension prompt builders kept in `mmr-subagents/prompts.ts`. |
+| `buildHistoryReaderWorkerSystemPrompt`, `buildLibrarianWorkerRolePrompt` | functions | Cross-extension prompt builders kept in `mmr-workers/prompts.ts`. |
 | `runMmrSubagentWorker`, `createChildCliMmrSubagentRunner`, `createMmrSubagentRunnerFromRunWorker`, `buildMmrWorkerArgs`, `classifyMmrWorkerOutcome`, `truncateMmrWorkerOutput`, `getMmrWorkerFinalOutput`, `hasUsableMmrWorkerFinalOutput`, `emptyMmrWorkerUsageStats`, `resolveMmrWorkerPiInvocation`, `resolveMmrWorkerPiInvocationFromEnv` | functions | Worker-runner contract and helpers. |
 | `DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS`, `DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT`, `MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT`, `MMR_WORKER_TRAIL_LIMIT` | constants | Worker-runner defaults. |
+| `ASYNC_TASK_TOOL_NAMES`, `ASYNC_TASK_AGENT_NAMES`, `START_TASK_TOOL_NAME`, `TASK_POLL_TOOL_NAME`, `TASK_WAIT_TOOL_NAME`, `TASK_CANCEL_TOOL_NAME` | constants | Background tool-name identifiers. Tested directly. |
+| `createStartTaskTool`, `createTaskPollTool`, `createTaskWaitTool`, `createTaskCancelTool`, `registerAsyncTaskTools` | functions | Individual background tool factories and the bulk registrar. |
+| `createMmrAsyncTaskRegistry`, `getMmrAsyncTaskRegistry`, `isValidAsyncTaskGroupId`, `toPublicAsyncTaskSnapshot` | functions | Session-scoped registry constructor/accessor and snapshot helpers. |
+| `ASYNC_TASK_MAX_RUNTIME_MS`, `ASYNC_TASK_STALLED_AFTER_MS`, `ASYNC_TASK_CANCEL_DEAD_AFTER_MS`, `ASYNC_TASK_TERMINAL_TTL_MS`, `ASYNC_TASK_OBSERVED_TERMINAL_TTL_MS`, `DEFAULT_ASYNC_TASK_MAX_RUNNING_PER_SESSION`, `DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION`, `DEFAULT_TASK_WAIT_TIMEOUT_MS`, `MAX_TASK_WAIT_TIMEOUT_MS` | constants | Registry lifecycle, concurrency, and wait-timeout defaults. |
 
 ### Re-exported types
 
-`MmrSubagentsFactoryOverrides`, `MmrSubagentsCapabilities`,
+`MmrWorkersFactoryOverrides`, `MmrWorkersCapabilities`,
+`MmrSubagentsCapabilities`, `MmrAsyncTasksCapabilities`,
 `FinderDetails`, `FinderParams`, `FinderToolDeps`, `OracleDetails`,
 `OracleParams`, `OracleToolDeps`, `OracleAttachmentRecord`,
 `LibrarianDetails`, `LibrarianParams`, `LibrarianStatus`,
@@ -236,12 +277,14 @@ changes.
 `MmrWorkerPiInvocationEnv`, `MmrWorkerProcess`,
 `MmrWorkerProgressSnapshot`, `MmrWorkerResult`, `MmrWorkerRunnerDeps`,
 `MmrWorkerSpawn`, `MmrWorkerTrailItem`, `MmrWorkerUsageStats`,
-`RunMmrSubagentWorkerOptions`, `ClassifyMmrWorkerOutcomeOptions`.
-
-> Note: the background-fleet tools and custom Markdown subagents were
-> extracted into the `mmr-async-tasks` and `mmr-custom-subagents`
-> extensions; their public surfaces are documented in their own sections
-> below.
+`RunMmrSubagentWorkerOptions`, `ClassifyMmrWorkerOutcomeOptions`,
+`AsyncTaskAgentName`, `AsyncTaskToolDeps`, `AsyncTaskToolDetails`,
+`MmrAsyncTaskRegistry`, `MmrAsyncTaskRegistryDeps`,
+`MmrAsyncTaskSnapshot`, `MmrAsyncTaskInternalSnapshot`,
+`MmrAsyncTaskStatus`, `MmrAsyncTaskFreshness`, `MmrAsyncTaskBoard`,
+`MmrAsyncTaskBoardEntry`, `MmrAsyncTaskGroupSnapshot`,
+`MmrAsyncTaskGroupStatus`, `StartAsyncTaskArgs`, `StartAsyncTaskResult`,
+`WaitForAsyncTaskResult`.
 
 > Note: `TaskStatus` is intentionally **not** a named package-root export.
 > Consumers that need the status discriminator should use
@@ -253,55 +296,9 @@ changes.
 The runner-contract helpers and worker prompt builders are intended for
 hosts that compose their own subagent pipelines (for example, tests
 that exercise the worker contract without spawning a child Pi). The
-default extension factory wires everything Pi needs in a normal load.
-
----
-
-## `mmr-async-tasks`
-
-Background-fleet extension extracted from `mmr-subagents`. It owns the
-background worker tools (`start_task`, `task_poll`, `task_wait`,
-`task_cancel`), a session-scoped registry of worker lifecycles, and the
-`mmr-async-tasks` feature gate. It runs `finder`/`librarian`/`Task`
-workers in the background and reuses the worker-runner contract owned by
-`mmr-subagents`.
-
-Stable for: provider/factory entrypoints, owned-tool name constants,
-registry constructors and snapshot helpers, and registry/board types.
-Tool descriptions and progress text are model-visible behavior covered
-by deterministic tests; treat changes to them as behavior changes.
-
-### Re-exports from the package root
-
-| Export | Kind | Notes |
-| --- | --- | --- |
-| `createMmrAsyncTasksExtension` | function | Factory producing the Pi extension. |
-| `createMmrAsyncTasksToolProvider` | function | MMR tool provider for the owned background-fleet tool names. |
-| `createMmrAsyncTasksFeatureGateProvider` | function | Feature-gate provider for `mmr-async-tasks`. |
-| `MMR_ASYNC_TASKS_FEATURE_GATE`, `MMR_ASYNC_TASKS_PROVIDER_NAME`, `MMR_ASYNC_TASK_TOOLS` | constants | Stable identifiers. |
-| `MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE`, `MMR_SUBAGENTS_ASYNC_TASK_TOOLS`, `MMR_SUBAGENTS_ASYNC_PUSH_ENV` | constants | Backward-compatible aliases from the pre-extraction `mmr-subagents` names. |
-| `ASYNC_TASK_TOOL_NAMES`, `START_TASK_TOOL_NAME`, `TASK_POLL_TOOL_NAME`, `TASK_WAIT_TOOL_NAME`, `TASK_CANCEL_TOOL_NAME` | constants | Owned tool-name identifiers. Tested directly. |
-| `createStartTaskTool`, `createTaskPollTool`, `createTaskWaitTool`, `createTaskCancelTool`, `registerAsyncTaskTools` | functions | Individual tool factories and the bulk registrar. |
-| `createMmrAsyncTaskRegistry`, `getMmrAsyncTaskRegistry`, `isValidAsyncTaskGroupId`, `toPublicAsyncTaskSnapshot` | functions | Session-scoped registry constructor/accessor and snapshot helpers. |
-| `ASYNC_TASK_MAX_RUNTIME_MS`, `ASYNC_TASK_STALLED_AFTER_MS`, `ASYNC_TASK_CANCEL_DEAD_AFTER_MS`, `ASYNC_TASK_TERMINAL_TTL_MS`, `ASYNC_TASK_OBSERVED_TERMINAL_TTL_MS`, `DEFAULT_ASYNC_TASK_MAX_RUNNING_PER_SESSION`, `DEFAULT_ASYNC_TASK_MAX_PUSHES_PER_SESSION`, `DEFAULT_TASK_WAIT_TIMEOUT_MS`, `MAX_TASK_WAIT_TIMEOUT_MS` | constants | Registry lifecycle, concurrency, and wait-timeout defaults. |
-
-### Re-exported types
-
-`MmrAsyncTasksFactoryOverrides`, `MmrAsyncTasksCapabilities`,
-`AsyncTaskAgentName`, `AsyncTaskToolDeps`, `AsyncTaskToolDetails`,
-`MmrAsyncTaskRegistry`, `MmrAsyncTaskRegistryDeps`,
-`MmrAsyncTaskSnapshot`, `MmrAsyncTaskInternalSnapshot`,
-`MmrAsyncTaskStatus`, `MmrAsyncTaskFreshness`, `MmrAsyncTaskBoard`,
-`MmrAsyncTaskBoardEntry`, `MmrAsyncTaskGroupSnapshot`,
-`MmrAsyncTaskGroupStatus`, `StartAsyncTaskArgs`, `StartAsyncTaskResult`,
-`WaitForAsyncTaskResult`.
-
-### Usage
-
-The registry constructor and snapshot helpers are intended for hosts and
-tests that drive background workers without a live session. The default
-extension factory wires the tools, registry, and completion delivery Pi
-needs in a normal load.
+registry constructor and snapshot helpers serve hosts and tests that
+drive background workers without a live session. The default extension
+factory wires everything Pi needs in a normal load.
 
 ---
 

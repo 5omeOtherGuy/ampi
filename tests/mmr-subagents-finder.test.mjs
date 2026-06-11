@@ -1,5 +1,5 @@
 // Unit tests for the `mmr-subagents` finder tool — written test-first to
-// pin observable behavior before implementing src/extensions/mmr-subagents/finder.ts.
+// pin observable behavior before implementing src/extensions/mmr-workers/finder.ts.
 //
 // Behavior pinned here (does NOT include the subprocess runner, which has
 // its own tests, or the provider/extension wiring, which is exercised in
@@ -43,8 +43,8 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/mmr-subagents/finder.ts";
-const PROMPTS_MODULE = "extensions/mmr-subagents/prompts.ts";
+const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
+const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const MODEL_RESOLVER_MODULE = "extensions/mmr-core/model-resolver.ts";
 const SUBAGENT_RESOLVER_MODULE = "extensions/mmr-core/subagent-resolver.ts";
@@ -384,7 +384,12 @@ describe("finder execute() seam", () => {
     // result.details for parent-side observability.
     assert.equal(options.tools, undefined);
     assert.equal(options.systemPrompt, "SP for /abs/project");
-    assert.equal(options.signal, controller.signal);
+    // Every run registers in the async-task registry, which owns the worker
+    // AbortController; the runner receives the registry signal (adapted from
+    // the tool-call signal), never the tool-call signal itself.
+    assert.ok(options.signal instanceof AbortSignal, "runner must receive the registry-owned task signal");
+    assert.notEqual(options.signal, controller.signal);
+    assert.equal(options.signal.aborted, false);
     assert.equal(options.model, "openai-codex/gpt-5.4-mini");
     assert.equal(options.profileName, "finder", "finder must call runMmrSubagentWorker with profileName='finder'");
     assert.equal("subagentProfile" in options, false, "runner contract uses profileName; the retired subagentProfile field must not leak into options");
@@ -972,22 +977,31 @@ describe("finder parent↔child route agreement", () => {
 });
 
 describe("finder blocking-vs-background guidance", () => {
-  it("states finder is blocking and names start_task(agent finder) for background", async () => {
+  it("keeps guidelines to a single routing line and states blocking/background in the description", async () => {
     const { createFinderTool } = await importSource(FINDER_MODULE);
     const tool = createFinderTool();
-    assert.ok(
-      tool.promptGuidelines.some((g) => /blocking/i.test(g)),
-      "a finder guideline must state finder is blocking",
-    );
-    assert.ok(
-      tool.promptGuidelines.some((g) => /start_task/.test(g) && /agent: "finder"/.test(g)),
-      "a finder guideline must name start_task with agent finder for background",
-    );
-    assert.match(tool.description, /blocking/i, "finder description must state it is blocking");
+    // The Guidelines block carries exactly one routing line; the
+    // blocking-vs-background policy renders once in the `## Using workers`
+    // block and in the schema description, never in per-tool guidelines.
+    assert.equal(tool.promptGuidelines.length, 1);
+    assert.match(tool.promptGuidelines[0], /complex, multi-step codebase discovery/);
+    for (const guideline of tool.promptGuidelines) {
+      assert.doesNotMatch(guideline, /start_task|blocking/i);
+    }
     assert.match(
       tool.description,
-      /start_task with agent: "finder"/,
-      "finder description must name the start_task background path",
+      /blocking by default/i,
+      "finder description must state it is blocking by default",
+    );
+    assert.match(
+      tool.description,
+      /background: true/,
+      "finder description must name the background: true path",
+    );
+    assert.doesNotMatch(
+      tool.description,
+      /start_task/,
+      "finder description must not route background runs to the deprecated start_task alias",
     );
   });
 });

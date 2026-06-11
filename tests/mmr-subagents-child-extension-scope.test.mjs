@@ -5,7 +5,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-subagents/child-extension-scope.ts";
+const MODULE = "extensions/mmr-workers/child-extension-scope.ts";
 
 const EXT_DIR = "/pkg/src/extensions";
 const LOCATION = { extensionsDir: EXT_DIR, moduleExt: ".ts" };
@@ -26,7 +26,7 @@ describe("mmr-subagents child-extension-scope: keep map", () => {
     assert.deepEqual([...map.finder], ["mmr-core"]);
     assert.deepEqual([...map.oracle], ["mmr-core", "mmr-web", "mmr-history"]);
     assert.deepEqual([...map.librarian], ["mmr-core", "mmr-github"]);
-    assert.deepEqual([...map["task-subagent"]], ["mmr-core", "mmr-web", "mmr-subagents", "mmr-tasks"]);
+    assert.deepEqual([...map["task-subagent"]], ["mmr-core", "mmr-web", "mmr-workers", "mmr-tasks"]);
     for (const names of Object.values(map)) {
       assert.ok([...names].includes("mmr-core"), "every profile keeps mmr-core");
     }
@@ -40,7 +40,7 @@ describe("mmr-subagents child-extension-scope: enumeration", () => {
       getAllTools: () => [
         { name: "read", sourceInfo: { path: "<builtin:read>" } },
         { name: "web_search", sourceInfo: { path: piMmr("mmr-web") } },
-        { name: "finder", sourceInfo: { path: piMmr("mmr-subagents") } },
+        { name: "finder", sourceInfo: { path: piMmr("mmr-workers") } },
         { name: "dup", sourceInfo: { path: piMmr("mmr-web") } },
       ],
       getCommands: () => [
@@ -50,7 +50,7 @@ describe("mmr-subagents child-extension-scope: enumeration", () => {
       ],
     };
     const paths = mod.enumerateLoadedExtensionPaths(host);
-    assert.deepEqual(paths, [piMmr("mmr-web"), piMmr("mmr-subagents"), EXTERNAL_A, piMmr("mmr-core")]);
+    assert.deepEqual(paths, [piMmr("mmr-web"), piMmr("mmr-workers"), EXTERNAL_A, piMmr("mmr-core")]);
   });
 
   it("returns [] for an absent host or throwing probes", async () => {
@@ -78,7 +78,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
       piMmr("mmr-web"),
       piMmr("mmr-history"),
       piMmr("mmr-github"),
-      piMmr("mmr-subagents"),
+      piMmr("mmr-workers"),
       piMmr("mmr-tasks"),
       EXTERNAL_A,
       EXTERNAL_B,
@@ -99,7 +99,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
       piMmr("mmr-core"),
       piMmr("mmr-history"),
       piMmr("mmr-github"),
-      piMmr("mmr-subagents"),
+      piMmr("mmr-workers"),
       piMmr("mmr-tasks"),
       EXTERNAL_A,
     ];
@@ -162,7 +162,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     // oracle needs mmr-history, but pretend its index file is missing.
     const scope = mod.resolveMmrChildExtensionScope({
       profileName: "oracle",
-      loadedPaths: [piMmr("mmr-core"), piMmr("mmr-web"), piMmr("mmr-subagents"), EXTERNAL_A],
+      loadedPaths: [piMmr("mmr-core"), piMmr("mmr-web"), piMmr("mmr-workers"), EXTERNAL_A],
       location: LOCATION,
       fileExists: (c) => c !== piMmr("mmr-history") && defaultExists(c),
     });

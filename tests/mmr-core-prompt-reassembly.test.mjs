@@ -55,13 +55,28 @@ function createState(mode) {
 
 const PROMPTED_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 
-// Unique posture heading per mode. `smart` and `smartGPT` share the SMART
-// posture, so its heading is not a unique discriminator between those two; the
-// cross-mode test pairs deep -> smart, whose posture headings are distinct.
-const SMART_POSTURE_HEADING = "## Smart mode";
+// Distinctive per-mode body markers. The smart family renders no posture
+// section, so smart is identified by its family-only "Investigate before
+// acting" heading; the cross-mode test pairs deep -> smart, whose body
+// sections are distinct.
+const SMART_INVESTIGATE_HEADING = "## Investigate before acting";
 const DEEP_POSTURE_HEADING = "## Deep mode";
 const SMART_CLOSING_LINE =
-  "Answer in fewer than 4 lines of prose unless asked for more detail, or unless a complete report needs more space.";
+  "You MUST answer concisely with fewer than 4 lines of text (not including tool use or code generation), unless the user asks for more detail.";
+const AUTONOMY_HEADING = "## Autonomy and persistence";
+const CAREFUL_ACTIONS_HEADING = "## Executing actions with care";
+const TOOL_USE_HEADING = "## Tool use";
+const DIAGRAMS_HEADING = "## Diagrams";
+const COLLABORATION_HEADING = "## Working with the user";
+const RESPONSE_STYLE_HEADING = "## Response style";
+
+function assertBefore(prompt, before, after, message) {
+  const beforeIndex = prompt.indexOf(before);
+  const afterIndex = prompt.indexOf(after);
+  assert.notEqual(beforeIndex, -1, `${message}: missing ${before}`);
+  assert.notEqual(afterIndex, -1, `${message}: missing ${after}`);
+  assert.ok(beforeIndex < afterIndex, `${message}: expected ${before} before ${after}`);
+}
 
 describe("assembleActiveSurface() prompt-tail drift hardening", () => {
   let assembleActiveSurface;
@@ -70,6 +85,56 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
   });
+
+  it("places task/risk posture before tool guidance and preserves that order across re-assembly", () => {
+    const first = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+    });
+    assert.equal(first.passthroughReason, undefined, "first assembly must rewrite Pi's prompt");
+
+    assertBefore(first.systemPrompt, AUTONOMY_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, CAREFUL_ACTIONS_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, RESPONSE_STYLE_HEADING, TOOL_USE_HEADING, "fresh smart prompt");
+    assertBefore(first.systemPrompt, TOOL_USE_HEADING, DIAGRAMS_HEADING, "fresh smart prompt");
+
+    const second = assembleActiveSurface({
+      state: createState("smart"),
+      baseSystemPrompt: first.systemPrompt,
+      activeToolManifest: [],
+    });
+    assert.equal(second.systemPrompt, first.systemPrompt, "posture-first prompt must re-assemble byte-stably");
+    assert.equal(second.passthroughReason, undefined, "re-assembly must remain a real rewrite");
+    assert.equal(second.systemPrompt.split(AUTONOMY_HEADING).length - 1, 1, "autonomy heading must not duplicate");
+    assert.equal(second.systemPrompt.split(TOOL_USE_HEADING).length - 1, 1, "tool-use heading must not duplicate");
+  });
+
+  for (const mode of PROMPTED_MODES.filter((mode) => mode !== "large")) {
+    it(`places user-collaboration and response style before tool guidance for ${mode}`, () => {
+      const first = assembleActiveSurface({
+        state: createState(mode),
+        baseSystemPrompt: BASE_PROMPT,
+        activeToolManifest: [],
+      });
+      assert.equal(first.passthroughReason, undefined, `${mode}: first assembly must rewrite Pi's prompt`);
+      assertBefore(first.systemPrompt, COLLABORATION_HEADING, TOOL_USE_HEADING, `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, RESPONSE_STYLE_HEADING, TOOL_USE_HEADING, `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, "Current date:", "Current working directory:", `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, TOOL_USE_HEADING, "Current date:", `${mode} fresh prompt`);
+
+      const second = assembleActiveSurface({
+        state: createState(mode),
+        baseSystemPrompt: first.systemPrompt,
+        activeToolManifest: [],
+      });
+      assert.equal(second.systemPrompt, first.systemPrompt, `${mode}: style-before-tools prompt must re-assemble byte-stably`);
+      assert.equal(second.passthroughReason, undefined, `${mode}: re-assembly must remain a real rewrite`);
+      assert.equal(second.systemPrompt.split(COLLABORATION_HEADING).length - 1, 1, `${mode}: collaboration heading must not duplicate`);
+      assert.equal(second.systemPrompt.split(RESPONSE_STYLE_HEADING).length - 1, 1, `${mode}: response style heading must not duplicate`);
+      assert.equal(second.systemPrompt.split(TOOL_USE_HEADING).length - 1, 1, `${mode}: tool-use heading must not duplicate`);
+    });
+  }
 
   for (const mode of PROMPTED_MODES) {
     it(`re-assembling a ${mode} prompt is byte-stable and still a real rewrite`, () => {
@@ -129,9 +194,9 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
 
     const sp = smartFromDeep.systemPrompt;
     assert.equal(
-      sp.split(SMART_POSTURE_HEADING).length - 1,
+      sp.split(SMART_INVESTIGATE_HEADING).length - 1,
       1,
-      "smart posture heading must appear exactly once after cross-mode re-assembly",
+      "smart-family investigate heading must appear exactly once after cross-mode re-assembly",
     );
     assert.equal(
       sp.split(SMART_CLOSING_LINE).length - 1,

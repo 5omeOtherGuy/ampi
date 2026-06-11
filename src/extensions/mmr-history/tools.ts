@@ -4,7 +4,7 @@ import { Type, type Static } from "typebox";
 import { registerMmrOwnedTool } from "../mmr-core/owned-tools.js";
 import type { LoadedMmrCoreSettings } from "../mmr-core/settings.js";
 import { checkMmrToolParams } from "../mmr-core/tool-params.js";
-import type { MmrSubagentRunner } from "../mmr-subagents/runner.js";
+import type { MmrSubagentRunner } from "../mmr-workers/runner.js";
 import {
   runHistoryReaderAnalysis,
   type HistoryAnalysisMode,

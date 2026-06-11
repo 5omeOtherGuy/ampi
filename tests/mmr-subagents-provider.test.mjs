@@ -7,7 +7,7 @@ after(cleanupLoadedSource);
 describe("mmr-subagents feature gate provider", () => {
   it("identifies itself as mmr-subagents", async () => {
     const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider();
     assert.equal(provider.name, "mmr-subagents");
@@ -15,7 +15,7 @@ describe("mmr-subagents feature gate provider", () => {
   });
 
   it("only claims the mmr-subagents gate", async () => {
-    const { createMmrSubagentsFeatureGateProvider } = await importSource("extensions/mmr-subagents/provider.ts");
+    const { createMmrSubagentsFeatureGateProvider } = await importSource("extensions/mmr-workers/provider.ts");
     const provider = createMmrSubagentsFeatureGateProvider();
     for (const other of ["mmr-web", "mmr-history", "mmr-toolbox", "mmr-toolbox-mcp", "totally-unknown"]) {
       assert.equal(provider.evaluate(other), undefined, `must not claim gate ${other}`);
@@ -24,7 +24,7 @@ describe("mmr-subagents feature gate provider", () => {
 
   it("reports the gate as disabled while no worker tools ship", async () => {
     const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider();
     const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
@@ -36,7 +36,7 @@ describe("mmr-subagents feature gate provider", () => {
 
   it("reports active capabilities including librarian when available", async () => {
     const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider({ finder: true, oracle: true, Task: true, librarian: true });
     const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
@@ -51,7 +51,7 @@ describe("mmr-subagents feature gate provider", () => {
 describe("mmr-subagents tool provider", () => {
   it("identifies itself as mmr-subagents", async () => {
     const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
     assert.equal(provider.name, "mmr-subagents");
@@ -60,12 +60,12 @@ describe("mmr-subagents tool provider", () => {
 
   it("only claims its owned logical tool names", async () => {
     const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_OWNED_TOOLS } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
     assert.deepEqual(
       [...MMR_SUBAGENTS_OWNED_TOOLS].sort(),
-      ["Task", "finder", "librarian", "oracle"],
+      ["Task", "code_review", "finder", "librarian", "oracle"],
     );
     for (const unowned of [
       "Read",
@@ -90,7 +90,7 @@ describe("mmr-subagents tool provider", () => {
 
   it("returns gated rules keyed to the mmr-subagents gate for inactive owned tools", async () => {
     const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_OWNED_TOOLS, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-subagents/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
     for (const logical of MMR_SUBAGENTS_OWNED_TOOLS) {
@@ -108,7 +108,7 @@ describe("mmr-subagents tool provider", () => {
   });
 
   it("returns active rules for shipped capabilities including librarian", async () => {
-    const { createMmrSubagentsToolProvider } = await importSource("extensions/mmr-subagents/provider.ts");
+    const { createMmrSubagentsToolProvider } = await importSource("extensions/mmr-workers/provider.ts");
     const provider = createMmrSubagentsToolProvider({ finder: true, oracle: true, Task: true, librarian: true });
     for (const logical of ["finder", "oracle", "Task", "librarian"]) {
       assert.deepEqual(provider.resolve(logical), { kind: "active" }, `${logical} must resolve active`);

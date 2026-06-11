@@ -19,7 +19,7 @@ Use this page as the user-facing map for `pi-mmr`. The root [`README.md`](../REA
 | Switch model/tool posture for a task | [`quick-reference.md#modes`](quick-reference.md#modes) | [`../src/extensions/mmr-core/README.md`](../src/extensions/mmr-core/README.md) |
 | Patch files safely | [`quick-reference.md#patch`](quick-reference.md#patch) | [`../src/extensions/mmr-patch/README.md`](../src/extensions/mmr-patch/README.md) |
 | Track session todos | [`quick-reference.md#tasks`](quick-reference.md#tasks) | [`../src/extensions/mmr-tasks/README.md`](../src/extensions/mmr-tasks/README.md) |
-| Delegate bounded work or code search | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/mmr-subagents/README.md`](../src/extensions/mmr-subagents/README.md) |
+| Delegate bounded work or code search | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md) |
 | Search the web or read a public page | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-web/README.md`](../src/extensions/mmr-web/README.md) |
 | Research a GitHub repository | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-github/README.md`](../src/extensions/mmr-github/README.md) |
 | Reuse a prior Pi session | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-history/README.md`](../src/extensions/mmr-history/README.md) |
@@ -32,7 +32,7 @@ Use this page as the user-facing map for `pi-mmr`. The root [`README.md`](../REA
 | [`mmr-core`](../src/extensions/mmr-core/README.md) | Locked modes, model resolution, prompt rewrite, diagnostics | On |
 | [`mmr-patch`](../src/extensions/mmr-patch/README.md) | `apply_patch` | On |
 | [`mmr-tasks`](../src/extensions/mmr-tasks/README.md) | `task_list` | On |
-| [`mmr-subagents`](../src/extensions/mmr-subagents/README.md) | `finder`, `oracle`, `Task`, `librarian` | On (`librarian` gated) |
+| [`mmr-workers`](../src/extensions/mmr-workers/README.md) | `finder`, `oracle`, `Task`, `librarian` | On (`librarian` gated) |
 | [`mmr-session-fallback`](../src/extensions/mmr-session-fallback/README.md) | Interactive quota/rate-limit fallback | On |
 | [`mmr-web`](../src/extensions/mmr-web/README.md) | `web_search`, `read_web_page` | Off |
 | [`mmr-history`](../src/extensions/mmr-history/README.md) | `find_session`, `read_session` | Off |

@@ -14,13 +14,20 @@ import {
 import { updateMmrStatus } from "../mmr-core/status.js";
 import { buildMmrSessionFallbackCandidates } from "./candidates.js";
 import { classifyMmrSessionFallbackError } from "./classifier.js";
+import {
+  isMmrSessionFallbackTransientSustained,
+  nextMmrSessionFallbackTransientState,
+} from "./escalation.js";
 import { createMmrSessionFallbackRetryMessage, type MmrSessionFallbackAssistantMessage } from "./retry-message.js";
 import {
   clearMmrSessionFallbackOverride,
+  clearMmrSessionFallbackTransientState,
   getMmrSessionFallbackOverrideSnapshot,
   getMmrSessionFallbackPromptInFlight,
+  getMmrSessionFallbackTransientState,
   setMmrSessionFallbackOverride,
   setMmrSessionFallbackPromptInFlight,
+  setMmrSessionFallbackTransientState,
 } from "./runtime.js";
 import {
   MMR_SESSION_FALLBACK_ENTRY,
@@ -54,6 +61,12 @@ function isAssistantErrorMessage(message: unknown): message is MmrSessionFallbac
   if (typeof message !== "object" || message === null) return false;
   const candidate = message as Partial<MmrSessionFallbackAssistantMessage>;
   return candidate.role === "assistant" && candidate.stopReason === "error";
+}
+
+function isAssistantNonErrorMessage(message: unknown): boolean {
+  if (typeof message !== "object" || message === null) return false;
+  const candidate = message as Partial<MmrSessionFallbackAssistantMessage>;
+  return candidate.role === "assistant" && candidate.stopReason !== "error";
 }
 
 function findRegisteredModel(ctx: ExtensionContext, provider: string, model: string): Parameters<ExtensionAPI["setModel"]>[0] | undefined {
@@ -125,6 +138,7 @@ function clearSessionFallback(pi: ExtensionAPI, ctx: ExtensionContext, reason: s
   const runtimeOverride = getMmrSessionFallbackOverrideSnapshot(sessionId);
   const latest = findLatestPersistedMmrSessionFallbackEntry(getSessionEntries(ctx), sessionId);
   clearMmrSessionFallbackOverride(sessionId);
+  clearMmrSessionFallbackTransientState(sessionId);
   clearMmrManagedModelOverride();
   if (!runtimeOverride && (!latest || latest.cleared === true)) return;
   try {
@@ -171,6 +185,7 @@ async function handleSessionStart(pi: ExtensionAPI, event: { reason?: string }, 
   const sessionId = getSessionId(ctx);
   if (event.reason === "new" || event.reason === "fork") {
     clearMmrSessionFallbackOverride(sessionId);
+    clearMmrSessionFallbackTransientState(sessionId);
     clearMmrManagedModelOverride();
     return;
   }
@@ -188,7 +203,12 @@ async function handleSessionStart(pi: ExtensionAPI, event: { reason?: string }, 
 async function handleMessageEnd(pi: ExtensionAPI, event: { message?: unknown }, ctx: ExtensionContext): Promise<{ message: MmrMessageEndReplacement } | undefined> {
   if (!ctx.hasUI) return undefined;
   if (getMmrSubagentState()) return undefined;
-  if (!isAssistantErrorMessage(event.message)) return undefined;
+  if (!isAssistantErrorMessage(event.message)) {
+    // A turn that completed without error means the route recovered; any
+    // pending transient streak is no longer sustained.
+    if (isAssistantNonErrorMessage(event.message)) clearMmrSessionFallbackTransientState(getSessionId(ctx));
+    return undefined;
+  }
 
   const state = getMmrModeState();
   if (!state || state.mode === "free" || !isMmrModeKey(state.mode) || !state.modelApplied || !state.provider || !state.model) return undefined;
@@ -199,6 +219,16 @@ async function handleMessageEnd(pi: ExtensionAPI, event: { message?: unknown }, 
   const originalError = event.message.errorMessage;
   const classification = classifyMmrSessionFallbackError({ provider: state.provider, errorMessage: originalError });
   if (!classification.shouldPrompt) return undefined;
+
+  if (classification.retryable) {
+    const transient = nextMmrSessionFallbackTransientState(getMmrSessionFallbackTransientState(sessionId), Date.now());
+    setMmrSessionFallbackTransientState(sessionId, transient);
+    if (!isMmrSessionFallbackTransientSustained(transient)) {
+      ctx.ui.notify(`${classification.friendlyMessage} A fallback model will be offered if it persists.`, "warning");
+      return undefined;
+    }
+  }
+  clearMmrSessionFallbackTransientState(sessionId);
 
   const mode = getMmrMode(state.mode);
   const candidates = buildMmrSessionFallbackCandidates({

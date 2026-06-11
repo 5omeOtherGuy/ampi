@@ -7,7 +7,7 @@ after(cleanupLoadedSource);
 describe("mmr-async-tasks provider", () => {
   it("identifies itself as mmr-async-tasks", async () => {
     const { createMmrAsyncTasksToolProvider, MMR_ASYNC_TASKS_PROVIDER_NAME } = await importSource(
-      "extensions/mmr-async-tasks/provider.ts",
+      "extensions/mmr-workers/provider.ts",
     );
     const provider = createMmrAsyncTasksToolProvider();
     assert.equal(provider.name, "mmr-async-tasks");
@@ -20,7 +20,7 @@ describe("mmr-async-tasks provider", () => {
       createMmrAsyncTasksToolProvider,
       MMR_ASYNC_TASKS_FEATURE_GATE,
       MMR_ASYNC_TASK_TOOLS,
-    } = await importSource("extensions/mmr-async-tasks/provider.ts");
+    } = await importSource("extensions/mmr-workers/provider.ts");
 
     const inactive = createMmrAsyncTasksToolProvider();
     for (const logical of MMR_ASYNC_TASK_TOOLS) {
@@ -48,7 +48,7 @@ describe("mmr-async-tasks provider", () => {
       MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE,
       MMR_SUBAGENTS_ASYNC_TASK_TOOLS,
       MMR_ASYNC_TASK_TOOLS,
-    } = await importSource("extensions/mmr-async-tasks/provider.ts");
+    } = await importSource("extensions/mmr-workers/provider.ts");
     assert.deepEqual([...MMR_SUBAGENTS_ASYNC_TASK_TOOLS], [...MMR_ASYNC_TASK_TOOLS]);
     const decision = createMmrAsyncTasksFeatureGateProvider({ asyncTasks: true }).evaluate(MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE);
     assert.equal(decision.status, "enabled");
