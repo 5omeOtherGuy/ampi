@@ -44,7 +44,7 @@ const MATRIX_MARKER_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
 const MODE_MARKERS = {
   smart: '<mmr_mode name="smart">',
   smartGPT: '<mmr_mode name="smartGPT">',
-  rush: "Don't compensate for a thin reasoning budget",
+  rush: "You run with no extended reasoning",
   large: "Large mode is for broad-context work:",
   deep: "Deep mode is for difficult reasoning,",
 };
@@ -53,11 +53,11 @@ const MODE_MARKERS = {
 // distinctive markers). smart and smartGPT share posture, so each excludes
 // the other's mode tag rather than the posture body.
 const MODE_FOREIGN_MARKERS = {
-  smart: ['<mmr_mode name="smartGPT">', "Don't compensate for a thin reasoning budget", "Large mode is for broad-context work:", "Deep mode is for difficult reasoning,"],
-  smartGPT: ['<mmr_mode name="smart">', "Don't compensate for a thin reasoning budget", "Large mode is for broad-context work:", "Deep mode is for difficult reasoning,"],
+  smart: ['<mmr_mode name="smartGPT">', "You run with no extended reasoning", "Large mode is for broad-context work:", "Deep mode is for difficult reasoning,"],
+  smartGPT: ['<mmr_mode name="smart">', "You run with no extended reasoning", "Large mode is for broad-context work:", "Deep mode is for difficult reasoning,"],
   rush: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "Large mode is for broad-context work:", "Deep mode is for difficult reasoning,"],
-  large: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "Don't compensate for a thin reasoning budget", "Deep mode is for difficult reasoning,"],
-  deep: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "Don't compensate for a thin reasoning budget", "Large mode is for broad-context work:"],
+  large: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  deep: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "You run with no extended reasoning", "Large mode is for broad-context work:"],
 };
 
 // Expected coarse block order. Matches the existing Phase B baseline.
@@ -392,7 +392,7 @@ describe("Phase F: free-mode passthrough invariant", () => {
         '<mmr_mode name="rush">',
         '<mmr_mode name="large">',
         '<mmr_mode name="deep">',
-        "Don't compensate for a thin reasoning budget",
+        "You run with no extended reasoning",
         "Large mode is for broad-context work:",
         "Deep mode is for difficult reasoning,",
       ];

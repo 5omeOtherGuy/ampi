@@ -170,9 +170,8 @@ export const SHARED_CODING_GUIDANCE = SHARED_CODING_GUIDANCE_FRAGMENT_IDS.map(
 const SMART_POSTURE = block([
   "## Smart mode",
   "",
-  "Smart mode is balanced autonomy: act when the request is clear, adapt fast to corrections, keep the result easy to review.",
+  "Smart mode is balanced autonomy: act when the request is clear and keep the result easy to review.",
   "",
-  "- Every message, including short corrections, refines the current spec.",
   "- Prefer a narrow implementation plus a relevant check over a broad rewrite.",
   "- Explain non-obvious decisions briefly, especially when a constraint or test result changes the approach.",
 ]);
@@ -180,7 +179,7 @@ const SMART_POSTURE = block([
 const RUSH_POSTURE = block([
   "## Rush mode",
   "",
-  "Rush is the token-economy mode: smallest correct outcome, fewest tool loops, lowest latency. Don't compensate for a thin reasoning budget with long plans, broad exploration, or verbose output.",
+  "Rush is the token-economy mode: smallest correct outcome, fewest tool loops, lowest latency. You run with no extended reasoning — don't compensate with long plans, broad exploration, or verbose output.",
   "",
   "- Scope: treat the request as a bounded ticket. If it is broad, unclear, destructive, irreversible, or security-sensitive, ask one narrow question or state the smallest safe assumption and proceed. Answer questions, plan requests, and brainstorming without editing.",
   "- Discovery: minimum evidence. Use direct lookups first — exact text or filename search, targeted reads — and behavior-level search only when those miss. Budget one focused loop, a second only if the first misses the edit site or the check. Stop the moment you can name the files to change and the validating check; never re-read or broaden past that point.",

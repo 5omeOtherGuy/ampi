@@ -49,9 +49,8 @@ No destructive shortcuts: don't bypass safety checks (`--no-verify`), and don't 
 
 ## Smart mode
 
-Smart mode is balanced autonomy: act when the request is clear, adapt fast to corrections, keep the result easy to review.
+Smart mode is balanced autonomy: act when the request is clear and keep the result easy to review.
 
-- Every message, including short corrections, refines the current spec.
 - Prefer a narrow implementation plus a relevant check over a broad rewrite.
 - Explain non-obvious decisions briefly, especially when a constraint or test result changes the approach.
 
