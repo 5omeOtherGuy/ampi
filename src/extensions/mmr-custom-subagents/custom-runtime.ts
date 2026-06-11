@@ -36,7 +36,8 @@ import {
   resolveEnabledMmrCustomSubagents,
 } from "./custom-config.js";
 import fs, { constants as fsConstants } from "node:fs";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "../mmr-subagents/progress-rendering.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../mmr-workers/progress-rendering.js";
+import { prepareRunFromToolExecute, registerMmrBackgroundAgent } from "../mmr-workers/background-agents.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   classifyMmrWorkerOutcomeForProfile,
@@ -49,16 +50,16 @@ import {
   type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "../mmr-subagents/runner.js";
+} from "../mmr-workers/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
   progressTextOrPlaceholder,
-} from "../mmr-subagents/worker-result-shaping.js";
+} from "../mmr-workers/worker-result-shaping.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
-} from "../mmr-subagents/worker-model-metadata.js";
+} from "../mmr-workers/worker-model-metadata.js";
 import { resolveMmrSubagentInvocation } from "../mmr-core/subagent-resolver.js";
 import { MMR_SUBAGENT_SHARED_DENY_TOOLS } from "../mmr-core/subagent-tool-policy.js";
 
@@ -601,6 +602,28 @@ export function registerMmrCustomSubagentDefinition(
   const tool = createMmrCustomSubagentTool(pi, definition, deps);
   registerMmrOwnedTool(definition.toolName);
   pi.registerTool(tool);
+  // Custom subagents are backgroundable (the profile defaults the flag to
+  // true): registering a background-agent descriptor is what lets start_task
+  // offer and dispatch this worker with no per-agent branch anywhere.
+  registerMmrBackgroundAgent({
+    agent: definition.toolName,
+    profileName: definition.toolName,
+    toolName: definition.toolName,
+    paramsHint: "{task}",
+    promptParamKey: "task",
+    start: {
+      parametersSchema: CUSTOM_SUBAGENT_PARAMETERS_SCHEMA,
+      workerTools: effectiveCustomSubagentToolPatterns(definition),
+      // Custom subagent tools are not built on the worker-tool factory, so
+      // their background runs adapt the blocking execute() instead of a
+      // factory run preparer.
+      prepareRun: prepareRunFromToolExecute({
+        tool,
+        agent: definition.toolName,
+        workerTools: effectiveCustomSubagentToolPatterns(definition),
+      }),
+    },
+  });
   return tool;
 }
 

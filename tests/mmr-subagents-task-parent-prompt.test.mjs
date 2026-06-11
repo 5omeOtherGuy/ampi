@@ -16,7 +16,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const TASK_MODULE = "extensions/mmr-subagents/task.ts";
+const TASK_MODULE = "extensions/mmr-workers/task.ts";
 const RUNTIME_MODULE = "extensions/mmr-core/runtime.ts";
 
 describe("Task parent-prompt capture (#6)", () => {

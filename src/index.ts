@@ -365,31 +365,40 @@ export type { MmrGithubToolDeps } from "./extensions/mmr-github/tools.js";
 export { createMmrGithubExtension } from "./extensions/mmr-github/index.js";
 export type { MmrGithubFactoryOverrides } from "./extensions/mmr-github/index.js";
 
-// --- mmr-subagents: providers, extension & subagent tools (Stable;
+// --- mmr-workers: the merged worker extension (blocking subagent tools +
+//     background task surface) and its providers (Stable;
 //     ORACLE_DEFAULT_MODEL_PREFERENCES is an Internal/legacy convenience
-//     constant) ---
+//     constant). The pre-merge provider names and gate ids remain exported
+//     for compatibility; the pre-merge extension factories
+//     (createMmrSubagentsExtension / createMmrAsyncTasksExtension) are
+//     REMOVED — use createMmrWorkersExtension. ---
 export {
   MMR_SUBAGENTS_FEATURE_GATE,
   MMR_SUBAGENTS_OWNED_TOOLS,
   MMR_SUBAGENTS_PROVIDER_NAME,
   createMmrSubagentsFeatureGateProvider,
   createMmrSubagentsToolProvider,
-} from "./extensions/mmr-subagents/provider.js";
+} from "./extensions/mmr-workers/provider.js";
 export {
   MMR_ASYNC_TASKS_FEATURE_GATE,
   MMR_ASYNC_TASKS_PROVIDER_NAME,
   MMR_ASYNC_TASK_TOOLS,
   MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE,
   MMR_SUBAGENTS_ASYNC_TASK_TOOLS,
+  MMR_WORKERS_FEATURE_GATE,
+  MMR_WORKERS_LEGACY_FEATURE_GATES,
+  MMR_WORKERS_OWNED_TOOLS,
+  MMR_WORKERS_PROVIDER_NAME,
   createMmrAsyncTasksFeatureGateProvider,
   createMmrAsyncTasksToolProvider,
-} from "./extensions/mmr-async-tasks/provider.js";
-export { createMmrAsyncTasksExtension } from "./extensions/mmr-async-tasks/index.js";
-export type { MmrAsyncTasksFactoryOverrides } from "./extensions/mmr-async-tasks/index.js";
-export type { MmrAsyncTasksCapabilities } from "./extensions/mmr-async-tasks/provider.js";
-export { createMmrSubagentsExtension } from "./extensions/mmr-subagents/index.js";
-export type { MmrSubagentsFactoryOverrides } from "./extensions/mmr-subagents/index.js";
-export type { MmrSubagentsCapabilities } from "./extensions/mmr-subagents/provider.js";
+  createMmrWorkersFeatureGateProvider,
+  createMmrWorkersToolProvider,
+} from "./extensions/mmr-workers/provider.js";
+export { createMmrWorkersExtension } from "./extensions/mmr-workers/index.js";
+export type { MmrWorkersFactoryOverrides } from "./extensions/mmr-workers/index.js";
+export type { MmrAsyncTasksCapabilities } from "./extensions/mmr-workers/provider.js";
+export type { MmrSubagentsCapabilities } from "./extensions/mmr-workers/provider.js";
+export type { MmrWorkersCapabilities } from "./extensions/mmr-workers/provider.js";
 export {
   FINDER_DEFAULT_MODEL_PREFERENCES,
   FINDER_DESCRIPTION,
@@ -402,8 +411,8 @@ export {
   buildFinderWorkerSystemPrompt,
   createFinderTool,
   registerFinderTool,
-} from "./extensions/mmr-subagents/finder.js";
-export type { FinderDetails, FinderParams, FinderToolDeps } from "./extensions/mmr-subagents/finder.js";
+} from "./extensions/mmr-workers/finder.js";
+export type { FinderDetails, FinderParams, FinderToolDeps } from "./extensions/mmr-workers/finder.js";
 export {
   DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT,
   ORACLE_DEFAULT_MODEL_PREFERENCES,
@@ -419,7 +428,7 @@ export {
   createOracleTool,
   registerOracleTool,
   requireMmrAdvisorProfile,
-} from "./extensions/mmr-subagents/oracle.js";
+} from "./extensions/mmr-workers/oracle.js";
 export type {
   MmrAdvisorToolConfig,
   MmrAdvisorToolDeps,
@@ -427,7 +436,7 @@ export type {
   OracleDetails,
   OracleParams,
   OracleToolDeps,
-} from "./extensions/mmr-subagents/oracle.js";
+} from "./extensions/mmr-workers/oracle.js";
 export {
   LIBRARIAN_DESCRIPTION,
   LIBRARIAN_GATING_REASON,
@@ -443,28 +452,47 @@ export {
   createLibrarianTool,
   isLibrarianGithubToolPrerequisiteRegistered,
   registerLibrarianTool,
-} from "./extensions/mmr-subagents/librarian.js";
+} from "./extensions/mmr-workers/librarian.js";
 export type {
   LibrarianDetails,
   LibrarianParams,
   LibrarianStatus,
   LibrarianToolDeps,
   ResolveLibrarianInvocationInput,
-} from "./extensions/mmr-subagents/librarian.js";
+} from "./extensions/mmr-workers/librarian.js";
+export {
+  CODE_REVIEW_DESCRIPTION,
+  CODE_REVIEW_PARAMETERS_SCHEMA,
+  CODE_REVIEW_PROGRESS_PLACEHOLDER,
+  CODE_REVIEW_PROMPT_GUIDELINES,
+  CODE_REVIEW_PROMPT_SNIPPET,
+  CODE_REVIEW_SUBAGENT_PROFILE,
+  CODE_REVIEW_TOOL_NAME,
+  CODE_REVIEW_WORKER_TOOLS,
+  buildCodeReviewUserPrompt,
+  buildCodeReviewWorkerSystemPrompt,
+  createCodeReviewTool,
+  registerCodeReviewTool,
+} from "./extensions/mmr-workers/code-review.js";
+export type {
+  CodeReviewDetails,
+  CodeReviewParams,
+  CodeReviewToolDeps,
+} from "./extensions/mmr-workers/code-review.js";
 export {
   buildHistoryReaderWorkerSystemPrompt,
   registerMmrHistoryPromptBuilders,
 } from "./extensions/mmr-history/prompts.js";
 export {
   buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerRolePrompt,
-} from "./extensions/mmr-subagents/prompts.js";
+} from "./extensions/mmr-workers/prompts.js";
 // Note: the worker outcome discriminator type is intentionally NOT
 // re-exported from the package root. The legacy task-list coordination
 // type that previously occupied that name is gone (see
 // tests/mmr-pi-root-todo-exports.test.mjs negative guard), and re-exporting
 // any matching identifier would conflict with that guard's source-text
 // check. Consumers that need the new type can import it from the deep path
-// `./extensions/mmr-subagents/task.js` instead.
+// `./extensions/mmr-workers/task.js` instead.
 export {
   TASK_DESCRIPTION,
   TASK_DESCRIPTION_MAX_BYTES,
@@ -479,19 +507,15 @@ export {
   TaskParamsError,
   buildTaskFinalResult,
   buildTaskProgressResult,
-  buildTaskRunnerThrowResult,
   buildTaskWorkerSystemPrompt,
   classifyTaskOutcome,
   coerceTaskParams,
   createTaskTool,
   hasUsableTaskFinalText,
-  prepareTaskRun,
   registerTaskTool,
   resolveTaskRunner,
-} from "./extensions/mmr-subagents/task.js";
+} from "./extensions/mmr-workers/task.js";
 export type {
-  PrepareTaskRunResult,
-  PreparedTaskRun,
   ResolveTaskInvocationInput,
   TaskDetails,
   TaskDetailsContext,
@@ -499,7 +523,7 @@ export type {
   TaskParams,
   TaskToolDeps,
   TaskWorkerSystemPromptInput,
-} from "./extensions/mmr-subagents/task.js";
+} from "./extensions/mmr-workers/task.js";
 export {
   ASYNC_TASK_AGENT_NAMES,
   ASYNC_TASK_TOOL_NAMES,
@@ -513,12 +537,12 @@ export {
   createTaskPollTool,
   createTaskWaitTool,
   registerAsyncTaskTools,
-} from "./extensions/mmr-async-tasks/async-task-tools.js";
+} from "./extensions/mmr-workers/async-task-tools.js";
 export type {
   AsyncTaskAgentName,
   AsyncTaskToolDeps,
   AsyncTaskToolDetails,
-} from "./extensions/mmr-async-tasks/async-task-tools.js";
+} from "./extensions/mmr-workers/async-task-tools.js";
 export {
   ASYNC_TASK_CANCEL_DEAD_AFTER_MS,
   ASYNC_TASK_MAX_RUNTIME_MS,
@@ -533,7 +557,7 @@ export {
   getMmrAsyncTaskRegistry,
   isValidAsyncTaskGroupId,
   toPublicAsyncTaskSnapshot,
-} from "./extensions/mmr-async-tasks/async-task-registry.js";
+} from "./extensions/mmr-workers/async-task-registry.js";
 export type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskBoardEntry,
@@ -548,7 +572,7 @@ export type {
   StartAsyncTaskArgs,
   StartAsyncTaskResult,
   WaitForAsyncTaskResult,
-} from "./extensions/mmr-async-tasks/async-task-registry.js";
+} from "./extensions/mmr-workers/async-task-registry.js";
 export {
   DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS,
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
@@ -571,7 +595,7 @@ export {
   resolveMmrWorkerPiInvocationFromEnv,
   runMmrSubagentWorker,
   truncateMmrWorkerOutput,
-} from "./extensions/mmr-subagents/runner.js";
+} from "./extensions/mmr-workers/runner.js";
 export type {
   ClassifyMmrWorkerOutcomeOptions,
   MmrAsyncTerminalOutcome,
@@ -594,7 +618,7 @@ export type {
   MmrWorkerTrailItem,
   MmrWorkerUsageStats,
   RunMmrSubagentWorkerOptions,
-} from "./extensions/mmr-subagents/runner.js";
+} from "./extensions/mmr-workers/runner.js";
 export {
   MMR_CUSTOM_SUBAGENTS_FEATURE_GATE,
   MMR_CUSTOM_SUBAGENTS_PROVIDER_NAME,

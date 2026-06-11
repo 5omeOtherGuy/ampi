@@ -16,6 +16,12 @@ export interface MmrSessionFallbackErrorInput {
 export interface MmrSessionFallbackErrorClassification {
   kind: MmrSessionFallbackQuotaKind;
   shouldPrompt: boolean;
+  /**
+   * True when the condition is transient (overload, rate limit) and may
+   * self-heal; the fallback prompt is then deferred until it is sustained.
+   * Hard-quota conditions are not retryable and escalate immediately.
+   */
+  retryable: boolean;
   friendlyMessage: string;
 }
 
@@ -40,32 +46,43 @@ function includesSilentAnthropicStreamStall(message: string): boolean {
     && /retryable=true/i.test(message);
 }
 
+const NOT_QUOTA: MmrSessionFallbackErrorClassification = {
+  kind: "not-quota",
+  shouldPrompt: false,
+  retryable: false,
+  friendlyMessage: "No subscription quota condition detected.",
+};
+
 export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorInput): MmrSessionFallbackErrorClassification {
   const provider = normalize(input.provider);
   const message = normalize(input.errorMessage);
   const lowerProvider = provider.toLowerCase();
 
   if (!message) {
-    return { kind: "not-quota", shouldPrompt: false, friendlyMessage: "No subscription quota condition detected." };
+    return NOT_QUOTA;
   }
 
   if (lowerProvider === "openai-codex" || /You have hit your ChatGPT usage limit/i.test(message)) {
-    const prompt = /You have hit your ChatGPT usage limit|rate[_ -]?limit[_ -]?exceeded/i.test(message)
-      || includesRateLimit(message)
-      || includesHardQuota(message);
+    const hard = /You have hit your ChatGPT usage limit/i.test(message) || includesHardQuota(message);
+    const prompt = hard || /rate[_ -]?limit[_ -]?exceeded/i.test(message) || includesRateLimit(message);
+    if (!prompt) return NOT_QUOTA;
     return {
-      kind: prompt ? "openai-usage-limit" : "not-quota",
-      shouldPrompt: prompt,
-      friendlyMessage: prompt ? "The active subscription-backed route reported a usage limit." : "No subscription quota condition detected.",
+      kind: "openai-usage-limit",
+      shouldPrompt: true,
+      retryable: !hard,
+      friendlyMessage: "The active subscription-backed route reported a usage limit.",
     };
   }
 
   if (lowerProvider === "github-copilot") {
-    const prompt = includesRateLimit(message) || includesHardQuota(message);
+    const hard = includesHardQuota(message);
+    const prompt = hard || includesRateLimit(message);
+    if (!prompt) return NOT_QUOTA;
     return {
-      kind: prompt ? "copilot-quota" : "not-quota",
-      shouldPrompt: prompt,
-      friendlyMessage: prompt ? "The active subscription-backed route reported a quota or rate limit." : "No subscription quota condition detected.",
+      kind: "copilot-quota",
+      shouldPrompt: true,
+      retryable: !hard,
+      friendlyMessage: "The active subscription-backed route reported a quota or rate limit.",
     };
   }
 
@@ -74,6 +91,7 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
       return {
         kind: "anthropic-overload",
         shouldPrompt: true,
+        retryable: true,
         friendlyMessage: "The active Claude subscription route reported degraded upstream capacity.",
       };
     }
@@ -87,14 +105,18 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
       return {
         kind: "anthropic-overload",
         shouldPrompt: true,
+        retryable: true,
         friendlyMessage: "The active Claude subscription route is overloaded.",
       };
     }
-    const prompt = includesRateLimit(message) || includesHardQuota(message);
+    const hard = includesHardQuota(message);
+    const prompt = hard || includesRateLimit(message);
+    if (!prompt) return NOT_QUOTA;
     return {
-      kind: prompt ? "anthropic-rate-limit" : "not-quota",
-      shouldPrompt: prompt,
-      friendlyMessage: prompt ? "The active subscription-backed route reported a rate limit." : "No subscription quota condition detected.",
+      kind: "anthropic-rate-limit",
+      shouldPrompt: true,
+      retryable: !hard,
+      friendlyMessage: "The active subscription-backed route reported a rate limit.",
     };
   }
 
@@ -102,6 +124,7 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
     return {
       kind: "generic-hard-quota",
       shouldPrompt: true,
+      retryable: false,
       friendlyMessage: "The active route reported a hard quota limit.",
     };
   }
@@ -110,9 +133,10 @@ export function classifyMmrSessionFallbackError(input: MmrSessionFallbackErrorIn
     return {
       kind: "generic-hard-quota",
       shouldPrompt: true,
+      retryable: true,
       friendlyMessage: "The active subscription-backed route reported a rate limit.",
     };
   }
 
-  return { kind: "not-quota", shouldPrompt: false, friendlyMessage: "No subscription quota condition detected." };
+  return NOT_QUOTA;
 }

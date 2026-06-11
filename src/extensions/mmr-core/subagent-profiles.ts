@@ -132,6 +132,23 @@ export interface MmrSubagentProfile {
    */
   readonly partialOutputPolicy?: MmrSubagentPartialOutputPolicy;
   /**
+   * Whether this worker may run as a background task (`start_task`).
+   * Defaults to `true` when omitted, so registered profiles — including
+   * runtime-registered custom Markdown subagents — are backgroundable
+   * unless they opt out. `oracle` (always blocking by contract) and
+   * `history-reader` (an internal extraction worker, not a public
+   * background agent) declare `false`.
+   */
+  readonly backgroundable?: boolean;
+  /**
+   * Whether the worker's parameters accept the narrowing
+   * `capabilityProfile` field (`read-only` / `read-write`). Defaults to
+   * `false`; only `task-subagent` declares `true`. The background
+   * surface derives its Task-only capabilityProfile rule from this flag
+   * instead of hardcoding the agent name.
+   */
+  readonly acceptsCapabilityProfile?: boolean;
+  /**
    * Prompt-assembly route. `standalone` uses the registered prompt
    * builder for `promptBuilder`; `mode-derived` builds on
    * `assembleActiveSurface(baseMode)` and then appends a worker role
@@ -247,6 +264,9 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     thinkingLevel: "minimal",
     tools: [],
     maxTurns: 1,
+    // Internal extraction worker driven by the mmr-history read tools; it is
+    // not a public background agent.
+    backgroundable: false,
     promptRoute: "standalone",
     promptBuilder: "history-reader",
     allowMcp: false,
@@ -283,8 +303,40 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
       "read_session",
       "find_session",
     ],
+    // Oracle is always blocking: the advisory result is consumed inline and
+    // the worker can never run as a background task.
+    backgroundable: false,
     promptRoute: "standalone",
     promptBuilder: "oracle",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  "code-review": deepFreeze({
+    name: "code-review",
+    displayName: "Code Review",
+    // Reviewer diversity is deliberate: the primary route is a strong
+    // non-Anthropic, non-OpenAI model so the reviewer rarely shares the
+    // parent mode's model family. Fallbacks keep the reviewer strong when
+    // the antigravity provider is not registered or authenticated.
+    modelPreferences: [
+      { model: "gemini-3.1-pro", providers: ["antigravity"] },
+      { model: "gpt-5.5", thinkingLevel: "medium" },
+      { model: "claude-opus-4-6", thinkingLevel: "medium" },
+    ],
+    thinkingLevel: "medium",
+    // Read-only review surface: local reads/searches plus bash for the
+    // whitelisted merge-base git diff commands. The worker prompt forbids
+    // edits and git state mutation; the profile keeps mutation tools out
+    // of the allowlist entirely.
+    tools: ["read", "grep", "find", "bash"],
+    // Reviews are bounded: the worker reads the diff, inspects related
+    // files, and reports. Declared for future in-process runners.
+    maxTurns: 24,
+    promptRoute: "standalone",
+    promptBuilder: "code-review",
     allowMcp: false,
     allowToolbox: false,
     enforceLockedMode: false,
@@ -392,6 +444,9 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     // still counts as success; every other profile keeps the
     // fail-on-nonzero default.
     partialOutputPolicy: "prefer-usable-output",
+    // Task is the only worker whose parameters accept the narrowing
+    // capabilityProfile field.
+    acceptsCapabilityProfile: true,
     promptRoute: "mode-derived",
     baseMode: "from-parent",
     promptBuilder: "task-subagent",

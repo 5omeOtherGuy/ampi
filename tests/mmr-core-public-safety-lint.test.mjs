@@ -151,11 +151,11 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
     // pi-mmr-owned language; behavioral pins belong in the public surface
     // (types, JSDoc, tests) without anchoring to a private path.
     const surfaces = [
-      "src/extensions/mmr-subagents/finder.ts",
-      "src/extensions/mmr-subagents/oracle.ts",
-      "src/extensions/mmr-subagents/task.ts",
-      "src/extensions/mmr-subagents/runner.ts",
-      "src/extensions/mmr-subagents/worker-trail.ts",
+      "src/extensions/mmr-workers/finder.ts",
+      "src/extensions/mmr-workers/oracle.ts",
+      "src/extensions/mmr-workers/task.ts",
+      "src/extensions/mmr-workers/runner.ts",
+      "src/extensions/mmr-workers/worker-trail.ts",
       "src/extensions/mmr-core/subagent-resolver.ts",
       "src/extensions/mmr-core/subagent-profiles.ts",
       "tests/mmr-subagents-finder.test.mjs",

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const PROMPT_MODULE = "extensions/mmr-subagents/oracle-prompt.ts";
-const ORACLE_MODULE = "extensions/mmr-subagents/oracle.ts";
+const PROMPT_MODULE = "extensions/mmr-workers/oracle-prompt.ts";
+const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
 
 after(cleanupLoadedSource);
 

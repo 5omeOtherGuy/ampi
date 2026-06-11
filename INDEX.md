@@ -18,14 +18,13 @@ Quick links for navigating the repository.
 - [`src/extensions/mmr-session-fallback/README.md`](src/extensions/mmr-session-fallback/README.md) — quota/rate-limit fallback trigger, picker flow, persisted override, and lifecycle.
 - [`src/extensions/mmr-web/README.md`](src/extensions/mmr-web/README.md) — `web_search`, `read_web_page`, backend configuration, and safety policy.
 - [`src/extensions/mmr-github/README.md`](src/extensions/mmr-github/README.md) — opt-in read-only GitHub repository tools and librarian gating.
-- [`src/extensions/mmr-subagents/README.md`](src/extensions/mmr-subagents/README.md) — `finder`, `oracle`, `Task`, `librarian`, worker behavior, and public API.
+- [`src/extensions/mmr-workers/README.md`](src/extensions/mmr-workers/README.md) — `finder`, `oracle`, `Task`, `librarian`, the background task surface, worker behavior, and public API.
 - [`src/extensions/mmr-history/README.md`](src/extensions/mmr-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
 
 The following extensions were split out of `mmr-toolbox` / `mmr-subagents`; their dedicated READMEs are pending, so use the source entry point for now:
 
 - [`src/extensions/mmr-patch/index.ts`](src/extensions/mmr-patch/index.ts) — owns `apply_patch` (context-matched multi-file workspace edits). README pending.
 - [`src/extensions/mmr-tasks/index.ts`](src/extensions/mmr-tasks/index.ts) — owns the session-local `task_list` and pinned widget. README pending.
-- [`src/extensions/mmr-async-tasks/index.ts`](src/extensions/mmr-async-tasks/index.ts) — owns `start_task`/`task_poll`/`task_wait`/`task_cancel` and the fleet dashboard. README pending.
 - [`src/extensions/mmr-custom-subagents/index.ts`](src/extensions/mmr-custom-subagents/index.ts) — discovers and registers custom Markdown subagents. README pending.
 
 Deprecated / unregistered:
@@ -38,7 +37,7 @@ Deprecated / unregistered:
 - [`src/extensions/mmr-core/ROADMAP.md`](src/extensions/mmr-core/ROADMAP.md)
 - [`src/extensions/mmr-session-fallback/ROADMAP.md`](src/extensions/mmr-session-fallback/ROADMAP.md)
 - [`src/extensions/mmr-web/ROADMAP.md`](src/extensions/mmr-web/ROADMAP.md)
-- [`src/extensions/mmr-subagents/ROADMAP.md`](src/extensions/mmr-subagents/ROADMAP.md)
+- [`src/extensions/mmr-workers/ROADMAP.md`](src/extensions/mmr-workers/ROADMAP.md)
 - [`src/extensions/mmr-history/ROADMAP.md`](src/extensions/mmr-history/ROADMAP.md)
 - [`src/extensions/mmr-toolbox/ROADMAP.md`](src/extensions/mmr-toolbox/ROADMAP.md) — deprecated shim.
 
@@ -66,8 +65,7 @@ Deprecated / unregistered:
 - [`src/extensions/mmr-tasks/index.ts`](src/extensions/mmr-tasks/index.ts) — `mmr-tasks` Pi extension entry point.
 - [`src/extensions/mmr-web/index.ts`](src/extensions/mmr-web/index.ts) — `mmr-web` Pi extension entry point.
 - [`src/extensions/mmr-github/index.ts`](src/extensions/mmr-github/index.ts) — `mmr-github` Pi extension entry point.
-- [`src/extensions/mmr-subagents/index.ts`](src/extensions/mmr-subagents/index.ts) — `mmr-subagents` Pi extension entry point.
-- [`src/extensions/mmr-async-tasks/index.ts`](src/extensions/mmr-async-tasks/index.ts) — `mmr-async-tasks` Pi extension entry point.
+- [`src/extensions/mmr-workers/index.ts`](src/extensions/mmr-workers/index.ts) — `mmr-workers` Pi extension entry point (blocking workers + background task surface).
 - [`src/extensions/mmr-custom-subagents/index.ts`](src/extensions/mmr-custom-subagents/index.ts) — `mmr-custom-subagents` Pi extension entry point.
 - [`src/extensions/mmr-history/index.ts`](src/extensions/mmr-history/index.ts) — `mmr-history` Pi extension entry point.
 - [`src/extensions/mmr-toolbox/index.ts`](src/extensions/mmr-toolbox/index.ts) — deprecated re-export shim (unregistered).

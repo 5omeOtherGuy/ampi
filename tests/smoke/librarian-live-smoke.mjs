@@ -93,11 +93,11 @@ function webHost() {
 }
 
 async function main() {
-  const promptsMod = await importSource("extensions/mmr-subagents/prompts.ts");
+  const promptsMod = await importSource("extensions/mmr-workers/prompts.ts");
   promptsMod.registerMmrSubagentsPromptBuilders();
   const ownershipMod = await importSource("extensions/mmr-web/tool-ownership.ts");
   ownershipMod.registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
-  const librarianMod = await importSource("extensions/mmr-subagents/librarian.ts");
+  const librarianMod = await importSource("extensions/mmr-workers/librarian.ts");
   const { createLibrarianTool, LIBRARIAN_WORKER_TOOLS } = librarianMod;
 
   const cwd = path.resolve(import.meta.dirname, "..", "..");

@@ -10,7 +10,7 @@ import {
   type MmrSubagentRunner,
   type MmrSubagentWorkerDetailsBase,
   type MmrSubagentWorkerRunResult,
-} from "../mmr-subagents/runner.js";
+} from "../mmr-workers/runner.js";
 import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
 import { extractTouchedFilesFromEntries } from "./session-index.js";
 

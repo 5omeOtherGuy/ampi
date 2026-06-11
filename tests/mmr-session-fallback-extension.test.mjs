@@ -57,8 +57,13 @@ beforeEach(async () => {
   fallbackRuntime.clearMmrSessionFallbackOverrides();
 });
 
+const RATE_LIMIT_EVENT = {
+  type: "message_end",
+  message: { role: "assistant", content: [], stopReason: "error", errorMessage: "rate_limit_error: HTTP 429" },
+};
+
 describe("mmr-session-fallback extension", () => {
-  it("prompts for a model and thinking level, applies the selection, persists it, and returns a retryable message", async () => {
+  it("defers a first transient error, then prompts once it is sustained, applies the selection, persists it, and returns a retryable message", async () => {
     const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
@@ -69,6 +74,8 @@ describe("mmr-session-fallback extension", () => {
       models: [FAILING_MODEL, FALLBACK_MODEL, OTHER_MODEL],
       model: FAILING_MODEL,
     });
+    const notifications = [];
+    ctx.ui.notify = (message, level) => { notifications.push({ message, level }); };
     ctx.ui.select = async (title, options) => {
       selectCalls.push({ title, options });
       if (/fallback model/i.test(title)) return options.find((option) => option.includes("anthropic/claude-opus-4-6"));
@@ -77,15 +84,12 @@ describe("mmr-session-fallback extension", () => {
     };
     extension(pi);
 
-    const result = await handlers.get("message_end")({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        content: [],
-        stopReason: "error",
-        errorMessage: "rate_limit_error: HTTP 429",
-      },
-    }, ctx);
+    const first = await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
+    assert.equal(first, undefined, "a single transient error does not prompt");
+    assert.equal(selectCalls.length, 0, "no fallback selection is offered for a single transient error");
+    assert.match(notifications.at(-1)?.message ?? "", /offered if it persists/i);
+
+    const result = await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
 
     assert.equal(calls.setModel.length, 1);
     assert.deepEqual(calls.setModel[0], FALLBACK_MODEL);
@@ -123,7 +127,7 @@ describe("mmr-session-fallback extension", () => {
     };
     extension(pi);
 
-    const result = await handlers.get("message_end")({
+    const stallEvent = {
       type: "message_end",
       message: {
         role: "assistant",
@@ -131,7 +135,9 @@ describe("mmr-session-fallback extension", () => {
         stopReason: "error",
         errorMessage: "Anthropic Messages API stream made no progress for 45000ms [status=200; request_id=req_x; last_event=toolUseInputDelta; saw_message_stop=false; upstream_capacity_signal=silent_200_stream; retryable=true]",
       },
-    }, ctx);
+    };
+    assert.equal(await handlers.get("message_end")(stallEvent, ctx), undefined, "a single stall is left to recover");
+    const result = await handlers.get("message_end")(stallEvent, ctx);
 
     assert.equal(calls.setModel.length, 1);
     assert.deepEqual(calls.setModel[0], FALLBACK_MODEL);
@@ -146,18 +152,72 @@ describe("mmr-session-fallback extension", () => {
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
     const { pi, calls, handlers } = createMockPi();
-    const { ctx } = createMockExtensionContext({ sessionId: "session-1", models: [FAILING_MODEL, FALLBACK_MODEL] });
+    const { ctx, selectCalls } = createMockExtensionContext({ sessionId: "session-1", models: [FAILING_MODEL, FALLBACK_MODEL] });
+    extension(pi);
+
+    await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
+    const result = await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
+
+    assert.equal(result, undefined);
+    assert.ok(selectCalls.length > 0, "the sustained error reached the fallback prompt");
+    assert.deepEqual(calls.setModel, []);
+    assert.deepEqual(calls.setThinkingLevel, []);
+    assert.deepEqual(calls.appendEntry, []);
+  });
+
+  it("escalates a hard-quota error immediately without waiting for a repeat", async () => {
+    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const runtime = await loadRuntime();
+    runtime.setMmrModeState(lockedSmartState());
+    const { pi, calls, handlers } = createMockPi();
+    const { ctx, selectCalls } = createMockExtensionContext({
+      sessionId: "session-1",
+      models: [FAILING_MODEL, FALLBACK_MODEL, OTHER_MODEL],
+      model: FAILING_MODEL,
+    });
+    ctx.ui.select = async (title, options) => {
+      selectCalls.push({ title, options });
+      if (/fallback model/i.test(title)) return options.find((option) => option.includes("anthropic/claude-opus-4-6"));
+      if (/thinking/i.test(title)) return options.find((option) => option.startsWith("high"));
+      return undefined;
+    };
     extension(pi);
 
     const result = await handlers.get("message_end")({
       type: "message_end",
-      message: { role: "assistant", content: [], stopReason: "error", errorMessage: "rate_limit_error: HTTP 429" },
+      message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage_limit_reached: quota exceeded for this billing cycle" },
     }, ctx);
 
+    assert.equal(calls.setModel.length, 1, "a hard quota prompts on the first error");
+    assert.equal(result.message.stopReason, "error");
+  });
+
+  it("resets the transient streak after a successful turn", async () => {
+    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const runtime = await loadRuntime();
+    runtime.setMmrModeState(lockedSmartState());
+    const { pi, calls, handlers } = createMockPi();
+    const { ctx, selectCalls } = createMockExtensionContext({
+      sessionId: "session-1",
+      models: [FAILING_MODEL, FALLBACK_MODEL],
+      model: FAILING_MODEL,
+    });
+    ctx.ui.select = async (title, options) => {
+      selectCalls.push({ title, options });
+      return undefined;
+    };
+    extension(pi);
+
+    await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
+    await handlers.get("message_end")({
+      type: "message_end",
+      message: { role: "assistant", content: [], stopReason: "stop" },
+    }, ctx);
+    const result = await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
+
     assert.equal(result, undefined);
+    assert.equal(selectCalls.length, 0, "a recovered turn resets the streak, so the next transient error does not prompt");
     assert.deepEqual(calls.setModel, []);
-    assert.deepEqual(calls.setThinkingLevel, []);
-    assert.deepEqual(calls.appendEntry, []);
   });
 
   it("does not prompt in Free mode, subagent workers, or sessions that already chose a fallback", async () => {
@@ -302,6 +362,7 @@ describe("mmr-session-fallback extension", () => {
       type: "message_end",
       message: { role: "assistant", content: [], stopReason: "error", errorMessage: "rate_limit_error: HTTP 429" },
     };
+    await handlers.get("message_end")(event, ctx); // first transient error only arms the streak
     const handlerPromise = handlers.get("message_end")(event, ctx);
     await Promise.resolve();
 
@@ -337,10 +398,8 @@ describe("mmr-session-fallback extension", () => {
     };
     extension(pi);
 
-    const result = await handlers.get("message_end")({
-      type: "message_end",
-      message: { role: "assistant", content: [], stopReason: "error", errorMessage: "rate_limit_error: HTTP 429" },
-    }, ctx);
+    await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx); // arm the streak
+    const result = await handlers.get("message_end")(RATE_LIMIT_EVENT, ctx);
 
     assert.equal(result, undefined, "a rejected prompt returns undefined");
     assert.equal(notifications.at(-1)?.level, "error", "a rejected prompt notifies an error");

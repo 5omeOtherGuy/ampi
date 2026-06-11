@@ -12,7 +12,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const HELPER_MODULE = "extensions/mmr-subagents/worker-result-shaping.ts";
+const HELPER_MODULE = "extensions/mmr-workers/worker-result-shaping.ts";
 
 function emptyUsage() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 };

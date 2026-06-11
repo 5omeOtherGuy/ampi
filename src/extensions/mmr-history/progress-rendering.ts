@@ -20,7 +20,7 @@ import { isRecord } from "../mmr-core/internal/json.js";
 import {
   formatMmrWorkerUsage,
   stripMmrWorkerModelProvider,
-} from "../mmr-subagents/worker-usage-format.js";
+} from "../mmr-workers/worker-usage-format.js";
 import type { FindSessionDetails, ReadSessionDetails } from "./tools.js";
 
 interface HistoryTheme {
