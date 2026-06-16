@@ -235,7 +235,7 @@ describe("mmr-core /mmr-status", () => {
     assert.match(output, /mmr-subagents: missing/);
     assert.match(output, /Policy warnings:/);
     assert.match(output, /Thinking: medium \(request policy: Anthropic adaptive\/high\)/);
-    assert.match(output, /Context: 300k total \/ 32k max out \/ 268k max in/);
+    assert.match(output, /Context: 300k total \/ 64k max out \/ 236k max in/);
     assert.match(output, /Context cap: model default/);
     assert.doesNotMatch(output, /Native compaction note:/);
     assert.match(output, /Baseline captured: no/);
@@ -348,12 +348,12 @@ describe("mmr-core /mmr-status", () => {
 
     const smart = await buildState({
       effectiveContextWindow: 200000,
-      effectiveMaxOutputTokens: 32000,
-      effectiveMaxInputTokens: 168000,
+      effectiveMaxOutputTokens: 64000,
+      effectiveMaxInputTokens: 136000,
     });
 
-    assert.match(formatMmrStatus(smart), /Context: 200k total \/ 32k max out \/ 168k max in/);
-    assert.match(formatMmrStatus(smart), /Context cap: 168000 input tokens \(mode profile\)/);
+    assert.match(formatMmrStatus(smart), /Context: 200k total \/ 64k max out \/ 136k max in/);
+    assert.match(formatMmrStatus(smart), /Context cap: 136000 input tokens \(mode profile\)/);
   });
 
   it("includes policy warnings alongside mode and tool state", async () => {

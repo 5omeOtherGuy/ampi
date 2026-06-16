@@ -72,10 +72,10 @@ export interface MmrRequestPolicy {
  * mmr-core's hook is a no-op while the mode is `free`.
  *
  * Notes on the shape choices:
- * - SMART uses adaptive thinking with `output_config.effort=high` for its
- *   Opus 4.8 profile. SMART's GPT fallback sets only Responses reasoning
- *   effort (no `max_output_tokens` override), so Opus-specific output caps
- *   do not leak onto GPT payloads.
+ * - SMART uses adaptive thinking with `output_config.effort=high` and
+ *   `max_tokens=64000` for its Opus 4.8 profile. SMART's GPT fallback sets
+ *   only Responses reasoning effort (no `max_output_tokens` override), so
+ *   Opus-specific output caps do not leak onto GPT payloads.
  * - LARGE uses adaptive thinking with `output_config.effort=medium` for its
  *   Opus 4.6 profile (and `max_tokens=32000`). LARGE's GPT fallback sets
  *   Responses reasoning effort only, matching the generic OpenAI default.
@@ -101,7 +101,7 @@ export interface MmrRequestPolicy {
 export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrRequestPolicy> = {
   smart: {
     anthropic: {
-      maxTokens: 32000,
+      maxTokens: 64000,
       // Anthropic adaptive effort follows the native Opus route's Pi-level map
       // (Option 1: Pi medium -> Anthropic high). The medium toggle preset pins
       // the same value; the high preset maps Pi high -> Anthropic xhigh.
@@ -112,9 +112,9 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
     },
     // smart caps the active Opus route to a 300k window (see context-cap.ts);
     // every locked mode caps to its profile total this way. Keep the display
-    // metadata consistent: 300k total - 32k max-output = 268k.
+    // metadata consistent: 300k total - 64k max-output = 236k.
     contextWindow: 300_000,
-    effectiveMaxInputTokens: 268_000,
+    effectiveMaxInputTokens: 236_000,
   },
   smartGPT: {
     openaiResponses: {
@@ -188,10 +188,9 @@ export interface MmrModeThinkingOption {
  *
  * Smart's high preset asks for Anthropic `xhigh` effort (Pi `high` maps to
  * Anthropic `xhigh` on the Opus route) while keeping the Anthropic output
- * budget at the mode default (32k). Both Smart presets therefore send the
- * same 32k admission shape and differ only in adaptive reasoning effort
- * (`high` vs `xhigh`), avoiding the heavier 64k output reservation that
- * reduced admission stability under Opus capacity pressure.
+ * budget at the mode default (64k). Both Smart presets therefore send the
+ * same 64k admission shape and differ only in adaptive reasoning effort
+ * (`high` vs `xhigh`).
  */
 export const MMR_MODE_THINKING_TOGGLES = {
   smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }],
