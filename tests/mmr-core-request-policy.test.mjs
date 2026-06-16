@@ -39,7 +39,7 @@ describe("mmr-core request policy", () => {
     const smart = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart);
 
     assert.notEqual(smart, payload);
-    assert.equal(smart.max_tokens, 32000);
+    assert.equal(smart.max_tokens, 64000);
     assert.deepEqual(smart.thinking, { type: "adaptive", display: "summarized" });
     assert.deepEqual(smart.output_config, { some_future_field: true, effort: "high" });
     assert.equal(JSON.stringify(smart.system), originalSystem);
@@ -238,7 +238,7 @@ describe("mmr-core request policy", () => {
     assert.equal("effectiveMaxInputTokens" in result, false);
     assert.equal("contextWindow" in result, false);
     assert.equal(MMR_REQUEST_POLICIES.smart.contextWindow, 300000);
-    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 268000);
+    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 236000);
   });
 
   it("leaves GPT/Codex modes without a context profile and clamps smart's input profile to smaller provider registrations", async () => {
@@ -255,14 +255,14 @@ describe("mmr-core request policy", () => {
       assert.equal(clamped.contextWindow, undefined, `${mode} stays native after clamping`);
     }
 
-    // smart's display profile is now 300k/268k. Callers pass the already-capped
+    // smart's display profile is now 300k/236k. Callers pass the already-capped
     // active model here, so a 300k Opus window leaves the profile unchanged.
-    const cappedOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 300_000, maxTokens: 32_000 });
-    assert.equal(cappedOpus.effectiveMaxInputTokens, 268000);
+    const cappedOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 300_000, maxTokens: 64_000 });
+    assert.equal(cappedOpus.effectiveMaxInputTokens, 236000);
     assert.equal(cappedOpus.contextWindow, 300000);
 
-    const smallCustomOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 200_000, maxTokens: 32_000 });
-    assert.equal(smallCustomOpus.effectiveMaxInputTokens, 168000);
+    const smallCustomOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 200_000, maxTokens: 64_000 });
+    assert.equal(smallCustomOpus.effectiveMaxInputTokens, 136000);
     assert.equal(smallCustomOpus.contextWindow, 200000);
 
     const large = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.large, { contextWindow: 1_000_000, maxTokens: 32_000 });
@@ -300,32 +300,32 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
-  it("maps Smart high to Anthropic xhigh effort while keeping the 32k output default, without mutating the source", async () => {
+  it("maps Smart high to Anthropic xhigh effort while keeping the 64k output default, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
     // Pi/session level is high; Anthropic adaptive effort is remapped to xhigh
     // (Pi high -> Anthropic xhigh on the Opus route), but the output budget
-    // stays at the mode default 32k, so the displayed max input is unchanged.
-    assert.equal(smartHigh.anthropic.maxTokens, 32000);
+    // stays at the mode default 64k, so the displayed max input is unchanged.
+    assert.equal(smartHigh.anthropic.maxTokens, 64000);
     assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "xhigh");
-    assert.equal(smartHigh.effectiveMaxInputTokens, 268000);
+    assert.equal(smartHigh.effectiveMaxInputTokens, 236000);
     // OpenAI Responses effort tracks the Pi level (high), not the Anthropic remap.
     assert.equal(smartHigh.openaiResponses.reasoning.effort, "high");
-    // Source policy stays at its 32k/high Anthropic default (pure transform).
-    assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.maxTokens, 32000);
+    // Source policy stays at its 64k/high Anthropic default (pure transform).
+    assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.maxTokens, 64000);
     assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.thinking.outputConfigEffort, "high");
-    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 268000);
+    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 236000);
     assert.equal(MMR_REQUEST_POLICIES.smart.openaiResponses.reasoning.effort, "medium");
 
     // Smart medium aligns to the Option-1 native map: Pi medium -> Anthropic
-    // high (32k), while OpenAI Responses effort tracks the Pi level (medium).
+    // high (64k), while OpenAI Responses effort tracks the Pi level (medium).
     const smartMedium = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "medium");
-    assert.equal(smartMedium.anthropic.maxTokens, 32000);
+    assert.equal(smartMedium.anthropic.maxTokens, 64000);
     assert.equal(smartMedium.anthropic.thinking.outputConfigEffort, "high");
     assert.equal(smartMedium.openaiResponses.reasoning.effort, "medium");
-    assert.equal(smartMedium.effectiveMaxInputTokens, 268000);
+    assert.equal(smartMedium.effectiveMaxInputTokens, 236000);
 
     const gptXhigh = applyMmrThinkingLevelToPolicy("smartGPT", MMR_REQUEST_POLICIES.smartGPT, "xhigh");
     assert.equal(gptXhigh.openaiResponses.reasoning.effort, "xhigh");

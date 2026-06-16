@@ -52,7 +52,7 @@ describe("mmr-core before_provider_request hook", () => {
     };
     const result = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);
 
-    assert.equal(result.max_tokens, 32000);
+    assert.equal(result.max_tokens, 64000);
     assert.deepEqual(result.thinking, { type: "adaptive", display: "summarized" });
     // Smart default (medium toggle) maps Pi medium -> Anthropic high (Option 1).
     assert.deepEqual(result.output_config, { effort: "high" });
@@ -60,12 +60,12 @@ describe("mmr-core before_provider_request hook", () => {
     assert.deepEqual(payload.thinking, undefined, "original payload is not mutated");
   });
 
-  it("emits Anthropic xhigh effort while keeping 32k max_tokens on the wire after the Smart high (alt+r) toggle", async () => {
+  it("emits Anthropic xhigh effort while keeping 64k max_tokens on the wire after the Smart high (alt+r) toggle", async () => {
     // End-to-end wire proof for Smart high under the native Opus 4.8 Option-1
     // map (Pi high -> Anthropic xhigh). The toggle sets Pi thinking level
     // "high"; the before_provider_request hook pins Anthropic effort "xhigh"
-    // but retains the mode default max_tokens 32000, so both Smart presets
-    // share the same 32k admission shape and differ only in reasoning effort.
+    // but retains the mode default max_tokens 64000, so both Smart presets
+    // share the same 64k admission shape and differ only in reasoning effort.
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const { ctx } = createContext([SMART_MODEL]);
     const { pi, handlers, shortcuts } = createPi({ model: SMART_MODEL });
@@ -83,7 +83,7 @@ describe("mmr-core before_provider_request hook", () => {
     };
     const result = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);
 
-    assert.equal(result.max_tokens, 32000);
+    assert.equal(result.max_tokens, 64000);
     assert.deepEqual(result.thinking, { type: "adaptive", display: "summarized" });
     assert.deepEqual(result.output_config, { effort: "xhigh" });
     assert.deepEqual(result.system, payload.system);
