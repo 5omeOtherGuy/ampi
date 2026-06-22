@@ -10,6 +10,7 @@ after(cleanupLoadedSource);
 const SMART_MODEL = { provider: "claude-subscription", id: "claude-opus-4-8" };
 const RUSH_MODEL = { provider: "claude-subscription", id: "claude-haiku-4-5" };
 const FREE_MODEL = { provider: "openai", id: "gpt-5.4" };
+const ALT_NATIVE_MODEL = { provider: "openai-codex", id: "gpt-5.5" };
 
 function createLockedState(overrides = {}) {
   return {
@@ -101,8 +102,8 @@ describe("mmr-core free mode", () => {
     assert.equal(state?.effectiveContextWindow, undefined);
     assert.deepEqual(state?.activeTools, openTools);
     assert.deepEqual(calls.setActiveTools, [openTools]);
-    assert.deepEqual(calls.setModel, []);
-    assert.deepEqual(calls.setThinkingLevel, []);
+    assert.deepEqual(calls.setModel, [FREE_MODEL]);
+    assert.deepEqual(calls.setThinkingLevel, ["high"]);
     assert.equal(calls.appendEntry.at(-1)?.[1].mode, "open");
 
     const payload = { model: "claude-opus-4-8", messages: [], max_tokens: 4096 };
@@ -112,6 +113,30 @@ describe("mmr-core free mode", () => {
 
     const promptResult = await handlers.get("before_agent_start")({ systemPrompt: "BASE", systemPromptOptions: { selectedTools: openTools } });
     assert.equal(promptResult, undefined);
+  });
+
+  it("/mode open restores captured native model and thinking while keeping Smart tools", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(undefined);
+    const openTools = ["read", "bash", "write", "edit", "Task", "task_list"];
+    const baselineTools = ["read", "bash", "grep"];
+    const { ctx } = createContext([SMART_MODEL, FREE_MODEL], { model: FREE_MODEL });
+    const { pi, calls, commands, handlers } = createPi({ activeTools: baselineTools, allTools: openTools, thinkingLevel: "high" });
+    extension(pi);
+
+    await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
+    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    calls.setActiveTools.length = 0;
+    calls.setModel.length = 0;
+    calls.setThinkingLevel.length = 0;
+
+    await commands.get("mode").handler("open", ctx);
+
+    assert.equal(runtime.getMmrModeState()?.mode, "open");
+    assert.deepEqual(calls.setActiveTools, [openTools]);
+    assert.deepEqual(calls.setModel, [FREE_MODEL]);
+    assert.deepEqual(calls.setThinkingLevel, ["high"]);
   });
 
   it("native model/thinking changes keep open active because controls are Pi-native", async () => {
@@ -136,6 +161,51 @@ describe("mmr-core free mode", () => {
     assert.deepEqual(calls.setThinkingLevel, []);
     assert.deepEqual(calls.appendEntry, []);
     assert.equal(notifications.some((notification) => /switched to Free mode/.test(notification.message)), false);
+  });
+
+  it("manual model changes made in open survive a locked-mode round trip", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(undefined);
+    const openTools = ["read", "bash", "write", "edit", "Task", "task_list"];
+    const { ctx } = createContext([SMART_MODEL, FREE_MODEL, ALT_NATIVE_MODEL], { model: FREE_MODEL });
+    const { pi, calls, commands, handlers } = createPi({ activeTools: ["read", "bash"], allTools: openTools, thinkingLevel: "medium" });
+    extension(pi);
+
+    await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
+    await commands.get("mode").handler("open", ctx);
+    await handlers.get("model_select")({ type: "model_select", model: ALT_NATIVE_MODEL, previousModel: FREE_MODEL, source: "cycle" }, ctx);
+    calls.setModel.length = 0;
+
+    await commands.get("mode").handler("smart", ctx);
+    await commands.get("mode").handler("open", ctx);
+
+    assert.equal(runtime.getMmrModeState()?.mode, "open");
+    assert.deepEqual(calls.setModel.at(-1), ALT_NATIVE_MODEL);
+  });
+
+  it("/mode free after open restores the original pre-MMR tool baseline", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(undefined);
+    const openTools = ["read", "bash", "write", "edit", "Task", "task_list"];
+    const baselineTools = ["read", "bash", "grep"];
+    const { ctx } = createContext([SMART_MODEL, FREE_MODEL], { model: FREE_MODEL });
+    const { pi, calls, commands, handlers } = createPi({ activeTools: baselineTools, allTools: openTools, thinkingLevel: "medium" });
+    extension(pi);
+
+    await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
+    await commands.get("mode").handler("open", ctx);
+    calls.setActiveTools.length = 0;
+    calls.setModel.length = 0;
+    calls.setThinkingLevel.length = 0;
+
+    await commands.get("mode").handler("free", ctx);
+
+    assert.equal(runtime.getMmrModeState()?.mode, "free");
+    assert.deepEqual(calls.setActiveTools, [baselineTools]);
+    assert.deepEqual(calls.setModel, [FREE_MODEL]);
+    assert.deepEqual(calls.setThinkingLevel, ["medium"]);
   });
 
   it("/mode free restores baseline tools, persists free, and leaves model/thinking untouched", async () => {
