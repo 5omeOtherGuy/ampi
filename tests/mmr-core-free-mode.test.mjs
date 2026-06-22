@@ -80,6 +80,40 @@ beforeEach(async () => {
 });
 
 describe("mmr-core free mode", () => {
+  it("/mode open activates Smart-equivalent tools without model, thinking, request, or prompt policy", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(createLockedState());
+    const openTools = ["read", "bash", "write", "edit", "web_search", "read_web_page", "read_session", "find_session", "Task", "task_list", "finder", "code_review"];
+    const { ctx } = createContext([SMART_MODEL], { model: FREE_MODEL });
+    const { pi, calls, commands, handlers } = createPi({ activeTools: ["read", "bash", "web_search"], allTools: openTools, thinkingLevel: "high" });
+    extension(pi);
+
+    await commands.get("mode").handler("open", ctx);
+
+    const state = runtime.getMmrModeState();
+    assert.equal(state?.mode, "open");
+    assert.equal(state?.modelApplied, false);
+    assert.deepEqual(state?.requestedModels, []);
+    assert.equal(state?.provider, "");
+    assert.equal(state?.model, "");
+    assert.equal(state?.thinkingLevel, undefined);
+    assert.equal(state?.effectiveContextWindow, undefined);
+    assert.deepEqual(state?.activeTools, openTools);
+    assert.deepEqual(calls.setActiveTools, [openTools]);
+    assert.deepEqual(calls.setModel, []);
+    assert.deepEqual(calls.setThinkingLevel, []);
+    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "open");
+
+    const payload = { model: "claude-opus-4-8", messages: [], max_tokens: 4096 };
+    const requestResult = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);
+    assert.equal(requestResult, undefined);
+    assert.deepEqual(payload, { model: "claude-opus-4-8", messages: [], max_tokens: 4096 });
+
+    const promptResult = await handlers.get("before_agent_start")({ systemPrompt: "BASE", systemPromptOptions: { selectedTools: openTools } });
+    assert.equal(promptResult, undefined);
+  });
+
   it("/mode free restores baseline tools, persists free, and leaves model/thinking untouched", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
