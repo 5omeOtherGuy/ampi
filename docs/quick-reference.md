@@ -9,6 +9,7 @@ Fast lookup for modes, tools, optional gates, and common troubleshooting.
 | Default balanced coding | `/mode smart` | Default when no flag/session/settings override exists |
 | Balanced coding with GPT-family preferences | `/mode smartGPT` | Same intent as `smart`, GPT-preferred model preference order |
 | Fast, low-token turns | `/mode rush` | Smaller posture for quick edits and short loops |
+| Test Opus without smart request shaping | `/mode test` | Diagnostic Opus 4.8 route with rush-style prompt/request behavior |
 | Long-context work | `/mode large` | Use when context capacity matters more than speed |
 | Deep reasoning, planning, review | `/mode deep` | Use for hard debugging and architecture decisions |
 | Native controls with rich tools | `/mode open` | Pi-native model/thinking/prompt, Smart tool surface active |

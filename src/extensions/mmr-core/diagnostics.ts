@@ -29,82 +29,7 @@ const FALLBACK_PROVIDER_WARNING =
  * Native-control modes never emit model/request/prompt diagnostics: native Pi
  * controls are in charge and MMR-specific model/policy state is intentionally absent.
  */
-export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnostic[] {
-  if (state.mode === "free") return [];
-
-  const diagnostics: MmrPolicyDiagnostic[] = [];
-
-  if (state.mode === "open") {
-    if (state.activeTools.length === 0) {
-      diagnostics.push({
-        code: "tools.none-active",
-        severity: "warning",
-        source: SOURCE,
-        message: "no active tools resolved",
-      });
-    }
-    if (state.missingTools.length > 0) {
-      diagnostics.push({
-        code: "tools.missing",
-        severity: "warning",
-        source: SOURCE,
-        message: `missing tools: ${state.missingTools.join(", ")}`,
-        data: { tools: [...state.missingTools] },
-      });
-    }
-    if (state.gatedTools.length > 0) {
-      diagnostics.push({
-        code: "tools.gated",
-        severity: "warning",
-        source: SOURCE,
-        message: `gated tools: ${state.gatedTools.join(", ")}`,
-        data: { tools: [...state.gatedTools] },
-      });
-    }
-    if (state.disabledTools.length > 0) {
-      diagnostics.push({
-        code: "tools.disabled",
-        severity: "warning",
-        source: SOURCE,
-        message: `disabled tools: ${state.disabledTools.join(", ")}`,
-        data: { tools: [...state.disabledTools] },
-      });
-    }
-    for (const note of state.availabilityNotes) {
-      diagnostics.push({
-        code: "availability",
-        severity: "warning",
-        source: SOURCE,
-        message: note,
-        data: { note },
-      });
-    }
-    return diagnostics;
-  }
-
-  if (!state.modelApplied) {
-    diagnostics.push({
-      code: "model.not-applied",
-      severity: "warning",
-      source: SOURCE,
-      message: state.modelFound ? "model was found but not applied" : "no usable model found",
-      data: { modelFound: state.modelFound, requestedModels: [...state.requestedModels] },
-    });
-  } else if (state.modelFallbackApplied) {
-    const reason = state.modelFallbackReason ?? "fallback route selected";
-    diagnostics.push({
-      code: "model.fallback-applied",
-      severity: "warning",
-      source: SOURCE,
-      message: `model fallback applied: ${reason} ${FALLBACK_PROVIDER_WARNING}`,
-      data: {
-        provider: state.provider,
-        model: state.model,
-        reason: state.modelFallbackReason,
-      },
-    });
-  }
-
+function appendToolDiagnostics(diagnostics: MmrPolicyDiagnostic[], state: MmrModeState): void {
   if (state.activeTools.length === 0) {
     diagnostics.push({
       code: "tools.none-active",
@@ -143,6 +68,55 @@ export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnosti
       data: { tools: [...state.disabledTools] },
     });
   }
+}
+
+function appendAvailabilityDiagnostics(diagnostics: MmrPolicyDiagnostic[], state: MmrModeState): void {
+  for (const note of state.availabilityNotes) {
+    diagnostics.push({
+      code: "availability",
+      severity: "warning",
+      source: SOURCE,
+      message: note,
+      data: { note },
+    });
+  }
+}
+
+export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnostic[] {
+  if (state.mode === "free") return [];
+
+  const diagnostics: MmrPolicyDiagnostic[] = [];
+
+  if (state.mode === "open") {
+    appendToolDiagnostics(diagnostics, state);
+    appendAvailabilityDiagnostics(diagnostics, state);
+    return diagnostics;
+  }
+
+  if (!state.modelApplied) {
+    diagnostics.push({
+      code: "model.not-applied",
+      severity: "warning",
+      source: SOURCE,
+      message: state.modelFound ? "model was found but not applied" : "no usable model found",
+      data: { modelFound: state.modelFound, requestedModels: [...state.requestedModels] },
+    });
+  } else if (state.modelFallbackApplied) {
+    const reason = state.modelFallbackReason ?? "fallback route selected";
+    diagnostics.push({
+      code: "model.fallback-applied",
+      severity: "warning",
+      source: SOURCE,
+      message: `model fallback applied: ${reason} ${FALLBACK_PROVIDER_WARNING}`,
+      data: {
+        provider: state.provider,
+        model: state.model,
+        reason: state.modelFallbackReason,
+      },
+    });
+  }
+
+  appendToolDiagnostics(diagnostics, state);
 
   if (
     typeof state.effectiveContextWindow === "number"
@@ -196,15 +170,7 @@ export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnosti
     });
   }
 
-  for (const note of state.availabilityNotes) {
-    diagnostics.push({
-      code: "availability",
-      severity: "warning",
-      source: SOURCE,
-      message: note,
-      data: { note },
-    });
-  }
+  appendAvailabilityDiagnostics(diagnostics, state);
 
   return diagnostics;
 }

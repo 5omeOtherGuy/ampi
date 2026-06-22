@@ -112,7 +112,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode rush, /mode test, /mode large, or /mode deep to re-enter a locked mode.",
+    "Use /mode smart, /mode smartGPT, /mode rush, /mode test, /mode large, /mode deep, or /mode open to re-enter a managed mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
@@ -201,6 +201,42 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }, rejectedSources);
   }
 
+  function resolveModeToolsWithExtras(
+    modeKey: MmrLockedModeKey,
+    baseToolNames: readonly string[],
+    baseResolution: ReturnType<typeof resolveMmrTools>,
+    availableTools: readonly string[],
+    cwd: string,
+  ): ReturnType<typeof resolveMmrTools> {
+    const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
+      modeKey,
+      configuredLockedModeExtraTools,
+      baseToolNames,
+    ));
+    const providerExtraNames = resolveMmrModeExtraTools(modeKey, cwd);
+    const baseToolSet = new Set(baseToolNames);
+    const seenExtra = new Set<string>();
+    const extraToolNames: string[] = [];
+    for (const name of [...settingsExtraNames, ...providerExtraNames]) {
+      if (baseToolSet.has(name) || seenExtra.has(name)) continue;
+      seenExtra.add(name);
+      extraToolNames.push(name);
+    }
+    return extraToolNames.length > 0
+      ? mergeToolResolutions(baseResolution, relabelExtraOwners(resolveMmrToolNames(extraToolNames, availableTools)))
+      : baseResolution;
+  }
+
+  function updateBaselineNativeControls(options: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">, ctx: ExtensionContext): void {
+    const nextModel = options.nativeModel ?? ctx.model;
+    const nextThinkingLevel = options.nativeThinkingLevel ?? safeGetThinkingLevel();
+    if (baseline) {
+      baseline = { ...baseline, model: nextModel, thinkingLevel: nextThinkingLevel };
+      return;
+    }
+    captureBaseline(ctx, { force: true, model: nextModel, thinkingLevel: nextThinkingLevel });
+  }
+
   function notifyFreeMode(ctx: ExtensionContext, state: MmrModeState, options: ApplyModeOptions): void {
     if (!options.notify) return;
 
@@ -253,6 +289,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     const mode = getMmrMode("open");
     captureBaseline(ctx);
     const previousState = getMmrModeState();
+    const isTransitioningFromLockedMode = previousState !== undefined
+      && previousState.mode !== "open"
+      && previousState.mode !== "free";
+    const shouldRestoreBaseline = Boolean(baseline && isTransitioningFromLockedMode);
     const availableTools = pi.getAllTools().map((tool) => tool.name);
     const baseResolution = resolveMmrTools("open", availableTools);
     if (mode.tools.length > 0 && baseResolution.activeTools.length === 0) {
@@ -262,27 +302,15 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }
 
     const smart = getMmrMode("smart");
-    const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
-      "smart",
-      configuredLockedModeExtraTools,
-      smart.tools,
-    ));
-    const providerExtraNames = resolveMmrModeExtraTools("smart", ctx.cwd);
-    const baseToolSet = new Set(mode.tools);
-    const seenExtra = new Set<string>();
-    const extraToolNames: string[] = [];
-    for (const name of [...settingsExtraNames, ...providerExtraNames]) {
-      if (baseToolSet.has(name) || seenExtra.has(name)) continue;
-      seenExtra.add(name);
-      extraToolNames.push(name);
-    }
-    const toolResolution = extraToolNames.length > 0
-      ? mergeToolResolutions(baseResolution, relabelExtraOwners(resolveMmrToolNames(extraToolNames, availableTools)))
-      : baseResolution;
+    const toolResolution = resolveModeToolsWithExtras("smart", smart.tools, baseResolution, availableTools, ctx.cwd);
 
     applyingMmrMode = true;
     try {
       pi.setActiveTools(toolResolution.activeTools);
+      if (shouldRestoreBaseline) {
+        if (baseline?.model) await pi.setModel(baseline.model);
+        if (baseline?.thinkingLevel) pi.setThinkingLevel(baseline.thinkingLevel);
+      }
     } finally {
       applyingMmrMode = false;
     }
@@ -414,30 +442,20 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       updateMmrStatus(ctx, previousState);
       return previousState;
     }
-    const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
-      mode.key as MmrLockedModeKey,
-      configuredLockedModeExtraTools,
-      mode.tools,
-    ));
     // Provider-contributed extras (e.g. mmr-subagents enabled custom `sa__*`
-    // subagents scoped to this mode + project). Merged through the same
+    // subagents scoped to this mode + project) are merged through the same
     // additive, fail-closed path as settings extras: they never satisfy the
     // zero-active-tools activation check and a missing name is a no-op. The
     // reserved `sa__*` namespace is filtered out of the user-controlled
-    // settings extras above so a custom subagent can only ever enter a mode
-    // through this scope-aware provider.
-    const providerExtraNames = resolveMmrModeExtraTools(mode.key as MmrLockedModeKey, ctx.cwd);
-    const baseToolSet = new Set(mode.tools);
-    const seenExtra = new Set<string>();
-    const extraToolNames: string[] = [];
-    for (const name of [...settingsExtraNames, ...providerExtraNames]) {
-      if (baseToolSet.has(name) || seenExtra.has(name)) continue;
-      seenExtra.add(name);
-      extraToolNames.push(name);
-    }
-    const toolResolution = extraToolNames.length > 0
-      ? mergeToolResolutions(baseResolution, relabelExtraOwners(resolveMmrToolNames(extraToolNames, availableTools)))
-      : baseResolution;
+    // settings extras so a custom subagent can only ever enter a mode through
+    // this scope-aware provider.
+    const toolResolution = resolveModeToolsWithExtras(
+      mode.key as MmrLockedModeKey,
+      mode.tools,
+      baseResolution,
+      availableTools,
+      ctx.cwd,
+    );
 
     applyingMmrMode = true;
     try {
@@ -571,12 +589,17 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     options: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel"> = {},
   ): Promise<void> {
     const state = getMmrModeState();
-    if (!state || state.mode === "free" || state.mode === "open") {
+    if (!state || state.mode === "free") {
       captureBaseline(ctx, {
         force: true,
         model: options.nativeModel ?? ctx.model,
         thinkingLevel: options.nativeThinkingLevel ?? safeGetThinkingLevel(),
       });
+      updateMmrStatus(ctx, state);
+      return;
+    }
+    if (state.mode === "open") {
+      updateBaselineNativeControls(options, ctx);
       updateMmrStatus(ctx, state);
       return;
     }
