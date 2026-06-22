@@ -340,6 +340,8 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 - `mmr-core`: Smart mode now reserves 64k Anthropic output tokens and reports the matching 300k/236k/64k context profile.
 
+- `mmr-core`: the `code-review` subagent now routes to GPT-5.2, then antigravity Gemini 3.1 Pro, then Claude Opus 4.6, all at high reasoning, replacing the previous Gemini-first/medium chain.
+
 ### Added
 
 - `mmr-core`: added a declarative extension capability manifest
