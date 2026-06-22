@@ -314,6 +314,7 @@ export const MMR_MODE_PROMPT_RECIPES = {
   smart: recipe("smart"),
   smartGPT: recipe("smartGPT"),
   rush: recipe("rush", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
+  test: recipe("test", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
   large: recipe("large"),
   deep: recipe("deep", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
@@ -331,6 +332,7 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
   smart: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smart),
   smartGPT: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smartGPT),
   rush: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.rush),
+  test: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.test),
   large: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.large),
   deep: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.deep),
 } satisfies Record<PromptedMmrModeKey, MmrModeBlockTemplate>;

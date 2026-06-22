@@ -392,6 +392,12 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
     postureSections: RUSH_POSTURE,
     closingLine: "Speed and low token use are the priority: do the smallest correct thing, verify narrowly, report honestly, and stop.",
   },
+  test: {
+    tag: "test",
+    intro: "You and the user share one workspace. Deliver the smallest correct outcome with the fewest useful tool loops, and verify what you change.",
+    postureSections: RUSH_POSTURE,
+    closingLine: "Speed and low token use are the priority: do the smallest correct thing, verify narrowly, report honestly, and stop.",
+  },
   large: {
     tag: "large",
     ...SMART_FAMILY_TEMPLATE_BODY,

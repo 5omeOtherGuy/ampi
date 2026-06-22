@@ -37,7 +37,7 @@ pre-publication safety check in the top-level roadmap.
 
 Implemented surfaces:
 
-- `--mmr-mode smart|smartGPT|rush|large|deep|free`
+- `--mmr-mode smart|smartGPT|rush|test|large|deep|free`
 - `/mode`, `/mode <mode>`
 - `/mmr-status` (with mode/source, model found/applied, active/missing/deferred/gated tools, settings files read, diagnostics by severity, optional `Debug` section)
 - `/mmr-status` policy warnings for fallback, missing-tool, zero-tool, and mode availability diagnostics

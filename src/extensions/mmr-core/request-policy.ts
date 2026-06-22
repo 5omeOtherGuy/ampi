@@ -144,6 +144,14 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
     // No context override; GPT/Codex routes run at Pi's registered window. See
     // smartGPT above.
   },
+  test: {
+    openaiResponses: {
+      maxOutputTokens: 128000,
+      reasoning: { effort: "none" },
+    },
+    // Mirrors rush so Anthropic-shaped Opus requests pass through without
+    // pi-mmr's smart-mode adaptive-thinking or max_tokens overrides.
+  },
   deep: {
     anthropic: {
       thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },

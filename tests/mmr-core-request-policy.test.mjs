@@ -246,7 +246,7 @@ describe("mmr-core request policy", () => {
 
     // GPT/Codex-primary modes set no context profile, so they run at Pi's own
     // registered window. Only the request policy (max output) is carried.
-    for (const mode of ["smartGPT", "rush", "deep"]) {
+    for (const mode of ["smartGPT", "rush", "test", "deep"]) {
       assert.equal(MMR_REQUEST_POLICIES[mode].contextWindow, undefined, `${mode} carries no contextWindow`);
       assert.equal(MMR_REQUEST_POLICIES[mode].effectiveMaxInputTokens, undefined, `${mode} carries no effectiveMaxInputTokens`);
       assert.equal(MMR_REQUEST_POLICIES[mode].openaiResponses.maxOutputTokens, 128000, `${mode} still carries its output policy`);
@@ -280,7 +280,7 @@ describe("mmr-core thinking-level toggle", () => {
       assert.equal(isToggleableMmrMode(mode), true, `${mode} should be toggleable`);
       assert.equal(getDefaultToggleThinkingLevel(mode), "medium");
     }
-    for (const mode of ["rush", "large", "free"]) {
+    for (const mode of ["rush", "test", "large", "free"]) {
       assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
     }
 

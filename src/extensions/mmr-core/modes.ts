@@ -3,7 +3,7 @@ import { MMR_REQUEST_POLICIES, formatMmrPolicyContext, formatMmrPolicyThinking }
 
 export const DEFAULT_MMR_MODE: MmrModeKey = "smart";
 
-export const MMR_MODE_KEYS = ["smart", "smartGPT", "rush", "large", "deep", "free"] as const satisfies readonly MmrModeKey[];
+export const MMR_MODE_KEYS = ["smart", "smartGPT", "rush", "test", "large", "deep", "free"] as const satisfies readonly MmrModeKey[];
 
 /**
  * MMR mode table.
@@ -107,6 +107,43 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
       { model: "claude-haiku-4-5", thinkingLevel: "off" },
     ],
     thinkingLevel: "off",
+    tools: [
+      "read",
+      "grep",
+      "find",
+      "finder",
+      "bash",
+      "write",
+      "edit",
+      "web_search",
+      "read_web_page",
+      "read_mcp_resource",
+      "chart",
+      "read_session",
+      "find_session",
+      "skill",
+      "oracle",
+      "handoff",
+      "librarian",
+      "Task",
+      "start_task",
+      "task_poll",
+      "task_wait",
+      "task_cancel",
+      "task_list",
+    ],
+    promptRoute: "rush",
+    featureGates: ["mmr-subagents", "mmr-async-tasks"],
+  },
+
+  test: {
+    key: "test",
+    displayName: "Test",
+    description: "Rush-style diagnostic mode pinned to Opus 4.8 with medium thinking.",
+    modelPreferences: [
+      { model: "claude-opus-4-8", thinkingLevel: "medium" },
+    ],
+    thinkingLevel: "medium",
     tools: [
       "read",
       "grep",

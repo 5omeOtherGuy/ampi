@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 // pin the structural invariants of MMR_MODE_PROMPT_TEMPLATES so accidental
 // deletion or key drift fails loudly without requiring a fixture refresh.
 
-const PROMPTED_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
+const PROMPTED_MODES = ["smart", "smartGPT", "rush", "test", "large", "deep"];
 
 describe("mmr-core prompt templates - structural invariants", () => {
   it("exports exactly one template per prompted (non-free) locked mode", async () => {

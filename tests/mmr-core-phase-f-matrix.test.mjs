@@ -36,7 +36,7 @@ const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 // (MATRIX_MARKER_MODES) so that the per-mode tag isolation invariant still
 // covers them.
 const MATRIX_MODES = ["smart", "rush", "large", "deep"];
-const MATRIX_MARKER_MODES = ["smart", "smartGPT", "rush", "large", "deep"];
+const MATRIX_MARKER_MODES = ["smart", "smartGPT", "rush", "test", "large", "deep"];
 
 // Distinguishing per-mode markers. The smart family (smart, smartGPT, large)
 // shares one prompt body, so each member is identified by its
@@ -46,6 +46,7 @@ const MODE_MARKERS = {
   smart: '<mmr_mode name="smart">',
   smartGPT: '<mmr_mode name="smartGPT">',
   rush: "You run with no extended reasoning",
+  test: '<mmr_mode name="test">',
   large: '<mmr_mode name="large">',
   deep: "Deep mode is for difficult reasoning,",
 };
@@ -54,11 +55,12 @@ const MODE_MARKERS = {
 // distinctive markers). The smart family shares its prompt body, so its
 // members exclude each other's mode tags rather than body text.
 const MODE_FOREIGN_MARKERS = {
-  smart: ['<mmr_mode name="smartGPT">', '<mmr_mode name="large">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  smartGPT: ['<mmr_mode name="smart">', '<mmr_mode name="large">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  rush: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="large">', "Deep mode is for difficult reasoning,"],
-  large: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  deep: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="large">', "You run with no extended reasoning"],
+  smart: ['<mmr_mode name="smartGPT">', '<mmr_mode name="test">', '<mmr_mode name="large">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  smartGPT: ['<mmr_mode name="smart">', '<mmr_mode name="test">', '<mmr_mode name="large">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  rush: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="test">', '<mmr_mode name="large">', "Deep mode is for difficult reasoning,"],
+  test: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="rush">', '<mmr_mode name="large">', "Deep mode is for difficult reasoning,"],
+  large: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="test">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  deep: ['<mmr_mode name="smart">', '<mmr_mode name="smartGPT">', '<mmr_mode name="test">', '<mmr_mode name="large">', "You run with no extended reasoning"],
 };
 
 // Expected coarse block order. Matches the existing Phase B baseline.
@@ -227,7 +229,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       const carefulActionsIdx = sp.indexOf("## Executing actions with care");
       // Only rush and deep render a mode posture; the smart family carries its
       // framing in the intro and body fragments.
-      const postureMarker = mode === "rush" ? "## Rush mode" : mode === "deep" ? "## Deep mode" : undefined;
+      const postureMarker = mode === "rush" || mode === "test" ? "## Rush mode" : mode === "deep" ? "## Deep mode" : undefined;
       const collaborationIdx = sp.indexOf("## Working with the user");
       const responseStyleIdx = sp.indexOf("## Response style");
       const toolHeadingIdx = sp.indexOf(MMR_TOOL_USE_HEADING);
@@ -236,7 +238,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       const guidelinesIdx = sp.indexOf("Guidelines:");
       const docsIdx = sp.indexOf("Pi documentation (");
       const sharedToolIdx = sp.indexOf("## Tool execution policy");
-      const styleIdx = mode === "rush" ? sp.indexOf("## File links") : sp.indexOf("## Diagrams");
+      const styleIdx = mode === "rush" || mode === "test" ? sp.indexOf("## File links") : sp.indexOf("## Diagrams");
       assert.ok(toolHeadingIdx !== -1 && leadInIdx !== -1, `${mode}: missing tool-use heading or lead-in`);
       assert.ok(autonomyIdx < carefulActionsIdx, `${mode}: task/risk posture must stay in order`);
       if (postureMarker !== undefined) {
@@ -374,6 +376,7 @@ describe("Phase F: free-mode passthrough invariant", () => {
         '<mmr_mode name="smart">',
         '<mmr_mode name="smartGPT">',
         '<mmr_mode name="rush">',
+        '<mmr_mode name="test">',
         '<mmr_mode name="large">',
         '<mmr_mode name="deep">',
         "You run with no extended reasoning",
