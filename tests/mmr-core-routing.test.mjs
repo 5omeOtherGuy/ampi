@@ -40,6 +40,13 @@ describe("mmr-core mode routing", () => {
       rejectedSources: [],
     });
 
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "test" }), {
+      mode: "test",
+      source: "settings",
+      warnings: [],
+      rejectedSources: [],
+    });
+
     assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fast" }), {
       mode: "smart",
       source: "default",

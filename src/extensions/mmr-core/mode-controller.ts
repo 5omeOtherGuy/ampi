@@ -112,7 +112,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode rush, /mode large, or /mode deep to re-enter a locked mode.",
+    "Use /mode smart, /mode rush, /mode test, /mode large, or /mode deep to re-enter a locked mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};

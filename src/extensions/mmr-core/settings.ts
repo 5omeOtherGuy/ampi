@@ -40,7 +40,7 @@ function readLockedModeExtraTools(
   for (const [key, names] of Object.entries(value)) {
     if (!isLockedModeExtraToolsKey(key)) {
       context.warnings.push(
-        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (smart, smartGPT, rush, large, deep). "free" is not configurable.`,
+        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (smart, smartGPT, rush, test, large, deep). "free" is not configurable.`,
       );
       continue;
     }

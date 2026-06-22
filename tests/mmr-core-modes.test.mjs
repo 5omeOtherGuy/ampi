@@ -41,6 +41,21 @@ describe("mmr-core mode table", () => {
     assert.equal(getMmrMode("deep").thinkingLevel, "medium");
   });
 
+  it("defines test as rush behavior with Opus 4.8 medium", async () => {
+    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+
+    const rush = getMmrMode("rush");
+    const test = getMmrMode("test");
+
+    assert.deepEqual(test.modelPreferences, [
+      { model: "claude-opus-4-8", thinkingLevel: "medium" },
+    ]);
+    assert.equal(test.thinkingLevel, "medium");
+    assert.deepEqual(test.tools, rush.tools);
+    assert.equal(test.promptRoute, rush.promptRoute);
+    assert.deepEqual(test.featureGates, rush.featureGates);
+  });
+
   it("renders mode list using per-mode request thinking and context metadata", async () => {
     const { formatMmrModeList } = await importSource("extensions/mmr-core/modes.ts");
 
@@ -83,7 +98,8 @@ describe("mmr-core mode table", () => {
 
     const free = getMmrMode("free");
 
-    assert.deepEqual(MMR_MODE_KEYS, ["smart", "smartGPT", "rush", "large", "deep", "free"]);
+    assert.deepEqual(MMR_MODE_KEYS, ["smart", "smartGPT", "rush", "test", "large", "deep", "free"]);
+    assert.equal(isMmrModeKey("test"), true);
     assert.equal(isMmrModeKey("free"), true);
     assert.equal(free.displayName, "Free");
     assert.deepEqual(free.modelPreferences, []);
