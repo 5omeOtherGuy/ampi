@@ -319,12 +319,12 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     displayName: "Code Review",
     // Ordered reviewer chain across distinct model families so the
     // reviewer often differs from the parent mode's model. Fallbacks keep
-    // the reviewer strong when the primary model or the antigravity
-    // provider is not registered or authenticated.
+    // the reviewer available when the antigravity provider is not
+    // registered or authenticated.
     modelPreferences: [
-      { model: "gpt-5.2", thinkingLevel: "high" },
-      { model: "gemini-3.1-pro", providers: ["antigravity"], thinkingLevel: "high" },
-      { model: "claude-opus-4-6", thinkingLevel: "high" },
+      { model: "gemini-3.5-flash", providers: ["antigravity"], thinkingLevel: "high" },
+      { model: "claude-sonnet-4-6", thinkingLevel: "high" },
+      { model: "gpt-5.4-mini", thinkingLevel: "high" },
     ],
     thinkingLevel: "high",
     // Read-only review surface: local reads/searches plus bash for the

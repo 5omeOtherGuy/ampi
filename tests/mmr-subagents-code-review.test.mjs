@@ -144,7 +144,7 @@ describe("code_review tool definition", () => {
 });
 
 describe("code-review subagent profile", () => {
-  it("is standalone, read-only by contract, backgroundable, and prefers GPT-5.2", async () => {
+  it("is standalone, read-only by contract, backgroundable, and prefers antigravity Gemini 3.5 Flash", async () => {
     const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
     const profile = getMmrSubagentProfile("code-review");
     assert.ok(profile, "mmr-core must expose a code-review subagent profile");
@@ -155,9 +155,9 @@ describe("code-review subagent profile", () => {
     assert.equal(profile.allowToolbox, false);
     assert.notEqual(profile.backgroundable, false, "code-review must be backgroundable");
     assert.deepEqual([...profile.modelPreferences], [
-      { model: "gpt-5.2", thinkingLevel: "high" },
-      { model: "gemini-3.1-pro", providers: ["antigravity"], thinkingLevel: "high" },
-      { model: "claude-opus-4-6", thinkingLevel: "high" },
+      { model: "gemini-3.5-flash", providers: ["antigravity"], thinkingLevel: "high" },
+      { model: "claude-sonnet-4-6", thinkingLevel: "high" },
+      { model: "gpt-5.4-mini", thinkingLevel: "high" },
     ]);
   });
 
@@ -275,7 +275,7 @@ describe("code_review execute() seam", () => {
       undefined,
       {
         cwd: "/abs/project",
-        modelRegistry: makeRegistry([{ provider: "antigravity", id: "gemini-3.1-pro" }]),
+        modelRegistry: makeRegistry([{ provider: "antigravity", id: "gemini-3.5-flash" }]),
       },
     );
     assert.equal(calls.length, 1);
@@ -286,7 +286,7 @@ describe("code_review execute() seam", () => {
     // does not mirror --tools (same contract as finder).
     assert.equal(options.tools, undefined);
     assert.equal(options.systemPrompt, "SP for /abs/project");
-    assert.equal(options.model, "antigravity/gemini-3.1-pro");
+    assert.equal(options.model, "antigravity/gemini-3.5-flash");
     assert.equal(options.profileName, "code-review");
     assert.equal(result.details.cwd, "/abs/project");
     assert.deepEqual([...result.details.workerTools], [...CODE_REVIEW_WORKER_TOOLS]);
