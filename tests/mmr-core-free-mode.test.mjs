@@ -114,6 +114,30 @@ describe("mmr-core free mode", () => {
     assert.equal(promptResult, undefined);
   });
 
+  it("native model/thinking changes keep open active because controls are Pi-native", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    const openTools = ["read", "bash", "write", "edit", "Task", "task_list"];
+    const { ctx, notifications } = createContext([SMART_MODEL, FREE_MODEL], { model: FREE_MODEL });
+    const { pi, calls, commands, handlers } = createPi({ activeTools: ["read", "bash"], allTools: openTools, thinkingLevel: "medium" });
+    extension(pi);
+
+    await commands.get("mode").handler("open", ctx);
+    calls.setActiveTools.length = 0;
+    calls.appendEntry.length = 0;
+    notifications.length = 0;
+
+    await handlers.get("model_select")({ type: "model_select", model: FREE_MODEL, previousModel: SMART_MODEL, source: "cycle" }, ctx);
+    await handlers.get("thinking_level_select")({ type: "thinking_level_select", level: "high", previousLevel: "medium" }, ctx);
+
+    assert.equal(runtime.getMmrModeState()?.mode, "open");
+    assert.deepEqual(calls.setActiveTools, []);
+    assert.deepEqual(calls.setModel, []);
+    assert.deepEqual(calls.setThinkingLevel, []);
+    assert.deepEqual(calls.appendEntry, []);
+    assert.equal(notifications.some((notification) => /switched to Free mode/.test(notification.message)), false);
+  });
+
   it("/mode free restores baseline tools, persists free, and leaves model/thinking untouched", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
