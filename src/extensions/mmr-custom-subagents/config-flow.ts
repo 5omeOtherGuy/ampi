@@ -134,7 +134,7 @@ function parseModeList(raw: string): MmrLockedModeKey[] | undefined {
   const tokens = raw.split(",").map((token) => token.trim()).filter(Boolean);
   const modes: MmrLockedModeKey[] = [];
   for (const token of tokens) {
-    if (!isMmrModeKey(token) || token === "free") return undefined;
+    if (!isMmrModeKey(token) || token === "open" || token === "free") return undefined;
     if (!modes.includes(token as MmrLockedModeKey)) modes.push(token as MmrLockedModeKey);
   }
   return modes.length > 0 ? modes : undefined;
