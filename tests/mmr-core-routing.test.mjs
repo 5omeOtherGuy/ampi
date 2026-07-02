@@ -12,7 +12,7 @@ describe("mmr-core mode routing", () => {
       resolveMmrModeSelection({
         flagValue: "rush",
         persistedMode: "deep",
-        settingsMode: "large",
+        settingsMode: "smartFable",
       }),
       { mode: "rush", source: "flag", warnings: [], rejectedSources: [] },
     );
@@ -24,7 +24,7 @@ describe("mmr-core mode routing", () => {
     assert.deepEqual(
       resolveMmrModeSelection({
         persistedMode: "deep",
-        settingsMode: "large",
+        settingsMode: "smartFable",
       }),
       { mode: "deep", source: "session", warnings: [], rejectedSources: [] },
     );
@@ -33,22 +33,15 @@ describe("mmr-core mode routing", () => {
   it("chooses settings mode before default and reports invalid settings", async () => {
     const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
 
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "large" }), {
-      mode: "large",
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "smartFable" }), {
+      mode: "smartFable",
       source: "settings",
       warnings: [],
       rejectedSources: [],
     });
 
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "test" }), {
-      mode: "test",
-      source: "settings",
-      warnings: [],
-      rejectedSources: [],
-    });
-
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "smartSonnet" }), {
-      mode: "smartSonnet",
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "deep" }), {
+      mode: "deep",
       source: "settings",
       warnings: [],
       rejectedSources: [],
@@ -80,15 +73,8 @@ describe("mmr-core mode routing", () => {
     ]);
   });
 
-  it("accepts open and free from flags and persisted session state", async () => {
+  it("accepts free from flags and persisted session state", async () => {
     const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
-
-    assert.deepEqual(resolveMmrModeSelection({ flagValue: "open", persistedMode: "deep" }), {
-      mode: "open",
-      source: "flag",
-      warnings: [],
-      rejectedSources: [],
-    });
 
     assert.deepEqual(resolveMmrModeSelection({ flagValue: "free", persistedMode: "deep" }), {
       mode: "free",

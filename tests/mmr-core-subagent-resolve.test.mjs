@@ -266,10 +266,9 @@ describe("resolveMmrSubagentInvocation", () => {
     const registry = makeTaskRegistry();
 
     const cases = [
-      { parentMode: "smart",    expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
-      { parentMode: "smartGPT", expectedBase: "smartGPT", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
-      { parentMode: "rush",     expectedBase: "rush",     provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
-      { parentMode: "large",    expectedBase: "large",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "smart",      expectedBase: "smart",      provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "smartFable", expectedBase: "smartFable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "rush",       expectedBase: "rush",       provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
       // Spec §6.1: deep aliases to smart for prompt base, route list,
       // selected route, and thinking level.
       { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
@@ -434,16 +433,16 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(deep.selected.model, "claude-haiku-4-5");
     assert.equal(deep.selected.thinkingLevel, "minimal");
 
-    const large = resolveMmrSubagentInvocation({
+    const fable = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "large",
+      parentMode: "smartFable",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
-    assert.equal(large.ok, true);
-    assert.equal(large.promptBaseMode, "large");
-    assert.equal(large.selected.model, "claude-opus-4-8");
-    assert.equal(large.selected.thinkingLevel, "low");
+    assert.equal(fable.ok, true);
+    assert.equal(fable.promptBaseMode, "smartFable");
+    assert.equal(fable.selected.model, "claude-opus-4-8");
+    assert.equal(fable.selected.thinkingLevel, "low");
   });
 
   it("falls rush Task workers back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {

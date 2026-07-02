@@ -9,7 +9,7 @@
  */
 import type { MmrModeKey } from "./types.js";
 
-type PromptedMmrModeKey = Exclude<MmrModeKey, "open" | "free">;
+type PromptedMmrModeKey = Exclude<MmrModeKey, "free">;
 
 function block(lines: readonly string[]): string {
   return lines.join("\n");
@@ -171,7 +171,7 @@ export const SHARED_CODING_GUIDANCE = SHARED_CODING_GUIDANCE_FRAGMENT_IDS.map(
 // --- Mode-specific coding-guidance overrides ---
 //
 // The shared fragments above are the base text (rush renders them unchanged).
-// Smart-family modes (smart, smartGPT, smartSonnet, smartFable, large) and deep override the four body
+// Smart-family modes (smart, smartFable) and deep override the four body
 // fragments where the authoritative mode framings diverge: smart-family uses
 // the default-template framing (action-assumptive, absolute investigate rule,
 // hard verification floor); deep uses the deep-template framing (outcome-first
@@ -307,10 +307,7 @@ export const MODE_CODING_GUIDANCE_OVERRIDES: Partial<
   Record<PromptedMmrModeKey, Partial<Record<SharedCodingGuidanceFragmentId, string>>>
 > = {
   smart: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  smartGPT: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  smartSonnet: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
   smartFable: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  large: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
   deep: DEEP_CODING_GUIDANCE_OVERRIDES,
 };
 
@@ -366,8 +363,8 @@ export interface MmrModeBlockTemplate {
 }
 
 /**
- * Smart-family template body (smart, smartGPT, smartSonnet, smartFable, large). The five
- * modes render the smart system prompt verbatim — same intro, no posture section (the
+ * Smart-family template body (smart, smartFable). Both modes render the smart
+ * system prompt verbatim — same intro, no posture section (the
  * authoritative default template carries its framing entirely in the intro and
  * body fragments), same closing line — and differ only in the mode tag.
  */
@@ -384,14 +381,6 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
     tag: "smart",
     ...SMART_FAMILY_TEMPLATE_BODY,
   },
-  smartGPT: {
-    tag: "smartGPT",
-    ...SMART_FAMILY_TEMPLATE_BODY,
-  },
-  smartSonnet: {
-    tag: "smartSonnet",
-    ...SMART_FAMILY_TEMPLATE_BODY,
-  },
   smartFable: {
     tag: "smartFable",
     ...SMART_FAMILY_TEMPLATE_BODY,
@@ -401,16 +390,6 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
     intro: "You and the user share one workspace. Deliver the smallest correct outcome with the fewest useful tool loops, and verify what you change.",
     postureSections: RUSH_POSTURE,
     closingLine: "Speed and low token use are the priority: do the smallest correct thing, verify narrowly, report honestly, and stop.",
-  },
-  test: {
-    tag: "test",
-    intro: "You and the user share one workspace. Deliver the smallest correct outcome with the fewest useful tool loops, and verify what you change.",
-    postureSections: RUSH_POSTURE,
-    closingLine: "Speed and low token use are the priority: do the smallest correct thing, verify narrowly, report honestly, and stop.",
-  },
-  large: {
-    tag: "large",
-    ...SMART_FAMILY_TEMPLATE_BODY,
   },
   deep: {
     tag: "deep",

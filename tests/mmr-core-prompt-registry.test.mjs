@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const PROMPTED_MODES = ["smart", "smartGPT", "smartSonnet", "smartFable", "rush", "test", "large", "deep"];
+const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
 const EXPECTED_SEQUENCE = [
   "identity",
   "autonomy",
@@ -101,7 +101,7 @@ describe("mmr-core prompt registry", () => {
       const recipe = MMR_MODE_PROMPT_RECIPES[mode];
       assert.equal(recipe.mode, mode);
       assert.equal(recipe.basePromptId, "pi-native-default-v1");
-      const expectedFragments = mode === "rush" || mode === "test"
+      const expectedFragments = mode === "rush"
         ? EXPECTED_RUSH_SEQUENCE
         : mode === "deep"
           ? EXPECTED_DEEP_SEQUENCE
@@ -111,7 +111,7 @@ describe("mmr-core prompt registry", () => {
       assert.equal(typeof recipe.intro, "string");
       assert.ok(recipe.intro.length > 20, `${mode}: intro must be substantive`);
       assert.equal(typeof recipe.postureSections, "string");
-      if (mode === "rush" || mode === "test" || mode === "deep") {
+      if (mode === "rush" || mode === "deep") {
         assert.ok(recipe.postureSections.length > 100, `${mode}: postureSections must be substantive`);
       } else {
         assert.equal(recipe.postureSections, "", `${mode}: smart-family modes render no posture section`);
@@ -154,7 +154,7 @@ describe("mmr-core prompt registry", () => {
       false,
       "engineering-judgment is deep-only",
     );
-    for (const mode of ["smart", "smartGPT", "smartSonnet", "smartFable", "large", "deep"]) {
+    for (const mode of ["smart", "smartFable", "deep"]) {
       assert.equal(
         MMR_MODE_PROMPT_RECIPES[mode].fragments.includes("diagrams"),
         true,

@@ -112,7 +112,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode smartGPT, /mode smartSonnet, /mode smartFable, /mode rush, /mode test, /mode large, /mode deep, or /mode open to re-enter a managed mode.",
+    "Use /mode smart, /mode smartFable, /mode rush, or /mode deep to re-enter a managed mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
@@ -126,7 +126,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let modeCycleQueue: Promise<void> = Promise.resolve();
   let thinkingToggleQueue: Promise<void> = Promise.resolve();
   // Per-mode, session-scoped thinking-level toggle overrides for toggleable
-  // modes (smart/smartGPT/smartSonnet/smartFable/deep). Lives only in process memory: persisted mode
+  // modes (smart/smartFable/deep). Lives only in process memory: persisted mode
   // state records the applied thinking level for diagnostics, but the toggle
   // default is re-derived on each apply so stale persisted levels never pin a
   // mode away from its default after a reload.
@@ -163,7 +163,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   }
 
   function createNativeControlModeState(
-    modeKey: "open" | "free",
+    modeKey: "free",
     source: MmrModeSelectionSource,
     tools: Parameters<typeof createMmrModeState>[0]["tools"],
     rejectedSources?: readonly MmrRejectedModeSource[],
@@ -227,16 +227,6 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       : baseResolution;
   }
 
-  function updateBaselineNativeControls(options: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">, ctx: ExtensionContext): void {
-    const nextModel = options.nativeModel ?? ctx.model;
-    const nextThinkingLevel = options.nativeThinkingLevel ?? safeGetThinkingLevel();
-    if (baseline) {
-      baseline = { ...baseline, model: nextModel, thinkingLevel: nextThinkingLevel };
-      return;
-    }
-    captureBaseline(ctx, { force: true, model: nextModel, thinkingLevel: nextThinkingLevel });
-  }
-
   function notifyFreeMode(ctx: ExtensionContext, state: MmrModeState, options: ApplyModeOptions): void {
     if (!options.notify) return;
 
@@ -281,67 +271,6 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       fallbackApplied: state.modelFallbackApplied,
       fallbackReason: state.modelFallbackReason,
     });
-  }
-
-  async function applyOpenMode(ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState | undefined> {
-    activePolicy = undefined;
-    clearMmrManagedModelOverride();
-    const mode = getMmrMode("open");
-    captureBaseline(ctx);
-    const previousState = getMmrModeState();
-    const isTransitioningFromLockedMode = previousState !== undefined
-      && previousState.mode !== "open"
-      && previousState.mode !== "free";
-    const shouldRestoreBaseline = Boolean(baseline && isTransitioningFromLockedMode);
-    const availableTools = pi.getAllTools().map((tool) => tool.name);
-    const baseResolution = resolveMmrTools("open", availableTools);
-    if (mode.tools.length > 0 && baseResolution.activeTools.length === 0) {
-      if (options.notify) ctx.ui.notify(formatZeroToolActivationFailure(mode, baseResolution, previousState), "error");
-      updateMmrStatus(ctx, previousState);
-      return previousState;
-    }
-
-    const smart = getMmrMode("smart");
-    const toolResolution = resolveModeToolsWithExtras("smart", smart.tools, baseResolution, availableTools, ctx.cwd);
-
-    applyingMmrMode = true;
-    try {
-      pi.setActiveTools(toolResolution.activeTools);
-      if (shouldRestoreBaseline) {
-        if (baseline?.model) await pi.setModel(baseline.model);
-        if (baseline?.thinkingLevel) pi.setThinkingLevel(baseline.thinkingLevel);
-      }
-    } finally {
-      applyingMmrMode = false;
-    }
-
-    const state = createNativeControlModeState("open", options.source, toolResolution, options.rejectedSources);
-    setMmrModeState(state);
-    publishStateChange();
-    recordModeTransition(previousState, state);
-
-    if (options.persist) {
-      pi.appendEntry(MMR_MODE_STATE_ENTRY, toPersistedModeState(state));
-    }
-
-    updateMmrStatus(ctx, state);
-
-    if (options.notify) {
-      const deferredMessages = toolResolution.decisions
-        .filter((decision) => decision.status === "deferred")
-        .map((decision) => decision.diagnostic);
-      const suffix = deferredMessages.length > 0 ? `\nWarnings:\n- ${deferredMessages.join("\n- ")}` : "";
-      ctx.ui.notify(
-        [
-          "MMR Open mode activated (open).",
-          "Native Pi model/thinking/prompt controls are active.",
-          "Smart tools are active in the parent session.",
-        ].join("\n") + suffix,
-        deferredMessages.length > 0 ? "warning" : "info",
-      );
-    }
-
-    return state;
   }
 
   async function applyFreeMode(ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState> {
@@ -408,13 +337,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (mode.key === "free") {
       return applyFreeMode(ctx, options);
     }
-    if (mode.key === "open") {
-      return applyOpenMode(ctx, options);
-    }
 
     captureBaseline(ctx);
 
-    // Toggleable modes (smart/smartGPT/smartSonnet/smartFable/deep) carry a runtime thinking-level
+    // Toggleable modes (smart/smartFable/deep) carry a runtime thinking-level
     // override flipped by the MMR-owned alt+r shortcut. Re-derive the effective level on every
     // apply (override or the mode default), force every candidate to it so the
     // active and fallback routes agree with the wire reasoning effort, and use
@@ -598,11 +524,6 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       updateMmrStatus(ctx, state);
       return;
     }
-    if (state.mode === "open") {
-      updateBaselineNativeControls(options, ctx);
-      updateMmrStatus(ctx, state);
-      return;
-    }
 
     await applyMode("free", ctx, {
       source: "native",
@@ -718,7 +639,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (!state || !isToggleableMmrMode(state.mode)) {
       if (state && ctx.hasUI !== false) {
         ctx.ui.notify(
-          `MMR thinking toggle is only available in smart, smartGPT, smartSonnet, smartFable, or deep (current: ${state?.mode ?? "none"}).`,
+          `MMR thinking toggle is only available in smart, smartFable, or deep (current: ${state?.mode ?? "none"}).`,
           "info",
         );
       }

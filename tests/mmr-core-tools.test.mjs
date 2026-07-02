@@ -289,21 +289,21 @@ describe("mmr-core tool registry", () => {
 });
 
 describe("mmr-core tool registry - per-mode matrices", () => {
-  it("resolves smart and large modes to read/bash/edit/write against Pi-native tools", async () => {
+  it("resolves smart and smartFable modes to read/bash/edit/write against Pi-native tools", async () => {
     const { resolveMmrTools } = await importSource("extensions/mmr-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    for (const mode of ["smart", "large"]) {
+    for (const mode of ["smart", "smartFable"]) {
       const resolved = resolveMmrTools(mode, available);
       assert.deepEqual(
         [...resolved.activeTools].sort(),
         ["bash", "edit", "read", "write"],
         `${mode}: per-mode active tools`,
       );
-      // smart/large delegate search/list to model-backed tools, so direct grep/find/ls are not requested.
-      assert.equal(resolved.activeTools.includes("grep"), false, `${mode}: grep is not requested in smart/large`);
-      assert.equal(resolved.activeTools.includes("find"), false, `${mode}: find is not requested in smart/large`);
-      assert.equal(resolved.activeTools.includes("ls"), false, `${mode}: ls is not requested in smart/large`);
+      // smart-family delegate search/list to model-backed tools, so direct grep/find/ls are not requested.
+      assert.equal(resolved.activeTools.includes("grep"), false, `${mode}: grep is not requested in smart-family`);
+      assert.equal(resolved.activeTools.includes("find"), false, `${mode}: find is not requested in smart-family`);
+      assert.equal(resolved.activeTools.includes("ls"), false, `${mode}: ls is not requested in smart-family`);
       assert.equal(resolved.deferredTools.includes("oracle"), true, `${mode}: oracle is deferred`);
       assert.equal(resolved.deferredTools.includes("finder"), true, `${mode}: finder is deferred`);
       assert.equal(resolved.deferredTools.includes("web_search"), true, `${mode}: web_search is deferred`);

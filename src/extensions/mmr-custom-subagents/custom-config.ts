@@ -158,9 +158,9 @@ function normalizeModeScope(
   }
   const modes: MmrLockedModeKey[] = [];
   for (const entry of value) {
-    if (typeof entry !== "string" || !isMmrModeKey(entry) || entry === "open" || entry === "free") {
+    if (typeof entry !== "string" || !isMmrModeKey(entry) || entry === "free") {
       ctx.warnings.push(
-        `Ignoring invalid mode "${String(entry)}" for mmrSubagents.custom.agents.${ctx.id} in ${ctx.filePath}: expected a locked mode key (smart, smartGPT, smartSonnet, smartFable, rush, test, large, deep).`,
+        `Ignoring invalid mode "${String(entry)}" for mmrSubagents.custom.agents.${ctx.id} in ${ctx.filePath}: expected a locked mode key (smart, smartFable, rush, deep).`,
       );
       continue;
     }

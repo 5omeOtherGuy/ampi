@@ -81,8 +81,8 @@ describe("mmr-core persisted state", () => {
     const { createMmrModeState, findLatestPersistedModeState, MMR_MODE_STATE_ENTRY, toPersistedModeState } = await importSource("extensions/mmr-core/state.ts");
     const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
 
-    for (const mode of ["open", "free"]) {
-      const activeTools = mode === "open" ? ["read", "bash", "Task"] : ["read", "bash"];
+    for (const mode of ["free"]) {
+      const activeTools = ["read", "bash"];
       const state = createMmrModeState({
         mode: getMmrMode(mode),
         source: "command",
@@ -94,7 +94,7 @@ describe("mmr-core persisted state", () => {
           fallbackApplied: false,
           candidates: [],
         },
-        tools: { requestedTools: mode === "open" ? activeTools : [], activeTools, missingTools: [], decisions: [] },
+        tools: { requestedTools: [], activeTools, missingTools: [], decisions: [] },
         appliedAt: "2026-05-08T00:00:00.000Z",
       });
 

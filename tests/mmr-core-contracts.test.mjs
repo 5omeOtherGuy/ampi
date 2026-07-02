@@ -580,22 +580,22 @@ describe("mmr-core event constants", () => {
     };
 
     await handlers.get("session_start")({}, ctx);
-    await commands.get("mode").handler("large", ctx);
-    const afterLarge = emissions.filter((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED).length;
-    assert.notEqual(afterLarge, 0, "expected at least one state-change emission after applying a mode");
+    await commands.get("mode").handler("deep", ctx);
+    const afterDeep = emissions.filter((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED).length;
+    assert.notEqual(afterDeep, 0, "expected at least one state-change emission after applying a mode");
 
-    const lastLarge = emissions.findLast((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED);
-    assert.equal(lastLarge.payload?.mode, "large");
+    const lastDeep = emissions.findLast((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED);
+    assert.equal(lastDeep.payload?.mode, "deep");
 
     // Raw bus payload is the deep-frozen runtime singleton (single-clone
     // contract): attempts to mutate must throw, and consecutive emissions
     // must be distinct objects so subscribers cannot bleed state across
     // applications via the shared reference.
-    assert.equal(Object.isFrozen(lastLarge.payload), true);
-    assert.throws(() => lastLarge.payload.activeTools.push("compromised"), /read only|object is not extensible|Cannot add property/i);
+    assert.equal(Object.isFrozen(lastDeep.payload), true);
+    assert.throws(() => lastDeep.payload.activeTools.push("compromised"), /read only|object is not extensible|Cannot add property/i);
     await commands.get("mode").handler("rush", ctx);
     const lastRush = emissions.findLast((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED);
     assert.equal(lastRush.payload?.mode, "rush");
-    assert.notEqual(lastRush.payload, lastLarge.payload, "each apply produces a fresh state object");
+    assert.notEqual(lastRush.payload, lastDeep.payload, "each apply produces a fresh state object");
   });
 });

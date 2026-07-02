@@ -56,7 +56,7 @@ import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } 
 import type { MmrModeDefinition, MmrModeKey } from "pi-mmr";
 ```
 
-- `MMR_MODE_KEYS`: ordered tuple `("smart", "smartGPT", "smartSonnet", "rush", "test", "large", "deep", "open", "free")`.
+- `MMR_MODE_KEYS`: ordered tuple `("smart", "smartFable", "rush", "deep", "free")`.
 - `MMR_MODES`: read-only mode table.
 - `getMmrMode(key)`: returns the `MmrModeDefinition` for a key.
 - `isMmrModeKey(value)`: type guard for incoming user/session strings.
@@ -84,12 +84,11 @@ override for that dimension (use the selected provider's registered
 behavior). These values are not persisted and are never written to provider
 payloads. mmr-core passes the selected registry model directly to
 `pi.setModel(...)`; Pi-native auto-compaction follows the selected provider
-route's registered model metadata. Only `smart` (268k max-input under its
-300k profile), `smartSonnet` (968k under its 1M profile), and `large` (968k
-under its 1M profile) carry an MMR context profile before provider-size
-clamping; the GPT/Codex-primary modes
-(`smartGPT`, `rush`, `test`, `deep`) carry no MMR context override and run
-at the selected provider's registered window. `open` and `free` carry no MMR
+route's registered model metadata. Only `smart` (236k max-input under its
+300k profile) carries an MMR context profile before provider-size
+clamping; the other locked modes
+(`smartFable`, `rush`, `deep`) carry no MMR context override and run
+at the selected provider's registered window. `free` carries no MMR
 context profile because Pi-native model/context controls stay in charge.
 
 `MmrModeState.baselineCaptured` / `baselineModel` are runtime-only
@@ -274,7 +273,7 @@ allowlist.
 
   - `"parent-spawn"` (default) — the parent (Task tool, or any future
     parent that spawns a worker through this resolver) is computing the
-    invocation. A missing, `"open"`, or `"free"` `parentMode` on a `from-parent`
+    invocation. A missing or `"free"` `parentMode` on a `from-parent`
     profile fails closed with `prompt-base.unresolved` because the
     parent owns prompt assembly and cannot build a worker system prompt
     for an unresolved mode.

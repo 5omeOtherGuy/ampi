@@ -17,7 +17,7 @@ export const MMR_ADDITIONAL_TOOLS_LINE =
 
 export const MMR_RESPONSE_STYLE_HEADING = "## Response style";
 
-type PromptedMmrModeKey = Exclude<MmrModeKey, "open" | "free">;
+type PromptedMmrModeKey = Exclude<MmrModeKey, "free">;
 
 export type MmrPromptBaseId = "pi-native-default-v1";
 
@@ -312,12 +312,8 @@ function recipe(
 
 export const MMR_MODE_PROMPT_RECIPES = {
   smart: recipe("smart"),
-  smartGPT: recipe("smartGPT"),
-  smartSonnet: recipe("smartSonnet"),
   smartFable: recipe("smartFable"),
   rush: recipe("rush", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
-  test: recipe("test", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
-  large: recipe("large"),
   deep: recipe("deep", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
 
@@ -332,12 +328,8 @@ function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {
 
 export const MMR_MODE_PROMPT_TEMPLATES = {
   smart: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smart),
-  smartGPT: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smartGPT),
-  smartSonnet: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smartSonnet),
   smartFable: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smartFable),
   rush: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.rush),
-  test: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.test),
-  large: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.large),
   deep: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.deep),
 } satisfies Record<PromptedMmrModeKey, MmrModeBlockTemplate>;
 

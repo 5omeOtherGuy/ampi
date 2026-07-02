@@ -41,18 +41,14 @@ function createState(overrides = {}) {
   };
 }
 
-const MODES = ["smart", "smartGPT", "smartSonnet", "smartFable", "rush", "test", "large", "deep"];
+const MODES = ["smart", "smartFable", "rush", "deep"];
 
 const PI_IDENTITY_LINE = "You are an expert coding assistant operating inside pi, a coding agent harness.";
 
 const MODE_MARKER_OPENINGS = {
   smart: '<mmr_mode name="smart">You are pair programming with the user to solve their coding task.',
-  smartGPT: '<mmr_mode name="smartGPT">You are pair programming with the user to solve their coding task.',
-  smartSonnet: '<mmr_mode name="smartSonnet">You are pair programming with the user to solve their coding task.',
   smartFable: '<mmr_mode name="smartFable">You are pair programming with the user to solve their coding task.',
   rush: '<mmr_mode name="rush">You and the user share one workspace.',
-  test: '<mmr_mode name="test">You and the user share one workspace.',
-  large: '<mmr_mode name="large">You are pair programming with the user to solve their coding task.',
   deep: '<mmr_mode name="deep">You are an autonomous coding agent in Deep mode.',
 };
 
@@ -209,7 +205,7 @@ describe("mmr-core prompt layer", () => {
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
-      if (mode === "rush" || mode === "test") {
+      if (mode === "rush") {
         // Rush-style modes trim the diagrams fragment for token economy.
         assert.equal(result.includes(diagramSentence), false, `${mode}: rush recipe drops the diagrams fragment`);
         assert.equal(result.includes("## Diagrams"), false, `${mode}: rush-style modes must not render the diagrams section`);

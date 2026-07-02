@@ -56,7 +56,7 @@ function createState(mode) {
   };
 }
 
-const MODES = ["smart", "rush", "large", "deep"];
+const MODES = ["smart", "smartFable", "rush", "deep"];
 
 // Coarse-grained block order. Each entry is a substring that uniquely
 // identifies the start of a block in the rendered prompt; the substrings
