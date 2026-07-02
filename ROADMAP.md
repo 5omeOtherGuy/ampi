@@ -81,7 +81,7 @@ Status: deferred. `mmr-core/request-policy.ts` keeps the current minimal mode-ow
 
 Potential review orchestration extension.
 
-Status: out of scope for now. `pi-mmr` does not include a core-owned `code_review` tool; users can use `oracle`, `Task`, custom subagents, or their own workflows.
+Status: out of scope for now. `pi-mmr` does not include a core-owned `reviewer` tool; users can use `oracle`, `Task`, custom subagents, or their own workflows.
 
 ## Release checklist
 
@@ -113,4 +113,4 @@ Public text includes docs, code comments, test names, fixtures, snapshots, packa
 - Describe behavior only in `pi-mmr` terms.
 - Do not include credentials, raw provider payloads, local session data, private analysis, exact local paths, or non-public provenance.
 - Keep model-visible prompt/tool metadata aligned with the implementation and the active tool surface.
-- Keep mode keys (`smart`, `smartFable`, `rush`, `deep`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`) stable unless a coordinated migration plan exists.
+- Keep mode keys (`smart`, `fable`, `rush`, `deep`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`) stable unless a coordinated migration plan exists.

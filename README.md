@@ -6,7 +6,7 @@
 
 > Switch your entire Pi coding harness — model, thinking, tools, and prompt — with one command. Fully reversible.
 
-`pi-mmr` turns Pi into a coding harness you control. Instead of one fixed model-and-prompt configuration, you pick a locked mode — `smart`, `smartFable`, `rush`, or `deep` — and `pi-mmr` swaps the **whole** profile in a single switch: that mode's provider-neutral model preferences, thinking policy, context profile, active-tool allowlist, worker profile, and prompt behavior. `free` releases every lock to return you to stock Pi at any time.
+`pi-mmr` turns Pi into a coding harness you control. Instead of one fixed model-and-prompt configuration, you pick a locked mode — `smart`, `fable`, `rush`, or `deep` — and `pi-mmr` swaps the **whole** profile in a single switch: that mode's provider-neutral model preferences, thinking policy, context profile, active-tool allowlist, worker profile, and prompt behavior. `free` releases every lock to return you to stock Pi at any time.
 
 It is a modular Pi extension package, not a fork or a separate IDE — it builds on Pi's native behavior instead of replacing it. Each mode's prompt is assembled from its own fragments and surgically swapped into Pi's auto-rendered prompt head, preserving Pi's own tool list, guidelines, documentation, and tail. Tool resolution is exact-name based, runtime state is session-scoped, and everything runs on your own provider subscriptions and API keys.
 
@@ -91,7 +91,7 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
 | I want to... | Use | What changes |
 | --- | --- | --- |
 | Do balanced coding | `smart` | Default locked route, standard tool set, toggleable thinking |
-| Prefer Claude Fable on a Claude Code subscription | `smartFable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
+| Prefer Claude Fable on a Claude Code subscription | `fable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
 | Move quickly | `rush` | Fast model preferences, low-token posture, smaller tool set |
 | Plan, debug, or review deeply | `deep` | High-reasoning route, diagnostic posture, deep-specific tools |
 | Return to stock Pi | `free` | Releases MMR locks and removes MMR-owned tools |
@@ -105,7 +105,7 @@ Useful controls:
 /mode deep         # switch mode
 /mmr-status        # locked-mode status (add `debug` for model/tool resolution)
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
-Ctrl+Space         # cycle smart → smartFable → rush → deep
+Ctrl+Space         # cycle smart → fable → rush → deep
 Alt+R              # toggle the active mode's thinking preset (where supported)
 ```
 

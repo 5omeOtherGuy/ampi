@@ -312,7 +312,7 @@ function recipe(
 
 export const MMR_MODE_PROMPT_RECIPES = {
   smart: recipe("smart"),
-  smartFable: recipe("smartFable"),
+  fable: recipe("fable"),
   rush: recipe("rush", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
   deep: recipe("deep", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
@@ -328,7 +328,7 @@ function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {
 
 export const MMR_MODE_PROMPT_TEMPLATES = {
   smart: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smart),
-  smartFable: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smartFable),
+  fable: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.fable),
   rush: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.rush),
   deep: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.deep),
 } satisfies Record<PromptedMmrModeKey, MmrModeBlockTemplate>;

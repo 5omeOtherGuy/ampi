@@ -48,7 +48,7 @@ describe("mmr-core request policy", () => {
     assert.equal(payload.max_tokens, 1024, "original payload is not mutated");
   });
 
-  it("applies smartFable Anthropic adaptive medium reasoning with 128k max_tokens for Fable 5", async () => {
+  it("applies fable Anthropic adaptive medium reasoning with 128k max_tokens for Fable 5", async () => {
     const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
     const originalSystem = JSON.stringify(anthropicPayload().system);
     const payload = anthropicPayload({
@@ -58,7 +58,7 @@ describe("mmr-core request policy", () => {
       output_config: { some_future_field: true, effort: "low" },
     });
 
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smartFable);
+    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.fable);
 
     assert.notEqual(result, payload);
     assert.equal(result.max_tokens, 128000);
@@ -243,11 +243,11 @@ describe("mmr-core request policy", () => {
       assert.equal(clamped.contextWindow, undefined, `${mode} stays native after clamping`);
     }
 
-    assert.equal(MMR_REQUEST_POLICIES.smartFable.contextWindow, undefined, "smartFable carries no contextWindow");
-    assert.equal(MMR_REQUEST_POLICIES.smartFable.effectiveMaxInputTokens, undefined, "smartFable carries no effectiveMaxInputTokens");
-    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.maxTokens, 128000, "smartFable still carries its output policy");
-    const clampedFable = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smartFable, { contextWindow: 1_000_000, maxTokens: 128_000 });
-    assert.equal(clampedFable.contextWindow, undefined, "smartFable stays native after clamping");
+    assert.equal(MMR_REQUEST_POLICIES.fable.contextWindow, undefined, "fable carries no contextWindow");
+    assert.equal(MMR_REQUEST_POLICIES.fable.effectiveMaxInputTokens, undefined, "fable carries no effectiveMaxInputTokens");
+    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.maxTokens, 128000, "fable still carries its output policy");
+    const clampedFable = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.fable, { contextWindow: 1_000_000, maxTokens: 128_000 });
+    assert.equal(clampedFable.contextWindow, undefined, "fable stays native after clamping");
 
     // smart's display profile is now 300k/236k. Callers pass the already-capped
     // active model here, so a 300k Opus window leaves the profile unchanged.
@@ -266,7 +266,7 @@ describe("mmr-core thinking-level toggle", () => {
     const { isToggleableMmrMode, getDefaultToggleThinkingLevel, getMmrModeThinkingOptions } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
-    for (const mode of ["smart", "smartFable", "deep"]) {
+    for (const mode of ["smart", "fable", "deep"]) {
       assert.equal(isToggleableMmrMode(mode), true, `${mode} should be toggleable`);
       assert.equal(getDefaultToggleThinkingLevel(mode), "medium");
     }
@@ -275,7 +275,7 @@ describe("mmr-core thinking-level toggle", () => {
     }
 
     assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }]);
-    assert.deepEqual(getMmrModeThinkingOptions("smartFable"), [{ level: "medium" }, { level: "high" }, { level: "low" }]);
+    assert.deepEqual(getMmrModeThinkingOptions("fable"), [{ level: "medium" }, { level: "high" }, { level: "low" }]);
     assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
   });
 
@@ -286,7 +286,7 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("smart", "high"), "medium");
     // Unrecognized/undefined current level lands on the non-default preset.
     assert.equal(getOtherToggleThinkingLevel("smart", undefined), "high");
-    assert.equal(getOtherToggleThinkingLevel("smartFable", "medium"), "high");
+    assert.equal(getOtherToggleThinkingLevel("fable", "medium"), "high");
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
@@ -294,7 +294,7 @@ describe("mmr-core thinking-level toggle", () => {
     const { getOtherToggleThinkingLevel } = await importSource("extensions/mmr-core/request-policy.ts");
 
     // medium (default) -> high -> low -> medium (wraps).
-    for (const mode of ["smartFable"]) {
+    for (const mode of ["fable"]) {
       assert.equal(getOtherToggleThinkingLevel(mode, "medium"), "high");
       assert.equal(getOtherToggleThinkingLevel(mode, "high"), "low");
       assert.equal(getOtherToggleThinkingLevel(mode, "low"), "medium");
@@ -332,24 +332,24 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(smartMedium.effectiveMaxInputTokens, 236000);
 
     for (const level of ["low", "medium", "high"]) {
-      const fable = applyMmrThinkingLevelToPolicy("smartFable", MMR_REQUEST_POLICIES.smartFable, level);
+      const fable = applyMmrThinkingLevelToPolicy("fable", MMR_REQUEST_POLICIES.fable, level);
       assert.equal(fable.anthropic.thinking.outputConfigEffort, level);
       assert.equal(fable.anthropic.maxTokens, 128000);
     }
   });
 
-  it("echoes each smartFable toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
+  it("echoes each fable toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     for (const level of ["low", "medium", "high"]) {
-      const result = applyMmrThinkingLevelToPolicy("smartFable", MMR_REQUEST_POLICIES.smartFable, level);
+      const result = applyMmrThinkingLevelToPolicy("fable", MMR_REQUEST_POLICIES.fable, level);
       assert.equal(result.anthropic.thinking.outputConfigEffort, level, `${level}: Anthropic effort tracks the Pi level directly`);
       assert.equal(result.anthropic.maxTokens, 128000, `${level}: output budget stays at the mode default`);
     }
     // Source policy stays at its medium default (pure transform).
-    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.thinking.outputConfigEffort, "medium");
-    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.maxTokens, 128000);
+    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.thinking.outputConfigEffort, "medium");
+    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.maxTokens, 128000);
   });
 
   // Boundary-value parity pins for request-policy's compact token formatter,

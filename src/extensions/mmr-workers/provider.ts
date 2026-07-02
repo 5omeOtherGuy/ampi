@@ -15,13 +15,13 @@ export const MMR_SUBAGENTS_OWNED_TOOLS: ReadonlyArray<
   | "finder"
   | "oracle"
   | "librarian"
-  | "code_review"
+  | "reviewer"
 > = [
   "Task",
   "finder",
   "oracle",
   "librarian",
-  "code_review",
+  "reviewer",
 ];
 
 const OWNED_TOOLS_SET: ReadonlySet<string> = new Set<string>(MMR_SUBAGENTS_OWNED_TOOLS);
@@ -42,7 +42,7 @@ export interface MmrSubagentsCapabilities {
   oracle?: MmrSubagentsCapability;
   Task?: MmrSubagentsCapability;
   librarian?: MmrSubagentsCapability;
-  code_review?: MmrSubagentsCapability;
+  reviewer?: MmrSubagentsCapability;
 }
 
 function readCapability(value: MmrSubagentsCapability | undefined): boolean {
@@ -66,8 +66,8 @@ function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string
       return readCapability(capabilities.Task);
     case "librarian":
       return readCapability(capabilities.librarian);
-    case "code_review":
-      return readCapability(capabilities.code_review);
+    case "reviewer":
+      return readCapability(capabilities.reviewer);
     default:
       return false;
   }

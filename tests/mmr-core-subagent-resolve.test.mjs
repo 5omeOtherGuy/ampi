@@ -267,7 +267,7 @@ describe("resolveMmrSubagentInvocation", () => {
 
     const cases = [
       { parentMode: "smart",      expectedBase: "smart",      provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
-      { parentMode: "smartFable", expectedBase: "smartFable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "fable", expectedBase: "fable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
       { parentMode: "rush",       expectedBase: "rush",       provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
       // Spec §6.1: deep aliases to smart for prompt base, route list,
       // selected route, and thinking level.
@@ -436,11 +436,11 @@ describe("resolveMmrSubagentInvocation", () => {
     const fable = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "smartFable",
+      parentMode: "fable",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
     assert.equal(fable.ok, true);
-    assert.equal(fable.promptBaseMode, "smartFable");
+    assert.equal(fable.promptBaseMode, "fable");
     assert.equal(fable.selected.model, "claude-opus-4-8");
     assert.equal(fable.selected.thinkingLevel, "low");
   });

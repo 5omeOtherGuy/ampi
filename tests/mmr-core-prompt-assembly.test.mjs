@@ -52,7 +52,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
+const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
 
 describe("Phase D: assembleActiveSurface() public API", () => {
   let assembleActiveSurface;

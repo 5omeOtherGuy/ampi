@@ -242,7 +242,7 @@ export function buildLibrarianWorkerSystemPrompt(_cwd: string): string {
 }
 
 /**
- * Build the code-review worker system prompt.
+ * Build the reviewer worker system prompt.
  *
  * The reviewer receives a diff DESCRIPTION (not the diff itself), computes
  * the diff with a whitelisted set of merge-base git commands, reviews it
@@ -254,7 +254,7 @@ export function buildLibrarianWorkerSystemPrompt(_cwd: string): string {
  * `mmr-core`. The framework resolves this through the
  * `registerMmrSubagentsPromptBuilders()` wiring below.
  */
-export function buildCodeReviewWorkerSystemPrompt(cwd: string): string {
+export function buildReviewerWorkerSystemPrompt(cwd: string): string {
   const safeCwd = typeof cwd === "string" && cwd.trim().length > 0 ? cwd : "unknown";
   return [
     "You are an expert senior engineer with deep knowledge of software engineering best practices, security, performance, and maintainability.",
@@ -350,8 +350,8 @@ const oraclePromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildOracleWo
 /** Prompt-builder seam for the `librarian` standalone subagent. */
 const librarianPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildLibrarianWorkerSystemPrompt(cwd);
 
-/** Prompt-builder seam for the `code-review` standalone subagent. */
-const codeReviewPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildCodeReviewWorkerSystemPrompt(cwd);
+/** Prompt-builder seam for the `reviewer` standalone subagent. */
+const reviewerPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildReviewerWorkerSystemPrompt(cwd);
 
 /** Prompt-builder seam for the mode-derived Task worker role block. */
 const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlock();
@@ -364,13 +364,13 @@ const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlo
  *
  * Called once during extension init (`createMmrWorkersExtension`) so
  * mmr-core's `assembleMmrSubagentSurface` can resolve finder, oracle,
- * librarian, code-review, and Task without a separate bootstrap step.
+ * librarian, reviewer, and Task without a separate bootstrap step.
  * `history-reader` is owned and registered by `mmr-history`.
  */
 export function registerMmrSubagentsPromptBuilders(): void {
   registerMmrSubagentPromptBuilder("finder", finderPromptBuilder);
   registerMmrSubagentPromptBuilder("oracle", oraclePromptBuilder);
   registerMmrSubagentPromptBuilder("librarian", librarianPromptBuilder);
-  registerMmrSubagentPromptBuilder("code-review", codeReviewPromptBuilder);
+  registerMmrSubagentPromptBuilder("reviewer", reviewerPromptBuilder);
   registerMmrSubagentPromptBuilder("task-subagent", taskPromptBuilder);
 }

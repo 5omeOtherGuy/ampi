@@ -6,7 +6,7 @@
 
 ## Summary
 
-`pi-mmr` is additive to Pi. It does not remove or rename anything you install; it only changes what is *active* while one of its **locked modes** (`smart`, `smartFable`, `rush`, `deep`) is selected. In **`free` mode**, `pi-mmr` releases all enforcement and behaves as if it were not installed (it only drops its own tool registrations), so every Pi extension works normally.
+`pi-mmr` is additive to Pi. It does not remove or rename anything you install; it only changes what is *active* while one of its **locked modes** (`smart`, `fable`, `rush`, `deep`) is selected. In **`free` mode**, `pi-mmr` releases all enforcement and behaves as if it were not installed (it only drops its own tool registrations), so every Pi extension works normally.
 
 Three locked-mode mechanics drive every interaction below:
 

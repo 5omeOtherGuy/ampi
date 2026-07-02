@@ -36,14 +36,14 @@ const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 // (MATRIX_MARKER_MODES) so that the per-mode tag isolation invariant still
 // covers them.
 const MATRIX_MODES = ["smart", "rush", "deep"];
-const MATRIX_MARKER_MODES = ["smart", "smartFable", "rush", "deep"];
+const MATRIX_MARKER_MODES = ["smart", "fable", "rush", "deep"];
 
-// Distinguishing per-mode markers. The smart family (smart, smartFable) shares
+// Distinguishing per-mode markers. The smart family (smart, fable) shares
 // one prompt body, so each member is identified by its <mmr_mode name="...">
 // tag. Rush and Deep have distinctive posture-body sentences.
 const MODE_MARKERS = {
   smart: '<mmr_mode name="smart">',
-  smartFable: '<mmr_mode name="smartFable">',
+  fable: '<mmr_mode name="fable">',
   rush: "You run with no extended reasoning",
   deep: "Deep mode is for difficult reasoning,",
 };
@@ -52,10 +52,10 @@ const MODE_MARKERS = {
 // distinctive markers). The smart family shares its prompt body, so its
 // members exclude each other's mode tags rather than body text.
 const MODE_FOREIGN_MARKERS = {
-  smart: ['<mmr_mode name="smartFable">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  smartFable: ['<mmr_mode name="smart">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  rush: ['<mmr_mode name="smart">', '<mmr_mode name="smartFable">', "Deep mode is for difficult reasoning,"],
-  deep: ['<mmr_mode name="smart">', '<mmr_mode name="smartFable">', "You run with no extended reasoning"],
+  smart: ['<mmr_mode name="fable">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  fable: ['<mmr_mode name="smart">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
+  rush: ['<mmr_mode name="smart">', '<mmr_mode name="fable">', "Deep mode is for difficult reasoning,"],
+  deep: ['<mmr_mode name="smart">', '<mmr_mode name="fable">', "You run with no extended reasoning"],
 };
 
 // Expected coarse block order. Matches the existing Phase B baseline.
@@ -370,7 +370,7 @@ describe("Phase F: native-control passthrough invariant", () => {
         MMR_TOOL_USE_POSTURE_LINE,
         MMR_RESPONSE_STYLE_HEADING,
         '<mmr_mode name="smart">',
-        '<mmr_mode name="smartFable">',
+        '<mmr_mode name="fable">',
         '<mmr_mode name="rush">',
         '<mmr_mode name="deep">',
         "You run with no extended reasoning",

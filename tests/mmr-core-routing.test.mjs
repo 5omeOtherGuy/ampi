@@ -12,7 +12,7 @@ describe("mmr-core mode routing", () => {
       resolveMmrModeSelection({
         flagValue: "rush",
         persistedMode: "deep",
-        settingsMode: "smartFable",
+        settingsMode: "fable",
       }),
       { mode: "rush", source: "flag", warnings: [], rejectedSources: [] },
     );
@@ -24,7 +24,7 @@ describe("mmr-core mode routing", () => {
     assert.deepEqual(
       resolveMmrModeSelection({
         persistedMode: "deep",
-        settingsMode: "smartFable",
+        settingsMode: "fable",
       }),
       { mode: "deep", source: "session", warnings: [], rejectedSources: [] },
     );
@@ -33,8 +33,8 @@ describe("mmr-core mode routing", () => {
   it("chooses settings mode before default and reports invalid settings", async () => {
     const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
 
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "smartFable" }), {
-      mode: "smartFable",
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fable" }), {
+      mode: "fable",
       source: "settings",
       warnings: [],
       rejectedSources: [],

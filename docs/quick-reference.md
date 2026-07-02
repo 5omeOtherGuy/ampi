@@ -7,7 +7,7 @@ Fast lookup for modes, tools, optional gates, and common troubleshooting.
 | I want to... | Use | Notes |
 | --- | --- | --- |
 | Default balanced coding | `/mode smart` | Default when no flag/session/settings override exists |
-| Balanced coding on a Claude Code subscription | `/mode smartFable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
+| Balanced coding on a Claude Code subscription | `/mode fable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
 | Fast, low-token turns | `/mode rush` | Smaller posture for quick edits and short loops |
 | Deep reasoning, planning, review | `/mode deep` | Use for hard debugging and architecture decisions |
 | Stock Pi behavior | `/mode free` | Releases MMR locks and removes MMR-owned tools |

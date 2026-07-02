@@ -128,7 +128,7 @@ describe("mmr-core model resolver", () => {
     assert.deepEqual(attempted, ["claude-subscription/claude-haiku-4-5"]);
   });
 
-  it("selects the shipped SmartFable Claude subscription route", async () => {
+  it("selects the shipped Fable Claude subscription route", async () => {
     const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
     const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
     const registry = fakeRegistry([
@@ -136,8 +136,8 @@ describe("mmr-core model resolver", () => {
     ]);
 
     const resolved = await resolveAndApplyMmrModel({
-      modeThinkingLevel: getMmrMode("smartFable").thinkingLevel,
-      modelPreferences: getMmrMode("smartFable").modelPreferences,
+      modeThinkingLevel: getMmrMode("fable").thinkingLevel,
+      modelPreferences: getMmrMode("fable").modelPreferences,
       registry,
       setModel: async () => true,
     });

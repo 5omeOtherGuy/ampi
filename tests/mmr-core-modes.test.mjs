@@ -39,15 +39,15 @@ describe("mmr-core mode table", () => {
     const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
 
     const smart = getMmrMode("smart");
-    const smartFable = getMmrMode("smartFable");
+    const fable = getMmrMode("fable");
 
-    assert.deepEqual(smartFable.modelPreferences, [
+    assert.deepEqual(fable.modelPreferences, [
       { model: "claude-fable-5", providers: ["claude-subscription"] },
     ]);
-    assert.equal(smartFable.thinkingLevel, "medium");
-    assert.deepEqual(smartFable.tools, smart.tools);
-    assert.equal(smartFable.promptRoute, smart.promptRoute);
-    assert.deepEqual(smartFable.featureGates, smart.featureGates);
+    assert.equal(fable.thinkingLevel, "medium");
+    assert.deepEqual(fable.tools, smart.tools);
+    assert.equal(fable.promptRoute, smart.promptRoute);
+    assert.deepEqual(fable.featureGates, smart.featureGates);
   });
 
   it("renders mode list using per-mode request thinking and context metadata", async () => {
@@ -57,7 +57,7 @@ describe("mmr-core mode table", () => {
 
     assert.match(list, /smart\s+claude-opus-4-8 → gpt-5\.5 — thinking: Anthropic adaptive\/high; context: 300k total \/ 64k max out \/ 236k max in/);
     assert.match(list, /rush\s+gpt-5\.5 → claude-haiku-4-5-20251001 → claude-haiku-4-5 — thinking: OpenAI Responses none; context: 128k max out/);
-    assert.match(list, /smartFable\s+claude-fable-5 — thinking: Anthropic adaptive\/medium; context: 128k max out/);
+    assert.match(list, /fable\s+claude-fable-5 — thinking: Anthropic adaptive\/medium; context: 128k max out/);
     assert.match(list, /deep\s+gpt-5\.5 → claude-opus-4-8 — thinking: Anthropic adaptive\/medium; context: 128k max out/);
   });
 
@@ -92,7 +92,7 @@ describe("mmr-core mode table", () => {
 
     const free = getMmrMode("free");
 
-    assert.deepEqual(MMR_MODE_KEYS, ["smart", "smartFable", "rush", "deep", "free"]);
+    assert.deepEqual(MMR_MODE_KEYS, ["smart", "fable", "rush", "deep", "free"]);
     assert.equal(isMmrModeKey("free"), true);
     assert.equal(isMmrModeKey("open"), false);
     assert.equal(free.displayName, "Free");

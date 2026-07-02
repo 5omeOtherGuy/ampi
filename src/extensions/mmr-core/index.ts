@@ -5,7 +5,7 @@ import { registerMmrLifecycleHooks } from "./lifecycle-hooks.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("mmr-mode", {
-    description: "Start with an MMR mode: smart, smartFable, rush, deep, or free",
+    description: "Start with an MMR mode: smart, fable, rush, deep, or free",
     type: "string",
   });
 

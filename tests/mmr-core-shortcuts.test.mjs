@@ -101,31 +101,31 @@ describe("mmr-core mode shortcuts", () => {
     assert.equal(runtime.getMmrModeState()?.effectiveMaxOutputTokens, 64000);
   });
 
-  it("cycles smartFable's thinking level through all three presets via alt+r", async () => {
+  it("cycles fable's thinking level through all three presets via alt+r", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
-    runtime.setMmrModeState(createState("smartFable"));
+    runtime.setMmrModeState(createState("fable"));
     const { ctx, notifications } = createContext();
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
-    // smartFable default toggle level is medium; the cycle is
+    // fable default toggle level is medium; the cycle is
     // medium -> high -> low -> medium, and every preset keeps the 128k budget.
     await shortcuts.get("alt+r").handler(ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smartFable");
+    assert.equal(runtime.getMmrModeState()?.mode, "fable");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "high");
     assert.deepEqual(calls.setThinkingLevel, ["high"]);
-    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: smartFable → high, max out 128k/);
+    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: fable → high, max out 128k/);
 
     await shortcuts.get("alt+r").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "low");
     assert.deepEqual(calls.setThinkingLevel, ["high", "low"]);
-    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: smartFable → low, max out 128k/);
+    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: fable → low, max out 128k/);
 
     await shortcuts.get("alt+r").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "medium");
     assert.deepEqual(calls.setThinkingLevel, ["high", "low", "medium"]);
-    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: smartFable → medium, max out 128k/);
+    assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: fable → medium, max out 128k/);
   });
 
   it("alt+r is a no-op notice in non-toggleable modes", async () => {
@@ -140,32 +140,33 @@ describe("mmr-core mode shortcuts", () => {
 
     assert.equal(runtime.getMmrModeState()?.mode, "rush");
     assert.deepEqual(calls.setThinkingLevel, []);
-    assert.match(notifications.at(-1)?.message ?? "", /only available in smart, smartFable, or deep/);
+    assert.match(notifications.at(-1)?.message ?? "", /only available in smart, fable, or deep/);
   });
 
-  it("opens a picker that includes smartFable mode", async () => {
+  it("opens a picker that excludes fable (fable is /mode-only)", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
     const { ctx, selectCalls } = createContext();
     ctx.ui.select = async (title, options) => {
       selectCalls.push({ title, options });
-      return "smartFable";
+      return "deep";
     };
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
     await shortcuts.get("alt+m").handler(ctx);
 
-    assert.deepEqual(selectCalls[0].options, ["smart", "smartFable", "rush", "deep", "free"]);
+    assert.deepEqual(selectCalls[0].options, ["smart", "rush", "deep", "free"]);
+    assert.equal(selectCalls[0].options.includes("fable"), false);
     assert.match(selectCalls[0].title, /current: smart/);
-    assert.equal(runtime.getMmrModeState()?.mode, "smartFable");
+    assert.equal(runtime.getMmrModeState()?.mode, "deep");
     assert.equal(calls.setModel.length, 1);
-    assert.equal(calls.setModel[0].id, FABLE_MODEL.id);
-    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "smartFable");
+    assert.equal(calls.setModel[0].id, DEEP_MODEL.id);
+    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "deep");
   });
 
-  it("cycles managed modes forward and skips free", async () => {
+  it("cycles managed modes forward, skipping free and the hotkey-hidden fable", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
@@ -173,11 +174,26 @@ describe("mmr-core mode shortcuts", () => {
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
+    // smart -> rush: fable is hotkey-hidden and free is not in the rotation.
     await shortcuts.get("ctrl+space").handler(ctx);
 
-    assert.equal(runtime.getMmrModeState()?.mode, "smartFable");
-    assert.deepEqual(calls.setThinkingLevel, ["medium"]);
-    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "smartFable");
+    assert.equal(runtime.getMmrModeState()?.mode, "rush");
+    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "rush");
+  });
+
+  it("applies fable via /mode even though it is hidden from the hotkeys", async () => {
+    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(createState("smart"));
+    const { ctx } = createContext();
+    const { pi, calls, commands } = createPi();
+    extension(pi);
+
+    await commands.get("mode").handler("fable", ctx);
+
+    assert.equal(runtime.getMmrModeState()?.mode, "fable");
+    assert.equal(calls.setModel.at(-1)?.id, FABLE_MODEL.id);
+    assert.equal(calls.appendEntry.at(-1)?.[1].mode, "fable");
   });
 
   it("cycles from free back to smart instead of including free in rotation", async () => {

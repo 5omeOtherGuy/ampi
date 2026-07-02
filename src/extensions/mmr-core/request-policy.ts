@@ -76,7 +76,7 @@ export interface MmrRequestPolicy {
  *   `max_tokens=64000` for its Opus 4.8 profile. SMART's GPT fallback sets
  *   only Responses reasoning effort (no `max_output_tokens` override), so
  *   Opus-specific output caps do not leak onto GPT payloads.
- * - SMARTFABLE pins Claude Fable 5 on the `claude-subscription` provider with
+ * - FABLE pins Claude Fable 5 on the `claude-subscription` provider with
  *   adaptive thinking and `max_tokens=128000`. Its toggle presets
  *   (low/medium/high) set no `anthropicEffort` override, so the Pi level echoes
  *   directly as the Anthropic adaptive effort.
@@ -93,7 +93,7 @@ export interface MmrRequestPolicy {
  *   total at the `setModel` call site (see `context-cap.ts`), so Pi's native
  *   compaction/overflow/footer run at the advertised window even when the
  *   route's native window is larger (e.g. `smart` pins its Opus route to 300k).
- *   The routes without an MMR-owned context profile (`smartFable`, `rush`, `deep`)
+ *   The routes without an MMR-owned context profile (`fable`, `rush`, `deep`)
  *   intentionally set no `contextWindow`, so every route runs at Pi's own registered
  *   window (the observed Codex backend limit) with no pi-mmr override. The cap
  *   is cap-down only, so a smaller custom route stays authoritative, and `free`
@@ -117,7 +117,7 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
     contextWindow: 300_000,
     effectiveMaxInputTokens: 236_000,
   },
-  smartFable: {
+  fable: {
     anthropic: {
       maxTokens: 128000,
       thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
@@ -180,7 +180,7 @@ export interface MmrModeThinkingOption {
  * same 64k admission shape and differ only in adaptive reasoning effort
  * (`high` vs `xhigh`).
  *
- * SmartFable cycles three presets (medium -> high -> low -> medium). It does
+ * Fable cycles three presets (medium -> high -> low -> medium). It does
  * not override `anthropicEffort`, so each Pi level echoes directly as the
  * Anthropic adaptive effort.
  */
@@ -188,7 +188,7 @@ export type MmrModeThinkingToggleOptions = readonly [MmrModeThinkingOption, MmrM
 
 export const MMR_MODE_THINKING_TOGGLES = {
   smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }],
-  smartFable: [{ level: "medium" }, { level: "high" }, { level: "low" }],
+  fable: [{ level: "medium" }, { level: "high" }, { level: "low" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, MmrModeThinkingToggleOptions>>;
 

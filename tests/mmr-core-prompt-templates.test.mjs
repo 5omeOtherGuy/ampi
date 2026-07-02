@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 // pin the structural invariants of MMR_MODE_PROMPT_TEMPLATES so accidental
 // deletion or key drift fails loudly without requiring a fixture refresh.
 
-const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
+const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
 
 describe("mmr-core prompt templates - structural invariants", () => {
   it("exports exactly one template per prompted (non-free) locked mode", async () => {
@@ -33,7 +33,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     }
     // The smart family mirrors the authoritative default template, whose
     // framing lives entirely in the intro and body fragments — no posture.
-    for (const mode of ["smart", "smartFable"]) {
+    for (const mode of ["smart", "fable"]) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, "", `${mode}: smart-family modes render no posture section`);
     }
     for (const mode of ["rush", "deep"]) {
@@ -95,7 +95,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
 
   it("smart-family variants render the smart system prompt verbatim apart from the mode tag", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
-    for (const mode of ["smartFable"]) {
+    for (const mode of ["fable"]) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.smart.intro, `${mode}: intro matches smart`);
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, MMR_MODE_PROMPT_TEMPLATES.smart.postureSections, `${mode}: posture matches smart`);
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].closingLine, MMR_MODE_PROMPT_TEMPLATES.smart.closingLine, `${mode}: closing matches smart`);

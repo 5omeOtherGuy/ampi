@@ -102,7 +102,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   // silently shadow one of them. `alt+r` is free across pi-mmr and is not a
   // Pi default binding.
   pi.registerShortcut("alt+r", {
-    description: "Toggle MMR thinking level (smart/smartFable/deep)",
+    description: "Toggle MMR thinking level (smart/fable/deep)",
     handler: async (ctx) => {
       await controller.toggleThinkingFromShortcut(ctx);
     },
