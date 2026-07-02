@@ -68,22 +68,18 @@ export interface MmrRequestPolicy {
 }
 
 /**
- * Per-mode policies for each locked MMR mode. Open and Free modes have no
- * policy; mmr-core's hook is a no-op while either native-control mode is active.
+ * Per-mode policies for each locked MMR mode. Free mode has no policy;
+ * mmr-core's hook is a no-op while the native-control mode is active.
  *
  * Notes on the shape choices:
  * - SMART uses adaptive thinking with `output_config.effort=high` and
  *   `max_tokens=64000` for its Opus 4.8 profile. SMART's GPT fallback sets
  *   only Responses reasoning effort (no `max_output_tokens` override), so
  *   Opus-specific output caps do not leak onto GPT payloads.
- * - LARGE uses adaptive thinking with `output_config.effort=medium` for its
- *   Opus 4.6 profile (and `max_tokens=32000`). LARGE's GPT fallback sets
- *   Responses reasoning effort only, matching the generic OpenAI default.
- * - SMARTSONNET pins Claude Sonnet 5 on the `claude-subscription` provider
- *   (no fallback model) with adaptive thinking and `max_tokens=32000`,
- *   mirroring LARGE's Anthropic shape. Its toggle presets (low/medium/high)
- *   set no `anthropicEffort` override, so the Pi level echoes directly as the
- *   Anthropic adaptive effort (see `MMR_MODE_THINKING_TOGGLES.smartSonnet`).
+ * - SMARTFABLE pins Claude Fable 5 on the `claude-subscription` provider with
+ *   adaptive thinking and `max_tokens=128000`. Its toggle presets
+ *   (low/medium/high) set no `anthropicEffort` override, so the Pi level echoes
+ *   directly as the Anthropic adaptive effort.
  * - RUSH uses OpenAI Responses with `reasoning.effort=none` and
  *   `max_output_tokens=128000` for the GPT-5.5 profile. Its Haiku fallback
  *   relies on the mode's `thinkingLevel: "off"` rather than an Anthropic
@@ -97,13 +93,13 @@ export interface MmrRequestPolicy {
  *   total at the `setModel` call site (see `context-cap.ts`), so Pi's native
  *   compaction/overflow/footer run at the advertised window even when the
  *   route's native window is larger (e.g. `smart` pins its Opus route to 300k).
- *   The routes without an MMR-owned context profile (`smartGPT`, `smartFable`, `rush`, `deep`)
+ *   The routes without an MMR-owned context profile (`smartFable`, `rush`, `deep`)
  *   intentionally set no `contextWindow`, so every route runs at Pi's own registered
  *   window (the observed Codex backend limit) with no pi-mmr override. The cap
  *   is cap-down only, so a smaller custom route stays authoritative, and `free`
  *   (no policy) is never capped.
  */
-export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "open" | "free">, MmrRequestPolicy> = {
+export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrRequestPolicy> = {
   smart: {
     anthropic: {
       maxTokens: 64000,
@@ -121,36 +117,6 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "open" | "free">, 
     contextWindow: 300_000,
     effectiveMaxInputTokens: 236_000,
   },
-  smartGPT: {
-    openaiResponses: {
-      maxOutputTokens: 128000,
-      reasoning: { effort: "medium", summary: "auto" },
-    },
-    // No context override: GPT/Codex routes run at Pi's own registered window
-    // (the observed Codex backend limit, pi#3641). pi-mmr deliberately does not
-    // carry its own number here so it cannot drift from Pi's metadata.
-  },
-  large: {
-    anthropic: {
-      maxTokens: 32000,
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
-    },
-    openaiResponses: {
-      reasoning: { effort: "medium", summary: "auto" },
-    },
-    contextWindow: 1000000,
-    effectiveMaxInputTokens: 968000,
-  },
-  smartSonnet: {
-    anthropic: {
-      maxTokens: 32000,
-      // No anthropicEffort override on the toggle presets: the Pi level
-      // (low/medium/high) echoes directly as the Anthropic adaptive effort.
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
-    },
-    contextWindow: 1000000,
-    effectiveMaxInputTokens: 968000,
-  },
   smartFable: {
     anthropic: {
       maxTokens: 128000,
@@ -163,16 +129,7 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "open" | "free">, 
       maxOutputTokens: 128000,
       reasoning: { effort: "none" },
     },
-    // No context override; GPT/Codex routes run at Pi's registered window. See
-    // smartGPT above.
-  },
-  test: {
-    openaiResponses: {
-      maxOutputTokens: 128000,
-      reasoning: { effort: "none" },
-    },
-    // Mirrors rush so Anthropic-shaped Opus requests pass through without
-    // pi-mmr's smart-mode adaptive-thinking or max_tokens overrides.
+    // No context override; GPT/Codex routes run at Pi's registered window.
   },
   deep: {
     anthropic: {
@@ -184,7 +141,6 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "open" | "free">, 
     },
     // No context override; GPT/Codex routes run at Pi's registered window. The
     // Opus fallback likewise runs at its native window (only `smart` pins Opus).
-    // See smartGPT above.
   },
 };
 
@@ -224,16 +180,14 @@ export interface MmrModeThinkingOption {
  * same 64k admission shape and differ only in adaptive reasoning effort
  * (`high` vs `xhigh`).
  *
- * SmartSonnet and SmartFable cycle three presets (medium -> high -> low ->
- * medium). They do not override `anthropicEffort`, so each Pi level echoes
- * directly as the Anthropic adaptive effort.
+ * SmartFable cycles three presets (medium -> high -> low -> medium). It does
+ * not override `anthropicEffort`, so each Pi level echoes directly as the
+ * Anthropic adaptive effort.
  */
 export type MmrModeThinkingToggleOptions = readonly [MmrModeThinkingOption, MmrModeThinkingOption, ...MmrModeThinkingOption[]];
 
 export const MMR_MODE_THINKING_TOGGLES = {
   smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }],
-  smartGPT: [{ level: "medium" }, { level: "xhigh" }],
-  smartSonnet: [{ level: "medium" }, { level: "high" }, { level: "low" }],
   smartFable: [{ level: "medium" }, { level: "high" }, { level: "low" }],
   deep: [{ level: "medium" }, { level: "xhigh" }],
 } as const satisfies Partial<Record<MmrModeKey, MmrModeThinkingToggleOptions>>;

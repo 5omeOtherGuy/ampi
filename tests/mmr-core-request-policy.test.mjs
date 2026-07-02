@@ -48,36 +48,24 @@ describe("mmr-core request policy", () => {
     assert.equal(payload.max_tokens, 1024, "original payload is not mutated");
   });
 
-  it("applies large Anthropic adaptive medium reasoning with 32k max_tokens for Opus 4.6", async () => {
+  it("applies smartFable Anthropic adaptive medium reasoning with 128k max_tokens for Fable 5", async () => {
     const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
     const originalSystem = JSON.stringify(anthropicPayload().system);
     const payload = anthropicPayload({
-      model: "claude-opus-4-6",
+      model: "claude-fable-5",
       max_tokens: 1024,
       thinking: { type: "adaptive", display: "summarized" },
       output_config: { some_future_field: true, effort: "low" },
     });
 
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.large);
+    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smartFable);
 
     assert.notEqual(result, payload);
-    assert.equal(result.max_tokens, 32000);
+    assert.equal(result.max_tokens, 128000);
     assert.deepEqual(result.thinking, { type: "adaptive", display: "summarized" });
     assert.deepEqual(result.output_config, { some_future_field: true, effort: "medium" });
     assert.equal(JSON.stringify(result.system), originalSystem);
     assert.equal(payload.max_tokens, 1024, "original payload is not mutated");
-  });
-
-  it("applies large OpenAI medium reasoning to the gpt-5.4 fallback without a max_output_tokens override", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
-    const payload = openaiPayload({ reasoning: { effort: "low", encrypted: true } });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.large);
-
-    assert.notEqual(result, payload);
-    assert.equal("max_output_tokens" in result, false);
-    assert.deepEqual(result.reasoning, { effort: "medium", encrypted: true, summary: "auto" });
-    assert.deepEqual(result.input, payload.input);
   });
 
   it("applies rush OpenAI Responses with reasoning effort none and 128k max output", async () => {
@@ -246,7 +234,7 @@ describe("mmr-core request policy", () => {
 
     // GPT/Codex-primary modes set no context profile, so they run at Pi's own
     // registered window. Only the request policy (max output) is carried.
-    for (const mode of ["smartGPT", "rush", "test", "deep"]) {
+    for (const mode of ["rush", "deep"]) {
       assert.equal(MMR_REQUEST_POLICIES[mode].contextWindow, undefined, `${mode} carries no contextWindow`);
       assert.equal(MMR_REQUEST_POLICIES[mode].effectiveMaxInputTokens, undefined, `${mode} carries no effectiveMaxInputTokens`);
       assert.equal(MMR_REQUEST_POLICIES[mode].openaiResponses.maxOutputTokens, 128000, `${mode} still carries its output policy`);
@@ -270,17 +258,6 @@ describe("mmr-core request policy", () => {
     const smallCustomOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 200_000, maxTokens: 64_000 });
     assert.equal(smallCustomOpus.effectiveMaxInputTokens, 136000);
     assert.equal(smallCustomOpus.contextWindow, 200000);
-
-    const large = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.large, { contextWindow: 1_000_000, maxTokens: 32_000 });
-    assert.equal(large.effectiveMaxInputTokens, 968000);
-    assert.equal(large.contextWindow, 1000000);
-
-    // smartSonnet mirrors large's 1M/968k/32k Anthropic profile.
-    assert.equal(MMR_REQUEST_POLICIES.smartSonnet.contextWindow, 1000000);
-    assert.equal(MMR_REQUEST_POLICIES.smartSonnet.effectiveMaxInputTokens, 968000);
-    const smartSonnet = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smartSonnet, { contextWindow: 1_000_000, maxTokens: 32_000 });
-    assert.equal(smartSonnet.effectiveMaxInputTokens, 968000);
-    assert.equal(smartSonnet.contextWindow, 1000000);
   });
 });
 
@@ -289,17 +266,15 @@ describe("mmr-core thinking-level toggle", () => {
     const { isToggleableMmrMode, getDefaultToggleThinkingLevel, getMmrModeThinkingOptions } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
-    for (const mode of ["smart", "smartGPT", "smartSonnet", "smartFable", "deep"]) {
+    for (const mode of ["smart", "smartFable", "deep"]) {
       assert.equal(isToggleableMmrMode(mode), true, `${mode} should be toggleable`);
       assert.equal(getDefaultToggleThinkingLevel(mode), "medium");
     }
-    for (const mode of ["rush", "test", "large", "free"]) {
+    for (const mode of ["rush", "free"]) {
       assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
     }
 
     assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }]);
-    assert.deepEqual(getMmrModeThinkingOptions("smartGPT"), [{ level: "medium" }, { level: "xhigh" }]);
-    assert.deepEqual(getMmrModeThinkingOptions("smartSonnet"), [{ level: "medium" }, { level: "high" }, { level: "low" }]);
     assert.deepEqual(getMmrModeThinkingOptions("smartFable"), [{ level: "medium" }, { level: "high" }, { level: "low" }]);
     assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
   });
@@ -311,7 +286,7 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(getOtherToggleThinkingLevel("smart", "high"), "medium");
     // Unrecognized/undefined current level lands on the non-default preset.
     assert.equal(getOtherToggleThinkingLevel("smart", undefined), "high");
-    assert.equal(getOtherToggleThinkingLevel("smartGPT", "medium"), "xhigh");
+    assert.equal(getOtherToggleThinkingLevel("smartFable", "medium"), "high");
     assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
   });
 
@@ -319,7 +294,7 @@ describe("mmr-core thinking-level toggle", () => {
     const { getOtherToggleThinkingLevel } = await importSource("extensions/mmr-core/request-policy.ts");
 
     // medium (default) -> high -> low -> medium (wraps).
-    for (const mode of ["smartSonnet", "smartFable"]) {
+    for (const mode of ["smartFable"]) {
       assert.equal(getOtherToggleThinkingLevel(mode, "medium"), "high");
       assert.equal(getOtherToggleThinkingLevel(mode, "high"), "low");
       assert.equal(getOtherToggleThinkingLevel(mode, "low"), "medium");
@@ -356,11 +331,6 @@ describe("mmr-core thinking-level toggle", () => {
     assert.equal(smartMedium.openaiResponses.reasoning.effort, "medium");
     assert.equal(smartMedium.effectiveMaxInputTokens, 236000);
 
-    const gptXhigh = applyMmrThinkingLevelToPolicy("smartGPT", MMR_REQUEST_POLICIES.smartGPT, "xhigh");
-    assert.equal(gptXhigh.openaiResponses.reasoning.effort, "xhigh");
-    assert.equal(gptXhigh.openaiResponses.maxOutputTokens, 128000);
-    assert.equal(MMR_REQUEST_POLICIES.smartGPT.openaiResponses.reasoning.effort, "medium");
-
     for (const level of ["low", "medium", "high"]) {
       const fable = applyMmrThinkingLevelToPolicy("smartFable", MMR_REQUEST_POLICIES.smartFable, level);
       assert.equal(fable.anthropic.thinking.outputConfigEffort, level);
@@ -368,18 +338,18 @@ describe("mmr-core thinking-level toggle", () => {
     }
   });
 
-  it("echoes each smartSonnet toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
+  it("echoes each smartFable toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/mmr-core/request-policy.ts");
 
     for (const level of ["low", "medium", "high"]) {
-      const result = applyMmrThinkingLevelToPolicy("smartSonnet", MMR_REQUEST_POLICIES.smartSonnet, level);
+      const result = applyMmrThinkingLevelToPolicy("smartFable", MMR_REQUEST_POLICIES.smartFable, level);
       assert.equal(result.anthropic.thinking.outputConfigEffort, level, `${level}: Anthropic effort tracks the Pi level directly`);
-      assert.equal(result.anthropic.maxTokens, 32000, `${level}: output budget stays at the mode default`);
+      assert.equal(result.anthropic.maxTokens, 128000, `${level}: output budget stays at the mode default`);
     }
     // Source policy stays at its medium default (pure transform).
-    assert.equal(MMR_REQUEST_POLICIES.smartSonnet.anthropic.thinking.outputConfigEffort, "medium");
-    assert.equal(MMR_REQUEST_POLICIES.smartSonnet.anthropic.maxTokens, 32000);
+    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.thinking.outputConfigEffort, "medium");
+    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.maxTokens, 128000);
   });
 
   // Boundary-value parity pins for request-policy's compact token formatter,

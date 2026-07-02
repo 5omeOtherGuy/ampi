@@ -53,7 +53,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "smartGPT", "smartSonnet", "smartFable", "rush", "test", "large", "deep"];
+const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
 
 // Distinctive per-mode body markers. The smart family renders no posture
 // section, so smart is identified by its family-only "Investigate before
@@ -110,7 +110,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     assert.equal(second.systemPrompt.split(TOOL_USE_HEADING).length - 1, 1, "tool-use heading must not duplicate");
   });
 
-  for (const mode of PROMPTED_MODES.filter((mode) => mode !== "large")) {
+  for (const mode of PROMPTED_MODES) {
     it(`places user-collaboration and response style before tool guidance for ${mode}`, () => {
       const first = assembleActiveSurface({
         state: createState(mode),

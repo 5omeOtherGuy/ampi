@@ -1,13 +1,13 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 
-export type MmrModeKey = "smart" | "smartGPT" | "smartSonnet" | "smartFable" | "rush" | "test" | "large" | "deep" | "open" | "free";
+export type MmrModeKey = "smart" | "smartFable" | "rush" | "deep" | "free";
 
 /**
  * Locked mode keys (modes that apply model/thinking/request/prompt policy).
  * Used by settings that only apply while a locked mode is active, such as
  * `lockedModeExtraTools`.
  */
-export type MmrLockedModeKey = Exclude<MmrModeKey, "open" | "free">;
+export type MmrLockedModeKey = Exclude<MmrModeKey, "free">;
 
 export type MmrPromptRoute = "default" | "rush" | "deep";
 

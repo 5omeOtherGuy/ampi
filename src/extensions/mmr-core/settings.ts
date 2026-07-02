@@ -9,12 +9,10 @@ import type { MmrCoreSettings, MmrModelPreference } from "./types.js";
 
 /**
  * Locked mode keys plus the `all` bucket accepted by `lockedModeExtraTools`.
- * `open` is native-control, not locked; it inherits Smart's resolved extras
- * when applying its Smart-equivalent tool surface instead of owning a setting
- * bucket of its own.
+ * `free` is native-control, not locked, so it does not own a setting bucket.
  */
 function isLockedModeExtraToolsKey(key: string): boolean {
-  return key === "all" || (isMmrModeKey(key) && key !== "open" && key !== "free");
+  return key === "all" || (isMmrModeKey(key) && key !== "free");
 }
 
 function readToolNameList(value: unknown): string[] {
@@ -45,7 +43,7 @@ function readLockedModeExtraTools(
   for (const [key, names] of Object.entries(value)) {
     if (!isLockedModeExtraToolsKey(key)) {
       context.warnings.push(
-        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (smart, smartGPT, smartSonnet, smartFable, rush, test, large, deep). "open" and "free" are not configurable.`,
+        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (smart, smartFable, rush, deep). "free" is not configurable.`,
       );
       continue;
     }

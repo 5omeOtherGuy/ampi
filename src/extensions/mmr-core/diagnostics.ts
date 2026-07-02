@@ -87,12 +87,6 @@ export function getMmrPolicyDiagnostics(state: MmrModeState): MmrPolicyDiagnosti
 
   const diagnostics: MmrPolicyDiagnostic[] = [];
 
-  if (state.mode === "open") {
-    appendToolDiagnostics(diagnostics, state);
-    appendAvailabilityDiagnostics(diagnostics, state);
-    return diagnostics;
-  }
-
   if (!state.modelApplied) {
     diagnostics.push({
       code: "model.not-applied",
@@ -221,7 +215,7 @@ export function buildPromptAssemblyObservation(
   surface: Pick<MmrPromptAssemblyResult, "passthroughReason">,
   options: MmrSystemPromptOptionsView | undefined,
 ): MmrPromptAssemblyObservation | undefined {
-  if (state.mode === "free" || state.mode === "open") return undefined;
+  if (state.mode === "free") return undefined;
   const observation: MmrPromptAssemblyObservation = {};
 
   const reason = surface.passthroughReason;

@@ -7,13 +7,9 @@ Fast lookup for modes, tools, optional gates, and common troubleshooting.
 | I want to... | Use | Notes |
 | --- | --- | --- |
 | Default balanced coding | `/mode smart` | Default when no flag/session/settings override exists |
-| Balanced coding with GPT-family preferences | `/mode smartGPT` | Same intent as `smart`, GPT-preferred model preference order |
-| Balanced coding on a Claude Code subscription | `/mode smartSonnet` | Smart profile pinned to Claude Sonnet 5 via `claude-subscription`, toggleable low/medium/high thinking |
+| Balanced coding on a Claude Code subscription | `/mode smartFable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
 | Fast, low-token turns | `/mode rush` | Smaller posture for quick edits and short loops |
-| Test Opus without smart request shaping | `/mode test` | Diagnostic Opus 4.8 route with rush-style prompt/request behavior |
-| Long-context work | `/mode large` | Use when context capacity matters more than speed |
 | Deep reasoning, planning, review | `/mode deep` | Use for hard debugging and architecture decisions |
-| Native controls with rich tools | `/mode open` | Pi-native model/thinking/prompt, Smart tool surface active |
 | Stock Pi behavior | `/mode free` | Releases MMR locks and removes MMR-owned tools |
 
 ```text

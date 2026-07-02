@@ -52,7 +52,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "smartGPT", "smartSonnet", "smartFable", "rush", "test", "large", "deep"];
+const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
 
 describe("Phase D: assembleActiveSurface() public API", () => {
   let assembleActiveSurface;
@@ -180,7 +180,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       // except rush-style modes, which drop it.
       assert.equal(
         kinds.filter((k) => k === "diagrams").length,
-        mode === "rush" || mode === "test" ? 0 : 1,
+        mode === "rush" ? 0 : 1,
         `mode ${mode}: diagrams fragment count`,
       );
       const autonomyIdx = kinds.indexOf("autonomy");
@@ -195,7 +195,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       assert.ok(autonomyIdx < carefulActionsIdx, `mode ${mode}: task/risk posture must stay in order`);
       // Only rush-style modes and deep render a mode posture; the smart family's empty
       // posture is skipped by the renderer.
-      if (mode === "rush" || mode === "test" || mode === "deep") {
+      if (mode === "rush" || mode === "deep") {
         assert.ok(carefulActionsIdx < modePostureIdx, `mode ${mode}: shared posture must precede mode posture`);
         assert.ok(modePostureIdx < collaborationIdx, `mode ${mode}: mode posture must precede collaboration style`);
       } else {
@@ -264,7 +264,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       ]);
       const sharedBlocks = result.blocks.filter((b) => sharedGuidanceKinds.has(b.kind));
       // 1 tool-guidance block + 8 coding fragments, minus diagrams for rush-style modes.
-      assert.equal(sharedBlocks.length, mode === "rush" || mode === "test" ? 8 : 9, `${mode}: must emit all shared guidance blocks`);
+      assert.equal(sharedBlocks.length, mode === "rush" ? 8 : 9, `${mode}: must emit all shared guidance blocks`);
       const sharedText = sharedBlocks.map((b) => b.text).join("\n");
       for (const entry of MMR_PLANNED_TOOL_CATALOG) {
         const namePattern = new RegExp(`\\b${entry.name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`);

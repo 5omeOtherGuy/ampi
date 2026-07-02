@@ -3,7 +3,7 @@ import { MMR_REQUEST_POLICIES, formatMmrPolicyContext, formatMmrPolicyThinking }
 
 export const DEFAULT_MMR_MODE: MmrModeKey = "smart";
 
-export const MMR_MODE_KEYS = ["smart", "smartGPT", "smartSonnet", "smartFable", "rush", "test", "large", "deep", "open", "free"] as const satisfies readonly MmrModeKey[];
+export const MMR_MODE_KEYS = ["smart", "smartFable", "rush", "deep", "free"] as const satisfies readonly MmrModeKey[];
 
 export const MMR_SMART_TOOL_NAMES = [
   "read",
@@ -89,34 +89,6 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     featureGates: ["mmr-subagents", "mmr-async-tasks"],
   },
 
-  smartGPT: {
-    key: "smartGPT",
-    displayName: "SmartGPT",
-    description: "Smart-style balanced mode with GPT-5.5 as its model preference. Toggleable thinking (medium/xhigh).",
-    modelPreferences: [
-      { model: "gpt-5.5" },
-    ],
-    // Default thinking level; alt+r toggles between medium and xhigh.
-    thinkingLevel: "medium",
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
-    featureGates: ["mmr-subagents", "mmr-async-tasks"],
-  },
-
-  smartSonnet: {
-    key: "smartSonnet",
-    displayName: "SmartSonnet",
-    description: "Smart-style balanced mode with Claude Sonnet 5 (Claude Code subscription) as its model preference. Toggleable thinking (low/medium/high).",
-    modelPreferences: [
-      { model: "claude-sonnet-5", providers: ["claude-subscription"] },
-    ],
-    // Default thinking level; alt+r cycles through medium -> high -> low.
-    thinkingLevel: "medium",
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
-    featureGates: ["mmr-subagents", "mmr-async-tasks"],
-  },
-
   smartFable: {
     key: "smartFable",
     displayName: "SmartFable",
@@ -143,33 +115,6 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     thinkingLevel: "off",
     tools: MMR_RUSH_TOOL_NAMES,
     promptRoute: "rush",
-    featureGates: ["mmr-subagents", "mmr-async-tasks"],
-  },
-
-  test: {
-    key: "test",
-    displayName: "Test",
-    description: "Rush-style diagnostic mode pinned to Opus 4.8 with medium thinking.",
-    modelPreferences: [
-      { model: "claude-opus-4-8", thinkingLevel: "medium" },
-    ],
-    thinkingLevel: "medium",
-    tools: MMR_RUSH_TOOL_NAMES,
-    promptRoute: "rush",
-    featureGates: ["mmr-subagents", "mmr-async-tasks"],
-  },
-
-  large: {
-    key: "large",
-    displayName: "Large",
-    description: "High-capability mode for broad implementation and reasoning tasks.",
-    modelPreferences: [
-      { model: "claude-opus-4-6" },
-      { model: "gpt-5.4" },
-    ],
-    thinkingLevel: "medium",
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
     featureGates: ["mmr-subagents", "mmr-async-tasks"],
   },
 
@@ -212,16 +157,6 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     featureGates: ["mmr-subagents", "mmr-async-tasks", "mmr-history", "mmr-web"],
   },
 
-  open: {
-    key: "open",
-    displayName: "Open",
-    description: "Native Pi model, thinking, and prompt controls with Smart tools active.",
-    modelPreferences: [],
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
-    featureGates: ["mmr-subagents", "mmr-async-tasks"],
-  },
-
   free: {
     key: "free",
     displayName: "Free",
@@ -243,7 +178,7 @@ export function getMmrMode(key: MmrModeKey): MmrModeDefinition {
 export function formatMmrModeList(): string {
   return MMR_MODE_KEYS.map((key) => {
     const mode = MMR_MODES[key];
-    const policy = key === "free" || key === "open" ? undefined : MMR_REQUEST_POLICIES[key];
+    const policy = key === "free" ? undefined : MMR_REQUEST_POLICIES[key];
     const models = mode.modelPreferences.length > 0
       ? mode.modelPreferences
         .map((preference) => preference.model)

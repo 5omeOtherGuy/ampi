@@ -6,7 +6,7 @@
 
 > Switch your entire Pi coding harness — model, thinking, tools, and prompt — with one command. Fully reversible.
 
-`pi-mmr` turns Pi into a coding harness you control. Instead of one fixed model-and-prompt configuration, you pick a locked mode — `smart`, `smartGPT`, `smartSonnet`, `rush`, `test`, `large`, or `deep` — and `pi-mmr` swaps the **whole** profile in a single switch: that mode's provider-neutral model preferences, thinking policy, context profile, active-tool allowlist, worker profile, and prompt behavior. `open` keeps Pi's native model/thinking/prompt controls while activating Smart's parent-session tools, and `free` releases every lock to return you to stock Pi at any time.
+`pi-mmr` turns Pi into a coding harness you control. Instead of one fixed model-and-prompt configuration, you pick a locked mode — `smart`, `smartFable`, `rush`, or `deep` — and `pi-mmr` swaps the **whole** profile in a single switch: that mode's provider-neutral model preferences, thinking policy, context profile, active-tool allowlist, worker profile, and prompt behavior. `free` releases every lock to return you to stock Pi at any time.
 
 It is a modular Pi extension package, not a fork or a separate IDE — it builds on Pi's native behavior instead of replacing it. Each mode's prompt is assembled from its own fragments and surgically swapped into Pi's auto-rendered prompt head, preserving Pi's own tool list, guidelines, documentation, and tail. Tool resolution is exact-name based, runtime state is session-scoped, and everything runs on your own provider subscriptions and API keys.
 
@@ -67,7 +67,6 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
    ```text
    /mode rush       # fast, low-token turns
    /mode deep       # hard reasoning, planning, review
-   /mode open       # native Pi model/thinking/prompt, Smart tools active
    /mode free       # stock Pi behavior; MMR-owned tools removed
    ```
 
@@ -92,13 +91,9 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
 | I want to... | Use | What changes |
 | --- | --- | --- |
 | Do balanced coding | `smart` | Default locked route, standard tool set, toggleable thinking |
-| Prefer GPT-family models | `smartGPT` | Smart profile with GPT-family model preferences |
-| Prefer Claude Sonnet on a Claude Code subscription | `smartSonnet` | Smart profile pinned to Claude Sonnet 5 via `claude-subscription`, toggleable low/medium/high thinking |
+| Prefer Claude Fable on a Claude Code subscription | `smartFable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
 | Move quickly | `rush` | Fast model preferences, low-token posture, smaller tool set |
-| Test Opus without smart-mode request shaping | `test` | Rush-style profile pinned to Opus 4.8 with medium thinking |
-| Work with long context | `large` | Long-context model preferences and broad-context posture |
 | Plan, debug, or review deeply | `deep` | High-reasoning route, diagnostic posture, deep-specific tools |
-| Keep native controls with rich tools | `open` | Native Pi model/thinking/prompt, Smart tool surface active |
 | Return to stock Pi | `free` | Releases MMR locks and removes MMR-owned tools |
 
 Mode selection precedence: `--mmr-mode` flag → persisted session → `mmrCore.defaultMode` → `smart`.
@@ -110,7 +105,7 @@ Useful controls:
 /mode deep         # switch mode
 /mmr-status        # locked-mode status (add `debug` for model/tool resolution)
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
-Ctrl+Space         # cycle smart → smartGPT → smartSonnet → rush → test → large → deep → open
+Ctrl+Space         # cycle smart → smartFable → rush → deep
 Alt+R              # toggle the active mode's thinking preset (where supported)
 ```
 

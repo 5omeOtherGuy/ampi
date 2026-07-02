@@ -171,10 +171,9 @@ describe("mmr-core mode activation", () => {
 
     await commands.get("mode").handler("smart", ctx);
     await commands.get("mode").handler("rush", ctx);
-    await commands.get("mode").handler("large", ctx);
     await commands.get("mode").handler("deep", ctx);
 
-    assert.deepEqual(calls.setThinkingLevel, ["medium", "off", "medium", "medium"]);
+    assert.deepEqual(calls.setThinkingLevel, ["medium", "off", "medium"]);
   });
 
   it("falls rush back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {

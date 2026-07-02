@@ -42,7 +42,7 @@ async function importCacheIsolatedRuntime() {
   return importSource("extensions/mmr-core/runtime.ts");
 }
 
-const LOCKED_MODES_THAT_REQUEST_WEB_TOOLS = ["smart", "rush", "test", "large", "deep"];
+const LOCKED_MODES_THAT_REQUEST_WEB_TOOLS = ["smart", "smartFable", "rush", "deep"];
 
 describe("mmr-web covers every locked mode that requests web_search / read_web_page", () => {
   for (const mode of LOCKED_MODES_THAT_REQUEST_WEB_TOOLS) {
