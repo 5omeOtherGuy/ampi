@@ -4,7 +4,7 @@
 
 **Related.** Concrete subagents: [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md). Profile/registry surface: [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
-`pi-mmr` separates the subagent framework from concrete subagents.
+`ampi` separates the subagent framework from concrete subagents.
 
 The framework owns reusable contracts:
 

@@ -6,11 +6,11 @@
  *
  * Marker syntax in the PR body:
  *
- *   <!-- pi-mmr changelog:start -->
+ *   <!-- ampi changelog:start -->
  *   ### Fixed
  *
  *   - `mmr-core`: bullet text.
- *   <!-- pi-mmr changelog:end -->
+ *   <!-- ampi changelog:end -->
  *
  * Validation rules:
  *   - At least one bullet inside the block.
@@ -33,8 +33,8 @@ import { fileURLToPath } from "node:url";
 
 export const CANONICAL_HEADINGS = ["Added", "Changed", "Fixed", "Removed", "Security", "Documentation"];
 
-const BLOCK_START = "<!-- pi-mmr changelog:start -->";
-const BLOCK_END = "<!-- pi-mmr changelog:end -->";
+const BLOCK_START = "<!-- ampi changelog:start -->";
+const BLOCK_END = "<!-- ampi changelog:end -->";
 
 // Mirror of scripts/check-changelog.mjs publicUnsafePatterns. Kept local
 // so this script has no internal imports and can be invoked from CI without
@@ -489,7 +489,7 @@ async function main() {
   const prBody = await readStdin();
   const block = extractBlock(prBody);
   if (!block) {
-    console.log("sync-changelog-from-pr: no <!-- pi-mmr changelog --> block found; skipping.");
+    console.log("sync-changelog-from-pr: no <!-- ampi changelog --> block found; skipping.");
     return;
   }
 

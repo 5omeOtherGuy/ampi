@@ -20,7 +20,7 @@ function makeChangelog(unreleasedBody, { trailing = "\n" } = {}) {
   return [
     "# Changelog",
     "",
-    "All notable changes to `pi-mmr` will be documented in this file.",
+    "All notable changes to `ampi` will be documented in this file.",
     "",
     "## Unreleased",
     ...(unreleasedBody ? ["", unreleasedBody] : []),
@@ -33,8 +33,8 @@ function makeChangelog(unreleasedBody, { trailing = "\n" } = {}) {
   ].join("\n") + trailing;
 }
 
-const BLOCK_START = "<!-- pi-mmr changelog:start -->";
-const BLOCK_END = "<!-- pi-mmr changelog:end -->";
+const BLOCK_START = "<!-- ampi changelog:start -->";
+const BLOCK_END = "<!-- ampi changelog:end -->";
 
 function prBody(block, extra = "") {
   return `Some PR description.\n\n${BLOCK_START}\n${block}\n${BLOCK_END}\n\n${extra}`;
@@ -56,11 +56,11 @@ describe("extractBlock", () => {
       "## Example",
       "",
       "```md",
-      "<!-- pi-mmr changelog:start -->",
+      "<!-- ampi changelog:start -->",
       "### Fixed",
       "",
       "- `mmr-core`: example bullet inside a fence.",
-      "<!-- pi-mmr changelog:end -->",
+      "<!-- ampi changelog:end -->",
       "```",
       "",
       "No real block here.",
@@ -71,11 +71,11 @@ describe("extractBlock", () => {
   it("ignores marker blocks inside ~~~ fenced code blocks", () => {
     const body = [
       "~~~",
-      "<!-- pi-mmr changelog:start -->",
+      "<!-- ampi changelog:start -->",
       "### Fixed",
       "",
       "- `mmr-core`: fenced.",
-      "<!-- pi-mmr changelog:end -->",
+      "<!-- ampi changelog:end -->",
       "~~~",
     ].join("\n");
     assert.equal(extractBlock(body), undefined);
@@ -86,19 +86,19 @@ describe("extractBlock", () => {
       "## Example documentation",
       "",
       "```",
-      "<!-- pi-mmr changelog:start -->",
+      "<!-- ampi changelog:start -->",
       "### Added",
       "- `mmr-core`: don't include me.",
-      "<!-- pi-mmr changelog:end -->",
+      "<!-- ampi changelog:end -->",
       "```",
       "",
       "## The actual changelog",
       "",
-      "<!-- pi-mmr changelog:start -->",
+      "<!-- ampi changelog:start -->",
       "### Fixed",
       "",
       "- `mmr-core`: real bullet.",
-      "<!-- pi-mmr changelog:end -->",
+      "<!-- ampi changelog:end -->",
     ].join("\n");
     const block = extractBlock(body);
     assert.ok(block, "extractBlock should return the un-fenced marker block");
@@ -158,10 +158,10 @@ describe("validateBuckets", () => {
       `Do not write '${watchedPhrase}'.`,
       "```",
       "",
-      "<!-- pi-mmr changelog:start -->",
+      "<!-- ampi changelog:start -->",
       "### Fixed",
       "- `mmr-core`: ok.",
-      "<!-- pi-mmr changelog:end -->",
+      "<!-- ampi changelog:end -->",
     ].join("\n");
     assert.deepEqual(validateBuckets(buckets, body), []);
   });

@@ -21,8 +21,8 @@ describe("MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX", () => {
     assert.ok(mod.MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX.length > 0);
     assert.match(
       mod.MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX,
-      /^pi-mmr:.+: $/,
-      "prefix must be the literal `pi-mmr: subagent activation failed: ` shape so producer + consumer cannot drift",
+      /^ampi:.+: $/,
+      "prefix must be the literal `ampi: subagent activation failed: ` shape so producer + consumer cannot drift",
     );
   });
 });
@@ -37,7 +37,7 @@ describe("extractMmrSubagentActivationFailure(stderr)", () => {
 
   it("extracts the message that follows the marker on a single line", async () => {
     const { extractMmrSubagentActivationFailure } = await importSource(MODULE);
-    const stderr = 'pi-mmr: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n';
+    const stderr = 'ampi: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n';
     const message = extractMmrSubagentActivationFailure(stderr);
     assert.equal(
       message,
@@ -49,7 +49,7 @@ describe("extractMmrSubagentActivationFailure(stderr)", () => {
     const { extractMmrSubagentActivationFailure } = await importSource(MODULE);
     const stderr = [
       "Warning: something earlier",
-      'pi-mmr: subagent activation failed: Subagent "finder" was invoked with --tools bash,write, but the profile tool allowlist is grep,find,read.',
+      'ampi: subagent activation failed: Subagent "finder" was invoked with --tools bash,write, but the profile tool allowlist is grep,find,read.',
       "Extension error (...): downstream noise",
       "",
     ].join("\n");
@@ -63,8 +63,8 @@ describe("extractMmrSubagentActivationFailure(stderr)", () => {
   it("returns the last occurrence when the marker appears multiple times", async () => {
     const { extractMmrSubagentActivationFailure } = await importSource(MODULE);
     const stderr = [
-      "pi-mmr: subagent activation failed: first failure message.",
-      "pi-mmr: subagent activation failed: later, more specific failure message.",
+      "ampi: subagent activation failed: first failure message.",
+      "ampi: subagent activation failed: later, more specific failure message.",
     ].join("\n");
     assert.equal(
       extractMmrSubagentActivationFailure(stderr),

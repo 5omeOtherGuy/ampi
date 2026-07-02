@@ -36,7 +36,7 @@ The previous `task_list` workspace-coordination prototype (leases, dependencies,
 Custom Pi tool that accepts a structured Codex-format patch and applies it to workspace files.
 
 - **Schema**: `{ patchText: string }`. The patch must wrap in `*** Begin Patch` / `*** End Patch` markers.
-- **Tool description (model-visible)**: self-contained — carries the full grammar, rules, examples, and `pi-mmr`-specific behaviors so deep-mode models can use the tool from the description alone. Includes the formal grammar block, context rules (3-line default; 5-10 lines for repetitive/large files; no duplicated context between adjacent changes), additional rules (conflict-marker length, no `apply_patch` for linter/formatter-only edits), reliability tips (read more before guessing, preserve indentation, avoid unanchored insert-only hunks, keep CRLF consistent), and worked examples for add, simple update, scoped update, repetitive file, multi-`@@` narrowing, end-of-file anchor, conflict markers, delete, and move/rename. Two `pi-mmr`-specific behaviors documented inline: ambiguous matches are rejected rather than first-match-wins, and path safety is the `pi-mmr` workspace + sibling-worktree behavior below.
+- **Tool description (model-visible)**: self-contained — carries the full grammar, rules, examples, and `ampi`-specific behaviors so deep-mode models can use the tool from the description alone. Includes the formal grammar block, context rules (3-line default; 5-10 lines for repetitive/large files; no duplicated context between adjacent changes), additional rules (conflict-marker length, no `apply_patch` for linter/formatter-only edits), reliability tips (read more before guessing, preserve indentation, avoid unanchored insert-only hunks, keep CRLF consistent), and worked examples for add, simple update, scoped update, repetitive file, multi-`@@` narrowing, end-of-file anchor, conflict markers, delete, and move/rename. Two `ampi`-specific behaviors documented inline: ambiguous matches are rejected rather than first-match-wins, and path safety is the `ampi` workspace + sibling-worktree behavior below.
 - **`promptGuidelines` (system-prompt-visible)**: short high-signal cues — prefer `apply_patch` for single-file edits and patch-style add/delete/rename/multi-file changes; do not use Python or shell rewrites when a simple `apply_patch` would suffice; read enough context first; use 5-10 lines or an `@@` anchor for repetitive/ambiguous locations; avoid unanchored insert-only hunks.
 - **Result shape**: `content[0].text` begins with one `Applied patch: …` status line, a blank line, then the structured diff body (context plus `-`/`+` lines; no unified-diff metadata). Single-file: `Applied patch: <path> (+a/-d)`. Multi-file: `Applied patch: N files` followed by labeled per-file sections each headed by `<path> (+a/-d)`. The status line gives surfaces that only render `content` an unambiguous success marker and is a single prefix line + blank line, trivially stripped. `details` carries `{ summary, files }` with compact per-file summary and structured metadata (`type`, `path`, optional `oldPath` for moves, `uri`, `additions`, `deletions`, unified `diff`). The interactive TUI `renderResult` path renders from `details` and suppresses the status line.
 - **Operations**: `*** Add File: <path>`, `*** Delete File: <path>`, `*** Update File: <path>` (optionally followed by `*** Move to: <newPath>`). Multiple operations in a single patch.
@@ -72,7 +72,7 @@ This is the limit of what an extension can enforce: Pi exposes no API to set `ex
 
 ### Pinned UI widget and `/tasks`
 
-`task_list` projects the current session's list onto Pi's persistent widget above the input editor (widget id `pi-mmr-task-list`). The session log entry is the source of truth; the widget is a UI mirror. Refresh fires after every successful tool call and after Pi emits `session_compact`, so the display is reprojected from persisted state after compaction reloads context.
+`task_list` projects the current session's list onto Pi's persistent widget above the input editor (widget id `ampi-task-list`). The session log entry is the source of truth; the widget is a UI mirror. Refresh fires after every successful tool call and after Pi emits `session_compact`, so the display is reprojected from persisted state after compaction reloads context.
 
 The widget is registered in the factory form (`(tui, theme) => ({ render, invalidate })`) so Pi re-invokes it on theme changes. Subtasks render directly below their parent with branch markers (`├─` / `└─`) so child work is visually distinct from the flat top-level list. Projection is best-effort: `refreshTodoWidget` swallows render/UI errors so a transient failure can never demote a successful tool call into an `isError` result. Headless surfaces (`ctx.hasUI === false`) are skipped entirely.
 
@@ -120,7 +120,7 @@ Also exported as `registerMmrToolboxProviders(registry)` for tests and isolated 
 
 ## Public API
 
-Re-exported from `pi-mmr`:
+Re-exported from `ampi`:
 
 - `createTodoListTool({ pi, getIsHidden })` — `task_list` tool definition.
 - `findLatestPersistedTodoState`, `toPersistedTodoState`, `parsePersistedTodoState`, `TODO_STATE_ENTRY`, `TODO_STATE_VERSION`.

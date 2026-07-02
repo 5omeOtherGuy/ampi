@@ -1,61 +1,84 @@
-# pi-mmr
+# ampi
 
-[![CI](https://github.com/5omeOtherGuy/pi-mmr/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/pi-mmr/actions/workflows/ci.yml)
+[![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Pi package](https://img.shields.io/badge/Pi-package-7c3aed)
 
-> Switch your entire Pi coding harness — model, thinking, tools, and prompt — with one command. Fully reversible.
+> AMP Code but in Pi Agent.
 
-`pi-mmr` turns Pi into a coding harness you control. Instead of one fixed model-and-prompt configuration, you pick a locked mode — `smart`, `fable`, `rush`, or `deep` — and `pi-mmr` swaps the **whole** profile in a single switch: that mode's provider-neutral model preferences, thinking policy, context profile, active-tool allowlist, worker profile, and prompt behavior. `free` releases every lock to return you to stock Pi at any time.
+`ampi` is a faithful, self-contained AMP Code-style harness for Pi Agent. It brings the AMP-style coding workflow into Pi as a production-ready extension package for the implemented workflows: opinionated locked modes, curated tools, subagents, background workers, web/repository/session context, fallback behavior, and strong defaults that aim for AMP Code parity while still running on **your** Pi install, subscriptions, API keys, models, and settings.
 
-It is a modular Pi extension package, not a fork or a separate IDE — it builds on Pi's native behavior instead of replacing it. Each mode's prompt is assembled from its own fragments and surgically swapped into Pi's auto-rendered prompt head, preserving Pi's own tool list, guidelines, documentation, and tail. Tool resolution is exact-name based, runtime state is session-scoped, and everything runs on your own provider subscriptions and API keys.
+ampi is not an official AMP Code package. It is an independent Pi extension that implements the listed AMP-style behavior in repo-owned code and tracks remaining parity gaps below.
 
-Beyond modes, `pi-mmr` adds Pi-native tools for codebase search, expert review, GitHub repository research, web lookup, prior-session recall, safe patching, todos, and subscription quota fallback — each behind explicit feature gates. Bounded work can be delegated to workers (`finder`, `oracle`, `librarian`, `Task`) and to your own Markdown subagents, each running in its own context and returning just the result. Independent work can run in the background as a worker fleet (`start_task`/`task_poll`/`task_wait`/`task_cancel`) that renders in the Pi TUI with live status, output previews, an expandable trail, usage counters, and a grouped task board — so you can watch what runs instead of guessing. Locked modes are fail-closed, everything is reversible, and the deterministic test suite never makes live provider calls.
+Use `ampi` as-is for the intended experience. Advanced users can override models, subagent routes, optional gates, and custom Markdown subagents, but the package ships with a complete default posture so a fresh install already feels like AMP Code inside Pi.
 
-## Why pi-mmr
+## What ampi already gives you
 
-- **One command changes the whole harness.** `/mode deep` is not just a model switch; it locks mode, model-preference order, thinking, tools, and prompt behavior together — and per-mode postures genuinely differ (fast and frugal vs. broad-context vs. careful-reasoning).
-- **A framework, not a black box.** Model routing, thinking policy, tool allowlists, and prompt assembly are all explicit, inspectable via `/mmr-status`, and configurable in settings.
-- **Provider-neutral by design.** Modes use explicit preference order: subscription/OAuth provider entries first, then API-key entries, then other registered providers — so the same mode follows you across providers.
-- **Right-sized delegation.** Use `finder`, `oracle`, `Task`, and `librarian`, run independent jobs as a background fleet, or ship your own Markdown subagents — without hand-picking child models and tools.
-- **Fail-closed and reversible.** A locked mode refuses to activate without a usable model and active tools; `open` keeps native Pi model/thinking/prompt behavior with Smart tools, while `free` releases every MMR-owned lock and tool registration.
-- **Optional reach, off by default.** Web, GitHub, and local session-history tools stay gated until you explicitly enable them.
-- **Runs on your stack.** Open source (MIT), self-hosted as a Pi package, driven by the providers you already authenticate.
+### AMP-style harness modes
+
+- **`smart`** — default balanced coding mode with broad tools, provider-neutral model preferences, managed thinking, and the full coding posture.
+- **`fable`** — Claude Fable 5 preference for Claude Code subscription users, with the same balanced Smart posture and a low/medium/high thinking cycle.
+- **`rush`** — fast, low-token mode for small or mechanical changes.
+- **`deep`** — reasoning-heavy mode for hard debugging, design, reviews, migrations, and multi-step implementation.
+- **`free`** — exit hatch back to stock Pi behavior with ampi-owned tools removed.
+
+Each locked mode swaps the whole harness together: model preference order, thinking policy, context profile, active-tool allowlist, subagent defaults, and model-visible prompt posture. Mode resolution is deterministic and inspectable; there is no hidden prompt classifier or silent automatic model switching.
+
+### AMP Code-style parity features already implemented
+
+- **Whole-harness mode switching** via `--mmr-mode`, `/mode`, hotkeys, and persisted session/settings state.
+- **Provider-neutral model preferences** that prefer subscription/OAuth providers first, then API-key providers, then other registered providers.
+- **Your subscriptions and keys**: Claude subscription, OpenAI/Codex, API-key providers, Brave Search, GitHub tokens, and SearXNG all stay under your control.
+- **Managed thinking and context policy** per mode, including mode-local thinking toggles and context display/capping where the mode owns it.
+- **Prompt posture replacement** that preserves Pi's own tool list, docs, project context, skills, date/cwd, and tail content while replacing the coding harness head.
+- **Exact active-tool allowlists** with `/mmr-status debug` diagnostics for active, gated, disabled, deferred, and missing tools.
+- **Safe local patching** through `apply_patch`, including path-safety checks across the workspace and sibling worktrees.
+- **Session-local planning** through `task_list`, rendered as a pinned Pi widget.
+- **Subagents**: `finder`, `oracle`, `librarian`, `Task`, `reviewer`, the internal `history-reader`, and custom Markdown `sa__*` subagents.
+- **Background work fleets**: `background: true`, grouped launches, live TUI task board, automatic completion delivery, and `task_poll` / `task_wait` / `task_cancel` controls.
+- **Repository research** with `librarian` plus read-only GitHub tools (`read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories`).
+- **Web research** with `web_search` and `read_web_page`, including SearXNG, Brave Search, DuckDuckGo fallback, domain filters, recency filters where supported, SSRF protections, and readable-page extraction.
+- **Prior-session recall** with `find_session` and `read_session`, opaque project refs instead of raw paths, opt-in content redaction, and a read-only history-reader worker.
+- **Subscription quota/capacity fallback** for provider failures, with explicit retry messaging instead of silent route mutation.
+- **Custom subagent import/setup** for Markdown agent definitions with safe tool mapping, per-mode scope, model/thinking config, and project/global enablement.
+- **Production guardrails**: deterministic tests, no live API calls in the committed suite, fail-closed activation, exact-name tool ownership, source-owned Free-mode cleanup, and public-safe prompt provenance.
 
 ## Quick start
 
 Pi must already be installed and authenticated.
 
 ```bash
-pi -e git:github.com/5omeOtherGuy/pi-mmr --mmr-mode smart
+pi -e git:github.com/5omeOtherGuy/ampi --mmr-mode smart
 ```
 
 Install globally or per project:
 
 ```bash
-pi install git:github.com/5omeOtherGuy/pi-mmr
-pi install -l git:github.com/5omeOtherGuy/pi-mmr
+pi install git:github.com/5omeOtherGuy/ampi
+pi install -l git:github.com/5omeOtherGuy/ampi
 ```
 
-Verify the active locked mode inside Pi:
+Inside Pi:
 
 ```text
 /mmr-status
+/mmr-status debug
 /mode rush
+/mode deep
 /mode free
 ```
 
-Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are peer dependencies and are not bundled.
+The runtime control surface still uses the shipped `/mmr-*`, `MMR_*`, and `mmr*` identifiers for compatibility; the package, repo, docs, and product posture are now `ampi`.
 
 ## First two minutes
 
-1. Start a session in the default locked mode:
+1. Start in the default AMP-style mode:
 
    ```bash
-   pi -e git:github.com/5omeOtherGuy/pi-mmr --mmr-mode smart
+   pi -e git:github.com/5omeOtherGuy/ampi --mmr-mode smart
    ```
 
-2. Inspect the active locked mode and gates:
+2. Inspect the resolved harness:
 
    ```text
    /mmr-status
@@ -65,17 +88,19 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
 3. Switch modes by intent:
 
    ```text
-   /mode rush       # fast, low-token turns
-   /mode deep       # hard reasoning, planning, review
-   /mode free       # stock Pi behavior; MMR-owned tools removed
+   /mode rush       # quick, low-token turns
+   /mode deep       # hard reasoning, planning, review, migration work
+   /mode fable      # Claude Fable 5 on a Claude Code subscription
+   /mode free       # stock Pi behavior; ampi-owned tools removed
    ```
 
-4. Ask Pi to use a worker when the job is bounded:
+4. Delegate bounded work:
 
    ```text
    Use finder to locate where provider model preferences are resolved.
    Ask oracle to review the mode activation design.
    Use Task to update the focused docs file and run the narrow check.
+   Use reviewer to review all uncommitted changes.
    ```
 
 5. Enable optional reach only when needed:
@@ -86,73 +111,64 @@ Pi (`@earendil-works/pi-coding-agent`) and `@earendil-works/pi-agent-core` are p
    export MMR_HISTORY_ENABLE=true
    ```
 
-## Choose a mode
+## Modes
 
-| I want to... | Use | What changes |
+| Intent | Mode | What ampi controls |
 | --- | --- | --- |
-| Do balanced coding | `smart` | Default locked route, standard tool set, toggleable thinking |
-| Prefer Claude Fable on a Claude Code subscription | `fable` | Smart profile pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
-| Move quickly | `rush` | Fast model preferences, low-token posture, smaller tool set |
-| Plan, debug, or review deeply | `deep` | High-reasoning route, diagnostic posture, deep-specific tools |
-| Return to stock Pi | `free` | Releases MMR locks and removes MMR-owned tools |
+| Balanced coding | `smart` | Default model preference order, medium/high thinking toggle, broad AMP-style tools, full coding posture |
+| Claude Code subscription path | `fable` | Claude Fable 5 via `claude-subscription`, low/medium/high thinking toggle, Smart-style tools |
+| Fast edits | `rush` | Fast model preferences, thinking off, lower-token posture, focused tools |
+| Hard work | `deep` | Reasoning-first model preferences, deeper posture, patching/research/history/subagent tools |
+| Native Pi | `free` | Releases ampi model/thinking/prompt/tool enforcement |
 
-Mode selection precedence: `--mmr-mode` flag → persisted session → `mmrCore.defaultMode` → `smart`.
+Mode selection precedence: `--mmr-mode` flag → restored session state → `mmrCore.defaultMode` → `smart`.
 
 Useful controls:
 
 ```text
 /mode              # show current mode
 /mode deep         # switch mode
-/mmr-status        # locked-mode status (add `debug` for model/tool resolution)
+/mmr-status        # current harness status
+/mmr-status debug  # model/tool/source diagnostics
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
-Ctrl+Space         # cycle smart → fable → rush → deep
-Alt+R              # toggle the active mode's thinking preset (where supported)
+Ctrl+Space         # cycle smart → rush → deep
+Alt+R              # toggle the active mode's thinking preset where supported
 ```
 
-## Choose a tool
+## Tools and subagents
 
-| I need to... | Use | Owner |
-| --- | --- | --- |
-| Patch files safely | `apply_patch` | [`mmr-patch`](src/extensions/mmr-patch/README.md) |
-| Track session work | `task_list` | [`mmr-tasks`](src/extensions/mmr-tasks/README.md) |
-| Search the codebase by behavior | `finder` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
-| Ask for deep advice or review | `oracle` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
-| Run bounded child work | `Task` | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
-| Run independent work in the background | worker tools with `background: true` (+ `task_poll` / `task_wait` / `task_cancel`) | [`mmr-workers`](src/extensions/mmr-workers/README.md) |
-| Research GitHub repositories | `librarian` | [`mmr-workers`](src/extensions/mmr-workers/README.md) + [`mmr-github`](src/extensions/mmr-github/README.md) |
-| Search the web | `web_search` | [`mmr-web`](src/extensions/mmr-web/README.md) |
-| Read public web pages | `read_web_page` | [`mmr-web`](src/extensions/mmr-web/README.md) |
-| Find old Pi sessions | `find_session` | [`mmr-history`](src/extensions/mmr-history/README.md) |
-| Reuse old session context | `read_session` | [`mmr-history`](src/extensions/mmr-history/README.md) |
-
-For command-style lookup, see the [quick reference](docs/quick-reference.md).
-
-## Delegate work to workers
-
-Workers run bounded jobs in their own context and return just the result, so the main session stays focused:
-
-- **`finder`** — fast, parallel codebase search; returns relevant files and line ranges.
-- **`oracle`** — expert review, planning, and hard-bug reasoning, zero-shot.
-- **`librarian`** — read-only research over remote GitHub repositories (gated on `mmr-github`).
-- **`Task`** — a general worker for a scoped implementation, investigation, repair, or review; optionally narrowed to `read-only` or `read-write`.
-- **Custom subagents** — your own Markdown-defined workers (`sa__*`), with model, thinking, tools, and skills set in frontmatter.
-
-Independent work can run as a **background fleet**: call `finder`, `librarian`, or `Task` with `background: true` (parallel calls can share one worker group via a `group` key), and `task_poll`/`task_wait`/`task_cancel` coordinate the running tasks. `start_task` remains as a deprecated compatibility alias for one release. Completed work is surfaced automatically or pulled on demand, and the Pi TUI shows a live, grouped task board. See [`docs/subagent-framework.md`](docs/subagent-framework.md).
+| Need | Use |
+| --- | --- |
+| Safe file patches | `apply_patch` |
+| Session todo plan | `task_list` |
+| Behavior-level codebase search | `finder` |
+| Expert planning/review/debugging advice | `oracle` |
+| Scoped implementation/investigation/repair | `Task` |
+| Independent background work | `background: true`, `task_poll`, `task_wait`, `task_cancel` |
+| Independent diff/code review | `reviewer` |
+| Remote GitHub research | `librarian` |
+| Direct read-only GitHub operations | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
+| Public web search/read | `web_search`, `read_web_page` |
+| Prior Pi session recall | `find_session`, `read_session` |
+| Custom workers | Markdown `sa__*` subagents imported through `/mmr-config` |
 
 ## Feature map
 
-| Extension | Default | User value |
+| Extension family | Default | User value |
 | --- | --- | --- |
-| [`mmr-core`](src/extensions/mmr-core/README.md) | On | Locked modes, model resolution, thinking policy, tool allowlists, prompt rewrite, diagnostics |
-| [`mmr-patch`](src/extensions/mmr-patch/README.md) | On | Safe patching via `apply_patch` |
-| [`mmr-tasks`](src/extensions/mmr-tasks/README.md) | On | Session-local todo tracking via `task_list` |
-| [`mmr-workers`](src/extensions/mmr-workers/README.md) | On | `finder`, `oracle`, `Task`, gated `librarian`, the background task fleet (`background: true`, `task_poll`/`task_wait`/`task_cancel`), and custom Markdown subagents |
-| [`mmr-session-fallback`](src/extensions/mmr-session-fallback/README.md) | On | Interactive fallback when subscription routes hit quota, rate limits, or Claude subscription capacity stalls |
-| [`mmr-web`](src/extensions/mmr-web/README.md) | Off | `web_search` and `read_web_page` via SearXNG, Brave, or DuckDuckGo |
-| [`mmr-history`](src/extensions/mmr-history/README.md) | Off | Search and summarize prior local Pi sessions with redaction |
-| [`mmr-github`](src/extensions/mmr-github/README.md) | Off | Read-only GitHub files, directories, search, commits, diffs, repositories |
+| `ampi-core` (`mmr-core` runtime id) | On | Locked modes, model resolution, request/thinking policy, active tools, prompt rewrite, diagnostics, config flow |
+| `ampi-patch` | On | Safe `apply_patch` editing |
+| `ampi-tasks` | On | Session-local `task_list` planning widget |
+| `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets, worker trails |
+| `ampi-custom-subagents` | On | Markdown-defined `sa__*` workers with scoped tools/models/thinking |
+| `ampi-session-fallback` | On | Explicit fallback on subscription quota, rate limits, overloads, and capacity stalls |
+| `ampi-web` | Off | Opt-in web search/page reading through your chosen backend |
+| `ampi-github` | Off | Opt-in read-only GitHub tools and librarian prerequisite |
+| `ampi-history` | Off | Opt-in local Pi session search and reuse |
 
-## Optional capabilities
+The package also exposes `./extensions/ampi-*` export aliases while keeping legacy `./extensions/mmr-*` subpaths for existing consumers.
+
+## Configure your own defaults
 
 Non-secret settings live in Pi settings files. Secrets belong in environment variables.
 
@@ -172,41 +188,39 @@ Non-secret settings live in Pi settings files. Secrets belong in environment var
 ```
 
 ```bash
-export MMR_WEB_ENABLE=true            # register web_search/read_web_page
-export MMR_GITHUB_ENABLE=true         # register read-only GitHub tools
-export MMR_HISTORY_ENABLE=true        # register find_session/read_session
-export BRAVE_API_KEY="..."            # optional; env only
-export MMR_GITHUB_TOKEN="ghp_xxx"     # optional; env only
+export MMR_WEB_ENABLE=true
+export MMR_GITHUB_ENABLE=true
+export MMR_HISTORY_ENABLE=true
+export BRAVE_API_KEY="..."
+export MMR_GITHUB_TOKEN="ghp_xxx"
 ```
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Restart Pi after changing settings or env vars that gate tool registration.
 
-## Safety and privacy
+## Production safety
 
-- Locked modes are **fail-closed**: no usable model or zero active tools aborts activation before mutating Pi state.
-- Tool resolution is exact-name based and reported as `active`, `gated`, `disabled`, `deferred`, or `missing` in `/mmr-status`.
-- `mmr-web` only runs after opt-in and rejects localhost/private/link-local reads for `read_web_page`.
-- `mmr-github` exposes read-only GitHub requests only; tokens are read from env and never echoed.
-- `mmr-history` redacts session packets and returns opaque `projectRef` values instead of raw session paths or project roots.
-- `free` mode drops only `pi-mmr`-owned tool registrations; third-party tools keep working.
+- Locked modes are **fail-closed**: no usable model or zero active tools aborts activation before mutation.
+- Free mode removes only ampi-owned tools; third-party tools keep working.
+- Network and history features are opt-in and gated.
+- GitHub tokens and web/search keys are read from env, not settings files.
+- `read_web_page` rejects localhost/private/link-local targets.
+- History always hides raw session file paths/project roots behind opaque refs; content redaction is opt-in with `MMR_HISTORY_REDACT=true`.
+- Worker runs are bounded, surfaced in the TUI, and report non-normal outcomes explicitly.
 
-## Troubleshooting
+## What is still missing
 
-Run `/mmr-status` first; add `debug` for model/tool resolution details.
+ampi is production-ready for the implemented AMP Code-style workflow, but parity work continues:
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `Model applied: no` | Provider missing, unauthenticated, or rejected by Pi | Inspect `/mmr-status debug` model candidates |
-| Mode flipped to Free | Native `/model` or `/think` changed a locked route | Re-enter `/mode <key>` |
-| Tool is `gated` | Owning extension is disabled or prerequisite missing | Enable the extension and restart Pi |
-| `librarian` is gated | `mmr-github` tools are not registered/source-owned | Set `MMR_GITHUB_ENABLE=true`; add `MMR_GITHUB_TOKEN` for private/search |
-| Locked mode refused activation | No usable model or zero active tools | Check model auth and tool resolution |
-
-Full troubleshooting: [`docs/troubleshooting.md`](docs/troubleshooting.md).
+- `/ampi-*` command aliases and first-class `AMPI_*` env aliases while keeping `/mmr-*` compatibility.
+- A richer `/mmr-status debug` history of deterministic mode/fallback events.
+- More background-widget metadata and grouped completion polish.
+- A TUI browser for prior sessions and stored web/research result IDs.
+- A proxy-first MCP tool surface with the same gated/self-contained posture.
+- Optional worktree isolation for child workers after safety semantics are pinned.
 
 ## Documentation
 
-- **Start here:** [`docs/README.md`](docs/README.md)
+- **Docs index:** [`docs/README.md`](docs/README.md)
 - **Quick lookup:** [`docs/quick-reference.md`](docs/quick-reference.md)
 - **Public API:** [`docs/public-api.md`](docs/public-api.md), [`docs/mmr-core-api.md`](docs/mmr-core-api.md)
 - **Architecture:** [`docs/reference-architecture.md`](docs/reference-architecture.md)
@@ -218,6 +232,7 @@ Full troubleshooting: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ```bash
 npm test
+npm run lint
 npm run check
 npm run pack:dry-run
 pi -e "$PWD" --list-models

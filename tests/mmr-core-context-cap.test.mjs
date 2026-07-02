@@ -95,7 +95,7 @@ describe("withMmrModeContextCap (pure)", () => {
 });
 
 function createTempCwd() {
-  return mkdtempSync(path.join(tmpdir(), "pi-mmr-context-cap-"));
+  return mkdtempSync(path.join(tmpdir(), "ampi-context-cap-"));
 }
 
 function buildPi(setModelCalls, handlers, flagValue) {
@@ -193,7 +193,7 @@ describe("mmr-core defensive reassertion", () => {
   it("leaves a GPT-primary mode (deep) at Pi's native window through session_start and input", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     // deep routes to an OpenAI model; give it a 1M native window to prove
-    // the GPT/Codex modes carry no pi-mmr cap and pass the native window
+    // the GPT/Codex modes carry no ampi cap and pass the native window
     // through untouched.
     const models = [
       { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 128_000 },

@@ -1,4 +1,4 @@
-# pi-mmr index
+# ampi index
 
 Quick links for navigating the repository.
 
@@ -47,7 +47,7 @@ Deprecated / unregistered:
 - [`docs/mmr-core-api.md`](docs/mmr-core-api.md) — stable public API exported by `mmr-core` / package root.
 - [`docs/public-api.md`](docs/public-api.md) — stable package-root API exported by non-core extensions.
 - [`docs/public-api-surface.md`](docs/public-api-surface.md) — generated package-root export surface reference.
-- [`docs/extension-compatibility.md`](docs/extension-compatibility.md) — how `pi-mmr` composes with other Pi extensions.
+- [`docs/extension-compatibility.md`](docs/extension-compatibility.md) — how `ampi` composes with other Pi extensions.
 - [`docs/subagent-framework.md`](docs/subagent-framework.md) — subagent framework and worker prompt contracts.
 - [`docs/data-storage-conventions.md`](docs/data-storage-conventions.md) — per-user data storage convention.
 - [`docs/prompt-provenance.md`](docs/prompt-provenance.md) — prompt-source notes and provenance boundaries.

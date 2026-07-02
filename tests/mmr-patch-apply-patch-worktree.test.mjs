@@ -20,7 +20,7 @@ describe("mmr-patch apply_patch path safety extends to same-repo git worktrees",
   }
 
   beforeEach(() => {
-    tmpRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-wt-")));
+    tmpRoot = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-wt-")));
     mainWt = path.join(tmpRoot, "main");
     siblingWt = path.join(tmpRoot, "sibling");
     mkdirSync(mainWt);
@@ -76,7 +76,7 @@ describe("mmr-patch apply_patch path safety extends to same-repo git worktrees",
   });
 
   it("rejects an absolute path that lands in an unrelated sibling directory (not a same-repo worktree)", async () => {
-    const unrelated = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-unrelated-")));
+    const unrelated = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-unrelated-")));
     try {
       await assert.rejects(
         () => runTool(patch(
@@ -94,7 +94,7 @@ describe("mmr-patch apply_patch path safety extends to same-repo git worktrees",
   });
 
   it("rejects a symlink escape from inside a sibling worktree", async () => {
-    const outside = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-out-")));
+    const outside = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-out-")));
     try {
       symlinkSync(outside, path.join(siblingWt, "link"));
       await assert.rejects(
@@ -113,8 +113,8 @@ describe("mmr-patch apply_patch path safety extends to same-repo git worktrees",
   });
 
   it("non-git temp workspace keeps cwd-only behavior (rejects sibling tmpdirs)", async () => {
-    const nonGitWorkdir = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-nogit-")));
-    const sibling = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-sibling-")));
+    const nonGitWorkdir = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-nogit-")));
+    const sibling = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-sibling-")));
     try {
       await assert.rejects(
         () => runTool(patch(
@@ -133,7 +133,7 @@ describe("mmr-patch apply_patch path safety extends to same-repo git worktrees",
   });
 
   it("boundary error message includes current workspace, allowed worktree roots, and the rejected target", async () => {
-    const unrelated = realpathSync(mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-msg-")));
+    const unrelated = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-msg-")));
     try {
       let err;
       try {

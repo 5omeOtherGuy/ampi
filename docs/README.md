@@ -1,42 +1,47 @@
-# pi-mmr documentation
+# ampi documentation
 
-Use this page as the user-facing map for `pi-mmr`. The root [`README.md`](../README.md) explains the product and first-run flow; this page points you to the right reference after that.
+Use this page as the user-facing map for `ampi`: AMP Code but in Pi Agent. The root [`README.md`](../README.md) explains the product posture, implemented parity, first-run flow, and roadmap; this page points to the right reference after that.
 
 ## Start here
 
 | Need | Read |
 | --- | --- |
+| Understand the AMP Code parity posture | [`../README.md`](../README.md) |
 | Learn the core commands and tools | [`quick-reference.md`](quick-reference.md) |
 | Install and verify the package | [`../README.md#quick-start`](../README.md#quick-start) |
-| Pick the right mode | [`../README.md#choose-a-mode`](../README.md#choose-a-mode) |
-| Pick the right tool | [`../README.md#choose-a-tool`](../README.md#choose-a-tool) |
+| Pick the right mode | [`../README.md#modes`](../README.md#modes) |
+| Pick the right tool or subagent | [`../README.md#tools-and-subagents`](../README.md#tools-and-subagents) |
 | Diagnose model/tool resolution | [`troubleshooting.md`](troubleshooting.md) |
 
 ## User guides by job
 
 | I want to... | Start with | Then read |
 | --- | --- | --- |
-| Switch model/tool posture for a task | [`quick-reference.md#modes`](quick-reference.md#modes) | [`../src/extensions/mmr-core/README.md`](../src/extensions/mmr-core/README.md) |
+| Switch the whole AMP-style harness for a task | [`quick-reference.md#modes`](quick-reference.md#modes) | [`../src/extensions/mmr-core/README.md`](../src/extensions/mmr-core/README.md) |
 | Patch files safely | [`quick-reference.md#patch`](quick-reference.md#patch) | [`../src/extensions/mmr-patch/README.md`](../src/extensions/mmr-patch/README.md) |
 | Track session todos | [`quick-reference.md#tasks`](quick-reference.md#tasks) | [`../src/extensions/mmr-tasks/README.md`](../src/extensions/mmr-tasks/README.md) |
-| Delegate bounded work or code search | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md) |
+| Delegate bounded work, searches, or reviews | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md) |
+| Import custom Markdown subagents | [`../README.md#tools-and-subagents`](../README.md#tools-and-subagents) | [`../src/extensions/mmr-custom-subagents/README.md`](../src/extensions/mmr-custom-subagents/README.md) |
 | Search the web or read a public page | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-web/README.md`](../src/extensions/mmr-web/README.md) |
 | Research a GitHub repository | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-github/README.md`](../src/extensions/mmr-github/README.md) |
 | Reuse a prior Pi session | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-history/README.md`](../src/extensions/mmr-history/README.md) |
-| Understand quota fallback | [`../README.md#feature-map`](../README.md#feature-map) | [`../src/extensions/mmr-session-fallback/README.md`](../src/extensions/mmr-session-fallback/README.md) |
+| Understand quota/capacity fallback | [`../README.md#feature-map`](../README.md#feature-map) | [`../src/extensions/mmr-session-fallback/README.md`](../src/extensions/mmr-session-fallback/README.md) |
 
 ## Extension reference
 
-| Extension | Purpose | Default |
-| --- | --- | --- |
-| [`mmr-core`](../src/extensions/mmr-core/README.md) | Locked modes, model resolution, prompt rewrite, diagnostics | On |
-| [`mmr-patch`](../src/extensions/mmr-patch/README.md) | `apply_patch` | On |
-| [`mmr-tasks`](../src/extensions/mmr-tasks/README.md) | `task_list` | On |
-| [`mmr-workers`](../src/extensions/mmr-workers/README.md) | `finder`, `oracle`, `Task`, `librarian` | On (`librarian` gated) |
-| [`mmr-session-fallback`](../src/extensions/mmr-session-fallback/README.md) | Interactive quota/rate-limit fallback | On |
-| [`mmr-web`](../src/extensions/mmr-web/README.md) | `web_search`, `read_web_page` | Off |
-| [`mmr-history`](../src/extensions/mmr-history/README.md) | `find_session`, `read_session` | Off |
-| [`mmr-github`](../src/extensions/mmr-github/README.md) | Read-only GitHub repository tools | Off |
+The public product name is `ampi`. Preferred package subpaths use `ampi/extensions/ampi-*`; the older `ampi/extensions/mmr-*` subpaths, `/mmr-*` commands, `MMR_*` environment variables, and `mmr*` settings keys remain supported compatibility identifiers.
+
+| ampi family | Runtime id | Purpose | Default |
+| --- | --- | --- | --- |
+| `ampi-core` | `mmr-core` | Locked modes, model resolution, prompt rewrite, diagnostics, config flow | On |
+| `ampi-patch` | `mmr-patch` | `apply_patch` | On |
+| `ampi-tasks` | `mmr-tasks` | `task_list` | On |
+| `ampi-workers` | `mmr-workers` | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets | On (`librarian` gated) |
+| `ampi-custom-subagents` | `mmr-custom-subagents` | Markdown `sa__*` workers | On |
+| `ampi-session-fallback` | `mmr-session-fallback` | Subscription quota/rate-limit/capacity fallback | On |
+| `ampi-web` | `mmr-web` | `web_search`, `read_web_page` | Off |
+| `ampi-history` | `mmr-history` | `find_session`, `read_session` | Off |
+| `ampi-github` | `mmr-github` | Read-only GitHub repository tools | Off |
 
 ## Reference docs
 

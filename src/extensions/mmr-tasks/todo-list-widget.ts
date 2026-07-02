@@ -22,7 +22,7 @@ import type { TaskListItem, TodoStatus } from "./todo-list.js";
  * list is pinned above the input editor. Process-wide unique to
  * mmr-tasks so other extensions never accidentally clobber it.
  */
-export const TASK_LIST_WIDGET_ID = "pi-mmr-task-list";
+export const TASK_LIST_WIDGET_ID = "ampi-task-list";
 
 /** Cap the pinned widget so a long backlog does not push the editor off-screen. */
 const TASK_LIST_WIDGET_MAX_ROWS = 12;

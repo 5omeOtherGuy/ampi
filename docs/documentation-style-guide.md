@@ -1,10 +1,10 @@
 # Documentation style guide
 
-How `pi-mmr` writes user-facing docs. The goal is predictable information architecture: readers learn one shape and can find the same thing in the same place across every README. Apply this to root `README.md`, per-extension READMEs, `tests/README.md`, and the user-facing files in `docs/`.
+How `ampi` writes user-facing docs. The goal is predictable information architecture: readers learn one shape and can find the same thing in the same place across every README. Apply this to root `README.md`, per-extension READMEs, `tests/README.md`, and the user-facing files in `docs/`.
 
 ## Audience and tone
 
-- Public-safe and repo-owned. Use `pi-mmr` vocabulary; do not reference local-only analysis, confidential product details, or exact local paths.
+- Public-safe and repo-owned. Use `ampi` vocabulary; do not reference local-only analysis, confidential product details, or exact local paths.
 - Reader-first. Lead with what the thing is for and when to use it; push invariants and developer notes lower.
 - Concise but complete. Every factual claim should be verifiable from the code or tests; do not delete claims to shorten — restructure instead.
 - Avoid ceremony. No "Overview", "Introduction", "Note that…" preambles when a heading already says what follows.
@@ -148,7 +148,7 @@ Re-exports stable from the package root only. Link out, don't recreate:
 ```md
 ## Public API
 
-Stable re-exports from `pi-mmr`: `createMmrSubagentsExtension`, `runMmrSubagentWorker`, ... Canonical catalog: [`docs/public-api.md`](../../../docs/public-api.md).
+Stable re-exports from `ampi`: `createMmrSubagentsExtension`, `runMmrSubagentWorker`, ... Canonical catalog: [`docs/public-api.md`](../../../docs/public-api.md).
 ```
 
 Do not list internal symbols, do not duplicate type definitions, do not document the deep-path imports unless they are part of the documented stable surface.
@@ -168,11 +168,11 @@ Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Public-safety wording rules
 
-Public docs describe only `pi-mmr` behavior in repo-owned terms.
+Public docs describe only `ampi` behavior in repo-owned terms.
 
 Use:
 
-- "Prompt text is authored for `pi-mmr` and assembled through the extension prompt pipeline."
+- "Prompt text is authored for `ampi` and assembled through the extension prompt pipeline."
 - "Locked modes", "prompt assembly", "feature gate", "provider-neutral model preferences", "tool allowlist", "fail-closed".
 
 Do not use:

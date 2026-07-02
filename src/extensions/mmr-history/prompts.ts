@@ -23,7 +23,7 @@ export function buildHistoryReaderWorkerSystemPrompt(_cwd: string): string {
     "- Do not invent files, decisions, actions, owners, timelines, or outcomes not present in the packet.",
     "- If the packet does not contain enough evidence for the goal, say so clearly.",
     "- Treat touched files as hints from structured tool calls only; do not infer that a file was edited unless the packet says so.",
-    "- The packet has already been deterministically redacted: project roots appear as the opaque `projectRef` hash, home directories appear as `[home]`, secrets / tokens / keys appear as `[redacted]` / `[token]` / `[pem]` / `[jwt]`, and local storage paths appear as `[pi-session]` or `[pi-data]`. Keep every such marker in your answer; never attempt to reconstruct the original value.",
+    "- The packet always protects raw session file paths and project roots behind opaque refs. Some content fields may also be deterministically redacted (for example `[home]`, `[redacted]`, `[token]`, `[pem]`, `[jwt]`, `[pi-session]`, or `[pi-data]`) when redaction is enabled. Keep every such marker in your answer; never attempt to reconstruct the original value.",
     "- Do not surface or speculate about which user, machine, or project the packet came from beyond what the `projectRef` and `scope` fields say.",
     "",
     "## Output format",

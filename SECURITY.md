@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-`pi-mmr` is currently pre-1.0. Security fixes target the default branch and the next published package version.
+`ampi` is currently pre-1.0. Security fixes target the default branch and the next published package version.
 
 ## Reporting a vulnerability
 
@@ -10,7 +10,7 @@ Please report suspected vulnerabilities privately through GitHub Security Adviso
 
 Helpful report details:
 
-- affected `pi-mmr` extension or tool
+- affected `ampi` extension or tool
 - impact and attack scenario
 - reproduction steps using non-secret sample data
 - affected version, commit, or installation source

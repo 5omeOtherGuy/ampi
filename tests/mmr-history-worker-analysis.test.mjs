@@ -513,7 +513,7 @@ describe("mmr-history leaving-string redaction (additional)", () => {
 
     assert.ok(!prompt.includes("/home/alice"), `prompt must not contain raw home path: ${prompt}`);
     assert.ok(!prompt.includes("alice"), `prompt must not contain raw username fragment: ${prompt}`);
-    // The first line is the goal, sourced from the already-redacted packet.
+    // The first line is the goal, sourced from the packet's sanitized goal field.
     const firstLine = prompt.split("\n")[0];
     assert.match(firstLine, /^Goal: /);
     assert.ok(firstLine.includes("[home]"), `goal line must echo redacted goal: ${firstLine}`);

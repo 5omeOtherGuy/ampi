@@ -1,11 +1,11 @@
 import type { MmrPlannedToolMetadata } from "./types.js";
 
 /**
- * Catalog of pi-mmr tools scoped for future extensions but not yet
+ * Catalog of ampi tools scoped for future extensions but not yet
  * implemented. See `MmrPlannedToolMetadata` for the entry shape and the
  * inertness contract.
  *
- * The summary field is pi-mmr-authored prose, intentionally short and
+ * The summary field is ampi-authored prose, intentionally short and
  * neutral. It exists for in-repo documentation and so the
  * negative-injection test can defensively assert that no planned summary
  * leaks into the model-facing prompt. It is not a tool description and is

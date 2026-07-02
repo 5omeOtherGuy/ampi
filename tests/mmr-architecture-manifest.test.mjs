@@ -68,7 +68,8 @@ describe("architecture manifest guardrails", () => {
 
     const exportedEntrypoints = new Set(Object.values(pkg.exports));
     // Every manifest entry with an exportSubpath must map to its entrypoint;
-    // entries without one must not be publicly exported.
+    // entries without one must not be publicly exported. Rebrand aliases are
+    // also manifest-owned and intentionally map to the same entrypoint.
     for (const entry of MMR_EXTENSION_MANIFEST) {
       if (entry.exportSubpath === null) {
         assert.equal(
@@ -83,13 +84,22 @@ describe("architecture manifest guardrails", () => {
         entry.entrypoint,
         `${entry.name}: exports["${entry.exportSubpath}"] must point at its entrypoint`,
       );
+      for (const alias of entry.exportAliases ?? []) {
+        assert.equal(
+          pkg.exports[alias],
+          entry.entrypoint,
+          `${entry.name}: exports["${alias}"] must point at its entrypoint`,
+        );
+      }
     }
 
     // Every ./extensions/* export key must be owned by exactly one manifest entry.
     const exportKeys = Object.keys(pkg.exports).filter((k) => k.startsWith("./extensions/"));
-    const manifestSubpaths = new Set(
-      MMR_EXTENSION_MANIFEST.map((e) => e.exportSubpath).filter((s) => s !== null),
-    );
+    const manifestSubpaths = new Set();
+    for (const entry of MMR_EXTENSION_MANIFEST) {
+      if (entry.exportSubpath !== null) manifestSubpaths.add(entry.exportSubpath);
+      for (const alias of entry.exportAliases ?? []) manifestSubpaths.add(alias);
+    }
     for (const key of exportKeys) {
       assert.equal(
         manifestSubpaths.has(key),
@@ -102,6 +112,31 @@ describe("architecture manifest guardrails", () => {
       exportKeys.length,
       "manifest export subpaths and package.json extension exports must be 1:1",
     );
+  });
+
+  it("every exported mmr extension subpath has the matching ampi alias", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const pkg = readPackageJson();
+
+    for (const entry of MMR_EXTENSION_MANIFEST) {
+      if (entry.exportSubpath === null) continue;
+      const expectedAlias = entry.exportSubpath.replace("./extensions/mmr-", "./extensions/ampi-");
+      assert.notEqual(
+        expectedAlias,
+        entry.exportSubpath,
+        `${entry.name}: exportSubpath must use the mmr-* compatibility namespace for alias derivation`,
+      );
+      assert.equal(
+        (entry.exportAliases ?? []).includes(expectedAlias),
+        true,
+        `${entry.name}: manifest exportAliases must include ${expectedAlias}`,
+      );
+      assert.equal(
+        pkg.exports[expectedAlias],
+        entry.entrypoint,
+        `${entry.name}: exports["${expectedAlias}"] must point at its entrypoint`,
+      );
+    }
   });
 
   it("manifest covers exactly the on-disk src/extensions directories", async () => {
@@ -140,6 +175,17 @@ describe("architecture manifest guardrails", () => {
         seen.set(tool, entry.name);
       }
     }
+  });
+
+  it("mmr-workers manifest tools match the provider-owned worker tool set", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const { MMR_WORKERS_OWNED_TOOLS } = await importSource("extensions/mmr-workers/provider.ts");
+    const manifestTools = MMR_EXTENSION_MANIFEST.find((entry) => entry.name === "mmr-workers")?.tools ?? [];
+    assert.deepEqual(
+      [...manifestTools].sort(),
+      [...MMR_WORKERS_OWNED_TOOLS].sort(),
+      "mmr-workers manifest tools must match MMR_WORKERS_OWNED_TOOLS so ownership drift is caught",
+    );
   });
 
   it("manifest tools never collide with the planned-tool catalog", async () => {

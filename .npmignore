@@ -11,7 +11,7 @@ coverage/
 
 # Dev-tooling for this repo's own primary-checkout sync invariants.
 # Hooks and the sync/check scripts only do anything useful when run
-# inside a pi-mmr git checkout; they have no purpose when pi-mmr is
+# inside a ampi git checkout; they have no purpose when ampi is
 # installed as a Pi extension into a downstream environment.
 .githooks/
 biome.json

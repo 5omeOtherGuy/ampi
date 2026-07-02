@@ -41,7 +41,7 @@ function quietGit(args, opts = {}) {
 function note(msg) {
   // Visible enough to spot when running `npm install` manually, but no
   // noisy banner. Single line, prefixed.
-  process.stderr.write(`pi-mmr install-hooks: ${msg}\n`);
+  process.stderr.write(`ampi install-hooks: ${msg}\n`);
 }
 
 const top = quietGit(["rev-parse", "--show-toplevel"]);
@@ -55,7 +55,7 @@ if (path.resolve(top) !== repoRoot) {
   process.exit(0);
 }
 
-// Defensive: confirm we are still in pi-mmr (not a fork that lifted the
+// Defensive: confirm we are still in ampi (not a fork that lifted the
 // scripts/ directory). Use the package.json `name` field as a sentinel.
 const pkgPath = path.join(repoRoot, "package.json");
 if (!existsSync(pkgPath)) process.exit(0);
@@ -65,7 +65,7 @@ try {
 } catch {
   process.exit(0);
 }
-if (pkgName !== "pi-mmr") process.exit(0);
+if (pkgName !== "ampi") process.exit(0);
 
 const hooksDir = path.join(repoRoot, ".githooks");
 if (!existsSync(hooksDir) || !statSync(hooksDir).isDirectory()) {

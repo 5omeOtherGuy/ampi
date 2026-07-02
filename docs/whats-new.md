@@ -1,4 +1,4 @@
-# What's New in pi-mmr
+# What's New in ampi
 
 A quick tour of what changed in the last couple of days, focused on what you can
 actually use. For the full technical record, see [`CHANGELOG.md`](../CHANGELOG.md).
@@ -79,7 +79,7 @@ warning if found in project-local settings).
 
 ## Runs under Pi 0.78.x
 
-The Pi host peer range was widened to `>=0.77.0 <0.79.0`, so `pi-mmr` loads under
+The Pi host peer range was widened to `>=0.77.0 <0.79.0`, so `ampi` loads under
 the current Pi `0.78.x` line. The terminal-only task-list widget and the worker
 model-fallback dialog were adapted to Pi 0.78's RPC/`hasUI` semantics, so headless
 and RPC hosts behave correctly and an interrupted session dismisses the fallback

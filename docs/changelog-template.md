@@ -1,10 +1,10 @@
-# pi-mmr changelog template
+# ampi changelog template
 
 **Audience.** Contributors editing `CHANGELOG.md`. Use this template for every substantial user-visible or operator-visible change.
 
 **Related.** Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
-Keep text public-safe and describe only `pi-mmr` behavior.
+Keep text public-safe and describe only `ampi` behavior.
 
 ## Section order
 
@@ -37,7 +37,7 @@ GitHub release notes are configured in `.github/release.yml`. PR labels determin
 Before cutting a release, generate notes from merged PRs:
 
 ```sh
-npm run release:notes -- v0.1.0 --previous-tag v0.0.0 --output ./release-notes/pi-mmr-v0.1.0.md
+npm run release:notes -- v0.1.0 --previous-tag v0.0.0 --output ./release-notes/ampi-v0.1.0.md
 ```
 
 Review the generated notes for public-safe wording, then copy/adapt the relevant bullets into the versioned `CHANGELOG.md` section. `CHANGELOG.md` remains the packaged offline source that Pi displays after `pi update`; GitHub-generated notes are the release-time input and GitHub Release body.
@@ -60,7 +60,7 @@ When cutting a release, use the reviewed GitHub-generated release notes plus the
 - Released change goes here.
 ```
 
-The startup changelog reader displays the current notes the first time it observes an install, then every versioned section newer than the user's last seen `pi-mmr` version on later updates. It also tracks `Unreleased` bullets by fingerprint so repeated updates between releases show only the bullets added since the previous update.
+The startup changelog reader displays the current notes the first time it observes an install, then every versioned section newer than the user's last seen `ampi` version on later updates. It also tracks `Unreleased` bullets by fingerprint so repeated updates between releases show only the bullets added since the previous update.
 
 ## Automated PR-body sync
 
@@ -71,7 +71,7 @@ The `changelog-sync` GitHub Actions workflow can append `Unreleased` bullets for
 Wrap the bullets you want appended in HTML comments inside the PR body:
 
 ```md
-<!-- pi-mmr changelog:start -->
+<!-- ampi changelog:start -->
 ### Fixed
 
 - `mmr-core`: short, public-safe bullet describing the user-visible effect.
@@ -79,7 +79,7 @@ Wrap the bullets you want appended in HTML comments inside the PR body:
 ### Added
 
 - `mmr-web`: another bullet under a different canonical heading.
-<!-- pi-mmr changelog:end -->
+<!-- ampi changelog:end -->
 ```
 
 Headings must match the canonical list (`Added`, `Changed`, `Fixed`, `Removed`, `Security`, `Documentation`). At least one bullet is required. The whole PR body is scanned for public-unsafe wording before any write.

@@ -1,6 +1,6 @@
 # mmr-github
 
-Read-only GitHub repository tools for `pi-mmr`. `mmr-github` is also the repository-provider prerequisite for the `mmr-subagents` `librarian` worker.
+Read-only GitHub repository tools for `ampi`. `mmr-github` is also the repository-provider prerequisite for the `mmr-subagents` `librarian` worker.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../../ROADMAP.md`](../../../ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -113,7 +113,7 @@ All `mmr-github` tools intentionally **return** a normal result whose `details.e
 
 ## Public API
 
-Re-exported from `pi-mmr`: `createMmrGithubExtension`, settings helpers, feature-gate and tool-provider helpers, ownership predicates, tool-name constants, parser/client errors, and tool registration helpers. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`: `createMmrGithubExtension`, settings helpers, feature-gate and tool-provider helpers, ownership predicates, tool-name constants, parser/client errors, and tool registration helpers. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 

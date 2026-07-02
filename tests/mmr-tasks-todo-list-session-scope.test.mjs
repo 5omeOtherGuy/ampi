@@ -4,7 +4,7 @@
 // Goals (from plan Phase 4):
 //   - Two sessions in the same workspace do NOT see each other's lists.
 //   - session_start does NOT hydrate the widget from a workspace store.
-//   - session_start does NOT create or read any <agentDir>/data/pi-mmr/task-list/* files.
+//   - session_start does NOT create or read any <agentDir>/data/ampi/task-list/* files.
 //   - No cross-session FS watcher is installed.
 //   - Widget only reflects this session's list and only refreshes on local
 //     tool use / explicit /tasks show|toggle.
@@ -39,11 +39,11 @@ function makeLinkedSession(initialEntries = []) {
 
 function makeCtx(session, overrides = {}) {
   return {
-    cwd: overrides.cwd ?? "/tmp/pi-mmr-test-cwd",
+    cwd: overrides.cwd ?? "/tmp/ampi-test-cwd",
     hasUI: overrides.hasUI ?? false,
     sessionManager: {
       getEntries: session.getEntries,
-      getCwd: () => overrides.cwd ?? "/tmp/pi-mmr-test-cwd",
+      getCwd: () => overrides.cwd ?? "/tmp/ampi-test-cwd",
       getSessionId: () => overrides.sessionId ?? "test-session",
       getSessionName: () => overrides.sessionName,
     },
@@ -83,7 +83,7 @@ describe("mmr-tasks task_list — session scope isolation", () => {
     const a = await loadToolboxLinked();
     const b = await loadToolboxLinked();
 
-    const cwd = "/tmp/pi-mmr-shared-workspace";
+    const cwd = "/tmp/ampi-shared-workspace";
     const ctxA = makeCtx(a.session, { cwd, sessionId: "session-A" });
     const ctxB = makeCtx(b.session, { cwd, sessionId: "session-B" });
 
@@ -122,8 +122,8 @@ describe("mmr-tasks task_list — no workspace task-store side effects on sessio
 
   beforeEach(() => {
     for (const k of ENV_KEYS) savedEnv.set(k, process.env[k]);
-    agentDirOverride = mkdtempSync(path.join(tmpdir(), "pi-mmr-todo-agent-"));
-    workdir = mkdtempSync(path.join(tmpdir(), "pi-mmr-todo-cwd-"));
+    agentDirOverride = mkdtempSync(path.join(tmpdir(), "ampi-todo-agent-"));
+    workdir = mkdtempSync(path.join(tmpdir(), "ampi-todo-cwd-"));
     process.env.PI_CODING_AGENT_DIR = agentDirOverride;
     delete process.env.XDG_DATA_HOME;
   });
@@ -137,7 +137,7 @@ describe("mmr-tasks task_list — no workspace task-store side effects on sessio
     rmSync(workdir, { recursive: true, force: true });
   });
 
-  it("session_start does NOT create <agentDir>/data/pi-mmr/task-list/", async () => {
+  it("session_start does NOT create <agentDir>/data/ampi/task-list/", async () => {
     const { handlers, session } = await loadToolboxLinked();
     // Drive the session_start handler that the extension may register.
     const sessionStart = handlers.get("session_start");
@@ -146,19 +146,19 @@ describe("mmr-tasks task_list — no workspace task-store side effects on sessio
       await sessionStart({}, ctx);
     }
     // The new design must not touch the old workspace task-list directory.
-    const oldTaskListDir = path.join(agentDirOverride, "data", "pi-mmr", "task-list");
+    const oldTaskListDir = path.join(agentDirOverride, "data", "ampi", "task-list");
     assert.equal(
       existsSync(oldTaskListDir),
       false,
       `session_start must not create the legacy workspace task-list dir; found ${oldTaskListDir}`,
     );
-    // Also: nothing else under data/pi-mmr/ should appear unless deliberately created elsewhere.
-    const dataPiMmr = path.join(agentDirOverride, "data", "pi-mmr");
+    // Also: nothing else under data/ampi/ should appear unless deliberately created elsewhere.
+    const dataPiMmr = path.join(agentDirOverride, "data", "ampi");
     if (existsSync(dataPiMmr)) {
       const children = readdirSync(dataPiMmr);
       assert.ok(
         !children.includes("task-list"),
-        `session_start must not create a 'task-list' subdir under data/pi-mmr; children=${children.join(",")}`,
+        `session_start must not create a 'task-list' subdir under data/ampi; children=${children.join(",")}`,
       );
     }
   });
@@ -405,7 +405,7 @@ describe("mmr-tasks task_list — compaction/context recollection", () => {
 
     const last = setWidgetCalls.at(-1);
     assert.ok(last, "session_compact must call setWidget when a persisted list exists");
-    assert.equal(last.id, "pi-mmr-task-list");
+    assert.equal(last.id, "ampi-task-list");
     assert.equal(typeof last.value, "function",
       "refresh should use the widget factory form so theme/width handling remains active");
     const widget = last.value(undefined, ctx.ui.theme);

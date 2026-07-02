@@ -50,7 +50,7 @@ const DOMAIN_FILTER_CANDIDATE_COUNT = 50;
  */
 export const SEARXNG_DEFAULT_PATH = "/search";
 
-const DEFAULT_USER_AGENT = "pi-mmr-web/0.0.0";
+const DEFAULT_USER_AGENT = "ampi-web/0.0.0";
 
 export interface SearXNGSearchArgs extends SearchArgs {}
 

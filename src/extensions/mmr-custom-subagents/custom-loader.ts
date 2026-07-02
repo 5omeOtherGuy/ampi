@@ -238,7 +238,7 @@ export const MMR_CUSTOM_SUBAGENT_TOOL_KEYS: readonly string[] = [
 /**
  * Standard toolset granted to a custom subagent that declares no `tools:`
  * key. These are the Pi-native coding tools (`read`, `bash`, `edit`,
- * `write`, `find`, `grep`) plus the pi-mmr web tools (`web_search`,
+ * `write`, `find`, `grep`) plus the ampi web tools (`web_search`,
  * `read_web_page`). A fixed constant is used rather than "all registered
  * tools" so the parent and the spawned child resolve the same set and the
  * worker never fails activation on a tool mismatch; each entry is still

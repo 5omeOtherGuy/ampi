@@ -80,7 +80,7 @@ provenance, claim/release leases, cross-process mutation locking,
 That functionality is parked, not discarded. A frozen snapshot lives at
 `archive/task-list-coordination-prototype-v1` (annotated tag). The on-disk
 files written by previous versions remain under
-`<getAgentDir()>/data/pi-mmr/task-list/` and are not deleted or migrated by
+`<getAgentDir()>/data/ampi/task-list/` and are not deleted or migrated by
 the new code; recover them by checking out the archive ref if needed.
 
 When `mmr-subagents` implements the `Task` tool, revisit the archive and

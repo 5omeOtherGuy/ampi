@@ -66,7 +66,7 @@ Finder slice shipped:
   `--mmr-subagent finder` so the child Pi process applies the
   profile-resolved model, thinking, and tool allowlist verbatim and
   fails closed on any mismatch before mutation.
-- ✅ Runner detects the `pi-mmr: subagent activation failed: <reason>`
+- ✅ Runner detects the `ampi: subagent activation failed: <reason>`
   marker on the child's stderr and converts it into an unmissable
   failure (`MmrWorkerResult.subagentActivationError`,
   `errorMessage: "subagent activation failed: <reason>"`,
@@ -117,7 +117,7 @@ Concrete worker tools registered: `finder`, `oracle`, `Task`, and
    isolated context, bounded model-visible output, progress updates,
    usage/error details, and abort propagation. Use the existing Pi
    subagent example as the implementation pattern, but keep the public
-   tool names and diagnostics `pi-mmr`-owned. **(Satisfied: shipped as
+   tool names and diagnostics `ampi`-owned. **(Satisfied: shipped as
    `runMmrSubagentWorker`; profile activation is required at the type level.)**
 3. ✅ Implement `finder` first as the low-risk read-only worker. Its
    schema is `{ query: string }`; its worker tool set should stay limited

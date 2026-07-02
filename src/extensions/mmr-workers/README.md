@@ -58,7 +58,7 @@ The internal `history-reader` profile is used by `mmr-history.read_session`; it 
 
 ### Blocking vs background
 
-`pi-mmr` exposes the same "run a worker" capability two ways: blocking worker
+`ampi` exposes the same "run a worker" capability two ways: blocking worker
 tools (`Task`, `finder`, `librarian`, `oracle`) that return their result inline,
 and background orchestration tools (`start_task`, `task_poll`, `task_wait`,
 `task_cancel`) that run a worker while the parent keeps working. The runtime
@@ -81,7 +81,7 @@ concrete `agent: "finder"` / `agent: "librarian"` / `agent: "Task"` examples.
 
 ### Concrete subagent ownership
 
-`mmr-subagents` owns every concrete subagent that ships in `pi-mmr`: the Pi tool registration, the worker prompt text and prompt-builder registration against `mmr-core`'s registry, the worker runner invocation, and the result rendering surfaced back to the parent agent.
+`mmr-subagents` owns every concrete subagent that ships in `ampi`: the Pi tool registration, the worker prompt text and prompt-builder registration against `mmr-core`'s registry, the worker runner invocation, and the result rendering surfaced back to the parent agent.
 
 The framework split keeps `mmr-core` provider-agnostic: it owns the profile contract, route resolver, prompt-assembly contract, and prompt-builder registry. `mmr-subagents` registers concrete prompt builders via `registerMmrSubagentsPromptBuilders()` (invoked during the extension factory's init so the registry is populated before any worker resolves).
 
@@ -178,7 +178,7 @@ Current runner behavior:
 - structured exit/error/stderr/usage details;
 - bounded model-visible final output, full final output retained in the result;
 - parent abort propagation via SIGTERM, then SIGKILL after a grace period;
-- detects `pi-mmr: subagent activation failed: <reason>` stderr marker (`MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) and converts it into an unmissable failure even when Pi exits 0, exposing the reason via `MmrWorkerResult.subagentActivationError` and mirroring it into `errorMessage` as `subagent activation failed: <reason>`.
+- detects `ampi: subagent activation failed: <reason>` stderr marker (`MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) and converts it into an unmissable failure even when Pi exits 0, exposing the reason via `MmrWorkerResult.subagentActivationError` and mirroring it into `errorMessage` as `subagent activation failed: <reason>`.
 
 
 ## Background task surface
@@ -242,12 +242,12 @@ Subagent model preferences are configured through `mmr-core`'s `/mmr-config` flo
 
 - **`librarian` stays `gated`.** `mmr-github` is not active or its read-only GitHub tools are not registered by `mmr-github` itself. Enable GitHub access (`MMR_GITHUB_ENABLE=true` or `mmrGithub.enabled=true`) and restart Pi.
 - **`Task` activation failed.** Parent mode is `free` or missing; Task only runs from a locked mode. Check `/mmr-status` for `Mode:`.
-- **Worker reported `subagentActivationError`.** Profile/route mismatch (unknown profile, no model route, explicit `--model` or `--tools` mismatch, invalid `--mmr-parent-mode`). The reason appears in stderr as `pi-mmr: subagent activation failed: <reason>` and in `details.subagentActivationError`.
+- **Worker reported `subagentActivationError`.** Profile/route mismatch (unknown profile, no model route, explicit `--model` or `--tools` mismatch, invalid `--mmr-parent-mode`). The reason appears in stderr as `ampi: subagent activation failed: <reason>` and in `details.subagentActivationError`.
 - **Worker exited 0 but the parent reported failure.** The runner intentionally detects the activation-failure stderr marker and converts it to a hard failure even on exit-0. This is fail-closed behavior, not a bug.
 
 ## Public API
 
-Re-exported from `pi-mmr`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 Extension surface:
 
@@ -262,7 +262,7 @@ Tool-specific (`create<X>Tool(deps?)` / `register<X>Tool(pi, deps?)` plus consta
 - **Finder.** `FINDER_TOOL_NAME`, `FINDER_WORKER_TOOLS`, `FINDER_DEFAULT_MODEL_PREFERENCES`, `FINDER_PROMPT_SNIPPET`, `FINDER_PROMPT_GUIDELINES`, `FINDER_DESCRIPTION`, `FINDER_PARAMETERS_SCHEMA`, `FINDER_PROGRESS_PLACEHOLDER`, `buildFinderWorkerSystemPrompt(cwd)`. Types: `FinderParams`, `FinderDetails`, `FinderToolDeps`.
 - **Oracle.** Analogous (`ORACLE_*`, `DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT`). Params `{ task, context?, files? }`. Types: `OracleParams`, `OracleDetails`, `OracleToolDeps`, `OracleAttachmentRecord`.
 - **Librarian.** `LIBRARIAN_TOOL_NAME`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_WORKER_TOOLS`, prompt/schema constants, `buildLibrarianWorkerSystemPrompt(cwd)`, `isLibrarianGithubToolPrerequisiteRegistered(pi)`, `LIBRARIAN_GATING_REASON`, `MmrLibrarianContextWindowError`. Types: `LibrarianParams`, `LibrarianDetails`, `LibrarianStatus`, `LibrarianToolDeps`, `ResolveLibrarianInvocationInput`. Params `{ query, context? }`. The worker's read-only repository tools are owned by `mmr-github`; librarian stays gated until those tools are registered and source-owned. See [`../mmr-github/README.md`](../mmr-github/README.md).
-- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `pi-mmr/src/extensions/mmr-workers/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
+- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `ampi/src/extensions/mmr-workers/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
   - Task does **not** expose `select*WorkerModel` or `TASK_DEFAULT_MODEL_PREFERENCES`. Model/tool resolution is owned by `resolveMmrSubagentInvocation` against the `task-subagent` profile. Programmatic overrides: `TaskToolDeps.modelPreferencesOverride`. Settings overrides: `mmrCore.subagentModelPreferences.task-subagent`.
 
 Runner:

@@ -66,7 +66,7 @@ describe("github client request behavior", () => {
     assert.equal(init.headers.Authorization, "Bearer secret-token");
     assert.equal(init.headers["X-GitHub-Api-Version"], "2022-11-28");
     assert.equal(init.headers.Accept, "application/vnd.github+json");
-    assert.equal(init.headers["User-Agent"], "pi-mmr-github");
+    assert.equal(init.headers["User-Agent"], "ampi-github");
   });
 
   it("omits Authorization when no token is configured", async () => {

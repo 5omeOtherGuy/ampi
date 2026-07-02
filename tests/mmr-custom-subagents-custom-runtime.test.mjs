@@ -53,7 +53,7 @@ function makeWorkerResult(overrides = {}) {
 
 describe("mmr-subagents custom Markdown runtime", () => {
   it("registers only enabled, in-scope config records as sa__ tools, profiles, and prompt builders (no .claude auto-load)", async () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-runtime-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "ampi-custom-runtime-"));
     try {
       // A Pi-owned subagent Markdown file plus an enabled project config record.
       const piAgents = path.join(root, ".pi", "subagents");
@@ -110,7 +110,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
   });
 
   it("exposes a registered subagent only in its configured modes via the mode-extra provider", async () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-modes-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "ampi-custom-modes-"));
     try {
       const piAgents = path.join(root, ".pi", "subagents");
       mkdirSync(piAgents, { recursive: true });
@@ -139,7 +139,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
   });
 
   it("refuses to register an enabled record whose source file is a symlink escaping the Pi-owned root", async () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-symlink-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "ampi-custom-symlink-"));
     try {
       const piAgents = path.join(root, ".pi", "subagents");
       mkdirSync(piAgents, { recursive: true });
@@ -173,7 +173,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
   });
 
   it("refuses to register an enabled record when the Pi-owned source root is a symlink", async () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-root-link-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "ampi-custom-root-link-"));
     try {
       const outsideAgents = path.join(root, "outside-agents");
       mkdirSync(outsideAgents, { recursive: true });
@@ -203,7 +203,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
   });
 
   it("does not register a discovered Pi-owned candidate without an enabled config record", async () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-custom-candidate-"));
+    const root = mkdtempSync(path.join(os.tmpdir(), "ampi-custom-candidate-"));
     try {
       const piAgents = path.join(root, ".pi", "subagents");
       mkdirSync(piAgents, { recursive: true });

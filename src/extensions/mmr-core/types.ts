@@ -19,7 +19,7 @@ export type MmrModeSelectionSource = "flag" | "command" | "session" | "settings"
  *
  * This is a deterministic record of what the operator/config did and what
  * fallback reacted to — never an inferred or automatic routing decision.
- * `pi-mmr` does not classify prompts or pick models on its own; every entry
+ * `ampi` does not classify prompts or pick models on its own; every entry
  * here corresponds to an explicit mode apply (flag/command/session/settings/
  * default/native) and the deterministic model resolution that followed.
  *
@@ -455,10 +455,10 @@ export interface MmrActiveToolManifestEntry {
 }
 
 /**
- * Metadata describing a tool that pi-mmr has scoped for a future
+ * Metadata describing a tool that ampi has scoped for a future
  * extension but has not yet implemented. Planned entries are tracked in
  * `MMR_PLANNED_TOOL_CATALOG` (see `planned-catalog.ts`) so that the
- * intended owner extension, tool name, and short pi-mmr-authored
+ * intended owner extension, tool name, and short ampi-authored
  * summary are visible in code rather than only in plans/docs that drift.
  *
  * Planned entries are inert by construction: they are not consumed by
@@ -475,7 +475,7 @@ export interface MmrPlannedToolMetadata {
   owner: string;
   /** Lifecycle status. Currently always `"planned"`; the type leaves room for `"deferred"` once a non-shipping but registered status is needed. */
   status: "planned";
-  /** Short pi-mmr-authored summary of the tool's intent. Never surfaced in the model-facing prompt. */
+  /** Short ampi-authored summary of the tool's intent. Never surfaced in the model-facing prompt. */
   summary: string;
 }
 

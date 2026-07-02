@@ -298,14 +298,14 @@ describe("resolveMmrSubagentInvocation", () => {
 
   // Cross-provider Opus 4.8 -> Anthropic "medium" effort contract.
   //
-  // This is a CONTRACT test, not a true wire-level test: pi-mmr cannot import
+  // This is a CONTRACT test, not a true wire-level test: ampi cannot import
   // the providers' real level->effort mappers (pi-ai's mapThinkingLevelToEffort
   // is unexported and nested under pi-coding-agent's node_modules; the
-  // claude-subscription provider package is not a pi-mmr dependency). Instead we
+  // claude-subscription provider package is not a ampi dependency). Instead we
   // encode each provider's published Opus 4.8 `thinkingLevelMap` plus the shared
   // adaptive-effort default algorithm both providers use, and assert that the
-  // canonical thinkingLevel pi-mmr actually RESOLVES for that provider maps to
-  // Anthropic effort "medium". If pi-mmr's per-provider levels drift, or a
+  // canonical thinkingLevel ampi actually RESOLVES for that provider maps to
+  // Anthropic effort "medium". If ampi's per-provider levels drift, or a
   // provider's documented map drifts, this test fails loudly and the fixture
   // must be re-verified against the provider before updating.
   //

@@ -1,5 +1,5 @@
 /**
- * `pi-mmr` package root barrel — the public export surface.
+ * `ampi` package root barrel — the public export surface.
  *
  * Exports here are organized into stability tiers. The same tiers, the
  * compatibility rule, and a per-tier breakdown of what each covers are

@@ -10,8 +10,8 @@ after(cleanupLoadedSource);
 const MODULE = "extensions/mmr-custom-subagents/custom-config.ts";
 
 function makeProject() {
-  const home = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-cfg-home-"));
-  const cwd = mkdtempSync(path.join(os.tmpdir(), "pi-mmr-cfg-cwd-"));
+  const home = mkdtempSync(path.join(os.tmpdir(), "ampi-cfg-home-"));
+  const cwd = mkdtempSync(path.join(os.tmpdir(), "ampi-cfg-cwd-"));
   return { home, cwd, cleanup: () => { rmSync(home, { recursive: true, force: true }); rmSync(cwd, { recursive: true, force: true }); } };
 }
 

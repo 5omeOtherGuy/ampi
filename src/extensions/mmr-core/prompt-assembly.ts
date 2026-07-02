@@ -136,7 +136,7 @@ function renderLegacyMmrTail(previousRecipe: MmrModePromptRecipe): string {
  * Mode-independent: the parent prompt fed into a re-assembly may have been
  * produced for a different mode (e.g. a `deep` parent aliased to a `smart` Task
  * base). Includes the legacy all-posture tail shape so already-captured parent
- * prompts from older `pi-mmr` versions still strip cleanly.
+ * prompts from older `ampi` versions still strip cleanly.
  */
 const PREVIOUS_MMR_TAILS: readonly string[] = [
   ...new Set(

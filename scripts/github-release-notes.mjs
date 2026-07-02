@@ -15,8 +15,8 @@ function usage(exitCode = 0) {
     "This requires the GitHub CLI (`gh`) to be authenticated with release-read access.",
     "",
     "Examples:",
-    "  npm run release:notes -- v0.1.0 --previous-tag v0.0.0 --output ./release-notes/pi-mmr-v0.1.0.md",
-    "  npm run release:notes -- v0.1.0 --repo owner/pi-mmr",
+    "  npm run release:notes -- v0.1.0 --previous-tag v0.0.0 --output ./release-notes/ampi-v0.1.0.md",
+    "  npm run release:notes -- v0.1.0 --repo owner/ampi",
   ].join("\n");
   (exitCode === 0 ? console.log : console.error)(message);
   process.exit(exitCode);

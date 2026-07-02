@@ -1,7 +1,7 @@
-# pi-mmr public API surface tiers
+# ampi public API surface tiers
 
 **Audience.** Maintainers and embedders deciding how stable a given
-package-root export from `pi-mmr` is.
+package-root export from `ampi` is.
 
 **Scope.** The export tiers used by the root barrel (`src/index.ts`).
 This document classifies *stability*; the symbol-by-symbol API reference

@@ -18,7 +18,7 @@ updates:
     commit-message:
       prefix: deps
       include: scope
-    # Keep Pi package updates together so pi-mmr follows one Pi dependency set.
+    # Keep Pi package updates together so ampi follows one Pi dependency set.
     groups:
       pi-agent-stack:
         patterns:

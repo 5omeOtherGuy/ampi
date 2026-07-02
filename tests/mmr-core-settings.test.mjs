@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core settings", () => {
   it("loads global and project MMR settings with project overrides", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -56,7 +56,7 @@ describe("mmr-core settings", () => {
   });
 
   it("warns and skips a malformed settings JSON file while loading the sibling file", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -82,7 +82,7 @@ describe("mmr-core settings", () => {
   });
 
   it("warns when mmrCore is not an object and continues with valid sibling settings", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -113,7 +113,7 @@ describe("mmr-core settings", () => {
   });
 
   it("emits a deprecation warning when toolAliases appears in a settings file and ignores it", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -144,7 +144,7 @@ describe("mmr-core settings", () => {
   });
 
   it("warns when modelPreferences is the wrong shape and ignores it", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -177,7 +177,7 @@ describe("mmr-core settings", () => {
 
 describe("mmr-core settings - read path hardening", () => {
   it("refuses to follow a symlinked settings file on load and keeps the sibling file", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-symlink-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-symlink-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -211,7 +211,7 @@ describe("mmr-core settings - read path hardening", () => {
   });
 
   it("locks filesRead semantics for missing, empty, and valid files", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-matrix-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-matrix-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -249,7 +249,7 @@ describe("mmr-core settings - read path hardening", () => {
 
 describe("mmr-core settings - lockedModeExtraTools", () => {
   it("parses all + per-mode buckets and merges global/project additively", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -280,7 +280,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
   });
 
   it("ignores the free key and unknown keys with warnings, and trims/dedupes names", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -322,7 +322,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
   });
 
   it("warns and skips when lockedModeExtraTools is not an object", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");

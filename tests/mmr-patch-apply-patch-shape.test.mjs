@@ -12,7 +12,7 @@ after(cleanupLoadedSource);
 describe("mmr-patch apply_patch structured result shape", () => {
   let workdir;
   beforeEach(() => {
-    workdir = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-shape-"));
+    workdir = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-shape-"));
   });
   afterEach(() => {
     rmSync(workdir, { recursive: true, force: true });

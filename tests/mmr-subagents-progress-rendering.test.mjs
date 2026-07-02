@@ -393,7 +393,7 @@ describe("renderMmrSubagentResult", () => {
 
   it("keeps collapsed completed results to one header plus the worker objective", async () => {
     const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    const query = "Find where pi-mmr handles subagent invocation behavior in the repository.\nSearch under src and tests for Task-like worker calls.";
+    const query = "Find where ampi handles subagent invocation behavior in the repository.\nSearch under src and tests for Task-like worker calls.";
     const component = renderMmrSubagentResult(
       "finder",
       makeResult(),
@@ -406,7 +406,7 @@ describe("renderMmrSubagentResult", () => {
     assert.equal(component.constructor.name, "Container");
     assert(hasChildType(component, "Box"), "collapsed completed operation body should be boxed like a native Pi tool call");
     assert.match(rendered, /finder • gpt-5\.4-mini\s+completed/i);
-    assert.match(rendered, /Find where pi-mmr handles subagent invocation behavior/);
+    assert.match(rendered, /Find where ampi handles subagent invocation behavior/);
     assert.match(rendered, /Search under src and tests/);
     assert.equal(countOccurrences(rendered, "finder"), 2);
     assert.doesNotMatch(rendered, /Query:/);
@@ -695,7 +695,7 @@ describe("renderMmrSubagentResult", () => {
 
   it("suppresses a duplicate final assistant trail item and renders the final Markdown once", async () => {
     const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    const finalMarkdown = "pi-mmr manages subagent/worker invocations across mmr-core and mmr-subagents.";
+    const finalMarkdown = "ampi manages subagent/worker invocations across mmr-core and mmr-subagents.";
     const component = renderMmrSubagentResult(
       "finder",
       {

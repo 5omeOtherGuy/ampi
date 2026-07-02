@@ -73,7 +73,7 @@ A defense-in-depth validation pass runs inside `execute` so hosts that skip Pi's
 
 ### Pinned widget and `/tasks`
 
-- `task_list` projects the current session's list onto Pi's persistent widget above the input editor (widget id `TASK_LIST_WIDGET_ID`, value `pi-mmr-task-list`). The session log entry is the source of truth; the widget is a UI mirror. Refresh fires after every successful tool call and after Pi emits `session_compact`.
+- `task_list` projects the current session's list onto Pi's persistent widget above the input editor (widget id `TASK_LIST_WIDGET_ID`, value `ampi-task-list`). The session log entry is the source of truth; the widget is a UI mirror. Refresh fires after every successful tool call and after Pi emits `session_compact`.
 - The widget is registered in factory form so Pi re-invokes it on theme changes. Subtasks render directly below their parent with branch markers (`├─` / `└─`). Projection is best-effort: `refreshTodoWidget` swallows render/UI errors so a transient failure can never demote a successful tool call into an `isError` result. Headless surfaces (`ctx.hasUI === false`) are skipped.
 - There is **no `session_start` hydration and no cross-session FS watcher**. The widget appears the first time the model calls `task_list` (or the user runs `/tasks show`) within the session.
 - `/tasks` slash command: `/tasks` (status), `/tasks show`, `/tasks hide`, `/tasks list`. Status reports current visibility and the bound toggle shortcut.
@@ -91,7 +91,7 @@ A defense-in-depth validation pass runs inside `execute` so hosts that skip Pi's
 
 ## Public API
 
-Stable re-exports from `pi-mmr`: `registerMmrTasksProviders`, `createTodoListTool`, `refreshTodoWidget`, `TASK_LIST_WIDGET_ID`, `TodoValidationError`, `findLatestPersistedTodoState`, `parsePersistedTodoState`, `toPersistedTodoState`, `TODO_STATE_ENTRY`, `TODO_STATE_VERSION`, and the types `PersistedTodoState`, `TaskListItem`, `TaskListSubtask`, `TodoStatus`, `CreateTodoListToolOptions`, `RefreshTodoWidgetOptions`, `TodoListDetails`, `TodoListErrorDetails`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Stable re-exports from `ampi`: `registerMmrTasksProviders`, `createTodoListTool`, `refreshTodoWidget`, `TASK_LIST_WIDGET_ID`, `TodoValidationError`, `findLatestPersistedTodoState`, `parsePersistedTodoState`, `toPersistedTodoState`, `TODO_STATE_ENTRY`, `TODO_STATE_VERSION`, and the types `PersistedTodoState`, `TaskListItem`, `TaskListSubtask`, `TodoStatus`, `CreateTodoListToolOptions`, `RefreshTodoWidgetOptions`, `TodoListDetails`, `TodoListErrorDetails`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 

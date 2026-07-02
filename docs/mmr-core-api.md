@@ -1,6 +1,6 @@
 # `mmr-core` public API
 
-**Audience.** Developers writing extensions against `mmr-core`, or packages depending on `pi-mmr`'s core runtime.
+**Audience.** Developers writing extensions against `mmr-core`, or packages depending on `ampi`'s core runtime.
 
 **Scope.** The stable programmatic surface that `mmr-core` exposes: runtime singletons, mode/state types, prompt-assembly contract, tool/feature-gate registry, subagent contracts. Non-core extension exports live in [`public-api.md`](./public-api.md).
 
@@ -8,13 +8,15 @@
 
 Anything not listed here is internal and may change without warning. The contract has two import paths:
 
-- **Package root** — `import { ... } from "pi-mmr"` (resolves to
+- **Package root** — `import { ... } from "ampi"` (resolves to
   `src/index.ts`). Use this in production code.
-- **Extension subpath** — `import { ... } from "pi-mmr/extensions/mmr-core"`
+- **Preferred extension subpath** — `import { ... } from "ampi/extensions/ampi-core"`
   (resolves to the extension entry point). Use this only when wiring
   the extension into a Pi package manifest.
+- **Compatibility subpath** — `import { ... } from "ampi/extensions/mmr-core"`.
+  The `mmr-*` subpaths remain supported for existing consumers.
 
-Internal modules under `pi-mmr/src/extensions/mmr-core/<file>` are not
+Internal modules under `ampi/src/extensions/mmr-core/<file>` are not
 part of the public contract; only the names re-exported from the
 package root are stable.
 
@@ -43,17 +45,15 @@ package root are stable.
    structured `MmrPolicyDiagnostic[]` records with stable `code` values.
    The human-readable `message` field is what `/mmr-status` and the
    activation notification's "Warnings:" block render verbatim.
-5. **Native-control modes are explicit.** `open` keeps Pi-native model,
-   thinking, request, and prompt behavior while activating Smart-equivalent
-   parent-session tools. `free` is the pure opt-out: mmr-core does not
-   enforce model/thinking/request/prompt/tool resolution and emits no policy
-   diagnostics.
+5. **Native-control opt-out is explicit.** `free` is the pure opt-out:
+   mmr-core does not enforce model/thinking/request/prompt/tool resolution,
+   removes ampi-owned tools, and emits no policy diagnostics.
 
 ## Modes
 
 ```ts
-import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } from "pi-mmr";
-import type { MmrModeDefinition, MmrModeKey } from "pi-mmr";
+import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } from "ampi";
+import type { MmrModeDefinition, MmrModeKey } from "ampi";
 ```
 
 - `MMR_MODE_KEYS`: ordered tuple `("smart", "fable", "rush", "deep", "free")`.
@@ -65,8 +65,8 @@ import type { MmrModeDefinition, MmrModeKey } from "pi-mmr";
 ## Mode state
 
 ```ts
-import { getMmrModeState, getMmrModeStateSnapshot } from "pi-mmr";
-import type { MmrModeState } from "pi-mmr";
+import { getMmrModeState, getMmrModeStateSnapshot } from "ampi";
+import type { MmrModeState } from "ampi";
 ```
 
 - `getMmrModeStateSnapshot()` — **preferred for new code.** Returns a
@@ -106,8 +106,8 @@ import {
   registerMmrToolProvider,
   resolveMmrTools,
   isToolAllowed,
-} from "pi-mmr";
-import type { MmrToolProvider, MmrToolResolution, MmrToolRule } from "pi-mmr";
+} from "ampi";
+import type { MmrToolProvider, MmrToolResolution, MmrToolRule } from "ampi";
 ```
 
 - `registerMmrToolProvider(provider)` — register an extension-owned
@@ -141,7 +141,7 @@ next mode resolution include its rules without ordering constraints.
 ## Worker-tool model resolution
 
 ```ts
-import { selectMmrModelRoute, resolveAndApplyMmrModel } from "pi-mmr";
+import { selectMmrModelRoute, resolveAndApplyMmrModel } from "ampi";
 import type {
   MmrModelPreference,
   MmrModelRouteSelection,
@@ -149,7 +149,7 @@ import type {
   MmrModelRegistryLike,
   ResolveAndApplyMmrModelArgs,
   SelectMmrModelRouteArgs,
-} from "pi-mmr";
+} from "ampi";
 ```
 
 - `selectMmrModelRoute({ modelPreferences, modeThinkingLevel?, registry })`
@@ -175,13 +175,13 @@ import {
   createMmrFeatureGateRegistry,
   registerMmrFeatureGateProvider,
   resolveMmrFeatureGates,
-} from "pi-mmr";
+} from "ampi";
 import type {
   MmrFeatureGateDecision,
   MmrFeatureGateProvider,
   MmrFeatureGateProviderDecision,
   MmrFeatureGateRegistry,
-} from "pi-mmr";
+} from "ampi";
 ```
 
 - `registerMmrFeatureGateProvider(provider)` — push a provider onto
@@ -210,7 +210,7 @@ import {
   getMmrSubagentState,
   listMmrSubagentProfiles,
   resolveMmrSubagentInvocation,
-} from "pi-mmr";
+} from "ampi";
 import type {
   ExplicitWorkerCliFlags,
   MmrSubagentBaseMode,
@@ -224,7 +224,7 @@ import type {
   MmrSubagentState,
   MmrSubagentToolResolution,
   ResolveMmrSubagentInvocationArgs,
-} from "pi-mmr";
+} from "ampi";
 ```
 
 Subagent workers run as a dedicated, non-locked execution route in a
@@ -319,7 +319,7 @@ Stable resolver failure codes:
 Fail-closed startup signaling (mmr-core writes; runner reads):
 
 - `MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX` — stable marker that
-  the child Pi process writes to its own stderr (`pi-mmr: subagent
+  the child Pi process writes to its own stderr (`ampi: subagent
   activation failed: <reason>`) when subagent activation rejects.
 - `extractMmrSubagentActivationFailure(stderr)` — pure parser that
   returns the trimmed reason from the last marker occurrence, or
@@ -337,8 +337,8 @@ not user-extensible at runtime.
 ## Prompt route
 
 ```ts
-import { getMmrPromptRoute } from "pi-mmr";
-import type { MmrPromptRoute } from "pi-mmr";
+import { getMmrPromptRoute } from "ampi";
+import type { MmrPromptRoute } from "ampi";
 ```
 
 - `getMmrPromptRoute(modeKey)` — returns `"default" | "rush" | "deep"`.
@@ -349,12 +349,12 @@ import type { MmrPromptRoute } from "pi-mmr";
 ## Policy diagnostics
 
 ```ts
-import { getMmrPolicyDiagnostics } from "pi-mmr";
+import { getMmrPolicyDiagnostics } from "ampi";
 import type {
   MmrPolicyDiagnostic,
   MmrPolicyDiagnosticCode,
   MmrPolicyDiagnosticSeverity,
-} from "pi-mmr";
+} from "ampi";
 ```
 
 - `getMmrPolicyDiagnostics(state)` — returns a list of structured
@@ -381,8 +381,8 @@ diagnostics for any deferred tools.
 ## Event bus
 
 ```ts
-import { MMR_EVENT_STATE_CHANGED, onMmrStateChanged } from "pi-mmr";
-import type { MmrEventBusHost, MmrStateChangedHandler } from "pi-mmr";
+import { MMR_EVENT_STATE_CHANGED, onMmrStateChanged } from "ampi";
+import type { MmrEventBusHost, MmrStateChangedHandler } from "ampi";
 ```
 
 The `mmr-core` extension emits `MMR_EVENT_STATE_CHANGED`
@@ -419,8 +419,8 @@ request/response. For queries, use the read APIs above.
 ## Persisted state
 
 ```ts
-import { MMR_MODE_STATE_ENTRY, findLatestPersistedModeState } from "pi-mmr";
-import type { MmrModeState } from "pi-mmr";
+import { MMR_MODE_STATE_ENTRY, findLatestPersistedModeState } from "ampi";
+import type { MmrModeState } from "ampi";
 ```
 
 - `MMR_MODE_STATE_ENTRY` — the `customType` string used for persisted

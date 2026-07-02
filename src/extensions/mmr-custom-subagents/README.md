@@ -1,6 +1,6 @@
 # mmr-custom-subagents
 
-Discovers project-local and global Markdown subagent definitions and, once enabled through config, registers each as a `sa__<slug>` worker tool for `pi-mmr`.
+Discovers project-local and global Markdown subagent definitions and, once enabled through config, registers each as a `sa__<slug>` worker tool for `ampi`.
 
 Package overview: [`../../../README.md`](../../../README.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md). Sibling worker extension: [`../mmr-workers/README.md`](../mmr-workers/README.md). Framework boundary: [`../../../docs/subagent-framework.md`](../../../docs/subagent-framework.md).
 
@@ -74,7 +74,7 @@ At activation, enabled records are resolved, their source Markdown parsed, and t
 
 ## Public API
 
-Stable re-exports from `pi-mmr`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Stable re-exports from `ampi`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 Extension and provider surface:
 

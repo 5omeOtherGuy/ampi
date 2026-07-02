@@ -100,7 +100,7 @@ function makeRegistry(models) {
 }
 
 function makeTempDir() {
-  return mkdtempSync(path.join(os.tmpdir(), "pi-mmr-oracle-test-"));
+  return mkdtempSync(path.join(os.tmpdir(), "ampi-oracle-test-"));
 }
 
 describe("oracle tool definition", () => {
@@ -755,7 +755,7 @@ describe("oracle execute() seam", () => {
       truncatedFinalOutput: "",
       exitCode: 0,
       stderr:
-        'pi-mmr: subagent activation failed: Unknown subagent profile "no-such". Known profiles: finder, oracle.\n',
+        'ampi: subagent activation failed: Unknown subagent profile "no-such". Known profiles: finder, oracle.\n',
       subagentActivationError: 'Unknown subagent profile "no-such". Known profiles: finder, oracle.',
       errorMessage: 'subagent activation failed: Unknown subagent profile "no-such". Known profiles: finder, oracle.',
     });

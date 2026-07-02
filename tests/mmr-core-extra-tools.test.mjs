@@ -94,7 +94,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-"));
     try {
       writeProjectSettings(tempRoot, {
         lockedModeExtraTools: { all: ["my_tool"], deep: ["deep_tool"], smart: ["smart_only"] },
@@ -134,7 +134,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-sa-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-sa-"));
     try {
       // A user tries to force a custom subagent into deep through the
       // scope-free settings extras path; even though sa__foo is a registered
@@ -171,7 +171,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-"));
     try {
       writeProjectSettings(tempRoot, { lockedModeExtraTools: { all: ["ghost_tool"] } });
 
@@ -210,7 +210,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
     const previousState = { mode: "smart", displayName: "Smart", activeTools: ["read"], missingTools: [], deferredTools: [] };
     runtime.setMmrModeState(previousState);
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-extra-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-"));
     try {
       // The extra tool exists, but NONE of deep's base tools do.
       writeProjectSettings(tempRoot, { lockedModeExtraTools: { all: ["my_tool"] } });

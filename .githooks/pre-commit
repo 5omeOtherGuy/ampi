@@ -40,7 +40,7 @@ pre-commit: refusing to commit on primary 'main' (behind origin/main by $BEHIND)
   AGENTS.md workflow: commit on a task worktree branched from origin/main,
   not on the primary checkout's local main. Run:
 
-      git worktree add ../pi-mmr-<slug> -b <branch> origin/main
+      git worktree add ../ampi-<slug> -b <branch> origin/main
 
   Or, if this commit really belongs on main, first reconcile:
 

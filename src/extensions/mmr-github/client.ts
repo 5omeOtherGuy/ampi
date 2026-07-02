@@ -17,7 +17,7 @@ import {
  */
 
 export const GITHUB_API_VERSION = "2022-11-28";
-export const DEFAULT_GITHUB_USER_AGENT = "pi-mmr-github";
+export const DEFAULT_GITHUB_USER_AGENT = "ampi-github";
 
 /**
  * Read budget for the contents endpoint. GitHub's contents API itself only

@@ -3,7 +3,7 @@
  *
  * Pi's auto-emitted `Guidelines:` block is concise; many high-signal
  * "how to use this tool well" rules from comparable agents are missing.
- * pi-mmr supplements that by inserting a `## Built-in tool guidance`
+ * ampi supplements that by inserting a `## Built-in tool guidance`
  * block immediately after Pi's `Guidelines:` block, scoped to whichever
  * built-in tools are currently listed in Pi's `Available tools:` block.
  *

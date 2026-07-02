@@ -1,5 +1,5 @@
 /**
- * Capability manifest for every `pi-mmr` extension directory.
+ * Capability manifest for every `ampi` extension directory.
  *
  * This module is the single declarative source of truth that the architecture
  * guardrail tests (`tests/mmr-architecture-manifest.test.mjs`) cross-check
@@ -51,6 +51,8 @@ export interface MmrExtensionManifestEntry {
   readonly entrypoint: string;
   /** `package.json` `exports` subpath, or `null` when not publicly exported. */
   readonly exportSubpath: string | null;
+  /** Additional public subpaths that intentionally alias the same entrypoint. */
+  readonly exportAliases?: readonly string[];
   /** Whether the entrypoint is registered in `package.json` `pi.extensions`. */
   readonly autoLoaded: boolean;
   /** Concrete, statically-known Pi tool names this extension owns. */
@@ -72,6 +74,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-core",
     entrypoint: "./src/extensions/mmr-core/index.ts",
     exportSubpath: "./extensions/mmr-core",
+    exportAliases: ["./extensions/ampi-core"],
     autoLoaded: true,
     tools: [],
     dynamicTools: false,
@@ -83,6 +86,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-session-fallback",
     entrypoint: "./src/extensions/mmr-session-fallback/index.ts",
     exportSubpath: "./extensions/mmr-session-fallback",
+    exportAliases: ["./extensions/ampi-session-fallback"],
     autoLoaded: true,
     tools: [],
     dynamicTools: false,
@@ -94,6 +98,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-patch",
     entrypoint: "./src/extensions/mmr-patch/index.ts",
     exportSubpath: "./extensions/mmr-patch",
+    exportAliases: ["./extensions/ampi-patch"],
     autoLoaded: true,
     tools: ["apply_patch"],
     dynamicTools: false,
@@ -105,6 +110,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-tasks",
     entrypoint: "./src/extensions/mmr-tasks/index.ts",
     exportSubpath: "./extensions/mmr-tasks",
+    exportAliases: ["./extensions/ampi-tasks"],
     autoLoaded: true,
     tools: ["task_list"],
     dynamicTools: false,
@@ -118,6 +124,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-toolbox",
     entrypoint: "./src/extensions/mmr-toolbox/index.ts",
     exportSubpath: "./extensions/mmr-toolbox",
+    exportAliases: ["./extensions/ampi-toolbox"],
     autoLoaded: false,
     tools: [],
     dynamicTools: false,
@@ -129,6 +136,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-web",
     entrypoint: "./src/extensions/mmr-web/index.ts",
     exportSubpath: "./extensions/mmr-web",
+    exportAliases: ["./extensions/ampi-web"],
     autoLoaded: true,
     tools: ["web_search", "read_web_page"],
     dynamicTools: false,
@@ -140,6 +148,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-github",
     entrypoint: "./src/extensions/mmr-github/index.ts",
     exportSubpath: "./extensions/mmr-github",
+    exportAliases: ["./extensions/ampi-github"],
     autoLoaded: true,
     tools: [
       "read_github",
@@ -159,11 +168,13 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-workers",
     entrypoint: "./src/extensions/mmr-workers/index.ts",
     exportSubpath: "./extensions/mmr-workers",
+    exportAliases: ["./extensions/ampi-workers"],
     autoLoaded: true,
     tools: [
       "finder",
       "oracle",
       "librarian",
+      "reviewer",
       "Task",
       "start_task",
       "task_poll",
@@ -180,6 +191,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-custom-subagents",
     entrypoint: "./src/extensions/mmr-custom-subagents/index.ts",
     exportSubpath: "./extensions/mmr-custom-subagents",
+    exportAliases: ["./extensions/ampi-custom-subagents"],
     autoLoaded: true,
     tools: [],
     dynamicTools: true,
@@ -191,6 +203,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     name: "mmr-history",
     entrypoint: "./src/extensions/mmr-history/index.ts",
     exportSubpath: "./extensions/mmr-history",
+    exportAliases: ["./extensions/ampi-history"],
     autoLoaded: true,
     tools: ["read_session", "find_session"],
     dynamicTools: false,

@@ -1,23 +1,25 @@
 {
-  "name": "pi-mmr",
+  "name": "ampi",
   "version": "0.2.0",
-  "description": "Pi Multi-Model Routing extensions.",
+  "description": "AMP Code-style harness for Pi Agent: locked modes, tools, workers, web, history, and fallback as one self-contained extension package.",
   "type": "module",
   "license": "MIT",
   "author": "5omeOtherGuy",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/5omeOtherGuy/pi-mmr.git"
+    "url": "git+https://github.com/5omeOtherGuy/ampi.git"
   },
-  "homepage": "https://github.com/5omeOtherGuy/pi-mmr#readme",
+  "homepage": "https://github.com/5omeOtherGuy/ampi#readme",
   "bugs": {
-    "url": "https://github.com/5omeOtherGuy/pi-mmr/issues"
+    "url": "https://github.com/5omeOtherGuy/ampi/issues"
   },
   "keywords": [
     "pi-package",
     "pi",
-    "mmr",
-    "multi-model-routing"
+    "ampi",
+    "amp-code",
+    "multi-model-routing",
+    "subagents"
   ],
   "pi": {
     "extensions": [
@@ -34,6 +36,16 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./extensions/ampi-core": "./src/extensions/mmr-core/index.ts",
+    "./extensions/ampi-session-fallback": "./src/extensions/mmr-session-fallback/index.ts",
+    "./extensions/ampi-patch": "./src/extensions/mmr-patch/index.ts",
+    "./extensions/ampi-tasks": "./src/extensions/mmr-tasks/index.ts",
+    "./extensions/ampi-toolbox": "./src/extensions/mmr-toolbox/index.ts",
+    "./extensions/ampi-web": "./src/extensions/mmr-web/index.ts",
+    "./extensions/ampi-github": "./src/extensions/mmr-github/index.ts",
+    "./extensions/ampi-workers": "./src/extensions/mmr-workers/index.ts",
+    "./extensions/ampi-custom-subagents": "./src/extensions/mmr-custom-subagents/index.ts",
+    "./extensions/ampi-history": "./src/extensions/mmr-history/index.ts",
     "./extensions/mmr-core": "./src/extensions/mmr-core/index.ts",
     "./extensions/mmr-session-fallback": "./src/extensions/mmr-session-fallback/index.ts",
     "./extensions/mmr-patch": "./src/extensions/mmr-patch/index.ts",

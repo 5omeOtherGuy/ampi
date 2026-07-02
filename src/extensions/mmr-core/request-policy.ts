@@ -95,7 +95,7 @@ export interface MmrRequestPolicy {
  *   route's native window is larger (e.g. `smart` pins its Opus route to 300k).
  *   The routes without an MMR-owned context profile (`fable`, `rush`, `deep`)
  *   intentionally set no `contextWindow`, so every route runs at Pi's own registered
- *   window (the observed Codex backend limit) with no pi-mmr override. The cap
+ *   window (the observed Codex backend limit) with no ampi override. The cap
  *   is cap-down only, so a smaller custom route stays authoritative, and `free`
  *   (no policy) is never capped.
  */

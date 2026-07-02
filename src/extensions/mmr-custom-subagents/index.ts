@@ -57,7 +57,7 @@ function maybeNotifyLegacyClaudeMigration(ctx: ExtensionContext): void {
     if (resolved.length > 0) return;
     if (countLegacyClaudeSubagentCandidates(ctx.cwd) === 0) return;
     ctx.ui.notify(
-      "Claude-style agents are no longer auto-loaded by pi-mmr. Run /mmr-config → \"subagent (setup/import custom)\" to review and enable selected agents.",
+      "Claude-style agents are no longer auto-loaded by ampi. Run /mmr-config → \"subagent (setup/import custom)\" to review and enable selected agents.",
       "info",
     );
   } catch {

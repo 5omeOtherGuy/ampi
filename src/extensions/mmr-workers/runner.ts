@@ -379,14 +379,14 @@ function emptyUsage(): MmrWorkerUsageStats {
 }
 
 async function writeSystemPromptFile(systemPrompt: string, deps: Pick<MmrWorkerRunnerDeps, "tmpDir">): Promise<PromptFileHandle> {
-  const dir = await mkdtemp(path.join(deps.tmpDir ?? tmpdir(), "pi-mmr-subagent-"));
+  const dir = await mkdtemp(path.join(deps.tmpDir ?? tmpdir(), "ampi-subagent-"));
   const filePath = path.join(dir, "system-prompt.md");
   await writeFile(filePath, systemPrompt, { encoding: "utf8", mode: 0o600 });
   return { dir, filePath };
 }
 
 async function writeUserPromptFile(prompt: string, deps: Pick<MmrWorkerRunnerDeps, "tmpDir">): Promise<PromptFileHandle> {
-  const dir = await mkdtemp(path.join(deps.tmpDir ?? tmpdir(), "pi-mmr-subagent-"));
+  const dir = await mkdtemp(path.join(deps.tmpDir ?? tmpdir(), "ampi-subagent-"));
   const filePath = path.join(dir, "user-prompt.md");
   await writeFile(filePath, prompt, { encoding: "utf8", mode: 0o600 });
   return { dir, filePath };

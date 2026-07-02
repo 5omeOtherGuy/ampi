@@ -45,17 +45,17 @@ locked MMR mode is active.
   `model_select` / `thinking_level_select` outside the managed guard
   clears the override.
 - ✅ Retry-message rewrite that flips Pi's assistant error into a
-  `pi-mmr applied a session fallback ...` message so the current turn
+  `ampi applied a session fallback ...` message so the current turn
   is retried through Pi's normal retry loop, preserving the original
   provider error message via the `Original error:` suffix.
-- ✅ Package-root public exports from `pi-mmr`:
+- ✅ Package-root public exports from `ampi`:
   `createMmrSessionFallbackExtension`, `classifyMmrSessionFallbackError`,
   `MMR_SESSION_FALLBACK_ENTRY`, `MMR_SESSION_FALLBACK_STATE_VERSION`,
   `parsePersistedMmrSessionFallbackOverride`,
   `toPersistedMmrSessionFallbackOverride`,
   `findLatestPersistedMmrSessionFallbackOverride`,
   `getMmrSessionFallbackOverrideSnapshot`, and the related types. The
-  `pi-mmr/extensions/mmr-session-fallback` subpath remains the Pi extension
+  `ampi/extensions/mmr-session-fallback` subpath remains the Pi extension
   entrypoint and is not a named-helper API.
 
 Dependencies satisfied:

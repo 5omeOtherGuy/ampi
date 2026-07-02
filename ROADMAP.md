@@ -1,49 +1,55 @@
-# pi-mmr roadmap
+# ampi roadmap
 
-This roadmap tracks package-level direction. Each shipped extension owns detailed milestones in its own `ROADMAP.md` file.
+ampi is AMP Code but in Pi Agent. The package goal is a faithful, production-ready, self-contained AMP Code-style harness for the implemented Pi workflows, running on the user's own subscriptions, API keys, models, settings, and optional network/history gates. ampi is independent, not an official AMP Code package, and remaining parity gaps are tracked below.
+
+This roadmap tracks package-level direction. Each shipped extension family owns detailed milestones in its own `ROADMAP.md` file.
 
 ## Current baseline
 
-`pi-mmr` ships as one installable Pi package with seven extensions:
+ampi ships as one installable Pi package with strong defaults and opt-in optional reach:
 
-| Extension | Status | Surface |
-| --- | --- | --- |
-| [`mmr-core`](src/extensions/mmr-core/README.md) | Shipped, default on | Locked modes, model resolution, tool registry, feature gates, prompt assembly, diagnostics |
-| [`mmr-toolbox`](src/extensions/mmr-toolbox/README.md) | Shipped, default on | `apply_patch`, session-local `task_list` |
-| [`mmr-subagents`](src/extensions/mmr-subagents/README.md) | Shipped, default on | `finder`, `oracle`, `Task`, `librarian`, custom Markdown subagents |
-| [`mmr-session-fallback`](src/extensions/mmr-session-fallback/README.md) | Shipped, default on | Interactive session-scoped fallback model + thinking picker for subscription quota/rate-limit errors |
-| [`mmr-web`](src/extensions/mmr-web/README.md) | Shipped, default off | `web_search`, `read_web_page` via SearXNG / Brave / DuckDuckGo |
-| [`mmr-history`](src/extensions/mmr-history/README.md) | Shipped, default off | `find_session`, `read_session` over local Pi sessions with redaction |
-| [`mmr-github`](src/extensions/mmr-github/README.md) | Shipped, default off | Read-only GitHub repository reads, listings, search, commits, diffs, repository discovery |
+| ampi family | Runtime id | Status | Surface |
+| --- | --- | --- | --- |
+| `ampi-core` | `mmr-core` | Shipped, default on | Locked modes, model resolution, request/thinking policy, active tools, feature gates, prompt assembly, diagnostics |
+| `ampi-patch` | `mmr-patch` | Shipped, default on | Safe `apply_patch` |
+| `ampi-tasks` | `mmr-tasks` | Shipped, default on | Session-local `task_list` |
+| `ampi-workers` | `mmr-workers` | Shipped, default on | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
+| `ampi-custom-subagents` | `mmr-custom-subagents` | Shipped, default on | Markdown `sa__*` subagents with scoped tools/models/thinking |
+| `ampi-session-fallback` | `mmr-session-fallback` | Shipped, default on | Explicit subscription quota/rate-limit/overload fallback |
+| `ampi-web` | `mmr-web` | Shipped, default off | `web_search`, `read_web_page` via SearXNG / Brave / DuckDuckGo |
+| `ampi-history` | `mmr-history` | Shipped, default off | `find_session`, `read_session` over local Pi sessions with redaction |
+| `ampi-github` | `mmr-github` | Shipped, default off | Read-only GitHub files, listings, search, commits, diffs, repository discovery |
 
-Routing spine owned by `mmr-core`:
+Runtime ids remain `mmr-*` while compatibility aliases and docs move to the `ampi` product name.
+
+Routing spine owned by `ampi-core`:
 
 ```text
 mode → model/thinking → active tools → prompt route → diagnostics
 ```
 
-## Per-extension roadmaps
+## Parity already achieved
 
-- [`src/extensions/mmr-core/ROADMAP.md`](src/extensions/mmr-core/ROADMAP.md)
-- [`src/extensions/mmr-session-fallback/ROADMAP.md`](src/extensions/mmr-session-fallback/ROADMAP.md)
-- [`src/extensions/mmr-toolbox/ROADMAP.md`](src/extensions/mmr-toolbox/ROADMAP.md)
-- [`src/extensions/mmr-web/ROADMAP.md`](src/extensions/mmr-web/ROADMAP.md)
-- [`src/extensions/mmr-subagents/ROADMAP.md`](src/extensions/mmr-subagents/ROADMAP.md)
-- [`src/extensions/mmr-history/ROADMAP.md`](src/extensions/mmr-history/ROADMAP.md)
-
-`mmr-github` currently ships without a separate roadmap; track new GitHub-provider milestones either here or in `src/extensions/mmr-github/ROADMAP.md` when the scope grows beyond maintenance.
+- Whole-harness locked modes: `smart`, `fable`, `rush`, `deep`, `free`.
+- Provider-neutral model preference order that works with subscription and API-key providers.
+- Per-mode thinking/context/tool/prompt policy.
+- Status/config/debug surfaces for deterministic mode resolution.
+- Safe patching, task planning, web search, web reading, GitHub repository research, prior-session recall, and quota/capacity fallback.
+- Built-in subagents and background workers: `finder`, `oracle`, `Task`, `reviewer`, `librarian`, internal `history-reader`, and custom Markdown `sa__*` agents.
+- Self-contained defaults: a fresh install works as a complete AMP-style Pi harness; advanced configuration is optional.
 
 ## Near-term priorities
 
-1. **User-facing documentation polish.** Keep the root README, [`docs/README.md`](docs/README.md), and [`docs/quick-reference.md`](docs/quick-reference.md) aligned with the shipped tool surface.
-2. **GitHub/librarian clarity.** Keep `librarian` gating, worker docs, and `mmr-github` reference docs synchronized as repository-provider behavior evolves.
-3. **Custom subagent setup hardening.** Continue tightening `/mmr-config` import/setup diagnostics, safe defaults, and fixtures for `sa__*` tools.
-4. **Session-history handoff design.** Extend `mmr-history` beyond lookup/reading only after privacy, storage, and redaction contracts are explicit.
-5. **Provider-policy boundaries.** Keep broad provider-specific payload/header/retry behavior out of `mmr-core` unless it is part of the mode contract.
+1. **Complete the visible rebrand.** Add `/ampi-*` command aliases, `AMPI_*` env aliases, docs for both old and new identifiers, and first-class `./extensions/ampi-*` API docs while preserving existing `/mmr-*` compatibility.
+2. **Keep AMP parity explicit.** Keep the root README, [`docs/README.md`](docs/README.md), and [`docs/quick-reference.md`](docs/quick-reference.md) aligned with the shipped tool/subagent surface and parity gaps.
+3. **Mode/fallback explainability.** Expand `/mmr-status debug` with deterministic mode/fallback event history, not prompt classification or hidden routing.
+4. **Background-worker polish.** Add richer metadata to the live task board and grouped completion notifications.
+5. **History and web ergonomics.** Add a session browser, smarter large-session windowing, and stored content/result IDs without weakening redaction or SSRF protections.
+6. **Custom subagent hardening.** Continue tightening setup/import diagnostics, safe defaults, and fixtures for `sa__*` tools.
 
 ## Planned or deferred capabilities
 
-### `mmr-skills`
+### `ampi-skills`
 
 Potential callable skill-loading extension.
 
@@ -51,37 +57,44 @@ Would provide:
 
 - `skill` tool registration and routing.
 - Pi skill discovery integration.
-- Feature-gate and tool-provider ownership through `mmr-core`.
+- Feature-gate and tool-provider ownership through `ampi-core`.
 
 Status: deferred until the Pi skill surface and least-privilege behavior are stable enough for a public contract.
 
-### `mmr-toolbox-mcp`
+### `ampi-mcp`
 
-Potential MCP discovery and routing extension separate from local toolbox utilities.
+Potential proxy-first MCP discovery and routing extension.
 
 Would provide:
 
+- A single controlled MCP tool surface for search/describe/connect/call/status.
 - MCP resource discovery, read-only resource access, and diagnostics.
-- Feature-gate and tool-provider ownership through `mmr-core`.
+- Feature-gate and tool-provider ownership through `ampi-core`.
 
-Status: deferred. Local tools remain in `mmr-toolbox`; network/provider surfaces stay in their owning extensions.
+Status: deferred. Local tools remain in the local tool families; network/provider surfaces stay in their owning extensions.
 
-### `mmr-provider-parity`
+### `ampi-provider-parity`
 
-Potential provider-specific request behavior beyond the narrow per-mode request policy already in `mmr-core`.
+Potential provider-specific request behavior beyond the narrow per-mode request policy already in `ampi-core`.
 
 Would provide:
 
 - Broader provider-specific payload shaping.
 - Provider-specific headers or retry policies when they become part of a public contract.
 
-Status: deferred. `mmr-core/request-policy.ts` keeps the current minimal mode-owned token/reasoning behavior.
+Status: deferred. Current mode-owned token/reasoning behavior stays minimal and deterministic.
 
-### `mmr-review`
+### Worker worktree isolation
 
-Potential review orchestration extension.
+Potential child-worker isolation mode.
 
-Status: out of scope for now. `pi-mmr` does not include a core-owned `reviewer` tool; users can use `oracle`, `Task`, custom subagents, or their own workflows.
+Would provide:
+
+- Optional per-worker worktrees for mutating child tasks.
+- Explicit parent review/apply semantics.
+- No auto-commit or hidden workspace mutation.
+
+Status: deferred until safety semantics are pinned.
 
 ## Release checklist
 
@@ -89,6 +102,7 @@ Before a release, run:
 
 ```bash
 npm test
+npm run lint
 npm run check
 npm run pack:dry-run
 ```
@@ -110,7 +124,8 @@ Release work should also:
 
 Public text includes docs, code comments, test names, fixtures, snapshots, package metadata, prompt text, tool descriptions, and schema descriptions. Before publishing or broadening visibility:
 
-- Describe behavior only in `pi-mmr` terms.
+- Describe behavior in `ampi` terms, with `mmr-*` only when naming existing compatibility identifiers.
 - Do not include credentials, raw provider payloads, local session data, private analysis, exact local paths, or non-public provenance.
+- Public AMP Code terminology and parity positioning are allowed when written in repo-owned words and grounded in implemented behavior.
 - Keep model-visible prompt/tool metadata aligned with the implementation and the active tool surface.
-- Keep mode keys (`smart`, `fable`, `rush`, `deep`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`) stable unless a coordinated migration plan exists.
+- Keep mode keys (`smart`, `fable`, `rush`, `deep`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`, `reviewer`) stable unless a coordinated migration plan exists.

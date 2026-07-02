@@ -46,7 +46,6 @@ Implemented surfaces:
 - logical MMR tool-name resolution to registered Pi tools
 - active tool filtering and `tool_call` blocking for locked MMR modes
 - fail-closed zero-active-tools policy for locked mode activation
-- `open` mode for native Pi model/thinking/prompt controls with Smart-equivalent tools
 - `free` mode for native Pi model/thinking controls, baseline Pi tools, and no MMR prompt/tool enforcement
 - automatic switch to `free` when native Pi model/thinking controls are used from a locked mode
 - per-mode system-prompt rewrite that replaces Pi's auto-rendered head only and preserves Pi's tail, `appendSystemPrompt`, and other extension content byte-for-byte
@@ -120,7 +119,7 @@ Implemented:
 - ✅ Missing reserved tools are non-fatal and are shown as missing/deferred in status and prompt text.
 - ✅ Locked modes set active tools, block disallowed `tool_call` events, and fail closed when no active tools resolve.
 - ✅ Prompt snapshot/consistency tests catch active/missing/deferred tool drift.
-- ✅ Per-mode tool matrices follow the project tool capability matrix: smart/large delegate search/list to model-backed tools, rush keeps direct `grep`/`find`, deep requests `bash`, `apply_patch`, and `write` directly.
+- ✅ Per-mode tool matrices follow the project tool capability matrix: `smart`/`fable` delegate search/list to model-backed tools, `rush` keeps direct `grep`/`find`, and `deep` requests `bash`, `apply_patch`, and `write` directly.
 - ✅ Registry rules carry metadata: requested name, chosen Pi tool name, owner extension (e.g. `mmr-subagents`, `mmr-history`, `mmr-web`, `mmr-toolbox`, `mmr-toolbox-mcp`, `mmr-skills`), explicit status (`active`/`missing`/`deferred`/`gated`/`disabled`), and user-facing diagnostic text exposed in `MmrToolDecision`.
 - ✅ `registerMmrToolProvider(...)` API: later extensions claim ownership for the exact names they own and report `active`/`gated`/`disabled`/`deferred` status; latest registration wins. An exact-name catalog credits owning extensions for deferred tools.
 - ✅ Tests cover identity dedup (same name requested twice) and gated/disabled tools (excluded from `activeTools`, surfaced in dedicated `gatedTools` / `disabledTools` buckets, blocked by `tool_call`).
@@ -141,7 +140,7 @@ Current status: MMR-authored per-mode templates and snapshots are implemented. `
 
 Tasks:
 
-- [x] Introduce per-mode prompt templates for `smart`, `smartGPT`, `rush`, `large`, and `deep`.
+- [x] Introduce per-mode prompt templates for `smart`, `fable`, `rush`, and `deep`.
 - [x] Keep the rewrite scoped to Pi's auto head; preserve any content prepended by earlier handlers, Pi's `appendSystemPrompt`, `# Project Context` / AGENTS.md, `<available_skills>`, future subagents block, `Current date:`, `Current working directory:`, and any extension-appended tail content byte-for-byte.
 - [x] Embed Pi's auto-rendered `Available tools:` and `Guidelines:` under `## Tool use` so the model never sees a stale or duplicated tool list. (Initial implementation stripped two unconditional Pi bullets the mode prompt covers; current policy is byte-identical passthrough — see Milestone 6.)
 - [x] Add prompt snapshot tests for each mode plus behavioral tests covering free mode, custom-prompt passthrough, prepended-extension preservation, `appendSystemPrompt` preservation, and tail-appended preservation.
@@ -221,7 +220,7 @@ Implemented:
 - ✅ Shared `## Tool use` and coding-guidance blocks inserted after Pi documentation and before mode posture for every prompted mode.
 - ✅ Planned-tool catalog (`MMR_PLANNED_TOOL_CATALOG`) describing scoped-but-not-implemented tools. Catalog entries are inert by construction: never reach the active manifest, never appear in the model-facing prompt. A negative-injection invariant covers every (mode × baseline-tool-set) combination.
 - ✅ Developer-only debug fixture renderer (`renderMmrPromptDebugFixture`) producing a stable Markdown artifact (`=== System Messages ===` / `=== Tools ===`). Deterministic JSON via `stringifyMmrToolSchema`.
-- ✅ Mode/tool-set matrix coverage: 16 renderer-flattened fixtures spanning `{smart, rush, large, deep} × {core-only, core+toolbox, core+web, core+toolbox+web}` plus per-mode structural invariants including `smartGPT`.
+- ✅ Mode/tool-set matrix coverage: renderer-flattened fixtures spanning shipped prompted modes and documented tool-set combinations, plus per-mode structural invariants.
 
 Public exports added by this milestone:
 
@@ -285,7 +284,7 @@ Implemented:
   route, explicit `--model` mismatch, and explicit `--tools` mismatch
   all reject before any mutation. The failure path emits an error
   notification, writes the canonical marker
-  `pi-mmr: subagent activation failed: <reason>` (exported as
+  `ampi: subagent activation failed: <reason>` (exported as
   `MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) to the child's
   stderr, and throws from `session_start`.
 - ✅ Pure stderr parser (`extractMmrSubagentActivationFailure`)
@@ -343,7 +342,7 @@ phases were scoped during that work but intentionally not implemented.
 
 What it would entail:
 
-- Register pi-mmr-owned tools that shadow or replace Pi built-ins. A wrapper
+- Register ampi-owned tools that shadow or replace Pi built-ins. A wrapper
   is a new tool with its own name, description, parameter schema, and prompt
   steering; it accepts model calls and either delegates to the underlying Pi
   built-in or reimplements the behavior.
@@ -357,7 +356,7 @@ What it would entail:
 
 Why it is deferred:
 
-- Wrappers replace a stable Pi built-in surface with a pi-mmr-owned surface
+- Wrappers replace a stable Pi built-in surface with a ampi-owned surface
   and bring real risk: schema drift, path-handling drift, renderer drift,
   tool-call resolution drift, and session-behavior drift versus what Pi already
   validates.
@@ -373,7 +372,7 @@ Revisit when:
 
 - A concrete behavioral requirement (e.g. structured shell output, atomic
   multi-file edits with a different schema, or a strictly sandboxed shell)
-  cannot be satisfied by prompt steering or by an existing pi-mmr tool.
+  cannot be satisfied by prompt steering or by an existing ampi tool.
 - Or when a wrapper is needed to enforce a safety/privacy policy that Pi's
   built-in surface cannot represent.
 

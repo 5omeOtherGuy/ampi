@@ -217,7 +217,7 @@ export const MMR_PROMPT_FRAGMENTS = {
     id: "shared-tool-guidance",
     blockKind: "shared-tool-guidance",
     source: "mmr-core",
-    summary: "Shared pi-mmr tool-execution policy for all prompted locked modes.",
+    summary: "Shared ampi tool-execution policy for all prompted locked modes.",
   },
   autonomy: {
     id: "autonomy",

@@ -281,7 +281,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     clearMmrManagedModelOverride();
     const previousState = getMmrModeState();
     const shouldRestoreBaseline = Boolean(baseline && previousState && previousState.mode !== "free" && !options.nativeControlOptOut);
-    // Free mode means "Pi as if `pi-mmr` were not installed". Drop tools
+    // Free mode means "Pi as if `ampi` were not installed". Drop tools
     // registered by MMR package extensions (apply_patch, web_search,
     // read_web_page, ...) from the baseline before handing control back to
     // Pi. Pi rebuilds its system prompt and provider `tools` payload from

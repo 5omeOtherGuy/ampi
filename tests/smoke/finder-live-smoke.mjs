@@ -19,9 +19,9 @@
 //                                   <path>` for each so the spawned `pi`
 //                                   loads ONLY the worktree's mmr-core /
 //                                   mmr-subagents instead of whatever
-//                                   pi-mmr Pi would auto-discover. Use this
+//                                   ampi Pi would auto-discover. Use this
 //                                   when running the smoke from a worktree
-//                                   that is NOT the pi-mmr install Pi sees.
+//                                   that is NOT the ampi install Pi sees.
 //                                   Production finder NEVER passes these.
 //
 // Exits 0 on a non-empty, non-aborted result; 1 otherwise. Always prints
@@ -38,7 +38,7 @@ import { cleanupLoadedSource, importSource } from "../helpers/load-src.mjs";
 
 // The Pi CLI bundles its own copy of @earendil-works/pi-coding-agent (and
 // @earendil-works/pi-ai), which is typically newer than the peer copy in
-// the pi-mmr workspace's node_modules. Production finder runs inside that
+// the ampi workspace's node_modules. Production finder runs inside that
 // bundled runtime, so to make this smoke faithfully exercise the
 // production model-selection path we load AuthStorage/ModelRegistry from
 // the *installed Pi CLI*, not from the workspace.
@@ -104,9 +104,9 @@ async function main() {
   // re-invoking this script as if it were Pi.
   //
   // By default the smoke is production-faithful: the spawned `pi` discovers
-  // pi-mmr through normal Pi extension discovery, exactly as a production
+  // ampi through normal Pi extension discovery, exactly as a production
   // finder worker would. Operators running this from a worktree that is
-  // NOT the pi-mmr install Pi sees should set FINDER_SMOKE_EXTENSION_PATHS
+  // NOT the ampi install Pi sees should set FINDER_SMOKE_EXTENSION_PATHS
   // to opt into dev-loop isolation (loads only the specified extensions
   // via `-e <path>` and disables auto-discovery via `--no-extensions`).
   const devExtensionPaths = (process.env.FINDER_SMOKE_EXTENSION_PATHS ?? "")

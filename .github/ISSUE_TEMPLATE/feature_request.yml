@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement to pi-mmr
+description: Suggest an improvement to ampi
 title: "Feature: "
 labels: [enhancement]
 body:
@@ -18,7 +18,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior
-      description: What should pi-mmr do differently?
+      description: What should ampi do differently?
     validations:
       required: true
   - type: textarea

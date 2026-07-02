@@ -18,7 +18,7 @@
 #
 # Usage:
 #   npm run cleanup:worktree -- <worktree-path> [branch] [--force]
-#   bash scripts/worktree-cleanup.sh ../pi-mmr-<slug> [chore/<branch>] [--force]
+#   bash scripts/worktree-cleanup.sh ../ampi-<slug> [chore/<branch>] [--force]
 #
 # Exit codes:
 #   0   cleaned up

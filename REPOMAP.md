@@ -1,6 +1,6 @@
-# pi-mmr repository map
+# ampi repository map
 
-`pi-mmr` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `mmr-core`, `mmr-session-fallback`, `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-github`, `mmr-workers`, `mmr-custom-subagents`, and `mmr-history`. Two further directories ship in source but are not registered in `pi.extensions`: `mmr-toolbox` (a deprecated compatibility shim) and `mmr-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `mmr-core`, `mmr-session-fallback`, `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-github`, `mmr-workers`, `mmr-custom-subagents`, and `mmr-history`. Two further directories ship in source but are not registered in `pi.extensions`: `mmr-toolbox` (a deprecated compatibility shim) and `mmr-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -38,7 +38,7 @@
 
 `mmr-toolbox` and `mmr-debug` are intentionally absent from this list. `mmr-toolbox` remains importable through the `exports` map as a deprecated re-export of `mmr-patch` and `mmr-tasks`; `mmr-debug` is loaded explicitly with Pi's `-e` flag and is excluded from the published package via `.npmignore`.
 
-Public consumers should import from the package root (`pi-mmr`) unless they are wiring a specific extension subpath declared in `exports`.
+Public consumers should import from the package root (`ampi`) unless they are wiring a specific extension subpath declared in `exports`.
 
 ## Source tree
 
@@ -91,7 +91,7 @@ Important files:
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
 
-Registered surface: slash commands (`/mode`, `/mmr-status`, `/mmr-changelog`, `/mmr-config`), mode shortcuts, the `pi-mmr-above-editor-dashboard` widget, and the feature gates for `mmr-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `mmr-history`, `mmr-web`, `mmr-patch`, and `mmr-tasks`.
+Registered surface: slash commands (`/mode`, `/mmr-status`, `/mmr-changelog`, `/mmr-config`), mode shortcuts, the `ampi-above-editor-dashboard` widget, and the feature gates for `mmr-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `mmr-history`, `mmr-web`, `mmr-patch`, and `mmr-tasks`.
 
 ### `src/extensions/mmr-session-fallback/`
 
@@ -125,7 +125,7 @@ Important files:
 
 - `index.ts` — Pi extension entry point and provider registration.
 - `todo-list-tool.ts` — `task_list` tool definition, whole-list validation, and verification nudges.
-- `todo-list-widget.ts` — pinned `aboveEditor` widget (`pi-mmr-task-list`) with Pi-native progress spinners.
+- `todo-list-widget.ts` — pinned `aboveEditor` widget (`ampi-task-list`) with Pi-native progress spinners.
 - `task-list-wiring.ts` — `/tasks` slash command, shortcuts, and compaction hooks.
 
 ### `src/extensions/mmr-web/`
@@ -169,7 +169,7 @@ Important files:
 - `async-task-tools.ts` — background start path plus `task_poll`, `task_wait`, and `task_cancel`.
 - `async-task-registry.ts` — in-memory, session-scoped registry of worker lifecycles and concurrency caps.
 - `async-task-delivery.ts` — at-most-once completion notices and idle-wake pushes.
-- `progress-rendering.ts` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`pi-mmr-background-tasks`) over the `background-task-view.ts` vocabulary.
+- `progress-rendering.ts` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`ampi-background-tasks`) over the `background-task-view.ts` vocabulary.
 - `async-task-tool-format.ts` — tool-result, board-snapshot, and fleet-status formatting.
 - `provider.ts` — unified tool-provider and feature-gate-provider factories.
 - `prompts.ts` — worker prompt builders.

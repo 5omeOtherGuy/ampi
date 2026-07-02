@@ -89,10 +89,10 @@ There is no per-project consent prompt. Content redaction is off by default for 
 
 ## Public API
 
-Re-exported from `pi-mmr`: `createMmrHistoryExtension`, `MMR_HISTORY_TOOL_NAMES`, history tool/details types. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`: `createMmrHistoryExtension`, `MMR_HISTORY_TOOL_NAMES`, history tool/details types. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 
 - `MMR_HISTORY_MODEL_ANALYSIS_ENABLE` is gone. The legacy `threadID` request alias and `analysis` parameter are accepted with a soft deprecation warning in `details.warnings`. `currentProjectOnly: true` is replaced by `scope: "all_sessions"`.
-- Global enumeration walks `~/.pi/agent/sessions/` behind a 10 s in-process TTL cache; per-session touched-file and metadata enrichment is cached by `id|modified|messageCount|path|cwd`. No persistent on-disk index, no filesystem watchers, no cross-process cache, no workspace state, no network sync. Persistent-index follow-up: [#64](https://github.com/5omeOtherGuy/pi-mmr/issues/64).
+- Global enumeration walks `~/.pi/agent/sessions/` behind a 10 s in-process TTL cache; per-session touched-file and metadata enrichment is cached by `id|modified|messageCount|path|cwd`. No persistent on-disk index, no filesystem watchers, no cross-process cache, no workspace state, no network sync. Persistent-index follow-up: [#64](https://github.com/5omeOtherGuy/ampi/issues/64).
 - Tests: `tests/mmr-history*.test.mjs`.

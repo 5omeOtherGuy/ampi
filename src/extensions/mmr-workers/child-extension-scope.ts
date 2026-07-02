@@ -13,14 +13,14 @@
  *
  *   1. mmr-core (always) — owns the `--mmr-subagent` activation guard, the tool
  *      allowlist, model routing, and thinking policy.
- *   2. The pi-mmr extensions that own the worker's declared tools.
+ *   2. The ampi extensions that own the worker's declared tools.
  *   3. EVERY other currently-loaded extension (external provider packages,
  *      unknown third-party tool/command extensions). These are kept verbatim
  *      because the parent resolves the worker's model route against its full
  *      provider set and passes `--model`; the child must keep whatever
  *      extension registers that provider or it fails with "Model not found".
  *
- * The safety posture is "only ever DROP pi-mmr extensions we positively
+ * The safety posture is "only ever DROP ampi extensions we positively
  * recognize as unneeded for this profile; keep everything else loaded." When
  * anything is uncertain (unknown/custom profile, empty enumeration, debug
  * capture active, unresolvable paths) the resolver returns `undefined`, which
@@ -39,7 +39,7 @@ import { fileURLToPath } from "node:url";
 import { isRecord } from "../mmr-core/internal/json.js";
 
 /**
- * Per-profile set of pi-mmr extension directory names the child MUST keep
+ * Per-profile set of ampi extension directory names the child MUST keep
  * loaded. Only built-in subagent profiles appear here; any profile not listed
  * (custom Markdown `sa__*` subagents, future profiles) resolves to `undefined`
  * and spawns with full discovery.
@@ -68,9 +68,9 @@ export interface MmrChildExtensionScopeHost {
   getCommands?: () => readonly unknown[];
 }
 
-/** Resolved on-disk location of the pi-mmr extension package. */
+/** Resolved on-disk location of the ampi extension package. */
 export interface MmrChildExtensionLocation {
-  /** Absolute path to the pi-mmr `src/extensions` dir (parent of each extension dir). */
+  /** Absolute path to the ampi `src/extensions` dir (parent of each extension dir). */
   extensionsDir: string;
   /** Source file extension of the loaded entry files (".ts" in source, ".js" in dist). */
   moduleExt: string;
@@ -153,11 +153,11 @@ export interface ResolveMmrChildExtensionScopeInput {
 
 /**
  * Pure resolver: given the profile, the parent's loaded extension paths, and
- * the pi-mmr package location, return the ordered child keep set
+ * the ampi package location, return the ordered child keep set
  * (`["-e"-able paths]`) or `undefined` to mean "use full discovery."
  *
- * Determinism: pi-mmr keep paths come first in their declared order
- * (mmr-core first), followed by all non-pi-mmr loaded paths in first-seen
+ * Determinism: ampi keep paths come first in their declared order
+ * (mmr-core first), followed by all non-ampi loaded paths in first-seen
  * order. Every returned path is verified to exist on disk.
  */
 export function resolveMmrChildExtensionScope(
@@ -177,7 +177,7 @@ export function resolveMmrChildExtensionScope(
     return first && first.length > 0 ? first : undefined;
   };
 
-  // Canonical pi-mmr keep paths in declared order. mmr-core resolving is the
+  // Canonical ampi keep paths in declared order. mmr-core resolving is the
   // floor: if we cannot even resolve the keep set's entry files, bail to full
   // discovery rather than spawn a child that cannot activate.
   const piMmrKeepPaths: string[] = [];
@@ -187,9 +187,9 @@ export function resolveMmrChildExtensionScope(
   }
   if (piMmrKeepPaths.length !== keepNames.length) return undefined;
 
-  // Keep every loaded extension that is NOT a pi-mmr extension. pi-mmr loaded
+  // Keep every loaded extension that is NOT a ampi extension. ampi loaded
   // paths are dropped here and re-added only through the canonical keep set
-  // above, so unneeded pi-mmr extensions fall away while external/unknown
+  // above, so unneeded ampi extensions fall away while external/unknown
   // packages (model providers, third-party tools) are preserved verbatim.
   const externalPaths: string[] = [];
   for (const candidate of input.loadedPaths) {
@@ -209,7 +209,7 @@ export function resolveMmrChildExtensionScope(
 }
 
 /**
- * Resolve the pi-mmr package location from this module's own URL. This module
+ * Resolve the ampi package location from this module's own URL. This module
  * lives at `<pkg>/src/extensions/mmr-subagents/child-extension-scope.<ext>`, so
  * the extensions dir is two levels up and the module extension mirrors the
  * loaded entry files (`.ts` in source, `.js` in dist).

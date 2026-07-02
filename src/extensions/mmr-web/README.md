@@ -181,7 +181,7 @@ Residual TOCTOU: DNS pre-resolution validates addresses returned by Node's defau
 
 ## Public API
 
-Re-exported from `pi-mmr`: `createMmrWebExtension`, `MMR_WEB_OWNED_TOOLS`, plus the web tool / details types. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`: `createMmrWebExtension`, `MMR_WEB_OWNED_TOOLS`, plus the web tool / details types. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 
