@@ -1,26 +1,26 @@
-// Unit tests for the `mmr-workers` code_review tool — written test-first to
+// Unit tests for the `mmr-workers` reviewer tool — written test-first to
 // pin observable behavior before implementing
-// src/extensions/mmr-workers/code-review.ts.
+// src/extensions/mmr-workers/reviewer.ts.
 //
 // Behavior pinned here (the subprocess runner and the provider/extension
 // wiring have their own suites):
 //
-//   1. The tool definition advertises name `code_review`, a snippet, a
+//   1. The tool definition advertises name `reviewer`, a snippet, a
 //      schema-only full description, and a
 //      `{ diff_description, files?, instructions? }` params shape plus the
 //      shared background run fields.
 //   2. The description states the diff-description contract (the worker
 //      generates the diff itself), blocking-by-default + background: true,
 //      and never references the deprecated start_task alias.
-//   3. Guidelines stay a single routing line naming code_review.
-//   4. The `code-review` subagent profile is standalone, read-only by
+//   3. Guidelines stay a single routing line naming reviewer.
+//   4. The `reviewer` subagent profile is standalone, read-only by
 //      contract (read/grep/find/bash, no MCP/toolbox), backgroundable, and
 //      uses GPT-5.5 at medium effort.
 //   5. The worker system prompt pins the review method: merge-base
 //      origin/HEAD reference commands, read-only guardrails, low
 //      persistence, the oversized-diff abort, severity/type taxonomy, and
 //      new-side line-number rules.
-//   6. buildCodeReviewUserPrompt folds files focus and extra instructions
+//   6. buildReviewerUserPrompt folds files focus and extra instructions
 //      into the worker task text.
 //   7. execute() rejects invalid params before spawning, resolves the
 //      profile route from ctx.modelRegistry, runs through the injected
@@ -36,7 +36,7 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const CODE_REVIEW_MODULE = "extensions/mmr-workers/code-review.ts";
+const REVIEWER_MODULE = "extensions/mmr-workers/reviewer.ts";
 const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
@@ -93,19 +93,19 @@ function makeRegistry(models) {
   };
 }
 
-describe("code_review tool definition", () => {
+describe("reviewer tool definition", () => {
   it("declares name, snippet, description, and the diff_description-led parameter schema", async () => {
     const {
-      createCodeReviewTool,
-      CODE_REVIEW_TOOL_NAME,
-      CODE_REVIEW_PROMPT_SNIPPET,
-      CODE_REVIEW_DESCRIPTION,
-    } = await importSource(CODE_REVIEW_MODULE);
-    assert.equal(CODE_REVIEW_TOOL_NAME, "code_review");
-    const tool = createCodeReviewTool();
-    assert.equal(tool.name, "code_review");
-    assert.equal(tool.promptSnippet, CODE_REVIEW_PROMPT_SNIPPET);
-    assert.equal(tool.description, CODE_REVIEW_DESCRIPTION);
+      createReviewerTool,
+      REVIEWER_TOOL_NAME,
+      REVIEWER_PROMPT_SNIPPET,
+      REVIEWER_DESCRIPTION,
+    } = await importSource(REVIEWER_MODULE);
+    assert.equal(REVIEWER_TOOL_NAME, "reviewer");
+    const tool = createReviewerTool();
+    assert.equal(tool.name, "reviewer");
+    assert.equal(tool.promptSnippet, REVIEWER_PROMPT_SNIPPET);
+    assert.equal(tool.description, REVIEWER_DESCRIPTION);
     const params = tool.parameters;
     assert.equal(params.type, "object");
     assert.deepEqual(params.required, ["diff_description"]);
@@ -119,8 +119,8 @@ describe("code_review tool definition", () => {
   });
 
   it("description states the diff-description contract and the blocking/background split without start_task", async () => {
-    const { createCodeReviewTool } = await importSource(CODE_REVIEW_MODULE);
-    const tool = createCodeReviewTool();
+    const { createReviewerTool } = await importSource(REVIEWER_MODULE);
+    const tool = createReviewerTool();
     assert.match(tool.description, /Review code changes/i);
     assert.match(tool.description, /description of the diff/i);
     assert.match(tool.description, /do not.*generate the diff/i);
@@ -132,44 +132,44 @@ describe("code_review tool definition", () => {
     assert.doesNotMatch(tool.description, /start_task/);
   });
 
-  it("keeps guidelines to a single routing line that names code_review", async () => {
-    const { CODE_REVIEW_PROMPT_GUIDELINES, createCodeReviewTool } = await importSource(CODE_REVIEW_MODULE);
-    assert.equal(CODE_REVIEW_PROMPT_GUIDELINES.length, 1);
-    assert.match(CODE_REVIEW_PROMPT_GUIDELINES[0], /code_review/);
-    assert.doesNotMatch(CODE_REVIEW_PROMPT_GUIDELINES[0], /start_task/);
-    assert.doesNotMatch(CODE_REVIEW_PROMPT_GUIDELINES[0], /blocking/i);
-    const tool = createCodeReviewTool();
-    assert.deepEqual([...tool.promptGuidelines], [...CODE_REVIEW_PROMPT_GUIDELINES]);
+  it("keeps guidelines to a single routing line that names reviewer", async () => {
+    const { REVIEWER_PROMPT_GUIDELINES, createReviewerTool } = await importSource(REVIEWER_MODULE);
+    assert.equal(REVIEWER_PROMPT_GUIDELINES.length, 1);
+    assert.match(REVIEWER_PROMPT_GUIDELINES[0], /reviewer/);
+    assert.doesNotMatch(REVIEWER_PROMPT_GUIDELINES[0], /start_task/);
+    assert.doesNotMatch(REVIEWER_PROMPT_GUIDELINES[0], /blocking/i);
+    const tool = createReviewerTool();
+    assert.deepEqual([...tool.promptGuidelines], [...REVIEWER_PROMPT_GUIDELINES]);
   });
 });
 
-describe("code-review subagent profile", () => {
+describe("reviewer subagent profile", () => {
   it("is standalone, read-only by contract, backgroundable, and uses GPT-5.5 medium", async () => {
     const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
-    const profile = getMmrSubagentProfile("code-review");
-    assert.ok(profile, "mmr-core must expose a code-review subagent profile");
+    const profile = getMmrSubagentProfile("reviewer");
+    assert.ok(profile, "mmr-core must expose a reviewer subagent profile");
     assert.equal(profile.promptRoute, "standalone");
-    assert.equal(profile.promptBuilder, "code-review");
+    assert.equal(profile.promptBuilder, "reviewer");
     assert.deepEqual([...profile.tools], ["read", "grep", "find", "bash"]);
     assert.equal(profile.allowMcp, false);
     assert.equal(profile.allowToolbox, false);
-    assert.notEqual(profile.backgroundable, false, "code-review must be backgroundable");
+    assert.notEqual(profile.backgroundable, false, "reviewer must be backgroundable");
     assert.equal(profile.thinkingLevel, "medium");
     assert.deepEqual([...profile.modelPreferences], [
       { model: "gpt-5.5", thinkingLevel: "medium" },
     ]);
   });
 
-  it("derives CODE_REVIEW_WORKER_TOOLS from the profile", async () => {
-    const { CODE_REVIEW_WORKER_TOOLS } = await importSource(CODE_REVIEW_MODULE);
-    assert.deepEqual([...CODE_REVIEW_WORKER_TOOLS], ["read", "grep", "find", "bash"]);
+  it("derives REVIEWER_WORKER_TOOLS from the profile", async () => {
+    const { REVIEWER_WORKER_TOOLS } = await importSource(REVIEWER_MODULE);
+    assert.deepEqual([...REVIEWER_WORKER_TOOLS], ["read", "grep", "find", "bash"]);
   });
 });
 
-describe("code-review worker system prompt", () => {
+describe("reviewer worker system prompt", () => {
   it("pins the review method, git command policy, guardrails, and report format", async () => {
-    const { buildCodeReviewWorkerSystemPrompt } = await importSource(CODE_REVIEW_MODULE);
-    const prompt = buildCodeReviewWorkerSystemPrompt("/abs/project");
+    const { buildReviewerWorkerSystemPrompt } = await importSource(REVIEWER_MODULE);
+    const prompt = buildReviewerWorkerSystemPrompt("/abs/project");
     assert.match(prompt, /expert senior engineer/i);
     assert.match(prompt, /Working directory: \/abs\/project/);
     // Review method.
@@ -208,21 +208,21 @@ describe("code-review worker system prompt", () => {
   });
 
   it("falls back to a safe placeholder when cwd is missing", async () => {
-    const { buildCodeReviewWorkerSystemPrompt } = await importSource(CODE_REVIEW_MODULE);
-    const prompt = buildCodeReviewWorkerSystemPrompt("");
+    const { buildReviewerWorkerSystemPrompt } = await importSource(REVIEWER_MODULE);
+    const prompt = buildReviewerWorkerSystemPrompt("");
     assert.doesNotMatch(prompt, /Working directory: \n/);
     assert.match(prompt, /Working directory:\s+\S/);
   });
 });
 
-describe("code-review worker user prompt", () => {
+describe("reviewer worker user prompt", () => {
   it("folds the diff description, files focus, and extra instructions into the task text", async () => {
-    const { buildCodeReviewUserPrompt } = await importSource(CODE_REVIEW_MODULE);
+    const { buildReviewerUserPrompt } = await importSource(REVIEWER_MODULE);
     assert.equal(
-      buildCodeReviewUserPrompt({ diff_description: "all uncommitted changes" }),
+      buildReviewerUserPrompt({ diff_description: "all uncommitted changes" }),
       "Review the following diff: all uncommitted changes",
     );
-    const withFocus = buildCodeReviewUserPrompt({
+    const withFocus = buildReviewerUserPrompt({
       diff_description: "branch changes since origin/HEAD",
       files: ["src/a.ts", "src/b.ts"],
       instructions: "Focus on concurrency.",
@@ -235,8 +235,8 @@ describe("code-review worker user prompt", () => {
   });
 
   it("ignores empty files arrays and blank instructions", async () => {
-    const { buildCodeReviewUserPrompt } = await importSource(CODE_REVIEW_MODULE);
-    const prompt = buildCodeReviewUserPrompt({
+    const { buildReviewerUserPrompt } = await importSource(REVIEWER_MODULE);
+    const prompt = buildReviewerUserPrompt({
       diff_description: "staged changes",
       files: [],
       instructions: "   ",
@@ -245,11 +245,11 @@ describe("code-review worker user prompt", () => {
   });
 });
 
-describe("code_review execute() seam", () => {
+describe("reviewer execute() seam", () => {
   it("rejects missing, blank, or extra parameters before spawning a worker", async () => {
-    const { createCodeReviewTool } = await importSource(CODE_REVIEW_MODULE);
+    const { createReviewerTool } = await importSource(REVIEWER_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
-    const tool = createCodeReviewTool({ runWorker });
+    const tool = createReviewerTool({ runWorker });
     await assert.rejects(tool.execute("c1", undefined, undefined, undefined, { cwd: "/tmp" }), /diff_description/i);
     await assert.rejects(tool.execute("c2", { diff_description: "" }, undefined, undefined, { cwd: "/tmp" }), /diff_description/i);
     await assert.rejects(tool.execute("c3", { diff_description: "   " }, undefined, undefined, { cwd: "/tmp" }), /diff_description/i);
@@ -261,9 +261,9 @@ describe("code_review execute() seam", () => {
   });
 
   it("calls the injected runner with the assembled prompt, profile, and the GPT-5.5 route", async () => {
-    const { createCodeReviewTool, CODE_REVIEW_WORKER_TOOLS } = await importSource(CODE_REVIEW_MODULE);
+    const { createReviewerTool, REVIEWER_WORKER_TOOLS } = await importSource(REVIEWER_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
-    const tool = createCodeReviewTool({
+    const tool = createReviewerTool({
       runWorker,
       buildSystemPrompt: (cwd) => `SP for ${cwd}`,
     });
@@ -286,15 +286,15 @@ describe("code_review execute() seam", () => {
     assert.equal(options.tools, undefined);
     assert.equal(options.systemPrompt, "SP for /abs/project");
     assert.equal(options.model, "openai-codex/gpt-5.5");
-    assert.equal(options.profileName, "code-review");
+    assert.equal(options.profileName, "reviewer");
     assert.equal(result.details.cwd, "/abs/project");
-    assert.deepEqual([...result.details.workerTools], [...CODE_REVIEW_WORKER_TOOLS]);
+    assert.deepEqual([...result.details.workerTools], [...REVIEWER_WORKER_TOOLS]);
   });
 
   it("returns the worker's final output verbatim as visible content", async () => {
-    const { createCodeReviewTool } = await importSource(CODE_REVIEW_MODULE);
+    const { createReviewerTool } = await importSource(REVIEWER_MODULE);
     const { runWorker } = makeRunnerSpy();
-    const tool = createCodeReviewTool({ runWorker });
+    const tool = createReviewerTool({ runWorker });
     const result = await tool.execute(
       "call-1",
       { diff_description: "all uncommitted changes" },
@@ -307,11 +307,11 @@ describe("code_review execute() seam", () => {
   });
 
   it("surfaces a clear error when the worker exits nonzero without output", async () => {
-    const { createCodeReviewTool } = await importSource(CODE_REVIEW_MODULE);
+    const { createReviewerTool } = await importSource(REVIEWER_MODULE);
     const { runWorker } = makeRunnerSpy(
       makeWorkerResult({ finalOutput: "", truncatedFinalOutput: "", exitCode: 1, stderr: "boom" }),
     );
-    const tool = createCodeReviewTool({ runWorker });
+    const tool = createReviewerTool({ runWorker });
     const result = await tool.execute(
       "call-1",
       { diff_description: "all uncommitted changes" },
@@ -319,17 +319,17 @@ describe("code_review execute() seam", () => {
       undefined,
       { cwd: "/abs/project" },
     );
-    assert.match(result.content[0].text, /code_review.*exited with code 1/i);
+    assert.match(result.content[0].text, /reviewer.*exited with code 1/i);
   });
 });
 
-describe("code_review cross-worker wiring", () => {
+describe("reviewer cross-worker wiring", () => {
   it("participates in the Using workers block as a background-capable delegation tool", async () => {
-    const { buildUsingWorkersGuidance, CODE_REVIEW_BACKGROUND_GUIDANCE } = await importSource(GUIDANCE_MODULE);
-    assert.match(CODE_REVIEW_BACKGROUND_GUIDANCE, /code_review is blocking by default/);
-    assert.match(CODE_REVIEW_BACKGROUND_GUIDANCE, /background: true/);
-    const block = buildUsingWorkersGuidance(["code_review"]);
-    assert.ok(block, "code_review alone must render the Using workers block");
+    const { buildUsingWorkersGuidance, REVIEWER_BACKGROUND_GUIDANCE } = await importSource(GUIDANCE_MODULE);
+    assert.match(REVIEWER_BACKGROUND_GUIDANCE, /reviewer is blocking by default/);
+    assert.match(REVIEWER_BACKGROUND_GUIDANCE, /background: true/);
+    const block = buildUsingWorkersGuidance(["reviewer"]);
+    assert.ok(block, "reviewer alone must render the Using workers block");
     assert.match(block, /## Using workers/);
     assert.match(block, /Do not start a worker/);
     assert.match(block, /background: true/);
@@ -337,9 +337,9 @@ describe("code_review cross-worker wiring", () => {
 
   it("is registered as a background agent keyed to diff_description", async () => {
     const { listMmrBackgroundAgents } = await importSource(BACKGROUND_AGENTS_MODULE);
-    const descriptor = listMmrBackgroundAgents().find((d) => d.agent === "code_review");
-    assert.ok(descriptor, "code_review must be a registered background agent");
-    assert.equal(descriptor.profileName, "code-review");
+    const descriptor = listMmrBackgroundAgents().find((d) => d.agent === "reviewer");
+    assert.ok(descriptor, "reviewer must be a registered background agent");
+    assert.equal(descriptor.profileName, "reviewer");
     assert.equal(descriptor.promptParamKey, "diff_description");
   });
 });

@@ -289,11 +289,11 @@ describe("mmr-core tool registry", () => {
 });
 
 describe("mmr-core tool registry - per-mode matrices", () => {
-  it("resolves smart and smartFable modes to read/bash/edit/write against Pi-native tools", async () => {
+  it("resolves smart and fable modes to read/bash/edit/write against Pi-native tools", async () => {
     const { resolveMmrTools } = await importSource("extensions/mmr-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    for (const mode of ["smart", "smartFable"]) {
+    for (const mode of ["smart", "fable"]) {
       const resolved = resolveMmrTools(mode, available);
       assert.deepEqual(
         [...resolved.activeTools].sort(),

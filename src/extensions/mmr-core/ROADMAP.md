@@ -25,17 +25,17 @@ Current modes:
 | Mode | Current target model | Thinking | Prompt route |
 | --- | --- | --- | --- |
 | `smart` | `claude-opus-4-8` → `gpt-5.5` | Anthropic adaptive/high or OpenAI Responses medium | `default` |
-| `smartFable` | `claude-fable-5` (claude-subscription) | Anthropic adaptive, toggleable low/medium/high | `default` |
+| `fable` | `claude-fable-5` (claude-subscription) | Anthropic adaptive, toggleable low/medium/high | `default` |
 | `rush` | `gpt-5.5` → `claude-haiku-4-5-20251001` → `claude-haiku-4-5` | OpenAI Responses none, Haiku fallback thinking off | `rush` |
 | `deep` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses medium or Anthropic adaptive/xhigh | `deep` |
 | `free` | native Pi controls | native Pi controls | Pi standard prompt |
 
-`smart`, `smartFable`, `rush`, `deep`, and `free` are stable development mode
+`smart`, `fable`, `rush`, `deep`, and `free` are stable development mode
 keys; see the public-safety checklist in the top-level roadmap.
 
 Implemented surfaces:
 
-- `--mmr-mode smart|smartFable|rush|deep|free`
+- `--mmr-mode smart|fable|rush|deep|free`
 - `/mode`, `/mode <mode>`
 - `/mmr-status` (with mode/source, model found/applied, active/missing/deferred/gated tools, settings files read, diagnostics by severity, optional `Debug` section)
 - `/mmr-status` policy warnings for fallback, missing-tool, zero-tool, and mode availability diagnostics

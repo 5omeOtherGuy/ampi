@@ -53,7 +53,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "smartFable", "rush", "deep"];
+const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
 
 // Distinctive per-mode body markers. The smart family renders no posture
 // section, so smart is identified by its family-only "Investigate before

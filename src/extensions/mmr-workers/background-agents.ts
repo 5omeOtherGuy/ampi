@@ -48,13 +48,13 @@ import {
   type TaskToolDeps,
 } from "./task.js";
 import {
-  CODE_REVIEW_PARAMETERS_SCHEMA,
-  CODE_REVIEW_SUBAGENT_PROFILE,
-  CODE_REVIEW_TOOL_NAME,
-  CODE_REVIEW_WORKER_TOOLS,
-  createCodeReviewRunPreparer,
-  type CodeReviewToolDeps,
-} from "./code-review.js";
+  REVIEWER_PARAMETERS_SCHEMA,
+  REVIEWER_SUBAGENT_PROFILE,
+  REVIEWER_TOOL_NAME,
+  REVIEWER_WORKER_TOOLS,
+  createReviewerRunPreparer,
+  type ReviewerToolDeps,
+} from "./reviewer.js";
 
 /** The agent `start_task` launches when the caller omits `agent`. */
 export const DEFAULT_MMR_BACKGROUND_AGENT = TASK_TOOL_NAME;
@@ -252,16 +252,16 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         },
       },
       {
-        agent: CODE_REVIEW_TOOL_NAME,
-        profileName: CODE_REVIEW_SUBAGENT_PROFILE,
-        toolName: CODE_REVIEW_TOOL_NAME,
+        agent: REVIEWER_TOOL_NAME,
+        profileName: REVIEWER_SUBAGENT_PROFILE,
+        toolName: REVIEWER_TOOL_NAME,
         paramsHint: "{diff_description, files?, instructions?}",
         promptParamKey: "diff_description",
         start: {
-          parametersSchema: CODE_REVIEW_PARAMETERS_SCHEMA,
-          workerTools: CODE_REVIEW_WORKER_TOOLS,
-          depsKey: "codeReviewDeps",
-          prepareRun: (deps, params, ctx) => createCodeReviewRunPreparer(deps as CodeReviewToolDeps)(params, ctx),
+          parametersSchema: REVIEWER_PARAMETERS_SCHEMA,
+          workerTools: REVIEWER_WORKER_TOOLS,
+          depsKey: "reviewerDeps",
+          prepareRun: (deps, params, ctx) => createReviewerRunPreparer(deps as ReviewerToolDeps)(params, ctx),
         },
       },
     ] satisfies MmrBackgroundAgentDescriptor[]

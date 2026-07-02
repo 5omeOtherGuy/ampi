@@ -2,7 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { withMmrModeContextCap } from "./context-cap.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
-import { DEFAULT_MMR_MODE, getMmrMode, isMmrModeKey, MMR_MODE_KEYS } from "./modes.js";
+import { DEFAULT_MMR_MODE, getMmrMode, isMmrModeKey, MMR_HOTKEY_MODE_KEYS } from "./modes.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
 import { resolveAndApplyMmrModel } from "./model-resolver.js";
 import { shouldDropToolForFreeMode } from "./owned-tools.js";
@@ -39,7 +39,10 @@ import { createMmrModeState, findLatestPersistedModeState, MMR_MODE_STATE_ENTRY,
 import { updateMmrStatus } from "./status.js";
 import type { MmrCoreSettings, MmrLockedModeKey, MmrModeKey, MmrModeSelectionSource, MmrModeState, MmrModelPreference, MmrRejectedModeSource } from "./types.js";
 
-const CYCLABLE_MMR_MODE_KEYS: MmrModeKey[] = MMR_MODE_KEYS.filter((mode) => mode !== "free");
+// Hotkey rotations (picker + cycle) draw from the hotkey-visible mode set, so
+// hotkey-hidden modes (e.g. `fable`) are reachable only via `/mode <key>`. The
+// cycle additionally drops `free`, which the picker still offers.
+const CYCLABLE_MMR_MODE_KEYS: MmrModeKey[] = MMR_HOTKEY_MODE_KEYS.filter((mode) => mode !== "free");
 
 export interface ApplyModeOptions {
   source: MmrModeSelectionSource;
@@ -112,7 +115,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode smartFable, /mode rush, or /mode deep to re-enter a managed mode.",
+    "Use /mode smart, /mode fable, /mode rush, or /mode deep to re-enter a managed mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
@@ -126,7 +129,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let modeCycleQueue: Promise<void> = Promise.resolve();
   let thinkingToggleQueue: Promise<void> = Promise.resolve();
   // Per-mode, session-scoped thinking-level toggle overrides for toggleable
-  // modes (smart/smartFable/deep). Lives only in process memory: persisted mode
+  // modes (smart/fable/deep). Lives only in process memory: persisted mode
   // state records the applied thinking level for diagnostics, but the toggle
   // default is re-derived on each apply so stale persisted levels never pin a
   // mode away from its default after a reload.
@@ -340,7 +343,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
 
     captureBaseline(ctx);
 
-    // Toggleable modes (smart/smartFable/deep) carry a runtime thinking-level
+    // Toggleable modes (smart/fable/deep) carry a runtime thinking-level
     // override flipped by the MMR-owned alt+r shortcut. Re-derive the effective level on every
     // apply (override or the mode default), force every candidate to it so the
     // active and fallback routes agree with the wire reasoning effort, and use
@@ -592,7 +595,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
 
     const currentMode = getMmrModeState()?.mode;
     const title = currentMode ? `MMR mode (current: ${currentMode})` : "MMR mode";
-    const choice = await ctx.ui.select(title, [...MMR_MODE_KEYS]);
+    const choice = await ctx.ui.select(title, [...MMR_HOTKEY_MODE_KEYS]);
     if (!choice || !isMmrModeKey(choice)) return;
 
     await applyMode(choice, ctx, { source: "command", persist: true, notify: true });
@@ -639,7 +642,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (!state || !isToggleableMmrMode(state.mode)) {
       if (state && ctx.hasUI !== false) {
         ctx.ui.notify(
-          `MMR thinking toggle is only available in smart, smartFable, or deep (current: ${state?.mode ?? "none"}).`,
+          `MMR thinking toggle is only available in smart, fable, or deep (current: ${state?.mode ?? "none"}).`,
           "info",
         );
       }

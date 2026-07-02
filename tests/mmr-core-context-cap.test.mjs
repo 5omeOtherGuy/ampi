@@ -34,7 +34,7 @@ describe("withMmrModeContextCap (pure)", () => {
   it("resolves the per-mode cap from each mode's request policy", async () => {
     const { getMmrModeContextWindowCap } = await importContextCap();
     assert.equal(getMmrModeContextWindowCap("smart"), 300_000);
-    assert.equal(getMmrModeContextWindowCap("smartFable"), undefined, "Fable routes run at Pi's native window");
+    assert.equal(getMmrModeContextWindowCap("fable"), undefined, "Fable routes run at Pi's native window");
     assert.equal(getMmrModeContextWindowCap("rush"), undefined, "GPT-primary modes run at Pi's native window");
     assert.equal(getMmrModeContextWindowCap("deep"), undefined, "GPT-primary modes run at Pi's native window");
     assert.equal(getMmrModeContextWindowCap("free"), undefined, "free has no policy, so no cap");
@@ -53,9 +53,9 @@ describe("withMmrModeContextCap (pure)", () => {
     assert.equal(model.contextWindow, 1_000_000, "must not mutate the input");
   });
 
-  it("does not cap smartFable/rush/deep — Fable and GPT/Codex routes keep Pi's native window", async () => {
+  it("does not cap fable/rush/deep — Fable and GPT/Codex routes keep Pi's native window", async () => {
     const { withMmrModeContextCap } = await importContextCap();
-    for (const mode of ["smartFable", "rush", "deep"]) {
+    for (const mode of ["fable", "rush", "deep"]) {
       const model = { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 128_000 };
       const result = withMmrModeContextCap(mode, model);
       assert.equal(result, model, `expected the untouched model for mode=${mode}`);
@@ -80,7 +80,7 @@ describe("withMmrModeContextCap (pure)", () => {
     assert.equal(withMmrModeContextCap("smart", below), below);
     // A custom provider with a smaller window than an uncapped mode stays authoritative.
     const smallGpt = { provider: "openai", id: "m", contextWindow: 250_000 };
-    assert.equal(withMmrModeContextCap("smartFable", smallGpt), smallGpt);
+    assert.equal(withMmrModeContextCap("fable", smallGpt), smallGpt);
   });
 
   it("no-ops when the window is missing or non-finite", async () => {
@@ -144,21 +144,21 @@ function buildCtx(models, setModelCalls, notifications = []) {
 }
 
 describe("mmr-core activation context cap", () => {
-  it("smartFable mode passes the registered model unchanged (no cap)", async () => {
+  it("fable mode passes the registered model unchanged (no cap)", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-fable-5", contextWindow: 1_000_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];
-    const pi = buildPi(setModelCalls, handlers, "smartFable");
+    const pi = buildPi(setModelCalls, handlers, "fable");
     const ctx = buildCtx(models, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     assert.equal(setModelCalls.length, 1);
-    assert.equal(setModelCalls[0], models[0], "smartFable must pass the registry model through unchanged");
+    assert.equal(setModelCalls[0], models[0], "fable must pass the registry model through unchanged");
     assert.equal(setModelCalls[0].contextWindow, 1_000_000);
   });
 });

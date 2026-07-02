@@ -461,24 +461,24 @@ export type {
   ResolveLibrarianInvocationInput,
 } from "./extensions/mmr-workers/librarian.js";
 export {
-  CODE_REVIEW_DESCRIPTION,
-  CODE_REVIEW_PARAMETERS_SCHEMA,
-  CODE_REVIEW_PROGRESS_PLACEHOLDER,
-  CODE_REVIEW_PROMPT_GUIDELINES,
-  CODE_REVIEW_PROMPT_SNIPPET,
-  CODE_REVIEW_SUBAGENT_PROFILE,
-  CODE_REVIEW_TOOL_NAME,
-  CODE_REVIEW_WORKER_TOOLS,
-  buildCodeReviewUserPrompt,
-  buildCodeReviewWorkerSystemPrompt,
-  createCodeReviewTool,
-  registerCodeReviewTool,
-} from "./extensions/mmr-workers/code-review.js";
+  REVIEWER_DESCRIPTION,
+  REVIEWER_PARAMETERS_SCHEMA,
+  REVIEWER_PROGRESS_PLACEHOLDER,
+  REVIEWER_PROMPT_GUIDELINES,
+  REVIEWER_PROMPT_SNIPPET,
+  REVIEWER_SUBAGENT_PROFILE,
+  REVIEWER_TOOL_NAME,
+  REVIEWER_WORKER_TOOLS,
+  buildReviewerUserPrompt,
+  buildReviewerWorkerSystemPrompt,
+  createReviewerTool,
+  registerReviewerTool,
+} from "./extensions/mmr-workers/reviewer.js";
 export type {
-  CodeReviewDetails,
-  CodeReviewParams,
-  CodeReviewToolDeps,
-} from "./extensions/mmr-workers/code-review.js";
+  ReviewerDetails,
+  ReviewerParams,
+  ReviewerToolDeps,
+} from "./extensions/mmr-workers/reviewer.js";
 export {
   buildHistoryReaderWorkerSystemPrompt,
   registerMmrHistoryPromptBuilders,

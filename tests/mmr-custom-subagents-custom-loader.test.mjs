@@ -330,7 +330,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
   it("accepts Claude Code-style frontmatter with name/description/body and no type key", async () => {
     const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
     const definition = parseMmrCustomSubagentMarkdown({
-      filePath: path.join("/repo", ".claude", "agents", "reviewer.md"),
+      filePath: path.join("/repo", ".claude", "agents", "code-review.md"),
       markdown: [
         "---",
         "name: Code Reviewer",

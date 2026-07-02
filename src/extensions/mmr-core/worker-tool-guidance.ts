@@ -22,7 +22,7 @@
  * Plain string constants only — the exact model-visible wording must stay
  * greppable.
  *
- * Adding a worker tool (for example a future code-review worker): register
+ * Adding a worker tool (for example a future reviewer worker): register
  * its name in the sets below and, when it has cross-worker policy text, add
  * a `UsingWorkersPart` gated on its name. Everything else (routing
  * guideline, schema description, subagent profile) stays in the tool's own
@@ -30,10 +30,10 @@
  */
 
 /** Worker tools that delegate work to a subagent. */
-const WORKER_DELEGATION_TOOL_NAMES = ["Task", "finder", "librarian", "oracle", "code_review"] as const;
+const WORKER_DELEGATION_TOOL_NAMES = ["Task", "finder", "librarian", "oracle", "reviewer"] as const;
 
 /** Worker surfaces that can run in the background (`oracle` cannot). */
-const BACKGROUND_CAPABLE_TOOL_NAMES = ["Task", "finder", "librarian", "code_review", "start_task"] as const;
+const BACKGROUND_CAPABLE_TOOL_NAMES = ["Task", "finder", "librarian", "reviewer", "start_task"] as const;
 
 /** Background orchestration tools. */
 const BACKGROUND_ORCHESTRATION_TOOL_NAMES = [
@@ -61,9 +61,9 @@ export const FINDER_BACKGROUND_GUIDANCE =
 export const LIBRARIAN_BACKGROUND_GUIDANCE =
   "librarian is blocking by default: it returns the research result inline. Pass background: true to run the research as a background task while you keep working.";
 
-/** code_review is blocking by default; background runs via `background: true`. */
-export const CODE_REVIEW_BACKGROUND_GUIDANCE =
-  "code_review is blocking by default: it returns the review report inline. Pass background: true to run the review as a background task while you keep working.";
+/** reviewer is blocking by default; background runs via `background: true`. */
+export const REVIEWER_BACKGROUND_GUIDANCE =
+  "reviewer is blocking by default: it returns the review report inline. Pass background: true to run the review as a background task while you keep working.";
 
 /** oracle can never be backgrounded. */
 export const ORACLE_ALWAYS_BLOCKING_GUIDANCE =

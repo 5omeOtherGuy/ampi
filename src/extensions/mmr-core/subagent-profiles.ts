@@ -314,11 +314,11 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     persistSubagentState: false,
   } satisfies MmrSubagentProfile),
 
-  "code-review": deepFreeze({
-    name: "code-review",
+  "reviewer": deepFreeze({
+    name: "reviewer",
     displayName: "Code Review",
     // Code review uses GPT-5.5 at medium effort; settings can still override
-    // `subagentModelPreferences.code-review` when an operator needs a local route.
+    // `subagentModelPreferences.reviewer` when an operator needs a local route.
     modelPreferences: [
       { model: "gpt-5.5", thinkingLevel: "medium" },
     ],
@@ -332,7 +332,7 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     // files, and reports. Declared for future in-process runners.
     maxTurns: 24,
     promptRoute: "standalone",
-    promptBuilder: "code-review",
+    promptBuilder: "reviewer",
     allowMcp: false,
     allowToolbox: false,
     enforceLockedMode: false,

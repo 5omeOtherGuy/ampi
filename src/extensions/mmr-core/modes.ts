@@ -3,7 +3,21 @@ import { MMR_REQUEST_POLICIES, formatMmrPolicyContext, formatMmrPolicyThinking }
 
 export const DEFAULT_MMR_MODE: MmrModeKey = "smart";
 
-export const MMR_MODE_KEYS = ["smart", "smartFable", "rush", "deep", "free"] as const satisfies readonly MmrModeKey[];
+export const MMR_MODE_KEYS = ["smart", "fable", "rush", "deep", "free"] as const satisfies readonly MmrModeKey[];
+
+/**
+ * Modes intentionally hidden from the interactive mode picker
+ * (`ctrl+shift+s` / `alt+m`) and the `ctrl+space` cycle. A hidden mode stays a
+ * fully valid mode key — reachable via `/mode <key>`, the `mmr-mode` flag, and
+ * settings `defaultMode` — but is never surfaced through a hotkey. `fable` is
+ * selectable only via `/mode fable`.
+ */
+export const MMR_HOTKEY_HIDDEN_MODE_KEYS = ["fable"] as const satisfies readonly MmrModeKey[];
+
+/** Mode keys offered through the interactive hotkeys (picker + cycle). */
+export const MMR_HOTKEY_MODE_KEYS: readonly MmrModeKey[] = MMR_MODE_KEYS.filter(
+  (mode) => !(MMR_HOTKEY_HIDDEN_MODE_KEYS as readonly MmrModeKey[]).includes(mode),
+);
 
 export const MMR_SMART_TOOL_NAMES = [
   "read",
@@ -24,7 +38,7 @@ export const MMR_SMART_TOOL_NAMES = [
   "task_cancel",
   "task_list",
   "finder",
-  "code_review",
+  "reviewer",
   "handoff",
   "read_mcp_resource",
 ] satisfies string[];
@@ -89,9 +103,9 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     featureGates: ["mmr-subagents", "mmr-async-tasks"],
   },
 
-  smartFable: {
-    key: "smartFable",
-    displayName: "SmartFable",
+  fable: {
+    key: "fable",
+    displayName: "Fable",
     description: "Smart-style balanced mode with Claude Fable 5 (Claude Code subscription) as its model preference. Toggleable thinking (low/medium/high).",
     modelPreferences: [
       { model: "claude-fable-5", providers: ["claude-subscription"] },
@@ -149,7 +163,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
       "task_wait",
       "task_cancel",
       "finder",
-      "code_review",
+      "reviewer",
       "task_list",
       "handoff",
     ],

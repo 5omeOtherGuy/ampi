@@ -171,7 +171,7 @@ export const SHARED_CODING_GUIDANCE = SHARED_CODING_GUIDANCE_FRAGMENT_IDS.map(
 // --- Mode-specific coding-guidance overrides ---
 //
 // The shared fragments above are the base text (rush renders them unchanged).
-// Smart-family modes (smart, smartFable) and deep override the four body
+// Smart-family modes (smart, fable) and deep override the four body
 // fragments where the authoritative mode framings diverge: smart-family uses
 // the default-template framing (action-assumptive, absolute investigate rule,
 // hard verification floor); deep uses the deep-template framing (outcome-first
@@ -307,7 +307,7 @@ export const MODE_CODING_GUIDANCE_OVERRIDES: Partial<
   Record<PromptedMmrModeKey, Partial<Record<SharedCodingGuidanceFragmentId, string>>>
 > = {
   smart: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  smartFable: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
+  fable: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
   deep: DEEP_CODING_GUIDANCE_OVERRIDES,
 };
 
@@ -363,7 +363,7 @@ export interface MmrModeBlockTemplate {
 }
 
 /**
- * Smart-family template body (smart, smartFable). Both modes render the smart
+ * Smart-family template body (smart, fable). Both modes render the smart
  * system prompt verbatim — same intro, no posture section (the
  * authoritative default template carries its framing entirely in the intro and
  * body fragments), same closing line — and differ only in the mode tag.
@@ -381,8 +381,8 @@ export const MMR_MODE_PROMPT_TEMPLATES = {
     tag: "smart",
     ...SMART_FAMILY_TEMPLATE_BODY,
   },
-  smartFable: {
-    tag: "smartFable",
+  fable: {
+    tag: "fable",
     ...SMART_FAMILY_TEMPLATE_BODY,
   },
   rush: {
