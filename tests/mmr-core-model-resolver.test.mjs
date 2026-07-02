@@ -128,6 +128,25 @@ describe("mmr-core model resolver", () => {
     assert.deepEqual(attempted, ["claude-subscription/claude-haiku-4-5"]);
   });
 
+  it("selects the shipped SmartFable Claude subscription route", async () => {
+    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const registry = fakeRegistry([
+      { provider: "claude-subscription", id: "claude-fable-5" },
+    ]);
+
+    const resolved = await resolveAndApplyMmrModel({
+      modeThinkingLevel: getMmrMode("smartFable").thinkingLevel,
+      modelPreferences: getMmrMode("smartFable").modelPreferences,
+      registry,
+      setModel: async () => true,
+    });
+
+    assert.equal(resolved.selectedProvider, "claude-subscription");
+    assert.equal(resolved.selectedModel, "claude-fable-5");
+    assert.equal(resolved.modelApplied, true);
+  });
+
   it("surfaces registry exceptions in candidate.reason instead of silently treating models as unauthenticated", async () => {
     const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
     const models = [{ provider: "openai", id: "gpt-5.5" }];

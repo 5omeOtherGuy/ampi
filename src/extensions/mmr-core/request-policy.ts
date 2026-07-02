@@ -97,7 +97,7 @@ export interface MmrRequestPolicy {
  *   total at the `setModel` call site (see `context-cap.ts`), so Pi's native
  *   compaction/overflow/footer run at the advertised window even when the
  *   route's native window is larger (e.g. `smart` pins its Opus route to 300k).
- *   The GPT/Codex/Fable-primary modes (`smartGPT`, `smartFable`, `rush`, `deep`)
+ *   The routes without an MMR-owned context profile (`smartGPT`, `smartFable`, `rush`, `deep`)
  *   intentionally set no `contextWindow`, so every route runs at Pi's own registered
  *   window (the observed Codex backend limit) with no pi-mmr override. The cap
  *   is cap-down only, so a smaller custom route stays authoritative, and `free`
@@ -152,9 +152,9 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "open" | "free">, 
     effectiveMaxInputTokens: 968000,
   },
   smartFable: {
-    openaiResponses: {
-      maxOutputTokens: 128000,
-      reasoning: { effort: "medium", summary: "auto" },
+    anthropic: {
+      maxTokens: 128000,
+      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
     },
     // No context override: Fable routes run at Pi's registered window.
   },
@@ -225,8 +225,8 @@ export interface MmrModeThinkingOption {
  * (`high` vs `xhigh`).
  *
  * SmartSonnet and SmartFable cycle three presets (medium -> high -> low ->
- * medium). SmartSonnet does not override `anthropicEffort`, so each Pi level
- * echoes directly as the Anthropic adaptive effort.
+ * medium). They do not override `anthropicEffort`, so each Pi level echoes
+ * directly as the Anthropic adaptive effort.
  */
 export type MmrModeThinkingToggleOptions = readonly [MmrModeThinkingOption, MmrModeThinkingOption, ...MmrModeThinkingOption[]];
 
