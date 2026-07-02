@@ -6,6 +6,24 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Fixed
+
+- deps: require `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`,
+  and `@earendil-works/pi-tui` at `^0.80.3`. The 0.79.x agent shipped an
+  `npm-shrinkwrap.json` pinning nested `protobufjs`/`ws`/`undici` versions with
+  known high-severity advisories that npm `overrides` cannot reach, so every
+  fresh install (including `pi update --extensions`) reported audit warnings
+  before a postinstall patch script cleaned them up. Upstream 0.80.3 pins fixed
+  versions, so installs now audit clean natively and the postinstall lockfile
+  patch script and `overrides` workaround are removed.
+
+### Changed
+
+- CI: CodeQL analysis no longer runs as a pull-request gate; it scans every
+  push to `main` and keeps the weekly scheduled scan. Required PR checks are
+  now the CI test job and dependency review only, shortening the PR
+  check-to-merge cycle without losing coverage of landed commits.
+
 ### Added
 
 - Developer tooling: added the Biome linter (`npm run lint`, `npm run lint:fix`)
