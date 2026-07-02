@@ -120,9 +120,9 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
   smartFable: {
     key: "smartFable",
     displayName: "SmartFable",
-    description: "Smart-style balanced mode with Fable as its model preference. Toggleable thinking (low/medium/high).",
+    description: "Smart-style balanced mode with Claude Fable 5 (Claude Code subscription) as its model preference. Toggleable thinking (low/medium/high).",
     modelPreferences: [
-      { model: "fable" },
+      { model: "claude-fable-5", providers: ["claude-subscription"] },
     ],
     // Default thinking level; alt+r cycles through medium -> high -> low.
     thinkingLevel: "medium",

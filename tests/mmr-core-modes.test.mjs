@@ -67,7 +67,7 @@ describe("mmr-core mode table", () => {
       { model: "claude-sonnet-5", providers: ["claude-subscription"] },
     ]);
     assert.deepEqual(smartFable.modelPreferences, [
-      { model: "fable" },
+      { model: "claude-fable-5", providers: ["claude-subscription"] },
     ]);
     for (const mode of [smartSonnet, smartFable]) {
       assert.equal(mode.thinkingLevel, "medium");
@@ -84,6 +84,7 @@ describe("mmr-core mode table", () => {
 
     assert.match(list, /smart\s+claude-opus-4-8 → gpt-5\.5 — thinking: Anthropic adaptive\/high; context: 300k total \/ 64k max out \/ 236k max in/);
     assert.match(list, /rush\s+gpt-5\.5 → claude-haiku-4-5-20251001 → claude-haiku-4-5 — thinking: OpenAI Responses none; context: 128k max out/);
+    assert.match(list, /smartFable\s+claude-fable-5 — thinking: Anthropic adaptive\/medium; context: 128k max out/);
     assert.match(list, /large\s+claude-opus-4-6 → gpt-5\.4 — thinking: Anthropic adaptive\/medium; context: 1M total \/ 32k max out \/ 968k max in/);
     assert.match(list, /deep\s+gpt-5\.5 → claude-opus-4-8 — thinking: Anthropic adaptive\/medium; context: 128k max out/);
   });

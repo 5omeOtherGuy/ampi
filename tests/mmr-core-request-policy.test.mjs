@@ -246,7 +246,7 @@ describe("mmr-core request policy", () => {
 
     // GPT/Codex-primary modes set no context profile, so they run at Pi's own
     // registered window. Only the request policy (max output) is carried.
-    for (const mode of ["smartGPT", "smartFable", "rush", "test", "deep"]) {
+    for (const mode of ["smartGPT", "rush", "test", "deep"]) {
       assert.equal(MMR_REQUEST_POLICIES[mode].contextWindow, undefined, `${mode} carries no contextWindow`);
       assert.equal(MMR_REQUEST_POLICIES[mode].effectiveMaxInputTokens, undefined, `${mode} carries no effectiveMaxInputTokens`);
       assert.equal(MMR_REQUEST_POLICIES[mode].openaiResponses.maxOutputTokens, 128000, `${mode} still carries its output policy`);
@@ -254,6 +254,12 @@ describe("mmr-core request policy", () => {
       const clamped = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode], { contextWindow: 272_000, maxTokens: 128_000 });
       assert.equal(clamped.contextWindow, undefined, `${mode} stays native after clamping`);
     }
+
+    assert.equal(MMR_REQUEST_POLICIES.smartFable.contextWindow, undefined, "smartFable carries no contextWindow");
+    assert.equal(MMR_REQUEST_POLICIES.smartFable.effectiveMaxInputTokens, undefined, "smartFable carries no effectiveMaxInputTokens");
+    assert.equal(MMR_REQUEST_POLICIES.smartFable.anthropic.maxTokens, 128000, "smartFable still carries its output policy");
+    const clampedFable = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smartFable, { contextWindow: 1_000_000, maxTokens: 128_000 });
+    assert.equal(clampedFable.contextWindow, undefined, "smartFable stays native after clamping");
 
     // smart's display profile is now 300k/236k. Callers pass the already-capped
     // active model here, so a 300k Opus window leaves the profile unchanged.
@@ -357,8 +363,8 @@ describe("mmr-core thinking-level toggle", () => {
 
     for (const level of ["low", "medium", "high"]) {
       const fable = applyMmrThinkingLevelToPolicy("smartFable", MMR_REQUEST_POLICIES.smartFable, level);
-      assert.equal(fable.openaiResponses.reasoning.effort, level);
-      assert.equal(fable.openaiResponses.maxOutputTokens, 128000);
+      assert.equal(fable.anthropic.thinking.outputConfigEffort, level);
+      assert.equal(fable.anthropic.maxTokens, 128000);
     }
   });
 
