@@ -65,16 +65,15 @@
     "worktrees:report": "bash scripts/list-merged-worktrees.sh",
     "gate": "bash scripts/gate.sh",
     "release:notes": "node scripts/github-release-notes.mjs",
-    "pack:dry-run": "npm pack --dry-run",
-    "postinstall": "node scripts/patch-pi-coding-agent-audit.mjs"
+    "pack:dry-run": "npm pack --dry-run"
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": "^0.79.6",
-    "@earendil-works/pi-coding-agent": "^0.79.6",
-    "@earendil-works/pi-tui": "^0.79.6"
+    "@earendil-works/pi-agent-core": "^0.80.3",
+    "@earendil-works/pi-coding-agent": "^0.80.3",
+    "@earendil-works/pi-tui": "^0.80.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
@@ -87,10 +86,5 @@
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "typebox": "1.1.38"
-  },
-  "overrides": {
-    "protobufjs": "^7.6.4",
-    "ws": "^8.21.0",
-    "undici": "^8.5.0"
   }
 }
