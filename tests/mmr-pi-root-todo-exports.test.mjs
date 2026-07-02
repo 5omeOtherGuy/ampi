@@ -40,7 +40,7 @@ const REMOVED_TYPE_NAMES = [
   "CompleteTaskResult",
 ];
 
-describe("pi-mmr root exports: legacy task-list coordination surface is removed", () => {
+describe("ampi root exports: legacy task-list coordination surface is removed", () => {
   it("does not expose legacy runtime exports from the package root", async () => {
     const root = await importSource("index.ts");
     for (const name of REMOVED_RUNTIME_EXPORTS) {

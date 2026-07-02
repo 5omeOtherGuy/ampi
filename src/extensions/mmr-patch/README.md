@@ -41,7 +41,7 @@ No settings or environment variables. The extension loads on startup and registe
 ### Schema and model-visible surfaces
 
 - **Schema**: `{ patchText: string }` with `additionalProperties: false`. The patch must wrap in `*** Begin Patch` / `*** End Patch` markers.
-- **`description` (model-visible)**: self-contained — carries the formal grammar block, context rules (3-line default; 5–10 lines for repetitive or large files; no duplicated context between adjacent changes), additional rules, reliability tips, and a worked example for each distinct operation. Two `pi-mmr`-specific behaviors are documented inline: ambiguous matches are rejected rather than first-match-wins, and the workspace + sibling-worktree path-safety contract.
+- **`description` (model-visible)**: self-contained — carries the formal grammar block, context rules (3-line default; 5–10 lines for repetitive or large files; no duplicated context between adjacent changes), additional rules, reliability tips, and a worked example for each distinct operation. Two `ampi`-specific behaviors are documented inline: ambiguous matches are rejected rather than first-match-wins, and the workspace + sibling-worktree path-safety contract.
 - **`promptGuidelines` (system prompt)**: short high-signal cues — prefer `apply_patch` for single-file edits and patch-style add/delete/rename/multi-file changes; read enough context first; use 5–10 lines or an `@@` anchor for repetitive or ambiguous locations; avoid unanchored insert-only hunks; redact secrets before submission.
 - **`promptSnippet`**: `"Apply a Codex-format patch to workspace files"`.
 
@@ -78,7 +78,7 @@ No settings or environment variables. The extension loads on startup and registe
 
 ## Public API
 
-Stable re-exports from `pi-mmr`: `registerMmrPatchProviders`, `ApplyPatchError`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Stable re-exports from `ampi`: `registerMmrPatchProviders`, `ApplyPatchError`. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 

@@ -25,7 +25,7 @@ import type { MmrModelCandidateResolution, MmrModelPreference, MmrModeKey } from
  * cannot drift across the boundary.
  */
 export const MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX =
-  "pi-mmr: subagent activation failed: ";
+  "ampi: subagent activation failed: ";
 
 /**
  * Parse a child Pi process's stderr for the activation-failure marker.

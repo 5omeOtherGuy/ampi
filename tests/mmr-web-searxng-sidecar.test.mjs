@@ -10,7 +10,7 @@ after(cleanupLoadedSource);
 
 /** Temp global+project settings layout mirroring loadMmrWebSettings inputs. */
 function setupTempEnv() {
-  const root = mkdtempSync(path.join(tmpdir(), "pi-mmr-web-sidecar-cfg-"));
+  const root = mkdtempSync(path.join(tmpdir(), "ampi-web-sidecar-cfg-"));
   const home = path.join(root, "home");
   const project = path.join(root, "project");
   mkdirSync(path.join(home, ".pi/agent"), { recursive: true });

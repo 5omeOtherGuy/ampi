@@ -12,9 +12,9 @@ Documentation). Leave the block empty, edit `## Unreleased` directly, or apply
 the `skip-changelog` label for a deliberately non-user-visible change.
 See docs/changelog-template.md ("Automated PR-body sync").
 -->
-<!-- pi-mmr changelog:start -->
+<!-- ampi changelog:start -->
 
-<!-- pi-mmr changelog:end -->
+<!-- ampi changelog:end -->
 
 ## Verification
 
@@ -35,4 +35,4 @@ Closes #
 - [ ] I described user-visible changes in the Changelog marker block above (or edited `## Unreleased`), or this change is deliberately non-user-visible.
 - [ ] I used labels that match the change type when practical.
 - [ ] I did not include secrets, private session data, provider payloads, credentials, or local-only notes.
-- [ ] Public-facing text uses `pi-mmr` project terms and is safe to publish.
+- [ ] Public-facing text uses `ampi` project terms and is safe to publish.

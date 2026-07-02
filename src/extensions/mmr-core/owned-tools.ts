@@ -1,5 +1,5 @@
 /**
- * Shared registry of concrete Pi tools owned by the `pi-mmr` package.
+ * Shared registry of concrete Pi tools owned by the `ampi` package.
  *
  * Two registries are tracked:
  *
@@ -14,7 +14,7 @@
  *    stamps every registered tool with `sourceInfo.path` matching the
  *    extension entrypoint that registered it, so Free mode can use this
  *    set to confirm that the currently-active registration for a given
- *    tool name still belongs to `pi-mmr`. If another extension later
+ *    tool name still belongs to `ampi`. If another extension later
  *    re-registers a tool with the same name, its `sourceInfo.path` will
  *    not be in this set and Free mode will preserve it.
  *
@@ -43,7 +43,7 @@ const ownedToolSourcePathsByOwner: Map<string, Set<string>> = (globalStore[
 ] ??= new Map<string, Set<string>>());
 
 /**
- * Register a concrete Pi tool name as owned by the `pi-mmr` package.
+ * Register a concrete Pi tool name as owned by the `ampi` package.
  *
  * Safe to call repeatedly; the set is idempotent. Names must match the
  * exact `definition.name` passed to `pi.registerTool({...})`.
@@ -160,7 +160,7 @@ export interface ToolInfoLike {
 
 /**
  * Decide whether Free mode should drop a given tool name from the
- * restored baseline so that Pi behaves as if `pi-mmr` were not installed.
+ * restored baseline so that Pi behaves as if `ampi` were not installed.
  *
  * Behavior matrix:
  *

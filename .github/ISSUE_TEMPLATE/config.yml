@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/5omeOtherGuy/pi-mmr/security/advisories/new
+    url: https://github.com/5omeOtherGuy/ampi/security/advisories/new
     about: Please report vulnerabilities privately. Do not open public issues with exploit details or secrets.

@@ -10,7 +10,7 @@ after(cleanupLoadedSource);
 const LOADER_MODULE = "extensions/mmr-custom-subagents/custom-loader.ts";
 
 async function withTempDir(fn) {
-  const dir = await mkdtemp(path.join(tmpdir(), "pi-mmr-custom-subagents-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "ampi-custom-subagents-"));
   try {
     return await fn(dir);
   } finally {

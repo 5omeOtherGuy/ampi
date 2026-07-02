@@ -57,7 +57,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   });
 
   pi.registerCommand("mmr-changelog", {
-    description: "Show pi-mmr changelog entries",
+    description: "Show ampi changelog entries",
     handler: async (_args, ctx) => {
       showMmrChangelogCommand(ctx);
     },
@@ -99,7 +99,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   // `alt+r` (reasoning), not `alt+t`: mmr-toolbox already defaults its
   // task-list widget toggle to `alt+t`, and Pi's loader resolves duplicate
   // extension shortcut keys as last-registered-wins, so sharing `alt+t` would
-  // silently shadow one of them. `alt+r` is free across pi-mmr and is not a
+  // silently shadow one of them. `alt+r` is free across ampi and is not a
   // Pi default binding.
   pi.registerShortcut("alt+r", {
     description: "Toggle MMR thinking level (smart/fable/deep)",

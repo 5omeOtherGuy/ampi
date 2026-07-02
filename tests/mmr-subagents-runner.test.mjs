@@ -520,7 +520,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("detects the subagent-activation failure marker on stderr and surfaces it as a hard failure even on exit 0", async () => {
-    // mmr-core writes `pi-mmr: subagent activation failed: <reason>` to
+    // mmr-core writes `ampi: subagent activation failed: <reason>` to
     // stderr when subagent activation rejects (unknown profile, no
     // model route, explicit --model / --tools mismatch). Pi currently
     // does not propagate extension `session_start` throws into a
@@ -538,7 +538,7 @@ describe("mmr-subagents worker runner", () => {
       { spawn, resolveInvocation: (args) => ({ command: "pi", args }) },
     );
     calls[0].proc.writeStderr(
-      'pi-mmr: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n',
+      'ampi: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n',
     );
     // Pi exits 0 in current behavior even after an extension throw.
     calls[0].proc.close(0);
@@ -566,7 +566,7 @@ describe("mmr-subagents worker runner", () => {
     );
     calls[0].proc.writeStderr("Warning: noise before\n");
     calls[0].proc.writeStderr(
-      'pi-mmr: subagent activation failed: Subagent "finder" was invoked with --tools bash,write, but the profile tool allowlist is grep,find,read.\n',
+      'ampi: subagent activation failed: Subagent "finder" was invoked with --tools bash,write, but the profile tool allowlist is grep,find,read.\n',
     );
     calls[0].proc.writeStderr("Extension error (...): downstream noise\n");
     calls[0].proc.close(0);

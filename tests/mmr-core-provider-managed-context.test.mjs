@@ -19,7 +19,7 @@ beforeEach(async () => {
 });
 
 function createTempCwd() {
-  return mkdtempSync(path.join(tmpdir(), "pi-mmr-provider-context-"));
+  return mkdtempSync(path.join(tmpdir(), "ampi-provider-context-"));
 }
 
 function buildPi(setModelCalls, notifications, handlers, flagValue) {

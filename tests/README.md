@@ -1,6 +1,6 @@
 # Tests
 
-Deterministic test suite for `pi-mmr`. Hermetic; no live provider/API calls from `npm test`.
+Deterministic test suite for `ampi`. Hermetic; no live provider/API calls from `npm test`.
 
 Package overview: [`../README.md`](../README.md). Documentation conventions: [`../docs/documentation-style-guide.md`](../docs/documentation-style-guide.md).
 

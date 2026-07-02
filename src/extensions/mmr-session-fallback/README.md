@@ -58,7 +58,7 @@ After the user picks ([`ui.ts`](ui.ts)):
 - `setMmrManagedModelOverride({ kind: "session-fallback", ... })` records the override on the `mmr-core` runtime.
 - `mmr-core`'s mode-state snapshot is republished with `modelFallbackApplied: true`, `modelFallbackReason`, new `provider`/`model`/`thinkingLevel`, and refreshed `effectiveContextWindow`, so `/mmr-status` reflects the fallback.
 - A `mmr-session-fallback.override` custom session entry is appended ([`state.ts`](state.ts)) keyed to `sessionId`: `{ version, sessionId, mode, failingProvider, failingModel, selectedProvider, selectedModel, thinkingLevel, reasonKind, appliedAt }`. A `cleared: true` variant records explicit clears.
-- Pi's `message_end` payload is rewritten ([`retry-message.ts`](retry-message.ts)) to keep `stopReason: "error"` but replace `errorMessage` with `<reason>: pi-mmr applied a session fallback to <provider>/<model> with thinking:<level>. Retrying this turn with the selected model. Original error: <original>`, where `<reason>` is `rate limit` for quota/rate-limit classifications and `upstream capacity` for overload/degraded-stream classifications. Pi's retry loop reacts and replays the turn.
+- Pi's `message_end` payload is rewritten ([`retry-message.ts`](retry-message.ts)) to keep `stopReason: "error"` but replace `errorMessage` with `<reason>: ampi applied a session fallback to <provider>/<model> with thinking:<level>. Retrying this turn with the selected model. Original error: <original>`, where `<reason>` is `rate limit` for quota/rate-limit classifications and `upstream capacity` for overload/degraded-stream classifications. Pi's retry loop reacts and replays the turn.
 
 ### Session lifecycle
 
@@ -78,7 +78,7 @@ After the user picks ([`ui.ts`](ui.ts)):
 
 ## Public API
 
-Re-exported from `pi-mmr`. The `pi-mmr/extensions/mmr-session-fallback` subpath exposes the extension factory entrypoint only.
+Re-exported from `ampi`. The `ampi/extensions/mmr-session-fallback` subpath exposes the extension factory entrypoint only.
 
 - `createMmrSessionFallbackExtension()` — Pi extension factory.
 - `classifyMmrSessionFallbackError(input)` — pure classifier.

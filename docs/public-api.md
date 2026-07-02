@@ -1,6 +1,6 @@
-# pi-mmr non-core public API
+# ampi non-core public API
 
-**Audience.** Developers writing code that imports from `pi-mmr` and wants the stable programmatic surface owned by the non-core extensions.
+**Audience.** Developers writing code that imports from `ampi` and wants the stable programmatic surface owned by the non-core extensions.
 
 **Scope.** Package-root re-exports owned by `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-subagents`, `mmr-async-tasks`, `mmr-custom-subagents`, `mmr-history`, and `mmr-session-fallback`. The `mmr-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`mmr-core-api.md`](./mmr-core-api.md).
 
@@ -21,15 +21,35 @@ Identical to `mmr-core`:
    invariants. Document any change in the extension's own README and in
    tests before changing the public surface.
 4. Public-safe wording only. Names, statuses, and reasons described
-   here are owned `pi-mmr` concepts.
+   here are owned `ampi` concepts.
 
 ## Import paths
 
-- **Package root** — `import { ... } from "pi-mmr"` (resolves to
+- **Package root** — `import { ... } from "ampi"` (resolves to
   `src/index.ts`). Use this in production code.
-- **Extension entrypoint** — `import extension from
-  "pi-mmr/extensions/<name>"` when wiring an extension into a Pi
+- **Preferred extension entrypoint** — `import extension from
+  "ampi/extensions/ampi-<family>"` when wiring an extension into a Pi
   package manifest.
+- **Compatibility entrypoint** — `import extension from
+  "ampi/extensions/mmr-<family>"`. The `mmr-*` subpaths remain supported
+  for existing consumers.
+
+| Family | Preferred subpath | Compatibility subpath |
+| --- | --- | --- |
+| Core | `ampi/extensions/ampi-core` | `ampi/extensions/mmr-core` |
+| Patch | `ampi/extensions/ampi-patch` | `ampi/extensions/mmr-patch` |
+| Tasks | `ampi/extensions/ampi-tasks` | `ampi/extensions/mmr-tasks` |
+| Workers | `ampi/extensions/ampi-workers` | `ampi/extensions/mmr-workers` |
+| Custom subagents | `ampi/extensions/ampi-custom-subagents` | `ampi/extensions/mmr-custom-subagents` |
+| Session fallback | `ampi/extensions/ampi-session-fallback` | `ampi/extensions/mmr-session-fallback` |
+| Web | `ampi/extensions/ampi-web` | `ampi/extensions/mmr-web` |
+| GitHub | `ampi/extensions/ampi-github` | `ampi/extensions/mmr-github` |
+| History | `ampi/extensions/ampi-history` | `ampi/extensions/mmr-history` |
+| Deprecated toolbox shim | `ampi/extensions/ampi-toolbox` | `ampi/extensions/mmr-toolbox` |
+
+Runtime commands, environment variables, and settings keys remain the shipped
+compatibility identifiers (`/mmr-*`, `MMR_*`, `mmrCore`, `mmrWeb`, and sibling
+settings) until explicit `ampi` aliases are implemented.
 
 The entrypoint default export and any `create<Extension>Extension(...)`
 factory are stable; everything else listed below is re-exported through
@@ -56,7 +76,7 @@ part of the supported surface.
 
 ### Usage
 
-Hosts that load `pi-mmr` through Pi's extension manifest do not need to
+Hosts that load `ampi` through Pi's extension manifest do not need to
 call any of these directly. See
 [`../src/extensions/mmr-patch/README.md`](../src/extensions/mmr-patch/README.md).
 
@@ -97,7 +117,7 @@ are part of the supported surface.
 
 ### Usage
 
-Hosts that load `pi-mmr` through Pi's extension manifest do not need to
+Hosts that load `ampi` through Pi's extension manifest do not need to
 call any of these directly. Consumers that build their own Pi runtime,
 or that want to inspect persisted task-list state from outside a Pi
 session, can use the `PersistedTodoState` helpers safely; they perform
@@ -218,9 +238,10 @@ one release; its description and results carry a deprecation notice.
   use `createMmrWorkersExtension`.
 - `MmrSubagentsFactoryOverrides` and `MmrAsyncTasksFactoryOverrides` →
   use `MmrWorkersFactoryOverrides`.
-- The package subpaths `pi-mmr/extensions/mmr-subagents` and
-  `pi-mmr/extensions/mmr-async-tasks` → use
-  `pi-mmr/extensions/mmr-workers`.
+- The package subpaths `ampi/extensions/mmr-subagents` and
+  `ampi/extensions/mmr-async-tasks` → use the preferred
+  `ampi/extensions/ampi-workers` subpath (or compatibility
+  `ampi/extensions/mmr-workers`).
 
 Every other package-root symbol below kept its name.
 

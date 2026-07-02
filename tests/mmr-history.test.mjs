@@ -59,7 +59,7 @@ describe("mmr-history query parsing and catalog search", () => {
   it("parses metadata, project, pagination, and explicit date filters", async () => {
     const { parseSessionQuery } = await importSource("extensions/mmr-history/query.ts");
     const parsed = parseSessionQuery(
-      "provider:anthropic model:claude tool:bash label:checkpoint has:errors project:pi-mmr cwd:worktree projectRef:abc123 since:today until:week created_after:2026-05-01 modified_before:2026-05-31 offset:20 sort:created",
+      "provider:anthropic model:claude tool:bash label:checkpoint has:errors project:ampi cwd:worktree projectRef:abc123 since:today until:week created_after:2026-05-01 modified_before:2026-05-31 offset:20 sort:created",
       new Date("2026-05-24T12:34:56Z"),
     );
 
@@ -68,7 +68,7 @@ describe("mmr-history query parsing and catalog search", () => {
     assert.deepEqual(parsed.tool, ["bash"]);
     assert.deepEqual(parsed.label, ["checkpoint"]);
     assert.deepEqual(parsed.has, ["errors"]);
-    assert.deepEqual(parsed.project, ["pi-mmr"]);
+    assert.deepEqual(parsed.project, ["ampi"]);
     assert.deepEqual(parsed.cwd, ["worktree"]);
     assert.deepEqual(parsed.projectRef, ["abc123"]);
     assert.equal(parsed.modifiedAfter.toISOString(), "2026-05-24T00:00:00.000Z");
@@ -852,7 +852,7 @@ describe("mmr-history metadata and project filters", () => {
     const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
     const { entriesA, entriesB } = makeIndexManagers();
     const sessions = [
-      sessionInfo({ id: "S-a", path: "/tmp/a.jsonl", cwd: "/work/pi-mmr-main", allMessagesText: "" }),
+      sessionInfo({ id: "S-a", path: "/tmp/a.jsonl", cwd: "/work/ampi-main", allMessagesText: "" }),
       sessionInfo({ id: "S-b", path: "/tmp/b.jsonl", cwd: "/work/other", allMessagesText: "" }),
     ];
     const managers = new Map([
@@ -901,19 +901,19 @@ describe("mmr-history metadata and project filters", () => {
     const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
     const { projectRefFromCwd } = await importSource("extensions/mmr-history/redaction.ts");
     const sessions = [
-      sessionInfo({ id: "S-main", cwd: "/home/me/projects/pi-mmr", allMessagesText: "" }),
-      sessionInfo({ id: "S-worktree", cwd: "/home/me/projects/pi-mmr-history-filters", allMessagesText: "" }),
+      sessionInfo({ id: "S-main", cwd: "/home/me/projects/ampi", allMessagesText: "" }),
+      sessionInfo({ id: "S-worktree", cwd: "/home/me/projects/ampi-history-filters", allMessagesText: "" }),
       sessionInfo({ id: "S-other", cwd: "/home/me/projects/other", allMessagesText: "" }),
     ];
 
-    const byProject = await searchSessionsWithDiagnostics({ listSessions: async () => sessions }, "project:/home/me/projects/pi-mmr-history", { limit: 10, redactionEnabled: false });
+    const byProject = await searchSessionsWithDiagnostics({ listSessions: async () => sessions }, "project:/home/me/projects/ampi-history", { limit: 10, redactionEnabled: false });
     assert.deepEqual(byProject.matches.map((m) => m.sessionId), ["S-worktree"]);
     assert.ok(!JSON.stringify(byProject.matches).includes("/home/me/projects"));
     assert.ok(!JSON.stringify(byProject.queryDiagnostics).includes("/home/me/projects"));
 
     const byRef = await searchSessionsWithDiagnostics(
       { listSessions: async () => sessions },
-      `projectRef:${projectRefFromCwd("/home/me/projects/pi-mmr")}`,
+      `projectRef:${projectRefFromCwd("/home/me/projects/ampi")}`,
       { limit: 10 },
     );
     assert.deepEqual(byRef.matches.map((m) => m.sessionId), ["S-main"]);
@@ -921,14 +921,14 @@ describe("mmr-history metadata and project filters", () => {
 
   it("find_session tool keeps cwd/project query echoes private even when content redaction is off", async () => {
     const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
-    const sessions = [sessionInfo({ id: "S-main", cwd: "/home/me/projects/pi-mmr", allMessagesText: "" })];
+    const sessions = [sessionInfo({ id: "S-main", cwd: "/home/me/projects/ampi", allMessagesText: "" })];
     const tool = createFindSessionTool({
       getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 4_000, redactionEnabled: false }),
       listSessions: async () => sessions,
       openSession: () => ({ getEntries: () => [] }),
     });
 
-    const result = await tool.execute("tcid", { query: "project:/home/me/projects/pi-mmr" }, undefined, undefined, { cwd: "/repo" });
+    const result = await tool.execute("tcid", { query: "project:/home/me/projects/ampi" }, undefined, undefined, { cwd: "/repo" });
 
     assert.equal(result.details.matches.length, 1);
     assert.ok(!result.details.query.includes("/home/me/projects"));

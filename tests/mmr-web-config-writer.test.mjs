@@ -8,7 +8,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 function setupTempEnv() {
-  const root = mkdtempSync(path.join(tmpdir(), "pi-mmr-web-writer-"));
+  const root = mkdtempSync(path.join(tmpdir(), "ampi-web-writer-"));
   const home = path.join(root, "home");
   const project = path.join(root, "project");
   mkdirSync(path.join(home, ".pi/agent"), { recursive: true });

@@ -122,8 +122,8 @@ function validateChangelogShape(markdown) {
   if (!markdown.startsWith("# Changelog\n")) {
     errors.push("CHANGELOG.md must start with '# Changelog'.");
   }
-  if (!/^All notable changes to `pi-mmr`/m.test(markdown)) {
-    errors.push("CHANGELOG.md must keep the pi-mmr notable-changes introduction.");
+  if (!/^All notable changes to `ampi`/m.test(markdown)) {
+    errors.push("CHANGELOG.md must keep the ampi notable-changes introduction.");
   }
   if (!/^## Unreleased\s*$/m.test(markdown)) {
     errors.push("CHANGELOG.md must contain a top-level '## Unreleased' section.");
@@ -200,7 +200,7 @@ export function evaluateChangelogEntryPolicy({ monitoredChanges, changelogChange
   }
   const shown = monitoredChanges.slice(0, 12).join(", ") + (monitoredChanges.length > 12 ? ", ..." : "");
   const message = [
-    "CHANGELOG.md was not updated for monitored pi-mmr changes.",
+    "CHANGELOG.md was not updated for monitored ampi changes.",
     `Changed monitored files: ${shown}`,
     `Add a public-safe bullet via the PR-body marker block (${templatePath}, "Automated PR-body sync") so changelog-sync appends it at PR time, edit ## Unreleased directly, or set PI_MMR_CHANGELOG_NOT_NEEDED=1 for a deliberately non-user-visible change.`,
   ].join("\n");

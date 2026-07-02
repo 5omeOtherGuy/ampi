@@ -10,7 +10,7 @@ after(cleanupLoadedSource);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const subagentsExtensionPath = "./src/extensions/mmr-workers/index.ts";
 const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
 const GITHUB_TOOLS = [
   "read_github",
   "list_directory_github",

@@ -104,7 +104,7 @@ function makeRegistry(models) {
 }
 
 function makeTempDir() {
-  return mkdtempSync(path.join(os.tmpdir(), "pi-mmr-finder-test-"));
+  return mkdtempSync(path.join(os.tmpdir(), "ampi-finder-test-"));
 }
 
 describe("finder tool definition", () => {
@@ -814,7 +814,7 @@ describe("finder execute() seam", () => {
 
   it("surfaces subagent activation failure as a clear error result instead of an empty success", async () => {
     // Pi currently exits 0 even when an extension's session_start throws.
-    // The runner detects the `pi-mmr: subagent activation failed: ...`
+    // The runner detects the `ampi: subagent activation failed: ...`
     // marker on stderr and surfaces it via
     // MmrWorkerResult.subagentActivationError. Finder MUST translate
     // that into a user-visible error message AND expose the activation
@@ -826,7 +826,7 @@ describe("finder execute() seam", () => {
       truncatedFinalOutput: "",
       exitCode: 0,
       stderr:
-        'pi-mmr: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n',
+        'ampi: subagent activation failed: Unknown subagent profile "no-such-profile". Known profiles: finder.\n',
       subagentActivationError:
         'Unknown subagent profile "no-such-profile". Known profiles: finder.',
       errorMessage:

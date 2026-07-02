@@ -19,6 +19,6 @@ export function createMmrSessionFallbackRetryMessage(
   return {
     ...message,
     stopReason: "error",
-    errorMessage: `${reason}: pi-mmr applied a session fallback to ${override.selectedProvider}/${override.selectedModel} with thinking:${override.thinkingLevel}. Retrying this turn with the selected model. Original error: ${originalError ?? "provider quota error"}`,
+    errorMessage: `${reason}: ampi applied a session fallback to ${override.selectedProvider}/${override.selectedModel} with thinking:${override.thinkingLevel}. Retrying this turn with the selected model. Original error: ${originalError ?? "provider quota error"}`,
   };
 }

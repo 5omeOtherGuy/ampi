@@ -8,7 +8,7 @@ const LIBRARIAN_MODULE = "extensions/mmr-workers/librarian.ts";
 const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
 const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
 
 const GITHUB_TOOLS = [
   "read_github",
@@ -367,7 +367,7 @@ describe("librarian failure mapping", () => {
       finalOutput: "",
       truncatedFinalOutput: "",
       exitCode: 0,
-      stderr: 'pi-mmr: subagent activation failed: Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.\n',
+      stderr: 'ampi: subagent activation failed: Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.\n',
       subagentActivationError: 'Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.',
       errorMessage: 'subagent activation failed: Subagent "librarian" was invoked with --tools read_github,read, but the resolved worker tool set is read_github,list_directory_github.',
     });

@@ -579,7 +579,7 @@ describe("Task tool", () => {
             finalOutput: "",
             truncatedFinalOutput: "",
             exitCode: 0,
-            stderr: "pi-mmr: subagent activation failed: Unknown subagent profile\n",
+            stderr: "ampi: subagent activation failed: Unknown subagent profile\n",
             subagentActivationError: "Unknown subagent profile",
             errorMessage: "subagent activation failed: Unknown subagent profile",
           });

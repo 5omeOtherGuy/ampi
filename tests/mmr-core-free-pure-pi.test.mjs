@@ -47,7 +47,7 @@ beforeEach(async () => {
   owned.__resetMmrOwnedToolsForTests();
 });
 
-describe("mmr-core free mode: pure Pi (pi-mmr-not-installed equivalence)", () => {
+describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   it("drops MMR-owned tools from baseline when entering free from a locked mode", async () => {
     const extension = (await importSource("extensions/mmr-core/index.ts")).default;
     const owned = await importOwnedTools();
@@ -174,7 +174,7 @@ describe("mmr-core free mode: pure Pi (pi-mmr-not-installed equivalence)", () =>
 });
 
 describe("mmr-core free mode: source-aware MMR ownership", () => {
-  const MMR_PATCH_PATH = "/abs/path/to/pi-mmr/src/extensions/mmr-patch/index.ts";
+  const MMR_PATCH_PATH = "/abs/path/to/ampi/src/extensions/mmr-patch/index.ts";
   const THIRD_PARTY_PATH = "/abs/path/to/other-pkg/src/extensions/patch/index.ts";
 
   it("drops an MMR-owned name when the active registration's source is an MMR extension path", async () => {

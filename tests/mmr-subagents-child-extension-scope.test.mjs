@@ -13,7 +13,7 @@ const piMmr = (name) => path.join(EXT_DIR, name, "index.ts");
 const EXTERNAL_A = "/home/u/.pi/agent/git/host/owner/minimalcc-pi/extensions/minimalcc-pi/index.ts";
 const EXTERNAL_B = "/home/u/.pi/agent/git/host/owner/gemini-pi/extensions/gemini-pi/index.ts";
 
-/** fileExists stub: every pi-mmr index + the two external entries exist. */
+/** fileExists stub: every ampi index + the two external entries exist. */
 function defaultExists(candidate) {
   if (candidate === EXTERNAL_A || candidate === EXTERNAL_B) return true;
   return candidate.startsWith(EXT_DIR) && candidate.endsWith("index.ts");
@@ -71,7 +71,7 @@ describe("mmr-subagents child-extension-scope: enumeration", () => {
 });
 
 describe("mmr-subagents child-extension-scope: resolver", () => {
-  it("finder keeps only mmr-core plus all external packages, drops other pi-mmr ext", async () => {
+  it("finder keeps only mmr-core plus all external packages, drops other ampi ext", async () => {
     const mod = await importSource(MODULE);
     const loadedPaths = [
       piMmr("mmr-core"),
@@ -109,7 +109,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
       location: LOCATION,
       fileExists: defaultExists,
     });
-    // pi-mmr keep paths first in declared order, then externals first-seen.
+    // ampi keep paths first in declared order, then externals first-seen.
     assert.deepEqual(scope, [
       piMmr("mmr-core"),
       piMmr("mmr-web"),
@@ -118,7 +118,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     ]);
   });
 
-  it("keeps unknown third-party extensions verbatim (only drops recognized pi-mmr)", async () => {
+  it("keeps unknown third-party extensions verbatim (only drops recognized ampi)", async () => {
     const mod = await importSource(MODULE);
     const thirdParty = "/opt/other-pkg/ext/index.ts";
     const scope = mod.resolveMmrChildExtensionScope({

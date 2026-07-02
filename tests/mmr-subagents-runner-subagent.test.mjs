@@ -170,7 +170,7 @@ describe("runMmrSubagentWorker — activation failure marker", () => {
     );
     const proc = calls[0].proc;
     proc.writeStderr(
-      'pi-mmr: subagent activation failed: Unknown subagent profile "no-such". Known profiles: finder.\n',
+      'ampi: subagent activation failed: Unknown subagent profile "no-such". Known profiles: finder.\n',
     );
     proc.close(0);
     const result = await promise;

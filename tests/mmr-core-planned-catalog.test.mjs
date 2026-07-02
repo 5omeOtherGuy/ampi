@@ -101,7 +101,7 @@ describe("Phase E: planned metadata catalog", () => {
       assert.equal(
         activeNames.has(name),
         false,
-        `${name}: planned entry must not collide with a currently-active pi-mmr tool name`,
+        `${name}: planned entry must not collide with a currently-active ampi tool name`,
       );
     }
   });
@@ -160,7 +160,7 @@ describe("Phase E: planned metadata catalog", () => {
 
   it("never leaks a planned-tool summary verbatim into the rendered system prompt", async () => {
     // Defensive: even if a tool name happened to be a common English word, the
-    // entry's pi-mmr-authored summary text is distinctive and must never
+    // entry's ampi-authored summary text is distinctive and must never
     // surface in the model-facing prompt.
     const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
     const planned = await importSource("extensions/mmr-core/planned-catalog.ts");

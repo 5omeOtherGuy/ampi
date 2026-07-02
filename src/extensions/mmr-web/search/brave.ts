@@ -35,7 +35,7 @@ const DOMAIN_FILTER_CANDIDATE_COUNT = 20;
  */
 export const BRAVE_SEARCH_BASE = "https://api.search.brave.com/res/v1/web/search";
 
-const DEFAULT_USER_AGENT = "pi-mmr-web/0.0.0";
+const DEFAULT_USER_AGENT = "ampi-web/0.0.0";
 
 export interface BraveSearchArgs extends SearchArgs {}
 

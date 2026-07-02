@@ -75,7 +75,7 @@ describe("mmr-core lifecycle smoke", () => {
   });
 
   it("surfaces the settings files read and load warnings through /mmr-status", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-lifecycle-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-lifecycle-"));
     const previousHome = process.env.HOME;
     const previousUserProfile = process.env.USERPROFILE;
     try {

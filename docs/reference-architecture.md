@@ -1,12 +1,12 @@
-# pi-mmr reference architecture
+# ampi reference architecture
 
-**Audience.** Maintainers and reviewers who need the architectural shape of `pi-mmr`: module ownership, dependency direction, and the shared contracts that bind core to its sibling extensions.
+**Audience.** Maintainers and reviewers who need the architectural shape of `ampi`: module ownership, dependency direction, and the shared contracts that bind core to its sibling extensions.
 
 **Related.** Package overview: [`../README.md`](../README.md). Public API: [`public-api.md`](./public-api.md), [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
 ## Current implementation state
 
-`pi-mmr` is one installable Pi package containing modular extensions. Today the package registers ten extensions:
+`ampi` is one installable Pi package containing modular extensions. Today the package registers ten extensions:
 
 - `mmr-core` — implemented;
 - `mmr-session-fallback` — implemented; interactive session-scoped fallback on subscription quota/rate-limit errors;
@@ -17,7 +17,7 @@
 - `mmr-subagents` — concrete workers shipped (`finder`, `oracle`, `Task`, `librarian`); owns `Task`/`finder`/`oracle`/`librarian` logical names and the `mmr-subagents` feature gate. Shipped workers use the `mmr-core` subagent execution route (`--mmr-subagent <name>`) so the child Pi process applies a profile-resolved model/thinking/tool allowlist verbatim; `librarian` remains `gated` until the required read-only GitHub tools are registered and source-owned by `mmr-github`; the feature gate reports `enabled` with the active capability list.
 - `mmr-async-tasks` — implemented; owns the background fleet tools `start_task`, `task_poll`, `task_wait`, and `task_cancel`.
 - `mmr-custom-subagents` — implemented; owns custom Markdown subagents (discovery and registration).
-- `mmr-history` — opt-in global local Pi session lookup; registers `find_session` and `read_session` when enabled. `read_session` runs through the in-process `history-reader` subagent with a deterministically redacted packet, falling back to lexical extraction on worker failure.
+- `mmr-history` — opt-in global local Pi session lookup; registers `find_session` and `read_session` when enabled. `read_session` runs through the in-process `history-reader` subagent with opaque project refs and opt-in content redaction, falling back to lexical extraction on worker failure.
 
 Implemented in `mmr-core`:
 
@@ -88,8 +88,8 @@ Other extensions own higher-risk or higher-variance capabilities and plug into c
 | `mmr-custom-subagents` | Custom Markdown subagent discovery and registration. | Implemented. |
 | `mmr-history` | `find_session`, `read_session`, future `handoff`, local session indexing, privacy gates. | Initial gated session lookup slice implemented. |
 | `mmr-skills` | Callable `skill` tool that loads and applies skill bodies through Pi-compatible skill discovery. | Planned. |
-| `mmr-toolbox-mcp` | MCP resource/tool discovery and `read_mcp_resource`. Diagnostics belong to user-configured MCP/IDE tools, not a canonical pi-mmr logical tool. | Planned. |
-| `mmr-review` | No pi-mmr-owned surface. Review orchestration is user-owned and out of scope. | Deferred/out of scope. |
+| `mmr-toolbox-mcp` | MCP resource/tool discovery and `read_mcp_resource`. Diagnostics belong to user-configured MCP/IDE tools, not a canonical ampi logical tool. | Planned. |
+| `mmr-review` | No ampi-owned surface. Review orchestration is user-owned and out of scope. | Deferred/out of scope. |
 | `mmr-provider-parity` | Model aliases beyond core model resolution, provider diagnostics, optional provider payload rewrites, payload snapshots. | Planned. |
 | Future `mmr-prompt` | Prompt profiles or provider-specific prompt block serialization if prompt behavior becomes independently configurable. | Do not split yet. |
 
@@ -192,7 +192,7 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `diff_github` | `mmr-github` | Active when GitHub access is enabled; compares refs and optional bounded patches. |
 | `list_repositories` | `mmr-github` | Active when GitHub access is enabled; discovers token-accessible and public repositories. |
 | `handoff` | `mmr-history` | Deferred. |
-| `read_session` | `mmr-history` | Active when `MMR_HISTORY_ENABLE=true`; resolves any local Pi session by id; always tries the `history-reader` worker first with a redacted packet, falls back to redacted lexical extraction. |
+| `read_session` | `mmr-history` | Active when `MMR_HISTORY_ENABLE=true`; resolves any local Pi session by id; always tries the `history-reader` worker first with opaque project refs and opt-in content redaction, falling back to lexical extraction. |
 | `find_session` | `mmr-history` | Active when `MMR_HISTORY_ENABLE=true`; enumerates every local Pi session on disk; returns matches with an opaque `projectRef` per session and never raw cwd / file paths. |
 | `skill` | `mmr-skills` | Deferred. |
 | `read_mcp_resource` | `mmr-toolbox-mcp` | Deferred. |
@@ -234,7 +234,7 @@ New local utility tools must follow the multi-surface design pattern: full guida
 
 Owns the session-local `task_list` tool and its pinned task-list widget. State is persisted as `mmr-tasks.todo-state` `CustomEntry` records in the current Pi session log. See [`src/extensions/mmr-tasks/README.md`](../src/extensions/mmr-tasks/README.md).
 
-> The deferred image/artifact inspection and `chart` rendering surfaces remain unbuilt local utilities; diagnostics belong to user-configured MCP/IDE tools rather than a canonical pi-mmr tool. The former combined `mmr-toolbox` extension is now an unregistered, deprecated compatibility shim that only re-exports `mmr-patch` and `mmr-tasks`.
+> The deferred image/artifact inspection and `chart` rendering surfaces remain unbuilt local utilities; diagnostics belong to user-configured MCP/IDE tools rather than a canonical ampi tool. The former combined `mmr-toolbox` extension is now an unregistered, deprecated compatibility shim that only re-exports `mmr-patch` and `mmr-tasks`.
 
 ### `mmr-toolbox-mcp`
 
@@ -242,7 +242,7 @@ Owns MCP-specific discovery and resource reads. Keep this separate from `mmr-too
 
 ### Review workflow
 
-`pi-mmr` does not include a `reviewer` tool in mode definitions and does not plan a core-owned review runner at this time. Review orchestration is user-owned/out of scope.
+`ampi` does not include a `reviewer` tool in mode definitions and does not plan a core-owned review runner at this time. Review orchestration is user-owned/out of scope.
 
 ## Implementation order
 

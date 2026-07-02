@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible pi-mmr problem
+description: Report a reproducible ampi problem
 title: "Bug: "
 labels: [bug]
 body:
@@ -40,13 +40,13 @@ body:
   - type: input
     id: version
     attributes:
-      label: pi-mmr version or commit
+      label: ampi version or commit
       placeholder: v0.1.0 or commit SHA
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Node version, OS, Pi version, enabled pi-mmr extensions.
+      description: Node version, OS, Pi version, enabled ampi extensions.
   - type: textarea
     id: notes
     attributes:

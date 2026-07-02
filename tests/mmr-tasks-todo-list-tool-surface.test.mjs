@@ -23,7 +23,7 @@ describe("mmr-tasks todo-list-tool public surface stays importable", () => {
     assert.equal(typeof mod.isTuiWidgetSurface, "function", "isTuiWidgetSurface");
     assert.equal(typeof mod.taskStatusGlyph, "function", "taskStatusGlyph");
     assert.equal(typeof mod.TodoValidationError, "function", "TodoValidationError");
-    assert.equal(mod.TASK_LIST_WIDGET_ID, "pi-mmr-task-list", "TASK_LIST_WIDGET_ID");
+    assert.equal(mod.TASK_LIST_WIDGET_ID, "ampi-task-list", "TASK_LIST_WIDGET_ID");
     assert.equal(typeof mod.TASK_LIST_DESCRIPTION, "string", "TASK_LIST_DESCRIPTION");
     assert.equal(typeof mod.TASK_LIST_PROMPT_SNIPPET, "string", "TASK_LIST_PROMPT_SNIPPET");
     assert.ok(Array.isArray(mod.TASK_LIST_PROMPT_GUIDELINES), "TASK_LIST_PROMPT_GUIDELINES");

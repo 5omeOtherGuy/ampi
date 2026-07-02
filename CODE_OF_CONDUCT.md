@@ -1,6 +1,6 @@
 # Code of Conduct
 
-`pi-mmr` aims to be a practical, respectful project space.
+`ampi` aims to be a practical, respectful project space.
 
 ## Expected behavior
 

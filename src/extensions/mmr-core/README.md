@@ -1,6 +1,6 @@
 # mmr-core
 
-Foundation locked-mode extension for `pi-mmr`. Owns locked modes, model resolution, request policy, tool resolution, and the per-turn system-prompt rewrite.
+Foundation locked-mode extension for `ampi`. Owns locked modes, model resolution, request policy, tool resolution, and the per-turn system-prompt rewrite.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMAP.md`](ROADMAP.md). Public API: [`../../../docs/mmr-core-api.md`](../../../docs/mmr-core-api.md) (full surface) and [`../../../docs/public-api.md`](../../../docs/public-api.md) (package-root re-exports).
 
@@ -12,14 +12,14 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 ## When to use it
 
-- Always loaded. Other `pi-mmr` extensions register against this one.
+- Always loaded. Other `ampi` extensions register against this one.
 - Read this file for mode semantics, request policy, tool resolution, prompt assembly, the subagent profile contract, and the `/mmr-status` field reference.
 
 ## Status and enablement
 
 Active by default. Mode resolution: `--mmr-mode` flag → restored session state → `mmrCore.defaultMode` setting → default `smart`. The selected mode is persisted as a `mmr-core.mode-state` custom session entry on every explicit change.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → fable → rush → deep`. Subagent execution uses a separate profile via `--mmr-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → rush → deep`. `fable` is valid through `/mode fable`, `--mmr-mode fable`, and settings, but is hidden from the hotkey cycle. Subagent execution uses a separate profile via `--mmr-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
@@ -31,9 +31,9 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → 
 - **Pi baseline thinking** per mode: `smart` medium, `fable` medium, `rush` off, `deep` medium. Request-level thinking is enforced separately by the per-mode request policy hook.
 - **Thinking-level toggle (`alt+r`)**: `smart`, `fable`, and `deep` are toggleable. The MMR-owned `alt+r` shortcut cycles the active mode through its configured presets in place without releasing the mode — `smart` Opus medium↔high, `deep` GPT medium↔xhigh, `fable` Fable medium→high→low→medium. The toggle drives the Pi thinking level and the wire reasoning effort. For `smart`, the Anthropic adaptive effort follows the native Opus route's Pi-level map (Option 1): the medium preset (Pi `medium`) maps to Anthropic `high`, and the high preset (Pi `high`) maps to Anthropic `xhigh`; both presets keep the Anthropic output budget at 64k so the displayed max-input remains 236k on the capped 300k Opus route. OpenAI Responses effort tracks the Pi level (`medium`/`high`). `fable` sets no Anthropic-effort override, so each Pi level (`low`/`medium`/`high`) echoes directly as the Anthropic adaptive effort, keeping the mode's output budget fixed across presets. The toggle is lightweight (concise status line, no mode-activation banner) and no-ops in non-toggleable modes. Toggle overrides are session-scoped (process memory); the default preset is re-derived on each apply. A dedicated key is used because Pi reserves `shift+tab` (`app.thinking.cycle`) and extensions cannot override it.
 - **Request policy** rewrites only token/reasoning fields on `before_provider_request` (`max_tokens`, `max_output_tokens`, Anthropic `thinking` / `output_config.effort`, OpenAI Responses `reasoning`). Never mutates provider identity, auth, headers, base URLs, messages, system blocks, or tools.
-- **Context profiles**: `smart` 300k/236k/64k (Anthropic branch), `fable` native, `rush` native, `deep` native. A mode that declares a profile total caps its active model's `contextWindow` down to it via a shallow clone at the `setModel` call site (`context-cap.ts`), derived from the mode's own request policy so the enforced and advertised windows stay in sync. This makes Pi's native compaction, overflow, footer, percent, and `getContextUsage()` run at the profile window even when the route's native window is larger (e.g. `smart` pins its Opus route to 300k). The modes without an MMR-owned context profile (`fable`, `rush`, `deep`) intentionally run at Pi's own registered window with no pi-mmr override that could drift from Pi's metadata. Capping is cap-down only, so a smaller custom route stays authoritative, and `free` (no policy) is never capped. The cap is reasserted defensively if a provider (re)registration (e.g. `/login`) transiently re-resolves the active model to its uncapped window.
+- **Context profiles**: `smart` 300k/236k/64k (Anthropic branch), `fable` native, `rush` native, `deep` native. A mode that declares a profile total caps its active model's `contextWindow` down to it via a shallow clone at the `setModel` call site (`context-cap.ts`), derived from the mode's own request policy so the enforced and advertised windows stay in sync. This makes Pi's native compaction, overflow, footer, percent, and `getContextUsage()` run at the profile window even when the route's native window is larger (e.g. `smart` pins its Opus route to 300k). The modes without an MMR-owned context profile (`fable`, `rush`, `deep`) intentionally run at Pi's own registered window with no ampi override that could drift from Pi's metadata. Capping is cap-down only, so a smaller custom route stays authoritative, and `free` (no policy) is never capped. The cap is reasserted defensively if a provider (re)registration (e.g. `/login`) transiently re-resolves the active model to its uncapped window.
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
-- **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. MMR does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `pi-mmr`-owned tools. Use `alt+r` for the in-mode thinking toggle that does not release.
+- **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. MMR does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+r` for the in-mode thinking toggle that does not release.
 
 ### Tool resolution
 
@@ -82,7 +82,7 @@ Per-turn rewrite via `before_agent_start` consumes Pi's already-rendered native 
 
 The renderer surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) by rendering the recipe fragments in order. The only MMR-owned XML marker is the initial one-line role marker (`<mmr_mode name="smart">…</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:`, `Guidelines:`, and `Pi documentation` blocks remain Pi-native fragments and embed byte-identically under `## Tool use`.
 
-Content prepended by earlier handlers is preserved byte-for-byte before the rewritten identity line. Pi's `appendSystemPrompt`, `# Project Context`, `<available_skills>`, host/extension blocks after the documentation section, `Current date:` / `Current working directory:`, and tail-appended extension content are preserved byte-for-byte as the `preserved-tail` fragment. Pi prompts pass through unchanged when the auto head cannot be located (e.g. user-supplied `--system-prompt`) and in `open`/`free` mode. MMR-owned built-in-tool guidance, shared tool guidance, mode posture, and response style are separate fragments. The shared coding guidance is further split into named fragments (`autonomy`, `discovery-discipline`, `pragmatism`, `verification`, `careful-actions`, `diagrams`, `file-links`, `collaboration`) so a recipe can include only the sections a mode needs; the default recipe renders all of them in order (byte-identical to the prior single block), and `rush` is the one mode that drops `diagrams` for token economy.
+Content prepended by earlier handlers is preserved byte-for-byte before the rewritten identity line. Pi's `appendSystemPrompt`, `# Project Context`, `<available_skills>`, host/extension blocks after the documentation section, `Current date:` / `Current working directory:`, and tail-appended extension content are preserved byte-for-byte as the `preserved-tail` fragment. Pi prompts pass through unchanged when the auto head cannot be located (e.g. user-supplied `--system-prompt`) and in `free` mode. MMR-owned built-in-tool guidance, shared tool guidance, mode posture, and response style are separate fragments. The shared coding guidance is further split into named fragments (`autonomy`, `discovery-discipline`, `pragmatism`, `verification`, `careful-actions`, `diagrams`, `file-links`, `collaboration`) so a recipe can include only the sections a mode needs; the default recipe renders all of them in order (byte-identical to the prior single block), and `rush` is the one mode that drops `diagrams` for token economy.
 
 ### Subagent profiles
 
@@ -107,7 +107,7 @@ Invariants:
 
 - Activation never captures or restores a Pi baseline, never persists `mmr-core.mode-state`, never emits `MMR_EVENT_STATE_CHANGED`, never applies locked-mode prompt templates / request policy / Free-mode tool restoration.
 - `before_agent_start` preserves Pi's base prompt (including `--append-system-prompt`) byte-for-byte; no locked-mode template tags inside a worker.
-- Empty effective tool set on a tool-intending profile fails closed. Invalid profile, unresolvable model route, invalid `--mmr-parent-mode`, or explicit `--model` / `--tools` mismatch all fail closed. The canonical marker `pi-mmr: subagent activation failed: <reason>` (`MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) is written to stderr; the runner detects it via `extractMmrSubagentActivationFailure(stderr)` and turns it into a hard failure even when Pi exits 0.
+- Empty effective tool set on a tool-intending profile fails closed. Invalid profile, unresolvable model route, invalid `--mmr-parent-mode`, or explicit `--model` / `--tools` mismatch all fail closed. The canonical marker `ampi: subagent activation failed: <reason>` (`MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX`) is written to stderr; the runner detects it via `extractMmrSubagentActivationFailure(stderr)` and turns it into a hard failure even when Pi exits 0.
 
 Registered profiles:
 
@@ -173,7 +173,7 @@ All diagnostic codes come from `getMmrPolicyDiagnostics(state)` so `/mmr-status`
 
 ## Public API
 
-Re-exported from `pi-mmr`. Canonical catalog: [`../../../docs/mmr-core-api.md`](../../../docs/mmr-core-api.md). Package-root re-exports: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`. Canonical catalog: [`../../../docs/mmr-core-api.md`](../../../docs/mmr-core-api.md). Package-root re-exports: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 
@@ -184,6 +184,6 @@ Non-goals:
 - No provider replacement; no auth/header/base-URL mutation.
 - No rewriting of Pi/extension content outside the auto-rendered head.
 - No legacy `<!-- mmr-core:start --> / <!-- mmr-core:end -->` block emission.
-- Prompt text is `pi-mmr`-authored; no third-party prompt material is copied. Provenance: [`docs/prompt-provenance.md`](../../../docs/prompt-provenance.md).
+- Prompt text is `ampi`-authored; no third-party prompt material is copied. Provenance: [`docs/prompt-provenance.md`](../../../docs/prompt-provenance.md).
 
 Tests: `tests/mmr-core*.test.mjs`, `tests/fixtures/mmr-core-prompts/`, `tests/fixtures/mmr-effective-surface/`, `tests/fixtures/mmr-subagent-surface/`.

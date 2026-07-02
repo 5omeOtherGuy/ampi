@@ -6,9 +6,9 @@ import { getAgentDir, type ExtensionContext } from "@earendil-works/pi-coding-ag
 import { parseBoolEnv } from "./internal/env.js";
 
 export const MMR_CHANGELOG_STATE_VERSION = 1;
-export const MMR_CHANGELOG_STATE_RELATIVE_PATH = "data/pi-mmr/changelog/state.json";
+export const MMR_CHANGELOG_STATE_RELATIVE_PATH = "data/ampi/changelog/state.json";
 
-const PACKAGE_NAME = "pi-mmr";
+const PACKAGE_NAME = "ampi";
 const VERSION_HEADER_PATTERN = /^##\s+\[?v?(\d+)\.(\d+)\.(\d+)\]?(?:\s|$)/;
 const UNRELEASED_HEADER_PATTERN = /^##\s+Unreleased\b/i;
 const DEBUG_ENV_VAR = "PI_MMR_CHANGELOG_DEBUG";
@@ -20,7 +20,7 @@ function isChangelogDebugEnabled(): boolean {
 function emitChangelogDebug(line: string): void {
   if (!isChangelogDebugEnabled()) return;
   try {
-    process.stderr.write(`[pi-mmr changelog] ${line}\n`);
+    process.stderr.write(`[ampi changelog] ${line}\n`);
   } catch {
     // diagnostic must never block startup
   }
@@ -501,29 +501,29 @@ export function shouldCheckMmrChangelogOnSessionStart(event: SessionStartLikeEve
 }
 
 export function formatMmrChangelogNotice(display: MmrChangelogDisplay): string {
-  const heading = display.kind === "versioned" ? `pi-mmr What's New (v${display.displayVersion})` : "pi-mmr What's New";
+  const heading = display.kind === "versioned" ? `ampi What's New (v${display.displayVersion})` : "ampi What's New";
   return [
     heading,
     "",
     display.markdown.trim(),
     "",
-    "Use /mmr-changelog to view the full pi-mmr changelog.",
+    "Use /mmr-changelog to view the full ampi changelog.",
   ].join("\n");
 }
 
 export function getFullMmrChangelogMarkdown(packageRoot = resolveMmrPackageRoot()): string {
-  if (!packageRoot) return "No pi-mmr changelog entries found.";
+  if (!packageRoot) return "No ampi changelog entries found.";
   try {
     const changelog = readPackageChangelog(packageRoot);
-    if (changelog === undefined) return "No pi-mmr changelog entries found.";
+    if (changelog === undefined) return "No ampi changelog entries found.";
     const parsed = parseMmrChangelog(changelog);
     const sections = [
       ...(parsed.unreleased ? [parsed.unreleased.content] : []),
       ...parsed.versionedEntries.map((entry) => entry.content),
     ];
-    return sections.length > 0 ? sections.join("\n\n") : "No pi-mmr changelog entries found.";
+    return sections.length > 0 ? sections.join("\n\n") : "No ampi changelog entries found.";
   } catch {
-    return "No pi-mmr changelog entries found.";
+    return "No ampi changelog entries found.";
   }
 }
 

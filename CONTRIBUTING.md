@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving `pi-mmr`.
+Thanks for improving `ampi`.
 
 ## Quick start
 
@@ -44,7 +44,7 @@ Keep the summary imperative and under 72 characters. Add a body when it helps ex
 
 - Update `CHANGELOG.md` under `## Unreleased` for user-visible or operator-visible changes.
 - Do not commit secrets, local session data, raw provider payloads, credentials, private notes, or exact local-only paths.
-- Keep public text framed in `pi-mmr` terms.
+- Keep public text framed in `ampi` terms.
 - Prefer existing helpers and dependencies over new one-off utilities.
 
 ## Tests

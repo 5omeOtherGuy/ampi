@@ -1,6 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-export const ABOVE_EDITOR_DASHBOARD_WIDGET_ID = "pi-mmr-above-editor-dashboard";
+export const ABOVE_EDITOR_DASHBOARD_WIDGET_ID = "ampi-above-editor-dashboard";
 
 export type AboveEditorDashboardSlot = "left" | "right";
 
@@ -49,7 +49,7 @@ interface DashboardStore {
   rowBudgets: Partial<Record<AboveEditorDashboardSlot, number>>;
 }
 
-const DASHBOARD_STORE_KEY = Symbol.for("pi-mmr.above-editor-dashboard");
+const DASHBOARD_STORE_KEY = Symbol.for("ampi.above-editor-dashboard");
 const MIN_COLUMN_DASHBOARD_WIDTH = 80;
 
 function dashboardStore(): DashboardStore {

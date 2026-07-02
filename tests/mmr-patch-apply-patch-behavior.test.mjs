@@ -12,7 +12,7 @@ after(cleanupLoadedSource);
 describe("mmr-patch apply_patch tool behavior", () => {
   let workdir;
   beforeEach(() => {
-    workdir = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-"));
+    workdir = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-"));
   });
   afterEach(() => {
     rmSync(workdir, { recursive: true, force: true });
@@ -416,7 +416,7 @@ describe("mmr-patch apply_patch tool behavior", () => {
   });
 
   it("rejects a path that traverses a symlink out of the workspace", async () => {
-    const outside = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-out-"));
+    const outside = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-out-"));
     try {
       symlinkSync(outside, path.join(workdir, "link"));
       await assert.rejects(
@@ -461,7 +461,7 @@ describe("mmr-patch apply_patch tool behavior", () => {
     // adds `a/b.txt` via the alias must surface `add a/b.txt` in the
     // result text, not `add ../wd-real/a/b.txt` (which is what naive
     // path.relative against the un-canonical cwd would produce).
-    const aliasParent = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-alias-"));
+    const aliasParent = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-alias-"));
     const alias = path.join(aliasParent, "link");
     symlinkSync(workdir, alias);
     let result;
@@ -490,7 +490,7 @@ describe("mmr-patch apply_patch tool behavior", () => {
     // branch of resolveSafePath: an absolute path containing a symlink
     // component may still resolve inside the workspace and should display
     // relative to the real workspace root, not as `../alias/...`.
-    const aliasParent = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-alias-"));
+    const aliasParent = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-alias-"));
     const alias = path.join(aliasParent, "link");
     symlinkSync(workdir, alias);
     let result;
@@ -536,7 +536,7 @@ describe("mmr-patch apply_patch tool behavior", () => {
     // existing-ancestor check to be a no-op and partial writes (`aa`
     // committed, mkdir on `place` failing) to slip through.
     writeFileSync(path.join(workdir, "place"), "old\n");
-    const aliasParent = mkdtempSync(path.join(tmpdir(), "pi-mmr-apply-patch-alias-"));
+    const aliasParent = mkdtempSync(path.join(tmpdir(), "ampi-apply-patch-alias-"));
     const alias = path.join(aliasParent, "link");
     symlinkSync(workdir, alias);
     try {

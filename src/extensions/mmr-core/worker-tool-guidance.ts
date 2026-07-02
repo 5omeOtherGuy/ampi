@@ -5,7 +5,7 @@
  * invocation surface, plus the `## Using workers` system-prompt block that
  * states the cross-worker rules ONCE.
  *
- * pi-mmr exposes the same "run a worker" capability two ways: worker tools
+ * ampi exposes the same "run a worker" capability two ways: worker tools
  * (`Task`, `finder`, `librarian`, `oracle`) run blocking by default and
  * accept `background: true`, and the orchestration tools (`task_poll`,
  * `task_wait`, `task_cancel`, plus the deprecated `start_task` alias) manage

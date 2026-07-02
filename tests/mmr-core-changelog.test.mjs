@@ -28,7 +28,7 @@ async function importRuntime() {
 
 function writePackage(root, { version = "0.0.0", isPrivate = true, changelog }) {
   mkdirSync(root, { recursive: true });
-  writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "pi-mmr", version, private: isPrivate }, null, 2));
+  writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "ampi", version, private: isPrivate }, null, 2));
   writeFileSync(path.join(root, "CHANGELOG.md"), changelog);
 }
 
@@ -159,7 +159,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("shows current version notes on first observation, then only versioned entries newer than the user's last update", async () => {
     const { evaluateMmrChangelogForDisplay } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-changelog-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-changelog-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -204,7 +204,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("tracks 0.0.0 Unreleased bullets incrementally so repeated git-style updates show only new additions", async () => {
     const { evaluateMmrChangelogForDisplay } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-unreleased-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-unreleased-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -260,7 +260,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("does not consume a pending changelog on resumed sessions", async () => {
     const { maybeShowMmrChangelogOnSessionStart } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-resume-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-resume-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -294,7 +294,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("skips reload, fork, non-UI, and existing-entry sessions without consuming the pending changelog", async () => {
     const { maybeShowMmrChangelogOnSessionStart } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-skip-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-skip-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -340,9 +340,9 @@ describe("mmr-core changelog parsing and update display", () => {
     }
   });
 
-  it("uses Pi's persistent warning notify level for the fresh-session pi-mmr update notice", async () => {
+  it("uses Pi's persistent warning notify level for the fresh-session ampi update notice", async () => {
     const { maybeShowMmrChangelogOnSessionStart } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-notify-level-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-notify-level-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -360,7 +360,7 @@ describe("mmr-core changelog parsing and update display", () => {
       );
       assert.equal(notifications.length, 1);
       assert.equal(notifications[0].level, "warning");
-      assert.match(notifications[0].message, /pi-mmr What's New/);
+      assert.match(notifications[0].message, /ampi What's New/);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -368,7 +368,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("emits an env-gated stderr diagnostic when evaluateMmrChangelogForDisplay throws", async () => {
     const { evaluateMmrChangelogForDisplay } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-debug-eval-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-debug-eval-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -397,7 +397,7 @@ describe("mmr-core changelog parsing and update display", () => {
         ),
       );
       assert.equal(debug.result, undefined);
-      assert.match(debug.stderr, /\[pi-mmr changelog\] evaluateMmrChangelogForDisplay failed:/);
+      assert.match(debug.stderr, /\[ampi changelog\] evaluateMmrChangelogForDisplay failed:/);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -405,7 +405,7 @@ describe("mmr-core changelog parsing and update display", () => {
 
   it("emits an env-gated stderr diagnostic when maybeShowMmrChangelogOnSessionStart is skipped by the fresh-session gate", async () => {
     const { maybeShowMmrChangelogOnSessionStart } = await importChangelogModule();
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-debug-skip-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-debug-skip-"));
     try {
       const packageRoot = path.join(tempRoot, "pkg");
       const statePath = path.join(tempRoot, "state.json");
@@ -439,14 +439,14 @@ describe("mmr-core changelog parsing and update display", () => {
         ),
       );
       assert.deepEqual(notifications, []);
-      assert.match(debug.stderr, /\[pi-mmr changelog\] session_start skipped: event\.reason=resume/);
+      assert.match(debug.stderr, /\[ampi changelog\] session_start skipped: event\.reason=resume/);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
 
-  it("registers /mmr-changelog and shows a pi-mmr update notice on the next fresh session without touching Pi's changelog state", async () => {
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-session-changelog-"));
+  it("registers /mmr-changelog and shows a ampi update notice on the next fresh session without touching Pi's changelog state", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-session-changelog-"));
     const previousHome = process.env.HOME;
     const previousUserProfile = process.env.USERPROFILE;
     try {
@@ -473,8 +473,8 @@ describe("mmr-core changelog parsing and update display", () => {
       assert.equal(commands.has("mmr-changelog"), true);
 
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, first.ctx);
-      const initialNotice = first.notifications.find((entry) => entry.message.includes("pi-mmr What's New"));
-      assert.ok(initialNotice, "expected current pi-mmr changelog on first observed startup");
+      const initialNotice = first.notifications.find((entry) => entry.message.includes("ampi What's New"));
+      assert.ok(initialNotice, "expected current ampi changelog on first observed startup");
       assert.match(initialNotice.message, /Already installed/);
 
       writePackage(packageRoot, {
@@ -485,23 +485,23 @@ describe("mmr-core changelog parsing and update display", () => {
 
       const second = createMockExtensionContext({ models: MODELS });
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, second.ctx);
-      const updateNotice = second.notifications.find((entry) => entry.message.includes("pi-mmr What's New"));
-      assert.ok(updateNotice, "expected a pi-mmr changelog notification on the next fresh session");
+      const updateNotice = second.notifications.find((entry) => entry.message.includes("ampi What's New"));
+      assert.ok(updateNotice, "expected a ampi changelog notification on the next fresh session");
       assert.equal(updateNotice.level, "warning");
       assert.match(updateNotice.message, /New update after install/);
       assert.doesNotMatch(updateNotice.message, /Already installed/);
 
       const third = createMockExtensionContext({ models: MODELS });
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, third.ctx);
-      assert.equal(third.notifications.some((entry) => entry.message.includes("pi-mmr What's New")), false);
+      assert.equal(third.notifications.some((entry) => entry.message.includes("ampi What's New")), false);
 
       await commands.get("mmr-changelog").handler("", second.ctx);
-      assert.match(second.notifications.at(-1)?.message ?? "", /pi-mmr Changelog/);
+      assert.match(second.notifications.at(-1)?.message ?? "", /ampi Changelog/);
       assert.match(second.notifications.at(-1)?.message ?? "", /Already installed/);
       assert.match(second.notifications.at(-1)?.message ?? "", /New update after install/);
 
-      assert.equal(existsSync(path.join(home, ".pi/agent/settings.json")), false, "pi-mmr must not write Pi's lastChangelogVersion setting");
-      const state = JSON.parse(readFileSync(path.join(home, ".pi/agent/data/pi-mmr/changelog/state.json"), "utf8"));
+      assert.equal(existsSync(path.join(home, ".pi/agent/settings.json")), false, "ampi must not write Pi's lastChangelogVersion setting");
+      const state = JSON.parse(readFileSync(path.join(home, ".pi/agent/data/ampi/changelog/state.json"), "utf8"));
       assert.equal(state.version, 1);
     } finally {
       if (previousHome === undefined) delete process.env.HOME;

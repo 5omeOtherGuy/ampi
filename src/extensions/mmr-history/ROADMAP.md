@@ -13,7 +13,7 @@
 
 ## Deferred
 
-- Persistent on-disk session index across the global catalog (tracked in [#64](https://github.com/5omeOtherGuy/pi-mmr/issues/64)).
+- Persistent on-disk session index across the global catalog (tracked in [#64](https://github.com/5omeOtherGuy/ampi/issues/64)).
 - `handoff` session creation.
 - Cross-machine session sharing or remote session stores.
 - Allowlisting `custom_message` / `extension` entries in the worker packet for power users.

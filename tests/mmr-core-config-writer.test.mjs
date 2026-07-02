@@ -125,7 +125,7 @@ describe("mmr-core config-writer", () => {
     );
     const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-writer-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-writer-"));
     try {
       const project = path.join(tempRoot, "project");
       const home = path.join(tempRoot, "home");
@@ -166,7 +166,7 @@ describe("mmr-core config-writer", () => {
       "extensions/mmr-core/config-writer.ts",
     );
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-writer-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-writer-"));
     try {
       const project = path.join(tempRoot, "project");
       mkdirSync(path.join(project, ".pi"), { recursive: true });
@@ -192,7 +192,7 @@ describe("mmr-core settings: subagentModelPreferences", () => {
   it("parses subagentModelPreferences from the project settings file", async () => {
     const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -229,7 +229,7 @@ describe("mmr-core settings: subagentModelPreferences", () => {
   it("warns when subagentModelPreferences is the wrong shape and ignores it", async () => {
     const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-settings-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-settings-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -311,7 +311,7 @@ describe("mmr-core config-flow: renders current values from disk, not stale snap
   it("shows the on-disk mode preference instead of the binding's startup snapshot", async () => {
     const { runMmrConfigFlow } = await importSource("extensions/mmr-core/config-flow.ts");
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-flow-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-flow-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");
@@ -340,7 +340,7 @@ describe("mmr-core config-flow: renders current values from disk, not stale snap
   it("shows the on-disk subagent preference instead of the binding's startup snapshot", async () => {
     const { runMmrConfigFlow } = await importSource("extensions/mmr-core/config-flow.ts");
 
-    const tempRoot = mkdtempSync(path.join(tmpdir(), "pi-mmr-config-flow-"));
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-flow-"));
     try {
       const home = path.join(tempRoot, "home");
       const project = path.join(tempRoot, "project");

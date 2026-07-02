@@ -17,7 +17,7 @@ const GITHUB_MODULE = "extensions/mmr-github/tool-ownership.ts";
 const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
 
 const OWNER = "mmr-github";
-const OWNER_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const OWNER_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
 const NAMES = ["read_github", "search_github"];
 
 function toolInfos(names, sourcePath) {

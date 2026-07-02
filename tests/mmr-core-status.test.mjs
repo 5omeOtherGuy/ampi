@@ -82,9 +82,9 @@ describe("mmr-core footer status", () => {
     let lines;
     try {
       updateMmrStatus({
-        cwd: "/test/home/user/projects/pi-mmr",
+        cwd: "/test/home/user/projects/ampi",
         sessionManager: {
-          getCwd: () => "/test/home/user/projects/pi-mmr",
+          getCwd: () => "/test/home/user/projects/ampi",
           getSessionName: () => undefined,
           getEntries: () => [
             {
@@ -117,7 +117,7 @@ describe("mmr-core footer status", () => {
 
     assert.equal(statuses.at(-1)?.value, undefined);
     assert.equal(typeof footers.at(-1), "function");
-    assert.equal(lines[0], "~/projects/pi-mmr (main)");
+    assert.equal(lines[0], "~/projects/ampi (main)");
     assert.match(lines[1], /^↑558k ↓68k R22M W167k \$12\.981 \(sub\) 19\.5%\/1.0M \(auto\)\s+opus-4\.8 • smart$/);
   });
 
@@ -126,7 +126,7 @@ describe("mmr-core footer status", () => {
     const { updateMmrStatus } = await importSource("extensions/mmr-core/status.ts");
     const cases = [
       { modeKey: "smart", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 60000, usageContextWindow: 1000000, usagePercent: 20, percent: "20.0", contextWindow: "1.0M", model: "opus-4.8", mode: "smart" },
-      // rush/deep carry no pi-mmr profile, so the footer denominator is Pi's
+      // rush/deep carry no ampi profile, so the footer denominator is Pi's
       // own registered window reported through getContextUsage (here 272k).
       { modeKey: "rush", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "rush" },
       { modeKey: "deep", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "deep" },
@@ -335,7 +335,7 @@ describe("mmr-core /mmr-status", () => {
     });
 
     const status = formatMmrStatus(deepCodex);
-    // deep carries no pi-mmr context profile and Codex streams output in-window,
+    // deep carries no ampi context profile and Codex streams output in-window,
     // so there is no total/max-out/max-in to show — Pi's native window applies.
     assert.match(status, /Context: provider default/);
     assert.doesNotMatch(status, /max out/);

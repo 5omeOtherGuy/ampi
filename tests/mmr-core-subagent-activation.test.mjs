@@ -34,7 +34,7 @@ function restoreArgv() {
 }
 
 const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-github/index.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
 const GITHUB_TOOLS = [
   "read_github",
   "list_directory_github",
@@ -104,7 +104,7 @@ function createContext(options = {}) {
   return createMockExtensionContext({
     models: options.models ?? [],
     authenticated: options.authenticated ?? true,
-    cwd: options.cwd ?? "/tmp/pi-mmr-worker",
+    cwd: options.cwd ?? "/tmp/ampi-worker",
     model: options.model,
   });
 }

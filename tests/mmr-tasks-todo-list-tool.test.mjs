@@ -47,11 +47,11 @@ function makeLinkedSession(initialEntries = []) {
 
 function makeCtx(session, overrides = {}) {
   return {
-    cwd: overrides.cwd ?? "/tmp/pi-mmr-test-cwd",
+    cwd: overrides.cwd ?? "/tmp/ampi-test-cwd",
     hasUI: overrides.hasUI ?? false,
     sessionManager: {
       getEntries: session.getEntries,
-      getCwd: () => overrides.cwd ?? "/tmp/pi-mmr-test-cwd",
+      getCwd: () => overrides.cwd ?? "/tmp/ampi-test-cwd",
       getSessionId: () => overrides.sessionId ?? "test-session",
       getSessionName: () => overrides.sessionName,
     },

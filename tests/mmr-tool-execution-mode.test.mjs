@@ -6,11 +6,11 @@ after(cleanupLoadedSource);
 
 // Issue #8: capability-aware tool parallelism.
 //
-// pi-mmr cannot change Pi's built-in bash/edit/write execution modes (no
+// ampi cannot change Pi's built-in bash/edit/write execution modes (no
 // extension API exists for that in this Pi version), but it CAN mark the
 // tools it registers. Pi's agent loop runs the WHOLE assistant tool-call
 // batch sequentially when any called tool declares
-// `executionMode: "sequential"`. So marking pi-mmr's mutating/workflow
+// `executionMode: "sequential"`. So marking ampi's mutating/workflow
 // tools sequential forces ordered execution for any turn that includes
 // one, while batches of purely read-only tools stay parallel-eligible.
 //

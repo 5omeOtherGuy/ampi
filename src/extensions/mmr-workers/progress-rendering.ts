@@ -840,7 +840,7 @@ export type { MmrWidgetGroupResolver } from "./background-task-view.js";
  * Stable widget id used with `ctx.ui.setWidget(...)`. Process-wide unique to
  * mmr-subagents so it never collides with the mmr-toolbox task-list widget.
  */
-export const BACKGROUND_TASK_WIDGET_ID = "pi-mmr-background-tasks";
+export const BACKGROUND_TASK_WIDGET_ID = "ampi-background-tasks";
 
 /** Cap visible lines (group headers + rows) so a long backlog never pushes the editor off-screen. */
 const WIDGET_MAX_ROWS = 8;

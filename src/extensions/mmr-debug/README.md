@@ -1,6 +1,6 @@
 # mmr-debug
 
-Opt-in, developer-only live capture of what `pi-mmr` actually sends to and
+Opt-in, developer-only live capture of what `ampi` actually sends to and
 receives from the model. Built to diagnose model-behavior issues by recording
 the **ground-truth** provider request (the assembled system prompt + tool
 surface) alongside the response status and the model's output.

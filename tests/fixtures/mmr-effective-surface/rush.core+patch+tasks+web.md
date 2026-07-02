@@ -442,7 +442,7 @@ Use the `*** End of File` marker on the last hunk of an Update File when the cha
 *** End Patch
 ```
 
-## Path Safety (pi-mmr)
+## Path Safety (ampi)
 
 Paths may be relative to the workspace root, or absolute paths that resolve inside the workspace
 or inside any sibling worktree of the same git repository (discovered via `git worktree list`).

@@ -62,10 +62,10 @@ const piBundlePath = resolvePiBundledCodingAgent();
 const { AuthStorage, FileAuthStorageBackend, ModelRegistry } = await import(pathToFileURL(piBundlePath).href);
 
 const QUERY = process.env.LIBRARIAN_SMOKE_QUERY
-  ?? "In 5omeOtherGuy/pi-mmr, where is the mmr-subagents README documented?";
+  ?? "In 5omeOtherGuy/ampi, where is the mmr-subagents README documented?";
 const CONTEXT = process.env.LIBRARIAN_SMOKE_CONTEXT?.trim();
 const TIMEOUT_MS = Number.parseInt(process.env.LIBRARIAN_SMOKE_TIMEOUT_MS ?? "180000", 10);
-const WEB_SOURCE_PATH = "/virtual/pi-mmr/extensions/mmr-web/index.ts";
+const WEB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-web/index.ts";
 
 function webHost() {
   const tools = [

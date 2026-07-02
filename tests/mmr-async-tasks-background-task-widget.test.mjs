@@ -100,7 +100,7 @@ describe("background-task widget", () => {
     const dashboard = await importSource(ABOVE_EDITOR_DASHBOARD_MODULE);
     dashboard.resetAboveEditorDashboardForTest();
     const { ctx, calls } = makeCtx();
-    dashboard.updateAboveEditorDashboardSlot(ctx, "left", "pi-mmr-task-list", [
+    dashboard.updateAboveEditorDashboardSlot(ctx, "left", "ampi-task-list", [
       "⠋ Reviewing finder test group 1",
       "  ├─ – Finder test 1",
       "  ├─ – Finder test 2",

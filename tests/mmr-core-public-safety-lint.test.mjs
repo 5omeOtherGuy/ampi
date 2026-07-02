@@ -148,7 +148,7 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
   it("mmr-subagents source and tests do not reference docs/private/* spec paths", () => {
     // Public-safety guard for the gitignored private research folder.
     // Source files and deterministic tests must explain their rationale in
-    // pi-mmr-owned language; behavioral pins belong in the public surface
+    // ampi-owned language; behavioral pins belong in the public surface
     // (types, JSDoc, tests) without anchoring to a private path.
     const surfaces = [
       "src/extensions/mmr-workers/finder.ts",

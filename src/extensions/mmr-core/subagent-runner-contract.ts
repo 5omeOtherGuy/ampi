@@ -79,7 +79,7 @@ export interface MmrSubagentRunResult {
 }
 
 export class MmrInProcessRunnerUnavailableError extends Error {
-  constructor(message = "The pi-mmr in-process subagent runner requires host support that is not available in this Pi runtime.") {
+  constructor(message = "The ampi in-process subagent runner requires host support that is not available in this Pi runtime.") {
     super(message);
     this.name = "MmrInProcessRunnerUnavailableError";
   }
@@ -89,6 +89,6 @@ export async function runMmrSubagentInProcess(
   _options: RunMmrSubagentInProcessOptions,
 ): Promise<MmrSubagentRunResult> {
   throw new MmrInProcessRunnerUnavailableError(
-    "The pi-mmr in-process subagent runner is not available yet: Pi must expose host support for nested runs, filtered shared tool access, and subagent-aware permission/progress events.",
+    "The ampi in-process subagent runner is not available yet: Pi must expose host support for nested runs, filtered shared tool access, and subagent-aware permission/progress events.",
   );
 }

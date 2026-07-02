@@ -116,7 +116,7 @@ export interface RegisteredMmrCustomSubagent {
 
 /**
  * Legacy external-harness roots scanned for *import candidates only*. These
- * are never auto-registered; pi-mmr discovers them so the setup/import flow
+ * are never auto-registered; ampi discovers them so the setup/import flow
  * can offer to port selected agents into a Pi-owned root + config record.
  */
 export function getLegacyClaudeSubagentRoots(cwd: string, home = homedir()): readonly string[] {
@@ -125,7 +125,7 @@ export function getLegacyClaudeSubagentRoots(cwd: string, home = homedir()): rea
 
 /**
  * Count discoverable legacy Claude-style agent candidates. Used to drive the
- * one-time migration notice: pi-mmr no longer auto-loads `.claude/agents`, so
+ * one-time migration notice: ampi no longer auto-loads `.claude/agents`, so
  * when candidates exist but nothing is enabled in config we point the user at
  * setup/import.
  */
@@ -342,7 +342,7 @@ function formatHumanList(items: readonly string[]): string {
 
 /**
  * Build the user-facing notice shown when a custom subagent relied on a
- * fallback for `model`, thinking/effort level, or `tools`. pi-mmr lowers
+ * fallback for `model`, thinking/effort level, or `tools`. ampi lowers
  * friction by defaulting an omitted `tools:` key to the standard toolset
  * and inheriting the parent model/thinking level, but it surfaces this so
  * the author can pin the fields for predictable behavior. An explicitly

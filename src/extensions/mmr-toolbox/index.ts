@@ -7,7 +7,7 @@
  * `./extensions/mmr-toolbox` surface from the new owners. It is no longer
  * registered in `package.json` `pi.extensions` and registers no tools itself;
  * the `mmr-patch` and `mmr-tasks` entrypoints do that. Import from
- * `@earendil-works/pi-mmr/extensions/mmr-patch` and `.../extensions/mmr-tasks`
+ * `@earendil-works/ampi/extensions/mmr-patch` and `.../extensions/mmr-tasks`
  * (or the package root barrel) instead.
  */
 import type { MmrToolProvider } from "../mmr-core/types.js";

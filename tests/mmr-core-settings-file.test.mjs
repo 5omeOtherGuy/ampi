@@ -17,7 +17,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 function tempDir() {
-  return mkdtempSync(path.join(tmpdir(), "pi-mmr-settings-file-"));
+  return mkdtempSync(path.join(tmpdir(), "ampi-settings-file-"));
 }
 
 describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
