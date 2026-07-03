@@ -20,6 +20,8 @@ Sibling extension roadmaps:
 - `oracle` — advisory worker that reads files and external context.
 - `librarian` — read-only GitHub repository research worker; non-GitHub
   repository-provider variants are deferred.
+- `reviewer` — read-only worker that computes and reviews a described diff
+  and returns prioritized findings.
 
 ## Current status
 
@@ -37,8 +39,8 @@ Shell and GitHub-backed worker slices shipped:
   `ampi-workers` feature gate with the per-tool `ampi-github` prerequisite reason.
 - ✅ `ampi-workers` registers a feature-gate provider that reports the
   `ampi-workers` gate as **enabled** with the active capability list
-  (currently `finder, oracle, Task`, plus `librarian` when the required
-  `ampi-github` tools are active and source-owned).
+  (currently `finder, oracle, Task, reviewer`, plus `librarian` when the
+  required `ampi-github` tools are active and source-owned).
 - ✅ `/ampi-status` credits `ampi-workers` for those decisions instead of
   falling through to `ampi-core`'s reserved-gate fallback or to the
   default deferred rule.
@@ -104,8 +106,8 @@ Framework-only surfaces now available:
   contracts and a fail-closed in-process runner placeholder for the future
   host nested-run seam.
 
-Concrete worker tools registered: `finder`, `oracle`, `Task`, and
-`librarian`.
+Concrete worker tools registered: `finder`, `oracle`, `Task`, `reviewer`,
+and `librarian`.
 
 ## Recommended next implementation slice
 
@@ -140,9 +142,9 @@ Concrete worker tools registered: `finder`, `oracle`, `Task`, and
 
 ## Acceptance criteria for the next concrete-tool slice
 
-- `finder`, `oracle`, `Task`, and `librarian` have deterministic unit tests
-  for schema validation, route-selection failure, subprocess failure,
-  cancellation, output truncation, and tool-provider resolution.
+- `finder`, `oracle`, `Task`, `reviewer`, and `librarian` have deterministic
+  unit tests for schema validation, route-selection failure, subprocess
+  failure, cancellation, output truncation, and tool-provider resolution.
 - Concrete worker tool metadata participates in the active prompt/tool
   assembly manifests once the tool is active and remains absent while
   gated (verified by the existing negative-injection invariant).
