@@ -21,7 +21,7 @@ import type { MmrModelCandidateResolution, MmrModelPreference, MmrModeKey } from
  * even when an extension's `session_start` throws).
  *
  * Both producer (`ampi-core/index.ts:failClosedSubagent`) and consumer
- * (`ampi-workers/runner.ts`) reference this constant so the string
+ * (`ampi-workers/framework/runner.ts`) reference this constant so the string
  * cannot drift across the boundary.
  */
 export const MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX =

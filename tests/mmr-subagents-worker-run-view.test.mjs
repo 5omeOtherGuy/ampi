@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const VIEW_MODULE = "extensions/ampi-workers/worker-run-view.ts";
+const VIEW_MODULE = "extensions/ampi-workers/rendering/worker-run-view.ts";
 
 describe("worker-run-view", () => {
   it("classifies background payloads by the pinned branch order: fleet → board → group → spawn → final", async () => {
@@ -85,7 +85,7 @@ describe("worker-run-view", () => {
   });
 });
 
-const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
+const ENVELOPE_MODULE = "extensions/ampi-workers/rendering/worker-run-envelope.ts";
 
 describe("buildWorkerRunFinal (rich N=1 projection)", () => {
   it("projects blocking status/model/diagnostic/body precedence from legacy details", async () => {

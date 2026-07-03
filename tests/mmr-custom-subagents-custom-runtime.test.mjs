@@ -20,8 +20,8 @@ beforeEach(async () => {
   clearMmrSubagentPromptBuilders();
   // Production ordering: ampi-workers activates before ampi-custom-subagents
   // and self-registers the core worker-host seam custom subagents consume.
-  const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/worker-binding-registry.ts");
-  const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/worker-host-impl.ts");
+  const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
+  const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/framework/worker-host-impl.ts");
   clearMmrDynamicBackgroundAgents();
   registerMmrWorkersWorkerHost({ getAllTools: () => [], getActiveTools: () => [], getCommands: () => [] });
 });

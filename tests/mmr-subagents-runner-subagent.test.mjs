@@ -36,7 +36,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/framework/runner.ts";
 
 class MockProcess extends EventEmitter {
   constructor() {

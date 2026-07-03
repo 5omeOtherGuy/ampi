@@ -55,7 +55,7 @@ function createState(mode) {
 }
 
 async function finderManifestEntry() {
-  const mod = await importSource("extensions/ampi-workers/finder.ts");
+  const mod = await importSource("extensions/ampi-workers/builtin-workers/finder.ts");
   return {
     name: "finder",
     owner: "ampi-workers",

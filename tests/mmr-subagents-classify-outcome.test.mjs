@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/framework/runner.ts";
 const ROOT_MODULE = "index.ts";
 
 // Minimal MmrWorkerResult shape sufficient for the classifier. The
@@ -346,7 +346,7 @@ describe("classifyMmrWorkerOutcome is exported from the package root", () => {
 
 describe("classifyTaskOutcome delegates to classifyMmrWorkerOutcome with Task policy", () => {
   it("preserves Task's existing semantics (non-zero exit with usable text → success)", async () => {
-    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/task.ts");
+    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/builtin-workers/task.ts");
     const status = classifyTaskOutcome({
       aborted: false,
       signal: null,
@@ -358,7 +358,7 @@ describe("classifyTaskOutcome delegates to classifyMmrWorkerOutcome with Task po
   });
 
   it("returns spawn-error when spawnError is set, regardless of partial output", async () => {
-    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/task.ts");
+    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/builtin-workers/task.ts");
     const status = classifyTaskOutcome({
       spawnError: "spawn ENOENT",
       aborted: false,
@@ -436,7 +436,7 @@ describe("canonical details.status discriminator set", () => {
 
   it("statusFromDetails trusts exactly the canonical set", async () => {
     const { MMR_SUBAGENT_DETAILS_STATUS_VALUES } = await importSource(RUNNER_MODULE);
-    const { statusFromDetails } = await importSource("extensions/ampi-workers/subagent-render-format.ts");
+    const { statusFromDetails } = await importSource("extensions/ampi-workers/rendering/subagent-render-format.ts");
     for (const status of MMR_SUBAGENT_DETAILS_STATUS_VALUES) {
       const expected = status === "success" ? "succeeded" : "failed";
       // exitCode 0 so only the stamped discriminator can drive the verdict.

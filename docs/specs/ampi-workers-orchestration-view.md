@@ -2,8 +2,8 @@
 
 > **Status note.** This spec predates the v2 worker-surface merge. The
 > `background-task-widget.ts` module it references was folded into the current
-> rendering layer ([`src/extensions/ampi-workers/progress-rendering.ts`](../../src/extensions/ampi-workers/progress-rendering.ts)
-> and [`subagent-render-format.ts`](../../src/extensions/ampi-workers/subagent-render-format.ts));
+> rendering layer ([`src/extensions/ampi-workers/rendering/progress-rendering.ts`](../../src/extensions/ampi-workers/rendering/progress-rendering.ts)
+> and [`subagent-render-format.ts`](../../src/extensions/ampi-workers/rendering/subagent-render-format.ts));
 > file references below are historical.
 
 Restyle of the below-editor background-task widget into a **grouped orchestration

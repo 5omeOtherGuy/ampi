@@ -4,11 +4,11 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
-const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
-const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const FINDER_MODULE = "extensions/ampi-workers/builtin-workers/finder.ts";
+const ORACLE_MODULE = "extensions/ampi-workers/builtin-workers/oracle.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/framework/runner.ts";
 const ROOT_MODULE = "index.ts";
-const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/profiles/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 
 beforeEach(async () => {

@@ -1,5 +1,5 @@
 import type { MmrFeatureGateProvider, MmrToolProvider, MmrToolRule } from "../ampi-core/types.js";
-import { LIBRARIAN_GATING_REASON } from "./librarian.js";
+import { LIBRARIAN_GATING_REASON } from "./builtin-workers/librarian.js";
 
 export const AMPI_SUBAGENTS_PROVIDER_NAME = "ampi-subagents";
 export const AMPI_SUBAGENTS_FEATURE_GATE = "ampi-subagents";

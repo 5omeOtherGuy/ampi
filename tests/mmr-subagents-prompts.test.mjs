@@ -22,7 +22,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/profiles/prompts.ts";
 const ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 

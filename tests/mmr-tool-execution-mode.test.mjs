@@ -33,15 +33,15 @@ describe("mmr tool execution-mode policy (#8)", () => {
   });
 
   it("marks the Task workflow worker sequential (it can run bash/edit/write)", async () => {
-    const { createTaskTool } = await importSource("extensions/ampi-workers/task.ts");
+    const { createTaskTool } = await importSource("extensions/ampi-workers/builtin-workers/task.ts");
     const task = createTaskTool();
     assert.equal(task.executionMode, "sequential", "Task workers can mutate the workspace and must be sequential");
   });
 
   it("keeps read-only subagent research tools parallel-eligible", async () => {
-    const { createFinderTool } = await importSource("extensions/ampi-workers/finder.ts");
-    const { createOracleTool } = await importSource("extensions/ampi-workers/oracle.ts");
-    const { createLibrarianTool } = await importSource("extensions/ampi-workers/librarian.ts");
+    const { createFinderTool } = await importSource("extensions/ampi-workers/builtin-workers/finder.ts");
+    const { createOracleTool } = await importSource("extensions/ampi-workers/builtin-workers/oracle.ts");
+    const { createLibrarianTool } = await importSource("extensions/ampi-workers/builtin-workers/librarian.ts");
 
     for (const [name, tool] of [
       ["finder", createFinderTool()],

@@ -159,20 +159,17 @@ Important files:
 
 Merged worker extension. Owns the blocking `finder`, `oracle`, `Task`, and `librarian` workers, the background task surface (`background: true` on the named worker tools, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`), the child-CLI runner, the session-scoped background registry, the live TUI fleet dashboard, and the `ampi-workers` feature gate (the pre-merge `mmr-subagents`/`mmr-async-tasks` gate ids remain accepted aliases). Worker model/tool/prompt policy is resolved through `ampi-core` profiles. Custom Markdown subagents live in `ampi-custom-subagents`.
 
-Important files:
+Layout (top level holds the extension entry, ownership, and compatibility surfaces; implementation lives in themed subdirectories):
 
 - `index.ts` — Pi extension entry point and provider registration.
-- `finder.ts`, `oracle.ts`, `task.ts`, `librarian.ts` — concrete worker tools (finder/librarian/Task accept `background`/`group`/`notify`).
-- `worker-tool-factory.ts` — the declarative factory the worker tools are generated from.
-- `background-agents.ts` — the profile-derived background-agent registry behind the background surface.
-- `runner.ts` — child-CLI subagent runner and worker lifecycle.
-- `async-task-tools.ts` — background start path plus `task_poll`, `task_wait`, and `task_cancel`.
-- `async-task-registry.ts` — in-memory, session-scoped registry of worker lifecycles and concurrency caps.
-- `async-task-delivery.ts` — at-most-once completion notices and idle-wake pushes.
-- `progress-rendering.ts` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`ampi-background-tasks`) over the `background-task-view.ts` vocabulary.
-- `async-task-tool-format.ts` — tool-result, board-snapshot, and fleet-status formatting.
 - `provider.ts` — unified tool-provider and feature-gate-provider factories.
-- `prompts.ts` — worker prompt builders.
+- `child-extension-scope.ts` — per-profile child-process extension keep-sets.
+- `worker-model-metadata.ts`, `worker-result-shaping.ts`, `worker-usage-format.ts` — compatibility re-exports of helpers that moved to `ampi-core` (kept for one release).
+- `framework/` — the worker execution framework: `runner.ts` (child-CLI subagent runner and worker lifecycle), `worker-tool-factory.ts` (the declarative factory the worker tools are generated from), `worker-host-impl.ts` (the `ampi-core` worker-host seam implementation), `worker-binding-registry.ts`, run invocation/outcome helpers, and the session-scoped worker-model fallback.
+- `profiles/` — `prompts.ts`, the built-in worker prompt builders.
+- `builtin-workers/` — the concrete `finder`, `oracle`, `librarian`, `reviewer`, and `Task` worker tools (finder/librarian/reviewer/Task accept `background`/`group`/`notify`).
+- `background/` — the background task surface: `async-task-tools.ts` (background start path plus `task_poll`, `task_wait`, `task_cancel`), `async-task-registry.ts` (in-memory, session-scoped registry of worker lifecycles and concurrency caps), `async-task-delivery.ts` (at-most-once completion notices and idle-wake pushes), schemas, formatting, projection, and dispatch.
+- `rendering/` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`ampi-background-tasks`) in `progress-rendering.ts` over the `background-task-view.ts` vocabulary, plus worker run views/envelopes and trail rendering.
 - `README.md`, `ROADMAP.md` — behavior, public API, and milestones.
 
 ### `src/extensions/ampi-custom-subagents/`

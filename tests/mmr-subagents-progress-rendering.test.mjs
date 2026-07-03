@@ -10,7 +10,7 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const PROGRESS_RENDERING_MODULE = "extensions/ampi-workers/progress-rendering.ts";
+const PROGRESS_RENDERING_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
 
 const fakeTheme = {
   fg(_color, text) { return text; },
@@ -155,7 +155,7 @@ function makeResult(overrides = {}) {
           toolCallId: "read-1",
           toolName: "read",
           status: "completed",
-          argsPreview: JSON.stringify({ path: `${home}/projects/repo/src/extensions/ampi-workers/finder.ts`, offset: 430, limit: 160 }),
+          argsPreview: JSON.stringify({ path: `${home}/projects/repo/src/extensions/ampi-workers/builtin-workers/finder.ts`, offset: 430, limit: 160 }),
           resultPreview: "read result preview from finder.ts",
         },
         {
@@ -599,7 +599,7 @@ describe("renderMmrSubagentResult", () => {
     assert.match(rendered, /completed/i);
     assert.match(rendered, /Evaluating interface name collision/);
     assert.match(rendered, /Now read finder\.ts buildFinalContent:/);
-    assert.match(rendered, /read .*~\/projects\/repo\/src\/extensions\/ampi-workers\/finder\.ts:430-589/);
+    assert.match(rendered, /read .*~\/projects\/repo\/src\/extensions\/ampi-workers\/builtin-workers\/finder\.ts:430-589/);
     assert.match(rendered, /read result preview from finder\.ts/);
     assert.match(rendered, /I'm seeing the core issue now/);
     assert.match(rendered, /grep .*activation failure marker.*tests/);
@@ -1358,7 +1358,7 @@ describe("background task rendering", () => {
         description: "Confirm background widget header removed",
         prompt:
           "Verify the background-task widget no longer renders a 'Background agents' header and renders " +
-          "agent rows directly. Check src/extensions/ampi-workers/progress-rendering.ts " +
+          "agent rows directly. Check src/extensions/ampi-workers/rendering/progress-rendering.ts " +
           "renderWidgetLines. Return file path and line numbers.",
         final: { worker: "mmr-subagents.finder", reportedModel: "openai-codex/gpt-5.4-mini" },
       },
@@ -1821,7 +1821,7 @@ describe("inline background card animation", () => {
     // Advance the loader frame on the SHARED background-task-view singleton (the
     // stable URL progress-rendering imports internally), not a cache-busted
     // importSource copy, so the card under test reads the frame we advance.
-    const viewUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-workers/background-task-view.ts")).href;
+    const viewUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-workers/rendering/background-task-view.ts")).href;
     const { advanceLoaderFrame } = await import(viewUrl);
     const now = Date.now();
     const board = singleBoard({ createdAtMs: now - 100_000, startedAtMs: now - 100_000, updatedAtMs: now });

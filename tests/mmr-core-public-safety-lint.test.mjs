@@ -151,11 +151,11 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
     // ampi-owned language; behavioral pins belong in the public surface
     // (types, JSDoc, tests) without anchoring to a private path.
     const surfaces = [
-      "src/extensions/ampi-workers/finder.ts",
-      "src/extensions/ampi-workers/oracle.ts",
-      "src/extensions/ampi-workers/task.ts",
-      "src/extensions/ampi-workers/runner.ts",
-      "src/extensions/ampi-workers/worker-trail.ts",
+      "src/extensions/ampi-workers/builtin-workers/finder.ts",
+      "src/extensions/ampi-workers/builtin-workers/oracle.ts",
+      "src/extensions/ampi-workers/builtin-workers/task.ts",
+      "src/extensions/ampi-workers/framework/runner.ts",
+      "src/extensions/ampi-workers/rendering/worker-trail.ts",
       "src/extensions/ampi-core/subagent-resolver.ts",
       "src/extensions/ampi-core/subagent-profiles.ts",
       "tests/mmr-subagents-finder.test.mjs",

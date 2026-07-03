@@ -16,7 +16,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const TASK_MODULE = "extensions/ampi-workers/task.ts";
+const TASK_MODULE = "extensions/ampi-workers/builtin-workers/task.ts";
 const RUNTIME_MODULE = "extensions/ampi-core/runtime.ts";
 
 describe("Task parent-prompt capture (#6)", () => {

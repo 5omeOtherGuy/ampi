@@ -8,10 +8,10 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 // tool-call signal adapted to task cancellation; blocking runs appear on the
 // task board (cap-exempt, never deduplicated, no watchdog).
 
-const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
-const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
-const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
-const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
+const FINDER_MODULE = "extensions/ampi-workers/builtin-workers/finder.ts";
+const ORACLE_MODULE = "extensions/ampi-workers/builtin-workers/oracle.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
 
 after(cleanupLoadedSource);
 
