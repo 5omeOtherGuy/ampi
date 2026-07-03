@@ -65,7 +65,7 @@ try {
 } catch {
   process.exit(0);
 }
-if (pkgName !== "ampi") process.exit(0);
+if (pkgName !== "@5omeotherguy/ampi") process.exit(0);
 
 const hooksDir = path.join(repoRoot, ".githooks");
 if (!existsSync(hooksDir) || !statSync(hooksDir).isDirectory()) {
