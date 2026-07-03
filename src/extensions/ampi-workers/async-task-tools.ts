@@ -18,9 +18,9 @@ import type {
 } from "./worker-tool-factory.js";
 import {
   getMmrBackgroundAgent,
-  inferToolErrorMessage,
   type MmrBackgroundAgentDescriptor,
-} from "./background-agents.js";
+} from "./worker-binding-registry.js";
+import { inferToolErrorMessage } from "./async-task-tool-format.js";
 import {
   ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
   LEGACY_ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
@@ -309,6 +309,8 @@ function prepareDescriptorRun(args: {
       },
     };
   }
+  // Envelope dual-write: the background surface consumes this prepared run.
+  prep.prepared.runMode = "background";
   return { prepared: prep.prepared };
 }
 
@@ -608,6 +610,8 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
     if (!prep.ok) {
       return { error: inferToolErrorMessage(prep.result) ?? `invalid ${descriptor.agent} parameters` };
     }
+    // Envelope dual-write: fleet members launch on the background surface.
+    prep.prepared.runMode = "background";
     const prepared = prep.prepared;
     const startArgs = preparedStartArgs(descriptor, prepared, member);
     return {
@@ -749,13 +753,20 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
   return {
     name: START_TASK_TOOL_NAME,
     label: START_TASK_TOOL_NAME,
-    // Description and schema are derived from the live background-agent set
-    // at registration; execute() re-derives the schema so an agent registered
-    // after this tool (activation order is not guaranteed) still validates.
-    description: buildStartTaskDescription(),
+    // Description and schema are derived from the LIVE worker-binding set on
+    // every read (lazy getters), not snapshotted at registration: custom
+    // sa__* bindings register after ampi-workers activates (activation order
+    // is not guaranteed), and the host validates calls against this
+    // property, so a load-time snapshot would reject dynamically registered
+    // agents that execute() would happily dispatch.
+    get description() {
+      return buildStartTaskDescription();
+    },
     promptSnippet: "Start a bounded subagent worker in the background and return an opaque task_id",
     promptGuidelines: [...START_TASK_PROMPT_GUIDELINES],
-    parameters: buildStartTaskParameters(),
+    get parameters() {
+      return buildStartTaskParameters();
+    },
     renderShell: "self" as const,
     renderCall(args, theme, context) {
       return renderMmrBackgroundTaskCall(START_TASK_TOOL_NAME, args, theme, context);

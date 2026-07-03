@@ -3,8 +3,15 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import type { TSchema } from "typebox";
 import { loadMmrCoreSettings } from "../ampi-core/settings.js";
+import type {
+  MmrWorkerRunMode,
+  MmrWorkerToolResolveInput,
+  MmrWorkerToolRunContext,
+  MmrWorkerToolSpec,
+} from "../ampi-core/worker-contract.js";
+import { classifyMmrWorkerOutcomeForProfile } from "../ampi-core/worker-outcome.js";
+import { attachWorkerRunEnvelope, buildWorkerRunEnvelope } from "./worker-run-envelope.js";
 import {
   getMmrSubagentProfile,
   type MmrSubagentPartialOutputPolicy,
@@ -80,37 +87,15 @@ import { progressTextOrPlaceholder } from "./worker-result-shaping.js";
  * re-exports it, and it is not part of the package-level public API.
  */
 
-/** Resolver seam input shared by every worker tool's invocation resolution. */
-export interface MmrWorkerToolResolveInput {
-  ctx: ExtensionContext | undefined;
-  registeredTools?: readonly string[];
-  /**
-   * Effective settings-driven (or explicit programmatic) model
-   * preference override resolved by the factory before calling the
-   * resolver; absent when neither source supplies one.
-   */
-  modelPreferencesOverride?: readonly MmrModelPreference[];
-}
-
-/**
- * Mutable per-execute run context threaded through the spec's
- * progress/final builders. `resolvedModel`/`contextWindow` are updated
- * per fallback attempt (`progressModelBinding: "per-attempt"`) or after
- * the run settles (`"initial"`), mirroring each tool's pre-factory
- * behavior.
- */
-export interface MmrWorkerToolRunContext<TParams, TRun = void> {
-  params: TParams;
-  cwd: string;
-  /** Per-execute data computed by {@link MmrWorkerToolSpec.computeRunData} (e.g. oracle attachments). */
-  runData: TRun;
-  /** Successful parent-side invocation; undefined when the spec degraded on a resolution failure. */
-  invocation: (MmrSubagentInvocation & { ok: true }) | undefined;
-  /** Worker tool list reported in details (per {@link MmrWorkerToolSpec.detailsWorkerTools}). */
-  workerTools: readonly string[];
-  resolvedModel: string | undefined;
-  contextWindow: number | undefined;
-}
+// The spec/run-context/resolve-input declarations are core-owned worker
+// contract types (`ampi-core/worker-contract.ts`) so sibling extensions can
+// construct specs for the worker-host seam; re-exported here as the
+// historical import path. Field-level behavior docs stay with this factory.
+export type {
+  MmrWorkerToolResolveInput,
+  MmrWorkerToolRunContext,
+  MmrWorkerToolSpec,
+} from "../ampi-core/worker-contract.js";
 
 /** Runtime dependency seams every factory-built worker tool accepts. */
 export interface MmrWorkerToolFactoryDeps extends MmrWorkerRunnerResolutionDeps {
@@ -128,135 +113,6 @@ export interface MmrWorkerToolFactoryDeps extends MmrWorkerRunnerResolutionDeps 
   sessionKey?: string;
 }
 
-export interface MmrWorkerToolSpec<TParams, TDetails, TRun = void> {
-  toolName: string;
-  profileName: string;
-  description: string;
-  promptSnippet: string;
-  promptGuidelines: readonly string[];
-  parameters: TSchema;
-  /** Set for workflow workers that must not run concurrently (Task). */
-  executionMode?: "sequential";
-  /** Override the call renderer (defaults to the shared subagent call renderer). */
-  renderCall?(args: unknown, theme: unknown, context: unknown): unknown;
-  /** Override the result renderer (defaults to the shared subagent result renderer). */
-  renderResult?(result: unknown, options: unknown, theme: unknown, context: unknown): unknown;
-  /** Compact progress text shown before the worker streams any output. */
-  progressPlaceholder: string;
-
-  /**
-   * v2 background surface: the tool's schema carries
-   * `background?`/`group?`/`notify?` and a `background: true` call is
-   * delegated to the registered background dispatcher instead of running
-   * the blocking path. The factory strips the three fields before
-   * {@link coerceParams}, so per-tool validation sees only the worker's
-   * own params. Off (undefined) for oracle, which is blocking-only.
-   */
-  backgroundCapable?: boolean;
-
-  /**
-   * Validate/coerce raw params. Throw to reject; whether the throw
-   * propagates to Pi (finder/oracle) or becomes a structured
-   * validation-error result (librarian/Task) is decided by
-   * {@link paramsFailure}.
-   */
-  coerceParams(raw: unknown): TParams;
-  /**
-   * Map a {@link coerceParams} throw to a structured failure result.
-   * Omit to propagate the throw to the Pi tool host (the pinned
-   * finder/oracle contract).
-   */
-  paramsFailure?(message: string, raw: unknown, cwd: string): AgentToolResult<TDetails>;
-  /**
-   * Pre-spawn gate evaluated after params validate (e.g. librarian's
-   * ampi-github prerequisite). Return a result to short-circuit.
-   */
-  preSpawnGate?(params: TParams, cwd: string): AgentToolResult<TDetails> | undefined;
-  /**
-   * Compute per-execute run data available to the prompt and detail
-   * builders (e.g. oracle's resolved attachments). Runs after the
-   * pre-spawn gate, before invocation resolution.
-   */
-  computeRunData?(params: TParams, cwd: string): TRun;
-
-  /**
-   * Parent-side invocation resolver seam (deps-injectable per tool).
-   * `params`/`runData` let mode-derived specs thread per-call inputs
-   * (Task's parentMode and capabilityProfile) into the resolution.
-   */
-  resolveInvocation(input: MmrWorkerToolResolveInput, params: TParams, runData: TRun): MmrSubagentInvocation;
-  /**
-   * `"fail-closed"`: a non-ok invocation returns
-   * {@link resolutionFailureResult}. `"degrade"`: proceed with no
-   * explicit model (child resolves the route), preserving the
-   * finder/oracle no-registry contract.
-   */
-  resolutionFailure: "fail-closed" | "degrade";
-  /** Required when `resolutionFailure` is `"fail-closed"`. */
-  resolutionFailureResult?(
-    invocation: MmrSubagentInvocation & { ok: false },
-    params: TParams,
-    cwd: string,
-  ): AgentToolResult<TDetails>;
-  /** Pass the resolved worker tool set to the child as explicit `--tools`. */
-  mirrorWorkerTools: boolean;
-  /** Which tool list `runCtx.workerTools` reports in details. */
-  detailsWorkerTools: "profile-constant" | "invocation";
-  /** The profile-derived constant reported when `detailsWorkerTools` is `"profile-constant"` (and pre-resolution failures). */
-  workerToolsConstant: readonly string[];
-  /** Which model id progress events report during fallback attempts. */
-  progressModelBinding: "per-attempt" | "initial";
-
-  /**
-   * Board identity for a registered run: the short display label and the
-   * display prompt stamped on the registry record (shown by task_list, the
-   * pinned widget, and group cards). Formats match the background surface's
-   * member normalization so a blocking row and a background row of the same
-   * worker read identically.
-   */
-  describeRun(params: TParams, runData: TRun): { description: string; displayPrompt: string };
-
-  /** Worker user prompt (the child's task text). */
-  buildUserPrompt(params: TParams, runData: TRun): string;
-  /**
-   * Assemble the worker system prompt. `workerTools` is the resolved
-   * invocation tool set when available — specs that pin their prompt
-   * without a tool manifest (finder/oracle) ignore it. `runCtx` carries
-   * the invocation and per-execute run data for mode-derived prompts.
-   */
-  assembleSystemPrompt(
-    cwd: string,
-    workerTools: readonly string[] | undefined,
-    runCtx: MmrWorkerToolRunContext<TParams, TRun>,
-  ): string;
-  /**
-   * Resolve the context window for the current route. Degrade-mode
-   * tools read it from the host model registry by id; fail-closed
-   * tools read it from the resolved invocation's registered model.
-   */
-  resolveContextWindow?(
-    ctx: ExtensionContext | undefined,
-    model: string | undefined,
-    invocation: (MmrSubagentInvocation & { ok: true }) | undefined,
-  ): number | undefined;
-  /** Extra runner options merged into the base options (e.g. Task's parentMode + replace delivery). */
-  extraRunnerOptions?(runCtx: MmrWorkerToolRunContext<TParams, TRun>): Partial<MmrSubagentRunOptions>;
-
-  /** Fallback candidate preferences (profile defaults; Task ranks by parent mode). */
-  candidatePreferences(runCtx: MmrWorkerToolRunContext<TParams, TRun>): readonly MmrModelPreference[];
-  /** Fallback scope key component for mode-derived profiles (Task). */
-  fallbackParentMode?(runCtx: MmrWorkerToolRunContext<TParams, TRun>): string | undefined;
-
-  buildProgressDetails(snapshot: MmrWorkerProgressSnapshot, runCtx: MmrWorkerToolRunContext<TParams, TRun>): TDetails;
-  buildFinalDetails(result: MmrWorkerResult, runCtx: MmrWorkerToolRunContext<TParams, TRun>): TDetails;
-  buildFinalContent(result: MmrWorkerResult, runCtx: MmrWorkerToolRunContext<TParams, TRun>): string;
-  /**
-   * Map a runner/fallback throw to a final result (librarian's
-   * context-window/spawn-error mapping, Task's §9.4 rule 2). Omit to
-   * propagate the throw (finder/oracle).
-   */
-  mapRunError?(err: unknown, runCtx: MmrWorkerToolRunContext<TParams, TRun>): AgentToolResult<TDetails>;
-}
 
 /**
  * Resolve the effective model-preference override for a worker execute
@@ -327,6 +183,17 @@ export function clipMmrWorkerDescription(text: string): string {
 export interface MmrPreparedWorkerRun<TDetails = unknown> {
   /** Public worker name (the tool name); the registry record's `agent`. */
   agent: string;
+  /** Backing subagent profile name (envelope identity). */
+  profileName?: string;
+  /** Producing tool name (envelope identity; equals `agent` for worker tools). */
+  toolName?: string;
+  /**
+   * How the registrant consumes this run: stamped by the consuming surface
+   * (blocking execute / background start / internal caller) before the run
+   * fires so envelope dual-writes carry the honest mode. Defaults to
+   * `"blocking"` when unset.
+   */
+  runMode?: MmrWorkerRunMode;
   /** Short display label for the board record. */
   description: string;
   /** Display prompt stamped on the board record (the worker's primary input). */
@@ -478,19 +345,61 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
       ...(spec.extraRunnerOptions ? spec.extraRunnerOptions(runCtx) : {}),
     };
 
-    // Renderer-only board reference, stamped onto every details payload
-    // produced AFTER the registrant assigns it (never into model `content`).
-    const stampBoardRef = (details: TDetails): TDetails => {
-      if (prepared.sessionKey === undefined || prepared.taskId === undefined) return details;
+    const described = spec.describeRun(params, runData);
+
+    // Renderer-only board reference plus the canonical worker-run envelope
+    // (dual-write window), stamped onto every details payload (never into
+    // model `content`). The envelope carries a light frozen identity/status
+    // snapshot; the legacy details fields remain the rich-render source
+    // until the dual-write window closes.
+    const stampBoardRef = (
+      details: TDetails,
+      status: string,
+      extra: { terminalOutcome?: "success" | "partial" | "failed"; errorMessage?: string } = {},
+    ): TDetails => {
       if (typeof details !== "object" || details === null) return details;
-      return { ...details, sessionKey: prepared.sessionKey, taskId: prepared.taskId };
+      const envelope = buildWorkerRunEnvelope({
+        profileName: spec.profileName,
+        toolName: spec.toolName,
+        agent: spec.toolName,
+        runMode: prepared.runMode ?? "blocking",
+        status,
+        workerTools: runCtx.workerTools,
+        description: described.description,
+        ...(prepared.sessionKey !== undefined ? { sessionKey: prepared.sessionKey } : {}),
+        ...(prepared.taskId !== undefined ? { taskId: prepared.taskId } : {}),
+        ...(runCtx.resolvedModel !== undefined ? { resolvedModel: runCtx.resolvedModel } : {}),
+        ...(runCtx.contextWindow !== undefined ? { contextWindow: runCtx.contextWindow } : {}),
+        ...(extra.terminalOutcome !== undefined ? { terminalOutcome: extra.terminalOutcome } : {}),
+        ...(extra.errorMessage !== undefined ? { snapshot: { errorMessage: extra.errorMessage } } : {}),
+      });
+      const stamped = attachWorkerRunEnvelope(details, envelope);
+      if (prepared.sessionKey === undefined || prepared.taskId === undefined) return stamped;
+      return { ...stamped, sessionKey: prepared.sessionKey, taskId: prepared.taskId };
     };
-    const stampResult = (result: AgentToolResult<TDetails>): AgentToolResult<TDetails> => ({
+    const terminalEnvelopeFields = (
+      result: MmrWorkerResult,
+    ): { status: string; terminalOutcome?: "success" | "partial" | "failed"; errorMessage?: string } => {
+      const outcome = classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(spec.profileName));
+      const status = outcome === "success" ? "succeeded" : outcome === "aborted" ? "cancelled" : "failed";
+      return {
+        status,
+        ...(outcome === "success"
+          ? { terminalOutcome: result.outputTruncated ? ("partial" as const) : ("success" as const) }
+          : outcome === "aborted"
+            ? {}
+            : { terminalOutcome: "failed" as const }),
+        ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+      };
+    };
+    const stampResult = (
+      result: AgentToolResult<TDetails>,
+      fields: { status: string; terminalOutcome?: "success" | "partial" | "failed"; errorMessage?: string },
+    ): AgentToolResult<TDetails> => ({
       ...result,
-      details: stampBoardRef(result.details as TDetails),
+      details: stampBoardRef(result.details as TDetails, fields.status, fields),
     });
 
-    const described = spec.describeRun(params, runData);
     const partialOutputPolicy = getMmrSubagentProfile(spec.profileName)?.partialOutputPolicy;
     // Task-only narrowing knob, threaded onto the board record when the
     // worker's params carry it (the schema admits it only for Task).
@@ -498,6 +407,8 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
 
     const prepared: MmrPreparedWorkerRun<TDetails> = {
       agent: spec.toolName,
+      profileName: spec.profileName,
+      toolName: spec.toolName,
       description: described.description,
       displayPrompt: described.displayPrompt,
       cwd,
@@ -514,7 +425,7 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
           onProgress(snapshot);
           const shaped: AgentToolResult<TDetails> = {
             content: [{ type: "text", text: progressTextOrPlaceholder(snapshot, spec.progressPlaceholder) }],
-            details: stampBoardRef(spec.buildProgressDetails(snapshot, runCtx)),
+            details: stampBoardRef(spec.buildProgressDetails(snapshot, runCtx), "running"),
           };
           onProgress(shaped);
           opts.onUpdate?.(shaped);
@@ -573,6 +484,14 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
         };
 
         try {
+          if (spec.modelFallback === "disabled") {
+            // Pinned contract: this worker never inherits the shared
+            // session-scoped fallback (no stored-override read, no fallback
+            // prompt). One plain run with the resolved route.
+            const single = await runWorkerOnce({});
+            if (single.route !== undefined) runCtx.resolvedModel = single.route;
+            return single.result;
+          }
           const fallbackParentMode = spec.fallbackParentMode?.(runCtx);
           const outcome = await runMmrWorkerWithSharedFallback({
             ctx,
@@ -603,12 +522,20 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
       },
       projectResult: (result) => {
         if (prepared.runError !== undefined && spec.mapRunError) {
-          return stampResult(spec.mapRunError(prepared.runError, runCtx));
+          const message = prepared.runError instanceof Error ? prepared.runError.message : String(prepared.runError);
+          return stampResult(spec.mapRunError(prepared.runError, runCtx), {
+            status: "failed",
+            terminalOutcome: "failed",
+            errorMessage: message,
+          });
         }
-        return stampResult({
-          content: [{ type: "text", text: spec.buildFinalContent(result, runCtx) }],
-          details: spec.buildFinalDetails(result, runCtx),
-        });
+        return stampResult(
+          {
+            content: [{ type: "text", text: spec.buildFinalContent(result, runCtx) }],
+            details: spec.buildFinalDetails(result, runCtx),
+          },
+          terminalEnvelopeFields(result),
+        );
       },
     };
     return { ok: true, prepared };
@@ -747,6 +674,7 @@ export function createWorkerTool<TParams, TDetails, TRun = void>(
       const prep = prepareRun(rawParams, ctx, onUpdate ? { onUpdate } : {});
       if (!prep.ok) return prep.result;
       const prepared = prep.prepared;
+      prepared.runMode = "blocking";
 
       // 2. Register: every worker run is a task. Blocking runs are
       //    cap-exempt, never deduplicated, and carry no watchdog; the

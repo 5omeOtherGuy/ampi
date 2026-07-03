@@ -11,7 +11,7 @@ import {
   DEFAULT_MMR_BACKGROUND_AGENT,
   listMmrBackgroundAgents,
   type MmrBackgroundAgentDescriptor,
-} from "./background-agents.js";
+} from "./worker-binding-registry.js";
 
 export const START_TASK_TOOL_NAME = "start_task";
 export const TASK_POLL_TOOL_NAME = "task_poll";

@@ -52,6 +52,30 @@ export type {
 } from "./runner-outcome.js";
 export { emptyMmrWorkerUsageStats } from "./worker-usage.js";
 
+// Worker contract types are core-owned (`ampi-core/worker-contract.ts`) as
+// part of the subagent unification; this entry file re-exports them so the
+// historical `ampi-workers/runner.js` import path stays stable.
+import type {
+  MmrSubagentRunOptions,
+  MmrWorkerMessage,
+  MmrWorkerProgressSnapshot,
+  MmrWorkerResult,
+  MmrWorkerUsageStats,
+} from "../ampi-core/worker-contract.js";
+export type {
+  MmrSubagentRunOptions,
+  MmrSubagentRunProgress,
+  MmrSubagentRunner,
+  MmrSubagentWorkerDetailsBase,
+  MmrSubagentWorkerRunResult,
+  MmrSpawnedSubagentWorkerDetailsBase,
+  MmrWorkerMessage,
+  MmrWorkerProgressSnapshot,
+  MmrWorkerResult,
+  MmrWorkerUsageStats,
+} from "../ampi-core/worker-contract.js";
+import type { MmrSubagentRunner } from "../ampi-core/worker-contract.js";
+
 export const DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS = 5_000;
 
 /**
@@ -74,219 +98,8 @@ export const DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS = 5_000;
  */
 export const MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT = 96 * 1024;
 
-export interface MmrWorkerUsageStats {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  contextTokens: number;
-  turns: number;
-}
 
-export interface MmrWorkerMessage {
-  role?: string;
-  content?: unknown;
-  usage?: unknown;
-  model?: string;
-  stopReason?: string;
-  errorMessage?: string;
-}
 
-export interface MmrWorkerProgressSnapshot {
-  messages: MmrWorkerMessage[];
-  finalOutput: string;
-  truncatedFinalOutput: string;
-  usage: MmrWorkerUsageStats;
-  trail: MmrWorkerTrailItem[];
-  model?: string;
-  stopReason?: string;
-  errorMessage?: string;
-}
-
-/**
- * Minimal worker-details surface every worker-backed details type
- * exposes, regardless of whether the worker runs in-process
- * (e.g. `ampi-history` `history-reader`) or spawns a child Pi process
- * (`finder`, `oracle`, `Task`).
- *
- * Captures the parent-observable run outcome (`model`,
- * `reportedModel`, `exitCode`, `signal`, `aborted`,
- * `outputTruncated`, `ignoredJsonLines`, `usage`, `stopReason`,
- * `errorMessage`), the subagent-activation failure discriminator
- * (`subagentActivationError`), and the deny-aware, registered-tool
- * intersection the worker actually ran with (`workerTools`).
- *
- * In-process workers extend this base directly because they do not
- * spawn a child process and therefore do not expose `command`,
- * `args`, `cwd`, `stderr`, `spawnError`, or `trail`.
- * Child-process workers extend {@link MmrSpawnedSubagentWorkerDetailsBase}
- * instead so those parent-observation fields are declared once.
- *
- * The wire shape of existing `result.details` payloads is unchanged;
- * this base only deduplicates the type declaration.
- */
-export interface MmrSubagentWorkerDetailsBase {
-  /** Discriminator literal owned by the concrete tool (e.g. `"ampi-workers.Task"`). */
-  worker: string;
-  /** Provider-qualified or bare worker model string the parent selected. */
-  model?: string;
-  /** Model identifier the worker process reported in its own usage stream. */
-  reportedModel?: string;
-  /** Context window for the selected worker model, when the parent can resolve it. */
-  contextWindow?: number;
-  exitCode: number | null;
-  signal: NodeJS.Signals | null;
-  aborted: boolean;
-  outputTruncated: boolean;
-  ignoredJsonLines: number;
-  usage: MmrWorkerUsageStats;
-  stopReason?: string;
-  errorMessage?: string;
-  /**
-   * Reason from `ampi-core` when subagent activation failed closed in
-   * the child Pi process (unknown profile, no model route,
-   * `--model` / `--tools` mismatch). Captured verbatim from the
-   * activation-failure stderr marker so callers and operators see the
-   * cause without grepping stderr.
-   */
-  subagentActivationError?: string;
-  /**
-   * Parent-side view of the worker's tool surface.
-   *
-   * Tools that pre-resolve the worker invocation on the parent side
-   * (e.g. `Task`) populate this with the resolver-computed
-   * deny-aware, registered-tool intersection, i.e. the exact set the
-   * worker actually ran with. Their parent and child agree by
-   * construction.
-   *
-   * Tools that defer worker-tool resolution to the child (e.g.
-   * `finder`, `oracle`) populate this with the parent's view of the
-   * profile intent allowlist (e.g. `FINDER_WORKER_TOOLS`,
-   * `ORACLE_WORKER_TOOLS`). The child then runs
-   * `resolveMmrSubagentInvocation` against its own registered-tool
-   * inventory to compute the effective set it executes with. The two
-   * agree when the child's registered tools are a superset of the
-   * profile's; they may differ when the child has been started with
-   * a reduced tool registry (in which case a `tools.mismatch`
-   * activation failure would surface through
-   * `subagentActivationError`).
-   *
-   * In-process workers (e.g. `ampi-history.history-reader`) populate
-   * this with the profile's `tools` list, which is the authoritative
-   * worker tool set because no child Pi process is involved.
-   *
-   * In all cases this field is the parent's best public-facing
-   * representation of what the worker was permitted to call. It is
-   * not a substitute for runtime tool-use observability; the actual
-   * tool invocations are reported through the bounded `trail` field
-   * on spawned-subagent details (`finder`, `oracle`, `Task`).
-   */
-  workerTools: readonly string[];
-}
-
-/**
- * Worker-details base for spawned-subagent tools that run a child Pi
- * process via the shared runner (`finder`, `oracle`, `Task`, and any
- * future tool with the same execution shape). Extends
- * {@link MmrSubagentWorkerDetailsBase} with the parent-observable
- * spawn metadata (`stderr`, `command`, `args`, `cwd`), the structured
- * spawn-failure discriminator (`spawnError`), and the bounded progress
- * wire shape (`trail`).
- *
- * In-process workers (e.g. `ampi-history` `history-reader`) extend
- * {@link MmrSubagentWorkerDetailsBase} directly; they do not declare
- * these fields because they do not spawn a child Pi process and do
- * not produce a parent-side `trail` stream.
- */
-export interface MmrSpawnedSubagentWorkerDetailsBase
-  extends MmrSubagentWorkerDetailsBase {
-  stderr: string;
-  command: string;
-  args: string[];
-  cwd: string;
-  /**
-   * Structured spawn-failure discriminator. Set to the spawn error's
-   * `message` when the child-process runner's `proc.on("error")` fires
-   * before/while spawning the child Pi process (typically
-   * `spawn ENOENT`, `EACCES`, or `E2BIG`). Absent when the worker
-   * actually started. `classifyMmrWorkerOutcome` /
-   * `classifyTaskOutcome` consume this field to map spawn failures
-   * deterministically without inspecting `errorMessage` text.
-   */
-  spawnError?: string;
-  /** Ordered assistant/tool trail rendered in the parent TUI when the row is expanded. */
-  trail: readonly MmrWorkerTrailItem[];
-  /**
-   * Renderer-only: async-task registry partition key for this run's board
-   * record. Every worker run registers (blocking and background), so the
-   * renderer can resolve the live registry snapshot; replayed transcripts
-   * fall back to the frozen details. Never part of model-consumed `content`.
-   */
-  sessionKey?: string;
-  /** Renderer-only: this run's board task id; see {@link MmrSpawnedSubagentWorkerDetailsBase.sessionKey}. */
-  taskId?: string;
-}
-
-export interface MmrWorkerResult extends MmrWorkerProgressSnapshot {
-  prompt: string;
-  cwd: string;
-  command: string;
-  args: string[];
-  exitCode: number | null;
-  signal: NodeJS.Signals | null;
-  stderr: string;
-  aborted: boolean;
-  outputTruncated: boolean;
-  ignoredJsonLines: number;
-  /**
-   * Reason string parsed out of the child Pi process's stderr when
-   * `ampi-core` writes the activation-failure marker. Present whenever a
-   * named `--ampi-subagent <name>` activation failed closed (unknown
-   * profile, no model route, `--model` / `--tools` mismatch); absent
-   * otherwise.
-   *
-   * The runner treats the marker as an unmissable failure even when Pi
-   * itself exits 0, because Pi currently does not propagate extension
-   * `session_start` throws into a nonzero exit code; without this
-   * detection, consumers (finder, future Task) would silently consume
-   * an un-policied worker run.
-   */
-  subagentActivationError?: string;
-  /**
-   * Structured spawn-failure discriminator. Set to the spawn error's
-   * `message` when `proc.on("error")` fires before/while spawning the
-   * child Pi process (typically `spawn ENOENT`, `EACCES`, or `E2BIG`).
-   * Absent when the worker actually started.
-   *
-   * The runner's spawn-error path resolves the promise with a structured
-   * `MmrWorkerResult` instead of throwing, so a discriminator separate
-   * from `errorMessage` (which is set for many failure modes, not just
-   * spawn) lets `classifyTaskOutcome` map spawn failures to
-   * `status: "spawn-error"` deterministically without inspecting the
-   * message text. See {@link classifyMmrWorkerOutcome} for the precedence
-   * ladder that consumes this field.
-   */
-  spawnError?: string;
-  /**
-   * Did the child Pi process emit `agent_start` (i.e. enter the agent
-   * loop) at least once before exiting?
-   *
-   * `false` when the child exited after `session` without ever firing
-   * `agent_start` — typically because a sibling extension's `input`
-   * event handler returned `{ action: "handled" }` and consumed the
-   * prompt before any provider call could happen. This is observably
-   * different from "the model produced no output" and is surfaced as
-   * the dedicated `no-agent-start` outcome by
-   * {@link classifyMmrWorkerOutcome}.
-   *
-   * Set defensively on any in-loop event (`agent_start`,
-   * `turn_start`, `message_start`, `message_end`, `turn_end`,
-   * `agent_end`, `tool_execution_*`, `tool_result_end`) so future Pi
-   * stream-event reshuffles do not silently regress the signal.
-   */
-  agentStarted: boolean;
-}
 
 /**
  * Subagent worker invocation options.
@@ -663,63 +476,9 @@ export async function runMmrSubagentWorker(
   }
 }
 
-/**
- * Stable, framework-owned name for the progress snapshot a
- * {@link MmrSubagentRunner} surfaces through {@link MmrSubagentRunOptions.onProgress}.
- *
- * Aliased to {@link MmrWorkerProgressSnapshot} so the field set stays
- * narrow today (callers already read these fields) while leaving room
- * to project a different shape later without rewriting tool callsites.
- */
-export type MmrSubagentRunProgress = MmrWorkerProgressSnapshot;
 
-/**
- * Stable worker-runner name for a subagent run's final result.
- *
- * Aliased to {@link MmrWorkerResult} for now: every consumer
- * (finder/oracle) already reads its full field set (including
- * `command` and `args` exercised by the runner tests). The alias
- * lets the runner interface land without breaking those callsites,
- * and future narrowing can happen behind the same public name.
- */
-export type MmrSubagentWorkerRunResult = MmrWorkerResult;
 
-/**
- * Generic subagent run options. Mirrors {@link RunMmrSubagentWorkerOptions}
- * but renames `onUpdate` to the framework-owned `onProgress` so future
- * runners (in-process, host-mediated, etc.) can share one option shape
- * across implementations.
- */
-export interface MmrSubagentRunOptions {
-  profileName: string;
-  parentMode?: string;
-  prompt: string;
-  cwd: string;
-  model?: string;
-  tools?: readonly string[];
-  /** See {@link RunMmrSubagentWorkerOptions.childExtensionScope}. */
-  childExtensionScope?: readonly string[];
-  systemPrompt?: string;
-  /** See {@link RunMmrSubagentWorkerOptions.systemPromptDelivery}. */
-  systemPromptDelivery?: "append" | "replace";
-  /** See {@link RunMmrSubagentWorkerOptions.modelPreferencesOverride}. */
-  modelPreferencesOverride?: readonly MmrModelPreference[];
-  signal?: AbortSignal;
-  outputByteLimit?: number;
-  /** Optional grace period between SIGTERM and SIGKILL on cancellation. */
-  killTimeoutMs?: number;
-  /** Progress callback invoked after parsed message/tool-result events. */
-  onProgress?: (snapshot: MmrSubagentRunProgress) => void;
-}
 
-/**
- * Generic subagent runner interface. Tool implementations depend on this
- * instead of the child-CLI worker function so alternate runners (e.g. a
- * future in-process host seam) can drop in without rewriting callers.
- */
-export interface MmrSubagentRunner {
-  run(options: MmrSubagentRunOptions): Promise<MmrSubagentWorkerRunResult>;
-}
 
 function toRunMmrSubagentWorkerOptions(
   options: MmrSubagentRunOptions,

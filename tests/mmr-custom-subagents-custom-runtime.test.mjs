@@ -18,6 +18,12 @@ beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
   clearMmrDynamicSubagentProfiles();
   clearMmrSubagentPromptBuilders();
+  // Production ordering: ampi-workers activates before ampi-custom-subagents
+  // and self-registers the core worker-host seam custom subagents consume.
+  const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/worker-binding-registry.ts");
+  const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/worker-host-impl.ts");
+  clearMmrDynamicBackgroundAgents();
+  registerMmrWorkersWorkerHost({ getAllTools: () => [], getActiveTools: () => [], getCommands: () => [] });
 });
 
 function makeRegistry(models) {

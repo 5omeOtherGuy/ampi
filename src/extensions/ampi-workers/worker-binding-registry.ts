@@ -1,25 +1,34 @@
 /**
- * Background-agent registry: the dispatch table behind `start_task`.
+ * The WorkerBindingRegistry: one registry of worker bindings keyed by
+ * profile name. It replaces the former background-agent descriptor table —
+ * every binding is the SAME prepared-run contract regardless of consumption
+ * surface, and carries its exposure and behavior-named contract preset.
  *
- * The set of agents the background surface offers is DERIVED, not hardcoded:
- * a profile appears as a `start_task` agent exactly when
+ * The set of agents the background surface (`start_task`, and each named
+ * tool's `background: true` path) offers is DERIVED, not hardcoded: a
+ * profile appears as a background agent exactly when
  *   1. it is registered in ampi-core's subagent-profile registry
  *      (`listMmrSubagentProfiles()`, static ∪ dynamic), AND
  *   2. its profile does not declare `backgroundable: false`, AND
- *   3. a worker extension registered a descriptor here saying how to launch it.
+ *   3. a binding is registered here, AND its exposure allows background.
  *
- * ampi-workers registers the built-in descriptors (finder, librarian, Task)
- * at module load; ampi-custom-subagents registers one per enabled custom
- * Markdown subagent at activation, which is what makes custom subagents
- * backgroundable without any per-agent branch in the async-task tools.
+ * ampi-workers registers the built-in bindings (Task, finder, librarian,
+ * reviewer) at module load; seam-registered workers (custom Markdown
+ * subagents via ampi-core's `registerMmrWorkerBinding`) are added at
+ * activation, which is what makes them backgroundable without any per-agent
+ * branch in the async-task tools. There is no tool-execute adapter and no
+ * terminal-status string sniffing: every binding prepares a registry-ready
+ * run through the shared worker-tool factory preparer.
  *
  * This module is intentionally internal (not exported from src/index.ts):
  * the public contract is the derived `start_task` surface, not the registry.
  */
-import type { AgentToolResult, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "typebox";
-import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrAsyncTaskStatus } from "./async-task-types.js";
+import type {
+  MmrWorkerContractPreset,
+} from "../ampi-core/worker-contract.js";
+import type { MmrWorkerBindingExposure } from "../ampi-core/worker-host.js";
 import {
   getMmrSubagentProfile,
   listMmrSubagentProfiles,
@@ -69,15 +78,13 @@ export interface MmrBackgroundAgentPrepareOptions {
 
 /**
  * How a background agent's run is built. ONE strategy for every agent: the
- * descriptor prepares a registry-ready run (validation → invocation
+ * binding prepares a registry-ready run (validation → invocation
  * resolution → run thunk + result projection) and `executeBackgroundStart`
- * registers it. Factory-built workers (finder, librarian, Task) plug their
- * run preparers in directly, so the background surface shares the blocking
- * tools' preparation path verbatim; non-factory tools (custom Markdown
- * subagents) adapt their blocking `execute()` via
- * {@link prepareRunFromToolExecute}. This replaces the former
- * `kind: "task" | "tool"` duality — `prepareTaskRun` is gone and Task is
- * not a special case anywhere in the dispatch path.
+ * registers it. Factory-built workers (finder, librarian, Task, reviewer)
+ * plug their run preparers in directly, and seam-registered workers (custom
+ * Markdown subagents) share the SAME factory preparer, so the background
+ * surface shares the blocking tools' preparation path verbatim for every
+ * agent — no tool-execute adapter, no per-agent strategy branch.
  */
 export interface MmrBackgroundAgentStart {
   /**
@@ -107,6 +114,14 @@ export interface MmrBackgroundAgentStart {
 export interface MmrBackgroundAgentDescriptor {
   /** Public agent name accepted by `start_task` (a stable worker tool name). */
   readonly agent: string;
+  /**
+   * Which consumption surfaces may resolve this binding. Defaults to
+   * `["tool", "background"]` when omitted (the historical descriptor
+   * behavior).
+   */
+  readonly exposure?: readonly MmrWorkerBindingExposure[];
+  /** Behavior-named pinned-contract preset this binding declares. */
+  readonly contractPreset?: MmrWorkerContractPreset;
   /** Backing subagent profile (policy source: backgroundable, capabilityProfile, output policy). */
   readonly profileName: string;
   /** Tool name used as the validation-error prefix for this agent's params. */
@@ -128,84 +143,6 @@ export interface MmrBackgroundAgentDescriptor {
   readonly start: MmrBackgroundAgentStart;
 }
 
-/**
- * Adapt a blocking ToolDefinition's `execute()` into the prepared-run
- * contract for agents that are not built on the worker-tool factory (custom
- * Markdown subagents). The tool's execute owns validation, spawn, and final
- * shaping; the adapter's run thunk feeds the registry the tool-run result
- * union (`finalToolResult` path), so no separate projection is needed.
- */
-/**
- * Infer the terminal task status of a tool-delegating background run from
- * its final `AgentToolResult`. Pi tool results have no top-level error flag,
- * so this reads the conventional `details.status`/error discriminators the
- * worker tools stamp. Lives here (not in the tool-format module) so the
- * tool-execute adapter below can use it without an import cycle.
- */
-export function inferToolRunStatus(result: AgentToolResult<unknown>, signal: AbortSignal): MmrAsyncTaskStatus {
-  const details = isRecord(result.details) ? result.details : {};
-  const status = details.status;
-  if (signal.aborted || status === "aborted" || details.aborted === true) return "cancelled";
-  if (status === "success") return "succeeded";
-  if (typeof status === "string") {
-    if (
-      status === "no-agent-start"
-      || status === "empty-output"
-      || status.includes("error")
-      || status.includes("gated")
-      || status.includes("exhausted")
-    ) return "failed";
-  }
-  if (typeof details.exitCode === "number" && details.exitCode !== 0) return "failed";
-  if (typeof details.spawnError === "string" || typeof details.subagentActivationError === "string") return "failed";
-  return "succeeded";
-}
-
-/** Companion to {@link inferToolRunStatus}: the error text a failed tool run reports. */
-export function inferToolErrorMessage(result: AgentToolResult<unknown>): string | undefined {
-  const details = isRecord(result.details) ? result.details : {};
-  return typeof details.errorMessage === "string" && details.errorMessage.length > 0
-    ? details.errorMessage
-    : undefined;
-}
-
-export function prepareRunFromToolExecute(args: {
-  tool: ToolDefinition;
-  agent: string;
-  workerTools: readonly string[];
-}): MmrBackgroundAgentStart["prepareRun"] {
-  return (_deps, params, ctx, opts) => ({
-    ok: true,
-    prepared: {
-      agent: args.agent,
-      // The start path labels the record from its normalized member
-      // (description/prompt summaries); these placeholders are never used.
-      description: args.agent,
-      displayPrompt: args.agent,
-      cwd: typeof (ctx as { cwd?: unknown }).cwd === "string" ? (ctx as { cwd: string }).cwd : process.cwd(),
-      workerTools: args.workerTools,
-      run: async ({ signal, onProgress }) => {
-        const result = await args.tool.execute(
-          `${opts.toolCallId}:${args.agent}`,
-          params,
-          signal,
-          (update) => onProgress(update as Parameters<typeof onProgress>[0]),
-          ctx,
-        );
-        const status = inferToolRunStatus(result, signal);
-        return {
-          toolResult: result,
-          status,
-          terminalOutcome: status === "succeeded" ? "success" : status === "failed" ? "failed" : undefined,
-          ...(status === "failed" ? { errorMessage: inferToolErrorMessage(result) } : {}),
-        };
-      },
-      // No raw projection: the run thunk settles with a tool-run result,
-      // which the registry finalizes directly as finalToolResult.
-    },
-  });
-}
-
 const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescriptor> = new Map(
   (
     [
@@ -213,6 +150,8 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         agent: TASK_TOOL_NAME,
         profileName: TASK_SUBAGENT_PROFILE,
         toolName: TASK_TOOL_NAME,
+        exposure: ["tool", "background"],
+        contractPreset: "strict-delegated",
         paramsHint: "{prompt, description}",
         promptParamKey: "prompt",
         descriptionParamKey: "description",
@@ -229,6 +168,8 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         agent: FINDER_TOOL_NAME,
         profileName: "finder",
         toolName: FINDER_TOOL_NAME,
+        exposure: ["tool", "background"],
+        contractPreset: "degrading-advisory",
         paramsHint: "{query}",
         promptParamKey: "query",
         start: {
@@ -242,6 +183,8 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         agent: LIBRARIAN_TOOL_NAME,
         profileName: "librarian",
         toolName: LIBRARIAN_TOOL_NAME,
+        exposure: ["tool", "background"],
+        contractPreset: "strict-delegated",
         paramsHint: "{query, context?}",
         promptParamKey: "query",
         start: {
@@ -255,6 +198,8 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         agent: REVIEWER_TOOL_NAME,
         profileName: REVIEWER_SUBAGENT_PROFILE,
         toolName: REVIEWER_TOOL_NAME,
+        exposure: ["tool", "background"],
+        contractPreset: "degrading-advisory",
         paramsHint: "{diff_description, files?, instructions?}",
         promptParamKey: "diff_description",
         start: {
@@ -338,7 +283,9 @@ export function listMmrBackgroundAgents(): readonly MmrBackgroundAgentDescriptor
     const profile = getMmrSubagentProfile(profileName);
     if (!profile || profile.backgroundable === false) continue;
     const descriptor = descriptorForProfile(profileName);
-    if (descriptor) ordered.push(descriptor);
+    if (!descriptor) continue;
+    if (descriptor.exposure !== undefined && !descriptor.exposure.includes("background")) continue;
+    ordered.push(descriptor);
   }
   return Object.freeze([
     ...ordered.filter((descriptor) => descriptor.agent === DEFAULT_MMR_BACKGROUND_AGENT),

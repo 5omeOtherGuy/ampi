@@ -1,9 +1,7 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import type {
-  AgentToolResult,
   ExtensionAPI,
-  ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
@@ -17,7 +15,6 @@ import {
   registerMmrSubagentProfile,
   type MmrSubagentProfile,
 } from "../ampi-core/subagent-profiles.js";
-import { selectMmrModelRoute } from "../ampi-core/model-resolver.js";
 import type { MmrModelPreference } from "../ampi-core/types.js";
 import {
   type MmrCustomSubagentDefinition,
@@ -36,31 +33,28 @@ import {
   resolveEnabledMmrCustomSubagents,
 } from "./custom-config.js";
 import fs, { constants as fsConstants } from "node:fs";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "../ampi-workers/progress-rendering.js";
-import { prepareRunFromToolExecute, registerMmrBackgroundAgent } from "../ampi-workers/background-agents.js";
+import { getMmrWorkerHost, registerMmrWorkerBinding } from "../ampi-core/worker-host.js";
+import type {
+  MmrSpawnedSubagentWorkerDetailsBase,
+  MmrSubagentRunner,
+  MmrWorkerProgressSnapshot,
+  MmrWorkerResult,
+  MmrWorkerToolRunContext,
+  MmrWorkerToolSpec,
+} from "../ampi-core/worker-contract.js";
 import {
-  DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   classifyMmrWorkerOutcomeForProfile,
-  createChildCliMmrSubagentRunner,
-  createMmrSubagentRunnerFromRunWorker,
-  type MmrSpawnedSubagentWorkerDetailsBase,
-  type MmrSubagentRunner,
   type MmrWorkerOutcomeStatus,
-  type MmrWorkerProgressSnapshot,
-  type MmrWorkerResult,
-  type MmrWorkerRunnerDeps,
-  runMmrSubagentWorker,
-} from "../ampi-workers/runner.js";
+} from "../ampi-core/worker-outcome.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
-  progressTextOrPlaceholder,
-} from "../ampi-workers/worker-result-shaping.js";
+} from "../ampi-core/worker-result-shaping.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
-} from "../ampi-workers/worker-model-metadata.js";
-import { resolveMmrSubagentInvocation } from "../ampi-core/subagent-resolver.js";
+} from "../ampi-core/worker-model-metadata.js";
+import { resolveMmrSubagentInvocation, type MmrSubagentInvocation } from "../ampi-core/subagent-resolver.js";
 import { MMR_SUBAGENT_SHARED_DENY_TOOLS } from "../ampi-core/subagent-tool-policy.js";
 
 export const CUSTOM_SUBAGENT_PARAMETERS_SCHEMA = Type.Object(
@@ -92,8 +86,6 @@ export interface CustomSubagentDetails extends MmrSpawnedSubagentWorkerDetailsBa
 
 export interface CustomSubagentToolDeps {
   runner?: MmrSubagentRunner;
-  runWorker?: typeof runMmrSubagentWorker;
-  runnerDeps?: MmrWorkerRunnerDeps;
   outputByteLimit?: number;
 }
 
@@ -316,13 +308,6 @@ function coerceParams(raw: unknown): { ok: true; value: CustomSubagentParams } |
   return { ok: true, value: { task: raw.task } };
 }
 
-function resolveRunner(deps: CustomSubagentToolDeps): MmrSubagentRunner {
-  if (deps.runner) return deps.runner;
-  if (deps.runWorker) return createMmrSubagentRunnerFromRunWorker(deps.runWorker, deps.runnerDeps);
-  if (deps.runnerDeps) return createChildCliMmrSubagentRunner(deps.runnerDeps);
-  return createChildCliMmrSubagentRunner();
-}
-
 function getRegisteredToolNames(pi: ExtensionAPI): string[] {
   return pi.getAllTools().map((tool) => tool.name).filter((name) => typeof name === "string" && name.length > 0);
 }
@@ -379,10 +364,6 @@ export function buildMmrCustomSubagentFallbackNotice(
   const file = path.basename(definition.filePath);
   const body = lines.map((line) => `- ${line}`).join("\n");
   return `Note (${definition.name}):\n${body}\nRecommend setting ${formatHumanList(recommend)} in ${file} for predictable subagent behavior.`;
-}
-
-function buildProgressContent(snapshot: MmrWorkerProgressSnapshot, definition: MmrCustomSubagentDefinition): string {
-  return progressTextOrPlaceholder(snapshot, `${definition.name}: worker running…`);
 }
 
 function buildFinalContent(
@@ -447,20 +428,93 @@ function buildFinalDetails(
   };
 }
 
-export function createMmrCustomSubagentTool(
+/** Shared 80-char display clip for board-row descriptions (mirrors the background member normalization). */
+function clipCustomSubagentDescription(text: string): string {
+  const summary = text.replace(/\s+/g, " ").trim();
+  return summary.length > 80 ? `${summary.slice(0, 77)}…` : summary;
+}
+
+/** Zero-usage details for pre-spawn failures (params validation, activation). */
+function preSpawnFailureDetails(
+  definition: MmrCustomSubagentDefinition,
+  args: {
+    status: MmrWorkerOutcomeStatus | "validation-error" | "activation-error" | "worker-error";
+    errorMessage: string;
+    prompt: string;
+    cwd: string;
+    workerTools: readonly string[];
+  },
+): CustomSubagentDetails {
+  return {
+    worker: `ampi-custom-subagents.${definition.toolName}`,
+    toolName: definition.toolName,
+    definitionName: definition.name,
+    filePath: definition.filePath,
+    prompt: args.prompt,
+    status: args.status as MmrWorkerOutcomeStatus,
+    exitCode: null,
+    signal: null,
+    aborted: false,
+    outputTruncated: false,
+    ignoredJsonLines: 0,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+    stderr: "",
+    command: "",
+    args: [],
+    cwd: args.cwd,
+    workerTools: args.workerTools,
+    trail: [],
+    errorMessage: args.errorMessage,
+  };
+}
+
+/**
+ * Per-call model-preference override + tool-set resolution captured on the
+ * invocation object so the spec's later builders (runner options) can read it
+ * without racy per-spec state. `customModelPreferencesOverride` carries the
+ * `model: inherit` parent-model preference forwarded to the child runner.
+ */
+type CustomSubagentInvocation = MmrSubagentInvocation & {
+  customModelPreferencesOverride?: readonly MmrModelPreference[];
+};
+
+/**
+ * Build the declarative worker-tool spec for a custom Markdown subagent.
+ * The execution skeleton is the shared worker-tool factory (via the core
+ * worker-host seam); this spec pins the pre-factory behavior verbatim:
+ *
+ *  - structured params failure (`worker-error` details, never a host throw);
+ *  - fail-closed activation when a model registry is present and the
+ *    resolver cannot produce a route (`activation-error` details);
+ *  - a context WITHOUT a model registry degrades to "no explicit model,
+ *    active∩registered∩declared tools" (the pre-seam contract), expressed
+ *    as a synthetic ok invocation so the run still mirrors `--tools`;
+ *  - `model: inherit` resolves the parent model and forwards it as a
+ *    session-scoped preference override to the child;
+ *  - `isolatedContext` maps to `systemPromptDelivery: "replace"`, else append;
+ *  - NO shared model-fallback wrapper (`modelFallback: "disabled"`, pinned).
+ */
+function createCustomSubagentSpec(
   pi: ExtensionAPI,
   definition: MmrCustomSubagentDefinition,
-  deps: CustomSubagentToolDeps = {},
-): ToolDefinition {
+): MmrWorkerToolSpec<CustomSubagentParams, CustomSubagentDetails> {
   const description = [
     definition.description,
     "",
     `Custom Markdown subagent loaded from ${path.basename(definition.filePath)}.`,
     "Provide a specific task for the worker. The worker runs with the Markdown body as its system prompt and only the requested tools that are registered and active in the parent session.",
   ].join("\n");
+  const patterns = effectiveCustomSubagentToolPatterns(definition);
+  const detailsCtx = (runCtx: MmrWorkerToolRunContext<CustomSubagentParams, void>) => ({
+    cwd: runCtx.cwd,
+    workerTools: runCtx.workerTools,
+    ...(runCtx.resolvedModel !== undefined ? { model: runCtx.resolvedModel } : {}),
+    ...(runCtx.contextWindow !== undefined ? { contextWindow: runCtx.contextWindow } : {}),
+    prompt: runCtx.params.task,
+  });
   return {
-    name: definition.toolName,
-    label: definition.name,
+    toolName: definition.toolName,
+    profileName: definition.toolName,
     description,
     promptSnippet: definition.description,
     promptGuidelines: [
@@ -469,123 +523,118 @@ export function createMmrCustomSubagentTool(
       "Do not use this custom subagent when a direct tool call or built-in subagent is a better fit.",
     ],
     parameters: CUSTOM_SUBAGENT_PARAMETERS_SCHEMA,
-    executionMode: effectiveCustomSubagentToolPatterns(definition).some((tool) => ["bash", "edit", "write", "apply_patch"].includes(tool))
-      ? "sequential" as const
-      : "parallel" as const,
-    renderShell: "self" as const,
-    renderCall(args, theme, context) {
-      return renderMmrSubagentCall(definition.toolName, args, theme, context);
+    ...(patterns.some((tool) => ["bash", "edit", "write", "apply_patch"].includes(tool))
+      ? { executionMode: "sequential" as const }
+      : {}),
+    modelFallback: "disabled",
+    progressPlaceholder: `${definition.name}: worker running…`,
+    coerceParams(raw) {
+      const parsed = coerceParams(raw);
+      if (!parsed.ok) throw new Error(parsed.message);
+      return parsed.value;
     },
-    renderResult(result, options, theme, context) {
-      return renderMmrSubagentResult(definition.toolName, result, options, theme, context);
-    },
-    async execute(_toolCallId, rawParams, signal, onUpdate, ctx: ExtensionContext): Promise<AgentToolResult<CustomSubagentDetails>> {
-      const parsed = coerceParams(rawParams);
-      if (!parsed.ok) {
-        return {
-          content: [{ type: "text", text: `${definition.name}: ${parsed.message}` }],
-          details: {
-            worker: `ampi-custom-subagents.${definition.toolName}`,
-            toolName: definition.toolName,
-            definitionName: definition.name,
-            filePath: definition.filePath,
-            prompt: "",
-            status: "worker-error",
-            exitCode: null,
-            signal: null,
-            aborted: false,
-            outputTruncated: false,
-            ignoredJsonLines: 0,
-            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-            stderr: "",
-            command: "",
-            args: [],
-            cwd: ctx.cwd,
-            workerTools: [],
-            trail: [],
-            errorMessage: parsed.message,
-          },
-        };
-      }
-
-      const cwd = ctx.cwd;
-      const registry = resolveCtxMmrModelRegistry(ctx);
-      const parentMode = getMmrModeStateSnapshot()?.mode;
-      const modelPreferencesOverride = definition.model === "inherit"
-        ? [readCurrentModelPreference(ctx)].filter((entry): entry is MmrModelPreference => Boolean(entry))
-        : undefined;
-      const profile = modelPreferencesOverride && modelPreferencesOverride.length > 0
-        ? { ...createProfile(definition), modelPreferences: modelPreferencesOverride }
-        : createProfile(definition);
-      const registeredTools = getParentAllowedRegisteredTools(pi);
-      const invocation = registry
-        ? resolveMmrSubagentInvocation({
-            profile,
-            registry,
-            registeredTools,
-            parentActiveTools: pi.getActiveTools(),
-            ...(parentMode ? { parentMode } : {}),
-          })
-        : undefined;
-      if (registry && invocation && !invocation.ok) {
-        return {
-          content: [{ type: "text", text: `${definition.name}: ${invocation.message}` }],
-          details: {
-            worker: `ampi-custom-subagents.${definition.toolName}`,
-            toolName: definition.toolName,
-            definitionName: definition.name,
-            filePath: definition.filePath,
-            prompt: parsed.value.task,
-            status: "activation-error",
-            exitCode: null,
-            signal: null,
-            aborted: false,
-            outputTruncated: false,
-            ignoredJsonLines: 0,
-            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-            stderr: "",
-            command: "",
-            args: [],
-            cwd,
-            workerTools: invocation.workerTools,
-            trail: [],
-            errorMessage: invocation.message,
-          },
-        };
-      }
-      const model = invocation?.ok
-        ? invocation.modelArg
-        : registry && modelPreferencesOverride && modelPreferencesOverride.length > 0
-          ? selectMmrModelRoute({ modelPreferences: modelPreferencesOverride, registry }).selected
-          : undefined;
-      const modelArg = typeof model === "string" ? model : model ? `${model.provider}/${model.model}` : undefined;
-      const workerTools = invocation?.workerTools
-        ?? registeredTools.filter((tool) => effectiveCustomSubagentToolPatterns(definition).includes(tool));
-      const contextWindow = resolveMmrWorkerModelContextWindowFromCtx(ctx, modelArg);
-      const result = await resolveRunner(deps).run({
-        profileName: definition.toolName,
-        prompt: parsed.value.task,
-        cwd,
-        ...(modelArg ? { model: modelArg } : {}),
-        tools: workerTools,
-        ...(modelPreferencesOverride && modelPreferencesOverride.length > 0 ? { modelPreferencesOverride } : {}),
-        systemPrompt: definition.systemPrompt,
-        systemPromptDelivery: definition.isolatedContext ? "replace" : "append",
-        outputByteLimit: deps.outputByteLimit ?? DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-        signal,
-        onProgress: onUpdate
-          ? (snapshot) => onUpdate({
-              content: [{ type: "text", text: buildProgressContent(snapshot, definition) }],
-              details: buildProgressDetails(snapshot, definition, { cwd, workerTools, model: modelArg, contextWindow, prompt: parsed.value.task }),
-            })
-          : undefined,
-      });
+    paramsFailure(message, _raw, cwd) {
       return {
-        content: [{ type: "text", text: buildFinalContent(result, definition) }],
-        details: buildFinalDetails(result, definition, { cwd, workerTools, model: modelArg, contextWindow, prompt: parsed.value.task }),
+        content: [{ type: "text", text: `${definition.name}: ${message}` }],
+        details: preSpawnFailureDetails(definition, {
+          status: "worker-error",
+          errorMessage: message,
+          prompt: "",
+          cwd,
+          workerTools: [],
+        }),
       };
     },
-  } satisfies ToolDefinition;
+    resolveInvocation(input, _params): MmrSubagentInvocation {
+      const ctx = input.ctx;
+      const registry = resolveCtxMmrModelRegistry(ctx);
+      const parentMode = getMmrModeStateSnapshot()?.mode;
+      const inheritOverride = definition.model === "inherit"
+        ? [readCurrentModelPreference(ctx)].filter((entry): entry is MmrModelPreference => Boolean(entry))
+        : undefined;
+      const profile = inheritOverride && inheritOverride.length > 0
+        ? { ...createProfile(definition), modelPreferences: inheritOverride }
+        : createProfile(definition);
+      const registeredTools = getParentAllowedRegisteredTools(pi);
+      if (!registry) {
+        // No model registry in the context: degrade to "no explicit model"
+        // while keeping the active∩registered∩declared tool ceiling mirrored
+        // to the child (the pre-seam custom-subagent contract).
+        const workerTools = registeredTools.filter((tool) => patterns.includes(tool));
+        const synthetic: Partial<CustomSubagentInvocation> = {
+          ok: true,
+          workerTools,
+          ...(inheritOverride && inheritOverride.length > 0
+            ? { customModelPreferencesOverride: inheritOverride }
+            : {}),
+        };
+        return synthetic as CustomSubagentInvocation;
+      }
+      const invocation = resolveMmrSubagentInvocation({
+        profile,
+        registry,
+        registeredTools,
+        parentActiveTools: pi.getActiveTools(),
+        ...(parentMode ? { parentMode } : {}),
+      });
+      if (inheritOverride && inheritOverride.length > 0) {
+        return { ...invocation, customModelPreferencesOverride: inheritOverride } as CustomSubagentInvocation;
+      }
+      return invocation;
+    },
+    resolutionFailure: "fail-closed",
+    resolutionFailureResult(invocation, params, cwd) {
+      return {
+        content: [{ type: "text", text: `${definition.name}: ${invocation.message}` }],
+        details: preSpawnFailureDetails(definition, {
+          status: "activation-error",
+          errorMessage: invocation.message,
+          prompt: params.task,
+          cwd,
+          workerTools: invocation.workerTools,
+        }),
+      };
+    },
+    mirrorWorkerTools: true,
+    detailsWorkerTools: "invocation",
+    workerToolsConstant: patterns,
+    progressModelBinding: "initial",
+    describeRun(params) {
+      return {
+        description: `${definition.toolName}: ${clipCustomSubagentDescription(params.task) || "custom run"}`,
+        displayPrompt: params.task,
+      };
+    },
+    buildUserPrompt(params) {
+      return params.task;
+    },
+    assembleSystemPrompt() {
+      return definition.systemPrompt;
+    },
+    resolveContextWindow(ctx, model) {
+      return resolveMmrWorkerModelContextWindowFromCtx(ctx, model);
+    },
+    extraRunnerOptions(runCtx) {
+      const override = (runCtx.invocation as CustomSubagentInvocation | undefined)?.customModelPreferencesOverride;
+      return {
+        systemPromptDelivery: definition.isolatedContext ? "replace" : "append",
+        ...(override && override.length > 0 ? { modelPreferencesOverride: override } : {}),
+      };
+    },
+    candidatePreferences() {
+      // No shared fallback for custom workers (modelFallback: "disabled").
+      return [];
+    },
+    buildProgressDetails(snapshot, runCtx) {
+      return buildProgressDetails(snapshot, definition, detailsCtx(runCtx));
+    },
+    buildFinalDetails(result, runCtx) {
+      return buildFinalDetails(result, definition, detailsCtx(runCtx));
+    },
+    buildFinalContent(result) {
+      return buildFinalContent(result, definition);
+    },
+  };
 }
 
 export function registerMmrCustomSubagentDefinition(
@@ -599,32 +648,25 @@ export function registerMmrCustomSubagentDefinition(
   }
   registerMmrSubagentProfile(createProfile(definition));
   registerMmrSubagentPromptBuilder(definition.toolName, () => definition.systemPrompt);
-  const tool = createMmrCustomSubagentTool(pi, definition, deps);
-  registerAmpiOwnedTool(definition.toolName);
-  pi.registerTool(tool);
-  // Custom subagents are backgroundable (the profile defaults the flag to
-  // true): registering a background-agent descriptor is what lets start_task
-  // offer and dispatch this worker with no per-agent branch anywhere.
-  registerMmrBackgroundAgent({
-    agent: definition.toolName,
-    profileName: definition.toolName,
-    toolName: definition.toolName,
+  // Register through the core worker-host seam: the shared worker-tool
+  // factory builds the blocking tool AND the background descriptor from one
+  // spec, so blocking sa__* runs register in the async-task registry
+  // (board/widget visible) and background runs share the same preparation
+  // path — no bespoke execute, no tool-execute adapter.
+  const registered = registerMmrWorkerBinding({
+    spec: createCustomSubagentSpec(pi, definition),
+    exposure: ["tool", "background"],
+    contractPreset: "strict-delegated",
     paramsHint: "{task}",
     promptParamKey: "task",
-    start: {
-      parametersSchema: CUSTOM_SUBAGENT_PARAMETERS_SCHEMA,
-      workerTools: effectiveCustomSubagentToolPatterns(definition),
-      // Custom subagent tools are not built on the worker-tool factory, so
-      // their background runs adapt the blocking execute() instead of a
-      // factory run preparer.
-      prepareRun: prepareRunFromToolExecute({
-        tool,
-        agent: definition.toolName,
-        workerTools: effectiveCustomSubagentToolPatterns(definition),
-      }),
-    },
+    boardWorkerTools: effectiveCustomSubagentToolPatterns(definition),
+    modelFallback: "disabled",
+    ...(deps.runner !== undefined ? { runner: deps.runner } : {}),
+    ...(deps.outputByteLimit !== undefined ? { outputByteLimit: deps.outputByteLimit } : {}),
   });
-  return tool;
+  registerAmpiOwnedTool(definition.toolName);
+  pi.registerTool(registered.tool);
+  return registered.tool;
 }
 
 /**
@@ -643,6 +685,17 @@ export function registerMmrCustomSubagentTools(
   pi: ExtensionAPI,
   options: RegisterMmrCustomSubagentToolsOptions = {},
 ): ToolDefinition[] {
+  // Custom subagents execute through the core worker-host seam; without a
+  // registered host (ampi-workers not active) no sa__* tool can run, so
+  // registration fails closed for the whole set — loud but non-fatal, the
+  // rest of the session keeps working.
+  if (!getMmrWorkerHost()) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "ampi-custom-subagents: no worker host is registered (ampi-workers is not active); custom sa__* subagents were not registered.",
+    );
+    return [];
+  }
   const cwd = options.cwd ?? process.cwd();
   const resolved = options.resolvedRecords
     ?? resolveEnabledMmrCustomSubagents({ cwd, ...(options.homeDir ? { homeDir: options.homeDir } : {}) }).resolved;

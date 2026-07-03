@@ -69,6 +69,7 @@ import type {
   MmrAsyncTaskGroupSnapshot,
 } from "./async-task-registry.js";
 import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
+import { buildWorkerRunView, isMmrBackgroundWorkerDetails } from "./worker-run-view.js";
 
 /**
  * Live-state resolvers for the inline background card. Supplied by the async
@@ -393,25 +394,25 @@ export function renderMmrBackgroundTaskResult(
   context?: RenderContextLike,
   extras?: BackgroundCardExtras,
 ): Component {
-  const details = result.details as BackgroundTaskDetails | undefined;
   const output = textContent(result).trim();
+  const view = buildWorkerRunView(result.details);
 
   // 0. Fleet declaration (start_task.fleet) → all group sections in one card,
   //    decoupled from execution; rows animate ready→running→terminal in place.
-  if (details?.fleet !== undefined) {
+  if (view.surface === "fleet") {
     clearRenderedCall(context);
     return renderBackgroundWorkerCard({
-      sessionKey: details.sessionKey,
+      sessionKey: view.details.sessionKey,
       extras,
       theme,
-      buildSections: fleetSectionBuilders(details.fleet as AsyncTaskFleetDetails),
+      buildSections: fleetSectionBuilders(view.fleet),
       gated: true,
     });
   }
 
   // 1. No-id board (task_poll list mode) → grouped board view.
-  if (details?.board !== undefined) {
-    const boardComponent = renderBackgroundTaskBoard(details.board, theme);
+  if (view.surface === "board") {
+    const boardComponent = renderBackgroundTaskBoard(view.board, theme);
     if (boardComponent) return boardComponent;
     const container = new Container();
     addMarkdownBlock(container, output, theme, { paddingX: 1 });
@@ -422,19 +423,20 @@ export function renderMmrBackgroundTaskResult(
   //    → one consolidated member-list card, rendered live every frame. The
   //    verbose model-facing group text carried in `content` is intentionally
   //    never drawn into the transcript.
-  if (details?.group !== undefined) {
+  if (view.surface === "group-control") {
     clearRenderedCall(context);
-    if (!details.groupId) return new Container();
+    if (!view.groupId) return new Container();
     return renderBackgroundWorkerCard({
-      sessionKey: details.sessionKey,
+      sessionKey: view.details.sessionKey,
       extras,
       theme,
-      buildSections: [groupSectionBuilder(details, details.groupId)],
+      buildSections: [groupSectionBuilder(view.details, view.groupId)],
       gated: false,
     });
   }
 
-  if (details?.worker !== "ampi-workers.async-task" && details?.worker !== "mmr-subagents.async-task") {
+  if (view.surface !== "spawn" && view.surface !== "background-final") {
+    // Not a background-task payload on this entry point: render the text.
     const container = new Container();
     addMarkdownBlock(container, output, theme, { paddingX: 1 });
     return container;
@@ -446,17 +448,17 @@ export function renderMmrBackgroundTaskResult(
   //    is invisible — the live, animated state lives only in the pinned
   //    aboveEditor widget; the card latches a static completed view once the
   //    run settles.
-  if (details.tool === "start_task" || details.backgroundStart === true) {
+  if (view.surface === "spawn") {
     clearRenderedCall(context);
-    if (details.groupId && !details.groupOpener) return new Container();
+    if (view.groupId && !view.groupOpener) return new Container();
     return renderBackgroundWorkerCard({
-      sessionKey: details.sessionKey,
+      sessionKey: view.details.sessionKey,
       extras,
       theme,
       buildSections: [
-        details.groupId
-          ? groupSectionBuilder(details, details.groupId)
-          : singleSectionBuilder(details),
+        view.groupId
+          ? groupSectionBuilder(view.details, view.groupId)
+          : singleSectionBuilder(view.details),
       ],
       gated: true,
     });
@@ -465,6 +467,7 @@ export function renderMmrBackgroundTaskResult(
   // 4. Single-task task_poll / task_wait / task_cancel → rich result card
   //    (model header, Markdown body, trail, final output, usage line). This is
   //    the result-retrieval surface and is unchanged.
+  const details = view.details;
   const renderStatus = backgroundTaskRenderStatus(details.status);
   if (!renderStatus || !details.taskId || !details.agent) {
     const container = new Container();
@@ -476,7 +479,7 @@ export function renderMmrBackgroundTaskResult(
   // matches a blocking subagent (model in the header, Markdown task body,
   // trail, usage line), while keeping background-specific status semantics
   // (neutral cancelled, the `background` badge).
-  const subDetails = (isRecord(details.final) ? details.final : {}) as SubagentProgressDetails;
+  const subDetails = view.final;
   const model = stripProvider(subDetails.reportedModel ?? subDetails.model ?? details.resolvedModel);
   const contextWindow = subDetails.contextWindow ?? details.contextWindow;
   const expanded = options.expanded === true;
@@ -598,8 +601,7 @@ export function renderMmrSubagentResult(
   // background-task payload, so it renders through the background card path
   // (live registry resolvers come from the dispatch seam — the named tools'
   // render wiring has no registry access of its own).
-  const rawDetails = result.details as { worker?: string } | undefined;
-  if (rawDetails?.worker === "ampi-workers.async-task" || rawDetails?.worker === "mmr-subagents.async-task") {
+  if (isMmrBackgroundWorkerDetails(result.details)) {
     return renderMmrBackgroundTaskResult(toolName, result, options, theme, context, getMmrBackgroundCardExtras());
   }
   const details = result.details as SubagentProgressDetails | undefined;
