@@ -8,9 +8,9 @@ import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./help
 after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const subagentsExtensionPath = "./src/extensions/mmr-workers/index.ts";
-const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
+const subagentsExtensionPath = "./src/extensions/ampi-workers/index.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/ampi-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/ampi-github/index.ts";
 const GITHUB_TOOLS = [
   "read_github",
   "list_directory_github",
@@ -56,12 +56,12 @@ function makePi(options = {}) {
 }
 
 async function importRuntime() {
-  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(url);
 }
 
 async function importCacheIsolatedRuntime() {
-  return importSource("extensions/mmr-core/runtime.ts");
+  return importSource("extensions/ampi-core/runtime.ts");
 }
 
 async function readPackageJson() {
@@ -71,7 +71,7 @@ async function readPackageJson() {
 describe("mmr-subagents package wiring", () => {
   it("registers mmr-subagents as a Pi extension after mmr-core", async () => {
     const pkg = await readPackageJson();
-    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/mmr-core/index.ts");
+    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/ampi-core/index.ts");
     const indexOfSubagents = pkg.pi.extensions.indexOf(subagentsExtensionPath);
     assert.notEqual(indexOfCore, -1, "mmr-core must be registered as a Pi extension");
     assert.notEqual(indexOfSubagents, -1, "mmr-subagents must be registered as a Pi extension");
@@ -83,12 +83,12 @@ describe("mmr-subagents package wiring", () => {
 
   it("exposes a package subpath for direct extension loading", async () => {
     const pkg = await readPackageJson();
-    assert.equal(pkg.exports["./extensions/mmr-workers"], subagentsExtensionPath);
-    assert.equal(pkg.exports["./extensions/mmr-subagents"], undefined, "the pre-merge subpath is removed");
+    assert.equal(pkg.exports["./extensions/ampi-workers"], subagentsExtensionPath);
+    assert.equal(pkg.exports["./extensions/ampi-subagents"], undefined, "the pre-merge subpath is removed");
   });
 
   it("exports a default factory and a createMmrWorkersExtension test seam", async () => {
-    const mod = await importSource("extensions/mmr-workers/index.ts");
+    const mod = await importSource("extensions/ampi-workers/index.ts");
     assert.equal(typeof mod.default, "function");
     assert.equal(typeof mod.createMmrWorkersExtension, "function");
   });
@@ -209,7 +209,7 @@ describe("mmr-subagents package wiring", () => {
 
 describe("mmr-subagents extension factory", () => {
   it("registers the finder, oracle, Task, librarian, and reviewer Pi tools plus the read-result normalizer", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const { pi, tools, handlers } = makePi();
     createMmrWorkersExtension()(pi);
     const names = tools.map((tool) => tool.name).sort();
@@ -225,7 +225,7 @@ describe("mmr-subagents extension factory", () => {
   });
 
   it("numbers native read output only while the finder subagent profile is active", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importCacheIsolatedRuntime();
     const { pi, handlers } = makePi();
     createMmrWorkersExtension()(pi);
@@ -259,7 +259,7 @@ describe("mmr-subagents extension factory", () => {
   });
 
   it("flips finder, oracle, Task, and librarian to active when the mmr-github tools are registered", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi, tools } = makePi({ externalTools: await mmrGithubToolInfos() });
     createMmrWorkersExtension()(pi);
@@ -270,14 +270,14 @@ describe("mmr-subagents extension factory", () => {
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision, `${shipped} must produce a decision`);
       assert.equal(decision.status, "active", `${shipped} must resolve as active`);
-      assert.equal(decision.owner, "mmr-workers");
+      assert.equal(decision.owner, "ampi-workers");
       assert.equal(resolved.activeTools.includes(shipped), true);
       assert.equal(resolved.gatedTools.includes(shipped), false);
     }
   });
 
   it("keeps librarian gated and provider-attributed when the GitHub tool prerequisite is missing", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi, tools } = makePi();
     createMmrWorkersExtension()(pi);
@@ -288,20 +288,20 @@ describe("mmr-subagents extension factory", () => {
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision, `${shipped} must produce a decision`);
       assert.equal(decision.status, "active", `${shipped} must resolve as active`);
-      assert.equal(decision.owner, "mmr-workers");
+      assert.equal(decision.owner, "ampi-workers");
     }
 
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "gated", "librarian must be gated, not deferred");
-    assert.equal(decision.owner, "mmr-workers", "librarian must be owned by the merged mmr-workers extension");
-    assert.match(decision.diagnostic, /requires mmr-github read-only GitHub tools/);
+    assert.equal(decision.owner, "ampi-workers", "librarian must be owned by the merged ampi-workers extension");
+    assert.match(decision.diagnostic, /requires ampi-github read-only GitHub tools/);
     assert.equal(resolved.gatedTools.includes("librarian"), true);
     assert.equal(resolved.deferredTools.includes("librarian"), false);
   });
 
   it("keeps librarian gated when GitHub tool names are registered by another source", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi, tools } = makePi({ externalTools: await mmrGithubToolInfos(GITHUB_TOOLS, "/virtual/other-extension/index.ts") });
     createMmrWorkersExtension()(pi);
@@ -311,11 +311,11 @@ describe("mmr-subagents extension factory", () => {
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "gated");
-    assert.match(decision.diagnostic, /requires mmr-github read-only GitHub tools/);
+    assert.match(decision.diagnostic, /requires ampi-github read-only GitHub tools/);
   });
 
   it("keeps librarian capability independent from parent active-tool snapshots", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     // The GitHub tools are registered + owned but never part of the parent's
     // active set; the registered-only gate must still flip librarian active.
@@ -334,7 +334,7 @@ describe("mmr-subagents extension factory", () => {
   });
 
   it("does not shadow tool decisions for non-owned logical names", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
     createMmrWorkersExtension()(pi);
@@ -342,12 +342,12 @@ describe("mmr-subagents extension factory", () => {
     const resolved = runtime.resolveMmrTools("smart", ["read", "bash", "edit", "write", "grep", "find"]);
     const readDecision = resolved.decisions.find((d) => d.requested === "read");
     assert.ok(readDecision);
-    assert.notEqual(readDecision.owner, "mmr-workers", "read must not be claimed by mmr-workers");
+    assert.notEqual(readDecision.owner, "ampi-workers", "read must not be claimed by mmr-workers");
     assert.equal(readDecision.status, "active");
   });
 
   it("flips the mmr-subagents feature gate to enabled and lists the shipped capabilities", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
     createMmrWorkersExtension()(pi);
@@ -355,7 +355,7 @@ describe("mmr-subagents extension factory", () => {
     const [decision] = runtime.resolveMmrFeatureGates(["mmr-subagents"]);
     assert.equal(decision.gate, "mmr-subagents");
     assert.equal(decision.status, "enabled");
-    assert.equal(decision.source, "mmr-workers");
+    assert.equal(decision.source, "ampi-workers");
     assert.match(decision.reason, /finder/i);
     assert.match(decision.reason, /oracle/i);
     assert.match(decision.reason, /Task/);
@@ -363,20 +363,20 @@ describe("mmr-subagents extension factory", () => {
   });
 
   it("only claims the mmr-subagents feature gate (leaves siblings to other providers)", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
     createMmrWorkersExtension()(pi);
 
     const [history, toolboxMcp] = runtime.resolveMmrFeatureGates(["mmr-history", "mmr-toolbox-mcp"]);
-    assert.notEqual(history.source, "mmr-workers");
-    assert.notEqual(toolboxMcp.source, "mmr-workers");
+    assert.notEqual(history.source, "ampi-workers");
+    assert.notEqual(toolboxMcp.source, "ampi-workers");
   });
 });
 
 describe("mmr-subagents registration across cache-isolated extension entrypoints", () => {
   it("shares provider registrations with a separately imported mmr-core runtime", async () => {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const runtime = await importCacheIsolatedRuntime();
     const { pi } = makePi();
     createMmrWorkersExtension()(pi);
@@ -389,15 +389,15 @@ describe("mmr-subagents registration across cache-isolated extension entrypoints
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision);
       assert.equal(decision.status, "active");
-      assert.equal(decision.owner, "mmr-workers");
+      assert.equal(decision.owner, "ampi-workers");
     }
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision);
     assert.equal(decision.status, "gated");
-    assert.equal(decision.owner, "mmr-workers");
+    assert.equal(decision.owner, "ampi-workers");
 
     const [gate] = runtime.resolveMmrFeatureGates(["mmr-subagents"]);
     assert.equal(gate.status, "enabled");
-    assert.equal(gate.source, "mmr-workers");
+    assert.equal(gate.source, "ampi-workers");
   });
 });

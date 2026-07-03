@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core tool registry", () => {
   it("resolves requested tool names by identity against the live Pi inventory", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const resolved = registry.resolve(["read", "bash", "find"], ["read", "bash", "find"]);
@@ -21,12 +21,12 @@ describe("mmr-core tool registry", () => {
     assert.equal(readDecision.status, "active");
     assert.equal(readDecision.chosen, "read");
     assert.deepEqual(readDecision.chosenTools, ["read"]);
-    assert.equal(readDecision.owner, "mmr-core");
+    assert.equal(readDecision.owner, "ampi-core");
     assert.match(readDecision.diagnostic, /read/);
   });
 
   it("does not translate legacy aliases or capitalized Pi-style names", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     // Legacy aliases and capitalized variants are no longer recognized: they
@@ -43,12 +43,12 @@ describe("mmr-core tool registry", () => {
     );
     for (const decision of resolved.decisions) {
       assert.equal(decision.status, "missing");
-      assert.equal(decision.owner, "mmr-core");
+      assert.equal(decision.owner, "ampi-core");
     }
   });
 
   it("classifies known extension-owned tools as deferred when Pi has not registered them", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const resolved = registry.resolve(["oracle", "finder", "web_search", "chart"], ["read", "bash"]);
@@ -59,19 +59,19 @@ describe("mmr-core tool registry", () => {
 
     const oracleDecision = resolved.decisions.find((d) => d.requested === "oracle");
     assert.equal(oracleDecision.status, "deferred");
-    assert.equal(oracleDecision.owner, "mmr-subagents");
-    assert.match(oracleDecision.diagnostic, /mmr-subagents/);
+    assert.equal(oracleDecision.owner, "ampi-workers");
+    assert.match(oracleDecision.diagnostic, /ampi-workers/);
 
     const chartDecision = resolved.decisions.find((d) => d.requested === "chart");
     assert.equal(chartDecision.status, "deferred");
-    assert.equal(chartDecision.owner, "mmr-tasks");
+    assert.equal(chartDecision.owner, "ampi-tasks");
 
     const webDecision = resolved.decisions.find((d) => d.requested === "web_search");
-    assert.equal(webDecision.owner, "mmr-web");
+    assert.equal(webDecision.owner, "ampi-web");
   });
 
   it("reports a tool with no provider claim, no catalog entry, and no identity match as missing", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const resolved = registry.resolve(["definitely_not_a_tool"], ["read", "bash"]);
@@ -86,13 +86,13 @@ describe("mmr-core tool registry", () => {
   });
 
   it("treats apply_patch as identity-only with no fallback to edit+write", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const concrete = registry.resolve(["apply_patch"], ["apply_patch", "edit", "write"]);
     assert.deepEqual(concrete.activeTools, ["apply_patch"]);
     assert.equal(concrete.decisions[0].status, "active");
-    assert.equal(concrete.decisions[0].owner, "mmr-patch");
+    assert.equal(concrete.decisions[0].owner, "ampi-patch");
 
     // Without a concrete apply_patch tool, the decision is deferred (no
     // fallback to edit+write). Callers that want narrow edit/write tools
@@ -101,15 +101,15 @@ describe("mmr-core tool registry", () => {
     assert.deepEqual(fallback.activeTools, []);
     assert.deepEqual(fallback.deferredTools, ["apply_patch"]);
     assert.equal(fallback.decisions[0].status, "deferred");
-    assert.equal(fallback.decisions[0].owner, "mmr-patch");
+    assert.equal(fallback.decisions[0].owner, "ampi-patch");
   });
 
   it("credits the catalog owner when Pi registers an extension-owned tool without a provider claim", async () => {
     // This covers Pi loaders that give each extension an isolated module
-    // cache, where mmr-web's `registerMmrToolProvider(...)` call cannot
+    // cache, where ampi-web's `registerMmrToolProvider(...)` call cannot
     // reach mmr-core's registry instance. The exact-name catalog still
-    // credits mmr-web as the owner once the concrete Pi tool is exposed.
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    // credits ampi-web as the owner once the concrete Pi tool is exposed.
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const both = registry.resolve(
@@ -121,10 +121,10 @@ describe("mmr-core tool registry", () => {
     const search = both.decisions.find((d) => d.requested === "web_search");
     const reader = both.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "active");
-    assert.equal(search.owner, "mmr-web");
+    assert.equal(search.owner, "ampi-web");
     assert.deepEqual(search.chosenTools, ["web_search"]);
     assert.equal(reader.status, "active");
-    assert.equal(reader.owner, "mmr-web");
+    assert.equal(reader.owner, "ampi-web");
     assert.deepEqual(reader.chosenTools, ["read_web_page"]);
 
     // Mixed availability: only the reader tool is registered.
@@ -134,13 +134,13 @@ describe("mmr-core tool registry", () => {
     );
     const searchOnly = readerOnly.decisions.find((d) => d.requested === "web_search");
     assert.equal(searchOnly.status, "deferred");
-    assert.equal(searchOnly.owner, "mmr-web");
+    assert.equal(searchOnly.owner, "ampi-web");
     assert.equal(
       readerOnly.decisions.find((d) => d.requested === "read_web_page").status,
       "active",
     );
 
-    // No mmr-web tools registered at all (extension disabled).
+    // No ampi-web tools registered at all (extension disabled).
     const none = registry.resolve(
       ["web_search", "read_web_page"],
       ["read", "bash", "edit", "write"],
@@ -148,12 +148,12 @@ describe("mmr-core tool registry", () => {
     assert.deepEqual([...none.deferredTools].sort(), ["read_web_page", "web_search"]);
     for (const decision of none.decisions) {
       assert.equal(decision.status, "deferred");
-      assert.equal(decision.owner, "mmr-web");
+      assert.equal(decision.owner, "ampi-web");
     }
   });
 
   it("dedupes activeTools when the same canonical name is requested twice", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     const resolved = registry.resolve(["edit", "edit"], ["edit"]);
@@ -167,14 +167,14 @@ describe("mmr-core tool registry", () => {
   });
 
   it("registerProvider lets later modules claim a tool as active, gated, or disabled", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     registry.registerProvider({
-      name: "mmr-subagents",
+      name: "ampi-subagents",
       resolve: (toolName) => {
         if (toolName === "oracle") return { kind: "active" };
-        if (toolName === "Task") return { kind: "gated", gate: "mmr-subagents", reason: "feature gate disabled" };
+        if (toolName === "Task") return { kind: "gated", gate: "ampi-subagents", reason: "feature gate disabled" };
         if (toolName === "finder") return { kind: "disabled", reason: "finder is administratively disabled" };
         return undefined;
       },
@@ -189,21 +189,21 @@ describe("mmr-core tool registry", () => {
 
     const oracle = resolved.decisions.find((d) => d.requested === "oracle");
     assert.equal(oracle.status, "active");
-    assert.equal(oracle.owner, "mmr-subagents");
+    assert.equal(oracle.owner, "ampi-subagents");
 
     const task = resolved.decisions.find((d) => d.requested === "Task");
     assert.equal(task.status, "gated");
-    assert.equal(task.owner, "mmr-subagents");
+    assert.equal(task.owner, "ampi-subagents");
     assert.match(task.diagnostic, /gate/i);
 
     const finder = resolved.decisions.find((d) => d.requested === "finder");
     assert.equal(finder.status, "disabled");
-    assert.equal(finder.owner, "mmr-subagents");
+    assert.equal(finder.owner, "ampi-subagents");
     assert.match(finder.diagnostic, /disabled/i);
   });
 
   it("latest-registered provider wins when two providers claim the same exact name", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     registry.registerProvider({
@@ -222,7 +222,7 @@ describe("mmr-core tool registry", () => {
   });
 
   it("falls through to an older provider when the newer one returns undefined for an unowned name", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     registry.registerProvider({
@@ -242,30 +242,30 @@ describe("mmr-core tool registry", () => {
     assert.equal(decision.owner, "older-provider");
   });
 
-  it("keeps chart catalog-deferred when mmr-tasks is loaded but that tool has not shipped", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+  it("keeps chart catalog-deferred when ampi-tasks is loaded but that tool has not shipped", async () => {
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
-    // Simulate the mmr-tasks provider: it only claims its shipped name
+    // Simulate the ampi-tasks provider: it only claims its shipped name
     // (task_list) and returns undefined for the rest (e.g. chart).
     registry.registerProvider({
-      name: "mmr-tasks",
+      name: "ampi-tasks",
       resolve: (toolName) => (toolName === "task_list" ? { kind: "active" } : undefined),
     });
 
     const resolved = registry.resolve(["chart"], ["apply_patch", "task_list"]);
     for (const decision of resolved.decisions) {
       assert.equal(decision.status, "deferred", `${decision.requested} must stay catalog-deferred`);
-      assert.equal(decision.owner, "mmr-tasks", `${decision.requested} catalog owner must remain mmr-tasks`);
+      assert.equal(decision.owner, "ampi-tasks", `${decision.requested} catalog owner must remain ampi-tasks`);
     }
   });
 
   it("reports a missing decision when a provider claims active but Pi has not registered the tool", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
     registry.registerProvider({
-      name: "mmr-web",
+      name: "ampi-web",
       resolve: (toolName) => (toolName === "web_search" ? { kind: "active" } : undefined),
     });
 
@@ -274,12 +274,12 @@ describe("mmr-core tool registry", () => {
     assert.deepEqual(resolved.missingTools, ["web_search"]);
     const decision = resolved.decisions[0];
     assert.equal(decision.status, "missing");
-    assert.equal(decision.owner, "mmr-web");
-    assert.match(decision.diagnostic, /claimed by mmr-web/);
+    assert.equal(decision.owner, "ampi-web");
+    assert.match(decision.diagnostic, /claimed by ampi-web/);
   });
 
   it("isToolAllowed returns true only for concrete tools listed in activeTools", async () => {
-    const { createMmrToolRegistry } = await importSource("extensions/mmr-core/tool-registry.ts");
+    const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
     const resolved = registry.resolve(["read", "oracle"], ["read"]);
 
@@ -290,7 +290,7 @@ describe("mmr-core tool registry", () => {
 
 describe("mmr-core tool registry - per-mode matrices", () => {
   it("resolves smart and fable modes to read/bash/edit/write against Pi-native tools", async () => {
-    const { resolveMmrTools } = await importSource("extensions/mmr-core/runtime.ts");
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
     for (const mode of ["smart", "fable"]) {
@@ -311,7 +311,7 @@ describe("mmr-core tool registry - per-mode matrices", () => {
   });
 
   it("resolves rush to keep direct grep/find alongside read/bash/edit/write", async () => {
-    const { resolveMmrTools } = await importSource("extensions/mmr-core/runtime.ts");
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
     const resolved = resolveMmrTools("rush", available);
@@ -325,7 +325,7 @@ describe("mmr-core tool registry - per-mode matrices", () => {
   });
 
   it("resolves deep using bash, apply_patch, and write (each requested directly)", async () => {
-    const { resolveMmrTools } = await importSource("extensions/mmr-core/runtime.ts");
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
 
     const withConcretePatch = resolveMmrTools("deep", ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"]);
     assert.deepEqual([...withConcretePatch.activeTools].sort(), ["apply_patch", "bash", "write"]);
@@ -346,8 +346,8 @@ describe("mmr-core tool registry - per-mode matrices", () => {
 
 describe("mmr-core tool registry - state and diagnostics surface", () => {
   it("propagates gatedTools and disabledTools onto MmrModeState and the persisted snapshot", async () => {
-    const { createMmrModeState, toPersistedModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrModeState, toPersistedModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("smart"),
@@ -370,9 +370,9 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
         gatedTools: ["Task"],
         disabledTools: ["finder"],
         decisions: [
-          { requested: "read", chosen: "read", chosenTools: ["read"], candidates: ["read"], status: "active", owner: "mmr-core", diagnostic: "read \u2192 read" },
-          { requested: "Task", chosenTools: [], candidates: [], status: "gated", owner: "mmr-subagents", diagnostic: "Task: gated behind mmr-subagents (feature gate disabled)" },
-          { requested: "finder", chosenTools: [], candidates: [], status: "disabled", owner: "mmr-subagents", diagnostic: "finder: disabled (administratively disabled)" },
+          { requested: "read", chosen: "read", chosenTools: ["read"], candidates: ["read"], status: "active", owner: "ampi-core", diagnostic: "read \u2192 read" },
+          { requested: "Task", chosenTools: [], candidates: [], status: "gated", owner: "ampi-subagents", diagnostic: "Task: gated behind ampi-subagents (feature gate disabled)" },
+          { requested: "finder", chosenTools: [], candidates: [], status: "disabled", owner: "ampi-subagents", diagnostic: "finder: disabled (administratively disabled)" },
         ],
       },
       appliedAt: "2026-05-08T00:00:00.000Z",
@@ -387,9 +387,9 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
   });
 
   it("/mmr-status surfaces gated/disabled sections and the per-decision diagnostic text", async () => {
-    const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("smart"),
@@ -412,9 +412,9 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
         gatedTools: ["Task"],
         disabledTools: ["finder"],
         decisions: [
-          { requested: "read", chosen: "read", chosenTools: ["read"], candidates: ["read"], status: "active", owner: "mmr-core", diagnostic: "read \u2192 read" },
-          { requested: "Task", chosenTools: [], candidates: [], status: "gated", owner: "mmr-subagents", diagnostic: "Task: gated behind mmr-subagents (feature gate disabled)" },
-          { requested: "finder", chosenTools: [], candidates: [], status: "disabled", owner: "mmr-subagents", diagnostic: "finder: disabled (administratively disabled)" },
+          { requested: "read", chosen: "read", chosenTools: ["read"], candidates: ["read"], status: "active", owner: "ampi-core", diagnostic: "read \u2192 read" },
+          { requested: "Task", chosenTools: [], candidates: [], status: "gated", owner: "ampi-subagents", diagnostic: "Task: gated behind ampi-subagents (feature gate disabled)" },
+          { requested: "finder", chosenTools: [], candidates: [], status: "disabled", owner: "ampi-subagents", diagnostic: "finder: disabled (administratively disabled)" },
         ],
       },
       appliedAt: "2026-05-08T00:00:00.000Z",
@@ -424,7 +424,7 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
 
     assert.match(output, /Gated tools: Task/);
     assert.match(output, /Disabled tools: finder/);
-    assert.match(output, /Task: gated behind mmr-subagents \(feature gate disabled\)/);
+    assert.match(output, /Task: gated behind ampi-subagents \(feature gate disabled\)/);
     assert.match(output, /finder: disabled \(administratively disabled\)/);
   });
 });
@@ -434,7 +434,7 @@ describe("mmr-core tool registry - root API", () => {
     const root = await importSource("index.ts");
     assert.equal(typeof root.registerMmrToolProvider, "function");
 
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     assert.equal(typeof runtime.registerMmrToolProvider, "function");
   });
 
@@ -442,12 +442,12 @@ describe("mmr-core tool registry - root API", () => {
     const root = await importSource("index.ts");
     assert.equal(root.registerMmrToolAlias, undefined);
 
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     assert.equal(runtime.registerMmrToolAlias, undefined);
   });
 
   it("createMmrCoreRuntime exposes registerToolProvider that overrides defaults for that runtime instance", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
     runtime.registerToolProvider({

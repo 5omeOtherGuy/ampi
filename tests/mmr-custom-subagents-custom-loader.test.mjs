@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const LOADER_MODULE = "extensions/mmr-custom-subagents/custom-loader.ts";
+const LOADER_MODULE = "extensions/ampi-custom-subagents/custom-loader.ts";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(tmpdir(), "ampi-custom-subagents-"));
@@ -47,7 +47,7 @@ describe("mmr-subagents custom sa__ loader framework", () => {
 
   it("reuses the shared subagent tool-policy constants for denied and read-only tool sets", async () => {
     const loader = await importSource(LOADER_MODULE);
-    const policy = await importSource("extensions/mmr-core/subagent-tool-policy.ts");
+    const policy = await importSource("extensions/ampi-core/subagent-tool-policy.ts");
     assert.deepEqual(
       [...loader.MMR_CUSTOM_SUBAGENT_DENIED_TOOLS].sort(),
       [...policy.MMR_SUBAGENT_SHARED_DENY_TOOLS].sort(),

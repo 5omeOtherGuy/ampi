@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const githubExtensionPath = "./src/extensions/mmr-github/index.ts";
+const githubExtensionPath = "./src/extensions/ampi-github/index.ts";
 
 async function readPackageJson() {
   return JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -16,9 +16,9 @@ async function readPackageJson() {
 describe("mmr-github package wiring", () => {
   it("registers mmr-github after mmr-core and before mmr-subagents", async () => {
     const pkg = await readPackageJson();
-    const core = pkg.pi.extensions.indexOf("./src/extensions/mmr-core/index.ts");
+    const core = pkg.pi.extensions.indexOf("./src/extensions/ampi-core/index.ts");
     const github = pkg.pi.extensions.indexOf(githubExtensionPath);
-    const subagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-workers/index.ts");
+    const subagents = pkg.pi.extensions.indexOf("./src/extensions/ampi-workers/index.ts");
     assert.ok(core !== -1 && github !== -1 && subagents !== -1);
     assert.ok(github > core, "mmr-github must load after mmr-core");
     assert.ok(github < subagents, "mmr-github must load before mmr-subagents so librarian gating sees the GitHub tools");
@@ -26,11 +26,11 @@ describe("mmr-github package wiring", () => {
 
   it("exposes a package subpath for direct extension loading", async () => {
     const pkg = await readPackageJson();
-    assert.equal(pkg.exports["./extensions/mmr-github"], githubExtensionPath);
+    assert.equal(pkg.exports["./extensions/ampi-github"], githubExtensionPath);
   });
 
   it("exports a default factory and a createMmrGithubExtension test seam", async () => {
-    const mod = await importSource("extensions/mmr-github/index.ts");
+    const mod = await importSource("extensions/ampi-github/index.ts");
     assert.equal(typeof mod.default, "function");
     assert.equal(typeof mod.createMmrGithubExtension, "function");
   });
@@ -58,7 +58,7 @@ describe("mmr-github package wiring", () => {
   });
 
   it("registers all GitHub tools when enabled and drains warnings on session_start", async () => {
-    const { createMmrGithubExtension } = await importSource("extensions/mmr-github/index.ts");
+    const { createMmrGithubExtension } = await importSource("extensions/ampi-github/index.ts");
     const registered = [];
     const handlers = new Map();
     const pi = {
@@ -81,7 +81,7 @@ describe("mmr-github package wiring", () => {
   });
 
   it("registers no tools when disabled", async () => {
-    const { createMmrGithubExtension } = await importSource("extensions/mmr-github/index.ts");
+    const { createMmrGithubExtension } = await importSource("extensions/ampi-github/index.ts");
     const registered = [];
     const pi = { registerTool: (t) => registered.push(t.name), on: () => {} };
     createMmrGithubExtension({

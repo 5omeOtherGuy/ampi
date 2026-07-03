@@ -60,7 +60,7 @@ async function loadToolboxLinked() {
   const { pi, handlers } = createMockPi();
   const session = makeLinkedSession();
   pi.appendEntry = (customType, data) => session.append(customType, data);
-  const toolbox = await importSource("extensions/mmr-tasks/index.ts");
+  const toolbox = await importSource("extensions/ampi-tasks/index.ts");
   toolbox.default(pi);
   return { pi, handlers, session, toolbox };
 }
@@ -96,7 +96,7 @@ describe("mmr-tasks task_list — session scope isolation", () => {
 
     // Session B's todo-state must be empty — A's write must not be visible.
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latestB = findLatestPersistedTodoState(b.session.getEntries());
     assert.equal(latestB, undefined, "session B must not see session A's todo-state");
@@ -198,7 +198,7 @@ describe("mmr-tasks task_list — no workspace task-store side effects on sessio
     const { getPreparedSourceRoot } = await import("./helpers/load-src.mjs");
     const fs = await import("node:fs/promises");
     const root = getPreparedSourceRoot();
-    const legacyPath = `${root}/extensions/mmr-tasks/task-list-tool.ts`;
+    const legacyPath = `${root}/extensions/ampi-tasks/task-list-tool.ts`;
     let legacyExists = false;
     try { await fs.access(legacyPath); legacyExists = true; } catch { /* expected */ }
     assert.equal(
@@ -207,7 +207,7 @@ describe("mmr-tasks task_list — no workspace task-store side effects on sessio
       `legacy ${legacyPath} (source of watchTaskListWidget) must be deleted in Phase 5`,
     );
     // The replacement module must not re-export the helper either.
-    const newToolMod = await importSource("extensions/mmr-tasks/todo-list-tool.ts");
+    const newToolMod = await importSource("extensions/ampi-tasks/todo-list-tool.ts");
     assert.equal(
       typeof newToolMod.watchTaskListWidget,
       "undefined",

@@ -10,7 +10,7 @@ import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs"
 after(cleanupLoadedSource);
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -29,7 +29,7 @@ function emptyResolution(overrides = {}) {
 
 describe("mmr-core locked-mode extra tools - helpers", () => {
   it("selectExtraToolNames combines all + per-mode, dedupes, and excludes base tools", async () => {
-    const { selectExtraToolNames } = await importSource("extensions/mmr-core/extra-tools.ts");
+    const { selectExtraToolNames } = await importSource("extensions/ampi-core/extra-tools.ts");
     const extras = {
       all: ["alpha", "beta", "read", " beta "],
       deep: ["gamma", "alpha"],
@@ -42,28 +42,28 @@ describe("mmr-core locked-mode extra tools - helpers", () => {
   });
 
   it("selectExtraToolNames returns empty for undefined extras or no matches", async () => {
-    const { selectExtraToolNames } = await importSource("extensions/mmr-core/extra-tools.ts");
+    const { selectExtraToolNames } = await importSource("extensions/ampi-core/extra-tools.ts");
     assert.deepEqual(selectExtraToolNames("smart", undefined, ["read"]), []);
     assert.deepEqual(selectExtraToolNames("smart", { deep: ["x"] }, ["read"]), []);
   });
 
   it("relabelExtraOwners rewrites only mmr-core owners to user-allowlist", async () => {
-    const { relabelExtraOwners, USER_ALLOWLIST_OWNER } = await importSource("extensions/mmr-core/extra-tools.ts");
+    const { relabelExtraOwners, USER_ALLOWLIST_OWNER } = await importSource("extensions/ampi-core/extra-tools.ts");
     const resolution = emptyResolution({
       activeTools: ["my_tool"],
       decisions: [
-        { requested: "my_tool", chosenTools: ["my_tool"], candidates: ["my_tool"], status: "active", owner: "mmr-core", diagnostic: "" },
-        { requested: "web_search", chosenTools: [], candidates: [], status: "deferred", owner: "mmr-web", diagnostic: "" },
+        { requested: "my_tool", chosenTools: ["my_tool"], candidates: ["my_tool"], status: "active", owner: "ampi-core", diagnostic: "" },
+        { requested: "web_search", chosenTools: [], candidates: [], status: "deferred", owner: "ampi-web", diagnostic: "" },
       ],
     });
 
     const relabeled = relabelExtraOwners(resolution);
     assert.equal(relabeled.decisions[0].owner, USER_ALLOWLIST_OWNER);
-    assert.equal(relabeled.decisions[1].owner, "mmr-web");
+    assert.equal(relabeled.decisions[1].owner, "ampi-web");
   });
 
   it("mergeToolResolutions concatenates buckets/decisions and dedupes names", async () => {
-    const { mergeToolResolutions } = await importSource("extensions/mmr-core/extra-tools.ts");
+    const { mergeToolResolutions } = await importSource("extensions/ampi-core/extra-tools.ts");
     const base = emptyResolution({
       requestedTools: ["read", "bash"],
       activeTools: ["read", "bash"],
@@ -90,7 +90,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
   }
 
   it("adds configured extra tools to the active set when their Pi tool exists", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -130,7 +130,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
   });
 
   it("never activates a reserved sa__ custom-subagent name via lockedModeExtraTools", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -167,7 +167,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
   });
 
   it("treats a missing extra tool as a non-fatal no-op (surfaced as missing, not active)", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -205,7 +205,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
   });
 
   it("extra tools never satisfy the fail-closed zero-base-tools abort", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const previousState = { mode: "smart", displayName: "Smart", activeTools: ["read"], missingTools: [], deferredTools: [] };
     runtime.setMmrModeState(previousState);

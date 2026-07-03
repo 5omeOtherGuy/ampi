@@ -14,37 +14,37 @@ Quick links for navigating the repository.
 
 ## Extension docs
 
-- [`src/extensions/mmr-core/README.md`](src/extensions/mmr-core/README.md) — locked modes, routing, prompt assembly, diagnostics, and public API.
-- [`src/extensions/mmr-session-fallback/README.md`](src/extensions/mmr-session-fallback/README.md) — quota/rate-limit fallback trigger, picker flow, persisted override, and lifecycle.
-- [`src/extensions/mmr-web/README.md`](src/extensions/mmr-web/README.md) — `web_search`, `read_web_page`, backend configuration, and safety policy.
-- [`src/extensions/mmr-github/README.md`](src/extensions/mmr-github/README.md) — opt-in read-only GitHub repository tools and librarian gating.
-- [`src/extensions/mmr-workers/README.md`](src/extensions/mmr-workers/README.md) — `finder`, `oracle`, `Task`, `librarian`, the background task surface, worker behavior, and public API.
-- [`src/extensions/mmr-history/README.md`](src/extensions/mmr-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
+- [`src/extensions/ampi-core/README.md`](src/extensions/ampi-core/README.md) — locked modes, routing, prompt assembly, diagnostics, and public API.
+- [`src/extensions/ampi-session-fallback/README.md`](src/extensions/ampi-session-fallback/README.md) — quota/rate-limit fallback trigger, picker flow, persisted override, and lifecycle.
+- [`src/extensions/ampi-web/README.md`](src/extensions/ampi-web/README.md) — `web_search`, `read_web_page`, backend configuration, and safety policy.
+- [`src/extensions/ampi-github/README.md`](src/extensions/ampi-github/README.md) — opt-in read-only GitHub repository tools and librarian gating.
+- [`src/extensions/ampi-workers/README.md`](src/extensions/ampi-workers/README.md) — `finder`, `oracle`, `Task`, `librarian`, the background task surface, worker behavior, and public API.
+- [`src/extensions/ampi-history/README.md`](src/extensions/ampi-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
 
-The following extensions were split out of `mmr-toolbox` / `mmr-subagents`; their dedicated READMEs are pending, so use the source entry point for now:
+The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
 
-- [`src/extensions/mmr-patch/index.ts`](src/extensions/mmr-patch/index.ts) — owns `apply_patch` (context-matched multi-file workspace edits). README pending.
-- [`src/extensions/mmr-tasks/index.ts`](src/extensions/mmr-tasks/index.ts) — owns the session-local `task_list` and pinned widget. README pending.
-- [`src/extensions/mmr-custom-subagents/index.ts`](src/extensions/mmr-custom-subagents/index.ts) — discovers and registers custom Markdown subagents. README pending.
+- [`src/extensions/ampi-patch/index.ts`](src/extensions/ampi-patch/index.ts) — owns `apply_patch` (context-matched multi-file workspace edits). README pending.
+- [`src/extensions/ampi-tasks/index.ts`](src/extensions/ampi-tasks/index.ts) — owns the session-local `task_list` and pinned widget. README pending.
+- [`src/extensions/ampi-custom-subagents/index.ts`](src/extensions/ampi-custom-subagents/index.ts) — discovers and registers custom Markdown subagents. README pending.
 
 Deprecated / unregistered:
 
-- [`src/extensions/mmr-toolbox/README.md`](src/extensions/mmr-toolbox/README.md) — **deprecated** compatibility shim that re-exports `mmr-patch` and `mmr-tasks`; not registered in `pi.extensions`.
-- [`src/extensions/mmr-debug/README.md`](src/extensions/mmr-debug/README.md) — developer-only prompt/tool/response capture extension; loaded with Pi's `-e` flag and excluded from the published package.
+- [`src/extensions/ampi-toolbox/README.md`](src/extensions/ampi-toolbox/README.md) — **deprecated** compatibility shim that re-exports `ampi-patch` and `ampi-tasks`; not registered in `pi.extensions`.
+- [`src/extensions/ampi-debug/README.md`](src/extensions/ampi-debug/README.md) — developer-only prompt/tool/response capture extension; loaded with Pi's `-e` flag and excluded from the published package.
 
 ## Per-extension roadmaps
 
-- [`src/extensions/mmr-core/ROADMAP.md`](src/extensions/mmr-core/ROADMAP.md)
-- [`src/extensions/mmr-session-fallback/ROADMAP.md`](src/extensions/mmr-session-fallback/ROADMAP.md)
-- [`src/extensions/mmr-web/ROADMAP.md`](src/extensions/mmr-web/ROADMAP.md)
-- [`src/extensions/mmr-workers/ROADMAP.md`](src/extensions/mmr-workers/ROADMAP.md)
-- [`src/extensions/mmr-history/ROADMAP.md`](src/extensions/mmr-history/ROADMAP.md)
-- [`src/extensions/mmr-toolbox/ROADMAP.md`](src/extensions/mmr-toolbox/ROADMAP.md) — deprecated shim.
+- [`src/extensions/ampi-core/ROADMAP.md`](src/extensions/ampi-core/ROADMAP.md)
+- [`src/extensions/ampi-session-fallback/ROADMAP.md`](src/extensions/ampi-session-fallback/ROADMAP.md)
+- [`src/extensions/ampi-web/ROADMAP.md`](src/extensions/ampi-web/ROADMAP.md)
+- [`src/extensions/ampi-workers/ROADMAP.md`](src/extensions/ampi-workers/ROADMAP.md)
+- [`src/extensions/ampi-history/ROADMAP.md`](src/extensions/ampi-history/ROADMAP.md)
+- [`src/extensions/ampi-toolbox/ROADMAP.md`](src/extensions/ampi-toolbox/ROADMAP.md) — deprecated shim.
 
 ## Architecture and contracts
 
 - [`docs/reference-architecture.md`](docs/reference-architecture.md) — implementation-facing module boundaries and dependency direction.
-- [`docs/mmr-core-api.md`](docs/mmr-core-api.md) — stable public API exported by `mmr-core` / package root.
+- [`docs/ampi-core-api.md`](docs/ampi-core-api.md) — stable public API exported by `ampi-core` / package root.
 - [`docs/public-api.md`](docs/public-api.md) — stable package-root API exported by non-core extensions.
 - [`docs/public-api-surface.md`](docs/public-api-surface.md) — generated package-root export surface reference.
 - [`docs/extension-compatibility.md`](docs/extension-compatibility.md) — how `ampi` composes with other Pi extensions.
@@ -59,17 +59,17 @@ Deprecated / unregistered:
 - [`package.json`](package.json) — package metadata, Pi extension registration, exports, and scripts.
 - [`src/index.ts`](src/index.ts) — package-level public exports.
 - [`src/extensions/manifest.ts`](src/extensions/manifest.ts) — single source of truth for the registered extension list.
-- [`src/extensions/mmr-core/index.ts`](src/extensions/mmr-core/index.ts) — `mmr-core` Pi extension entry point.
-- [`src/extensions/mmr-session-fallback/index.ts`](src/extensions/mmr-session-fallback/index.ts) — `mmr-session-fallback` Pi extension entry point.
-- [`src/extensions/mmr-patch/index.ts`](src/extensions/mmr-patch/index.ts) — `mmr-patch` Pi extension entry point.
-- [`src/extensions/mmr-tasks/index.ts`](src/extensions/mmr-tasks/index.ts) — `mmr-tasks` Pi extension entry point.
-- [`src/extensions/mmr-web/index.ts`](src/extensions/mmr-web/index.ts) — `mmr-web` Pi extension entry point.
-- [`src/extensions/mmr-github/index.ts`](src/extensions/mmr-github/index.ts) — `mmr-github` Pi extension entry point.
-- [`src/extensions/mmr-workers/index.ts`](src/extensions/mmr-workers/index.ts) — `mmr-workers` Pi extension entry point (blocking workers + background task surface).
-- [`src/extensions/mmr-custom-subagents/index.ts`](src/extensions/mmr-custom-subagents/index.ts) — `mmr-custom-subagents` Pi extension entry point.
-- [`src/extensions/mmr-history/index.ts`](src/extensions/mmr-history/index.ts) — `mmr-history` Pi extension entry point.
-- [`src/extensions/mmr-toolbox/index.ts`](src/extensions/mmr-toolbox/index.ts) — deprecated re-export shim (unregistered).
-- [`src/extensions/mmr-debug/index.ts`](src/extensions/mmr-debug/index.ts) — developer-only capture extension (unregistered).
+- [`src/extensions/ampi-core/index.ts`](src/extensions/ampi-core/index.ts) — `ampi-core` Pi extension entry point.
+- [`src/extensions/ampi-session-fallback/index.ts`](src/extensions/ampi-session-fallback/index.ts) — `ampi-session-fallback` Pi extension entry point.
+- [`src/extensions/ampi-patch/index.ts`](src/extensions/ampi-patch/index.ts) — `ampi-patch` Pi extension entry point.
+- [`src/extensions/ampi-tasks/index.ts`](src/extensions/ampi-tasks/index.ts) — `ampi-tasks` Pi extension entry point.
+- [`src/extensions/ampi-web/index.ts`](src/extensions/ampi-web/index.ts) — `ampi-web` Pi extension entry point.
+- [`src/extensions/ampi-github/index.ts`](src/extensions/ampi-github/index.ts) — `ampi-github` Pi extension entry point.
+- [`src/extensions/ampi-workers/index.ts`](src/extensions/ampi-workers/index.ts) — `ampi-workers` Pi extension entry point (blocking workers + background task surface).
+- [`src/extensions/ampi-custom-subagents/index.ts`](src/extensions/ampi-custom-subagents/index.ts) — `ampi-custom-subagents` Pi extension entry point.
+- [`src/extensions/ampi-history/index.ts`](src/extensions/ampi-history/index.ts) — `ampi-history` Pi extension entry point.
+- [`src/extensions/ampi-toolbox/index.ts`](src/extensions/ampi-toolbox/index.ts) — deprecated re-export shim (unregistered).
+- [`src/extensions/ampi-debug/index.ts`](src/extensions/ampi-debug/index.ts) — developer-only capture extension (unregistered).
 
 ## Tests and contributor guidance
 

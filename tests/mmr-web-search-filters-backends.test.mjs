@@ -37,7 +37,7 @@ function ddgRow(url, title) {
 
 describe("brave backend — filters", () => {
   it("maps recency to a native freshness param and reports recency native/full", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/search/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/search/brave.ts");
     const { fetchImpl, calls } = captureFetch(() =>
       new Response(braveBody(["https://a.com/1"]), { status: 200, headers: { "content-type": "application/json" } }),
     );
@@ -51,7 +51,7 @@ describe("brave backend — filters", () => {
   });
 
   it("post-filters domains on result hostnames and reports include_domains post_filter/full", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/search/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/search/brave.ts");
     const { fetchImpl } = captureFetch(() =>
       new Response(braveBody(["https://docs.example.com/1", "https://other.com/2"]), {
         status: 200,
@@ -68,7 +68,7 @@ describe("brave backend — filters", () => {
   });
 
   it("reports no appliedFilters when none requested", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/search/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/search/brave.ts");
     const { fetchImpl, calls } = captureFetch(() =>
       new Response(braveBody(["https://a.com/1"]), { status: 200, headers: { "content-type": "application/json" } }),
     );
@@ -80,7 +80,7 @@ describe("brave backend — filters", () => {
 
 describe("searxng backend — filters", () => {
   it("maps recency to a native time_range param and reports recency native/full", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl, calls } = captureFetch(() =>
       new Response(searxngBody(["https://a.com/1"]), { status: 200, headers: { "content-type": "application/json" } }),
     );
@@ -94,7 +94,7 @@ describe("searxng backend — filters", () => {
   });
 
   it("does not send a country param (SearXNG ignores it) and reports it unsupported/none", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl, calls } = captureFetch(() =>
       new Response(searxngBody(["https://a.com/1"]), { status: 200, headers: { "content-type": "application/json" } }),
     );
@@ -115,7 +115,7 @@ describe("searxng backend — filters", () => {
   });
 
   it("post-filters domains and reports exclude_domains post_filter/full", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = captureFetch(() =>
       new Response(searxngBody(["https://keep.com/1", "https://drop.example.com/2"]), {
         status: 200,
@@ -135,7 +135,7 @@ describe("searxng backend — filters", () => {
 describe("duckduckgo backend — filters", () => {
   it("post-filters domains but reports recency as unsupported/none with a reason", async () => {
     const { duckduckgoSearch, __resetDuckDuckGoStateForTests } = await importSource(
-      "extensions/mmr-web/search/duckduckgo.ts",
+      "extensions/ampi-web/search/duckduckgo.ts",
     );
     __resetDuckDuckGoStateForTests();
     const html = `<html><body>${ddgRow("https://keep.com/1", "Keep")}${ddgRow("https://drop.example.com/2", "Drop")}</body></html>`;

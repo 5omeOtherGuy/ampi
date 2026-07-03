@@ -51,7 +51,7 @@ function createPi() {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -62,19 +62,19 @@ beforeEach(async () => {
 
 describe("mmr-core mode shortcuts", () => {
   it("registers picker and cycle shortcuts", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, shortcuts } = createPi();
 
     extension(pi);
 
-    assert.equal(shortcuts.get("ctrl+shift+s")?.description, "Select MMR mode");
-    assert.equal(shortcuts.get("alt+m")?.description, "Select MMR mode");
-    assert.equal(shortcuts.get("ctrl+space")?.description, "Cycle MMR mode");
-    assert.match(shortcuts.get("alt+r")?.description ?? "", /Toggle MMR thinking level/);
+    assert.equal(shortcuts.get("ctrl+shift+s")?.description, "Select ampi mode");
+    assert.equal(shortcuts.get("alt+m")?.description, "Select ampi mode");
+    assert.equal(shortcuts.get("ctrl+space")?.description, "Cycle ampi mode");
+    assert.match(shortcuts.get("alt+r")?.description ?? "", /Toggle ampi thinking level/);
   });
 
   it("toggles the thinking level in place via alt+r without releasing the mode", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
     const { ctx, notifications } = createContext();
@@ -102,7 +102,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("cycles fable's thinking level through all three presets via alt+r", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("fable"));
     const { ctx, notifications } = createContext();
@@ -129,7 +129,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("alt+r is a no-op notice in non-toggleable modes", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("rush"));
     const { ctx, notifications } = createContext();
@@ -144,7 +144,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("opens a picker that excludes fable (fable is /mode-only)", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
     const { ctx, selectCalls } = createContext();
@@ -167,7 +167,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("cycles managed modes forward, skipping free and the hotkey-hidden fable", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
     const { ctx } = createContext();
@@ -182,7 +182,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("applies fable via /mode even though it is hidden from the hotkeys", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("smart"));
     const { ctx } = createContext();
@@ -197,7 +197,7 @@ describe("mmr-core mode shortcuts", () => {
   });
 
   it("cycles from free back to smart instead of including free in rotation", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("free"));
     const { ctx } = createContext();

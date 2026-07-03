@@ -1,6 +1,6 @@
 // Unit tests for the `mmr-workers` reviewer tool — written test-first to
 // pin observable behavior before implementing
-// src/extensions/mmr-workers/reviewer.ts.
+// src/extensions/ampi-workers/reviewer.ts.
 //
 // Behavior pinned here (the subprocess runner and the provider/extension
 // wiring have their own suites):
@@ -36,12 +36,12 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const REVIEWER_MODULE = "extensions/mmr-workers/reviewer.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
-const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
-const GUIDANCE_MODULE = "extensions/mmr-core/worker-tool-guidance.ts";
-const BACKGROUND_AGENTS_MODULE = "extensions/mmr-workers/background-agents.ts";
+const REVIEWER_MODULE = "extensions/ampi-workers/reviewer.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
+const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
+const GUIDANCE_MODULE = "extensions/ampi-core/worker-tool-guidance.ts";
+const BACKGROUND_AGENTS_MODULE = "extensions/ampi-workers/background-agents.ts";
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);

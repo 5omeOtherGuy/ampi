@@ -31,12 +31,12 @@ function createPi(options = {}) {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
 async function importOwnedTools() {
-  const ownedUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/owned-tools.ts")).href;
+  const ownedUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/owned-tools.ts")).href;
   return import(ownedUrl);
 }
 
@@ -49,7 +49,7 @@ beforeEach(async () => {
 
 describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   it("drops MMR-owned tools from baseline when entering free from a locked mode", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     // Simulate mmr-patch and mmr-web having registered their concrete
     // Pi tools before mmr-core captures its baseline.
@@ -83,7 +83,7 @@ describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   });
 
   it("preserves tools from unrelated extensions in free mode", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     owned.registerMmrOwnedTool("web_search");
@@ -105,7 +105,7 @@ describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   });
 
   it("drops MMR-owned tools on native-control opt-out from a locked mode", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
 
@@ -131,7 +131,7 @@ describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   });
 
   it("drops MMR-owned tools when --mmr-mode free is the initial selection at session start", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     owned.registerMmrOwnedTool("web_search");
@@ -158,7 +158,7 @@ describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
   });
 
   it("does nothing extra when no MMR-owned tools are registered", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const baselineTools = ["read", "bash", "edit", "write", "third_party_tool"];
     const { ctx } = createContext();
     const { pi, calls, commands, handlers } = createPi({ activeTools: baselineTools, allTools: baselineTools });
@@ -174,11 +174,11 @@ describe("mmr-core free mode: pure Pi (ampi-not-installed equivalence)", () => {
 });
 
 describe("mmr-core free mode: source-aware MMR ownership", () => {
-  const MMR_PATCH_PATH = "/abs/path/to/ampi/src/extensions/mmr-patch/index.ts";
+  const MMR_PATCH_PATH = "/abs/path/to/ampi/src/extensions/ampi-patch/index.ts";
   const THIRD_PARTY_PATH = "/abs/path/to/other-pkg/src/extensions/patch/index.ts";
 
   it("drops an MMR-owned name when the active registration's source is an MMR extension path", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     owned.registerMmrOwnedExtensionPath(MMR_PATCH_PATH);
@@ -207,7 +207,7 @@ describe("mmr-core free mode: source-aware MMR ownership", () => {
   });
 
   it("preserves an MMR-owned name when the active registration's source is a third-party extension", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     // mmr-patch path is registered, but the currently-active apply_patch
@@ -242,7 +242,7 @@ describe("mmr-core free mode: source-aware MMR ownership", () => {
   });
 
   it("falls back to name-based filtering when sourceInfo is missing", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     owned.registerMmrOwnedExtensionPath(MMR_PATCH_PATH);
@@ -267,7 +267,7 @@ describe("mmr-core free mode: source-aware MMR ownership", () => {
   });
 
   it("keeps non-MMR-owned tool names regardless of source", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const owned = await importOwnedTools();
     owned.registerMmrOwnedTool("apply_patch");
     owned.registerMmrOwnedExtensionPath(MMR_PATCH_PATH);

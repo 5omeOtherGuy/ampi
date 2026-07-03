@@ -30,7 +30,7 @@ function openaiPayload(overrides = {}) {
 
 describe("mmr-core request policy", () => {
   it("applies smart Anthropic adaptive thinking and max_tokens without touching system/messages/tools", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = anthropicPayload({ output_config: { some_future_field: true } });
     const originalSystem = JSON.stringify(payload.system);
     const originalMessages = JSON.stringify(payload.messages);
@@ -49,7 +49,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("applies fable Anthropic adaptive medium reasoning with 128k max_tokens for Fable 5", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const originalSystem = JSON.stringify(anthropicPayload().system);
     const payload = anthropicPayload({
       model: "claude-fable-5",
@@ -69,7 +69,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("applies rush OpenAI Responses with reasoning effort none and 128k max output", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       max_output_tokens: 4096,
       reasoning: { effort: "medium", encrypted: true },
@@ -85,7 +85,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("does not apply an Anthropic budget-thinking override in rush fallback routes", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = anthropicPayload({
       model: "claude-haiku-4-5-20251001",
       thinking: { type: "disabled" },
@@ -99,7 +99,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("applies deep OpenAI Responses reasoning and max_output_tokens for the public Responses shape", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       max_output_tokens: 4096,
       reasoning: { effort: "low", encrypted: true },
@@ -117,7 +117,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("skips max_output_tokens for Codex-variant payloads identified by top-level instructions string", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       instructions: "You are a helpful assistant.",
       reasoning: { effort: "low" },
@@ -132,7 +132,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("skips max_output_tokens for Codex-variant payloads identified by text.verbosity", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       text: { verbosity: "low" },
       reasoning: { effort: "low" },
@@ -146,7 +146,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("still strips an inbound max_output_tokens out of Codex-variant payloads (does not echo it back)", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       instructions: "sys",
       max_output_tokens: 4096,
@@ -159,7 +159,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("uses the resolved provider id to strip max_output_tokens from openai-codex Responses payloads without Codex markers", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = openaiPayload({
       max_output_tokens: 4096,
       reasoning: { effort: "low" },
@@ -172,7 +172,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("leaves free mode and unknown provider payloads untouched", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = { model: "future-provider-model", data: { prompt: "hi" } };
 
     assert.equal(applyMmrRequestPolicy(payload, undefined), payload);
@@ -180,7 +180,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("leaves lookalike custom/chat payloads untouched unless provider-shape markers are present", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const openAiChatLikePayload = {
       model: "gpt-4.1",
       messages: [{ role: "user", content: "hi" }],
@@ -205,7 +205,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("drops stray body-level anthropic_beta from matched Anthropic Messages payloads", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = {
       ...anthropicPayload(),
       anthropic_beta: ["interleaved-thinking-2025-05-14"],
@@ -218,7 +218,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("does not write runtime-only effectiveMaxInputTokens into provider payloads", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = anthropicPayload();
 
     const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart);
@@ -230,7 +230,7 @@ describe("mmr-core request policy", () => {
   });
 
   it("leaves GPT/Codex modes without a context profile and clamps smart's input profile to smaller provider registrations", async () => {
-    const { clampPolicyToRegisteredModel, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { clampPolicyToRegisteredModel, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
 
     // GPT/Codex-primary modes set no context profile, so they run at Pi's own
     // registered window. Only the request policy (max output) is carried.
@@ -264,7 +264,7 @@ describe("mmr-core request policy", () => {
 describe("mmr-core thinking-level toggle", () => {
   it("identifies the toggleable modes and their default levels", async () => {
     const { isToggleableMmrMode, getDefaultToggleThinkingLevel, getMmrModeThinkingOptions } =
-      await importSource("extensions/mmr-core/request-policy.ts");
+      await importSource("extensions/ampi-core/request-policy.ts");
 
     for (const mode of ["smart", "fable", "deep"]) {
       assert.equal(isToggleableMmrMode(mode), true, `${mode} should be toggleable`);
@@ -280,7 +280,7 @@ describe("mmr-core thinking-level toggle", () => {
   });
 
   it("alternates between the two configured levels", async () => {
-    const { getOtherToggleThinkingLevel } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { getOtherToggleThinkingLevel } = await importSource("extensions/ampi-core/request-policy.ts");
 
     assert.equal(getOtherToggleThinkingLevel("smart", "medium"), "high");
     assert.equal(getOtherToggleThinkingLevel("smart", "high"), "medium");
@@ -291,7 +291,7 @@ describe("mmr-core thinking-level toggle", () => {
   });
 
   it("cycles three-preset modes in order and wraps around", async () => {
-    const { getOtherToggleThinkingLevel } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { getOtherToggleThinkingLevel } = await importSource("extensions/ampi-core/request-policy.ts");
 
     // medium (default) -> high -> low -> medium (wraps).
     for (const mode of ["fable"]) {
@@ -306,7 +306,7 @@ describe("mmr-core thinking-level toggle", () => {
 
   it("maps Smart high to Anthropic xhigh effort while keeping the 64k output default, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
-      await importSource("extensions/mmr-core/request-policy.ts");
+      await importSource("extensions/ampi-core/request-policy.ts");
 
     const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
     // Pi/session level is high; Anthropic adaptive effort is remapped to xhigh
@@ -340,7 +340,7 @@ describe("mmr-core thinking-level toggle", () => {
 
   it("echoes each fable toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
-      await importSource("extensions/mmr-core/request-policy.ts");
+      await importSource("extensions/ampi-core/request-policy.ts");
 
     for (const level of ["low", "medium", "high"]) {
       const result = applyMmrThinkingLevelToPolicy("fable", MMR_REQUEST_POLICIES.fable, level);
@@ -360,7 +360,7 @@ describe("mmr-core thinking-level toggle", () => {
   // Math.round, so e.g. 12345 -> "12.3k" here vs "12k" in the footer. These
   // pins guard against an accidental unifying edit collapsing the two formats.
   it("formats request-policy token counts byte-for-byte across boundary values", async () => {
-    const { formatMmrPolicyContext, MMR_REQUEST_POLICIES } = await importSource("extensions/mmr-core/request-policy.ts");
+    const { formatMmrPolicyContext, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
     const cases = [
       [999, "999"],
       [1000, "1k"],

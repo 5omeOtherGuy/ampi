@@ -12,7 +12,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-core/worker-tool-guidance.ts";
+const MODULE = "extensions/ampi-core/worker-tool-guidance.ts";
 
 describe("buildUsingWorkersGuidance", () => {
   it("returns null when no worker tool is active", async () => {

@@ -9,7 +9,7 @@ import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./help
 after(cleanupLoadedSource);
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -71,7 +71,7 @@ function buildCtx(models, notifications, setModelCalls = []) {
 
 describe("mmr-core provider-managed context selection", () => {
   it("caps the smart Opus route to a 300k context window via a shallow clone", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
     ];
@@ -99,7 +99,7 @@ describe("mmr-core provider-managed context selection", () => {
 
   it("falls back to GPT when the smart Opus route is absent", async () => {
     const runtime = await importRuntime();
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
 
     const models = [
       { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400_000, maxTokens: 128_000 },
@@ -139,8 +139,8 @@ describe("mmr-core provider-managed context selection", () => {
 
   it("does not emit the context.registered-exceeds-profile diagnostic when the selected route matches the mode profile", async () => {
     const runtime = await importRuntime();
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
 
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },

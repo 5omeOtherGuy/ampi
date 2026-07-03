@@ -17,15 +17,15 @@ Use this page as the user-facing map for `ampi`: AMP Code but in Pi Agent. The r
 
 | I want to... | Start with | Then read |
 | --- | --- | --- |
-| Switch the whole AMP-style harness for a task | [`quick-reference.md#modes`](quick-reference.md#modes) | [`../src/extensions/mmr-core/README.md`](../src/extensions/mmr-core/README.md) |
-| Patch files safely | [`quick-reference.md#patch`](quick-reference.md#patch) | [`../src/extensions/mmr-patch/README.md`](../src/extensions/mmr-patch/README.md) |
-| Track session todos | [`quick-reference.md#tasks`](quick-reference.md#tasks) | [`../src/extensions/mmr-tasks/README.md`](../src/extensions/mmr-tasks/README.md) |
-| Delegate bounded work, searches, or reviews | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md) |
-| Import custom Markdown subagents | [`../README.md#tools-and-subagents`](../README.md#tools-and-subagents) | [`../src/extensions/mmr-custom-subagents/README.md`](../src/extensions/mmr-custom-subagents/README.md) |
-| Search the web or read a public page | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-web/README.md`](../src/extensions/mmr-web/README.md) |
-| Research a GitHub repository | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-github/README.md`](../src/extensions/mmr-github/README.md) |
-| Reuse a prior Pi session | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/mmr-history/README.md`](../src/extensions/mmr-history/README.md) |
-| Understand quota/capacity fallback | [`../README.md#feature-map`](../README.md#feature-map) | [`../src/extensions/mmr-session-fallback/README.md`](../src/extensions/mmr-session-fallback/README.md) |
+| Switch the whole AMP-style harness for a task | [`quick-reference.md#modes`](quick-reference.md#modes) | [`../src/extensions/ampi-core/README.md`](../src/extensions/ampi-core/README.md) |
+| Patch files safely | [`quick-reference.md#patch`](quick-reference.md#patch) | [`../src/extensions/ampi-patch/README.md`](../src/extensions/ampi-patch/README.md) |
+| Track session todos | [`quick-reference.md#tasks`](quick-reference.md#tasks) | [`../src/extensions/ampi-tasks/README.md`](../src/extensions/ampi-tasks/README.md) |
+| Delegate bounded work, searches, or reviews | [`quick-reference.md#workers`](quick-reference.md#workers) | [`../src/extensions/ampi-workers/README.md`](../src/extensions/ampi-workers/README.md) |
+| Import custom Markdown subagents | [`../README.md#tools-and-subagents`](../README.md#tools-and-subagents) | [`../src/extensions/ampi-custom-subagents/README.md`](../src/extensions/ampi-custom-subagents/README.md) |
+| Search the web or read a public page | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/ampi-web/README.md`](../src/extensions/ampi-web/README.md) |
+| Research a GitHub repository | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/ampi-github/README.md`](../src/extensions/ampi-github/README.md) |
+| Reuse a prior Pi session | [`quick-reference.md#optional-reach`](quick-reference.md#optional-reach) | [`../src/extensions/ampi-history/README.md`](../src/extensions/ampi-history/README.md) |
+| Understand quota/capacity fallback | [`../README.md#feature-map`](../README.md#feature-map) | [`../src/extensions/ampi-session-fallback/README.md`](../src/extensions/ampi-session-fallback/README.md) |
 
 ## Extension reference
 
@@ -48,7 +48,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | Topic | Read |
 | --- | --- |
 | Public package API | [`public-api.md`](public-api.md) |
-| Core public API | [`mmr-core-api.md`](mmr-core-api.md) |
+| Core public API | [`ampi-core-api.md`](ampi-core-api.md) |
 | Reference architecture | [`reference-architecture.md`](reference-architecture.md) |
 | Extension compatibility | [`extension-compatibility.md`](extension-compatibility.md) |
 | Subagent framework | [`subagent-framework.md`](subagent-framework.md) |

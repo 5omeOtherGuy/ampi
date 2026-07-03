@@ -12,12 +12,12 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const OWNED_TOOLS_MODULE = "extensions/mmr-core/owned-tools.ts";
-const GITHUB_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
+const OWNED_TOOLS_MODULE = "extensions/ampi-core/owned-tools.ts";
+const GITHUB_MODULE = "extensions/ampi-github/tool-ownership.ts";
+const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 
-const OWNER = "mmr-github";
-const OWNER_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
+const OWNER = "ampi-github";
+const OWNER_PATH = "/virtual/ampi/extensions/ampi-github/index.ts";
 const NAMES = ["read_github", "search_github"];
 
 function toolInfos(names, sourcePath) {
@@ -79,12 +79,14 @@ describe("mmr-github mirrors source paths into the core owner registry", () => {
     await freshRegistry();
   });
 
-  it("registerMmrGithubToolSourcePath populates owner \"mmr-github\"", async () => {
-    const { registerMmrGithubToolSourcePath, MMR_GITHUB_TOOL_OWNER } = await importSource(GITHUB_MODULE);
+  it("registerMmrGithubToolSourcePath populates canonical and legacy owners", async () => {
+    const { registerMmrGithubToolSourcePath, AMPI_GITHUB_TOOL_OWNER, MMR_GITHUB_TOOL_OWNER } = await importSource(GITHUB_MODULE);
     const { getMmrOwnedToolSourcePaths } = await importSource(OWNED_TOOLS_MODULE);
-    assert.equal(MMR_GITHUB_TOOL_OWNER, OWNER);
+    assert.equal(AMPI_GITHUB_TOOL_OWNER, OWNER);
+    assert.equal(MMR_GITHUB_TOOL_OWNER, "mmr-github");
     registerMmrGithubToolSourcePath(OWNER_PATH);
     assert.deepEqual(getMmrOwnedToolSourcePaths(OWNER), [OWNER_PATH]);
+    assert.deepEqual(getMmrOwnedToolSourcePaths(MMR_GITHUB_TOOL_OWNER), [OWNER_PATH]);
   });
 });
 
@@ -95,9 +97,9 @@ describe("librarian profile declares mmr-github owned-tool requirements", () => 
     assert.ok(librarian, "librarian profile exists");
     assert.ok(Array.isArray(librarian.requiredOwnedTools) && librarian.requiredOwnedTools.length === 1);
     const group = librarian.requiredOwnedTools[0];
-    assert.equal(group.owner, "mmr-github");
+    assert.equal(group.owner, "ampi-github");
     assert.deepEqual([...group.toolNames].sort(), [...librarian.tools].sort());
-    assert.match(group.description, /mmr-github-owned read-only GitHub tools/);
-    assert.match(group.unmetHint, /MMR_GITHUB_ENABLE=true/);
+    assert.match(group.description, /ampi-github-owned read-only GitHub tools/);
+    assert.match(group.unmetHint, /AMPI_GITHUB_ENABLE=true/);
   });
 });

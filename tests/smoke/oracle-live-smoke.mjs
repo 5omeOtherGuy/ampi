@@ -90,7 +90,7 @@ const FORCED_MODEL_PREFERENCE = FORCED_MODEL
 const TIMEOUT_MS = Number.parseInt(process.env.ORACLE_SMOKE_TIMEOUT_MS ?? "180000", 10);
 
 async function main() {
-  const oracleMod = await importSource("extensions/mmr-workers/oracle.ts");
+  const oracleMod = await importSource("extensions/ampi-workers/oracle.ts");
   const { createOracleTool, ORACLE_WORKER_TOOLS } = oracleMod;
 
   const cwd = path.resolve(import.meta.dirname, "..", "..");

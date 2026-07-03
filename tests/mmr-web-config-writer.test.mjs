@@ -22,14 +22,14 @@ function setupTempEnv() {
 }
 
 describe("mmr-web config-writer", () => {
-  it("applies a single-field update on a clean slate (flat mmrWeb layout)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+  it("applies a single-field update on a clean slate (flat ampiWeb layout)", async () => {
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { enabled: true });
-    assert.deepEqual(next, { mmrWeb: { enabled: true } });
+    assert.deepEqual(next, { ampiWeb: { enabled: true } });
   });
 
   it("preserves unrelated top-level keys (mmrCore) and unrelated mmrWeb fields", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
       mmrCore: { defaultMode: "deep" },
       mmrWeb: { enabled: true, maxResultBytes: 12345 },
@@ -42,7 +42,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("supports the nested mmr.web layout and keeps it nested if that's how the file is shaped", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
       mmr: { core: { defaultMode: "deep" }, web: { enabled: true } },
     };
@@ -53,7 +53,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("clears a field by passing 'clear' (string sentinel)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
       mmrWeb: { enabled: true, backend: "brave", searchBackend: "brave" },
     };
@@ -62,7 +62,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("drops the mmrWeb block entirely when the last field is cleared", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
       mmrCore: { defaultMode: "deep" },
       mmrWeb: { backend: "brave" },
@@ -73,14 +73,14 @@ describe("mmr-web config-writer", () => {
   });
 
   it("does the same drop in the nested mmr.web layout (and drops mmr entirely if no other branches)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = { mmr: { web: { backend: "brave" } } };
     const next = applyMmrWebConfigUpdate(existing, { backend: "clear" });
     assert.deepEqual(next, {});
   });
 
   it("accepts every public field name (enabled, backend, searchBackend, readerBackend, searchTimeoutMs, readTimeoutMs, maxResultBytes)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, {
       enabled: true,
       backend: "auto",
@@ -90,7 +90,7 @@ describe("mmr-web config-writer", () => {
       readTimeoutMs: 12345,
       maxResultBytes: 999999,
     });
-    assert.deepEqual(next.mmrWeb, {
+    assert.deepEqual(next.ampiWeb, {
       enabled: true,
       backend: "auto",
       searchBackend: "brave",
@@ -102,8 +102,8 @@ describe("mmr-web config-writer", () => {
   });
 
   it("writeMmrWebConfigFile creates the file and round-trips through loadMmrWebSettings", async () => {
-    const { writeMmrWebConfigFile } = await importSource("extensions/mmr-web/config-writer.ts");
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { writeMmrWebConfigFile } = await importSource("extensions/ampi-web/config-writer.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       const filePath = path.join(env.project, ".pi/settings.json");
@@ -123,7 +123,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("writeMmrWebConfigFile refuses to overwrite a settings file whose contents are not valid JSON", async () => {
-    const { writeMmrWebConfigFile } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { writeMmrWebConfigFile } = await importSource("extensions/ampi-web/config-writer.ts");
     const env = setupTempEnv();
     try {
       const filePath = path.join(env.project, ".pi/settings.json");
@@ -143,19 +143,19 @@ describe("mmr-web config-writer", () => {
     // Defense in depth: the writer's typed signature does not accept these
     // fields, but a callsite that hand-builds an unknown object should not
     // accidentally persist secrets to .pi/settings.json.
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, /** @type {any} */ ({
       jinaApiKey: "leaked-jina",
       braveApiKey: "leaked-brave",
       enabled: true,
     }));
-    assert.equal(next.mmrWeb?.jinaApiKey, undefined);
-    assert.equal(next.mmrWeb?.braveApiKey, undefined);
-    assert.equal(next.mmrWeb?.enabled, true);
+    assert.equal(next.ampiWeb?.jinaApiKey, undefined);
+    assert.equal(next.ampiWeb?.braveApiKey, undefined);
+    assert.equal(next.ampiWeb?.enabled, true);
   });
 
   it("runMmrWebConfigFlow refuses to run without an interactive UI", async () => {
-    const { runMmrWebConfigFlow } = await importSource("extensions/mmr-web/config-flow.ts");
+    const { runMmrWebConfigFlow } = await importSource("extensions/ampi-web/config-flow.ts");
     const notifications = [];
     await runMmrWebConfigFlow({
       cwd: process.cwd(),
@@ -173,7 +173,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("runMmrWebConfigFlow hides readerBackend because read_web_page always uses the custom reader", async () => {
-    const { runMmrWebConfigFlow } = await importSource("extensions/mmr-web/config-flow.ts");
+    const { runMmrWebConfigFlow } = await importSource("extensions/ampi-web/config-flow.ts");
     const optionsSeen = [];
     await runMmrWebConfigFlow({
       cwd: process.cwd(),
@@ -193,7 +193,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("runMmrWebConfigFlow tells users every saved change requires a Pi restart", async () => {
-    const { runMmrWebConfigFlow } = await importSource("extensions/mmr-web/config-flow.ts");
+    const { runMmrWebConfigFlow } = await importSource("extensions/ampi-web/config-flow.ts");
     const env = setupTempEnv();
     const notifications = [];
     try {
@@ -209,7 +209,7 @@ describe("mmr-web config-writer", () => {
           notify: (message, level) => { notifications.push({ message, level }); },
         },
       });
-      const saved = notifications.find((n) => /Saved mmr-web config/.test(n.message));
+      const saved = notifications.find((n) => /Saved ampi-web config/.test(n.message));
       assert.ok(saved, `expected a saved notification, got ${JSON.stringify(notifications)}`);
       assert.match(saved.message, /Restart Pi/i);
       assert.doesNotMatch(saved.message, /next tool call/i);
@@ -219,10 +219,10 @@ describe("mmr-web config-writer", () => {
   });
 
   it("/mmr-config offers a 'web' branch that dispatches to runMmrWebConfigFlow", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     // mmr-core no longer imports the web flow; loading mmr-web registers its
     // `web` section into the core /mmr-config registry (as it does at runtime).
-    await importSource("extensions/mmr-web/index.ts");
+    await importSource("extensions/ampi-web/index.ts");
     const commands = new Map();
     const pi = {
       registerFlag: () => {},
@@ -242,11 +242,11 @@ describe("mmr-web config-writer", () => {
 
     assert.ok(commands.has("mmr-config"), `expected /mmr-config to be registered, got ${[...commands.keys()].join(", ")}`);
     const descriptor = commands.get("mmr-config");
-    assert.match(descriptor.description, /mmr-web/i, "description should mention mmr-web after the merge");
+    assert.match(descriptor.description, /ampi-web/i, "description should mention ampi-web after the merge");
 
     // Drive the command: top-level select returns 'web' → must dispatch into
     // runMmrWebConfigFlow, which then issues its own select titled
-    // "mmr-web config: what do you want to set?".
+    // "ampi-web config: what do you want to set?".
     const selectTitles = [];
     const notifications = [];
     const ctx = {
@@ -267,11 +267,11 @@ describe("mmr-web config-writer", () => {
     };
     await descriptor.handler("", ctx);
     assert.ok(selectTitles.length >= 2, `expected /mmr-config to dispatch into the web flow (>=2 selects), got ${selectTitles.length}`);
-    assert.match(selectTitles[1], /mmr-web config/i, `expected web flow's select title, got ${JSON.stringify(selectTitles[1])}`);
+    assert.match(selectTitles[1], /ampi-web config/i, `expected web flow's select title, got ${JSON.stringify(selectTitles[1])}`);
   });
 
   it("rejects out-of-range numeric updates (non-positive integers)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5]) {
       assert.throws(
         () => applyMmrWebConfigUpdate({}, { searchTimeoutMs: bad }),
@@ -281,20 +281,20 @@ describe("mmr-web config-writer", () => {
   });
 
   it("writes a valid searxngUrl (http(s) only)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { searxngUrl: "http://127.0.0.1:8080" });
-    assert.deepEqual(next.mmrWeb, { searxngUrl: "http://127.0.0.1:8080" });
+    assert.deepEqual(next.ampiWeb, { searxngUrl: "http://127.0.0.1:8080" });
   });
 
   it("clears searxngUrl via the \"clear\" sentinel", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = { mmrWeb: { enabled: true, searxngUrl: "http://127.0.0.1:8080" } };
     const next = applyMmrWebConfigUpdate(existing, { searxngUrl: "clear" });
     assert.deepEqual(next.mmrWeb, { enabled: true });
   });
 
   it("rejects non-http(s) searxngUrl values", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     for (const bad of ["file:///tmp/x", "javascript:alert(1)", "ftp://example.com/"]) {
       assert.throws(
         () => applyMmrWebConfigUpdate({}, { searxngUrl: bad }),
@@ -304,7 +304,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("rejects non-string searxngUrl values", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     for (const bad of ["", "   ", "not a url", null, 42, true]) {
       assert.throws(
         () => applyMmrWebConfigUpdate({}, { searxngUrl: bad }),
@@ -314,32 +314,32 @@ describe("mmr-web config-writer", () => {
   });
 
   it("accepts searchBackend=searxng (new backend value)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { searchBackend: "searxng" });
-    assert.deepEqual(next.mmrWeb, { searchBackend: "searxng" });
+    assert.deepEqual(next.ampiWeb, { searchBackend: "searxng" });
   });
 
   it("writes searxngManaged (boolean)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { searxngManaged: true });
-    assert.deepEqual(next.mmrWeb, { searxngManaged: true });
+    assert.deepEqual(next.ampiWeb, { searxngManaged: true });
   });
 
   it("clears searxngManaged via the \"clear\" sentinel", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = { mmrWeb: { enabled: true, searxngManaged: true } };
     const next = applyMmrWebConfigUpdate(existing, { searxngManaged: "clear" });
     assert.deepEqual(next.mmrWeb, { enabled: true });
   });
 
   it("writes a valid searxngHealthUrl", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { searxngHealthUrl: "http://127.0.0.1:8080/healthz" });
-    assert.deepEqual(next.mmrWeb, { searxngHealthUrl: "http://127.0.0.1:8080/healthz" });
+    assert.deepEqual(next.ampiWeb, { searxngHealthUrl: "http://127.0.0.1:8080/healthz" });
   });
 
   it("rejects non-http(s) searxngHealthUrl values", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     for (const bad of ["file:///tmp/x", "javascript:alert(1)", "ftp://example.com/"]) {
       assert.throws(
         () => applyMmrWebConfigUpdate({}, { searxngHealthUrl: bad }),
@@ -349,25 +349,25 @@ describe("mmr-web config-writer", () => {
   });
 
   it("writes searxngIdleTimeoutMs and searxngStartTimeoutMs", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, {
       searxngIdleTimeoutMs: 60_000,
       searxngStartTimeoutMs: 45_000,
     });
-    assert.deepEqual(next.mmrWeb, {
+    assert.deepEqual(next.ampiWeb, {
       searxngIdleTimeoutMs: 60_000,
       searxngStartTimeoutMs: 45_000,
     });
   });
 
   it("allows searxngIdleTimeoutMs=0 to disable idle-stop", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const next = applyMmrWebConfigUpdate({}, { searxngIdleTimeoutMs: 0 });
-    assert.deepEqual(next.mmrWeb, { searxngIdleTimeoutMs: 0 });
+    assert.deepEqual(next.ampiWeb, { searxngIdleTimeoutMs: 0 });
   });
 
   it("rejects zero/negative/non-integer values for sidecar timers", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     for (const bad of [0, -1, 1.5, "30000", null]) {
       assert.throws(
         () => applyMmrWebConfigUpdate({}, { searxngStartTimeoutMs: bad }),
@@ -377,7 +377,7 @@ describe("mmr-web config-writer", () => {
   });
 
   it("intentionally does NOT accept searxngStartCommand or searxngStopCommand (settings-file only)", async () => {
-    const { applyMmrWebConfigUpdate } = await importSource("extensions/mmr-web/config-writer.ts");
+    const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     // The MmrWebConfigUpdate TS surface excludes these fields. Any caller
     // that smuggles them in via a cast must be ignored — the FIELD_SPECS
     // table is the gating layer and does not list them.

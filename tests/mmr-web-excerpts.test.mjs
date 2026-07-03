@@ -29,7 +29,7 @@ Pasta sauce can be made from tomatoes, onions, and garlic.
 describe("extractObjectiveRelevantExcerpts", () => {
   it("returns excerpted=false when objective is blank", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const result = extractObjectiveRelevantExcerpts({
       markdown: SAMPLE_MARKDOWN,
@@ -42,7 +42,7 @@ describe("extractObjectiveRelevantExcerpts", () => {
 
   it("returns excerpts relevant to the objective and skips unrelated sections", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const result = extractObjectiveRelevantExcerpts({
       markdown: SAMPLE_MARKDOWN,
@@ -58,7 +58,7 @@ describe("extractObjectiveRelevantExcerpts", () => {
 
   it("includes the heading context with each excerpt", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const result = extractObjectiveRelevantExcerpts({
       markdown: SAMPLE_MARKDOWN,
@@ -74,7 +74,7 @@ describe("extractObjectiveRelevantExcerpts", () => {
 
   it("returns excerpted=false when no passage clears the relevance threshold", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const result = extractObjectiveRelevantExcerpts({
       markdown: SAMPLE_MARKDOWN,
@@ -87,7 +87,7 @@ describe("extractObjectiveRelevantExcerpts", () => {
 
   it("preserves original document order in returned excerpts", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const markdown = `# Top
 
@@ -117,7 +117,7 @@ Together alpha and beta are common.
 
   it("honors maxBytes when selecting top excerpts", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     // Each section's heading repeats the objective tokens so every passage
     // clears the relevance gate; the byte budget is the only remaining
@@ -135,7 +135,7 @@ Together alpha and beta are common.
 
   it("caps excerpt count at MAX_EXCERPTS even when the byte budget allows more", async () => {
     const { extractObjectiveRelevantExcerpts, MAX_EXCERPTS } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     assert.equal(typeof MAX_EXCERPTS, "number");
     assert.ok(MAX_EXCERPTS >= 1, "MAX_EXCERPTS must be positive");
@@ -157,7 +157,7 @@ Together alpha and beta are common.
 
   it("drops passages with only a single weak body-token match (no phrase, no heading)", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const markdown = `# Topic\n\n## Background\n\nIntroduction with no relevant content here.\n\n## Other Stuff\n\nThe word labradoodle appears once here in passing.\n\n## Breeding\n\nLabradoodle breeding requires careful planning of both parent lines.`;
     const result = extractObjectiveRelevantExcerpts({
@@ -178,7 +178,7 @@ Together alpha and beta are common.
 
   it("recognizes quoted exact phrases", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const markdown = `# Doc
 
@@ -199,7 +199,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("does not repeat the heading prefix on consecutive same-trail excerpts", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     // Three sibling passages directly under the same H2 heading. With the
     // pre-fix behavior each emitted excerpt carried its own "## Breeding\n\n"
@@ -226,7 +226,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("restores the heading prefix when the trail changes between excerpts", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     // Two passages under "## Breeding", then a passage under "## Health". The
     // first Health excerpt must keep its heading prefix because the trail
@@ -245,7 +245,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("demotes passages under References-style headings below body content", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     // Both passages mention the objective tokens; the References-section
     // passage should be demoted so the body content wins under the
@@ -265,7 +265,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("demotes citation-dense passages even without an explicit References heading", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     // Two passages under non-References headings; the first is normal body
     // prose, the second is a citation block (bracketed numerics, Retrieved
@@ -285,7 +285,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("caps final content on a valid UTF-8 boundary when a multibyte character crosses the cap", async () => {
     const { applyFinalContentCap, FINAL_CONTENT_CAP_BYTES, TRUNCATION_MARKER } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const text = `${"a".repeat(FINAL_CONTENT_CAP_BYTES - 1)}\u20actail`;
     const result = applyFinalContentCap(text);
@@ -301,7 +301,7 @@ A passage mentioning house and sparrow separately is less relevant.
 
   it("keeps fenced code blocks intact", async () => {
     const { extractObjectiveRelevantExcerpts } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const markdown = `# API Reference
 

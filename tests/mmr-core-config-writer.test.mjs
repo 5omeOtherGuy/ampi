@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core config-writer", () => {
   it("applies a per-mode model preference update and preserves unrelated settings", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
 
     const existing = {
       mmrWeb: { enabled: true },
@@ -44,7 +44,7 @@ describe("mmr-core config-writer", () => {
   });
 
   it("writes a subagent override and serializes a bare-model preference as a string", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
 
     const next = applyMmrConfigUpdate({}, {
       subagentModelPreferences: {
@@ -54,14 +54,14 @@ describe("mmr-core config-writer", () => {
     });
 
     assert.deepEqual(next, {
-      mmrCore: {
+      ampiCore: {
         subagentModelPreferences: { finder: ["gpt-5.4-mini"] },
       },
     });
   });
 
   it("clears an existing override when preferences is empty", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
 
     const existing = {
       mmrCore: {
@@ -82,7 +82,7 @@ describe("mmr-core config-writer", () => {
   });
 
   it("removes the mmrCore block entirely when the last entry is cleared", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
 
     const existing = {
       mmrCore: {
@@ -100,7 +100,7 @@ describe("mmr-core config-writer", () => {
   });
 
   it("preserves the nested mmr.core layout when no flat mmrCore exists", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
 
     const existing = {
       mmr: {
@@ -121,9 +121,9 @@ describe("mmr-core config-writer", () => {
 
   it("writeMmrCoreConfigFile writes valid JSON that the loader can read back", async () => {
     const { writeMmrCoreConfigFile, getProjectMmrSettingsPath } = await importSource(
-      "extensions/mmr-core/config-writer.ts",
+      "extensions/ampi-core/config-writer.ts",
     );
-    const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+    const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-writer-"));
     try {
@@ -163,7 +163,7 @@ describe("mmr-core config-writer", () => {
 
   it("refuses to overwrite a settings file with invalid JSON", async () => {
     const { writeMmrCoreConfigFile, getProjectMmrSettingsPath } = await importSource(
-      "extensions/mmr-core/config-writer.ts",
+      "extensions/ampi-core/config-writer.ts",
     );
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-writer-"));
@@ -190,7 +190,7 @@ describe("mmr-core config-writer", () => {
 
 describe("mmr-core settings: subagentModelPreferences", () => {
   it("parses subagentModelPreferences from the project settings file", async () => {
-    const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+    const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-settings-"));
     try {
@@ -227,7 +227,7 @@ describe("mmr-core settings: subagentModelPreferences", () => {
   });
 
   it("warns when subagentModelPreferences is the wrong shape and ignores it", async () => {
-    const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+    const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-settings-"));
     try {
@@ -309,7 +309,7 @@ describe("mmr-core config-flow: renders current values from disk, not stale snap
   }
 
   it("shows the on-disk mode preference instead of the binding's startup snapshot", async () => {
-    const { runMmrConfigFlow } = await importSource("extensions/mmr-core/config-flow.ts");
+    const { runMmrConfigFlow } = await importSource("extensions/ampi-core/config-flow.ts");
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-flow-"));
     try {
@@ -338,7 +338,7 @@ describe("mmr-core config-flow: renders current values from disk, not stale snap
   });
 
   it("shows the on-disk subagent preference instead of the binding's startup snapshot", async () => {
-    const { runMmrConfigFlow } = await importSource("extensions/mmr-core/config-flow.ts");
+    const { runMmrConfigFlow } = await importSource("extensions/ampi-core/config-flow.ts");
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-config-flow-"));
     try {

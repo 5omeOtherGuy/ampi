@@ -2,7 +2,7 @@
 // real wiring. These checks are static and deterministic; they fail when an
 // extension is added/renamed/retired without updating the manifest, when tool
 // ownership collides, when the subagent child keep-set references an unknown
-// extension, or when `mmr-core` gains a new sibling-extension import.
+// extension, or when `ampi-core` gains a new sibling-extension import.
 //
 // As the greenfield extension split proceeds, each chunk updates
 // `src/extensions/manifest.ts` in lockstep and these guardrails keep the
@@ -114,17 +114,32 @@ describe("architecture manifest guardrails", () => {
     );
   });
 
-  it("every exported mmr extension subpath has the matching ampi alias", async () => {
+  it("every preferred ampi extension subpath has the matching mmr compatibility alias", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const pkg = readPackageJson();
 
     for (const entry of MMR_EXTENSION_MANIFEST) {
       if (entry.exportSubpath === null) continue;
-      const expectedAlias = entry.exportSubpath.replace("./extensions/mmr-", "./extensions/ampi-");
+      assert.match(
+        entry.name,
+        /^ampi-/,
+        `${entry.name}: manifest name must use canonical ampi-* extension id`,
+      );
+      assert.match(
+        entry.entrypoint,
+        /^\.\/src\/extensions\/ampi-[^/]+\/index\.ts$/,
+        `${entry.name}: entrypoint must use canonical src/extensions/ampi-* path`,
+      );
+      assert.match(
+        entry.exportSubpath,
+        /^\.\/extensions\/ampi-/,
+        `${entry.name}: exportSubpath must use preferred ./extensions/ampi-* namespace`,
+      );
+      const expectedAlias = entry.exportSubpath.replace("./extensions/ampi-", "./extensions/mmr-");
       assert.notEqual(
         expectedAlias,
         entry.exportSubpath,
-        `${entry.name}: exportSubpath must use the mmr-* compatibility namespace for alias derivation`,
+        `${entry.name}: exportSubpath must use the ampi-* preferred namespace for alias derivation`,
       );
       assert.equal(
         (entry.exportAliases ?? []).includes(expectedAlias),
@@ -177,20 +192,20 @@ describe("architecture manifest guardrails", () => {
     }
   });
 
-  it("mmr-workers manifest tools match the provider-owned worker tool set", async () => {
+  it("ampi-workers manifest tools match the provider-owned worker tool set", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
-    const { MMR_WORKERS_OWNED_TOOLS } = await importSource("extensions/mmr-workers/provider.ts");
-    const manifestTools = MMR_EXTENSION_MANIFEST.find((entry) => entry.name === "mmr-workers")?.tools ?? [];
+    const { MMR_WORKERS_OWNED_TOOLS } = await importSource("extensions/ampi-workers/provider.ts");
+    const manifestTools = MMR_EXTENSION_MANIFEST.find((entry) => entry.name === "ampi-workers")?.tools ?? [];
     assert.deepEqual(
       [...manifestTools].sort(),
       [...MMR_WORKERS_OWNED_TOOLS].sort(),
-      "mmr-workers manifest tools must match MMR_WORKERS_OWNED_TOOLS so ownership drift is caught",
+      "ampi-workers manifest tools must match MMR_WORKERS_OWNED_TOOLS so ownership drift is caught",
     );
   });
 
   it("manifest tools never collide with the planned-tool catalog", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
-    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/ampi-core/planned-catalog.ts");
     const plannedNames = new Set(MMR_PLANNED_TOOL_CATALOG.map((e) => e.name));
     for (const entry of MMR_EXTENSION_MANIFEST) {
       for (const tool of entry.tools) {
@@ -206,7 +221,7 @@ describe("architecture manifest guardrails", () => {
   it("subagent child keep-set references only manifested extensions", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const { MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS } = await importSource(
-      "extensions/mmr-workers/child-extension-scope.ts",
+      "extensions/ampi-workers/child-extension-scope.ts",
     );
     const names = new Set(MMR_EXTENSION_MANIFEST.map((e) => e.name));
     for (const [profile, keep] of Object.entries(MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS)) {
@@ -235,11 +250,11 @@ describe("architecture manifest guardrails", () => {
     }
   });
 
-  it("mmr-core imports no sibling extension outside the recorded exception set", async () => {
+  it("ampi-core imports no sibling extension outside the recorded exception set", async () => {
     const { MMR_CORE_SIBLING_IMPORT_EXCEPTIONS } = await loadManifest();
     const allowed = new Set(MMR_CORE_SIBLING_IMPORT_EXCEPTIONS);
-    const coreDir = path.join(extensionsDir, "mmr-core");
-    const importRe = /from\s+"\.\.\/(mmr-[a-z-]+)\//g;
+    const coreDir = path.join(extensionsDir, "ampi-core");
+    const importRe = /from\s+"\.\.\/(ampi-[a-z-]+)\//g;
 
     const violations = [];
     for (const file of collectTsFiles(coreDir)) {
@@ -247,7 +262,7 @@ describe("architecture manifest guardrails", () => {
       let match;
       while ((match = importRe.exec(text)) !== null) {
         const sibling = match[1];
-        if (sibling === "mmr-core") continue;
+        if (sibling === "ampi-core") continue;
         if (!allowed.has(sibling)) {
           violations.push(`${path.relative(repoRoot, file)} -> ${sibling}`);
         }
@@ -256,21 +271,21 @@ describe("architecture manifest guardrails", () => {
     assert.deepEqual(
       violations,
       [],
-      `mmr-core must not import siblings outside [${[...allowed].join(", ")}]. New couplings:\n${violations.join("\n")}`,
+      `ampi-core must not import siblings outside [${[...allowed].join(", ")}]. New couplings:\n${violations.join("\n")}`,
     );
   });
 
-  it("records the current mmr-core sibling-import exceptions as still present (drift detector)", async () => {
+  it("records the current ampi-core sibling-import exceptions as still present (drift detector)", async () => {
     const { MMR_CORE_SIBLING_IMPORT_EXCEPTIONS } = await loadManifest();
-    const coreDir = path.join(extensionsDir, "mmr-core");
-    const importRe = /from\s+"\.\.\/(mmr-[a-z-]+)\//g;
+    const coreDir = path.join(extensionsDir, "ampi-core");
+    const importRe = /from\s+"\.\.\/(ampi-[a-z-]+)\//g;
 
     const found = new Set();
     for (const file of collectTsFiles(coreDir)) {
       const text = readFileSync(file, "utf8");
       let match;
       while ((match = importRe.exec(text)) !== null) {
-        if (match[1] !== "mmr-core") found.add(match[1]);
+        if (match[1] !== "ampi-core") found.add(match[1]);
       }
     }
     // Every recorded exception must still exist; once a chunk removes a coupling,

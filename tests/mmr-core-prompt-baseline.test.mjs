@@ -84,7 +84,7 @@ describe("Phase B baseline: buildMmrPromptLayer block ordering", () => {
   let buildMmrPromptLayer;
 
   beforeEach(async () => {
-    const mod = await importSource("extensions/mmr-core/prompt.ts");
+    const mod = await importSource("extensions/ampi-core/prompt.ts");
     buildMmrPromptLayer = mod.buildMmrPromptLayer;
   });
 
@@ -168,8 +168,8 @@ describe("Phase B baseline: effective-surface snapshots (renderer + buildMmrProm
   let renderMmrPromptDebugFixture;
 
   beforeEach(async () => {
-    const prompt = await importSource("extensions/mmr-core/prompt.ts");
-    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const prompt = await importSource("extensions/ampi-core/prompt.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
     buildMmrPromptLayer = prompt.buildMmrPromptLayer;
     renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
   });

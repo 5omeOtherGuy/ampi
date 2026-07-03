@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-custom-subagents/custom-config.ts";
+const MODULE = "extensions/ampi-custom-subagents/custom-config.ts";
 
 function makeProject() {
   const home = mkdtempSync(path.join(os.tmpdir(), "ampi-cfg-home-"));

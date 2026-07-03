@@ -22,4 +22,4 @@ scripts/install-hooks.mjs
 # Developer-only debug-capture extension. Not registered in package.json
 # pi.extensions, so it never auto-loads for users; excluded here so it is
 # never shipped in the npm package either.
-src/extensions/mmr-debug/
+src/extensions/ampi-debug/

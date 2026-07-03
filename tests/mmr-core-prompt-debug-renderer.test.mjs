@@ -79,7 +79,7 @@ describe("mmr-core prompt debug renderer", () => {
   let stringifyMmrToolSchema;
 
   beforeEach(async () => {
-    const mod = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const mod = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
     renderMmrPromptDebugFixture = mod.renderMmrPromptDebugFixture;
     stringifyMmrToolSchema = mod.stringifyMmrToolSchema;
   });
@@ -275,7 +275,7 @@ describe("mmr-core stringifyMmrToolSchema", () => {
   let stringifyMmrToolSchema;
 
   beforeEach(async () => {
-    const mod = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+    const mod = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
     stringifyMmrToolSchema = mod.stringifyMmrToolSchema;
   });
 

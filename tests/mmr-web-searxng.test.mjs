@@ -32,7 +32,7 @@ function makeFetchMock(plan) {
 
 describe("mmr-web SearXNG client - search", () => {
   it("rejects an empty SearXNG URL", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     await assert.rejects(
       () => searxngSearch({ query: "ts", maxResults: 5, maxResultBytes: 10000 }, { url: "" }),
       /SearXNG URL/,
@@ -40,7 +40,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("rejects an empty query", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     await assert.rejects(
       () => searxngSearch({ query: "  ", maxResults: 5, maxResultBytes: 10000 }, { url: "http://127.0.0.1:8080" }),
       /non-empty query/,
@@ -48,7 +48,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("sends a GET request to /search?format=json with the user query", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ results: [
         { title: "TypeScript", url: "https://example.com/ts", content: "Typed JS" },
@@ -75,7 +75,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("preserves a base path prefix when the SearXNG URL is hosted under a subpath", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ results: [] }),
     ]);
@@ -87,7 +87,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("rejects result URLs that would fail the public-web SSRF policy", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => jsonResponse({ results: [
         { title: "ok", url: "https://example.com/ok" },
@@ -106,7 +106,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("clamps to maxResults", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => jsonResponse({ results: Array.from({ length: 8 }, (_, i) => ({
         title: `t${i}`, url: `https://example.com/${i}`,
@@ -121,7 +121,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("surfaces an actionable error when the instance returns HTML (JSON not enabled)", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => htmlResponse("<!DOCTYPE html><html><body>SearXNG</body></html>"),
     ]);
@@ -135,7 +135,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("propagates HTTP error status with a diagnostic body preview", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } }),
     ]);
@@ -149,7 +149,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("normalizes publishedDate to age", async () => {
-    const { searxngSearch } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { searxngSearch } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => jsonResponse({ results: [
         { title: "t", url: "https://example.com/", publishedDate: "2024-01-15" },
@@ -163,7 +163,7 @@ describe("mmr-web SearXNG client - search", () => {
   });
 
   it("createSearXNGSearchBackend returns a SearchBackend with id=searxng", async () => {
-    const { createSearXNGSearchBackend } = await importSource("extensions/mmr-web/search/searxng.ts");
+    const { createSearXNGSearchBackend } = await importSource("extensions/ampi-web/search/searxng.ts");
     const { fetchImpl } = makeFetchMock([
       () => jsonResponse({ results: [{ title: "t", url: "https://example.com/" }] }),
     ]);

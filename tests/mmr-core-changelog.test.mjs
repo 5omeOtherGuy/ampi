@@ -17,12 +17,12 @@ const MODELS = [
 after(cleanupLoadedSource);
 
 async function importChangelogModule() {
-  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/changelog.ts")).href;
+  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/changelog.ts")).href;
   return import(`${url}?${Date.now()}-${Math.random()}`);
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -459,7 +459,7 @@ describe("mmr-core changelog parsing and update display", () => {
         changelog: makeUnreleasedChangelog(["Already installed."]),
       });
 
-      const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+      const extension = (await importSource("extensions/ampi-core/index.ts")).default;
       const runtime = await importRuntime();
       runtime.setMmrModeState(undefined);
       runtime.setMmrSessionIdentity(undefined);

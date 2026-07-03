@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TOOLS_MODULE = "extensions/mmr-workers/async-task-tools.ts";
-const REGISTRY_MODULE = "extensions/mmr-workers/async-task-registry.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
 
 after(cleanupLoadedSource);
 
@@ -62,7 +62,7 @@ function stubLibrarianInvocation() {
 }
 
 async function makeGithubOwnedPi() {
-  const ownership = await importSource("extensions/mmr-github/tool-ownership.ts");
+  const ownership = await importSource("extensions/ampi-github/tool-ownership.ts");
   ownership.__resetMmrGithubToolSourcePathsForTests();
   ownership.registerMmrGithubToolSourcePath("/mmr-github");
   return {
@@ -313,7 +313,7 @@ describe("start_task", () => {
     const result = await poll.execute("p0", { task_id: "finder-1" }, undefined, undefined, CTX);
     assert.equal(result.details.status, "succeeded");
     assert.equal(result.details.agent, "finder");
-    assert.equal(result.details.final.worker, "mmr-subagents.finder");
+    assert.equal(result.details.final.worker, "ampi-workers.finder");
     assert.match(result.content[0].text, /finder answer/);
   });
 
@@ -401,7 +401,7 @@ describe("start_task", () => {
     await flush();
     const result = await poll.execute("p0", { task_id: "librarian-1" }, undefined, undefined, CTX);
     assert.equal(result.details.agent, "librarian");
-    assert.equal(result.details.final.worker, "mmr-subagents.librarian");
+    assert.equal(result.details.final.worker, "ampi-workers.librarian");
     assert.equal(result.details.final.query, "Explain owner/repo auth");
     assert.match(result.content[0].text, /librarian answer/);
   });
@@ -432,7 +432,7 @@ describe("task_poll", () => {
     result = await poll.execute("p1", { task_id: "t1" }, undefined, undefined, CTX);
     assert.equal(result.details.status, "succeeded");
     assert.match(result.content[0].text, /final answer/);
-    assert.equal(result.details.final.worker, "mmr-subagents.Task");
+    assert.equal(result.details.final.worker, "ampi-workers.Task");
   });
 
   it("renders partial terminal outcomes distinctly from clean success", async () => {
@@ -808,7 +808,7 @@ describe("async task tools completion push", () => {
     await flush();
     assert.equal(sent.length, 1, "exactly one completion push");
     assert.deepEqual(sent[0].o, { deliverAs: "followUp", triggerTurn: true });
-    assert.equal(sent[0].m.customType, "mmr-subagents.async-task-completion");
+    assert.equal(sent[0].m.customType, "ampi-workers.async-task-completion");
     assert.match(sent[0].m.content, /call task_poll\(\{task_id:"t1"\}\) once to retrieve it\./);
     assert.doesNotMatch(sent[0].m.content, /Non-normal outcome:/);
     assert.equal(sent[0].m.details.outcomeText, undefined);

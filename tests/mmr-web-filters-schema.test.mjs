@@ -38,7 +38,7 @@ function makeFetchMock(handler) {
 
 describe("web_search schema — filter fields", () => {
   it("declares optional include_domains/exclude_domains arrays and a recency enum", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const tool = createWebSearchTool({ getSettings: () => settings() });
     const props = tool.parameters.properties;
     assert.equal(props.include_domains.type, "array");
@@ -60,7 +60,7 @@ describe("web_search schema — filter fields", () => {
 
 describe("web_search execute — filter passthrough and reporting", () => {
   it("normalizes domains (scheme/www/case/path stripped) and passes them to the backend; reports details.filters", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() =>
       braveJson([
         { title: "A", url: "https://docs.example.com/a", description: "alpha" },
@@ -96,7 +96,7 @@ describe("web_search execute — filter passthrough and reporting", () => {
   });
 
   it("passes a country code to the Brave backend and reports it native/full in details.filters", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([{ title: "A", url: "https://x/a" }]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -110,7 +110,7 @@ describe("web_search execute — filter passthrough and reporting", () => {
   });
 
   it("rejects an invalid country code before any network call", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -124,7 +124,7 @@ describe("web_search execute — filter passthrough and reporting", () => {
   });
 
   it("reports details.filters as an empty array when no filters are requested", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl } = makeFetchMock(() => braveJson([{ title: "A", url: "https://x/a" }]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -135,7 +135,7 @@ describe("web_search execute — filter passthrough and reporting", () => {
   });
 
   it("rejects a domain present in both include and exclude (conflict) without calling fetch", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -156,7 +156,7 @@ describe("web_search execute — filter passthrough and reporting", () => {
   });
 
   it("rejects an invalid recency value before any network call", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const fetchImpl = async () => {
       throw new Error("fetch must not be called for invalid params");
     };

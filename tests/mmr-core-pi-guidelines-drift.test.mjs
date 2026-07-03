@@ -2,7 +2,7 @@
 //
 // Mode-derived subagent workers rebuild their `Guidelines:` block from the
 // worker's profile-filtered manifest (see
-// src/extensions/mmr-core/subagent-prompt-assembly.ts:buildWorkerGuidelinesBlock),
+// src/extensions/ampi-core/subagent-prompt-assembly.ts:buildWorkerGuidelinesBlock),
 // reproducing Pi's `buildSystemPrompt` composition. Per-tool bullets are Pi's
 // own data flowing through the manifest, but the conditional bash-exploration
 // bullet and the two always-on bullets are Pi-owned *constants* reproduced from
@@ -23,7 +23,7 @@ after(cleanupLoadedSource);
 describe("Pi Guidelines composition drift guard", () => {
   it("our reproduced constant guidelines still match Pi's buildSystemPrompt", async () => {
     const { PI_CONSTANT_GUIDELINES } = await importSource(
-      "extensions/mmr-core/subagent-prompt-assembly.ts",
+      "extensions/ampi-core/subagent-prompt-assembly.ts",
     );
 
     // Resolve the installed Pi package via its ESM entry (the package's

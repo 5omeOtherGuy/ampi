@@ -11,7 +11,7 @@ describe("mmr-session-fallback persisted state", () => {
       MMR_SESSION_FALLBACK_STATE_VERSION,
       findLatestPersistedMmrSessionFallbackOverride,
       toPersistedMmrSessionFallbackOverride,
-    } = await importSource("extensions/mmr-session-fallback/state.ts");
+    } = await importSource("extensions/ampi-session-fallback/state.ts");
 
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
@@ -40,7 +40,7 @@ describe("mmr-session-fallback persisted state", () => {
       findLatestPersistedMmrSessionFallbackOverride,
       toPersistedMmrSessionFallbackClear,
       toPersistedMmrSessionFallbackOverride,
-    } = await importSource("extensions/mmr-session-fallback/state.ts");
+    } = await importSource("extensions/ampi-session-fallback/state.ts");
 
     const override = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
@@ -70,7 +70,7 @@ describe("mmr-session-fallback persisted state", () => {
   });
 
   it("skips invalid, future-version, and other-session entries", async () => {
-    const { MMR_SESSION_FALLBACK_ENTRY, findLatestPersistedMmrSessionFallbackOverride } = await importSource("extensions/mmr-session-fallback/state.ts");
+    const { MMR_SESSION_FALLBACK_ENTRY, findLatestPersistedMmrSessionFallbackOverride } = await importSource("extensions/ampi-session-fallback/state.ts");
 
     const found = findLatestPersistedMmrSessionFallbackOverride([
       { type: "custom", customType: MMR_SESSION_FALLBACK_ENTRY, data: { version: 999, sessionId: "session-1" } },

@@ -5,8 +5,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const IMPORT_MODULE = "extensions/mmr-custom-subagents/custom-import.ts";
-const LOADER_MODULE = "extensions/mmr-custom-subagents/custom-loader.ts";
+const IMPORT_MODULE = "extensions/ampi-custom-subagents/custom-import.ts";
+const LOADER_MODULE = "extensions/ampi-custom-subagents/custom-loader.ts";
 
 describe("mmr-subagents custom import planner", () => {
   it("maps Claude aliases, blocks unsafe tools, and flags unknown tools", async () => {

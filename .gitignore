@@ -9,7 +9,9 @@ coverage/
 .pi/npm/
 .pi/git/
 .pi/agent/
-# mmr-debug capture output (contains full prompt/session text; never commit)
+# ampi-debug capture output (contains full prompt/session text; never commit)
+.pi/ampi-debug/
+# legacy capture path
 .pi/mmr-debug/
 *.mmr-capture.jsonl
 docs/private/

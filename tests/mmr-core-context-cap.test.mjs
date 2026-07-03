@@ -9,11 +9,11 @@ import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./help
 after(cleanupLoadedSource);
 
 async function importContextCap() {
-  return importSource("extensions/mmr-core/context-cap.ts");
+  return importSource("extensions/ampi-core/context-cap.ts");
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -145,7 +145,7 @@ function buildCtx(models, setModelCalls, notifications = []) {
 
 describe("mmr-core activation context cap", () => {
   it("fable mode passes the registered model unchanged (no cap)", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-fable-5", contextWindow: 1_000_000, maxTokens: 128_000 },
     ];
@@ -165,7 +165,7 @@ describe("mmr-core activation context cap", () => {
 
 describe("mmr-core defensive reassertion", () => {
   it("re-applies the cap when the active model drifts back to an uncapped window", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
     ];
@@ -191,7 +191,7 @@ describe("mmr-core defensive reassertion", () => {
   });
 
   it("leaves a GPT-primary mode (deep) at Pi's native window through session_start and input", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     // deep routes to an OpenAI model; give it a 1M native window to prove
     // the GPT/Codex modes carry no ampi cap and pass the native window
     // through untouched.
@@ -218,7 +218,7 @@ describe("mmr-core defensive reassertion", () => {
 
   it("does not reassert while a subagent worker is active", async () => {
     const runtime = await importRuntime();
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
     ];
@@ -242,7 +242,7 @@ describe("mmr-core defensive reassertion", () => {
   });
 
   it("does not reassert when the active model drifted to a different provider/id (genuine native change)", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
       { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 32_000 },
@@ -266,7 +266,7 @@ describe("mmr-core defensive reassertion", () => {
 
   it("does not reassert while an MMR-managed model override is in effect", async () => {
     const runtime = await importRuntime();
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
     ];

@@ -43,13 +43,13 @@ You can now define your own subagents as Markdown files and call them as tools.
 - Author a subagent in a Pi-owned root: `<cwd>/.pi/subagents` (project) or
   `~/.pi/agent/subagents` (global). The Markdown body becomes the worker's system
   prompt; frontmatter sets the model, thinking level, and tool allowlist.
-- Enable and configure them through the `/mmr-config` → **subagent (setup/import
+- Enable and configure them through the `/ampi-config` → **subagent (setup/import
   custom)** wizard. It scans Pi-owned roots and can **import existing
   `.claude/agents` definitions**, recommends a least-privilege read-only toolset,
   maps tool aliases, blocks unsafe (recursive/advisory/MCP/mutation) tools, and
   lets you scope each subagent to specific locked modes and projects.
 - Config is the on switch: a Markdown file is just a candidate until an enabled
-  `mmrSubagents.custom.agents.<id>` record references it. A fresh install never
+  `ampiSubagents.custom.agents.<id>` record references it. A fresh install never
   auto-inherits another harness's subagents.
 - Sensible fallbacks reduce friction: a subagent with no declared `tools` gets a
   standard toolset (`read, bash, edit, write, find, grep, web_search,
@@ -67,9 +67,9 @@ completion rules, a reminder to keep the list current after each successful writ
 a verification nudge when a 3+ item list is marked all-complete without a check
 step, and a bounded stale-update reminder after repeated turns with no list write.
 
-## Safer `/mmr-config` writes
+## Safer `/ampi-config` writes
 
-All `/mmr-config` settings writes (core, web, and custom-subagent records) now go
+All `/ampi-config` settings writes (core, web, and custom-subagent records) now go
 through one hardened path: symlinked `settings.json` files are refused, non-JSON
 files are not clobbered, and writes are atomic — a crash mid-write can no longer
 truncate your settings. The config menu also re-reads from disk on entry, so the
@@ -92,22 +92,22 @@ The built-in `edit` guidance now states that each `edits[]` item carries only
 steering the agent to split changes across separate items instead of retrying a
 rejected call.
 
-## For developers: opt-in request/response capture (`mmr-debug`)
+## For developers: opt-in request/response capture (`ampi-debug`)
 
 A new developer-only extension can record the ground-truth provider
 request/response surface (assembled system prompt, advertised tools, response
 status/headers, and model output) as JSON Lines for turn-by-turn debugging. It is
-fully inert unless `MMR_DEBUG_CAPTURE_FILE` is set and is not auto-loaded — opt in
-with:
+fully inert unless `AMPI_DEBUG_CAPTURE_FILE` (legacy `MMR_DEBUG_CAPTURE_FILE` still
+accepted) is set and is not auto-loaded — opt in with:
 
 ```
-MMR_DEBUG_CAPTURE_FILE="$PWD/.pi/mmr-debug/capture.jsonl" \
-  pi -e "$PWD/src/extensions/mmr-debug/index.ts"
+AMPI_DEBUG_CAPTURE_FILE="$PWD/.pi/ampi-debug/capture.jsonl" \
+  pi -e "$PWD/src/extensions/ampi-debug/index.ts"
 ```
 
-`MMR_DEBUG_CAPTURE_FULL=1` additionally dumps the entire raw request payload.
+`AMPI_DEBUG_CAPTURE_FULL=1` additionally dumps the entire raw request payload.
 Capture files contain full prompt/session text, so keep them out of version
-control (the recommended `.pi/mmr-debug/` path is gitignored).
+control (the recommended `.pi/ampi-debug/` path is gitignored, as is the legacy `.pi/mmr-debug/`).
 
 ## Also of note
 

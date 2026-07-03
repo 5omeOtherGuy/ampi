@@ -46,14 +46,14 @@ function lockedSmartState(overrides = {}) {
 }
 
 async function loadRuntime() {
-  return importSource("extensions/mmr-core/runtime.ts");
+  return importSource("extensions/ampi-core/runtime.ts");
 }
 
 beforeEach(async () => {
   const runtime = await loadRuntime();
   runtime.setMmrModeState(undefined);
   runtime.setMmrSubagentState(undefined);
-  const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+  const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
   fallbackRuntime.clearMmrSessionFallbackOverrides();
 });
 
@@ -64,7 +64,7 @@ const RATE_LIMIT_EVENT = {
 
 describe("mmr-session-fallback extension", () => {
   it("defers a first transient error, then prompts once it is sustained, applies the selection, persists it, and returns a retryable message", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
 
@@ -95,7 +95,7 @@ describe("mmr-session-fallback extension", () => {
     assert.deepEqual(calls.setModel[0], FALLBACK_MODEL);
     assert.deepEqual(calls.setThinkingLevel, ["high"]);
     assert.equal(calls.appendEntry.length, 1);
-    assert.equal(calls.appendEntry[0][0], "mmr-session-fallback.override");
+    assert.equal(calls.appendEntry[0][0], "ampi-session-fallback.override");
     assert.equal(calls.appendEntry[0][1].selectedProvider, "anthropic");
     assert.equal(calls.appendEntry[0][1].selectedModel, "claude-opus-4-6");
     assert.equal(runtime.getMmrModeState()?.provider, "anthropic");
@@ -109,7 +109,7 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("offers a fallback for minimalcc-pi silent 200 stream capacity stalls", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
 
@@ -148,7 +148,7 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("leaves the provider error unchanged when the user cancels", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
     const { pi, calls, handlers } = createMockPi();
@@ -166,7 +166,7 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("escalates a hard-quota error immediately without waiting for a repeat", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
     const { pi, calls, handlers } = createMockPi();
@@ -193,7 +193,7 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("resets the transient streak after a successful turn", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
     const { pi, calls, handlers } = createMockPi();
@@ -221,9 +221,9 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("does not prompt in Free mode, subagent workers, or sessions that already chose a fallback", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
-    const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
     const { pi, calls, handlers } = createMockPi();
     const { ctx, selectCalls } = createMockExtensionContext({ sessionId: "session-1", models: [FAILING_MODEL, FALLBACK_MODEL] });
     ctx.ui.select = async (title, options) => {
@@ -270,9 +270,9 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("clears runtime and persisted fallback when the user changes model or thinking", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
-    const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
     const { pi, calls, handlers } = createMockPi();
     const { ctx } = createMockExtensionContext({ sessionId: "session-1", models: [FAILING_MODEL, FALLBACK_MODEL] });
     fallbackRuntime.setMmrSessionFallbackOverride("session-1", {
@@ -294,15 +294,15 @@ describe("mmr-session-fallback extension", () => {
 
     assert.equal(fallbackRuntime.getMmrSessionFallbackOverrideSnapshot("session-1"), undefined);
     assert.equal(runtime.getMmrManagedModelOverride(), undefined);
-    assert.equal(calls.appendEntry.at(-1)?.[0], "mmr-session-fallback.override");
+    assert.equal(calls.appendEntry.at(-1)?.[0], "ampi-session-fallback.override");
     assert.equal(calls.appendEntry.at(-1)?.[1].cleared, true);
   });
 
   it("rehydrates an override on resume and clears it for a new session", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState());
-    const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/mmr-session-fallback/state.ts");
+    const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/ampi-session-fallback/state.ts");
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
       mode: "smart",
@@ -327,15 +327,15 @@ describe("mmr-session-fallback extension", () => {
     assert.equal(runtime.getMmrManagedModelOverride()?.model, "claude-opus-4-6");
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
     assert.equal(fallbackRuntime.getMmrSessionFallbackOverrideSnapshot("session-1"), undefined);
     assert.equal(runtime.getMmrManagedModelOverride(), undefined);
   });
 
   it("sets promptInFlight while a prompt runs and clears it after the prompt settles", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
-    const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
     runtime.setMmrModeState(lockedSmartState());
     const { pi, handlers } = createMockPi();
     const { ctx, selectCalls } = createMockExtensionContext({
@@ -380,9 +380,9 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("clears promptInFlight when the prompt rejects", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
-    const fallbackRuntime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const fallbackRuntime = await importSource("extensions/ampi-session-fallback/runtime.ts");
     runtime.setMmrModeState(lockedSmartState());
     const { pi, handlers } = createMockPi();
     const notifications = [];
@@ -407,10 +407,10 @@ describe("mmr-session-fallback extension", () => {
   });
 
   it("does not rehydrate stale overrides for a different current mode route", async () => {
-    const extension = (await importSource("extensions/mmr-session-fallback/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-session-fallback/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrModeState(lockedSmartState({ provider: "openai-codex", model: "gpt-5.5" }));
-    const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/mmr-session-fallback/state.ts");
+    const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/ampi-session-fallback/state.ts");
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
       mode: "smart",

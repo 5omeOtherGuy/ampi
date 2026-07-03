@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const CONTRACT_MODULE = "extensions/mmr-core/subagent-runner-contract.ts";
+const CONTRACT_MODULE = "extensions/ampi-core/subagent-runner-contract.ts";
 
 describe("mmr-core subagent runner framework contract", () => {
   it("exports the generic run and tool-use status literals", async () => {

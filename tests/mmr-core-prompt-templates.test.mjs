@@ -13,13 +13,13 @@ const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
 
 describe("mmr-core prompt templates - structural invariants", () => {
   it("exports exactly one template per prompted (non-free) locked mode", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     assert.deepEqual(Object.keys(MMR_MODE_PROMPT_TEMPLATES).sort(), [...PROMPTED_MODES].sort());
     assert.equal("free" in MMR_MODE_PROMPT_TEMPLATES, false, "free mode must not have a prompt template");
   });
 
   it("every template has a non-empty tag, intro, and closingLine; only rush and deep carry a posture", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       const template = MMR_MODE_PROMPT_TEMPLATES[mode];
       assert.ok(template, `${mode}: template must exist`);
@@ -42,14 +42,14 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("tag matches the mode key for every template", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].tag, mode, `${mode}: tag must equal the mode key`);
     }
   });
 
   it("shared prompt modules carry common tool/coding guidance", async () => {
-    const { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } = await importSource("extensions/mmr-core/prompt-modules.ts");
+    const { SHARED_CODING_GUIDANCE, SHARED_TOOL_GUIDANCE } = await importSource("extensions/ampi-core/prompt-modules.ts");
     assert.match(SHARED_TOOL_GUIDANCE, /## Tool execution policy/);
     assert.doesNotMatch(SHARED_TOOL_GUIDANCE, /Run independent read-only calls in parallel/);
     assert.match(SHARED_TOOL_GUIDANCE, /purpose-built worker fits the job/);
@@ -62,7 +62,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("mode templates do not duplicate shared module-only guidance sections", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       const posture = MMR_MODE_PROMPT_TEMPLATES[mode].postureSections;
       assert.doesNotMatch(posture, /## Executing actions with care/, `${mode}: shared guardrail must live in prompt modules`);
@@ -72,7 +72,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("mode-specific posture headings are present (rush/deep)", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush mode/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Discovery: minimum evidence/);
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Communication: outcome first/);
@@ -83,7 +83,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("introductions identify the mode by name or role to avoid silent mis-routing", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     // Each intro must mention its mode or a unique role marker so a copy-paste
     // bug between entries fails loudly.
     assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.intro, /fewest useful tool loops/i);
@@ -94,7 +94,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("smart-family variants render the smart system prompt verbatim apart from the mode tag", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of ["fable"]) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.smart.intro, `${mode}: intro matches smart`);
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, MMR_MODE_PROMPT_TEMPLATES.smart.postureSections, `${mode}: posture matches smart`);
@@ -103,13 +103,13 @@ describe("mmr-core prompt templates - structural invariants", () => {
   });
 
   it("closingLine differs between distinct framings (smart family shares one)", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     const closings = ["smart", "rush", "deep"].map((mode) => MMR_MODE_PROMPT_TEMPLATES[mode].closingLine);
     assert.equal(new Set(closings).size, closings.length, "smart, rush, and deep must define distinct closing lines");
   });
 
   it("postureSections never re-introduces a leading or trailing blank line that the renderer would double", async () => {
-    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/mmr-core/prompt-templates.ts");
+    const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       const sections = MMR_MODE_PROMPT_TEMPLATES[mode].postureSections;
       assert.equal(sections.startsWith("\n"), false, `${mode}: postureSections must not start with a newline`);

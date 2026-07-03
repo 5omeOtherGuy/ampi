@@ -8,10 +8,10 @@
 import { importSource } from "./load-src.mjs";
 
 export async function applyPatchManifestEntry() {
-  const mod = await importSource("extensions/mmr-patch/index.ts");
+  const mod = await importSource("extensions/ampi-patch/index.ts");
   return {
     name: "apply_patch",
-    owner: "mmr-patch",
+    owner: "ampi-patch",
     promptSnippet: mod.APPLY_PATCH_PROMPT_SNIPPET,
     promptGuidelines: [...mod.APPLY_PATCH_PROMPT_GUIDELINES],
     description: mod.APPLY_PATCH_DESCRIPTION,
@@ -20,10 +20,10 @@ export async function applyPatchManifestEntry() {
 }
 
 export async function taskListManifestEntry() {
-  const mod = await importSource("extensions/mmr-tasks/todo-list-tool.ts");
+  const mod = await importSource("extensions/ampi-tasks/todo-list-tool.ts");
   return {
     name: "task_list",
-    owner: "mmr-tasks",
+    owner: "ampi-tasks",
     promptSnippet: mod.TASK_LIST_PROMPT_SNIPPET,
     promptGuidelines: [...mod.TASK_LIST_PROMPT_GUIDELINES],
     description: mod.TASK_LIST_DESCRIPTION,
@@ -32,10 +32,10 @@ export async function taskListManifestEntry() {
 }
 
 export async function webSearchManifestEntry() {
-  const mod = await importSource("extensions/mmr-web/tools.ts");
+  const mod = await importSource("extensions/ampi-web/tools.ts");
   return {
     name: "web_search",
-    owner: "mmr-web",
+    owner: "ampi-web",
     promptSnippet: mod.WEB_SEARCH_PROMPT_SNIPPET,
     promptGuidelines: [...mod.WEB_SEARCH_PROMPT_GUIDELINES],
     description: mod.WEB_SEARCH_DESCRIPTION,
@@ -44,10 +44,10 @@ export async function webSearchManifestEntry() {
 }
 
 export async function readWebPageManifestEntry() {
-  const mod = await importSource("extensions/mmr-web/tools.ts");
+  const mod = await importSource("extensions/ampi-web/tools.ts");
   return {
     name: "read_web_page",
-    owner: "mmr-web",
+    owner: "ampi-web",
     promptSnippet: mod.READ_WEB_PAGE_PROMPT_SNIPPET,
     promptGuidelines: [...mod.READ_WEB_PAGE_PROMPT_GUIDELINES],
     description: mod.READ_WEB_PAGE_DESCRIPTION,

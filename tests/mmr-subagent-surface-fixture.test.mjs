@@ -332,10 +332,10 @@ describe("mmr-subagent-surface: finder fixture", () => {
   let getMmrSubagentProfile;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
-    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
-    const prompts = await importSource("extensions/mmr-workers/prompts.ts");
-    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/ampi-workers/prompts.ts");
+    const profiles = await importSource("extensions/ampi-core/subagent-profiles.ts");
     assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
     renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
     clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
@@ -389,10 +389,10 @@ describe("mmr-subagent-surface: Task fixture", () => {
   let getMmrSubagentProfile;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
-    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
-    const prompts = await importSource("extensions/mmr-workers/prompts.ts");
-    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/ampi-workers/prompts.ts");
+    const profiles = await importSource("extensions/ampi-core/subagent-profiles.ts");
     assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
     renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
     clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
@@ -460,10 +460,10 @@ describe("mmr-subagent-surface: oracle fixture", () => {
   let getMmrSubagentProfile;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
-    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
-    const prompts = await importSource("extensions/mmr-workers/prompts.ts");
-    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/ampi-workers/prompts.ts");
+    const profiles = await importSource("extensions/ampi-core/subagent-profiles.ts");
     assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
     renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
     clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
@@ -513,10 +513,10 @@ describe("mmr-subagent-surface: librarian fixture", () => {
   let getMmrSubagentProfile;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
-    const renderer = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
-    const prompts = await importSource("extensions/mmr-workers/prompts.ts");
-    const profiles = await importSource("extensions/mmr-core/subagent-profiles.ts");
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/ampi-workers/prompts.ts");
+    const profiles = await importSource("extensions/ampi-core/subagent-profiles.ts");
     assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
     renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
     clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;

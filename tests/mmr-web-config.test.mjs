@@ -23,7 +23,7 @@ function setupTempEnv() {
 
 describe("mmr-web config", () => {
   it("defaults to disabled with no settings file and no env opt-in", async () => {
-    const { loadMmrWebSettings, DEFAULT_MAX_RESULT_BYTES, DEFAULT_TIMEOUT_MS } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings, DEFAULT_MAX_RESULT_BYTES, DEFAULT_TIMEOUT_MS } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       const result = loadMmrWebSettings(env.project, { homeDirectory: env.home, env: {} });
@@ -43,7 +43,7 @@ describe("mmr-web config", () => {
   });
 
   it("reads mmrWeb block from project settings.json (toggles only, no key)", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -61,7 +61,7 @@ describe("mmr-web config", () => {
   });
 
   it("also accepts the nested `mmr.web` block", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -75,7 +75,7 @@ describe("mmr-web config", () => {
   });
 
   it("ignores deprecated jinaApiKey in settings.json and warns the user it is unsupported", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     for (const layout of ["flat", "nested"]) {
       const env = setupTempEnv();
       try {
@@ -96,7 +96,7 @@ describe("mmr-web config", () => {
   });
 
   it("does not warn when deprecated jinaApiKey is declared with a non-string value", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -111,7 +111,7 @@ describe("mmr-web config", () => {
   });
 
   it("environment JINA_API_KEY is ignored silently while BRAVE_API_KEY is honored", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       const result = loadMmrWebSettings(env.project, {
@@ -130,7 +130,7 @@ describe("mmr-web config", () => {
   });
 
   it("empty MMR_WEB_ENABLE does not override file-set enabled=true", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -148,7 +148,7 @@ describe("mmr-web config", () => {
   });
 
   it("reads mmrWeb backend fields and ignores removed Jina values", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     for (const value of ["auto", "brave"]) {
       const env = setupTempEnv();
       try {
@@ -180,7 +180,7 @@ describe("mmr-web config", () => {
   });
 
   it("environment backend overrides accept only auto/brave", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -205,7 +205,7 @@ describe("mmr-web config", () => {
   });
 
   it("environment BRAVE_API_KEY is honored; file mmrWeb.braveApiKey is ignored with a warning", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     for (const layout of ["flat", "nested"]) {
       const env = setupTempEnv();
       try {
@@ -230,7 +230,7 @@ describe("mmr-web config", () => {
   });
 
   it("reads searxngUrl from MMR_WEB_SEARXNG_URL env", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       const result = loadMmrWebSettings(env.project, {
@@ -245,7 +245,7 @@ describe("mmr-web config", () => {
   });
 
   it("reads searxngUrl from the mmrWeb settings block", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), JSON.stringify({
@@ -259,7 +259,7 @@ describe("mmr-web config", () => {
   });
 
   it("warns and ignores a non-http(s) searxngUrl", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     for (const layout of ["file", "env"]) {
       const env = setupTempEnv();
       try {
@@ -284,7 +284,7 @@ describe("mmr-web config", () => {
   });
 
   it("accepts MMR_WEB_SEARCH_BACKEND=searxng (new in Phase 2)", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       const result = loadMmrWebSettings(env.project, {
@@ -299,7 +299,7 @@ describe("mmr-web config", () => {
   });
 
   it("emits a warning for malformed JSON without throwing", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       writeFileSync(path.join(env.project, ".pi/settings.json"), "{ not valid json");

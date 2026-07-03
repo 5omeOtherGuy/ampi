@@ -196,7 +196,7 @@ Current working directory: /test/cwd
 
 # finder
 
-Owner: mmr-subagents
+Owner: ampi-workers
 
 Prompt snippet: Intelligently search your codebase for complex, multi-step search tasks based on functionality or concepts rather than exact matches
 

@@ -26,12 +26,12 @@ Each locked mode swaps the whole harness together: model preference order, think
 
 ### AMP Code-style parity features already implemented
 
-- **Whole-harness mode switching** via `--mmr-mode`, `/mode`, hotkeys, and persisted session/settings state.
+- **Whole-harness mode switching** via `--ampi-mode`, `/mode`, hotkeys, and persisted session/settings state.
 - **Provider-neutral model preferences** that prefer subscription/OAuth providers first, then API-key providers, then other registered providers.
 - **Your subscriptions and keys**: Claude subscription, OpenAI/Codex, API-key providers, Brave Search, GitHub tokens, and SearXNG all stay under your control.
 - **Managed thinking and context policy** per mode, including mode-local thinking toggles and context display/capping where the mode owns it.
 - **Prompt posture replacement** that preserves Pi's own tool list, docs, project context, skills, date/cwd, and tail content while replacing the coding harness head.
-- **Exact active-tool allowlists** with `/mmr-status debug` diagnostics for active, gated, disabled, deferred, and missing tools.
+- **Exact active-tool allowlists** with `/ampi-status debug` diagnostics for active, gated, disabled, deferred, and missing tools.
 - **Safe local patching** through `apply_patch`, including path-safety checks across the workspace and sibling worktrees.
 - **Session-local planning** through `task_list`, rendered as a pinned Pi widget.
 - **Subagents**: `finder`, `oracle`, `librarian`, `Task`, `reviewer`, the internal `history-reader`, and custom Markdown `sa__*` subagents.
@@ -48,7 +48,7 @@ Each locked mode swaps the whole harness together: model preference order, think
 Pi must already be installed and authenticated.
 
 ```bash
-pi -e git:github.com/5omeOtherGuy/ampi --mmr-mode smart
+pi -e git:github.com/5omeOtherGuy/ampi --ampi-mode smart
 ```
 
 Install globally or per project:
@@ -61,28 +61,28 @@ pi install -l git:github.com/5omeOtherGuy/ampi
 Inside Pi:
 
 ```text
-/mmr-status
-/mmr-status debug
+/ampi-status
+/ampi-status debug
 /mode rush
 /mode deep
 /mode free
 ```
 
-The runtime control surface still uses the shipped `/mmr-*`, `MMR_*`, and `mmr*` identifiers for compatibility; the package, repo, docs, and product posture are now `ampi`.
+The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `AMPI_*` env vars, and `ampi*` settings. The legacy `/mmr-*`, `--mmr-*`, `MMR_*`, and `mmr*` identifiers remain accepted as aliases for existing setups.
 
 ## First two minutes
 
 1. Start in the default AMP-style mode:
 
    ```bash
-   pi -e git:github.com/5omeOtherGuy/ampi --mmr-mode smart
+   pi -e git:github.com/5omeOtherGuy/ampi --ampi-mode smart
    ```
 
 2. Inspect the resolved harness:
 
    ```text
-   /mmr-status
-   /mmr-status debug
+   /ampi-status
+   /ampi-status debug
    ```
 
 3. Switch modes by intent:
@@ -106,9 +106,9 @@ The runtime control surface still uses the shipped `/mmr-*`, `MMR_*`, and `mmr*`
 5. Enable optional reach only when needed:
 
    ```bash
-   export MMR_WEB_ENABLE=true
-   export MMR_GITHUB_ENABLE=true
-   export MMR_HISTORY_ENABLE=true
+   export AMPI_WEB_ENABLE=true
+   export AMPI_GITHUB_ENABLE=true
+   export AMPI_HISTORY_ENABLE=true
    ```
 
 ## Modes
@@ -121,15 +121,15 @@ The runtime control surface still uses the shipped `/mmr-*`, `MMR_*`, and `mmr*`
 | Hard work | `deep` | Reasoning-first model preferences, deeper posture, patching/research/history/subagent tools |
 | Native Pi | `free` | Releases ampi model/thinking/prompt/tool enforcement |
 
-Mode selection precedence: `--mmr-mode` flag → restored session state → `mmrCore.defaultMode` → `smart`.
+Mode selection precedence: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` → `smart`.
 
 Useful controls:
 
 ```text
 /mode              # show current mode
 /mode deep         # switch mode
-/mmr-status        # current harness status
-/mmr-status debug  # model/tool/source diagnostics
+/ampi-status       # current harness status
+/ampi-status debug # model/tool/source diagnostics
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
 Ctrl+Space         # cycle smart → rush → deep
 Alt+R              # toggle the active mode's thinking preset where supported
@@ -150,7 +150,7 @@ Alt+R              # toggle the active mode's thinking preset where supported
 | Direct read-only GitHub operations | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
 | Public web search/read | `web_search`, `read_web_page` |
 | Prior Pi session recall | `find_session`, `read_session` |
-| Custom workers | Markdown `sa__*` subagents imported through `/mmr-config` |
+| Custom workers | Markdown `sa__*` subagents imported through `/ampi-config` |
 
 ## Feature map
 
@@ -174,7 +174,7 @@ Non-secret settings live in Pi settings files. Secrets belong in environment var
 
 ```json
 {
-  "mmrCore": {
+  "ampiCore": {
     "defaultMode": "rush",
     "modelPreferences": {
       "deep": [{ "model": "gpt-5.5", "thinkingLevel": "medium" }]
@@ -183,17 +183,19 @@ Non-secret settings live in Pi settings files. Secrets belong in environment var
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
     }
   },
-  "mmrWeb": { "enabled": true }
+  "ampiWeb": { "enabled": true }
 }
 ```
 
 ```bash
-export MMR_WEB_ENABLE=true
-export MMR_GITHUB_ENABLE=true
-export MMR_HISTORY_ENABLE=true
+export AMPI_WEB_ENABLE=true
+export AMPI_GITHUB_ENABLE=true
+export AMPI_HISTORY_ENABLE=true
 export BRAVE_API_KEY="..."
-export MMR_GITHUB_TOKEN="ghp_xxx"
+export AMPI_GITHUB_TOKEN="ghp_xxx"
 ```
+
+The `AMPI_*` env vars take precedence; the legacy `MMR_*` names (for example `MMR_WEB_ENABLE`) are still accepted.
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Restart Pi after changing settings or env vars that gate tool registration.
 
@@ -204,15 +206,15 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 - Network and history features are opt-in and gated.
 - GitHub tokens and web/search keys are read from env, not settings files.
 - `read_web_page` rejects localhost/private/link-local targets.
-- History always hides raw session file paths/project roots behind opaque refs; content redaction is opt-in with `MMR_HISTORY_REDACT=true`.
+- History always hides raw session file paths/project roots behind opaque refs; content redaction is opt-in with `AMPI_HISTORY_REDACT=true`.
 - Worker runs are bounded, surfaced in the TUI, and report non-normal outcomes explicitly.
 
 ## What is still missing
 
 ampi is production-ready for the implemented AMP Code-style workflow, but parity work continues:
 
-- `/ampi-*` command aliases and first-class `AMPI_*` env aliases while keeping `/mmr-*` compatibility.
-- A richer `/mmr-status debug` history of deterministic mode/fallback events.
+- Continued `/mmr-*`, `--mmr-*`, `MMR_*`, and `mmr*` legacy-alias compatibility alongside the canonical `ampi` surface.
+- A richer `/ampi-status debug` history of deterministic mode/fallback events.
 - More background-widget metadata and grouped completion polish.
 - A TUI browser for prior sessions and stored web/research result IDs.
 - A proxy-first MCP tool surface with the same gated/self-contained posture.
@@ -222,7 +224,7 @@ ampi is production-ready for the implemented AMP Code-style workflow, but parity
 
 - **Docs index:** [`docs/README.md`](docs/README.md)
 - **Quick lookup:** [`docs/quick-reference.md`](docs/quick-reference.md)
-- **Public API:** [`docs/public-api.md`](docs/public-api.md), [`docs/mmr-core-api.md`](docs/mmr-core-api.md)
+- **Public API:** [`docs/public-api.md`](docs/public-api.md), [`docs/ampi-core-api.md`](docs/ampi-core-api.md)
 - **Architecture:** [`docs/reference-architecture.md`](docs/reference-architecture.md)
 - **Subagents:** [`docs/subagent-framework.md`](docs/subagent-framework.md)
 - **Compatibility:** [`docs/extension-compatibility.md`](docs/extension-compatibility.md)

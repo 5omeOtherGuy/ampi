@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const webExtensionPath = "./src/extensions/mmr-web/index.ts";
+const webExtensionPath = "./src/extensions/ampi-web/index.ts";
 
 async function readPackageJson() {
   return JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -20,7 +20,7 @@ async function readPackageLock() {
 describe("mmr-web package wiring", () => {
   it("registers mmr-web as a Pi extension after mmr-core", async () => {
     const pkg = await readPackageJson();
-    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/mmr-core/index.ts");
+    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/ampi-core/index.ts");
     const indexOfWeb = pkg.pi.extensions.indexOf(webExtensionPath);
     assert.notEqual(indexOfCore, -1);
     assert.notEqual(indexOfWeb, -1);
@@ -46,11 +46,11 @@ describe("mmr-web package wiring", () => {
 
   it("exposes a package subpath for direct extension loading", async () => {
     const pkg = await readPackageJson();
-    assert.equal(pkg.exports["./extensions/mmr-web"], webExtensionPath);
+    assert.equal(pkg.exports["./extensions/ampi-web"], webExtensionPath);
   });
 
   it("exports a default factory and a createMmrWebExtension test seam", async () => {
-    const mod = await importSource("extensions/mmr-web/index.ts");
+    const mod = await importSource("extensions/ampi-web/index.ts");
     assert.equal(typeof mod.default, "function");
     assert.equal(typeof mod.createMmrWebExtension, "function");
   });

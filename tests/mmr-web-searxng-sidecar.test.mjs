@@ -131,12 +131,12 @@ function settings(partial = {}) {
 
 describe("mmr-web SearXNG sidecar — opt-in gate", () => {
   beforeEach(async () => {
-    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     __resetSearxngSidecarStateForTests();
   });
 
   it("does nothing when managed=false (does not spawn)", async () => {
-    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn, calls } = makeSpawnRecorder();
     await ensureSearxngSidecarRunning(settings({ managed: false }), { spawn });
     assert.equal(calls.length, 0);
@@ -144,14 +144,14 @@ describe("mmr-web SearXNG sidecar — opt-in gate", () => {
   });
 
   it("does nothing when url is unset (caller resolves to another backend)", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn, calls } = makeSpawnRecorder();
     await ensureSearxngSidecarRunning(settings({ url: undefined }), { spawn });
     assert.equal(calls.length, 0);
   });
 
   it("throws actionable error when managed=true but startCommand is missing", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn } = makeSpawnRecorder();
     await assert.rejects(
       () => ensureSearxngSidecarRunning(settings({ startCommand: undefined }), { spawn }),
@@ -162,12 +162,12 @@ describe("mmr-web SearXNG sidecar — opt-in gate", () => {
 
 describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   beforeEach(async () => {
-    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     __resetSearxngSidecarStateForTests();
   });
 
   it("spawns the start command (no shell) and resolves when health check passes", async () => {
-    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn, calls } = makeSpawnRecorder();
     const fetchImpl = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
     const { timer } = makeManualTimer();
@@ -181,7 +181,7 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   });
 
   it("spawns only ONCE under concurrent ensureRunning() callers", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn, calls } = makeSpawnRecorder();
     let healthCalls = 0;
     const fetchImpl = async () => {
@@ -201,7 +201,7 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   });
 
   it("times out and kills the child when health check never passes", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const child = makeChild(3001);
     const { spawn } = makeSpawnRecorder({ children: [child] });
     // Always fail the health check.
@@ -215,7 +215,7 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   });
 
   it("redacts the start command args from the spawn-failure error", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const sentinel = "SECRET-TOKEN-ARG-do-not-leak";
     const spawn = () => {
       throw new Error("ENOENT");
@@ -243,7 +243,7 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   });
 
   it("uses the explicit healthUrl when provided", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn } = makeSpawnRecorder();
     const fetchCalls = [];
     const fetchImpl = async (url) => {
@@ -257,7 +257,7 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
   });
 
   it("defaults the health URL to ${url}/search?q=ping&format=json", async () => {
-    const { ensureSearxngSidecarRunning } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn } = makeSpawnRecorder();
     const fetchCalls = [];
     const fetchImpl = async (url) => {
@@ -272,12 +272,12 @@ describe("mmr-web SearXNG sidecar — spawn + health poll", () => {
 
 describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   beforeEach(async () => {
-    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { __resetSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     __resetSearxngSidecarStateForTests();
   });
 
   it("fires the stop command after the idle window elapses", async () => {
-    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const startChild = makeChild(4001);
     const stopChild = makeChild(4002);
     const { spawn, calls } = makeSpawnRecorder({
@@ -301,7 +301,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("noteUse() resets the idle timer so the stop is deferred", async () => {
-    const { ensureSearxngSidecarRunning, noteSearxngSidecarUse } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, noteSearxngSidecarUse } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     // Stop child (index 1) auto-exits so the eventual idle-stop wait resolves.
     const { spawn, calls } = makeSpawnRecorder({ autoExitChildren: [1] });
     const fetchImpl = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
@@ -318,7 +318,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("shutdownSearxngSidecar runs the stop command and kills the child as a fallback", async () => {
-    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar, __getSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar, __getSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const startChild = makeChild(5001);
     const stopChild = makeChild(5002);
     const { spawn, calls } = makeSpawnRecorder({
@@ -335,7 +335,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("still runs the stop command after a short-lived detached start process exits", async () => {
-    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const startChild = makeChild(5101);
     const stopChild = makeChild(5102);
     const { spawn, calls } = makeSpawnRecorder({
@@ -358,7 +358,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("noteUse() re-arms the idle timer after a detached start process exits", async () => {
-    const { ensureSearxngSidecarRunning, noteSearxngSidecarUse } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, noteSearxngSidecarUse } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const startChild = makeChild(5201);
     const stopChild = makeChild(5202);
     const { spawn, calls } = makeSpawnRecorder({
@@ -381,7 +381,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("shutdown is idempotent (second call is a no-op)", async () => {
-    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn, calls } = makeSpawnRecorder({ autoExitChildren: [1] });
     const fetchImpl = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
     const { timer } = makeManualTimer();
@@ -392,7 +392,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("falls back to SIGTERM when no stopCommand is configured", async () => {
-    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, shutdownSearxngSidecar } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const startChild = makeChild(6001);
     const { spawn, calls } = makeSpawnRecorder({ children: [startChild] });
     const fetchImpl = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
@@ -404,7 +404,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
   });
 
   it("idle timer is disabled when idleTimeoutMs=0", async () => {
-    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/mmr-web/search/searxng-sidecar.ts");
+    const { ensureSearxngSidecarRunning, __getSearxngSidecarStateForTests } = await importSource("extensions/ampi-web/search/searxng-sidecar.ts");
     const { spawn } = makeSpawnRecorder();
     const fetchImpl = async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
     const { timer } = makeManualTimer();
@@ -415,7 +415,7 @@ describe("mmr-web SearXNG sidecar — idle stop + shutdown", () => {
 
 describe("mmr-web SearXNG sidecar — config wiring", () => {
   it("loadMmrWebSettings reads searxngManaged from env and rejects env start/stop commands with a warning", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const result = loadMmrWebSettings(process.cwd(), {
       homeDirectory: "/dev/null",
       env: {
@@ -438,7 +438,7 @@ describe("mmr-web SearXNG sidecar — config wiring", () => {
   });
 
   it("honors searxngStart/StopCommand from GLOBAL settings but never from project-local settings", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       env.writeGlobal({
@@ -462,7 +462,7 @@ describe("mmr-web SearXNG sidecar — config wiring", () => {
   });
 
   it("ignores a project-only searxngStart/StopCommand and warns (arbitrary-spawn trust gate)", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       env.writeProject({
@@ -485,7 +485,7 @@ describe("mmr-web SearXNG sidecar — config wiring", () => {
   });
 
   it("keeps the GLOBAL command when a project file also sets one (project value is dropped)", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const env = setupTempEnv();
     try {
       env.writeGlobal({ mmrWeb: { searxngManaged: true, searxngStartCommand: ["docker", "compose", "up", "-d"] } });
@@ -499,7 +499,7 @@ describe("mmr-web SearXNG sidecar — config wiring", () => {
   });
 
   it("defaults searxngManaged=false when nothing is configured", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     const result = loadMmrWebSettings(process.cwd(), { homeDirectory: "/dev/null", env: {} });
     assert.equal(result.settings.searxngManaged, false);
     assert.equal(result.settings.searxngStartCommand, undefined);
@@ -507,7 +507,7 @@ describe("mmr-web SearXNG sidecar — config wiring", () => {
   });
 
   it("idle and start timeout defaults are sane", async () => {
-    const { loadMmrWebSettings, DEFAULT_SEARXNG_IDLE_TIMEOUT_MS, DEFAULT_SEARXNG_START_TIMEOUT_MS } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings, DEFAULT_SEARXNG_IDLE_TIMEOUT_MS, DEFAULT_SEARXNG_START_TIMEOUT_MS } = await importSource("extensions/ampi-web/config.ts");
     const result = loadMmrWebSettings(process.cwd(), { homeDirectory: "/dev/null", env: {} });
     assert.equal(result.settings.searxngIdleTimeoutMs, DEFAULT_SEARXNG_IDLE_TIMEOUT_MS);
     assert.equal(result.settings.searxngStartTimeoutMs, DEFAULT_SEARXNG_START_TIMEOUT_MS);

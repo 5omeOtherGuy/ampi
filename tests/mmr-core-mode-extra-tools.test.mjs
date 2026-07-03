@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNTIME_MODULE = "extensions/mmr-core/runtime.ts";
+const RUNTIME_MODULE = "extensions/ampi-core/runtime.ts";
 
 describe("mmr-core mode-extra-tool provider hook", () => {
   it("contributes extra tool names per mode + cwd, deduped, and survives a throwing provider", async () => {

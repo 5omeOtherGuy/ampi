@@ -21,8 +21,8 @@ after(cleanupLoadedSource);
 const promptFixtureDir = path.join(import.meta.dirname, "fixtures/mmr-core-prompts");
 const BASE_PROMPT = readFileSync(path.join(promptFixtureDir, "base.md"), "utf8");
 
-const ASSEMBLY_MODULE = "extensions/mmr-core/prompt-assembly.ts";
-const DIAGNOSTICS_MODULE = "extensions/mmr-core/diagnostics.ts";
+const ASSEMBLY_MODULE = "extensions/ampi-core/prompt-assembly.ts";
+const DIAGNOSTICS_MODULE = "extensions/ampi-core/diagnostics.ts";
 
 function makeState(overrides = {}) {
   return {

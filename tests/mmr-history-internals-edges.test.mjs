@@ -21,7 +21,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-history session-catalog edge paths", () => {
   it("applies before: filter (drops sessions newer than the bound)", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-old", modified: new Date("2026-05-15T00:00:00Z"), allMessagesText: "history search" }),
       sessionInfo({ id: "S-new", modified: new Date("2026-05-25T00:00:00Z"), allMessagesText: "history search" }),
@@ -39,7 +39,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("surfaces an invalid after: date as an `invalid` diagnostic without constraining results", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-old", modified: new Date("2026-05-15T00:00:00Z"), allMessagesText: "history search" }),
       sessionInfo({ id: "S-new", modified: new Date("2026-05-25T00:00:00Z"), allMessagesText: "history search" }),
@@ -62,7 +62,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("applies id: filter as a case-insensitive substring", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "ABC-keep", allMessagesText: "x" }),
       sessionInfo({ id: "XYZ-drop", allMessagesText: "x" }),
@@ -79,7 +79,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("filters by created/modified date aliases and sorts by created time", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-old-created", created: new Date("2026-05-01T00:00:00Z"), modified: new Date("2026-05-29T00:00:00Z"), allMessagesText: "history search" }),
       sessionInfo({ id: "S-middle", created: new Date("2026-05-15T00:00:00Z"), modified: new Date("2026-05-20T00:00:00Z"), allMessagesText: "history search" }),
@@ -99,7 +99,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("paginates results with query-string offset when no top-level offset is supplied", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = Array.from({ length: 5 }, (_, i) =>
       sessionInfo({
         id: `S-${i}`,
@@ -117,7 +117,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("top-level offset overrides query-string offset", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = Array.from({ length: 5 }, (_, i) =>
       sessionInfo({
         id: `S-${i}`,
@@ -133,7 +133,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("paginates results with offset, totalCount, and hasMore", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = Array.from({ length: 5 }, (_, i) =>
       sessionInfo({
         id: `S-${i}`,
@@ -151,7 +151,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("caps results at the requested limit", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = Array.from({ length: 5 }, (_, i) =>
       sessionInfo({
         id: `S-${i}`,
@@ -167,7 +167,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("resolveSessionById trims, strips a leading @, and returns undefined for empty input", async () => {
-    const { resolveSessionById } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { resolveSessionById } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "abc123" })];
     const deps = { listSessions: async () => sessions };
 
@@ -182,14 +182,14 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("resolveSessionById returns undefined when no session matches the prefix", async () => {
-    const { resolveSessionById } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { resolveSessionById } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "abc123" })];
     const resolved = await resolveSessionById({ listSessions: async () => sessions }, "zzz");
     assert.equal(resolved, undefined);
   });
 
   it("resolveSessionById flags ambiguous prefixes and returns all candidate ids", async () => {
-    const { resolveSessionById } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { resolveSessionById } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "abc111" }),
       sessionInfo({ id: "abc222" }),
@@ -203,7 +203,7 @@ describe("mmr-history session-catalog edge paths", () => {
   });
 
   it("resolveSessionById prefers the shared sessionIndex when provided", async () => {
-    const { resolveSessionById } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { resolveSessionById } = await importSource("extensions/ampi-history/session-catalog.ts");
     let depsCalls = 0;
     let indexCalls = 0;
     const sessions = [sessionInfo({ id: "abc123" })];
@@ -236,24 +236,24 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   }
 
   it("collectToolCallPaths returns [] for an unknown tool name", async () => {
-    const { collectToolCallPaths } = await importSource("extensions/mmr-history/session-index.ts");
+    const { collectToolCallPaths } = await importSource("extensions/ampi-history/session-index.ts");
     assert.deepEqual(collectToolCallPaths("unknown_tool", { path: "src/x.ts" }), []);
   });
 
   it("collectToolCallPaths reads write.file_path when write.path is absent", async () => {
-    const { collectToolCallPaths } = await importSource("extensions/mmr-history/session-index.ts");
+    const { collectToolCallPaths } = await importSource("extensions/ampi-history/session-index.ts");
     assert.deepEqual(collectToolCallPaths("write", { file_path: "src/new.ts" }), ["src/new.ts"]);
   });
 
   it("collectToolCallPaths returns [] for non-object args", async () => {
-    const { collectToolCallPaths } = await importSource("extensions/mmr-history/session-index.ts");
+    const { collectToolCallPaths } = await importSource("extensions/ampi-history/session-index.ts");
     assert.deepEqual(collectToolCallPaths("read", undefined), []);
     assert.deepEqual(collectToolCallPaths("read", null), []);
     assert.deepEqual(collectToolCallPaths("read", "not-an-object"), []);
   });
 
   it("apply_patch path extraction picks up every patch-header path, including both sides of '->' renames", async () => {
-    const { collectToolCallPaths } = await importSource("extensions/mmr-history/session-index.ts");
+    const { collectToolCallPaths } = await importSource("extensions/ampi-history/session-index.ts");
     const patchText = [
       "*** Begin Patch",
       "*** Update File: src/a.ts",
@@ -271,13 +271,13 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("apply_patch path extraction accepts the legacy `patch` argument shape", async () => {
-    const { collectToolCallPaths } = await importSource("extensions/mmr-history/session-index.ts");
+    const { collectToolCallPaths } = await importSource("extensions/ampi-history/session-index.ts");
     const paths = collectToolCallPaths("apply_patch", { patch: "*** Update File: src/legacy.ts\n@@" });
     assert.deepEqual(paths, ["src/legacy.ts"]);
   });
 
   it("extractTouchedFilesFromEntries skips non-assistant messages and string content", async () => {
-    const { extractTouchedFilesFromEntries } = await importSource("extensions/mmr-history/session-index.ts");
+    const { extractTouchedFilesFromEntries } = await importSource("extensions/ampi-history/session-index.ts");
     const entries = [
       // User message with a path-shaped tool call is ignored: only
       // assistant-authored structured calls are inspected.
@@ -307,7 +307,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("normalizeTouchedPath handles backslashes and a path equal to the cwd", async () => {
-    const { normalizeTouchedPath } = await importSource("extensions/mmr-history/session-index.ts");
+    const { normalizeTouchedPath } = await importSource("extensions/ampi-history/session-index.ts");
     assert.equal(normalizeTouchedPath("src\\auth.ts", "/repo"), "src/auth.ts");
     // A path that *is* the cwd itself is not a touched file.
     assert.equal(normalizeTouchedPath("/repo", "/repo"), undefined);
@@ -316,7 +316,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("SessionIndex.list reuses the cached result when the fingerprint is unchanged", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
     let listCalls = 0;
     const sessions = [sessionInfo({ id: "S-1" })];
     const deps = {
@@ -339,7 +339,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("SessionIndex.getTouchedFiles memoizes per-session by id|modified|messageCount|path|cwd", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
     const info = sessionInfo({ id: "S-1" });
     let openCalls = 0;
     const deps = {
@@ -367,7 +367,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("SessionIndex does not reuse touched metadata when path or cwd changes", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
     const base = sessionInfo({ id: "S-1", modified: new Date("2026-05-21T00:00:00Z"), messageCount: 2, path: "/tmp/old.jsonl", cwd: "/repo/old" });
     const moved = { ...base, path: "/tmp/new.jsonl", cwd: "/repo/new" };
     let openCalls = 0;
@@ -394,7 +394,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
   });
 
   it("SessionIndex discards per-session touched cache when the global fingerprint changes", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
     const infoV1 = sessionInfo({ id: "S-1", modified: new Date("2026-05-21T00:00:00Z"), messageCount: 2 });
     const infoV2 = { ...infoV1, modified: new Date("2026-05-22T00:00:00Z"), messageCount: 3 };
     let listCalls = 0;
@@ -429,7 +429,7 @@ describe("mmr-history session-index edge paths and TTL cache", () => {
 describe("mmr-history read-session edge paths", () => {
   it("truncates excerpts to fit maxBytes and reports truncated:true", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const { readSessionForGoal } = await importSource("extensions/ampi-history/read-session.ts");
     const manager = SessionManager.inMemory("/repo");
     // Three large assistant messages, each well past the limit.
     const big = "alpha ".repeat(200);
@@ -457,7 +457,7 @@ describe("mmr-history read-session edge paths", () => {
 
   it("goal tokens shorter than 3 chars and common stop-words are dropped from matchedTerms", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const { readSessionForGoal } = await importSource("extensions/ampi-history/read-session.ts");
     const manager = SessionManager.inMemory("/repo");
     manager.appendMessage({ role: "user", content: "alpha discussion about the planner" });
 
@@ -472,7 +472,7 @@ describe("mmr-history read-session edge paths", () => {
 
   it("goal tokens that carry sensitive substrings are redacted in matchedTerms", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const { readSessionForGoal } = await importSource("extensions/ampi-history/read-session.ts");
     const manager = SessionManager.inMemory("/repo");
     manager.appendMessage({ role: "user", content: "We mentioned [home]/alice/secret.ts" });
 
@@ -486,7 +486,7 @@ describe("mmr-history read-session edge paths", () => {
   });
 
   it("formatSessionReadResult prints the standard header lines and the empty-excerpts footer", async () => {
-    const { formatSessionReadResult } = await importSource("extensions/mmr-history/read-session.ts");
+    const { formatSessionReadResult } = await importSource("extensions/ampi-history/read-session.ts");
     const empty = {
       sessionId: "S-empty",
       name: "Empty session",
@@ -522,7 +522,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   }
 
   it("renders the invalid-filter diagnostic group in find_session output", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createFindSessionTool(baseDeps({
       listSessions: async () => [
         sessionInfo({ id: "S-1", modified: new Date("2026-05-21T00:00:00Z"), allMessagesText: "history search" }),
@@ -538,7 +538,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("find_session throws when the privacy gate is disabled", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createFindSessionTool(baseDeps({ getSettings: () => ({ enabled: false, maxResults: 10, maxExcerptBytes: 10_000 }) }));
     await assert.rejects(
       () => tool.execute("call", { query: "anything" }, undefined, undefined, { cwd: "/repo" }),
@@ -547,7 +547,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("find_session rejects an empty or whitespace-only query", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createFindSessionTool(baseDeps());
     await assert.rejects(
       () => tool.execute("call", { query: "" }, undefined, undefined, { cwd: "/repo" }),
@@ -560,7 +560,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("find_session caps limit at settings.maxResults and clamps low bounds", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     // Build more sessions than the configured cap so an oversized
     // limit cannot quietly succeed by happening to fit.
     const many = Array.from({ length: 8 }, (_, i) =>
@@ -587,7 +587,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("find_session ignores non-object params (no crash, query missing -> rejection)", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createFindSessionTool(baseDeps());
     await assert.rejects(
       () => tool.execute("call", null, undefined, undefined, { cwd: "/repo" }),
@@ -600,7 +600,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("read_session throws when the privacy gate is disabled", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createReadSessionTool(baseDeps({ getSettings: () => ({ enabled: false, maxResults: 10, maxExcerptBytes: 10_000 }) }));
     await assert.rejects(
       () => tool.execute("call", { sessionId: "abc", goal: "x" }, undefined, undefined, { cwd: "/repo" }),
@@ -609,7 +609,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("read_session requires a sessionId and a non-empty goal", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createReadSessionTool(baseDeps());
 
     await assert.rejects(
@@ -627,7 +627,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("read_session reports a clear error when no session matches the id/prefix", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createReadSessionTool(baseDeps({ listSessions: async () => sessions(sessionInfo({ id: "abc123" })) }));
     await assert.rejects(
       () => tool.execute("call", { sessionId: "zzz", goal: "anything" }, undefined, undefined, { cwd: "/repo" }),
@@ -636,7 +636,7 @@ describe("mmr-history tools edge paths and input validation", () => {
   });
 
   it("read_session emits a deprecation warning when the 'analysis' input key is present", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
     const manager = SessionManager.inMemory("/repo");
     manager.appendMessage({ role: "user", content: "alpha discussion" });

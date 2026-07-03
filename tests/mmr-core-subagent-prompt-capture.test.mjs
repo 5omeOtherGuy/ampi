@@ -28,7 +28,7 @@ function tmpPath() {
 }
 
 async function loadRuntime() {
-  return importSource("extensions/mmr-core/runtime.ts");
+  return importSource("extensions/ampi-core/runtime.ts");
 }
 
 function fireRequest(handlers, ctx, payload) {
@@ -60,7 +60,7 @@ afterEach(async () => {
 
 describe("mmr-core subagent system-prompt capture", () => {
   it("captures an `instructions`-shaped payload to the env-pointed file", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(SUBAGENT_STATE);
     const file = tmpPath();
@@ -74,7 +74,7 @@ describe("mmr-core subagent system-prompt capture", () => {
   });
 
   it("captures a `system`-shaped payload to the env-pointed file", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(SUBAGENT_STATE);
     const file = tmpPath();
@@ -88,7 +88,7 @@ describe("mmr-core subagent system-prompt capture", () => {
   });
 
   it("captures an `input[]`-array payload as the JSON-stringified array", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(SUBAGENT_STATE);
     const file = tmpPath();
@@ -103,7 +103,7 @@ describe("mmr-core subagent system-prompt capture", () => {
   });
 
   it("writes no file when the env var is unset", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(SUBAGENT_STATE);
     const file = tmpPath();
@@ -117,7 +117,7 @@ describe("mmr-core subagent system-prompt capture", () => {
   });
 
   it("writes no file for a non-subagent (normal) session even when the env var is set", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(undefined);
     const file = tmpPath();
@@ -131,7 +131,7 @@ describe("mmr-core subagent system-prompt capture", () => {
   });
 
   it("does not throw when the capture path is unwritable", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await loadRuntime();
     runtime.setMmrSubagentState(SUBAGENT_STATE);
     // Point at a path under a non-existent directory so writeFileSync fails.

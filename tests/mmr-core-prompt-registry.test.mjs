@@ -60,7 +60,7 @@ describe("mmr-core prompt registry", () => {
   let registry;
 
   beforeEach(async () => {
-    registry = await importSource("extensions/mmr-core/prompt-registry.ts");
+    registry = await importSource("extensions/ampi-core/prompt-registry.ts");
   });
 
   it("maps the system prompt into a Pi-native base plus ordered fragments", () => {
@@ -164,7 +164,7 @@ describe("mmr-core prompt registry", () => {
   });
 
   it("keeps shared coding fragment ids, text map, and registry metadata aligned", async () => {
-    const modules = await importSource("extensions/mmr-core/prompt-modules.ts");
+    const modules = await importSource("extensions/ampi-core/prompt-modules.ts");
     const { MMR_PROMPT_FRAGMENTS, MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE } = registry;
     const codingIds = [
       "autonomy",

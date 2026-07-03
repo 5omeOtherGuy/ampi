@@ -55,10 +55,10 @@ function createState(mode) {
 }
 
 async function finderManifestEntry() {
-  const mod = await importSource("extensions/mmr-workers/finder.ts");
+  const mod = await importSource("extensions/ampi-workers/finder.ts");
   return {
     name: "finder",
-    owner: "mmr-subagents",
+    owner: "ampi-workers",
     promptSnippet: mod.FINDER_PROMPT_SNIPPET,
     promptGuidelines: [...mod.FINDER_PROMPT_GUIDELINES],
     description: mod.FINDER_DESCRIPTION,
@@ -83,11 +83,11 @@ function assertFixtureMatches(filename, actual) {
   );
 }
 
-describe("mmr-subagents effective surface: smart mode with finder active", () => {
+describe("ampi-workers effective surface: smart mode with finder active", () => {
   it("renders an active-tools section that names finder and pins the manifest snapshot", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const { renderMmrPromptDebugFixture } = await importSource(
-      "extensions/mmr-core/prompt-debug-renderer.ts",
+      "extensions/ampi-core/prompt-debug-renderer.ts",
     );
     const activeToolManifest = [await finderManifestEntry()];
     const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);

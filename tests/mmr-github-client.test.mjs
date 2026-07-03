@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const CLIENT_MODULE = "extensions/mmr-github/client.ts";
+const CLIENT_MODULE = "extensions/ampi-github/client.ts";
 
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {

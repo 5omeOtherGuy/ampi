@@ -53,7 +53,7 @@ describe("normalizeDomainInput — canonical bare-host parsing", () => {
   ];
   for (const [input, expected] of cases) {
     it(`normalizes ${JSON.stringify(input)} -> ${expected}`, async () => {
-      const { normalizeDomainInput } = await importSource("extensions/mmr-web/tools.ts");
+      const { normalizeDomainInput } = await importSource("extensions/ampi-web/tools.ts");
       assert.equal(normalizeDomainInput(input), expected);
     });
   }
@@ -61,7 +61,7 @@ describe("normalizeDomainInput — canonical bare-host parsing", () => {
   const invalid = ["", "   ", "not a host", "2001:db8::1", "example.com:abc", "***"];
   for (const input of invalid) {
     it(`treats ${JSON.stringify(input)} as invalid (empty result)`, async () => {
-      const { normalizeDomainInput } = await importSource("extensions/mmr-web/tools.ts");
+      const { normalizeDomainInput } = await importSource("extensions/ampi-web/tools.ts");
       assert.equal(normalizeDomainInput(input), "");
     });
   }
@@ -69,7 +69,7 @@ describe("normalizeDomainInput — canonical bare-host parsing", () => {
 
 describe("web_search domain list — reject, do not silently drop", () => {
   it("rejects an invalid domain entry instead of dropping it (no silent no-op)", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -83,7 +83,7 @@ describe("web_search domain list — reject, do not silently drop", () => {
   });
 
   it("rejects more than the documented cap of unique domains without fetching", async () => {
-    const { createWebSearchTool, MAX_DOMAIN_FILTERS } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool, MAX_DOMAIN_FILTERS } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -98,7 +98,7 @@ describe("web_search domain list — reject, do not silently drop", () => {
   });
 
   it("collapses duplicates so a list within the cap after dedupe is accepted", async () => {
-    const { createWebSearchTool, MAX_DOMAIN_FILTERS } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool, MAX_DOMAIN_FILTERS } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl } = makeFetchMock(() => braveJson([{ title: "A", url: "https://x/a" }]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -110,7 +110,7 @@ describe("web_search domain list — reject, do not silently drop", () => {
   });
 
   it("detects conflict after canonicalization (.example.com vs example.com)", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock(() => braveJson([]));
     const tool = createWebSearchTool({
       getSettings: () => settings(),
@@ -131,7 +131,7 @@ describe("web_search domain list — reject, do not silently drop", () => {
   });
 
   it("matches a punycoded result host against a Unicode include_domains filter", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl } = makeFetchMock(() =>
       braveJson([
         { title: "A", url: "https://xn--maana-pta.com/a", description: "alpha" },

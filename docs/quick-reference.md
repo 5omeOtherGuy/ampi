@@ -15,11 +15,11 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 ```text
 /mode              # show current mode
 /mode deep         # switch mode
-/mmr-status        # concise locked-mode status
-/mmr-status debug  # model preference candidates, tool resolution, policy details
+/ampi-status        # concise locked-mode status
+/ampi-status debug  # model preference candidates, tool resolution, policy details
 ```
 
-Mode source precedence: `--mmr-mode` flag → persisted session → `mmrCore.defaultMode` → `smart`.
+Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `smart`.
 
 ## Workers and subagents
 
@@ -63,15 +63,15 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 
 | Capability | Enable | Provides |
 | --- | --- | --- |
-| Web search/page reads | `MMR_WEB_ENABLE=true` or `mmrWeb.enabled=true` | `web_search`, `read_web_page` |
-| GitHub repository reads | `MMR_GITHUB_ENABLE=true` | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
-| Prior local Pi sessions | `MMR_HISTORY_ENABLE=true` | `find_session`, `read_session` |
+| Web search/page reads | `AMPI_WEB_ENABLE=true` (legacy `MMR_WEB_ENABLE` still accepted) or `ampiWeb.enabled=true` | `web_search`, `read_web_page` |
+| GitHub repository reads | `AMPI_GITHUB_ENABLE=true` (legacy `MMR_GITHUB_ENABLE` still accepted) | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
+| Prior local Pi sessions | `AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted) | `find_session`, `read_session` |
 
 Optional secrets stay in the environment:
 
 ```bash
 export BRAVE_API_KEY="brv_xxx"
-export MMR_GITHUB_TOKEN="ghp_xxx"
+export AMPI_GITHUB_TOKEN="ghp_xxx"
 ```
 
 Restart Pi after changing gates that register tools.
@@ -82,17 +82,17 @@ Minimal settings example:
 
 ```json
 {
-  "mmrCore": {
+  "ampiCore": {
     "defaultMode": "rush",
     "subagentModelPreferences": {
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
     }
   },
-  "mmrWeb": { "enabled": true }
+  "ampiWeb": { "enabled": true }
 }
 ```
 
-Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`mmrCore`) and nested (`mmr.core`) forms are accepted where supported by the owning extension.
+Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`ampiCore`) and nested (`ampi.core`) forms are accepted where supported by the owning extension.
 
 ## Tool status words
 
@@ -108,11 +108,11 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 
 | Symptom | Do this |
 | --- | --- |
-| `Model applied: no` | Run `/mmr-status debug`; check provider registration/authentication |
+| `Model applied: no` | Run `/ampi-status debug`; check provider registration/authentication |
 | Tool is `gated` | Enable its extension and restart Pi |
-| `librarian` is `gated` | Enable `MMR_GITHUB_ENABLE`; add `MMR_GITHUB_TOKEN` for private repos/search |
-| Web search is unreliable | Configure `MMR_WEB_SEARXNG_URL` or `BRAVE_API_KEY` |
+| `librarian` is `gated` | Enable `AMPI_GITHUB_ENABLE`; add `AMPI_GITHUB_TOKEN` for private repos/search |
+| Web search is unreliable | Configure `AMPI_WEB_SEARXNG_URL` or `BRAVE_API_KEY` |
 | Mode unexpectedly became `free` | Re-enter `/mode <key>` after native `/model` or `/think` changes |
-| Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/mmr-status debug` |
+| Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/ampi-status debug` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

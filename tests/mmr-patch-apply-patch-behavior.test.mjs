@@ -19,7 +19,7 @@ describe("mmr-patch apply_patch tool behavior", () => {
   });
 
   async function getTool() {
-    const toolbox = await importSource("extensions/mmr-patch/index.ts");
+    const toolbox = await importSource("extensions/ampi-patch/index.ts");
     const { pi } = createMockPi();
     toolbox.default(pi);
     return pi.tools.get("apply_patch");

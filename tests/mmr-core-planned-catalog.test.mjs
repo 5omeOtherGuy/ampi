@@ -55,7 +55,7 @@ function createState(mode) {
 
 describe("Phase E: planned metadata catalog", () => {
   it("exports MMR_PLANNED_TOOL_CATALOG as a non-empty readonly array of well-formed entries", async () => {
-    const mod = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const mod = await importSource("extensions/ampi-core/planned-catalog.ts");
     assert.ok(Array.isArray(mod.MMR_PLANNED_TOOL_CATALOG), "MMR_PLANNED_TOOL_CATALOG must be an array");
     assert.ok(mod.MMR_PLANNED_TOOL_CATALOG.length > 0, "MMR_PLANNED_TOOL_CATALOG must contain at least one planned entry");
 
@@ -63,7 +63,7 @@ describe("Phase E: planned metadata catalog", () => {
       assert.equal(typeof entry.name, "string", "planned entry name must be a string");
       assert.notEqual(entry.name.trim(), "", "planned entry name must be non-empty");
       assert.equal(typeof entry.owner, "string", `${entry.name}: owner must be a string`);
-      assert.match(entry.owner, /^mmr-/, `${entry.name}: owner must be an mmr-* extension`);
+      assert.match(entry.owner, /^ampi-/, `${entry.name}: owner must be an ampi-* extension`);
       assert.equal(entry.status, "planned", `${entry.name}: status must be "planned"`);
       assert.equal(typeof entry.summary, "string", `${entry.name}: summary must be a string`);
       assert.notEqual(entry.summary.trim(), "", `${entry.name}: summary must be non-empty`);
@@ -71,7 +71,7 @@ describe("Phase E: planned metadata catalog", () => {
   });
 
   it("exports only the remaining planned tool slots", async () => {
-    const mod = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const mod = await importSource("extensions/ampi-core/planned-catalog.ts");
     assert.deepEqual(
       mod.MMR_PLANNED_TOOL_CATALOG.map((entry) => entry.name).sort(),
       ["load_skill", "read_mcp_resource", "subagents"],
@@ -80,13 +80,13 @@ describe("Phase E: planned metadata catalog", () => {
 
   it("re-exports MMR_PLANNED_TOOL_CATALOG from the package root", async () => {
     const root = await importSource("index.ts");
-    const catalog = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const catalog = await importSource("extensions/ampi-core/planned-catalog.ts");
     assert.equal("MMR_PLANNED_TOOL_CATALOG" in root, true, "MMR_PLANNED_TOOL_CATALOG must be re-exported from the package root");
     assert.deepEqual(root.MMR_PLANNED_TOOL_CATALOG, catalog.MMR_PLANNED_TOOL_CATALOG);
   });
 
   it("names every planned entry uniquely (no duplicates with each other or with currently-active tool names)", async () => {
-    const mod = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const mod = await importSource("extensions/ampi-core/planned-catalog.ts");
     const names = mod.MMR_PLANNED_TOOL_CATALOG.map((e) => e.name);
     const uniq = new Set(names);
     assert.equal(uniq.size, names.length, "planned entry names must be unique");
@@ -107,8 +107,8 @@ describe("Phase E: planned metadata catalog", () => {
   });
 
   it("never leaks a planned-tool name into the active tool manifest across all (mode × tool-set) combinations", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-    const planned = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+    const planned = await importSource("extensions/ampi-core/planned-catalog.ts");
     const plannedNames = planned.MMR_PLANNED_TOOL_CATALOG.map((e) => e.name);
 
     for (const mode of ALL_MODES) {
@@ -133,8 +133,8 @@ describe("Phase E: planned metadata catalog", () => {
   });
 
   it("never leaks a planned-tool name into the rendered system prompt across all (mode × tool-set) combinations", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-    const planned = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+    const planned = await importSource("extensions/ampi-core/planned-catalog.ts");
     const plannedNames = planned.MMR_PLANNED_TOOL_CATALOG.map((e) => e.name);
 
     for (const mode of ALL_MODES) {
@@ -162,8 +162,8 @@ describe("Phase E: planned metadata catalog", () => {
     // Defensive: even if a tool name happened to be a common English word, the
     // entry's ampi-authored summary text is distinctive and must never
     // surface in the model-facing prompt.
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-    const planned = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+    const planned = await importSource("extensions/ampi-core/planned-catalog.ts");
 
     for (const mode of ALL_MODES) {
       const state = createState(mode);

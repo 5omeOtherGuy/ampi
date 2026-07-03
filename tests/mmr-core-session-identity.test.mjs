@@ -20,14 +20,14 @@ function makeIdentity(overrides = {}) {
 
 describe("mmr-core session identity runtime", () => {
   it("returns undefined before any identity has been set", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
     assert.equal(runtime.getMmrSessionIdentity(), undefined);
     assert.equal(runtime.getMmrSessionIdentitySnapshot(), undefined);
   });
 
   it("freezes the live identity and returns a mutable snapshot", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
     runtime.setMmrSessionIdentity(makeIdentity());
 
@@ -48,7 +48,7 @@ describe("mmr-core session identity runtime", () => {
   });
 
   it("uses Pi sessionId as the canonical conversation identity without a threadID or sessionID alias", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
     runtime.setMmrSessionIdentity(makeIdentity());
     const identity = runtime.getMmrSessionIdentity();
@@ -61,7 +61,7 @@ describe("mmr-core session identity runtime", () => {
   });
 
   it("reports change only when the resolved identity actually differs", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
     const first = runtime.setMmrSessionIdentity(makeIdentity());
@@ -93,7 +93,7 @@ describe("mmr-core session identity runtime", () => {
 describe("mmr-core session identity event subscription", () => {
   it("delivers per-handler deep clones via onMmrSessionIdentityChanged", async () => {
     const { MMR_EVENT_SESSION_IDENTITY_CHANGED, onMmrSessionIdentityChanged } =
-      await importSource("extensions/mmr-core/runtime.ts");
+      await importSource("extensions/ampi-core/runtime.ts");
 
     const bus = new Map();
     const pi = {
@@ -164,8 +164,8 @@ describe("mmr-core extension publishes identity on session_start", () => {
   }
 
   it("captures cwd and sessionId from ExtensionContext as canonical identity", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     runtime.setMmrModeState(undefined);
     // Clear identity that may have been set on the global singleton by an
     // earlier test (mirrors the existing setMmrModeState(undefined) reset).

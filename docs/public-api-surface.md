@@ -6,7 +6,7 @@ package-root export from `ampi` is.
 **Scope.** The export tiers used by the root barrel (`src/index.ts`).
 This document classifies *stability*; the symbol-by-symbol API reference
 lives in [`public-api.md`](./public-api.md) (non-core extensions) and
-[`mmr-core-api.md`](./mmr-core-api.md) (`mmr-core`). Keep this table in
+[`ampi-core-api.md`](./ampi-core-api.md) (`ampi-core`). Keep this table in
 sync with the tier doc block and the section banner comments at the top
 of `src/index.ts`.
 
@@ -41,7 +41,7 @@ Annotation comes first; pruning is a deliberate, staged follow-up.
   types.
 - Model resolver and routing: `selectMmrModelRoute`,
   `resolveAndApplyMmrModel`, `resolveMmrModeSelection`, and the runtime
-  resolver/state accessors re-exported from `mmr-core/runtime`.
+  resolver/state accessors re-exported from `ampi-core/runtime`.
 - Feature gates and settings loaders: `createMmrFeatureGateRegistry`,
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.

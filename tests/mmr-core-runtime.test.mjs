@@ -21,9 +21,9 @@ describe("mmr-core shared runtime API", () => {
   });
 
   it("freezes the live mode-state object so accidental mutation throws in strict mode", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
-    const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
+    const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const runtime = createMmrCoreRuntime();
     const built = createMmrModeState({
@@ -62,7 +62,7 @@ describe("mmr-core shared runtime API", () => {
   });
 
   it("resolves per-mode model and tools through isolated runtime instances", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
     assert.deepEqual(runtime.resolveMmrModel("rush"), {

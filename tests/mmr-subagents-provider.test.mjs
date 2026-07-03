@@ -5,41 +5,44 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 describe("mmr-subagents feature gate provider", () => {
-  it("identifies itself as mmr-subagents", async () => {
-    const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+  it("identifies itself as ampi-subagents while retaining the legacy constant", async () => {
+    const { createMmrSubagentsFeatureGateProvider, AMPI_SUBAGENTS_PROVIDER_NAME, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider();
-    assert.equal(provider.name, "mmr-subagents");
-    assert.equal(provider.name, MMR_SUBAGENTS_PROVIDER_NAME);
+    assert.equal(provider.name, "ampi-subagents");
+    assert.equal(provider.name, AMPI_SUBAGENTS_PROVIDER_NAME);
+    assert.equal(MMR_SUBAGENTS_PROVIDER_NAME, "mmr-subagents");
   });
 
-  it("only claims the mmr-subagents gate", async () => {
-    const { createMmrSubagentsFeatureGateProvider } = await importSource("extensions/mmr-workers/provider.ts");
+  it("claims canonical and legacy subagent gates only", async () => {
+    const { createMmrSubagentsFeatureGateProvider, AMPI_SUBAGENTS_FEATURE_GATE, MMR_SUBAGENTS_FEATURE_GATE } = await importSource("extensions/ampi-workers/provider.ts");
     const provider = createMmrSubagentsFeatureGateProvider();
-    for (const other of ["mmr-web", "mmr-history", "mmr-toolbox", "mmr-toolbox-mcp", "totally-unknown"]) {
+    assert.ok(provider.evaluate(AMPI_SUBAGENTS_FEATURE_GATE));
+    assert.ok(provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE));
+    for (const other of ["ampi-web", "ampi-history", "ampi-toolbox", "ampi-toolbox-mcp", "totally-unknown"]) {
       assert.equal(provider.evaluate(other), undefined, `must not claim gate ${other}`);
     }
   });
 
   it("reports the gate as disabled while no worker tools ship", async () => {
-    const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+    const { createMmrSubagentsFeatureGateProvider, AMPI_SUBAGENTS_FEATURE_GATE } = await importSource(
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider();
-    const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
+    const decision = provider.evaluate(AMPI_SUBAGENTS_FEATURE_GATE);
     assert.ok(decision, "must return a decision for its own gate");
-    assert.equal(decision.gate, "mmr-subagents");
+    assert.equal(decision.gate, "ampi-subagents");
     assert.equal(decision.status, "disabled");
     assert.match(decision.reason, /worker tools are not yet implemented/);
   });
 
   it("reports active capabilities including librarian when available", async () => {
-    const { createMmrSubagentsFeatureGateProvider, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+    const { createMmrSubagentsFeatureGateProvider, AMPI_SUBAGENTS_FEATURE_GATE } = await importSource(
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsFeatureGateProvider({ finder: true, oracle: true, Task: true, librarian: true });
-    const decision = provider.evaluate(MMR_SUBAGENTS_FEATURE_GATE);
+    const decision = provider.evaluate(AMPI_SUBAGENTS_FEATURE_GATE);
     assert.equal(decision.status, "enabled");
     assert.match(decision.reason, /finder/);
     assert.match(decision.reason, /oracle/);
@@ -49,18 +52,19 @@ describe("mmr-subagents feature gate provider", () => {
 });
 
 describe("mmr-subagents tool provider", () => {
-  it("identifies itself as mmr-subagents", async () => {
-    const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+  it("identifies itself as ampi-subagents while retaining the legacy constant", async () => {
+    const { createMmrSubagentsToolProvider, AMPI_SUBAGENTS_PROVIDER_NAME, MMR_SUBAGENTS_PROVIDER_NAME } = await importSource(
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
-    assert.equal(provider.name, "mmr-subagents");
-    assert.equal(provider.name, MMR_SUBAGENTS_PROVIDER_NAME);
+    assert.equal(provider.name, "ampi-subagents");
+    assert.equal(provider.name, AMPI_SUBAGENTS_PROVIDER_NAME);
+    assert.equal(MMR_SUBAGENTS_PROVIDER_NAME, "mmr-subagents");
   });
 
   it("only claims its owned logical tool names", async () => {
     const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_OWNED_TOOLS } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
     assert.deepEqual(
@@ -88,9 +92,9 @@ describe("mmr-subagents tool provider", () => {
     }
   });
 
-  it("returns gated rules keyed to the mmr-subagents gate for inactive owned tools", async () => {
-    const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_OWNED_TOOLS, MMR_SUBAGENTS_FEATURE_GATE } = await importSource(
-      "extensions/mmr-workers/provider.ts",
+  it("returns gated rules keyed to the ampi-subagents gate for inactive owned tools", async () => {
+    const { createMmrSubagentsToolProvider, MMR_SUBAGENTS_OWNED_TOOLS, AMPI_SUBAGENTS_FEATURE_GATE } = await importSource(
+      "extensions/ampi-workers/provider.ts",
     );
     const provider = createMmrSubagentsToolProvider();
     for (const logical of MMR_SUBAGENTS_OWNED_TOOLS) {
@@ -98,17 +102,17 @@ describe("mmr-subagents tool provider", () => {
       assert.ok(rule, `must produce a rule for ${logical}`);
       assert.equal(rule.kind, "gated");
       if (logical === "librarian") {
-        assert.equal(rule.gate, MMR_SUBAGENTS_FEATURE_GATE);
-        assert.equal(rule.reason, "librarian: requires mmr-github read-only GitHub tools (set MMR_GITHUB_ENABLE=true).");
+        assert.equal(rule.gate, AMPI_SUBAGENTS_FEATURE_GATE);
+        assert.equal(rule.reason, "librarian: requires ampi-github read-only GitHub tools (set AMPI_GITHUB_ENABLE=true or legacy MMR_GITHUB_ENABLE=true).");
       } else {
-        assert.equal(rule.gate, MMR_SUBAGENTS_FEATURE_GATE);
-        assert.match(rule.reason, new RegExp(`${logical}: implementation pending in mmr-subagents`));
+        assert.equal(rule.gate, AMPI_SUBAGENTS_FEATURE_GATE);
+        assert.match(rule.reason, new RegExp(`${logical}: implementation pending in ampi-subagents`));
       }
     }
   });
 
   it("returns active rules for shipped capabilities including librarian", async () => {
-    const { createMmrSubagentsToolProvider } = await importSource("extensions/mmr-workers/provider.ts");
+    const { createMmrSubagentsToolProvider } = await importSource("extensions/ampi-workers/provider.ts");
     const provider = createMmrSubagentsToolProvider({ finder: true, oracle: true, Task: true, librarian: true });
     for (const logical of ["finder", "oracle", "Task", "librarian"]) {
       assert.deepEqual(provider.resolve(logical), { kind: "active" }, `${logical} must resolve active`);

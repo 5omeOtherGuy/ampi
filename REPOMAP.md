@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `mmr-core`, `mmr-session-fallback`, `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-github`, `mmr-workers`, `mmr-custom-subagents`, and `mmr-history`. Two further directories ship in source but are not registered in `pi.extensions`: `mmr-toolbox` (a deprecated compatibility shim) and `mmr-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -24,19 +24,19 @@
 
 ```json
 [
-  "./src/extensions/mmr-core/index.ts",
-  "./src/extensions/mmr-session-fallback/index.ts",
-  "./src/extensions/mmr-patch/index.ts",
-  "./src/extensions/mmr-tasks/index.ts",
-  "./src/extensions/mmr-web/index.ts",
-  "./src/extensions/mmr-github/index.ts",
-  "./src/extensions/mmr-workers/index.ts",
-  "./src/extensions/mmr-custom-subagents/index.ts",
-  "./src/extensions/mmr-history/index.ts"
+  "./src/extensions/ampi-core/index.ts",
+  "./src/extensions/ampi-session-fallback/index.ts",
+  "./src/extensions/ampi-patch/index.ts",
+  "./src/extensions/ampi-tasks/index.ts",
+  "./src/extensions/ampi-web/index.ts",
+  "./src/extensions/ampi-github/index.ts",
+  "./src/extensions/ampi-workers/index.ts",
+  "./src/extensions/ampi-custom-subagents/index.ts",
+  "./src/extensions/ampi-history/index.ts"
 ]
 ```
 
-`mmr-toolbox` and `mmr-debug` are intentionally absent from this list. `mmr-toolbox` remains importable through the `exports` map as a deprecated re-export of `mmr-patch` and `mmr-tasks`; `mmr-debug` is loaded explicitly with Pi's `-e` flag and is excluded from the published package via `.npmignore`.
+`ampi-toolbox` and `ampi-debug` are intentionally absent from this list. `ampi-toolbox` remains importable through the `exports` map as a deprecated re-export of `ampi-patch` and `ampi-tasks`; `ampi-debug` is loaded explicitly with Pi's `-e` flag and is excluded from the published package via `.npmignore`.
 
 Public consumers should import from the package root (`ampi`) unless they are wiring a specific extension subpath declared in `exports`.
 
@@ -47,28 +47,28 @@ src/
   index.ts
   extensions/
     manifest.ts
-    mmr-core/
-    mmr-session-fallback/
-    mmr-patch/
-    mmr-tasks/
-    mmr-web/
-    mmr-github/
-    mmr-workers/
-    mmr-custom-subagents/
-    mmr-history/
-    mmr-toolbox/     # deprecated shim, unregistered
-    mmr-debug/       # developer-only capture, unregistered
+    ampi-core/
+    ampi-session-fallback/
+    ampi-patch/
+    ampi-tasks/
+    ampi-web/
+    ampi-github/
+    ampi-workers/
+    ampi-custom-subagents/
+    ampi-history/
+    ampi-toolbox/     # deprecated shim, unregistered
+    ampi-debug/       # developer-only capture, unregistered
 ```
 
 ### `src/index.ts`
 
-Package-level public API. It re-exports stable helpers, types, extension factories, tool factories, settings loaders, and constants from shipped extensions. Canonical API catalogs live in [`docs/mmr-core-api.md`](docs/mmr-core-api.md) and [`docs/public-api.md`](docs/public-api.md).
+Package-level public API. It re-exports stable helpers, types, extension factories, tool factories, settings loaders, and constants from shipped extensions. Canonical API catalogs live in [`docs/ampi-core-api.md`](docs/ampi-core-api.md) and [`docs/public-api.md`](docs/public-api.md).
 
 ### `src/extensions/manifest.ts`
 
 Single source of truth for the registered extension list consumed by `package.json` generation and tests.
 
-### `src/extensions/mmr-core/`
+### `src/extensions/ampi-core/`
 
 Foundation routing extension. It owns mode consistency across model choice, thinking level, tool allowlist, prompt route, diagnostics, persisted state, feature gates, and subagent profiles. Sibling extensions plug into its runtime registries rather than mutating core state.
 
@@ -82,20 +82,20 @@ Important files:
 - `tool-registry.ts` — exact-name tool provider registry, allowlists, and deferred registrations.
 - `feature-gates.ts` — feature-gate provider registry for opt-in siblings.
 - `request-policy.ts` — per-mode provider-request and thinking-level policy.
-- `prompt-assembly.ts` — prompt-head rewrite and MMR-authored mode prompts.
+- `prompt-assembly.ts` — prompt-head rewrite and ampi-authored mode prompts.
 - `subagent-profiles.ts`, `subagent-resolver.ts`, `subagent-prompt-assembly.ts` — worker model/tool/prompt policy for subagents.
-- `status.ts`, `diagnostics.ts` — `/mmr-status` formatting and structured diagnostics.
+- `status.ts`, `diagnostics.ts` — `/ampi-status` formatting and structured diagnostics.
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
 
-Registered surface: slash commands (`/mode`, `/mmr-status`, `/mmr-changelog`, `/mmr-config`), mode shortcuts, the `ampi-above-editor-dashboard` widget, and the feature gates for `mmr-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `mmr-history`, `mmr-web`, `mmr-patch`, and `mmr-tasks`.
+Registered surface: slash commands (`/mode`, `/ampi-status`, `/ampi-changelog`, `/ampi-config`), mode shortcuts, the `ampi-above-editor-dashboard` widget, and the feature gates for `ampi-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `ampi-history`, `ampi-web`, `ampi-patch`, and `ampi-tasks`.
 
-### `src/extensions/mmr-session-fallback/`
+### `src/extensions/ampi-session-fallback/`
 
-Session-scoped quota/rate-limit fallback. When a subscription-backed route fails with a classified quota or rate-limit error, it prompts for a fallback model/thinking level, applies the override through `mmr-core`, persists it for the session, and lets Pi retry the turn. It registers no model-invokable tools and is driven by message-lifecycle events.
+Session-scoped quota/rate-limit fallback. When a subscription-backed route fails with a classified quota or rate-limit error, it prompts for a fallback model/thinking level, applies the override through `ampi-core`, persists it for the session, and lets Pi retry the turn. It registers no model-invokable tools and is driven by message-lifecycle events.
 
 Important files:
 
@@ -106,9 +106,9 @@ Important files:
 - `state.ts`, `runtime.ts` — persisted override schema and in-process guards.
 - `README.md`, `ROADMAP.md` — behavior and milestones.
 
-### `src/extensions/mmr-patch/`
+### `src/extensions/ampi-patch/`
 
-Owns `apply_patch`. Provides context-matched, multi-file workspace edits using a Codex-format patch parser with path safety and atomic application. Split out of the former `mmr-toolbox`.
+Owns `apply_patch`. Provides context-matched, multi-file workspace edits using a Codex-format patch parser with path safety and atomic application. Split out of the former `ampi-toolbox`.
 
 Important files:
 
@@ -117,9 +117,9 @@ Important files:
 - `apply-patch.ts` — Codex patch parser and hunk-matching engine.
 - `apply-patch-plan.ts` — path safety, per-file mutation locking, and flush phase.
 
-### `src/extensions/mmr-tasks/`
+### `src/extensions/ampi-tasks/`
 
-Owns the session-local `task_list`. Persists a todo list in the current Pi session log and renders it as a pinned TUI widget. Split out of the former `mmr-toolbox`.
+Owns the session-local `task_list`. Persists a todo list in the current Pi session log and renders it as a pinned TUI widget. Split out of the former `ampi-toolbox`.
 
 Important files:
 
@@ -128,22 +128,22 @@ Important files:
 - `todo-list-widget.ts` — pinned `aboveEditor` widget (`ampi-task-list`) with Pi-native progress spinners.
 - `task-list-wiring.ts` — `/tasks` slash command, shortcuts, and compaction hooks.
 
-### `src/extensions/mmr-web/`
+### `src/extensions/ampi-web/`
 
-Network-backed web extension. Disabled by default; registers `web_search` and `read_web_page` when enabled (`MMR_WEB_ENABLE` or settings). Search supports SearXNG (managed sidecar or remote), Brave, and DuckDuckGo; page reads use an in-process Readability/Turndown reader with a fallback extractor.
+Network-backed web extension. Disabled by default; registers `web_search` and `read_web_page` when enabled (`AMPI_WEB_ENABLE` or settings; legacy `MMR_WEB_ENABLE` still accepted). Search supports SearXNG (managed sidecar or remote), Brave, and DuckDuckGo; page reads use an in-process Readability/Turndown reader with a fallback extractor.
 
 Important files:
 
-- `index.ts` — Pi extension entry point, provider, and `/mmr-config` flow registration.
+- `index.ts` — Pi extension entry point, provider, and `/ampi-config` flow registration.
 - `config.ts`, `backend.ts` — settings/env parsing and backend selection.
 - `tools.ts` — `web_search` and `read_web_page` tool definitions.
 - `url-policy.ts` — SSRF protection and external-URL validation.
 - `reader/`, `search/` — page-reader and pluggable search-backend implementations (including the SearXNG sidecar).
 - `README.md`, `ROADMAP.md` — configuration, safety, diagnostics, and roadmap.
 
-### `src/extensions/mmr-github/`
+### `src/extensions/ampi-github/`
 
-Opt-in read-only GitHub provider (`MMR_GITHUB_ENABLE`). Registers repository tools used directly by callers and gates the `librarian` worker until the GitHub tool surface is owned by this extension.
+Opt-in read-only GitHub provider (`AMPI_GITHUB_ENABLE`, legacy `MMR_GITHUB_ENABLE` still accepted). Registers repository tools used directly by callers and gates the `librarian` worker until the GitHub tool surface is owned by this extension.
 
 Important files:
 
@@ -155,9 +155,9 @@ Important files:
 - `provider.ts`, `tool-ownership.ts` — feature-gate/tool-provider ownership checks and `librarian` gating.
 - `README.md` — tool reference, configuration, safety, and public API.
 
-### `src/extensions/mmr-workers/`
+### `src/extensions/ampi-workers/`
 
-Merged worker extension. Owns the blocking `finder`, `oracle`, `Task`, and `librarian` workers, the background task surface (`background: true` on the named worker tools, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`), the child-CLI runner, the session-scoped background registry, the live TUI fleet dashboard, and the `mmr-workers` feature gate (the pre-merge `mmr-subagents`/`mmr-async-tasks` gate ids remain accepted aliases). Worker model/tool/prompt policy is resolved through `mmr-core` profiles. Custom Markdown subagents live in `mmr-custom-subagents`.
+Merged worker extension. Owns the blocking `finder`, `oracle`, `Task`, and `librarian` workers, the background task surface (`background: true` on the named worker tools, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`), the child-CLI runner, the session-scoped background registry, the live TUI fleet dashboard, and the `ampi-workers` feature gate (the pre-merge `mmr-subagents`/`mmr-async-tasks` gate ids remain accepted aliases). Worker model/tool/prompt policy is resolved through `ampi-core` profiles. Custom Markdown subagents live in `ampi-custom-subagents`.
 
 Important files:
 
@@ -175,9 +175,9 @@ Important files:
 - `prompts.ts` — worker prompt builders.
 - `README.md`, `ROADMAP.md` — behavior, public API, and milestones.
 
-### `src/extensions/mmr-custom-subagents/`
+### `src/extensions/ampi-custom-subagents/`
 
-Custom Markdown subagent extension extracted from `mmr-subagents`. Discovers project-local Markdown subagent definitions, manages enable/import config flows, and registers `subagent-<name>` worker tools behind a feature gate.
+Custom Markdown subagent extension extracted from `ampi-workers`. Discovers project-local Markdown subagent definitions, manages enable/import config flows, and registers `subagent-<name>` worker tools behind a feature gate.
 
 Important files:
 
@@ -185,12 +185,12 @@ Important files:
 - `custom-loader.ts` — scans project directories and parses Markdown subagent definitions.
 - `custom-runtime.ts` — tool registration and worker execution wiring.
 - `custom-config.ts`, `custom-import.ts` — enabled-subagent persistence and legacy-definition import.
-- `config-flow.ts` — interactive `/mmr-config` discovery/enable UI.
+- `config-flow.ts` — interactive `/ampi-config` discovery/enable UI.
 - `provider.ts` — tool-provider and feature-gate-provider factories.
 
-### `src/extensions/mmr-history/`
+### `src/extensions/ampi-history/`
 
-Opt-in global local Pi session lookup (`MMR_HISTORY_ENABLE=true`). Registers `find_session` and `read_session`; `read_session` uses the in-process `history-reader` worker first and falls back to deterministic lexical extraction. Redaction and opaque project references prevent raw session paths from surfacing.
+Opt-in global local Pi session lookup (`AMPI_HISTORY_ENABLE=true`, legacy `MMR_HISTORY_ENABLE` still accepted). Registers `find_session` and `read_session`; `read_session` uses the in-process `history-reader` worker first and falls back to deterministic lexical extraction. Redaction and opaque project references prevent raw session paths from surfacing.
 
 Important files:
 
@@ -199,16 +199,16 @@ Important files:
 - `read-session.ts`, `analysis-worker.ts` — lexical extraction and optional `history-reader` worker analysis.
 - `prompts.ts` — `history-reader` worker prompts.
 - `redaction.ts` — deterministic sanitizer.
-- `config.ts` — settings and the `MMR_HISTORY_ENABLE` gate.
+- `config.ts` — settings and the `AMPI_HISTORY_ENABLE` gate.
 - `README.md`, `ROADMAP.md` — behavior, privacy boundaries, and next milestones.
 
-### `src/extensions/mmr-toolbox/` (deprecated shim)
+### `src/extensions/ampi-toolbox/` (deprecated shim)
 
-Not registered in `pi.extensions` and registers no tools. `index.ts` re-exports the former `mmr-toolbox` public surface from `mmr-patch` and `mmr-tasks` (including `registerMmrToolboxProviders`) so existing imports keep working. New code should import from `mmr-patch` and `mmr-tasks` directly. `README.md` and `ROADMAP.md` are retained for historical context.
+Not registered in `pi.extensions` and registers no tools. `index.ts` re-exports the former `ampi-toolbox` public surface from `ampi-patch` and `ampi-tasks` (including `registerAmpiToolboxProviders`, with `registerMmrToolboxProviders` retained as a legacy alias) so existing imports keep working. New code should import from `ampi-patch` and `ampi-tasks` directly. `README.md` and `ROADMAP.md` are retained for historical context.
 
-### `src/extensions/mmr-debug/` (developer-only)
+### `src/extensions/ampi-debug/` (developer-only)
 
-Not registered in `pi.extensions` and excluded from the published package via `.npmignore`. Loaded explicitly with `pi -e "$PWD/src/extensions/mmr-debug/index.ts"` and inert unless `MMR_DEBUG_CAPTURE_FILE` is set. A pure hook-based observer (`index.ts`, `capture.ts`) that records system-prompt source/text, advertised tool names, response status/headers, and message end metadata for ground-truth review. See its `README.md` for usage.
+Not registered in `pi.extensions` and excluded from the published package via `.npmignore`. Loaded explicitly with `pi -e "$PWD/src/extensions/ampi-debug/index.ts"` and inert unless `AMPI_DEBUG_CAPTURE_FILE` (legacy `MMR_DEBUG_CAPTURE_FILE` still accepted) is set. A pure hook-based observer (`index.ts`, `capture.ts`) that records system-prompt source/text, advertised tool names, response status/headers, and message end metadata for ground-truth review. See its `README.md` for usage.
 
 ## Documentation tree
 
@@ -219,7 +219,7 @@ Not registered in `pi.extensions` and excluded from the published package via `.
 | [`docs/whats-new.md`](docs/whats-new.md) | Recent user- and developer-visible changes. |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Symptom-first troubleshooting and provider/tool-call procedures. |
 | [`docs/reference-architecture.md`](docs/reference-architecture.md) | Extension ownership, dependency direction, core contracts, and implementation state. |
-| [`docs/mmr-core-api.md`](docs/mmr-core-api.md) | Stable core public API contract and import guidance. |
+| [`docs/ampi-core-api.md`](docs/ampi-core-api.md) | Stable core public API contract and import guidance. |
 | [`docs/public-api.md`](docs/public-api.md) | Stable non-core extension public API contract and import guidance. |
 | [`docs/public-api-surface.md`](docs/public-api-surface.md) | Generated package-root export surface reference. |
 | [`docs/extension-compatibility.md`](docs/extension-compatibility.md) | Composition with other Pi extensions. |
@@ -244,7 +244,7 @@ Tests use Node's built-in `node:test` runner and deterministic fixtures. They do
 
 ```diagram
    ╭──────────╮     ╭──────────────╮     ╭──────────────╮
-   │ /mode or │────▶│ mmr-core     │────▶│ Pi runtime   │
+   │ /mode or │────▶│ ampi-core     │────▶│ Pi runtime   │
    │ settings │     │ resolution   │     │ model/tools  │
    ╰──────────╯     ╰──────┬───────╯     ╰──────┬───────╯
                             │                    │
@@ -255,4 +255,4 @@ Tests use Node's built-in `node:test` runner and deterministic fixtures. They do
                     ╰──────────────╯     ╰──────────────╯
 ```
 
-`mmr-core` is the source of truth for locked routing state. Sibling extensions plug in through provider APIs, feature gates, and MMR-owned tool registrations rather than mutating core state directly.
+`ampi-core` is the source of truth for locked routing state. Sibling extensions plug in through provider APIs, feature gates, and ampi-owned tool registrations rather than mutating core state directly.

@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core internal JSON helpers", () => {
   it("matches the existing record predicate semantics", async () => {
-    const { isRecord } = await importSource("extensions/mmr-core/internal/json.ts");
+    const { isRecord } = await importSource("extensions/ampi-core/internal/json.ts");
 
     assert.equal(isRecord({}), true);
     assert.equal(isRecord({ a: 1 }), true);

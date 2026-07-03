@@ -3,13 +3,13 @@ import { after, afterEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
-const TOOLS_MODULE = "extensions/mmr-workers/async-task-tools.ts";
-const REGISTRY_MODULE = "extensions/mmr-workers/async-task-registry.ts";
-const DISPATCH_MODULE = "extensions/mmr-workers/background-dispatch.ts";
-const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
-const LIBRARIAN_MODULE = "extensions/mmr-workers/librarian.ts";
-const TASK_MODULE = "extensions/mmr-workers/task.ts";
-const ORACLE_PROMPT_MODULE = "extensions/mmr-workers/oracle-prompt.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
+const DISPATCH_MODULE = "extensions/ampi-workers/background-dispatch.ts";
+const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
+const LIBRARIAN_MODULE = "extensions/ampi-workers/librarian.ts";
+const TASK_MODULE = "extensions/ampi-workers/task.ts";
+const ORACLE_PROMPT_MODULE = "extensions/ampi-workers/oracle-prompt.ts";
 
 after(cleanupLoadedSource);
 
@@ -92,7 +92,7 @@ describe("background: true through a named worker tool", () => {
       undefined,
       CTX,
     );
-    assert.equal(result.details.worker, "mmr-subagents.async-task");
+    assert.equal(result.details.worker, "ampi-workers.async-task");
     assert.equal(result.details.tool, "finder");
     assert.equal(result.details.backgroundStart, true);
     assert.equal(result.details.agent, "finder");
@@ -180,7 +180,7 @@ describe("background: true through a named worker tool", () => {
       undefined,
       CTX,
     );
-    assert.notEqual(result.details?.worker, "mmr-subagents.async-task");
+    assert.notEqual(result.details?.worker, "ampi-workers.async-task");
     assert.match(result.content[0].text, /worker done/);
   });
 });

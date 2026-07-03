@@ -5,8 +5,8 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const debugExtensionDir = "src/extensions/mmr-debug/";
-const debugExtensionEntry = "./src/extensions/mmr-debug/index.ts";
+const debugExtensionDir = "src/extensions/ampi-debug/";
+const debugExtensionEntry = "./src/extensions/ampi-debug/index.ts";
 
 async function readPackageJson() {
   return JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));

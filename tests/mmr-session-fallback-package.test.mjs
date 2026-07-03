@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const fallbackExtensionPath = "./src/extensions/mmr-session-fallback/index.ts";
+const fallbackExtensionPath = "./src/extensions/ampi-session-fallback/index.ts";
 
 async function readPackageJson() {
   return JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -16,7 +16,7 @@ async function readPackageJson() {
 describe("mmr-session-fallback package wiring", () => {
   it("registers after mmr-core so managed model updates are available", async () => {
     const pkg = await readPackageJson();
-    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/mmr-core/index.ts");
+    const indexOfCore = pkg.pi.extensions.indexOf("./src/extensions/ampi-core/index.ts");
     const indexOfFallback = pkg.pi.extensions.indexOf(fallbackExtensionPath);
 
     assert.notEqual(indexOfCore, -1);
@@ -26,7 +26,7 @@ describe("mmr-session-fallback package wiring", () => {
 
   it("exposes extension and helper exports", async () => {
     const pkg = await readPackageJson();
-    assert.equal(pkg.exports["./extensions/mmr-session-fallback"], fallbackExtensionPath);
+    assert.equal(pkg.exports["./extensions/ampi-session-fallback"], fallbackExtensionPath);
 
     const root = await importSource("index.ts");
     assert.equal(typeof root.createMmrSessionFallbackExtension, "function");

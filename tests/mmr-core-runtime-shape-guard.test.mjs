@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-// Mirror the constant in src/extensions/mmr-core/runtime.ts. The key is part
+// Mirror the constant in src/extensions/ampi-core/runtime.ts. The key is part
 // of the global singleton's ABI; bumping it would change this test too.
 const MMR_CORE_RUNTIME_GLOBAL_KEY = "__pi_mmr_core_runtime_v2__";
 
@@ -25,7 +25,7 @@ describe("mmr-core runtime singleton shape guard", () => {
     g[MMR_CORE_RUNTIME_GLOBAL_KEY] = stale;
 
     try {
-      const mod = await importSource("extensions/mmr-core/runtime.ts");
+      const mod = await importSource("extensions/ampi-core/runtime.ts");
 
       assert.notEqual(
         g[MMR_CORE_RUNTIME_GLOBAL_KEY],
@@ -50,13 +50,13 @@ describe("mmr-core runtime singleton shape guard", () => {
 
     try {
       // First import publishes a compatible runtime.
-      const first = await importSource("extensions/mmr-core/runtime.ts");
+      const first = await importSource("extensions/ampi-core/runtime.ts");
       const published = g[MMR_CORE_RUNTIME_GLOBAL_KEY];
       assert.ok(published, "first import must publish a runtime on globalThis");
 
       // Second import (fresh module cache, same globalThis) must keep the same
       // singleton object so sibling extensions share one runtime/registry.
-      const second = await importSource("extensions/mmr-core/runtime.ts");
+      const second = await importSource("extensions/ampi-core/runtime.ts");
       assert.equal(
         g[MMR_CORE_RUNTIME_GLOBAL_KEY],
         published,

@@ -32,14 +32,14 @@ const COMPACT_TOKEN_EDGE_CASES = [
 
 describe("mmr-core compact token formatter", () => {
   it("formats compact token counts byte-for-byte across boundary values", async () => {
-    const { formatMmrCompactTokens } = await importSource("extensions/mmr-core/token-format.ts");
+    const { formatMmrCompactTokens } = await importSource("extensions/ampi-core/token-format.ts");
     for (const [input, expected] of COMPACT_TOKEN_CASES) {
       assert.equal(formatMmrCompactTokens(input), expected, `formatMmrCompactTokens(${input})`);
     }
   });
 
   it("formats edge inputs (zero, negatives, non-integers, NaN) byte-for-byte", async () => {
-    const { formatMmrCompactTokens } = await importSource("extensions/mmr-core/token-format.ts");
+    const { formatMmrCompactTokens } = await importSource("extensions/ampi-core/token-format.ts");
     for (const [input, expected] of COMPACT_TOKEN_EDGE_CASES) {
       assert.equal(formatMmrCompactTokens(input), expected, `formatMmrCompactTokens(${input})`);
     }
