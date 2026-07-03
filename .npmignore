@@ -9,6 +9,12 @@ coverage/
 .DS_Store
 .pi/
 
+# Local-only planning/design notes. Gitignored (see .gitignore `docs/private/`)
+# and never shipped: npm consults .npmignore instead of .gitignore when this
+# file exists, so the exclusion must be repeated here or the directory leaks
+# into the published tarball.
+docs/private/
+
 # Dev-tooling for this repo's own primary-checkout sync invariants.
 # Hooks and the sync/check scripts only do anything useful when run
 # inside a ampi git checkout; they have no purpose when ampi is

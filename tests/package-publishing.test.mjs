@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, it } from "node:test";
@@ -72,6 +73,22 @@ describe("npm publishing metadata", () => {
       pkg.files.includes("!src/extensions/ampi-debug"),
       "files[] must negate the dev-only ampi-debug extension so it is never packaged.",
     );
+    assert.ok(
+      pkg.files.includes("!docs/private"),
+      "files[] must negate docs/private so local-only planning notes are never packaged.",
+    );
+  });
+
+  it("repeats the docs/private exclusion in .npmignore (npm ignores .gitignore when .npmignore exists)", async () => {
+    const npmignore = await readFile(path.join(repoRoot, ".npmignore"), "utf8");
+    const excludesPrivate = npmignore
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .some((line) => line === "docs/private" || line === "docs/private/");
+    assert.ok(
+      excludesPrivate,
+      "`.npmignore` must list `docs/private/`; npm consults .npmignore instead of .gitignore, so the gitignore rule alone would leak the directory.",
+    );
   });
 });
 
@@ -109,6 +126,7 @@ describe("npm pack tarball contents", () => {
       "biome.json",
       "package-lock.json",
       ".npmignore",
+      "docs/private",
     ];
     const leaks = paths.filter((p) => forbidden.some((f) => p === f || p.startsWith(`${f}/`)));
     assert.deepEqual(leaks, [], `tarball leaks local/dev-only files: ${leaks.join(", ")}`);
@@ -118,5 +136,42 @@ describe("npm pack tarball contents", () => {
     const { paths } = packFiles();
     const packaged = paths.filter((p) => p.startsWith("src/extensions/ampi-debug/"));
     assert.deepEqual(packaged, [], `ampi-debug must not be packaged; found: ${packaged.join(", ")}`);
+  });
+
+  // Ground-truth regression guard for the docs/private leak: `docs/private/` is
+  // gitignored, so it is absent from a fresh checkout and a plain pack cannot
+  // observe the leak. Materialize a sentinel file under docs/private, run a
+  // dedicated pack, and assert the exclusion actually fires. Runs its own pack
+  // (not the memoized packFiles) so the sentinel is present on disk.
+  it("excludes docs/private even when the directory exists on disk", () => {
+    const privateDir = path.join(repoRoot, "docs", "private");
+    const sentinel = path.join(privateDir, "__leak_probe__.md");
+    let createdDir = false;
+    try {
+      try {
+        mkdirSync(privateDir);
+        createdDir = true;
+      } catch (error) {
+        if (!(error && error.code === "EEXIST")) throw error;
+      }
+      writeFileSync(sentinel, "# leak probe — must never be packaged\n");
+
+      const raw = execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+        cwd: repoRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const parsed = JSON.parse(raw);
+      const entry = Array.isArray(parsed) ? parsed[0] : parsed;
+      const leaks = entry.files.map((f) => f.path).filter((p) => p.startsWith("docs/private/"));
+      assert.deepEqual(
+        leaks,
+        [],
+        `docs/private/ must never be packaged; leaked: ${leaks.join(", ")}`,
+      );
+    } finally {
+      rmSync(sentinel, { force: true });
+      if (createdDir) rmSync(privateDir, { recursive: true, force: true });
+    }
   });
 });
