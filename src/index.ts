@@ -35,6 +35,12 @@
  *
  * Section banner comments below mark the owning extension/module for each
  * export group; they are comment-only and add or remove no export.
+ *
+ * Brand aliases: every `Mmr*` / `MMR_*` public export is additionally
+ * re-exported under a brand-aligned `Ampi*` / `AMPI_*` name in the trailing
+ * alias block at the end of this file. The `Mmr*` names stay primary; the
+ * aliases are additive exact re-exports. Parity is enforced by
+ * `tests/mmr-root-ampi-alias-parity.test.mjs`.
  */
 
 // --- ampi-core: public types (Stable) ---
@@ -695,3 +701,392 @@ export type {
   MmrCustomSubagentDefinition,
   ParseMmrCustomSubagentMarkdownArgs,
 } from "./extensions/ampi-custom-subagents/custom-loader.js";
+
+// ===========================================================================
+// Additive `Ampi*` / `AMPI_*` brand aliases (additive-only; each alias keeps
+// the same stability tier as the original export it mirrors — see the tier
+// banners above, which include Stable and Internal / prompt-assembly exports).
+//
+// Every `Mmr*` / `MMR_*`-named public export above that did not already have
+// an `Ampi*` / `AMPI_*` sibling is re-exported here under its brand-aligned
+// name so the programmatic surface matches the canonical `ampi` product name.
+// Aliasing does not change or widen an export's stability promise.
+//
+// Rules for this block:
+//   - Additive only: it never renames or removes an existing export. The
+//     original `Mmr*` / `MMR_*` names remain the primary, supported contract
+//     (see the barrel header's compatibility rule); these aliases are exact
+//     re-exports of the same binding, so `AmpiX === MmrX` by construction for
+//     values, and identical types for type-only members.
+//   - Names that already ship a distinct hand-authored `Ampi*` sibling (for
+//     example `AMPI_HISTORY_ENABLE_ENV`, whose value intentionally differs
+//     from `MMR_HISTORY_ENABLE_ENV`) are NOT duplicated here.
+//   - Coverage is asserted generically by
+//     `tests/mmr-root-ampi-alias-parity.test.mjs`; keep that test green when
+//     adding or removing barrel exports.
+// ===========================================================================
+export {
+  MMR_BUILTIN_TOOL_GUIDANCE_HEADING as AMPI_BUILTIN_TOOL_GUIDANCE_HEADING,
+} from "./extensions/ampi-core/builtin-tool-guidance.js";
+export {
+  getMmrPolicyDiagnostics as getAmpiPolicyDiagnostics,
+} from "./extensions/ampi-core/diagnostics.js";
+export {
+  createMmrFeatureGateRegistry as createAmpiFeatureGateRegistry,
+} from "./extensions/ampi-core/feature-gates.js";
+export {
+  resolveAndApplyMmrModel as resolveAndApplyAmpiModel,
+  selectMmrModelRoute as selectAmpiModelRoute,
+} from "./extensions/ampi-core/model-resolver.js";
+export {
+  DEFAULT_MMR_MODE as DEFAULT_AMPI_MODE,
+  MMR_MODES as AMPI_MODES,
+  MMR_MODE_KEYS as AMPI_MODE_KEYS,
+  getMmrMode as getAmpiMode,
+  isMmrModeKey as isAmpiModeKey,
+} from "./extensions/ampi-core/modes.js";
+export {
+  MMR_PLANNED_TOOL_CATALOG as AMPI_PLANNED_TOOL_CATALOG,
+} from "./extensions/ampi-core/planned-catalog.js";
+export {
+  MMR_ADDITIONAL_TOOLS_LINE as AMPI_ADDITIONAL_TOOLS_LINE,
+  MMR_IDENTITY_LINE as AMPI_IDENTITY_LINE,
+  MMR_RESPONSE_STYLE_HEADING as AMPI_RESPONSE_STYLE_HEADING,
+  MMR_TOOL_USE_HEADING as AMPI_TOOL_USE_HEADING,
+  MMR_TOOL_USE_POSTURE_LINE as AMPI_TOOL_USE_POSTURE_LINE,
+} from "./extensions/ampi-core/prompt-assembly.js";
+export {
+  renderMmrPromptDebugFixture as renderAmpiPromptDebugFixture,
+  stringifyMmrToolSchema as stringifyAmpiToolSchema,
+} from "./extensions/ampi-core/prompt-debug-renderer.js";
+export {
+  MMR_PROMPT_LAYER_END as AMPI_PROMPT_LAYER_END,
+  MMR_PROMPT_LAYER_START as AMPI_PROMPT_LAYER_START,
+  buildMmrPromptLayer as buildAmpiPromptLayer,
+} from "./extensions/ampi-core/prompt.js";
+export {
+  resolveMmrModeSelection as resolveAmpiModeSelection,
+} from "./extensions/ampi-core/routing.js";
+export {
+  MMR_EVENT_SESSION_IDENTITY_CHANGED as AMPI_EVENT_SESSION_IDENTITY_CHANGED,
+  MMR_EVENT_STATE_CHANGED as AMPI_EVENT_STATE_CHANGED,
+  createMmrCoreRuntime as createAmpiCoreRuntime,
+  getMmrModeState as getAmpiModeState,
+  getMmrModeStateSnapshot as getAmpiModeStateSnapshot,
+  getMmrPromptRoute as getAmpiPromptRoute,
+  getMmrSessionIdentity as getAmpiSessionIdentity,
+  getMmrSessionIdentitySnapshot as getAmpiSessionIdentitySnapshot,
+  getMmrSubagentState as getAmpiSubagentState,
+  onMmrSessionIdentityChanged as onAmpiSessionIdentityChanged,
+  onMmrStateChanged as onAmpiStateChanged,
+  registerMmrFeatureGateProvider as registerAmpiFeatureGateProvider,
+  registerMmrToolProvider as registerAmpiToolProvider,
+  resolveMmrFeatureGates as resolveAmpiFeatureGates,
+  resolveMmrModel as resolveAmpiModel,
+  resolveMmrTools as resolveAmpiTools,
+} from "./extensions/ampi-core/runtime.js";
+export {
+  loadMmrCoreSettings as loadAmpiCoreSettings,
+} from "./extensions/ampi-core/settings.js";
+export {
+  expandMmrModelPreferencesToStrings as expandAmpiModelPreferencesToStrings,
+  getMmrSubagentProfile as getAmpiSubagentProfile,
+  listMmrSubagentProfiles as listAmpiSubagentProfiles,
+} from "./extensions/ampi-core/subagent-profiles.js";
+export {
+  assembleMmrSubagentSurface as assembleAmpiSubagentSurface,
+  getMmrSubagentPromptBuilder as getAmpiSubagentPromptBuilder,
+  registerMmrSubagentPromptBuilder as registerAmpiSubagentPromptBuilder,
+} from "./extensions/ampi-core/subagent-prompt-assembly.js";
+export {
+  MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX as AMPI_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX,
+  extractMmrSubagentActivationFailure as extractAmpiSubagentActivationFailure,
+  resolveMmrSubagentInvocation as resolveAmpiSubagentInvocation,
+} from "./extensions/ampi-core/subagent-resolver.js";
+export {
+  MMR_IN_PROCESS_SUBAGENT_RUNNER_AVAILABLE as AMPI_IN_PROCESS_SUBAGENT_RUNNER_AVAILABLE,
+  MMR_SUBAGENT_RUN_STATUSES as AMPI_SUBAGENT_RUN_STATUSES,
+  MMR_SUBAGENT_TOOL_USE_STATUSES as AMPI_SUBAGENT_TOOL_USE_STATUSES,
+  MmrInProcessRunnerUnavailableError as AmpiInProcessRunnerUnavailableError,
+  runMmrSubagentInProcess as runAmpiSubagentInProcess,
+} from "./extensions/ampi-core/subagent-runner-contract.js";
+export {
+  MMR_SUBAGENT_CAPABILITY_PROFILE_KEYS as AMPI_SUBAGENT_CAPABILITY_PROFILE_KEYS,
+  MMR_SUBAGENT_CUSTOM_DEFAULT_TOOLS as AMPI_SUBAGENT_CUSTOM_DEFAULT_TOOLS,
+  MMR_SUBAGENT_EXECUTION_TOOLS as AMPI_SUBAGENT_EXECUTION_TOOLS,
+  MMR_SUBAGENT_MUTATION_TOOLS as AMPI_SUBAGENT_MUTATION_TOOLS,
+  MMR_SUBAGENT_READ_ONLY_TOOLS as AMPI_SUBAGENT_READ_ONLY_TOOLS,
+  MMR_SUBAGENT_READ_WRITE_TOOLS as AMPI_SUBAGENT_READ_WRITE_TOOLS,
+  MMR_SUBAGENT_RECURSIVE_ADVISORY_DENY_TOOLS as AMPI_SUBAGENT_RECURSIVE_ADVISORY_DENY_TOOLS,
+  MMR_SUBAGENT_SHARED_DENY_TOOLS as AMPI_SUBAGENT_SHARED_DENY_TOOLS,
+  MMR_SUBAGENT_TOOLBOX_MCP_DENY_TOOLS as AMPI_SUBAGENT_TOOLBOX_MCP_DENY_TOOLS,
+  isMmrCapabilityProfileKey as isAmpiCapabilityProfileKey,
+  resolveMmrCapabilityAllowedTools as resolveAmpiCapabilityAllowedTools,
+} from "./extensions/ampi-core/subagent-tool-policy.js";
+export {
+  createMmrToolRegistry as createAmpiToolRegistry,
+  isMmrToolAllowed as isAmpiToolAllowed,
+  resolveMmrTools as resolveAmpiToolNames,
+} from "./extensions/ampi-core/tool-registry.js";
+export {
+  DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH as DEFAULT_AMPI_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH,
+  MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES as AMPI_CUSTOM_SUBAGENT_MAX_FILE_BYTES,
+  MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH as AMPI_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH,
+  MMR_CUSTOM_SUBAGENT_TOOL_PREFIX as AMPI_CUSTOM_SUBAGENT_TOOL_PREFIX,
+  discoverMmrCustomSubagents as discoverAmpiCustomSubagents,
+  normalizeMmrCustomSubagentToolPatterns as normalizeAmpiCustomSubagentToolPatterns,
+  parseMmrCustomSubagentMarkdown as parseAmpiCustomSubagentMarkdown,
+  toMmrCustomSubagentToolName as toAmpiCustomSubagentToolName,
+} from "./extensions/ampi-custom-subagents/custom-loader.js";
+export {
+  loadMmrGithubSettings as loadAmpiGithubSettings,
+} from "./extensions/ampi-github/config.js";
+export {
+  hasMmrGithubOwnedTools as hasAmpiGithubOwnedTools,
+  isMmrGithubOwnedToolInfo as isAmpiGithubOwnedToolInfo,
+  isMmrGithubToolName as isAmpiGithubToolName,
+} from "./extensions/ampi-github/tool-ownership.js";
+export {
+  MMR_GITHUB_PROMPT_GUIDELINES as AMPI_GITHUB_PROMPT_GUIDELINES,
+  registerMmrGithubTools as registerAmpiGithubTools,
+} from "./extensions/ampi-github/tools.js";
+export {
+  DEFAULT_MMR_HISTORY_MAX_EXCERPT_BYTES as DEFAULT_AMPI_HISTORY_MAX_EXCERPT_BYTES,
+  DEFAULT_MMR_HISTORY_MAX_RESULTS as DEFAULT_AMPI_HISTORY_MAX_RESULTS,
+  MAX_MMR_HISTORY_RESULTS as MAX_AMPI_HISTORY_RESULTS,
+  loadMmrHistorySettings as loadAmpiHistorySettings,
+} from "./extensions/ampi-history/config.js";
+export {
+  registerMmrHistoryPromptBuilders as registerAmpiHistoryPromptBuilders,
+} from "./extensions/ampi-history/prompts.js";
+export {
+  createDefaultMmrHistoryToolDeps as createDefaultAmpiHistoryToolDeps,
+  registerMmrHistoryTools as registerAmpiHistoryTools,
+} from "./extensions/ampi-history/tools.js";
+export {
+  classifyMmrSessionFallbackError as classifyAmpiSessionFallbackError,
+} from "./extensions/ampi-session-fallback/classifier.js";
+export {
+  createMmrSessionFallbackExtension as createAmpiSessionFallbackExtension,
+} from "./extensions/ampi-session-fallback/index.js";
+export {
+  getMmrSessionFallbackOverrideSnapshot as getAmpiSessionFallbackOverrideSnapshot,
+} from "./extensions/ampi-session-fallback/runtime.js";
+export {
+  MMR_SESSION_FALLBACK_STATE_VERSION as AMPI_SESSION_FALLBACK_STATE_VERSION,
+  findLatestPersistedMmrSessionFallbackOverride as findLatestPersistedAmpiSessionFallbackOverride,
+  parsePersistedMmrSessionFallbackOverride as parsePersistedAmpiSessionFallbackOverride,
+  toPersistedMmrSessionFallbackOverride as toPersistedAmpiSessionFallbackOverride,
+} from "./extensions/ampi-session-fallback/state.js";
+export {
+  loadMmrWebSettings as loadAmpiWebSettings,
+} from "./extensions/ampi-web/config.js";
+export {
+  createMmrAsyncTaskRegistry as createAmpiAsyncTaskRegistry,
+  getMmrAsyncTaskRegistry as getAmpiAsyncTaskRegistry,
+} from "./extensions/ampi-workers/background/async-task-registry.js";
+export {
+  MmrLibrarianContextWindowError as AmpiLibrarianContextWindowError,
+} from "./extensions/ampi-workers/builtin-workers/librarian.js";
+export {
+  createMmrAdvisorTool as createAmpiAdvisorTool,
+  requireMmrAdvisorProfile as requireAmpiAdvisorProfile,
+} from "./extensions/ampi-workers/builtin-workers/oracle.js";
+export {
+  DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS as DEFAULT_AMPI_WORKER_KILL_TIMEOUT_MS,
+  DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT as DEFAULT_AMPI_WORKER_OUTPUT_BYTE_LIMIT,
+  DEFAULT_MMR_WORKER_PARTIAL_OUTPUT_POLICY as DEFAULT_AMPI_WORKER_PARTIAL_OUTPUT_POLICY,
+  MMR_SUBAGENT_DETAILS_STATUS_VALUES as AMPI_SUBAGENT_DETAILS_STATUS_VALUES,
+  MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT as AMPI_WORKER_INLINE_PROMPT_BYTE_LIMIT,
+  MMR_WORKER_OUTCOME_STATUS_VALUES as AMPI_WORKER_OUTCOME_STATUS_VALUES,
+  MMR_WORKER_TRAIL_LIMIT as AMPI_WORKER_TRAIL_LIMIT,
+  buildMmrWorkerArgs as buildAmpiWorkerArgs,
+  classifyMmrWorkerOutcome as classifyAmpiWorkerOutcome,
+  classifyMmrWorkerOutcomeForProfile as classifyAmpiWorkerOutcomeForProfile,
+  createChildCliMmrSubagentRunner as createChildCliAmpiSubagentRunner,
+  createMmrSubagentRunnerFromRunWorker as createAmpiSubagentRunnerFromRunWorker,
+  emptyMmrWorkerUsageStats as emptyAmpiWorkerUsageStats,
+  getMmrWorkerFinalOutput as getAmpiWorkerFinalOutput,
+  hasUsableMmrWorkerFinalOutput as hasUsableAmpiWorkerFinalOutput,
+  resolveMmrWorkerPartialOutputPolicy as resolveAmpiWorkerPartialOutputPolicy,
+  resolveMmrWorkerPiInvocation as resolveAmpiWorkerPiInvocation,
+  resolveMmrWorkerPiInvocationFromEnv as resolveAmpiWorkerPiInvocationFromEnv,
+  runMmrSubagentWorker as runAmpiSubagentWorker,
+  truncateMmrWorkerOutput as truncateAmpiWorkerOutput,
+} from "./extensions/ampi-workers/framework/runner.js";
+export {
+  MMR_SUBAGENTS_ASYNC_TASK_TOOLS as AMPI_SUBAGENTS_ASYNC_TASK_TOOLS,
+} from "./extensions/ampi-workers/provider.js";
+export type {
+  MmrModelRegistryLike as AmpiModelRegistryLike,
+  MmrModelRouteSelection as AmpiModelRouteSelection,
+  MmrRegisteredModelLike as AmpiRegisteredModelLike,
+  ResolveAndApplyMmrModelArgs as ResolveAndApplyAmpiModelArgs,
+  SelectMmrModelRouteArgs as SelectAmpiModelRouteArgs,
+} from "./extensions/ampi-core/model-resolver.js";
+export type {
+  MmrPromptLayerContext as AmpiPromptLayerContext,
+} from "./extensions/ampi-core/prompt.js";
+export type {
+  MmrEventBusHost as AmpiEventBusHost,
+  MmrSessionIdentityChangedHandler as AmpiSessionIdentityChangedHandler,
+  MmrStateChangedHandler as AmpiStateChangedHandler,
+  MmrSubagentState as AmpiSubagentState,
+} from "./extensions/ampi-core/runtime.js";
+export type {
+  MmrSubagentBaseMode as AmpiSubagentBaseMode,
+  MmrSubagentPartialOutputPolicy as AmpiSubagentPartialOutputPolicy,
+  MmrSubagentProfile as AmpiSubagentProfile,
+  MmrSubagentPromptRoute as AmpiSubagentPromptRoute,
+} from "./extensions/ampi-core/subagent-profiles.js";
+export type {
+  AssembleMmrSubagentSurfaceInput as AssembleAmpiSubagentSurfaceInput,
+  MmrSubagentPromptAssemblyResult as AmpiSubagentPromptAssemblyResult,
+  MmrSubagentPromptBlockKind as AmpiSubagentPromptBlockKind,
+  MmrSubagentPromptBuilder as AmpiSubagentPromptBuilder,
+  MmrSubagentPromptBuilderInput as AmpiSubagentPromptBuilderInput,
+  MmrSubagentSurfaceBlock as AmpiSubagentSurfaceBlock,
+} from "./extensions/ampi-core/subagent-prompt-assembly.js";
+export type {
+  MmrSubagentInvocation as AmpiSubagentInvocation,
+  MmrSubagentInvocationFail as AmpiSubagentInvocationFail,
+  MmrSubagentInvocationOk as AmpiSubagentInvocationOk,
+  MmrSubagentResolveCode as AmpiSubagentResolveCode,
+  MmrSubagentResolveDiagnostic as AmpiSubagentResolveDiagnostic,
+  MmrSubagentToolResolution as AmpiSubagentToolResolution,
+  ResolveMmrSubagentInvocationArgs as ResolveAmpiSubagentInvocationArgs,
+} from "./extensions/ampi-core/subagent-resolver.js";
+export type {
+  MmrSubagentPermissionContext as AmpiSubagentPermissionContext,
+  MmrSubagentProgressEvent as AmpiSubagentProgressEvent,
+  MmrSubagentRunResult as AmpiSubagentRunResult,
+  MmrSubagentRunStatus as AmpiSubagentRunStatus,
+  MmrSubagentToolUseProgress as AmpiSubagentToolUseProgress,
+  MmrSubagentToolUseStatus as AmpiSubagentToolUseStatus,
+  MmrSubagentTurnProgress as AmpiSubagentTurnProgress,
+  RunMmrSubagentInProcessOptions as RunAmpiSubagentInProcessOptions,
+} from "./extensions/ampi-core/subagent-runner-contract.js";
+export type {
+  MmrCapabilityProfileKey as AmpiCapabilityProfileKey,
+} from "./extensions/ampi-core/subagent-tool-policy.js";
+export type {
+  MmrActiveToolManifestEntry as AmpiActiveToolManifestEntry,
+  MmrCoreSettings as AmpiCoreSettings,
+  MmrFeatureGateDecision as AmpiFeatureGateDecision,
+  MmrFeatureGateProvider as AmpiFeatureGateProvider,
+  MmrFeatureGateProviderDecision as AmpiFeatureGateProviderDecision,
+  MmrFeatureGateRegistry as AmpiFeatureGateRegistry,
+  MmrFeatureGateStatus as AmpiFeatureGateStatus,
+  MmrModeDefinition as AmpiModeDefinition,
+  MmrModeKey as AmpiModeKey,
+  MmrModeSelection as AmpiModeSelection,
+  MmrModeSelectionSource as AmpiModeSelectionSource,
+  MmrModeState as AmpiModeState,
+  MmrModelCandidateResolution as AmpiModelCandidateResolution,
+  MmrModelPreference as AmpiModelPreference,
+  MmrModelResolution as AmpiModelResolution,
+  MmrPlannedToolMetadata as AmpiPlannedToolMetadata,
+  MmrPolicyDiagnostic as AmpiPolicyDiagnostic,
+  MmrPolicyDiagnosticCode as AmpiPolicyDiagnosticCode,
+  MmrPolicyDiagnosticSeverity as AmpiPolicyDiagnosticSeverity,
+  MmrPromptAssemblyResult as AmpiPromptAssemblyResult,
+  MmrPromptBlock as AmpiPromptBlock,
+  MmrPromptBlockKind as AmpiPromptBlockKind,
+  MmrPromptRoute as AmpiPromptRoute,
+  MmrSessionIdentity as AmpiSessionIdentity,
+  MmrSessionIdentitySource as AmpiSessionIdentitySource,
+  MmrToolDecision as AmpiToolDecision,
+  MmrToolProvider as AmpiToolProvider,
+  MmrToolResolution as AmpiToolResolution,
+  MmrToolRule as AmpiToolRule,
+  MmrToolStatus as AmpiToolStatus,
+} from "./extensions/ampi-core/types.js";
+export type {
+  DiscoverMmrCustomSubagentsArgs as DiscoverAmpiCustomSubagentsArgs,
+  MmrCustomSubagentDefinition as AmpiCustomSubagentDefinition,
+  ParseMmrCustomSubagentMarkdownArgs as ParseAmpiCustomSubagentMarkdownArgs,
+} from "./extensions/ampi-custom-subagents/custom-loader.js";
+export type {
+  MmrCustomSubagentsFactoryOverrides as AmpiCustomSubagentsFactoryOverrides,
+} from "./extensions/ampi-custom-subagents/index.js";
+export type {
+  MmrCustomSubagentsCapabilities as AmpiCustomSubagentsCapabilities,
+} from "./extensions/ampi-custom-subagents/provider.js";
+export type {
+  LoadedMmrGithubSettings as LoadedAmpiGithubSettings,
+  MmrGithubSettings as AmpiGithubSettings,
+} from "./extensions/ampi-github/config.js";
+export type {
+  MmrGithubFactoryOverrides as AmpiGithubFactoryOverrides,
+} from "./extensions/ampi-github/index.js";
+export type {
+  MmrGithubToolInfoLike as AmpiGithubToolInfoLike,
+} from "./extensions/ampi-github/tool-ownership.js";
+export type {
+  MmrGithubToolDeps as AmpiGithubToolDeps,
+} from "./extensions/ampi-github/tools.js";
+export type {
+  MmrHistoryToolDeps as AmpiHistoryToolDeps,
+} from "./extensions/ampi-history/tools.js";
+export type {
+  MmrSessionFallbackErrorClassification as AmpiSessionFallbackErrorClassification,
+  MmrSessionFallbackQuotaKind as AmpiSessionFallbackQuotaKind,
+} from "./extensions/ampi-session-fallback/classifier.js";
+export type {
+  PersistedMmrSessionFallbackOverride as PersistedAmpiSessionFallbackOverride,
+} from "./extensions/ampi-session-fallback/state.js";
+export type {
+  LoadedMmrWebSettings as LoadedAmpiWebSettings,
+  MmrWebSettings as AmpiWebSettings,
+} from "./extensions/ampi-web/config.js";
+export type {
+  MmrWebFactoryOverrides as AmpiWebFactoryOverrides,
+} from "./extensions/ampi-web/index.js";
+export type {
+  MmrAsyncTaskBoard as AmpiAsyncTaskBoard,
+  MmrAsyncTaskBoardEntry as AmpiAsyncTaskBoardEntry,
+  MmrAsyncTaskFreshness as AmpiAsyncTaskFreshness,
+  MmrAsyncTaskGroupSnapshot as AmpiAsyncTaskGroupSnapshot,
+  MmrAsyncTaskGroupStatus as AmpiAsyncTaskGroupStatus,
+  MmrAsyncTaskInternalSnapshot as AmpiAsyncTaskInternalSnapshot,
+  MmrAsyncTaskRegistry as AmpiAsyncTaskRegistry,
+  MmrAsyncTaskRegistryDeps as AmpiAsyncTaskRegistryDeps,
+  MmrAsyncTaskSnapshot as AmpiAsyncTaskSnapshot,
+  MmrAsyncTaskStatus as AmpiAsyncTaskStatus,
+} from "./extensions/ampi-workers/background/async-task-registry.js";
+export type {
+  MmrAdvisorToolConfig as AmpiAdvisorToolConfig,
+  MmrAdvisorToolDeps as AmpiAdvisorToolDeps,
+} from "./extensions/ampi-workers/builtin-workers/oracle.js";
+export type {
+  ClassifyMmrWorkerOutcomeOptions as ClassifyAmpiWorkerOutcomeOptions,
+  MmrAsyncTerminalOutcome as AmpiAsyncTerminalOutcome,
+  MmrSpawnedSubagentWorkerDetailsBase as AmpiSpawnedSubagentWorkerDetailsBase,
+  MmrSubagentDetailsStatus as AmpiSubagentDetailsStatus,
+  MmrSubagentRunOptions as AmpiSubagentRunOptions,
+  MmrSubagentRunProgress as AmpiSubagentRunProgress,
+  MmrSubagentRunner as AmpiSubagentRunner,
+  MmrSubagentWorkerDetailsBase as AmpiSubagentWorkerDetailsBase,
+  MmrSubagentWorkerRunResult as AmpiSubagentWorkerRunResult,
+  MmrWorkerInvocation as AmpiWorkerInvocation,
+  MmrWorkerMessage as AmpiWorkerMessage,
+  MmrWorkerOutcomeStatus as AmpiWorkerOutcomeStatus,
+  MmrWorkerPiInvocationEnv as AmpiWorkerPiInvocationEnv,
+  MmrWorkerProcess as AmpiWorkerProcess,
+  MmrWorkerProgressSnapshot as AmpiWorkerProgressSnapshot,
+  MmrWorkerResult as AmpiWorkerResult,
+  MmrWorkerRunnerDeps as AmpiWorkerRunnerDeps,
+  MmrWorkerSpawn as AmpiWorkerSpawn,
+  MmrWorkerTrailItem as AmpiWorkerTrailItem,
+  MmrWorkerUsageStats as AmpiWorkerUsageStats,
+  RunMmrSubagentWorkerOptions as RunAmpiSubagentWorkerOptions,
+} from "./extensions/ampi-workers/framework/runner.js";
+export type {
+  MmrWorkersFactoryOverrides as AmpiWorkersFactoryOverrides,
+} from "./extensions/ampi-workers/index.js";
+export type {
+  MmrAsyncTasksCapabilities as AmpiAsyncTasksCapabilities,
+  MmrSubagentsCapabilities as AmpiSubagentsCapabilities,
+  MmrWorkersCapabilities as AmpiWorkersCapabilities,
+} from "./extensions/ampi-workers/provider.js";
+

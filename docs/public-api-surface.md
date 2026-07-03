@@ -32,6 +32,21 @@ package-root export must ship a staged compatibility plan:
 
 Annotation comes first; pruning is a deliberate, staged follow-up.
 
+## Symbol naming: `Mmr*` primary, `Ampi*` additive aliases
+
+The package root exports every public symbol under its original
+`Mmr*` / `MMR_*` name (the primary, supported contract) and additionally
+re-exports it under a brand-aligned `Ampi*` / `AMPI_*` name. The aliases are
+additive: they never rename or remove an `Mmr*` name, and each alias is an
+exact re-export of the same binding, so `AmpiX === MmrX` for values and the
+types are identical. A small set of hand-authored sibling constants
+(for example `AMPI_HISTORY_ENABLE_ENV` vs `MMR_HISTORY_ENABLE_ENV`) hold
+values that intentionally differ by the brand token rather than being exact
+aliases. Alias completeness and honesty are enforced generically by
+`tests/mmr-root-ampi-alias-parity.test.mjs`; the deep
+`./extensions/*` entrypoints are out of scope and expose only their existing
+names.
+
 ## What lives in each tier
 
 ### Stable
