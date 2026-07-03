@@ -260,18 +260,13 @@ export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.free
  * import; the dependency-direction guardrail test fails on edges outside this
  * set.
  *
- * The remaining edges are documented debt, scheduled to be inverted through a
- * core-registered worker-service seam so `ampi-workers` stops acting as a
- * hidden shared runtime:
- *  - `ampi-custom-subagents -> ampi-workers` (worker runner/rendering reuse)
- *  - `ampi-history -> ampi-workers` (history-reader worker execution)
- *  - `ampi-toolbox -> ampi-patch` / `ampi-toolbox -> ampi-tasks` (deprecated
- *    compatibility shim re-exporting its former split-out surface; removed
- *    together with the shim)
+ * `ampi-custom-subagents` and `ampi-history` consume workers through the
+ * core-registered worker-host seam (`ampi-core/worker-host.ts`) with zero
+ * direct `ampi-workers` imports. The only remaining edges are the deprecated
+ * `ampi-toolbox` compatibility shim re-exporting its former split-out
+ * surface; they are removed together with the shim.
  */
 export const MMR_SIBLING_IMPORT_ALLOWLIST: readonly string[] = Object.freeze([
-  "ampi-custom-subagents -> ampi-workers",
-  "ampi-history -> ampi-workers",
   "ampi-toolbox -> ampi-patch",
   "ampi-toolbox -> ampi-tasks",
 ]);
