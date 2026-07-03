@@ -172,14 +172,16 @@ describe("resolveMmrSubagentRoute", () => {
     const primary = resolveMmrSubagentRoute({
       profile,
       registry: makeRegistry([
+        { provider: "openai-codex", id: "gpt-5.5" },
         { provider: "claude-subscription", id: "claude-opus-4-6" },
         { provider: "openai-codex", id: "gpt-5.4" },
       ]),
     });
     assert.equal(primary.ok, true);
-    assert.equal(primary.selected.provider, "claude-subscription");
-    assert.equal(primary.selected.model, "claude-opus-4-6");
-    assert.equal(primary.selected.thinkingLevel, "medium");
+    // Default librarian usage: GPT-5.5 with no reasoning (thinking off).
+    assert.equal(primary.selected.provider, "openai-codex");
+    assert.equal(primary.selected.model, "gpt-5.5");
+    assert.equal(primary.selected.thinkingLevel, "off");
     assert.deepEqual([...primary.tools], [
       "read_github",
       "list_directory_github",
@@ -191,13 +193,28 @@ describe("resolveMmrSubagentRoute", () => {
     ]);
     assert.equal(primary.promptRoute, "standalone");
 
+    // Opus 4.6 fallback when GPT-5.5 is not registered; still reasoning-free
+    // (inherits the profile-level thinking-off default).
     const fallback = resolveMmrSubagentRoute({
+      profile,
+      registry: makeRegistry([
+        { provider: "claude-subscription", id: "claude-opus-4-6" },
+        { provider: "openai-codex", id: "gpt-5.4" },
+      ]),
+    });
+    assert.equal(fallback.ok, true);
+    assert.equal(fallback.selected.provider, "claude-subscription");
+    assert.equal(fallback.selected.model, "claude-opus-4-6");
+    assert.equal(fallback.selected.thinkingLevel, "off");
+
+    // Final fallback to GPT-5.4 when only it is registered.
+    const lastFallback = resolveMmrSubagentRoute({
       profile,
       registry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.4" }]),
     });
-    assert.equal(fallback.ok, true);
-    assert.equal(fallback.selected.provider, "openai-codex");
-    assert.equal(fallback.selected.model, "gpt-5.4");
+    assert.equal(lastFallback.ok, true);
+    assert.equal(lastFallback.selected.provider, "openai-codex");
+    assert.equal(lastFallback.selected.model, "gpt-5.4");
   });
 
   it("fails closed for librarian model and explicit-tool mismatches", async () => {

@@ -168,9 +168,12 @@ describe("mmr-core subagent profile registry", () => {
       "diff_github",
       "list_repositories",
     ]);
-    assert.equal(profile.thinkingLevel, "medium");
+    assert.equal(profile.thinkingLevel, "off");
     const prefIds = profile.modelPreferences.map((preference) => preference.model);
-    assert.deepEqual(prefIds, ["claude-opus-4-6", "gpt-5.4"]);
+    assert.deepEqual(prefIds, ["gpt-5.5", "claude-opus-4-6", "gpt-5.4"]);
+    // Default librarian usage runs reasoning-free: the GPT-5.5 primary carries
+    // an explicit thinking-off level.
+    assert.equal(profile.modelPreferences[0].thinkingLevel, "off");
   });
 
   it("does not add a bare fallback when expanding explicit provider preferences", async () => {

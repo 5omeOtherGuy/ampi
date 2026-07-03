@@ -342,11 +342,17 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   librarian: deepFreeze({
     name: "librarian",
     displayName: "Librarian",
+    // Default librarian usage is GPT-5.5 with no reasoning (thinking off):
+    // repository lookups are retrieval-oriented, so the primary route runs
+    // reasoning-free for latency/cost, falling back to Opus 4.6 then GPT-5.4
+    // when GPT-5.5 is not registered. The profile-level `thinkingLevel: "off"`
+    // applies to every fallback that carries no per-entry level.
     modelPreferences: [
+      { model: "gpt-5.5", thinkingLevel: "off" },
       { model: "claude-opus-4-6" },
       { model: "gpt-5.4" },
     ],
-    thinkingLevel: "medium",
+    thinkingLevel: "off",
     // Read-only GitHub repository provider tools owned by `ampi-github`.
     // The worker activates these by name through `--tools`; they are not
     // part of any user-facing mode allowlist.
