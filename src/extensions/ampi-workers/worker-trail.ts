@@ -5,27 +5,11 @@ export const MMR_WORKER_TRAIL_LIMIT = 32;
 const MMR_WORKER_TRAIL_PREVIEW_CHAR_LIMIT = 180;
 const MMR_WORKER_TRAIL_TEXT_CHAR_LIMIT = 4_000;
 
-export type MmrWorkerTrailItem =
-  | { type: "user"; text: string; imageCount?: number }
-  | { type: "assistant"; text: string }
-  | { type: "thinking"; text: string }
-  | {
-      type: "tool";
-      toolCallId: string;
-      toolName: string;
-      status: "running" | "completed" | "failed";
-      args?: unknown;
-      argsPreview?: string;
-      updatePreview?: string;
-      resultPreview?: string;
-      isError?: boolean;
-    }
-  | { type: "toolResult"; toolCallId?: string; toolName?: string; text?: string; imageCount?: number; isError?: boolean }
-  | { type: "bashExecution"; command?: string; output?: string; exitCode?: number; cancelled?: boolean; truncated?: boolean }
-  | { type: "compactionSummary"; summary: string; tokensBefore?: number }
-  | { type: "branchSummary"; summary: string }
-  | { type: "custom"; customType?: string; text?: string; imageCount?: number }
-  | { type: "skillInvocation"; name?: string; location?: string; text?: string };
+// The trail item union is a core-owned worker contract type
+// (`ampi-core/worker-contract.ts`); re-exported here as the historical
+// import path.
+import type { MmrWorkerTrailItem } from "../ampi-core/worker-contract.js";
+export type { MmrWorkerTrailItem } from "../ampi-core/worker-contract.js";
 
 interface ContentPreview {
   text: string;

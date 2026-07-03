@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const AGENTS_MODULE = "extensions/ampi-workers/background-agents.ts";
+const AGENTS_MODULE = "extensions/ampi-workers/worker-binding-registry.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 const SCHEMAS_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
 const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
@@ -35,17 +35,33 @@ function probeProfile(overrides = {}) {
 
 async function probeDescriptor(tool) {
   const { Type } = await import("typebox");
-  const agents = await importSource(AGENTS_MODULE);
   return {
     agent: "sa__probe",
     profileName: "sa__probe",
     toolName: "sa__probe",
+    exposure: ["tool", "background"],
+    contractPreset: "strict-delegated",
     paramsHint: "{task}",
     promptParamKey: "task",
     start: {
       parametersSchema: Type.Object({ task: Type.String() }, { additionalProperties: false }),
       workerTools: ["read"],
-      prepareRun: agents.prepareRunFromToolExecute({ tool, agent: "sa__probe", workerTools: ["read"] }),
+      // A minimal prepared-run stub: the probe tool's execute is the run
+      // thunk and settles with the tool-run result union.
+      prepareRun: (_deps, params, ctx, opts) => ({
+        ok: true,
+        prepared: {
+          agent: "sa__probe",
+          description: "sa__probe",
+          displayPrompt: "sa__probe",
+          cwd: typeof ctx?.cwd === "string" ? ctx.cwd : process.cwd(),
+          workerTools: ["read"],
+          run: async ({ signal, onProgress }) => {
+            const result = await tool.execute(`${opts.toolCallId}:sa__probe`, params, signal, onProgress, ctx);
+            return { toolResult: result, status: "succeeded", terminalOutcome: "success" };
+          },
+        },
+      }),
     },
   };
 }
@@ -192,5 +208,28 @@ describe("start_task with a custom background agent", () => {
     const startTask = tools.createStartTaskTool({ registry: createMmrAsyncTaskRegistry({ idFactory: () => "t1" }), sessionKey: "S" });
     const result = await startTask.execute("call-1", { agent: "bogus", params: { task: "x" } }, undefined, undefined, { cwd: "/repo" });
     assert.match(result.details.errorMessage ?? "", /agent must be one of: Task, finder, reviewer, librarian, sa__probe\./);
+  });
+});
+
+describe("start_task live schema derivation", () => {
+  it("reflects a binding registered AFTER the tool was created (lazy schema/description)", async () => {
+    const tools = await importSource(TOOLS_MODULE);
+    const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
+    const startTask = tools.createStartTaskTool({
+      registry: createMmrAsyncTaskRegistry({ idFactory: () => "t1" }),
+      sessionKey: "S",
+    });
+    const before = startTask.parameters.properties.agent.anyOf.map((entry) => entry.const);
+    assert.deepEqual(before, ["Task", "finder", "reviewer", "librarian"]);
+    // Register the custom binding AFTER tool creation (the production
+    // activation order: ampi-workers before ampi-custom-subagents).
+    await registerProbe();
+    const after = startTask.parameters.properties.agent.anyOf.map((entry) => entry.const);
+    assert.deepEqual(
+      after,
+      ["Task", "finder", "reviewer", "librarian", "sa__probe"],
+      "the host validates against tool.parameters, so it must be derived from the live binding set",
+    );
+    assert.match(startTask.description, /sa__probe/);
   });
 });

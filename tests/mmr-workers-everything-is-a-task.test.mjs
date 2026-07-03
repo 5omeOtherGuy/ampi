@@ -285,3 +285,36 @@ describe("registry: waitForSettle, external signal, raw-result projection", () =
     assert.deepEqual(snapshot.finalResult.finalOutput, "worker done");
   });
 });
+
+describe("worker-run envelope dual-write (blocking factory runs)", () => {
+  it("stamps the v1 envelope alongside the legacy details fields", async () => {
+    const { finder, def } = await makeBlockingFinder();
+    const pending = finder.execute("c1", { query: "find X" }, new AbortController().signal, undefined, CTX);
+    def.resolve();
+    const result = await pending;
+    // Legacy details fields remain intact (dual-write, not replacement).
+    assert.equal(result.details.worker, "ampi-workers.finder");
+    // Canonical envelope carried on the same details object.
+    assert.equal(result.details.kind, "worker-run");
+    assert.equal(result.details.version, 1);
+    assert.equal(result.details.run.agent, "finder");
+    assert.equal(result.details.run.profileName, "finder");
+    assert.equal(result.details.run.runMode, "blocking");
+    assert.equal(result.details.run.status, "succeeded");
+    assert.equal(result.details.run.terminalOutcome, "success");
+    assert.equal(result.details.run.sessionKey, "S");
+    assert.equal(result.details.run.taskId, "b1");
+  });
+
+  it("stamps a running envelope on progress updates and a cancelled envelope on aborts", async () => {
+    const { finder, def } = await makeBlockingFinder();
+    const controller = new AbortController();
+    const updates = [];
+    const pending = finder.execute("c1", { query: "find X" }, controller.signal, (u) => updates.push(u), CTX);
+    controller.abort();
+    def.resolve();
+    const result = await pending;
+    assert.equal(result.details.run.status, "cancelled");
+    assert.equal(result.details.run.terminalOutcome, undefined, "an abort has no terminal outcome");
+  });
+});

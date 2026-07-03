@@ -21,6 +21,7 @@ import {
   createMmrWorkersToolProvider,
   type MmrWorkersCapabilities,
 } from "./provider.js";
+import { registerMmrWorkersWorkerHost } from "./worker-host-impl.js";
 
 // Pi stamps every tool registered through `pi.registerTool` with the
 // `sourceInfo.path` of the extension entrypoint that called it. Recording
@@ -70,6 +71,11 @@ export function createMmrWorkersExtension(overrides: MmrWorkersFactoryOverrides 
     // prompt-assembly registry before any subagent worker can be
     // resolved. Idempotent across reloads.
     registerMmrSubagentsPromptBuilders();
+    // Self-register the core worker-host seam FIRST so sibling extensions
+    // that activate after ampi-workers (ampi-custom-subagents, ampi-history)
+    // can register bindings / prepare runs through ampi-core with no direct
+    // ampi-workers imports.
+    registerMmrWorkersWorkerHost(pi);
     registerFinderTool(pi, overrides.finder ?? {});
     registerOracleTool(pi, overrides.oracle ?? {});
     registerTaskParentPromptCapture(pi);

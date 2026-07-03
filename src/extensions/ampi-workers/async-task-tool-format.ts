@@ -27,13 +27,17 @@ import {
   listMmrBackgroundAgents,
   normalizeMmrBackgroundAgentName,
   type MmrBackgroundAgentDescriptor,
-} from "./background-agents.js";
+} from "./worker-binding-registry.js";
 
-// Status/error inference for tool-delegating runs moved next to the
-// tool-execute adapter that needs it; re-exported here so existing callers
-// keep one stable import path.
-export { inferToolErrorMessage, inferToolRunStatus } from "./background-agents.js";
 import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
+
+/** The error text a failed pre-spawn/tool result reports via its details. */
+export function inferToolErrorMessage(result: AgentToolResult<unknown>): string | undefined {
+  const details = isRecord(result.details) ? result.details : {};
+  return typeof details.errorMessage === "string" && details.errorMessage.length > 0
+    ? details.errorMessage
+    : undefined;
+}
 
 export function escapeXmlAttr(value: string): string {
   return value

@@ -20,7 +20,7 @@ import { isRecord } from "../ampi-core/internal/json.js";
 import {
   formatMmrWorkerUsage,
   stripMmrWorkerModelProvider,
-} from "../ampi-workers/worker-usage-format.js";
+} from "../ampi-core/worker-usage-format.js";
 import type { FindSessionDetails, ReadSessionDetails } from "./tools.js";
 
 interface HistoryTheme {

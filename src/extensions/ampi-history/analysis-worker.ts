@@ -5,12 +5,12 @@ import { assembleMmrSubagentSurface } from "../ampi-core/subagent-prompt-assembl
 import { getMmrSubagentProfile, selectFirstMatchingAvailableModel } from "../ampi-core/subagent-profiles.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
-  classifyMmrWorkerOutcomeForProfile,
-  createChildCliMmrSubagentRunner,
   type MmrSubagentRunner,
   type MmrSubagentWorkerDetailsBase,
   type MmrSubagentWorkerRunResult,
-} from "../ampi-workers/runner.js";
+} from "../ampi-core/worker-contract.js";
+import { classifyMmrWorkerOutcomeForProfile } from "../ampi-core/worker-outcome.js";
+import { getMmrWorkerHost } from "../ampi-core/worker-host.js";
 import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
 import { extractTouchedFilesFromEntries } from "./session-index.js";
 
@@ -701,7 +701,15 @@ export async function runHistoryReaderAnalysis(input: RunHistoryReaderAnalysisIn
     maxBytes: input.packetByteLimit,
     redactionEnabled: input.redactionEnabled,
   });
-  const runner = input.runner ?? createChildCliMmrSubagentRunner();
+  // Shared execution through the core worker-host seam (runMode "internal":
+  // not board-visible). Fail closed to the lexical fallback when no host is
+  // registered (ampi-workers not active) — the same posture as an
+  // unavailable model route.
+  const host = getMmrWorkerHost();
+  const runner: MmrSubagentRunner | undefined = input.runner ?? (host ? { run: host.runWorker } : undefined);
+  if (!runner) {
+    return failure("The ampi worker host is not registered in this session; history-reader worker analysis is unavailable.");
+  }
   try {
     const result = await runner.run({
       profileName: HISTORY_READER_SUBAGENT_PROFILE,

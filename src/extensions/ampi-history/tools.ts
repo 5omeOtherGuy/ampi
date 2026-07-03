@@ -4,7 +4,7 @@ import { Type, type Static } from "typebox";
 import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
 import type { LoadedMmrCoreSettings } from "../ampi-core/settings.js";
 import { checkMmrToolParams } from "../ampi-core/tool-params.js";
-import type { MmrSubagentRunner } from "../ampi-workers/runner.js";
+import type { MmrSubagentRunner } from "../ampi-core/worker-contract.js";
 import {
   runHistoryReaderAnalysis,
   type HistoryAnalysisMode,

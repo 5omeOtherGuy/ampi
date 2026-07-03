@@ -666,3 +666,44 @@ describe("mmr-history tools edge paths and input validation", () => {
     );
   });
 });
+
+describe("mmr-history worker-host seam boundary", () => {
+  it("has zero direct ampi-workers imports (consumption goes through ampi-core)", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve(import.meta.dirname, "..", "src", "extensions", "ampi-history");
+    for (const file of readdirSync(dir)) {
+      if (!file.endsWith(".ts")) continue;
+      const source = readFileSync(path.join(dir, file), "utf8");
+      assert.ok(
+        !source.includes("../ampi-workers/"),
+        `${file} must not import from ampi-workers (found a direct import edge)`,
+      );
+    }
+  });
+
+  it("fails closed to the lexical fallback reason when no worker host is registered", async () => {
+    const { __resetMmrWorkerHostForTests } = await importSource("extensions/ampi-core/worker-host.ts");
+    const { registerMmrHistoryPromptBuilders } = await importSource("extensions/ampi-history/prompts.ts");
+    const { runHistoryReaderAnalysis } = await importSource("extensions/ampi-history/analysis-worker.ts");
+    registerMmrHistoryPromptBuilders();
+    __resetMmrWorkerHostForTests();
+    const manager = { buildSessionContext: () => ({ messages: [] }), getEntries: () => [] };
+    const result = await runHistoryReaderAnalysis({
+      info: sessionInfo(),
+      manager,
+      goal: "extract the plan",
+      cwd: "/repo",
+      // An authenticated route must exist so the failure is attributable to
+      // the missing host, not the model resolution.
+      ctx: {
+        modelRegistry: {
+          getAvailable: () => [{ provider: "openai", id: "gpt-5.4-mini" }],
+          hasConfiguredAuth: () => true,
+        },
+      },
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.fallbackReason, /worker host is not registered/);
+  });
+});

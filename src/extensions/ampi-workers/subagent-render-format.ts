@@ -25,6 +25,14 @@ type TrailToolStatus = Extract<MmrWorkerTrailItem, { type: "tool" }>["status"];
  */
 const SUBAGENT_DETAILS_STATUS_VALUES: ReadonlySet<string> = new Set(MMR_SUBAGENT_DETAILS_STATUS_VALUES);
 
+/**
+ * Legacy blocking-subagent details shape. Dual-write window: producers now
+ * also stamp the canonical `{kind:"worker-run", version:1}` envelope
+ * (`ampi-core/worker-contract.ts`) on the same details object, and the
+ * renderer classifies through `worker-run-view.ts` (envelope preferred,
+ * this shape as fallback). Scheduled for removal one release after the
+ * dual-write began.
+ */
 export interface SubagentProgressDetails {
   model?: string;
   reportedModel?: string;
@@ -58,6 +66,11 @@ export interface SubagentProgressDetails {
   fallbackNotice?: string;
 }
 
+/**
+ * Legacy background-task details shape. See {@link SubagentProgressDetails}
+ * for the dual-write/removal plan; classification for this shape lives in
+ * `worker-run-view.ts`, never inline in a renderer.
+ */
 export interface BackgroundTaskDetails {
   worker?: string;
   tool?: string;
