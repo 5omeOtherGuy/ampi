@@ -16,10 +16,16 @@
  */
 import { isRecord } from "../ampi-core/internal/json.js";
 import type { MmrWorkerRunEnvelopeV1 } from "../ampi-core/worker-contract.js";
+import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./runner.js";
 import { readWorkerRunEnvelope } from "./worker-run-envelope.js";
-import type {
-  BackgroundTaskDetails,
-  SubagentProgressDetails,
+import {
+  diagnosticMessage,
+  statusFromDetails,
+  stripProvider,
+  type BackgroundTaskDetails,
+  type RenderContextLike,
+  type RenderStatus,
+  type SubagentProgressDetails,
 } from "./subagent-render-format.js";
 import type { WidgetRow, WidgetSection } from "./background-task-view.js";
 import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
@@ -130,4 +136,201 @@ export function buildWorkerRunView(details: unknown): WorkerRunView {
 function hasBackgroundSections(details: unknown): boolean {
   return isRecord(details)
     && (details.fleet !== undefined || details.board !== undefined || details.group !== undefined);
+}
+
+// ---------------------------------------------------------------------------
+// WorkerRunFinal: the N=1 rich-card projection
+// ---------------------------------------------------------------------------
+
+/**
+ * Coarse render status for a background-task poll/wait/cancel result. Mirrors
+ * the async-task status vocabulary onto the three-value {@link RenderStatus}
+ * the rich card draws: a user-initiated `cancelled` folds into the coarse
+ * `failed` bucket for section gating, but the neutral colouring is preserved
+ * separately via the raw status (see {@link WorkerRunFinal.backgroundStatus}).
+ * `undefined` for a non-terminal-or-running status the card cannot render.
+ */
+export function backgroundTaskRenderStatus(status: string | undefined): RenderStatus | undefined {
+  if (status === "running" || status === "cancelling") return "running";
+  if (status === "succeeded") return "succeeded";
+  if (status === "failed" || status === "cancelled") return "failed";
+  return undefined;
+}
+
+/**
+ * Collapsed/expanded task-body precedence for a background result card. The
+ * collapsed form prefers the short `description`; the expanded form prefers the
+ * full `prompt`. Both fall back through the start_task args display and the
+ * projected worker details so a replayed record with only partial fields still
+ * resolves a body. Pure: no theme, no live registry.
+ */
+export function backgroundTaskDisplayText(
+  details: BackgroundTaskDetails,
+  subDetails: SubagentProgressDetails,
+  startDisplay: { collapsed?: string; expanded?: string } | undefined,
+): { collapsed?: string; expanded?: string } {
+  const expanded = details.prompt
+    ?? startDisplay?.expanded
+    ?? subDetails.query
+    ?? subDetails.prompt
+    ?? subDetails.task
+    ?? subDetails.description
+    ?? details.description;
+  const collapsed = details.description
+    ?? startDisplay?.collapsed
+    ?? subDetails.description
+    ?? subDetails.query
+    ?? subDetails.task
+    ?? subDetails.prompt
+    ?? expanded;
+  return { collapsed, expanded };
+}
+
+/**
+ * The ONE data projection both rich N=1 cards (blocking transcript card and
+ * background-final poll card) consume. A pure view built from frozen details
+ * plus a few render-time bits; the rich-card assembler in `progress-rendering`
+ * turns it into components with zero surface branching beyond the flags carried
+ * here. Live registry state is never required — replayed transcripts project
+ * the same shape.
+ *
+ * Surface differences are encoded as data, not duplicate assembly:
+ *  - `background` toggles the `• background` header badge; `partial` the
+ *    partial-outcome chip.
+ *  - `backgroundStatus` carries the raw async-task status so the neutral
+ *    `cancelled` colouring (box bg + badge) survives the coarse
+ *    {@link RenderStatus} fold (a blocking failure stays error-red).
+ *  - `showTerminalSections` gates the final-output box and the usage line
+ *    (`!isPartial` for blocking; `renderStatus !== "running"` for background).
+ *  - `spaceBeforeTrailWhenExpanded` / `spaceBeforeOutputWhenExpanded` capture
+ *    the two surfaces' distinct spacer placement in the expanded trail view.
+ */
+export interface WorkerRunFinal {
+  surface: "blocking" | "background";
+  /** Display name in the header title. */
+  headerName: string;
+  /** Tool name shown on the trailing usage status line. */
+  statusLineName: string;
+  model: string | undefined;
+  contextWindow: number | undefined;
+  /** Coarse status: box bg (blocking), section gating, diagnostic colour. */
+  status: RenderStatus;
+  /** Raw async-task status (background badge + neutral-cancelled bg). */
+  backgroundStatus?: string;
+  /** Whether the final-output box and usage line render. */
+  showTerminalSections: boolean;
+  collapsedBody: string | undefined;
+  expandedBody: string | undefined;
+  /** Cleaned final output text; surface-specific source. */
+  output: string;
+  trail: readonly MmrWorkerTrailItem[];
+  trailWorkerPrompt: string | undefined;
+  suppressDuplicateFinalOutput: boolean;
+  usage: MmrWorkerUsageStats | undefined;
+  diagnostic: string | undefined;
+  diagnosticStatus: RenderStatus;
+  fallbackNotice: string | undefined;
+  /** Render the `• background` header badge. */
+  background: boolean;
+  /** Render the partial-outcome chip. */
+  partial: boolean;
+  spaceBeforeTrailWhenExpanded: "never" | "whenRawTrailNonEmpty";
+  spaceBeforeOutputWhenExpanded: "always" | "conditional";
+}
+
+/** Discriminated input for {@link buildWorkerRunFinal}. */
+export type WorkerRunFinalInput =
+  | {
+      surface: "blocking";
+      toolName: string;
+      details: SubagentProgressDetails | undefined;
+      isPartial: boolean;
+      context: RenderContextLike | undefined;
+      /** Derived at the call site via `operationLabel` (needs `context.args`). */
+      collapsedBody: string | undefined;
+      expandedBody: string | undefined;
+      trailWorkerPrompt: string | undefined;
+      /** `textContent(result).trim()`. */
+      output: string;
+    }
+  | {
+      surface: "background";
+      details: BackgroundTaskDetails;
+      /** Projected worker details (`details.final`), pre-narrowed by the view. */
+      final: SubagentProgressDetails;
+      startDisplay: { collapsed?: string; expanded?: string } | undefined;
+      /** `details.finalOutput?.trim() ?? ""`. */
+      output: string;
+    };
+
+/**
+ * Project a frozen worker-result payload into the {@link WorkerRunFinal} both
+ * rich cards render. Pure: status/model/diagnostic/body precedence is derived
+ * here (reusing `statusFromDetails`, `stripProvider`, `diagnosticMessage`, and
+ * `backgroundTaskDisplayText`), so the two entry points never re-derive them
+ * inline. During the envelope dual-write window the rich fields (trail, usage,
+ * model, body) are read from the legacy details shape — which the producers
+ * still stamp alongside the light envelope snapshot — so replay parity holds
+ * without doubling the session-log size.
+ */
+export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal {
+  if (input.surface === "background") {
+    const { details, final } = input;
+    const renderStatus = backgroundTaskRenderStatus(details.status) ?? "failed";
+    const model = stripProvider(final.reportedModel ?? final.model ?? details.resolvedModel);
+    const operation = backgroundTaskDisplayText(details, final, input.startDisplay);
+    return {
+      surface: "background",
+      headerName: details.agent ?? "background task",
+      statusLineName: details.agent ?? "background task",
+      model,
+      contextWindow: final.contextWindow ?? details.contextWindow,
+      status: renderStatus,
+      backgroundStatus: details.status,
+      showTerminalSections: renderStatus !== "running",
+      collapsedBody: operation.collapsed,
+      expandedBody: operation.expanded,
+      output: input.output,
+      trail: final.trail ?? [],
+      trailWorkerPrompt: operation.expanded ?? operation.collapsed,
+      suppressDuplicateFinalOutput: true,
+      usage: final.usage,
+      // Neutral cancel stays neutral: only a hard `failed` surfaces the
+      // error-coloured diagnostic (matches the pre-collapse gate).
+      diagnostic: details.status === "failed" ? details.errorMessage : undefined,
+      diagnosticStatus: renderStatus,
+      fallbackNotice: undefined,
+      background: true,
+      partial: details.terminalOutcome === "partial",
+      spaceBeforeTrailWhenExpanded: "whenRawTrailNonEmpty",
+      spaceBeforeOutputWhenExpanded: "always",
+    };
+  }
+
+  const { details } = input;
+  const status = statusFromDetails(details, input.isPartial, input.context);
+  const model = stripProvider(details?.reportedModel ?? details?.model);
+  return {
+    surface: "blocking",
+    headerName: input.toolName,
+    statusLineName: input.toolName,
+    model,
+    contextWindow: details?.contextWindow,
+    status,
+    showTerminalSections: !input.isPartial,
+    collapsedBody: input.collapsedBody,
+    expandedBody: input.expandedBody,
+    output: input.output,
+    trail: details?.trail ?? [],
+    trailWorkerPrompt: input.trailWorkerPrompt,
+    suppressDuplicateFinalOutput: !input.isPartial,
+    usage: details?.usage,
+    diagnostic: diagnosticMessage(details, status),
+    diagnosticStatus: status,
+    fallbackNotice: details?.fallbackNotice,
+    background: false,
+    partial: false,
+    spaceBeforeTrailWhenExpanded: "never",
+    spaceBeforeOutputWhenExpanded: "conditional",
+  };
 }

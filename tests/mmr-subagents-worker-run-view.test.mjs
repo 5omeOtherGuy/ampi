@@ -84,3 +84,172 @@ describe("worker-run-view", () => {
     assert.equal(isMmrBackgroundWorkerDetails(undefined), false);
   });
 });
+
+const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
+
+describe("buildWorkerRunFinal (rich N=1 projection)", () => {
+  it("projects blocking status/model/diagnostic/body precedence from legacy details", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "blocking",
+      toolName: "Task",
+      details: {
+        // details.status === "success" must win over a non-zero exit code.
+        status: "success",
+        exitCode: 2,
+        // reportedModel wins over model; provider prefix is stripped.
+        reportedModel: "openai-codex/gpt-5.4-mini",
+        model: "other-provider/ignored",
+        // spawnError has the highest diagnostic precedence.
+        spawnError: "pi not found",
+        errorMessage: "generic error",
+        trail: [{ type: "assistant", text: "trail item" }],
+        usage: { turns: 1 },
+      },
+      isPartial: false,
+      context: undefined,
+      collapsedBody: "short body",
+      expandedBody: "long body",
+      trailWorkerPrompt: "prompt",
+      output: "final answer",
+    });
+    assert.equal(final.surface, "blocking");
+    assert.equal(final.status, "succeeded");
+    assert.equal(final.model, "gpt-5.4-mini");
+    assert.match(final.diagnostic, /Spawn failed: pi not found/);
+    assert.equal(final.collapsedBody, "short body");
+    assert.equal(final.expandedBody, "long body");
+    assert.equal(final.background, false);
+    assert.equal(final.partial, false);
+    assert.equal(final.showTerminalSections, true);
+    assert.equal(final.spaceBeforeTrailWhenExpanded, "never");
+    assert.equal(final.spaceBeforeOutputWhenExpanded, "conditional");
+  });
+
+  it("marks a partial blocking run as running with terminal sections suppressed", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "blocking",
+      toolName: "finder",
+      details: { reportedModel: "prov/m" },
+      isPartial: true,
+      context: undefined,
+      collapsedBody: "c",
+      expandedBody: "e",
+      trailWorkerPrompt: undefined,
+      output: "",
+    });
+    assert.equal(final.status, "running");
+    assert.equal(final.showTerminalSections, false);
+    assert.equal(final.suppressDuplicateFinalOutput, false);
+  });
+
+  it("reads rich blocking fields from legacy details even when an envelope is present (dual-write)", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const { buildWorkerRunEnvelope, attachWorkerRunEnvelope } = await importSource(ENVELOPE_MODULE);
+    const envelope = buildWorkerRunEnvelope({
+      profileName: "finder-profile",
+      toolName: "finder",
+      agent: "finder",
+      runMode: "blocking",
+      status: "succeeded",
+      workerTools: [],
+    });
+    const details = attachWorkerRunEnvelope(
+      {
+        reportedModel: "openai-codex/gpt-5.4-mini",
+        stopReason: "end_turn",
+        trail: [{ type: "assistant", text: "legacy trail" }],
+        usage: { turns: 2 },
+      },
+      envelope,
+    );
+    const final = buildWorkerRunFinal({
+      surface: "blocking",
+      toolName: "finder",
+      details,
+      isPartial: false,
+      context: undefined,
+      collapsedBody: "c",
+      expandedBody: "e",
+      trailWorkerPrompt: undefined,
+      output: "o",
+    });
+    assert.equal(final.status, "succeeded");
+    assert.equal(final.model, "gpt-5.4-mini");
+    assert.deepEqual(final.trail, [{ type: "assistant", text: "legacy trail" }]);
+    assert.deepEqual(final.usage, { turns: 2 });
+  });
+
+  it("projects a cancelled background run as neutral (raw status kept, no error diagnostic)", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "background",
+      details: {
+        worker: "ampi-workers.async-task",
+        tool: "task_poll",
+        agent: "finder",
+        taskId: "t1",
+        status: "cancelled",
+        description: "desc body",
+        prompt: "full prompt body",
+        resolvedModel: "google/gemini-3",
+        errorMessage: "aborted by watchdog",
+      },
+      final: {},
+      startDisplay: undefined,
+      output: "",
+    });
+    assert.equal(final.surface, "background");
+    assert.equal(final.backgroundStatus, "cancelled");
+    assert.equal(final.status, "failed");
+    assert.equal(final.diagnostic, undefined);
+    assert.equal(final.background, true);
+    assert.equal(final.model, "gemini-3");
+    assert.equal(final.collapsedBody, "desc body");
+    assert.equal(final.expandedBody, "full prompt body");
+    assert.equal(final.spaceBeforeTrailWhenExpanded, "whenRawTrailNonEmpty");
+    assert.equal(final.spaceBeforeOutputWhenExpanded, "always");
+  });
+
+  it("surfaces the failed-background diagnostic, the partial chip, and final-model precedence", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "background",
+      details: {
+        worker: "ampi-workers.async-task",
+        tool: "task_poll",
+        agent: "Task",
+        taskId: "t2",
+        status: "failed",
+        errorMessage: "boom",
+        terminalOutcome: "partial",
+        resolvedModel: "z/rv",
+      },
+      final: { reportedModel: "x/rm", model: "y/m", trail: [{ type: "assistant", text: "leg" }] },
+      startDisplay: undefined,
+      output: "",
+    });
+    assert.equal(final.status, "failed");
+    assert.equal(final.diagnostic, "boom");
+    assert.equal(final.partial, true);
+    // final.reportedModel wins over final.model and details.resolvedModel.
+    assert.equal(final.model, "rm");
+    assert.equal(final.statusLineName, "Task");
+  });
+
+  it("tolerates an empty background final snapshot without throwing", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "background",
+      details: { worker: "ampi-workers.async-task", tool: "task_poll", agent: "finder", taskId: "t3", status: "succeeded" },
+      final: {},
+      startDisplay: undefined,
+      output: "",
+    });
+    assert.equal(final.trail.length, 0);
+    assert.equal(final.usage, undefined);
+    assert.equal(final.model, undefined);
+    assert.equal(final.showTerminalSections, true);
+  });
+});

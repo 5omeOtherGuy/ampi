@@ -14,18 +14,11 @@ import { isRecord } from "../ampi-core/internal/json.js";
 import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./runner.js";
 import {
   compactOneLine,
-  diagnosticMessage,
-  formatTitle,
   formatTokens,
   formatWorkerStatusLine,
-  statusBgFn,
-  statusColor,
-  statusLabel,
-  stripProvider,
   successBgFn,
   type RenderContextLike,
   type RenderStatus,
-  type SubagentProgressDetails,
   type SubagentTheme,
 } from "./subagent-render-format.js";
 import {
@@ -156,26 +149,6 @@ export function addDiagnostic(
   const color = status === "failed" ? "error" : "warning";
   container.addChild(new Text(theme.fg(color, compactOneLine(message)), 0, 0));
   return true;
-}
-
-export function addTaskBox(
-  container: Container,
-  toolName: string,
-  details: SubagentProgressDetails | undefined,
-  operation: string | undefined,
-  expanded: boolean,
-  status: RenderStatus,
-  theme: SubagentTheme,
-  expandedOperation = operation,
-): boolean {
-  const box = new Box(1, 1, statusBgFn(status, theme));
-  box.addChild(new Text(renderHeaderLine(toolName, status, details, theme), 0, 0));
-  const preview = taskPreviewForDisplay(operation, expandedOperation, expanded);
-  const hasOperation = addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
-  if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
-  const hasDiagnostic = addDiagnostic(box, diagnosticMessage(details, status), status, theme);
-  container.addChild(box);
-  return hasOperation || hasDiagnostic;
 }
 
 export function addFallbackNoticeBlock(container: Container, notice: string | undefined, theme: SubagentTheme): boolean {
@@ -508,13 +481,3 @@ export function addTrailComponents(
   return added;
 }
 
-function renderHeaderLine(
-  toolName: string,
-  status: RenderStatus,
-  details: SubagentProgressDetails | undefined,
-  theme: SubagentTheme,
-): string {
-  const model = stripProvider(details?.reportedModel ?? details?.model);
-  const title = formatTitle(toolName, model, theme);
-  return `${title}  ${theme.fg(statusColor(status), statusLabel(status))}`;
-}
