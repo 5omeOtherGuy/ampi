@@ -176,7 +176,7 @@ export const FINDER_PROGRESS_PLACEHOLDER = "finder: searching codebase…";
 /**
  * Build the finder worker system prompt. Re-exported here for
  * compatibility with existing imports; the canonical owner is
- * `ampi-workers/prompts.ts`, which also registers the finder builder
+ * `ampi-workers/profiles/prompts.ts`, which also registers the finder builder
  * against ampi-core's prompt-assembly registry.
  */
 export function buildFinderWorkerSystemPrompt(cwd: string): string {

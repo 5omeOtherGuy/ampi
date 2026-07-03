@@ -212,7 +212,7 @@ export const ORACLE_DESCRIPTION = [
  * Build the oracle worker system prompt. Re-exported here for
  * compatibility with callers that import the builder through the
  * concrete-tool module; the canonical owner is
- * `ampi-workers/prompts.ts`, which also registers the oracle builder
+ * `ampi-workers/profiles/prompts.ts`, which also registers the oracle builder
  * against ampi-core's prompt-assembly registry.
  */
 export function buildOracleWorkerSystemPrompt(cwd: string): string {

@@ -155,7 +155,7 @@ function makeResult(overrides = {}) {
           toolCallId: "read-1",
           toolName: "read",
           status: "completed",
-          argsPreview: JSON.stringify({ path: `${home}/projects/repo/src/extensions/ampi-workers/finder.ts`, offset: 430, limit: 160 }),
+          argsPreview: JSON.stringify({ path: `${home}/projects/repo/src/extensions/ampi-workers/builtin-workers/finder.ts`, offset: 430, limit: 160 }),
           resultPreview: "read result preview from finder.ts",
         },
         {
@@ -599,7 +599,7 @@ describe("renderMmrSubagentResult", () => {
     assert.match(rendered, /completed/i);
     assert.match(rendered, /Evaluating interface name collision/);
     assert.match(rendered, /Now read finder\.ts buildFinalContent:/);
-    assert.match(rendered, /read .*~\/projects\/repo\/src\/extensions\/ampi-workers\/finder\.ts:430-589/);
+    assert.match(rendered, /read .*~\/projects\/repo\/src\/extensions\/ampi-workers\/builtin-workers\/finder\.ts:430-589/);
     assert.match(rendered, /read result preview from finder\.ts/);
     assert.match(rendered, /I'm seeing the core issue now/);
     assert.match(rendered, /grep .*activation failure marker.*tests/);

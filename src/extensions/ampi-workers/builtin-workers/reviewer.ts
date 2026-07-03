@@ -155,7 +155,7 @@ export const REVIEWER_PROGRESS_PLACEHOLDER = "reviewer: reviewing changes…";
 /**
  * Build the reviewer worker system prompt. Re-exported here for
  * symmetry with the other worker modules; the canonical owner is
- * `ampi-workers/prompts.ts`, which also registers the reviewer builder
+ * `ampi-workers/profiles/prompts.ts`, which also registers the reviewer builder
  * against ampi-core's prompt-assembly registry.
  */
 export function buildReviewerWorkerSystemPrompt(cwd: string): string {
