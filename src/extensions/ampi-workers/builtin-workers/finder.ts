@@ -7,28 +7,28 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
-import { getMmrSubagentState } from "../ampi-core/runtime.js";
-import { checkMmrToolParams } from "../ampi-core/tool-params.js";
-import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background-dispatch.js";
+import { getMmrSubagentState } from "../../ampi-core/runtime.js";
+import { checkMmrToolParams } from "../../ampi-core/tool-params.js";
+import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
 import {
   assembleMmrSubagentSurface,
   getMmrSubagentPromptBuilder,
   registerMmrSubagentPromptBuilder,
   unregisterMmrSubagentPromptBuilder,
-} from "../ampi-core/subagent-prompt-assembly.js";
+} from "../../ampi-core/subagent-prompt-assembly.js";
 import {
   expandMmrModelPreferencesToStrings,
   getMmrSubagentProfile,
-} from "../ampi-core/subagent-profiles.js";
+} from "../../ampi-core/subagent-profiles.js";
 import {
   resolveMmrSubagentInvocation,
   type MmrSubagentInvocation,
-} from "../ampi-core/subagent-resolver.js";
-import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../ampi-core/settings.js";
-import type { MmrModelPreference } from "../ampi-core/types.js";
-import { buildFinderWorkerSystemPrompt as buildFinderWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
+} from "../../ampi-core/subagent-resolver.js";
+import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../../ampi-core/settings.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
+import { buildFinderWorkerSystemPrompt as buildFinderWorkerSystemPromptFromPrompts } from "../profiles/prompts.js";
+import { resolveEffectiveRunner } from "../framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerRunPreparer,
@@ -37,13 +37,13 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolResolveInput,
   type MmrWorkerToolSpec,
-} from "./framework/worker-tool-factory.js";
-import { FINDER_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { type ToolHostLike } from "./framework/worker-host.js";
+} from "../framework/worker-tool-factory.js";
+import { FINDER_BACKGROUND_GUIDANCE } from "../../ampi-core/worker-tool-guidance.js";
+import { type ToolHostLike } from "../framework/worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
-} from "./worker-model-metadata.js";
+} from "../worker-model-metadata.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
   type MmrSpawnedSubagentWorkerDetailsBase,
@@ -54,11 +54,11 @@ import {
   type MmrWorkerRunnerDeps,
   type MmrWorkerTrailItem,
   runMmrSubagentWorker,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
-} from "./worker-result-shaping.js";
+} from "../worker-result-shaping.js";
 
 export const FINDER_TOOL_NAME = "finder";
 

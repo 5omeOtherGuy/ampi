@@ -5,27 +5,27 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
-import { isRecord } from "../ampi-core/internal/json.js";
-import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
-import { checkMmrToolParams } from "../ampi-core/tool-params.js";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background-dispatch.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
+import { checkMmrToolParams } from "../../ampi-core/tool-params.js";
 import {
   assembleMmrSubagentSurface,
   getMmrSubagentPromptBuilder,
   registerMmrSubagentPromptBuilder,
   unregisterMmrSubagentPromptBuilder,
-} from "../ampi-core/subagent-prompt-assembly.js";
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
+} from "../../ampi-core/subagent-prompt-assembly.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
 import {
   resolveMmrSubagentInvocation,
   type MmrSubagentInvocation,
-} from "../ampi-core/subagent-resolver.js";
-import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../ampi-core/model-resolver.js";
-import { loadMmrCoreSettings } from "../ampi-core/settings.js";
-import type { MmrActiveToolManifestEntry, MmrModelPreference } from "../ampi-core/types.js";
-import { hasOwnedToolsFromOwner, type ToolInfoLike } from "../ampi-core/owned-tools.js";
-import { buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
+} from "../../ampi-core/subagent-resolver.js";
+import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../../ampi-core/model-resolver.js";
+import { loadMmrCoreSettings } from "../../ampi-core/settings.js";
+import type { MmrActiveToolManifestEntry, MmrModelPreference } from "../../ampi-core/types.js";
+import { hasOwnedToolsFromOwner, type ToolInfoLike } from "../../ampi-core/owned-tools.js";
+import { buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerSystemPromptFromPrompts } from "../profiles/prompts.js";
+import { resolveEffectiveRunner } from "../framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerRunPreparer,
@@ -33,10 +33,10 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolRunContext,
   type MmrWorkerToolSpec,
-} from "./framework/worker-tool-factory.js";
-import { LIBRARIAN_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { buildWorkerToolManifest, type ToolHostLike } from "./framework/worker-host.js";
-import { readMmrModelContextWindow } from "./worker-model-metadata.js";
+} from "../framework/worker-tool-factory.js";
+import { LIBRARIAN_BACKGROUND_GUIDANCE } from "../../ampi-core/worker-tool-guidance.js";
+import { buildWorkerToolManifest, type ToolHostLike } from "../framework/worker-host.js";
+import { readMmrModelContextWindow } from "../worker-model-metadata.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
   emptyMmrWorkerUsageStats,
@@ -47,11 +47,11 @@ import {
   type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
-} from "./worker-result-shaping.js";
+} from "../worker-result-shaping.js";
 
 export const LIBRARIAN_TOOL_NAME = "librarian";
 export const LIBRARIAN_SUBAGENT_PROFILE_NAME = "librarian";

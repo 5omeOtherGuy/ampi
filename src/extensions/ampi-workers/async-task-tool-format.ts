@@ -6,7 +6,7 @@ import {
   buildTaskFinalResult,
   buildTaskProgressResult,
   type TaskDetailsContext,
-} from "./task.js";
+} from "./builtin-workers/task.js";
 import {
   isValidAsyncTaskGroupId,
   type MmrAsyncTaskBoard,

@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const LIBRARIAN_MODULE = "extensions/ampi-workers/librarian.ts";
-const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const LIBRARIAN_MODULE = "extensions/ampi-workers/builtin-workers/librarian.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/profiles/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/ampi-github/tool-ownership.ts";
 const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/ampi-github/index.ts";

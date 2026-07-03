@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Type, type Static } from "typebox";
-import { checkMmrToolParams } from "../ampi-core/tool-params.js";
+import { checkMmrToolParams } from "../../ampi-core/tool-params.js";
 import type { OracleAttachmentRecord } from "./oracle-result.js";
 
 /**

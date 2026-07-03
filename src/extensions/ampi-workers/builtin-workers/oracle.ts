@@ -4,44 +4,44 @@ import type {
   ExtensionAPI,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
+import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
 import {
   assembleMmrSubagentSurface,
   getMmrSubagentPromptBuilder,
   registerMmrSubagentPromptBuilder,
   unregisterMmrSubagentPromptBuilder,
-} from "../ampi-core/subagent-prompt-assembly.js";
+} from "../../ampi-core/subagent-prompt-assembly.js";
 import {
   expandMmrModelPreferencesToStrings,
   getMmrSubagentProfile,
   type MmrSubagentProfile,
-} from "../ampi-core/subagent-profiles.js";
+} from "../../ampi-core/subagent-profiles.js";
 import {
   resolveMmrSubagentInvocation,
   type MmrSubagentInvocation,
-} from "../ampi-core/subagent-resolver.js";
-import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../ampi-core/settings.js";
-import type { MmrModelPreference } from "../ampi-core/types.js";
-import { buildOracleWorkerSystemPrompt as buildOracleWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
+} from "../../ampi-core/subagent-resolver.js";
+import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../../ampi-core/settings.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
+import { buildOracleWorkerSystemPrompt as buildOracleWorkerSystemPromptFromPrompts } from "../profiles/prompts.js";
+import { resolveEffectiveRunner } from "../framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerTool,
   resolveWorkerModelPreferencesOverride,
   type MmrWorkerToolResolveInput,
-} from "./framework/worker-tool-factory.js";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
-import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { type ToolHostLike } from "./framework/worker-host.js";
+} from "../framework/worker-tool-factory.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../progress-rendering.js";
+import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "../../ampi-core/worker-tool-guidance.js";
+import { type ToolHostLike } from "../framework/worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
-} from "./worker-model-metadata.js";
+} from "../worker-model-metadata.js";
 import {
   type MmrSubagentRunner,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   IMAGE_EXTENSIONS,
   buildOracleUserPrompt,

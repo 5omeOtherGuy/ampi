@@ -1,16 +1,16 @@
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
   type MmrSpawnedSubagentWorkerDetailsBase,
   type MmrWorkerOutcomeStatus,
   type MmrWorkerProgressSnapshot,
   type MmrWorkerResult,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
   progressTextOrPlaceholder,
-} from "./worker-result-shaping.js";
+} from "../worker-result-shaping.js";
 import type { InternalAttachment } from "./oracle-prompt.js";
 import type { MmrAdvisorToolConfig } from "./oracle.js";
 

@@ -458,8 +458,8 @@ export {
   buildFinderWorkerSystemPrompt,
   createFinderTool,
   registerFinderTool,
-} from "./extensions/ampi-workers/finder.js";
-export type { FinderDetails, FinderParams, FinderToolDeps } from "./extensions/ampi-workers/finder.js";
+} from "./extensions/ampi-workers/builtin-workers/finder.js";
+export type { FinderDetails, FinderParams, FinderToolDeps } from "./extensions/ampi-workers/builtin-workers/finder.js";
 export {
   DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT,
   ORACLE_DEFAULT_MODEL_PREFERENCES,
@@ -475,7 +475,7 @@ export {
   createOracleTool,
   registerOracleTool,
   requireMmrAdvisorProfile,
-} from "./extensions/ampi-workers/oracle.js";
+} from "./extensions/ampi-workers/builtin-workers/oracle.js";
 export type {
   MmrAdvisorToolConfig,
   MmrAdvisorToolDeps,
@@ -483,7 +483,7 @@ export type {
   OracleDetails,
   OracleParams,
   OracleToolDeps,
-} from "./extensions/ampi-workers/oracle.js";
+} from "./extensions/ampi-workers/builtin-workers/oracle.js";
 export {
   LIBRARIAN_DESCRIPTION,
   LIBRARIAN_GATING_REASON,
@@ -499,14 +499,14 @@ export {
   createLibrarianTool,
   isLibrarianGithubToolPrerequisiteRegistered,
   registerLibrarianTool,
-} from "./extensions/ampi-workers/librarian.js";
+} from "./extensions/ampi-workers/builtin-workers/librarian.js";
 export type {
   LibrarianDetails,
   LibrarianParams,
   LibrarianStatus,
   LibrarianToolDeps,
   ResolveLibrarianInvocationInput,
-} from "./extensions/ampi-workers/librarian.js";
+} from "./extensions/ampi-workers/builtin-workers/librarian.js";
 export {
   REVIEWER_DESCRIPTION,
   REVIEWER_PARAMETERS_SCHEMA,
@@ -520,19 +520,19 @@ export {
   buildReviewerWorkerSystemPrompt,
   createReviewerTool,
   registerReviewerTool,
-} from "./extensions/ampi-workers/reviewer.js";
+} from "./extensions/ampi-workers/builtin-workers/reviewer.js";
 export type {
   ReviewerDetails,
   ReviewerParams,
   ReviewerToolDeps,
-} from "./extensions/ampi-workers/reviewer.js";
+} from "./extensions/ampi-workers/builtin-workers/reviewer.js";
 export {
   buildHistoryReaderWorkerSystemPrompt,
   registerMmrHistoryPromptBuilders,
 } from "./extensions/ampi-history/prompts.js";
 export {
   buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerRolePrompt,
-} from "./extensions/ampi-workers/prompts.js";
+} from "./extensions/ampi-workers/profiles/prompts.js";
 // Note: the worker outcome discriminator type is intentionally NOT
 // re-exported from the package root. The legacy task-list coordination
 // type that previously occupied that name is gone (see
@@ -561,7 +561,7 @@ export {
   hasUsableTaskFinalText,
   registerTaskTool,
   resolveTaskRunner,
-} from "./extensions/ampi-workers/task.js";
+} from "./extensions/ampi-workers/builtin-workers/task.js";
 export type {
   ResolveTaskInvocationInput,
   TaskDetails,
@@ -570,7 +570,7 @@ export type {
   TaskParams,
   TaskToolDeps,
   TaskWorkerSystemPromptInput,
-} from "./extensions/ampi-workers/task.js";
+} from "./extensions/ampi-workers/builtin-workers/task.js";
 export {
   AMPI_SUBAGENTS_ASYNC_PUSH_ENV,
   ASYNC_TASK_AGENT_NAMES,

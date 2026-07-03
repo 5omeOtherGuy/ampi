@@ -6,10 +6,10 @@ import { createMockPi } from "./helpers/pi-stub.mjs";
 const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
 const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
 const DISPATCH_MODULE = "extensions/ampi-workers/background-dispatch.ts";
-const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
-const LIBRARIAN_MODULE = "extensions/ampi-workers/librarian.ts";
-const TASK_MODULE = "extensions/ampi-workers/task.ts";
-const ORACLE_PROMPT_MODULE = "extensions/ampi-workers/oracle-prompt.ts";
+const FINDER_MODULE = "extensions/ampi-workers/builtin-workers/finder.ts";
+const LIBRARIAN_MODULE = "extensions/ampi-workers/builtin-workers/librarian.ts";
+const TASK_MODULE = "extensions/ampi-workers/builtin-workers/task.ts";
+const ORACLE_PROMPT_MODULE = "extensions/ampi-workers/builtin-workers/oracle-prompt.ts";
 
 after(cleanupLoadedSource);
 

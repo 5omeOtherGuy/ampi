@@ -346,7 +346,7 @@ describe("classifyMmrWorkerOutcome is exported from the package root", () => {
 
 describe("classifyTaskOutcome delegates to classifyMmrWorkerOutcome with Task policy", () => {
   it("preserves Task's existing semantics (non-zero exit with usable text → success)", async () => {
-    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/task.ts");
+    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/builtin-workers/task.ts");
     const status = classifyTaskOutcome({
       aborted: false,
       signal: null,
@@ -358,7 +358,7 @@ describe("classifyTaskOutcome delegates to classifyMmrWorkerOutcome with Task po
   });
 
   it("returns spawn-error when spawnError is set, regardless of partial output", async () => {
-    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/task.ts");
+    const { classifyTaskOutcome } = await importSource("extensions/ampi-workers/builtin-workers/task.ts");
     const status = classifyTaskOutcome({
       spawnError: "spawn ENOENT",
       aborted: false,

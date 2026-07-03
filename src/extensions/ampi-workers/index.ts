@@ -4,12 +4,12 @@ import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { getMmrSubagentState, registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { parseBoolEnv, readPreferredEnv } from "../ampi-core/internal/env.js";
 import { resetMmrWorkerFallbackState } from "./framework/fallback.js";
-import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./finder.js";
-import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./librarian.js";
-import { type ReviewerToolDeps, registerReviewerTool } from "./reviewer.js";
-import { type MmrAdvisorToolDeps, registerOracleTool } from "./oracle.js";
-import { registerMmrSubagentsPromptBuilders } from "./prompts.js";
-import { type TaskToolDeps, registerTaskParentPromptCapture, registerTaskTool } from "./task.js";
+import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./builtin-workers/finder.js";
+import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./builtin-workers/librarian.js";
+import { type ReviewerToolDeps, registerReviewerTool } from "./builtin-workers/reviewer.js";
+import { type MmrAdvisorToolDeps, registerOracleTool } from "./builtin-workers/oracle.js";
+import { registerMmrSubagentsPromptBuilders } from "./profiles/prompts.js";
+import { type TaskToolDeps, registerTaskParentPromptCapture, registerTaskTool } from "./builtin-workers/task.js";
 import {
   AMPI_SUBAGENTS_ASYNC_PUSH_ENV,
   type AsyncTaskToolDeps,

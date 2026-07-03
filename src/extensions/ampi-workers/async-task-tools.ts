@@ -8,10 +8,10 @@ import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
 import {
   buildTaskFinalResult,
   type TaskToolDeps,
-} from "./task.js";
-import type { FinderToolDeps } from "./finder.js";
-import type { LibrarianToolDeps } from "./librarian.js";
-import type { ReviewerToolDeps } from "./reviewer.js";
+} from "./builtin-workers/task.js";
+import type { FinderToolDeps } from "./builtin-workers/finder.js";
+import type { LibrarianToolDeps } from "./builtin-workers/librarian.js";
+import type { ReviewerToolDeps } from "./builtin-workers/reviewer.js";
 import type {
   MmrPreparedWorkerRun,
   MmrPreparedWorkerRunResult,

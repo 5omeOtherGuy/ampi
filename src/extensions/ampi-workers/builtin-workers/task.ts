@@ -4,38 +4,38 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "./background-dispatch.js";
-import { isRecord } from "../ampi-core/internal/json.js";
-import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
-import { getMmrModeStateSnapshot, getMmrSubagentState } from "../ampi-core/runtime.js";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background-dispatch.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
+import { getMmrModeStateSnapshot, getMmrSubagentState } from "../../ampi-core/runtime.js";
 import type {
   MmrActiveToolManifestEntry,
   MmrModelPreference,
   MmrModeKey,
-} from "../ampi-core/types.js";
-import { assembleMmrSubagentSurface } from "../ampi-core/subagent-prompt-assembly.js";
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
+} from "../../ampi-core/types.js";
+import { assembleMmrSubagentSurface } from "../../ampi-core/subagent-prompt-assembly.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
 import {
   resolveMmrSubagentInvocation,
   type MmrSubagentInvocation,
-} from "../ampi-core/subagent-resolver.js";
+} from "../../ampi-core/subagent-resolver.js";
 import {
   isMmrCapabilityProfileKey,
   type MmrCapabilityProfileKey,
-} from "../ampi-core/subagent-tool-policy.js";
-import { checkMmrToolParams } from "../ampi-core/tool-params.js";
-import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../ampi-core/model-resolver.js";
-import { loadMmrCoreSettings } from "../ampi-core/settings.js";
-import { TASK_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { buildWorkerToolManifest, type ToolHostLike } from "./framework/worker-host.js";
-import { readMmrModelContextWindow } from "./worker-model-metadata.js";
+} from "../../ampi-core/subagent-tool-policy.js";
+import { checkMmrToolParams } from "../../ampi-core/tool-params.js";
+import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../../ampi-core/model-resolver.js";
+import { loadMmrCoreSettings } from "../../ampi-core/settings.js";
+import { TASK_BACKGROUND_GUIDANCE } from "../../ampi-core/worker-tool-guidance.js";
+import { buildWorkerToolManifest, type ToolHostLike } from "../framework/worker-host.js";
+import { readMmrModelContextWindow } from "../worker-model-metadata.js";
 import {
   createChildCliMmrSubagentRunner,
   createMmrSubagentRunnerFromRunWorker,
   type MmrSubagentRunner,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   TASK_PROGRESS_PLACEHOLDER,
   TASK_SUBAGENT_PROFILE,
@@ -54,7 +54,7 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolRunContext,
   type MmrWorkerToolSpec,
-} from "./framework/worker-tool-factory.js";
+} from "../framework/worker-tool-factory.js";
 
 // Re-export the Task result/outcome shaping surface from its new home
 // (`task-result.ts`) so this entry file remains the stable public surface.

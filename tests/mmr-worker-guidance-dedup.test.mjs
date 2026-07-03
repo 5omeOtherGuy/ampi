@@ -36,11 +36,11 @@ describe("worker guidance single-render invariant", () => {
     const { buildUsingWorkersGuidance } = await importSource(GUIDANCE_MODULE);
     const block = buildUsingWorkersGuidance(FULL_WORKER_SURFACE);
     const guidelineSources = [
-      ["extensions/ampi-workers/task.ts", "TASK_PROMPT_GUIDELINES"],
-      ["extensions/ampi-workers/finder.ts", "FINDER_PROMPT_GUIDELINES"],
-      ["extensions/ampi-workers/librarian.ts", "LIBRARIAN_PROMPT_GUIDELINES"],
-      ["extensions/ampi-workers/oracle.ts", "ORACLE_PROMPT_GUIDELINES"],
-      ["extensions/ampi-workers/reviewer.ts", "REVIEWER_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/builtin-workers/task.ts", "TASK_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/builtin-workers/finder.ts", "FINDER_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/builtin-workers/librarian.ts", "LIBRARIAN_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/builtin-workers/oracle.ts", "ORACLE_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/builtin-workers/reviewer.ts", "REVIEWER_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "START_TASK_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "TASK_POLL_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "TASK_WAIT_PROMPT_GUIDELINES"],

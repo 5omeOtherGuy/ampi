@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TASK_MODULE = "extensions/ampi-workers/task.ts";
+const TASK_MODULE = "extensions/ampi-workers/builtin-workers/task.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
-const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/profiles/prompts.ts";
 const ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 
 function makeWorkerResult(overrides = {}) {

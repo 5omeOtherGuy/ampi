@@ -1,7 +1,7 @@
 import {
   registerMmrSubagentPromptBuilder,
   type MmrSubagentPromptBuilder,
-} from "../ampi-core/subagent-prompt-assembly.js";
+} from "../../ampi-core/subagent-prompt-assembly.js";
 
 /**
  * Build the finder worker system prompt. Tool names match Pi's concrete

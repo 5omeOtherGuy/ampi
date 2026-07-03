@@ -1,6 +1,6 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
-import type { MmrSubagentInvocation } from "../ampi-core/subagent-resolver.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
+import type { MmrSubagentInvocation } from "../../ampi-core/subagent-resolver.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
   emptyMmrWorkerUsageStats,
@@ -9,12 +9,12 @@ import {
   type MmrSubagentDetailsStatus,
   type MmrWorkerProgressSnapshot,
   type MmrWorkerResult,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,
   progressTextOrPlaceholder,
-} from "./worker-result-shaping.js";
+} from "../worker-result-shaping.js";
 
 /**
  * Pure result/outcome shaping for the Task tool: the Task status classifier

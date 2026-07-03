@@ -40,7 +40,7 @@ import {
   type MmrAsyncTaskRegistry,
   type MmrAsyncTaskRun,
 } from "../async-task-registry.js";
-import { buildSpawnErrorWorkerResult } from "../task-result.js";
+import { buildSpawnErrorWorkerResult } from "../builtin-workers/task-result.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   emptyMmrWorkerUsageStats,

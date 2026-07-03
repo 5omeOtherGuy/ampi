@@ -42,20 +42,20 @@ import {
   FINDER_TOOL_NAME,
   FINDER_WORKER_TOOLS,
   type FinderToolDeps,
-} from "../finder.js";
+} from "../builtin-workers/finder.js";
 import {
   createLibrarianRunPreparer,
   LIBRARIAN_PARAMETERS_SCHEMA,
   LIBRARIAN_TOOL_NAME,
   LIBRARIAN_WORKER_TOOLS,
   type LibrarianToolDeps,
-} from "../librarian.js";
+} from "../builtin-workers/librarian.js";
 import {
   createTaskRunPreparer,
   TASK_SUBAGENT_PROFILE,
   TASK_TOOL_NAME,
   type TaskToolDeps,
-} from "../task.js";
+} from "../builtin-workers/task.js";
 import {
   REVIEWER_PARAMETERS_SCHEMA,
   REVIEWER_SUBAGENT_PROFILE,
@@ -63,7 +63,7 @@ import {
   REVIEWER_WORKER_TOOLS,
   createReviewerRunPreparer,
   type ReviewerToolDeps,
-} from "../reviewer.js";
+} from "../builtin-workers/reviewer.js";
 
 /** The agent `start_task` launches when the caller omits `agent`. */
 export const DEFAULT_MMR_BACKGROUND_AGENT = TASK_TOOL_NAME;

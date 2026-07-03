@@ -93,11 +93,11 @@ function webHost() {
 }
 
 async function main() {
-  const promptsMod = await importSource("extensions/ampi-workers/prompts.ts");
+  const promptsMod = await importSource("extensions/ampi-workers/profiles/prompts.ts");
   promptsMod.registerMmrSubagentsPromptBuilders();
   const ownershipMod = await importSource("extensions/ampi-web/tool-ownership.ts");
   ownershipMod.registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
-  const librarianMod = await importSource("extensions/ampi-workers/librarian.ts");
+  const librarianMod = await importSource("extensions/ampi-workers/builtin-workers/librarian.ts");
   const { createLibrarianTool, LIBRARIAN_WORKER_TOOLS } = librarianMod;
 
   const cwd = path.resolve(import.meta.dirname, "..", "..");
