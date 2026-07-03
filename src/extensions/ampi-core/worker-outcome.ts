@@ -3,7 +3,7 @@
  * shared precedence-ordered classifier, its async terminal-outcome
  * projection, and the nonzero-exit output policy resolution.
  *
- * Moved from `ampi-workers/runner-outcome.ts` (which re-exports this module
+ * Moved from `ampi-workers/framework/runner-outcome.ts` (which re-exports this module
  * as its stable import path) so sibling extensions — `ampi-custom-subagents`
  * and `ampi-history` — can classify worker results without importing
  * `ampi-workers`. Pure policy only: no process, stream, or filesystem state.

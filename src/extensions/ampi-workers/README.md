@@ -77,6 +77,32 @@ Choosing a worker ("use a subagent" / "delegate") does not by itself mean
 background; `start_task` is the canonical background launcher and carries
 concrete `agent: "finder"` / `agent: "librarian"` / `agent: "Task"` examples.
 
+## Layout
+
+The extension top level holds only the entry and cross-process/compat
+surfaces: `index.ts` (extension entry), `provider.ts` (tool/feature-gate
+providers), `child-extension-scope.ts` (child keep-sets), and the one-release
+compatibility re-exports `worker-model-metadata.ts`, `worker-result-shaping.ts`,
+and `worker-usage-format.ts`. Implementation lives in themed subdirectories:
+
+- `framework/` — worker execution framework: child-CLI runner, declarative
+  worker-tool factory, the `ampi-core` worker-host seam implementation,
+  binding registry, invocation/outcome helpers, and worker-model fallback.
+- `profiles/` — built-in worker prompt builders (`prompts.ts`).
+- `builtin-workers/` — the concrete `finder`, `oracle`, `librarian`,
+  `reviewer`, and `Task` tools.
+- `background/` — async-task registry, tools, schemas, formatting,
+  projection, delivery, and dispatch.
+- `rendering/` — progress cards, fleet dashboard, worker run views,
+  and trail rendering.
+
+The subagent framework *contracts and policy spine* stay in `ampi-core`
+(profiles, resolver, activation, tool policy, CLI-flag and env parsing,
+prompt-assembly registry, worker tool guidance): spawned children for
+`finder`/`oracle`/`librarian` run with keep-sets that do not load
+`ampi-workers`, and child `--ampi-subagent` activation re-derives policy
+fail-closed from `ampi-core` alone.
+
 ## Behavior
 
 ### Concrete subagent ownership
@@ -85,7 +111,7 @@ concrete `agent: "finder"` / `agent: "librarian"` / `agent: "Task"` examples.
 
 The framework split keeps `ampi-core` provider-agnostic: it owns the profile contract, route resolver, prompt-assembly contract, and prompt-builder registry. `ampi-workers` registers concrete prompt builders via `registerMmrSubagentsPromptBuilders()` (invoked during the extension factory's init so the registry is populated before any worker resolves).
 
-Concrete prompts live in [`prompts.ts`](prompts.ts):
+Concrete prompts live in [`profiles/prompts.ts`](profiles/prompts.ts):
 
 - Pure synchronous functions; no I/O.
 - Keyed by `MmrSubagentProfile.promptBuilder`; framework fails closed when the builder is unregistered.
@@ -262,7 +288,7 @@ Tool-specific (`create<X>Tool(deps?)` / `register<X>Tool(pi, deps?)` plus consta
 - **Finder.** `FINDER_TOOL_NAME`, `FINDER_WORKER_TOOLS`, `FINDER_DEFAULT_MODEL_PREFERENCES`, `FINDER_PROMPT_SNIPPET`, `FINDER_PROMPT_GUIDELINES`, `FINDER_DESCRIPTION`, `FINDER_PARAMETERS_SCHEMA`, `FINDER_PROGRESS_PLACEHOLDER`, `buildFinderWorkerSystemPrompt(cwd)`. Types: `FinderParams`, `FinderDetails`, `FinderToolDeps`.
 - **Oracle.** Analogous (`ORACLE_*`, `DEFAULT_ORACLE_PER_FILE_BYTE_LIMIT`). Params `{ task, context?, files? }`. Types: `OracleParams`, `OracleDetails`, `OracleToolDeps`, `OracleAttachmentRecord`.
 - **Librarian.** `LIBRARIAN_TOOL_NAME`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_WORKER_TOOLS`, prompt/schema constants, `buildLibrarianWorkerSystemPrompt(cwd)`, `isLibrarianGithubToolPrerequisiteRegistered(pi)`, `LIBRARIAN_GATING_REASON`, `MmrLibrarianContextWindowError`. Types: `LibrarianParams`, `LibrarianDetails`, `LibrarianStatus`, `LibrarianToolDeps`, `ResolveLibrarianInvocationInput`. Params `{ query, context? }`. The worker's read-only repository tools are owned by `ampi-github`; librarian stays gated until those tools are registered and source-owned. See [`../ampi-github/README.md`](../ampi-github/README.md).
-- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `ampi/src/extensions/ampi-workers/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
+- **Task.** `TASK_TOOL_NAME`, `TASK_SUBAGENT_PROFILE`, `TASK_WORKER_TOOLS`, prompt/schema constants, `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B), `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`. Types: `TaskParams`, `TaskDetails`, `TaskToolDeps`, `TaskWorkerSystemPromptInput`, `ResolveTaskInvocationInput`, `TaskOutcomeInput`. The `TaskStatus` discriminator is exported from the deep path `ampi/src/extensions/ampi-workers/builtin-workers/task.js` only — the package root keeps a negative-export guard against a legacy task-list type with the same name.
   - Task does **not** expose `select*WorkerModel` or `TASK_DEFAULT_MODEL_PREFERENCES`. Model/tool resolution is owned by `resolveMmrSubagentInvocation` against the `task-subagent` profile. Programmatic overrides: `TaskToolDeps.modelPreferencesOverride`. Settings overrides: `ampiCore.subagentModelPreferences.task-subagent`.
 
 Runner:

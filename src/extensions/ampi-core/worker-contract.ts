@@ -76,7 +76,7 @@ export interface MmrWorkerProgressSnapshot {
   errorMessage?: string;
 }
 
-/** Terminal result of one worker run (see `ampi-workers/runner.ts` for field docs). */
+/** Terminal result of one worker run (see `ampi-workers/framework/runner.ts` for field docs). */
 export interface MmrWorkerResult extends MmrWorkerProgressSnapshot {
   prompt: string;
   cwd: string;
@@ -95,7 +95,7 @@ export interface MmrWorkerResult extends MmrWorkerProgressSnapshot {
 
 /**
  * Minimal worker-details surface every worker-backed details type exposes
- * (see `ampi-workers/runner.ts` for the field-level docs; the wire shape of
+ * (see `ampi-workers/framework/runner.ts` for the field-level docs; the wire shape of
  * existing `result.details` payloads is unchanged by this declaration move).
  */
 export interface MmrSubagentWorkerDetailsBase {
@@ -143,7 +143,7 @@ export const DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT = 50 * 1024;
 export type MmrSubagentRunProgress = MmrWorkerProgressSnapshot;
 export type MmrSubagentWorkerRunResult = MmrWorkerResult;
 
-/** Generic subagent run options (see `ampi-workers/runner.ts` for field docs). */
+/** Generic subagent run options (see `ampi-workers/framework/runner.ts` for field docs). */
 export interface MmrSubagentRunOptions {
   profileName: string;
   parentMode?: string;
@@ -265,7 +265,7 @@ export interface MmrWorkerToolResolveInput {
 
 /**
  * Mutable per-execute run context threaded through a spec's progress/final
- * builders (see `ampi-workers/worker-tool-factory.ts` for behavior docs).
+ * builders (see `ampi-workers/framework/worker-tool-factory.ts` for behavior docs).
  */
 export interface MmrWorkerToolRunContext<TParams, TRun = void> {
   params: TParams;
@@ -279,7 +279,7 @@ export interface MmrWorkerToolRunContext<TParams, TRun = void> {
 
 /**
  * Declarative spec for a spawned-subagent worker tool. The execution
- * skeleton lives in `ampi-workers/worker-tool-factory.ts`; this declaration
+ * skeleton lives in `ampi-workers/framework/worker-tool-factory.ts`; this declaration
  * is core-owned so sibling extensions can construct specs and register them
  * through the worker-host seam without importing `ampi-workers`. Field-level
  * behavior documentation lives with the factory implementation.

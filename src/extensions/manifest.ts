@@ -250,6 +250,19 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
  *
  * Keep it empty: the architecture guardrail test fails if any `ampi-core`
  * module imports a sibling extension that is not listed here.
+ *
+ * Ownership note (subagent framework): the subagent policy spine — profiles,
+ * resolver, activation, tool policy, worker CLI-flag/env parsing, the
+ * prompt-assembly registry, and worker tool guidance — is core-owned by
+ * design, not by accident. Child `--ampi-subagent` activation runs in
+ * `ampi-core`'s session_start under child keep-sets that may load only
+ * `ampi-core` (see `MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS`), and the child
+ * re-derives its model/tool policy fail-closed from that spine without
+ * trusting parent-supplied flags. `ampi-workers` owns the concrete worker
+ * implementations (tools, runner, host implementation, prompt builders,
+ * rendering, background surface) and registers them through core-owned
+ * seams. Moving the spine into `ampi-workers` would require core -> workers
+ * imports or child keep-set growth; both are rejected here.
  */
 export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([]);
 

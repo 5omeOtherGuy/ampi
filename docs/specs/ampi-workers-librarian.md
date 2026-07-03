@@ -128,7 +128,7 @@ The worker uses `assembleMmrSubagentSurface` with:
 - `activeToolManifest`: the source-owned GitHub tool allowlist
 - `systemPromptDelivery: "replace"`
 
-The concrete prompt builder lives in [`src/extensions/ampi-workers/prompts.ts`](../../src/extensions/ampi-workers/prompts.ts) and is registered through `registerMmrSubagentsPromptBuilders()`.
+The concrete prompt builder lives in [`src/extensions/ampi-workers/profiles/prompts.ts`](../../src/extensions/ampi-workers/profiles/prompts.ts) and is registered through `registerMmrSubagentsPromptBuilders()`.
 
 Prompt rules:
 

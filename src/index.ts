@@ -539,7 +539,7 @@ export {
 // tests/mmr-pi-root-todo-exports.test.mjs negative guard), and re-exporting
 // any matching identifier would conflict with that guard's source-text
 // check. Consumers that need the new type can import it from the deep path
-// `./extensions/ampi-workers/task.js` instead.
+// `./extensions/ampi-workers/builtin-workers/task.js` instead.
 export {
   TASK_DESCRIPTION,
   TASK_DESCRIPTION_MAX_BYTES,
