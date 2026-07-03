@@ -14,8 +14,8 @@ import { extractMmrSubagentActivationFailure } from "../../ampi-core/subagent-re
 import type { MmrModelPreference } from "../../ampi-core/types.js";
 import { buildMmrWorkerArgs, resolveMmrWorkerPiInvocation } from "./runner-invocation.js";
 import type { MmrWorkerInvocation } from "./runner-invocation.js";
-import { copyMmrWorkerTrailItem, createMmrWorkerTrailAggregator } from "../worker-trail.js";
-import type { MmrWorkerTrailItem } from "../worker-trail.js";
+import { copyMmrWorkerTrailItem, createMmrWorkerTrailAggregator } from "../rendering/worker-trail.js";
+import type { MmrWorkerTrailItem } from "../rendering/worker-trail.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   getMmrWorkerFinalOutput,
@@ -25,8 +25,8 @@ import {
 import { collectUsage, emptyMmrWorkerUsageStats, readString } from "./worker-usage.js";
 export { buildMmrWorkerArgs, resolveMmrWorkerPiInvocation, resolveMmrWorkerPiInvocationFromEnv } from "./runner-invocation.js";
 export type { MmrWorkerArgsOptions, MmrWorkerInvocation, MmrWorkerPiInvocationEnv } from "./runner-invocation.js";
-export { MMR_WORKER_TRAIL_LIMIT } from "../worker-trail.js";
-export type { MmrWorkerTrailItem } from "../worker-trail.js";
+export { MMR_WORKER_TRAIL_LIMIT } from "../rendering/worker-trail.js";
+export type { MmrWorkerTrailItem } from "../rendering/worker-trail.js";
 // Re-export the outcome classification/output-shaping helpers and the usage
 // helpers from their new homes (`runner-outcome.ts`, `worker-usage.ts`) so
 // this entry file remains the stable public surface for them.

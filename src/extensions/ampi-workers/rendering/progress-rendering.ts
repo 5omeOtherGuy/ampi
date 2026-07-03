@@ -3,12 +3,12 @@ import {
   type MessageRenderer,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
-import { isRecord } from "../ampi-core/internal/json.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
 import {
   getAboveEditorDashboardSlotRowBudget,
   updateAboveEditorDashboardSlot,
-} from "../ampi-core/above-editor-dashboard.js";
-import { reassertLowerAboveEditorWidgets } from "../ampi-core/above-editor-order.js";
+} from "../../ampi-core/above-editor-dashboard.js";
+import { reassertLowerAboveEditorWidgets } from "../../ampi-core/above-editor-order.js";
 import {
   formatTitle,
   statusBgFn,
@@ -36,7 +36,7 @@ import {
   taskPreviewForDisplay,
   WorkerStatusLineComponent,
 } from "./subagent-trail-components.js";
-import { getMmrBackgroundCardExtras } from "./background/background-dispatch.js";
+import { getMmrBackgroundCardExtras } from "../background/background-dispatch.js";
 import {
   advanceLoaderFrame,
   backgroundStatusColor,
@@ -65,8 +65,8 @@ import type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
-} from "./background/async-task-registry.js";
-import type { AsyncTaskFleetDetails } from "./background/async-task-tool-schemas.js";
+} from "../background/async-task-registry.js";
+import type { AsyncTaskFleetDetails } from "../background/async-task-tool-schemas.js";
 import {
   backgroundTaskRenderStatus,
   buildWorkerRunFinal,

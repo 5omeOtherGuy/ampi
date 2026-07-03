@@ -14,9 +14,9 @@
  * {@link WorkerRunRow} / {@link WorkerRunSection} IS the widget row/section
  * shape, so every surface projects the same rows.
  */
-import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrWorkerRunEnvelopeV1 } from "../ampi-core/worker-contract.js";
-import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./runner.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import type { MmrWorkerRunEnvelopeV1 } from "../../ampi-core/worker-contract.js";
+import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import { readWorkerRunEnvelope } from "./worker-run-envelope.js";
 import {
   diagnosticMessage,
@@ -28,7 +28,7 @@ import {
   type SubagentProgressDetails,
 } from "./subagent-render-format.js";
 import type { WidgetRow, WidgetSection } from "./background-task-view.js";
-import type { AsyncTaskFleetDetails } from "./background/async-task-tool-schemas.js";
+import type { AsyncTaskFleetDetails } from "../background/async-task-tool-schemas.js";
 
 /** Shared projection aliases: every worker surface renders these shapes. */
 export type WorkerRunRow = WidgetRow;

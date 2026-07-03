@@ -11,7 +11,7 @@ after(cleanupLoadedSource);
 
 const HOST_MODULE = "extensions/ampi-core/worker-host.ts";
 const CONTRACT_MODULE = "extensions/ampi-core/worker-contract.ts";
-const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
+const ENVELOPE_MODULE = "extensions/ampi-workers/rendering/worker-run-envelope.ts";
 
 function makeHost(overrides = {}) {
   return {

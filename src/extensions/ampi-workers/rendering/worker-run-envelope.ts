@@ -10,12 +10,12 @@
  * shape sniffing as fallback. The legacy shapes are deleted one release
  * after dual-write began.
  */
-import { isRecord } from "../ampi-core/internal/json.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
 import {
   MMR_WORKER_RUN_ENVELOPE_KIND,
   MMR_WORKER_RUN_ENVELOPE_VERSION,
   type MmrWorkerRunEnvelopeV1,
-} from "../ampi-core/worker-contract.js";
+} from "../../ampi-core/worker-contract.js";
 
 /** Inputs for {@link buildWorkerRunEnvelope}; mirrors the envelope, flattened. */
 export interface BuildWorkerRunEnvelopeArgs {

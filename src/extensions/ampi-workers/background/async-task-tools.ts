@@ -30,7 +30,7 @@ import {
   renderAsyncTaskCompletionMessage,
   renderMmrBackgroundTaskCall,
   renderMmrBackgroundTaskResult,
-} from "../progress-rendering.js";
+} from "../rendering/progress-rendering.js";
 import {
   getMmrAsyncTaskRegistry,
   type MmrAsyncTaskGroupSnapshot,

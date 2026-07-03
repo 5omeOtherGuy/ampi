@@ -1,7 +1,7 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import { compactOneLine as sharedCompactOneLine } from "../background-task-view.js";
+import { compactOneLine as sharedCompactOneLine } from "../rendering/background-task-view.js";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { MmrWorkerTrailItem } from "../worker-trail.js";
+import type { MmrWorkerTrailItem } from "../rendering/worker-trail.js";
 import {
   buildTaskFinalResult,
   buildTaskProgressResult,

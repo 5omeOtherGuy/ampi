@@ -1,5 +1,5 @@
-import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrWorkerMessage } from "./framework/runner.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import type { MmrWorkerMessage } from "../framework/runner.js";
 
 export const MMR_WORKER_TRAIL_LIMIT = 32;
 const MMR_WORKER_TRAIL_PREVIEW_CHAR_LIMIT = 180;
@@ -8,8 +8,8 @@ const MMR_WORKER_TRAIL_TEXT_CHAR_LIMIT = 4_000;
 // The trail item union is a core-owned worker contract type
 // (`ampi-core/worker-contract.ts`); re-exported here as the historical
 // import path.
-import type { MmrWorkerTrailItem } from "../ampi-core/worker-contract.js";
-export type { MmrWorkerTrailItem } from "../ampi-core/worker-contract.js";
+import type { MmrWorkerTrailItem } from "../../ampi-core/worker-contract.js";
+export type { MmrWorkerTrailItem } from "../../ampi-core/worker-contract.js";
 
 interface ContentPreview {
   text: string;

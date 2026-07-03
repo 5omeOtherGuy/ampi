@@ -4,7 +4,7 @@ import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
-const WIDGET_MODULE = "extensions/ampi-workers/progress-rendering.ts";
+const WIDGET_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
 const ABOVE_EDITOR_DASHBOARD_MODULE = "extensions/ampi-core/above-editor-dashboard.ts";
 const ABOVE_EDITOR_ORDER_MODULE = "extensions/ampi-core/above-editor-order.ts";
 

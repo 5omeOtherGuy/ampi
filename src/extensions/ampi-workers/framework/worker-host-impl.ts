@@ -21,7 +21,7 @@ import {
   type MmrWorkerHost,
 } from "../../ampi-core/worker-host.js";
 import { registerMmrBackgroundAgent } from "./worker-binding-registry.js";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "../progress-rendering.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../rendering/progress-rendering.js";
 import { createChildCliMmrSubagentRunner } from "./runner.js";
 import type { ToolHostLike } from "./worker-host.js";
 import {

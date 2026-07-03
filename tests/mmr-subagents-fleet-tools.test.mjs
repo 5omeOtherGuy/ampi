@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
 const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
-const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
+const ENVELOPE_MODULE = "extensions/ampi-workers/rendering/worker-run-envelope.ts";
 
 after(cleanupLoadedSource);
 

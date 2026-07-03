@@ -30,7 +30,7 @@ import {
   resolveWorkerModelPreferencesOverride,
   type MmrWorkerToolResolveInput,
 } from "../framework/worker-tool-factory.js";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "../progress-rendering.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../rendering/progress-rendering.js";
 import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "../../ampi-core/worker-tool-guidance.js";
 import { type ToolHostLike } from "../framework/worker-host.js";
 import {

@@ -10,8 +10,8 @@ import {
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import { Box, Container, Markdown, Spacer, Text, type Component, type TUI } from "@earendil-works/pi-tui";
-import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "./framework/runner.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import {
   compactOneLine,
   formatTokens,

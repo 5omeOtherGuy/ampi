@@ -11,7 +11,7 @@ import type {
   MmrWorkerToolSpec,
 } from "../../ampi-core/worker-contract.js";
 import { classifyMmrWorkerOutcomeForProfile } from "../../ampi-core/worker-outcome.js";
-import { attachWorkerRunEnvelope, buildWorkerRunEnvelope } from "../worker-run-envelope.js";
+import { attachWorkerRunEnvelope, buildWorkerRunEnvelope } from "../rendering/worker-run-envelope.js";
 import {
   getMmrSubagentProfile,
   type MmrSubagentPartialOutputPolicy,
@@ -24,7 +24,7 @@ import {
   refreshBackgroundTaskWidget,
   renderMmrSubagentCall,
   renderMmrSubagentResult,
-} from "../progress-rendering.js";
+} from "../rendering/progress-rendering.js";
 import { computeMmrChildExtensionScope } from "../child-extension-scope.js";
 import {
   resolveMmrWorkerSessionKey,

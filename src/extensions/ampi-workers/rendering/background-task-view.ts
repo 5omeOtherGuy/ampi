@@ -19,11 +19,11 @@ import type {
   MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
   MmrAsyncTaskGroupStatus,
-} from "./background/async-task-registry.js";
+} from "../background/async-task-registry.js";
 import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,
-} from "./worker-usage-format.js";
+} from "../worker-usage-format.js";
 
 /**
  * Minimal theme shape both surfaces share: foreground colouring + bold. The

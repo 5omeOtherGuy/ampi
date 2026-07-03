@@ -1,10 +1,10 @@
 import { type AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { MMR_SUBAGENT_DETAILS_STATUS_VALUES, type MmrWorkerTrailItem, type MmrWorkerUsageStats } from "./framework/runner.js";
+import { MMR_SUBAGENT_DETAILS_STATUS_VALUES, type MmrWorkerTrailItem, type MmrWorkerUsageStats } from "../framework/runner.js";
 import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,
-} from "./worker-usage-format.js";
+} from "../worker-usage-format.js";
 
 type TrailToolStatus = Extract<MmrWorkerTrailItem, { type: "tool" }>["status"];
 
