@@ -45,13 +45,38 @@ Each locked mode swaps the whole harness together: model preference order, think
 
 ## Quick start
 
-Pi must already be installed and authenticated.
+Pi must already be installed and authenticated. `@5omeotherguy/ampi` is the npm
+package name; `ampi` is the product and runtime brand you see in commands, modes,
+and settings.
+
+Install for your user (recommended):
 
 ```bash
-pi -e git:github.com/5omeOtherGuy/ampi --ampi-mode smart
+pi install npm:@5omeotherguy/ampi
 ```
 
-Install globally or per project:
+Install for one project only (writes to `.pi/settings.json`, shareable with your
+team):
+
+```bash
+pi install -l npm:@5omeotherguy/ampi
+```
+
+Try it for a single run without installing:
+
+```bash
+pi -e npm:@5omeotherguy/ampi --ampi-mode smart
+```
+
+Keep it up to date:
+
+```bash
+pi update --extensions            # update all Pi packages
+pi update npm:@5omeotherguy/ampi  # update just ampi
+```
+
+Prefer installing from git, or want an unreleased commit? Use the git source as
+a fallback (pin a tag or commit with `@<ref>`):
 
 ```bash
 pi install git:github.com/5omeOtherGuy/ampi
@@ -75,7 +100,7 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 1. Start in the default AMP-style mode:
 
    ```bash
-   pi -e git:github.com/5omeOtherGuy/ampi --ampi-mode smart
+   pi -e npm:@5omeotherguy/ampi --ampi-mode smart
    ```
 
 2. Inspect the resolved harness:
@@ -231,6 +256,17 @@ ampi is production-ready for the implemented AMP Code-style workflow, but parity
 - **Contributor map:** [`INDEX.md`](INDEX.md), [`REPOMAP.md`](REPOMAP.md), [`ROADMAP.md`](ROADMAP.md)
 
 ## Development
+
+Work on ampi from a local clone and load the working tree directly:
+
+```bash
+git clone https://github.com/5omeOtherGuy/ampi
+cd ampi
+npm install
+pi -e "$PWD" --ampi-mode smart   # run the local checkout
+```
+
+Checks:
 
 ```bash
 npm test

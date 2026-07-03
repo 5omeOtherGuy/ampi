@@ -1,5 +1,5 @@
 {
-  "name": "ampi",
+  "name": "@5omeotherguy/ampi",
   "version": "0.2.0",
   "description": "AMP Code-style harness for Pi Agent: locked modes, tools, workers, web, history, and fallback as one self-contained extension package.",
   "type": "module",
@@ -20,6 +20,17 @@
     "amp-code",
     "multi-model-routing",
     "subagents"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "src/",
+    "!src/extensions/ampi-debug",
+    "docs/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "pi": {
     "extensions": [
