@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-workers/fallback.ts";
+const MODULE = "extensions/ampi-workers/fallback.ts";
 
 let mod;
 beforeEach(async () => {
@@ -412,8 +412,8 @@ describe("session_start clears worker-fallback state (#3)", () => {
   const scope = () => mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "oracle" });
 
   async function registerExtension() {
-    const { createMmrWorkersExtension } = await importSource("extensions/mmr-workers/index.ts");
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     const handlers = new Map();
     const pi = {
       registerTool: () => {},

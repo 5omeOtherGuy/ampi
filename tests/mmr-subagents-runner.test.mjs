@@ -73,7 +73,7 @@ async function waitForSpawnCall(calls, timeoutMs = 2_000) {
 
 describe("mmr-subagents worker runner", () => {
   it("builds a Pi JSON-mode invocation with prompt, named subagent profile, model, tools, and cwd", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       {
@@ -95,7 +95,7 @@ describe("mmr-subagents worker runner", () => {
       "json",
       "-p",
       "--no-session",
-      "--mmr-subagent",
+      "--ampi-subagent",
       "finder",
       "--model",
       "provider/model",
@@ -112,7 +112,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("writes a temporary system prompt file, passes --append-system-prompt, and removes it after close", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project", systemPrompt: "You are a focused worker." },
@@ -136,7 +136,7 @@ describe("mmr-subagents worker runner", () => {
     // must spill the prompt to a temp file and reference it via Pi's `@<path>` syntax instead, or
     // the spawn will fail with `spawn E2BIG`. Regression coverage for that path.
     const { runMmrSubagentWorker, MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT } = await importSource(
-      "extensions/mmr-workers/runner.ts",
+      "extensions/ampi-workers/runner.ts",
     );
     const { readFile } = await import("node:fs/promises");
     const { spawn, calls } = makeSpawnMock();
@@ -171,7 +171,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("keeps small user prompts inline as `Task: <prompt>` so the common-case argv contract is preserved", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "small ask", cwd: "/tmp/project" },
@@ -191,7 +191,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("parses message_end and tool_result_end events, aggregates assistant usage, and returns final output", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const updates = [];
     const promise = runMmrSubagentWorker(
@@ -229,7 +229,7 @@ describe("mmr-subagents worker runner", () => {
     // that the renderer reads from `details.trail`. The legacy
     // `toolActivity` shape was removed; `trail` is the only progress
     // representation.
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const updates = [];
     const promise = runMmrSubagentWorker(
@@ -260,10 +260,10 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("builds an ordered worker trail from assistant text and child tool calls", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const updates = [];
-    const filePath = `${homedir()}/projects/repo/src/extensions/mmr-workers/finder.ts`;
+    const filePath = `${homedir()}/projects/repo/src/extensions/ampi-workers/finder.ts`;
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project", onUpdate: (snapshot) => updates.push(snapshot) },
       { spawn, resolveInvocation: (args) => ({ command: "pi", args }) },
@@ -305,7 +305,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("captures worker transcript roles and content blocks in the ordered trail", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const updates = [];
     const promise = runMmrSubagentWorker(
@@ -410,7 +410,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("treats literal <skill> XML in user prose as ordinary user text (anchored parse)", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project" },
@@ -439,7 +439,7 @@ describe("mmr-subagents worker runner", () => {
 
   it("detects a skill block whose body exceeds the trail truncation cap", async () => {
     const { runMmrSubagentWorker, MMR_WORKER_TRAIL_TEXT_CHAR_LIMIT } = await importSource(
-      "extensions/mmr-workers/runner.ts",
+      "extensions/ampi-workers/runner.ts",
     );
     const charCap = typeof MMR_WORKER_TRAIL_TEXT_CHAR_LIMIT === "number" ? MMR_WORKER_TRAIL_TEXT_CHAR_LIMIT : 4000;
     const longBody = "x".repeat(charCap + 500);
@@ -471,7 +471,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("keeps a failed tool status when a later toolResult message omits isError", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project" },
@@ -504,7 +504,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("ignores malformed JSON lines and records ignored-line count", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project" },
@@ -527,7 +527,7 @@ describe("mmr-subagents worker runner", () => {
     // nonzero exit code, so the runner MUST treat the marker on stderr
     // as an unmissable failure or callers (finder, future Task) will
     // silently consume an un-policied worker run.
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       {
@@ -558,7 +558,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("detects the activation failure marker even when it is mixed with other stderr noise", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "noop", cwd: "/tmp/project" },
@@ -579,7 +579,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("leaves subagentActivationError undefined when no marker is present", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "noop", cwd: "/tmp/project" },
@@ -600,7 +600,7 @@ describe("mmr-subagents worker runner", () => {
     // `agent_start`. The runner must surface this via `result.agentStarted
     // === false` so `classifyMmrWorkerOutcome` can emit `no-agent-start`
     // instead of the cheerful `empty-output` outcome.
-    const { runMmrSubagentWorker, classifyMmrWorkerOutcome } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker, classifyMmrWorkerOutcome } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "noop", cwd: "/tmp/project" },
@@ -622,7 +622,7 @@ describe("mmr-subagents worker runner", () => {
     // Positive case: a normal worker run that fires `agent_start` (and
     // beyond) must flip the flag. Used by `classifyMmrWorkerOutcome` to
     // preserve `empty-output` for legitimate empty assistant responses.
-    const { runMmrSubagentWorker, classifyMmrWorkerOutcome } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker, classifyMmrWorkerOutcome } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "noop", cwd: "/tmp/project" },
@@ -643,7 +643,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("returns stderr and non-zero exit code without throwing", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project" },
@@ -660,7 +660,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("captures spawn errors as structured failures and tags result.spawnError", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project" },
@@ -682,7 +682,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("truncates final output by UTF-8 byte length", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
       { profileName: "finder", prompt: "Investigate", cwd: "/tmp/project", outputByteLimit: 8 },
@@ -698,7 +698,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("propagates abort by sending SIGTERM and returns an aborted result", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const controller = new AbortController();
     const promise = runMmrSubagentWorker(
@@ -719,7 +719,7 @@ describe("mmr-subagents worker runner", () => {
   });
 
   it("escalates to SIGKILL when the child does not exit within killTimeoutMs, even after kill() reports success", async () => {
-    const { runMmrSubagentWorker } = await importSource("extensions/mmr-workers/runner.ts");
+    const { runMmrSubagentWorker } = await importSource("extensions/ampi-workers/runner.ts");
     const { spawn, calls } = makeSpawnMock();
     const controller = new AbortController();
     const promise = runMmrSubagentWorker(
@@ -743,7 +743,7 @@ describe("mmr-subagents worker runner", () => {
 
 describe("resolveMmrWorkerPiInvocationFromEnv", () => {
   it("re-invokes the current Pi script via the runtime executable when the script exists", async () => {
-    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/mmr-workers/runner.ts");
+    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/ampi-workers/runner.ts");
     const invocation = resolveMmrWorkerPiInvocationFromEnv(["--mode", "json"], {
       argv1: "/usr/local/bin/pi",
       execPath: "/usr/bin/node",
@@ -756,7 +756,7 @@ describe("resolveMmrWorkerPiInvocationFromEnv", () => {
   });
 
   it("falls back to pi on PATH when no current script is available and the runtime is a generic node", async () => {
-    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/mmr-workers/runner.ts");
+    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/ampi-workers/runner.ts");
     const invocation = resolveMmrWorkerPiInvocationFromEnv(["--mode", "json"], {
       argv1: "/missing/script",
       execPath: "/usr/bin/node",
@@ -766,7 +766,7 @@ describe("resolveMmrWorkerPiInvocationFromEnv", () => {
   });
 
   it("uses process.execPath when the runtime is a packaged Pi binary, not node/bun", async () => {
-    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/mmr-workers/runner.ts");
+    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/ampi-workers/runner.ts");
     const invocation = resolveMmrWorkerPiInvocationFromEnv(["--mode", "json"], {
       argv1: undefined,
       execPath: "/usr/local/bin/pi",
@@ -776,7 +776,7 @@ describe("resolveMmrWorkerPiInvocationFromEnv", () => {
   });
 
   it("does not re-invoke a bun virtual script and falls back to pi on PATH under a generic runtime", async () => {
-    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/mmr-workers/runner.ts");
+    const { resolveMmrWorkerPiInvocationFromEnv } = await importSource("extensions/ampi-workers/runner.ts");
     const invocation = resolveMmrWorkerPiInvocationFromEnv(["--mode", "json"], {
       argv1: "/$bunfs/root/pi",
       execPath: "/usr/bin/node",

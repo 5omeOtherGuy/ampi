@@ -16,8 +16,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const TASK_MODULE = "extensions/mmr-workers/task.ts";
-const RUNTIME_MODULE = "extensions/mmr-core/runtime.ts";
+const TASK_MODULE = "extensions/ampi-workers/task.ts";
+const RUNTIME_MODULE = "extensions/ampi-core/runtime.ts";
 
 describe("Task parent-prompt capture (#6)", () => {
   it("captures the system prompt and its structured options together", async () => {

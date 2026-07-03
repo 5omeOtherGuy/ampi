@@ -9,7 +9,7 @@ import { createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
 
-const REGISTRY_MODULE = "extensions/mmr-core/config-flow-registry.ts";
+const REGISTRY_MODULE = "extensions/ampi-core/config-flow-registry.ts";
 
 async function freshRegistry() {
   const mod = await importSource(REGISTRY_MODULE);
@@ -51,11 +51,11 @@ describe("/mmr-config dispatch via registry", () => {
 
   it("routes a selected registered label to that section's run()", async () => {
     const { registerMmrConfigFlowSection } = await importSource(REGISTRY_MODULE);
-    const { runMmrConfigFlow } = await importSource("extensions/mmr-core/config-flow.ts");
+    const { runMmrConfigFlow } = await importSource("extensions/ampi-core/config-flow.ts");
     let ran = null;
     const tools = ["read_file", "web_search"];
     registerMmrConfigFlowSection({
-      id: "mmr-web",
+      id: "ampi-web",
       label: "web",
       order: 20,
       run: (_ctx, sectionCtx) => {
@@ -87,20 +87,20 @@ describe("siblings register their /mmr-config sections on load", () => {
   });
 
   it("mmr-web registers the \"web\" section", async () => {
-    await importSource("extensions/mmr-web/index.ts");
+    await importSource("extensions/ampi-web/index.ts");
     const { listMmrConfigFlowSections } = await importSource(REGISTRY_MODULE);
-    assert.ok(listMmrConfigFlowSections().some((s) => s.id === "mmr-web" && s.label === "web"));
+    assert.ok(listMmrConfigFlowSections().some((s) => s.id === "ampi-web" && s.label === "web"));
   });
 
   it("mmr-custom-subagents registers the custom setup/import section", async () => {
-    const mod = await importSource("extensions/mmr-custom-subagents/index.ts");
+    const mod = await importSource("extensions/ampi-custom-subagents/index.ts");
     // touch the factory so module side effects are unquestionably evaluated
     const { pi } = createMockPi();
     mod.createMmrCustomSubagentsExtension({ customSubagents: { cwd: "/tmp/none" } })(pi);
     const { listMmrConfigFlowSections } = await importSource(REGISTRY_MODULE);
     assert.ok(
       listMmrConfigFlowSections().some(
-        (s) => s.id === "mmr-custom-subagents" && s.label === "subagent (setup/import custom)",
+        (s) => s.id === "ampi-custom-subagents" && s.label === "subagent (setup/import custom)",
       ),
     );
   });

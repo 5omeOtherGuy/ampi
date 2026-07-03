@@ -16,7 +16,7 @@ describe("Phase C: mmr-web web_search metadata", () => {
   let mod;
 
   beforeEach(async () => {
-    mod = await importSource("extensions/mmr-web/tools.ts");
+    mod = await importSource("extensions/ampi-web/tools.ts");
   });
 
   it("description tells the model when to use web_search (up-to-date or precise documentation)", () => {
@@ -79,7 +79,7 @@ describe("Phase C: mmr-web read_web_page metadata", () => {
   let mod;
 
   beforeEach(async () => {
-    mod = await importSource("extensions/mmr-web/tools.ts");
+    mod = await importSource("extensions/ampi-web/tools.ts");
   });
 
   it("description tells the model that url-only returns Markdown", () => {
@@ -140,7 +140,7 @@ describe("Phase C: mmr-patch apply_patch redaction/failure guidance", () => {
   let mod;
 
   beforeEach(async () => {
-    mod = await importSource("extensions/mmr-patch/index.ts");
+    mod = await importSource("extensions/ampi-patch/index.ts");
   });
 
   it("prompt guidelines include a redaction/failure note", () => {

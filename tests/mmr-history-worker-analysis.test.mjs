@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const PROMPTS_MODULE = "extensions/mmr-history/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
+const PROMPTS_MODULE = "extensions/ampi-history/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 
 function sessionInfo(overrides = {}) {
   return {
@@ -65,7 +65,7 @@ async function makeManager(messages = []) {
 }
 
 async function makeReadSessionTool({ settings = {}, runner, sessions, manager, loadCoreSettings } = {}) {
-  const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+  const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
   const activeManager = manager ?? await makeManager();
   const activeSessions = sessions ?? [sessionInfo({ id: activeManager.getSessionId(), messageCount: 2 })];
   const deps = {
@@ -89,7 +89,7 @@ beforeEach(async () => {
 
 describe("mmr-history settings (single gate)", () => {
   it("loadMmrHistorySettings only honors MMR_HISTORY_ENABLE as the tool gate", async () => {
-    const { loadMmrHistorySettings } = await importSource("extensions/mmr-history/config.ts");
+    const { loadMmrHistorySettings } = await importSource("extensions/ampi-history/config.ts");
     assert.deepEqual(
       loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true" }),
       { enabled: true, maxResults: 10, maxExcerptBytes: 24_000, redactionEnabled: false, packetByteBudget: 512_000 },
@@ -100,7 +100,7 @@ describe("mmr-history settings (single gate)", () => {
   });
 
   it("CONTENT redaction is opt-in: default OFF, MMR_HISTORY_REDACT turns it ON", async () => {
-    const { loadMmrHistorySettings } = await importSource("extensions/mmr-history/config.ts");
+    const { loadMmrHistorySettings } = await importSource("extensions/ampi-history/config.ts");
     // Default (unset) => raw content for the local same-user case.
     assert.equal(loadMmrHistorySettings({}).redactionEnabled, false);
     assert.equal(loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true" }).redactionEnabled, false);
@@ -108,10 +108,13 @@ describe("mmr-history settings (single gate)", () => {
     assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "true" }).redactionEnabled, true);
     assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "1" }).redactionEnabled, true);
     assert.equal(loadMmrHistorySettings({ MMR_HISTORY_REDACT: "false" }).redactionEnabled, false);
+    // Canonical env var works and wins over the legacy one.
+    assert.equal(loadMmrHistorySettings({ AMPI_HISTORY_REDACT: "true" }).redactionEnabled, true);
+    assert.equal(loadMmrHistorySettings({ AMPI_HISTORY_REDACT: "false", MMR_HISTORY_REDACT: "true" }).redactionEnabled, false);
   });
 
   it("MMR_HISTORY_PACKET_BYTE_BUDGET overrides the default and is capped at the ceiling", async () => {
-    const { loadMmrHistorySettings, MAX_MMR_HISTORY_PACKET_BYTE_BUDGET } = await importSource("extensions/mmr-history/config.ts");
+    const { loadMmrHistorySettings, MAX_MMR_HISTORY_PACKET_BYTE_BUDGET } = await importSource("extensions/ampi-history/config.ts");
     // A modest override is honored verbatim.
     assert.equal(
       loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "true", MMR_HISTORY_PACKET_BYTE_BUDGET: "123456" }).packetByteBudget,
@@ -130,7 +133,7 @@ describe("mmr-history settings (single gate)", () => {
   });
 
   it("the legacy MMR_HISTORY_MODEL_ANALYSIS_ENABLE env constant is no longer exported", async () => {
-    const mod = await importSource("extensions/mmr-history/config.ts");
+    const mod = await importSource("extensions/ampi-history/config.ts");
     assert.equal("MMR_HISTORY_MODEL_ANALYSIS_ENABLE_ENV" in mod, false);
   });
 });
@@ -226,7 +229,7 @@ describe("mmr-history worker-first read_session", () => {
 
 describe("mmr-history read_session deprecated input handling", () => {
   it("declares only 'goal' as schema-required so threadID-only callers are not rejected at the boundary", async () => {
-    const { READ_SESSION_PARAMETERS_SCHEMA } = await importSource("extensions/mmr-history/tools.ts");
+    const { READ_SESSION_PARAMETERS_SCHEMA } = await importSource("extensions/ampi-history/tools.ts");
     assert.deepEqual([...READ_SESSION_PARAMETERS_SCHEMA.required], ["goal"]);
     assert.ok(
       /threadID/.test(READ_SESSION_PARAMETERS_SCHEMA.properties.sessionId.description),
@@ -320,7 +323,7 @@ describe("mmr-history read_session deprecated input handling", () => {
 
 describe("mmr-history worker packet redaction", () => {
   it("emits a packet whose strings carry redaction markers and no raw secrets, JWTs, or sensitive paths", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({
       id: "S-private",
       path: "/home/someuser/.pi/agent/sessions/abc/S-private.jsonl",
@@ -383,7 +386,7 @@ describe("mmr-history worker packet redaction", () => {
   });
 
   it("drops custom_message entries from the packet (entry-type allowlist) while keeping message / compaction / branch_summary / session_info", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     // Lightweight fake satisfies the buildHistoryReaderSessionPacket
     // signature directly: only getEntries() and buildSessionContext()
     // are read. This proves the entry-type allowlist deterministically
@@ -504,7 +507,7 @@ describe("mmr-history leaving-string redaction (additional)", () => {
   });
 
   it("buildHistoryReaderUserPrompt does NOT prepend the raw caller goal", async () => {
-    const { buildHistoryReaderSessionPacket, buildHistoryReaderUserPrompt } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket, buildHistoryReaderUserPrompt } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const manager = await makeManager();
     const info = sessionInfo({ id: manager.getSessionId(), messageCount: 2, cwd: "/repo/private-project" });
 
@@ -521,7 +524,7 @@ describe("mmr-history leaving-string redaction (additional)", () => {
   });
 
   it("buildHistoryReaderSessionPacket redacts touchedFiles entries", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
     const manager = SessionManager.inMemory("/repo/private-project");
     manager.appendMessage({ role: "user", content: "please read the secret" });
@@ -560,7 +563,7 @@ describe("mmr-history opt-in content redaction (default OFF)", () => {
   ].join("\n");
 
   it("buildHistoryReaderSessionPacket leaves content RAW by default (redactionEnabled omitted => product opt-in is OFF at the tools seam)", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-raw", cwd: "/home/someuser/projects/private-project" });
     const manager = await makeManager([
       { role: "user", content: SENSITIVE },
@@ -585,7 +588,7 @@ describe("mmr-history opt-in content redaction (default OFF)", () => {
   });
 
   it("buildHistoryReaderSessionPacket redacts content when opted in, and projectRef is identical in both modes", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-toggle", cwd: "/home/someuser/projects/private-project" });
     const rawManager = await makeManager([{ role: "user", content: SENSITIVE }, { role: "assistant", content: "ack" }]);
     const redManager = await makeManager([{ role: "user", content: SENSITIVE }, { role: "assistant", content: "ack" }]);
@@ -648,7 +651,7 @@ describe("mmr-history worker packet budget-driven selection", () => {
   }
 
   it("preserves far more than the old 40/80 caps under the liberal default budget", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-large", cwd: "/repo/private-project" });
     const manager = fakeManagerWithEntries(300);
 
@@ -665,7 +668,7 @@ describe("mmr-history worker packet budget-driven selection", () => {
   });
 
   it("keeps both early and recent content when over budget (balanced, not tail-first loss)", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-overflow", cwd: "/repo/private-project" });
     // Isolate entry selection: empty context so the budget governs entries.
     const manager = fakeManagerWithEntries(200, { context: false });
@@ -684,7 +687,7 @@ describe("mmr-history worker packet budget-driven selection", () => {
   });
 
   it("shrinks the largest fields before dropping entries when over budget", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-bigfields", cwd: "/repo/private-project" });
     // A handful of entries, each with a very large text field.
     const manager = fakeManagerWithEntries(6, { textFor: (i, tag) => `ENTRY-${tag} ` + "x".repeat(20_000) });
@@ -742,7 +745,7 @@ describe("mmr-history packet tool-call / tool-result fidelity", () => {
   }
 
   it("includes assistant tool-call name+arguments and tool-result output in the built packet", async () => {
-    const { buildHistoryReaderSessionPacket } = await importSource("extensions/mmr-history/analysis-worker.ts");
+    const { buildHistoryReaderSessionPacket } = await importSource("extensions/ampi-history/analysis-worker.ts");
     const info = sessionInfo({ id: "S-tools", cwd: "/repo/private-project" });
     const packet = buildHistoryReaderSessionPacket(info, toolActivityManager(), "recover query and diff", { maxBytes: 32_000 });
 
@@ -773,7 +776,7 @@ describe("mmr-history packet tool-call / tool-result fidelity", () => {
   });
 
   it("surfaces tool-call args and tool-result output in the lexical fallback excerpts", async () => {
-    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const { readSessionForGoal } = await importSource("extensions/ampi-history/read-session.ts");
     const info = sessionInfo({ id: "S-tools", cwd: "/repo/private-project" });
     // Each goal token matches a distinct tool-activity excerpt so the
     // term-filtered selection keeps the assistant call, the tool result,

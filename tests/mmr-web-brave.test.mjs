@@ -39,7 +39,7 @@ function makeFetchMock(plan) {
 
 describe("mmr-web Brave client - search", () => {
   it("requires an API key", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     await assert.rejects(
       () => braveSearch({ query: "ts", maxResults: 5, maxResultBytes: 10000 }, {}),
       /BRAVE_API_KEY/,
@@ -47,7 +47,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("rejects an empty query", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     await assert.rejects(
       () => braveSearch({ query: "  ", maxResults: 5, maxResultBytes: 10000 }, { apiKey: "k" }),
       /non-empty query/,
@@ -55,7 +55,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("calls the Brave web search endpoint with the subscription token and parses web.results", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({
         web: {
@@ -92,7 +92,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("passes the optional country code in uppercase and reports it native/full", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ web: { results: [] } }),
     ]);
@@ -109,7 +109,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("throws on non-200 responses", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl } = makeFetchMock([
       () => new Response("forbidden", { status: 403 }),
     ]);
@@ -120,7 +120,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("aborts the fetch when timeoutMs elapses", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     let observedSignal;
     const fetchImpl = (_input, init) => {
       observedSignal = init.signal;
@@ -139,7 +139,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("rejects fast when upstream Content-Length far exceeds the byte budget", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     let response;
     const fetchImpl = async () => {
       response = new Response("x".repeat(10), {
@@ -162,7 +162,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("caps the streamed search body at maxResultBytes without buffering more (chunked / no Content-Length)", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     const CAP = 1000;
     let chunksEmitted = 0;
     const stream = new ReadableStream({
@@ -196,7 +196,7 @@ describe("mmr-web Brave client - search", () => {
   });
 
   it("bounds the diagnostic preview from non-OK search error responses (no unbounded text())", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     let pullCount = 0;
     const stream = new ReadableStream({
       async pull(controller) {
@@ -222,7 +222,7 @@ describe("mmr-web Brave client - search", () => {
 
 describe("mmr-web custom reader", () => {
   it("rejects invalid or local URLs before any network call", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     for (const url of ["http://localhost/", "http://127.0.0.1/", "file:///etc/passwd", "not a url"]) {
       await assert.rejects(
@@ -234,7 +234,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("fetches the target URL directly and converts HTML to Markdown", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const html = `<!DOCTYPE html><html><head><title>x</title><style>.a{}</style></head>
       <body>
         <nav>Skip</nav>
@@ -270,7 +270,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("decodes HTML entities and named references", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const html = `<html><body><main><p>5 &lt; 10 &amp; q&rsquo;d &#x2014; ok</p></main></body></html>`;
     const { fetchImpl } = makeFetchMock([() => textResponse(html)]);
     const result = await braveReader({ url: "https://example.com/", maxResultBytes: 10000 }, { fetchImpl, lookup: PUBLIC_DNS_STUB });
@@ -278,7 +278,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("aborts the fetch when timeoutMs elapses", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     let observedSignal;
     const fetchImpl = (_input, init) => {
       observedSignal = init.signal;
@@ -296,7 +296,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects fast when reader Content-Length far exceeds the byte budget", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     let response;
     const fetchImpl = async () => {
       response = new Response("x", {
@@ -319,7 +319,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects a redirect that targets a private/loopback address (SSRF defense across hops)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", {
         status: 302,
@@ -336,7 +336,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects a redirect that targets a link-local metadata host (SSRF defense)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", {
         status: 301,
@@ -351,7 +351,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects a redirect to a file:// or non-http(s) scheme", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", { status: 302, headers: { location: "file:///etc/passwd" } }),
     ]);
@@ -363,7 +363,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("follows a redirect to a valid public URL and validates each hop", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", { status: 302, headers: { location: "https://other.example/landing" } }),
       () => new Response(
@@ -385,7 +385,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("resolves a relative Location header against the previous URL before validating it", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", { status: 302, headers: { location: "/landed" } }),
       () => new Response(
@@ -403,7 +403,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects a relative redirect that resolves to a denied host", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // The Location is scheme-relative and points at a private IP. WHATWG
     // resolves it to http://127.0.0.1/ which must be rejected.
     const { fetchImpl, calls } = makeFetchMock([
@@ -417,7 +417,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("enforces a maximum redirect count to prevent open-redirect chains", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // Many sequential redirects, all public, but more hops than the limit.
     const plan = Array.from({ length: 20 }, (_, i) => () => new Response("", {
       status: 302,
@@ -433,7 +433,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects a hostname that resolves to a private IP (DNS-rebinding / 127.0.0.1.nip.io defense)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     const lookup = async (host) => {
       assert.equal(host, "local-rebind.example");
@@ -451,7 +451,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects when ANY resolved address is private even if others are public", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     // Multi-A record: one public address plus a private one. We must refuse
     // the request rather than gamble on which Node picks at connect time.
@@ -470,7 +470,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("rejects an IPv6 AAAA record in a private range (e.g. ::1, fc00::/7)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     const lookup = async () => [{ address: "::1", family: 6 }];
     await assert.rejects(
@@ -484,7 +484,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("re-resolves the hostname on every redirect hop (no trust transfer across hops)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => new Response("", { status: 302, headers: { location: "https://hop2.example/" } }),
     ]);
@@ -510,7 +510,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("skips DNS lookup for URL-literal IPs (already covered by validateExternalHttpUrl)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl } = makeFetchMock([
       () => new Response("<html><body><main>ok</main></body></html>", { status: 200, headers: { "content-type": "text/html" } }),
     ]);
@@ -529,7 +529,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("applies timeoutMs to a hung DNS lookup so a slow resolver cannot exceed the tool timeout", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // Lookup never resolves; without lookup-side timeout integration, the
     // caller would hang past timeoutMs because Node's fetch abort signal
     // only covers the HTTP phase.
@@ -555,7 +555,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("honors a caller-provided AbortSignal during the DNS lookup phase", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const controller = new AbortController();
     const lookup = () => new Promise(() => { /* never resolves */ });
     const fetchImpl = () => { throw new Error("fetch must not run"); };
@@ -570,7 +570,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("truncates very large pages to the byte budget", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const body = `<html><body><main><p>${"x".repeat(5000)}</p></main></body></html>`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const result = await braveReader({ url: "https://example.com/", maxResultBytes: 200 }, { fetchImpl, lookup: PUBLIC_DNS_STUB });
@@ -579,7 +579,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("refuses responses with Content-Disposition: attachment (no file downloads)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const { fetchImpl } = makeFetchMock([
       () => new Response("binary garbage", {
         status: 200,
@@ -596,7 +596,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("refuses non-text content types (application/octet-stream, PDF, image, archive)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const cases = [
       { type: "application/octet-stream" },
       { type: "application/pdf" },
@@ -617,7 +617,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("accepts allowed text-shaped content types (html, xhtml, plain, xml) with parameters", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const cases = [
       "text/html; charset=utf-8",
       "application/xhtml+xml",
@@ -641,7 +641,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("tolerates a missing Content-Type header (best-effort decode)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // Build a Response without a content-type header by stripping defaults.
     const fetchImpl = async () => new Response("<html><body><main>hi</main></body></html>", {
       status: 200,
@@ -655,7 +655,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("caps streamed body bytes at maxResultBytes without buffering more (chunked / no Content-Length)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const CAP = 1000;
     let chunksEmitted = 0;
     const stream = new ReadableStream({
@@ -691,7 +691,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("bounds the diagnostic preview from non-OK error responses (no unbounded text())", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     let pullCount = 0;
     const stream = new ReadableStream({
       async pull(controller) {
@@ -715,7 +715,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("DNS lookup is raced against the per-call timeout signal", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // Lookup that never resolves; must be killed by the timeout, not hang.
     const lookup = () => new Promise(() => {});
     const { fetchImpl, calls } = makeFetchMock([]);
@@ -732,7 +732,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("redacts BRAVE_API_KEY from upstream search error body before throwing", async () => {
-    const { braveSearch } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveSearch } = await importSource("extensions/ampi-web/brave.ts");
     const apiKey = "redacted-demo-key-abcdef0123";
     const fetchImpl = async () => new Response(
       `Unauthorized. X-Subscription-Token=${apiKey}`,
@@ -751,7 +751,7 @@ describe("mmr-web custom reader", () => {
   });
 
   it("redacts BRAVE_API_KEY from custom-reader error body before throwing", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     // The custom reader does not send a Brave API key (it fetches the origin
     // directly), but its BraveClientOptions still carries apiKey so the search
     // and reader share configuration; verify the reader path still redacts if

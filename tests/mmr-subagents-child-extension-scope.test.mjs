@@ -5,7 +5,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-workers/child-extension-scope.ts";
+const MODULE = "extensions/ampi-workers/child-extension-scope.ts";
 
 const EXT_DIR = "/pkg/src/extensions";
 const LOCATION = { extensionsDir: EXT_DIR, moduleExt: ".ts" };
@@ -23,12 +23,12 @@ describe("mmr-subagents child-extension-scope: keep map", () => {
   it("declares the four built-in spawned profiles with mmr-core always present", async () => {
     const mod = await importSource(MODULE);
     const map = mod.MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS;
-    assert.deepEqual([...map.finder], ["mmr-core"]);
-    assert.deepEqual([...map.oracle], ["mmr-core", "mmr-web", "mmr-history"]);
-    assert.deepEqual([...map.librarian], ["mmr-core", "mmr-github"]);
-    assert.deepEqual([...map["task-subagent"]], ["mmr-core", "mmr-web", "mmr-workers", "mmr-tasks"]);
+    assert.deepEqual([...map.finder], ["ampi-core"]);
+    assert.deepEqual([...map.oracle], ["ampi-core", "ampi-web", "ampi-history"]);
+    assert.deepEqual([...map.librarian], ["ampi-core", "ampi-github"]);
+    assert.deepEqual([...map["task-subagent"]], ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks"]);
     for (const names of Object.values(map)) {
-      assert.ok([...names].includes("mmr-core"), "every profile keeps mmr-core");
+      assert.ok([...names].includes("ampi-core"), "every profile keeps ampi-core");
     }
   });
 });
@@ -39,18 +39,18 @@ describe("mmr-subagents child-extension-scope: enumeration", () => {
     const host = {
       getAllTools: () => [
         { name: "read", sourceInfo: { path: "<builtin:read>" } },
-        { name: "web_search", sourceInfo: { path: piMmr("mmr-web") } },
-        { name: "finder", sourceInfo: { path: piMmr("mmr-workers") } },
-        { name: "dup", sourceInfo: { path: piMmr("mmr-web") } },
+        { name: "web_search", sourceInfo: { path: piMmr("ampi-web") } },
+        { name: "finder", sourceInfo: { path: piMmr("ampi-workers") } },
+        { name: "dup", sourceInfo: { path: piMmr("ampi-web") } },
       ],
       getCommands: () => [
         { name: "claude-subscription-usage", sourceInfo: { path: EXTERNAL_A } },
-        { name: "mmr-config", sourceInfo: { path: piMmr("mmr-core") } },
+        { name: "ampi-config", sourceInfo: { path: piMmr("ampi-core") } },
         { name: "skill", sourceInfo: { path: "/home/u/.pi/agent/skills/x/SKILL.md" } },
       ],
     };
     const paths = mod.enumerateLoadedExtensionPaths(host);
-    assert.deepEqual(paths, [piMmr("mmr-web"), piMmr("mmr-workers"), EXTERNAL_A, piMmr("mmr-core")]);
+    assert.deepEqual(paths, [piMmr("ampi-web"), piMmr("ampi-workers"), EXTERNAL_A, piMmr("ampi-core")]);
   });
 
   it("returns [] for an absent host or throwing probes", async () => {
@@ -74,12 +74,12 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
   it("finder keeps only mmr-core plus all external packages, drops other ampi ext", async () => {
     const mod = await importSource(MODULE);
     const loadedPaths = [
-      piMmr("mmr-core"),
-      piMmr("mmr-web"),
-      piMmr("mmr-history"),
-      piMmr("mmr-github"),
-      piMmr("mmr-workers"),
-      piMmr("mmr-tasks"),
+      piMmr("ampi-core"),
+      piMmr("ampi-web"),
+      piMmr("ampi-history"),
+      piMmr("ampi-github"),
+      piMmr("ampi-workers"),
+      piMmr("ampi-tasks"),
       EXTERNAL_A,
       EXTERNAL_B,
     ];
@@ -89,18 +89,18 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
       location: LOCATION,
       fileExists: defaultExists,
     });
-    assert.deepEqual(scope, [piMmr("mmr-core"), EXTERNAL_A, EXTERNAL_B]);
+    assert.deepEqual(scope, [piMmr("ampi-core"), EXTERNAL_A, EXTERNAL_B]);
   });
 
   it("oracle keeps mmr-core/web/history + externals, drops github/subagents/tasks", async () => {
     const mod = await importSource(MODULE);
     const loadedPaths = [
-      piMmr("mmr-web"),
-      piMmr("mmr-core"),
-      piMmr("mmr-history"),
-      piMmr("mmr-github"),
-      piMmr("mmr-workers"),
-      piMmr("mmr-tasks"),
+      piMmr("ampi-web"),
+      piMmr("ampi-core"),
+      piMmr("ampi-history"),
+      piMmr("ampi-github"),
+      piMmr("ampi-workers"),
+      piMmr("ampi-tasks"),
       EXTERNAL_A,
     ];
     const scope = mod.resolveMmrChildExtensionScope({
@@ -111,9 +111,9 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     });
     // ampi keep paths first in declared order, then externals first-seen.
     assert.deepEqual(scope, [
-      piMmr("mmr-core"),
-      piMmr("mmr-web"),
-      piMmr("mmr-history"),
+      piMmr("ampi-core"),
+      piMmr("ampi-web"),
+      piMmr("ampi-history"),
       EXTERNAL_A,
     ]);
   });
@@ -123,11 +123,11 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     const thirdParty = "/opt/other-pkg/ext/index.ts";
     const scope = mod.resolveMmrChildExtensionScope({
       profileName: "finder",
-      loadedPaths: [piMmr("mmr-core"), piMmr("mmr-web"), thirdParty],
+      loadedPaths: [piMmr("ampi-core"), piMmr("ampi-web"), thirdParty],
       location: LOCATION,
       fileExists: (c) => c === thirdParty || defaultExists(c),
     });
-    assert.deepEqual(scope, [piMmr("mmr-core"), thirdParty]);
+    assert.deepEqual(scope, [piMmr("ampi-core"), thirdParty]);
   });
 
   it("returns undefined for unknown/custom profiles", async () => {
@@ -135,7 +135,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     assert.equal(
       mod.resolveMmrChildExtensionScope({
         profileName: "sa__custom",
-        loadedPaths: [piMmr("mmr-core")],
+        loadedPaths: [piMmr("ampi-core")],
         location: LOCATION,
         fileExists: defaultExists,
       }),
@@ -148,7 +148,7 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
     assert.equal(
       mod.resolveMmrChildExtensionScope({
         profileName: "finder",
-        loadedPaths: [piMmr("mmr-core"), EXTERNAL_A],
+        loadedPaths: [piMmr("ampi-core"), EXTERNAL_A],
         location: LOCATION,
         fileExists: defaultExists,
         debugCaptureActive: true,
@@ -159,12 +159,12 @@ describe("mmr-subagents child-extension-scope: resolver", () => {
 
   it("returns undefined when a required keep extension entry cannot be resolved on disk", async () => {
     const mod = await importSource(MODULE);
-    // oracle needs mmr-history, but pretend its index file is missing.
+    // oracle needs ampi-history, but pretend its index file is missing.
     const scope = mod.resolveMmrChildExtensionScope({
       profileName: "oracle",
-      loadedPaths: [piMmr("mmr-core"), piMmr("mmr-web"), piMmr("mmr-workers"), EXTERNAL_A],
+      loadedPaths: [piMmr("ampi-core"), piMmr("ampi-web"), piMmr("ampi-workers"), EXTERNAL_A],
       location: LOCATION,
-      fileExists: (c) => c !== piMmr("mmr-history") && defaultExists(c),
+      fileExists: (c) => c !== piMmr("ampi-history") && defaultExists(c),
     });
     assert.equal(scope, undefined);
   });
@@ -175,11 +175,11 @@ describe("mmr-subagents child-extension-scope: compute (host-driven)", () => {
     const mod = await importSource(MODULE);
     const host = {
       getAllTools: () => [
-        { name: "web_search", sourceInfo: { path: piMmr("mmr-web") } },
+        { name: "web_search", sourceInfo: { path: piMmr("ampi-web") } },
         { name: "find", sourceInfo: { path: "<builtin:find>" } },
       ],
       getCommands: () => [
-        { name: "mmr-config", sourceInfo: { path: piMmr("mmr-core") } },
+        { name: "ampi-config", sourceInfo: { path: piMmr("ampi-core") } },
         { name: "antigravity-status", sourceInfo: { path: EXTERNAL_B } },
       ],
     };
@@ -190,7 +190,7 @@ describe("mmr-subagents child-extension-scope: compute (host-driven)", () => {
       fileExists: defaultExists,
       debugCaptureActive: false,
     });
-    assert.deepEqual(scope, [piMmr("mmr-core"), EXTERNAL_B]);
+    assert.deepEqual(scope, [piMmr("ampi-core"), EXTERNAL_B]);
   });
 
   it("returns undefined (full discovery) when the host enumerates nothing", async () => {

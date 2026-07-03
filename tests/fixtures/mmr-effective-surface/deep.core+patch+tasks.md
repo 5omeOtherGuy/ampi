@@ -224,7 +224,7 @@ Current working directory: /test/cwd
 
 # apply_patch
 
-Owner: mmr-patch
+Owner: ampi-patch
 
 Prompt snippet: Apply a Codex-format patch to workspace files
 
@@ -292,7 +292,7 @@ HunkLine    := (" " | "-" | "+") text NEWLINE
 - Multiple files can be patched in a single call.
 - File paths can be relative or absolute.
 - Don't use apply patch for edits that an available linter or formatter could do based on the instructions in the users AGENTS.md file.
-- **Ambiguous matches are rejected.** mmr-patch does not silently take the first match when more than one body location passes; add more context or an `@@` anchor to disambiguate.
+- **Ambiguous matches are rejected.** ampi-patch does not silently take the first match when more than one body location passes; add more context or an `@@` anchor to disambiguate.
 
 ## Reliability Tips (Hard Cases)
 - Repeated blocks (CSS vars, test mocks, large "god" files): include a *unique* `@@ ...` header, and add 5-10 or more context lines until the target is unique.
@@ -496,7 +496,7 @@ Parameters:
 
 # task_list
 
-Owner: mmr-tasks
+Owner: ampi-tasks
 
 Prompt snippet: Plan and track work as a session-local todo list
 

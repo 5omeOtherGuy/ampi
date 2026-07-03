@@ -16,8 +16,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RESOLVER = "extensions/mmr-core/subagent-resolver.ts";
-const PROFILES = "extensions/mmr-core/subagent-profiles.ts";
+const RESOLVER = "extensions/ampi-core/subagent-resolver.ts";
+const PROFILES = "extensions/ampi-core/subagent-profiles.ts";
 
 function makeRegistry(models) {
   return {
@@ -310,7 +310,7 @@ describe("resolveMmrSubagentInvocation", () => {
   // must be re-verified against the provider before updating.
   //
   // Keep these maps in sync with the task-subagent profile comment in
-  // src/extensions/mmr-core/subagent-profiles.ts.
+  // src/extensions/ampi-core/subagent-profiles.ts.
   const OPUS_48_PROVIDER_EFFORT_CONTRACTS = [
     {
       provider: "claude-subscription",
@@ -706,7 +706,7 @@ describe("resolveMmrSubagentInvocation", () => {
 
   it("keeps recursive, advisory, toolbox, and MCP tools out under capabilityProfile=read-write", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
-    const { MMR_SUBAGENT_SHARED_DENY_TOOLS } = await importSource("extensions/mmr-core/subagent-tool-policy.ts");
+    const { MMR_SUBAGENT_SHARED_DENY_TOOLS } = await importSource("extensions/ampi-core/subagent-tool-policy.ts");
     const profile = {
       name: "wide",
       displayName: "Wide",

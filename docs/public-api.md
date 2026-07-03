@@ -2,18 +2,18 @@
 
 **Audience.** Developers writing code that imports from `ampi` and wants the stable programmatic surface owned by the non-core extensions.
 
-**Scope.** Package-root re-exports owned by `mmr-patch`, `mmr-tasks`, `mmr-web`, `mmr-subagents`, `mmr-async-tasks`, `mmr-custom-subagents`, `mmr-history`, and `mmr-session-fallback`. The `mmr-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`mmr-core-api.md`](./mmr-core-api.md).
+**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, and `ampi-session-fallback`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
 
 **Related.** Package overview: [`../README.md`](../README.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
-Anything not listed here (or in `mmr-core-api.md`) is internal and may change without warning. Names re-exported from the package root are the stable contract; deep imports under `src/extensions/<name>/<file>` are not part of the public surface unless this document calls them out.
+Anything not listed here (or in `ampi-core-api.md`) is internal and may change without warning. Names re-exported from the package root are the stable contract; deep imports under `src/extensions/<name>/<file>` are not part of the public surface unless this document calls them out.
 
 ## Public principles
 
-Identical to `mmr-core`:
+Identical to `ampi-core`:
 
 1. Provider claims are identity-only. Tool and feature-gate providers
-   claim logical names through `mmr-core` provider registration; the
+   claim logical names through `ampi-core` provider registration; the
    live tool inventory is the source of truth for active vs deferred.
 2. State snapshots are deep-cloned; raw event payloads are read-only
    for the duration of an emission.
@@ -47,9 +47,10 @@ Identical to `mmr-core`:
 | History | `ampi/extensions/ampi-history` | `ampi/extensions/mmr-history` |
 | Deprecated toolbox shim | `ampi/extensions/ampi-toolbox` | `ampi/extensions/mmr-toolbox` |
 
-Runtime commands, environment variables, and settings keys remain the shipped
-compatibility identifiers (`/mmr-*`, `MMR_*`, `mmrCore`, `mmrWeb`, and sibling
-settings) until explicit `ampi` aliases are implemented.
+Runtime commands, environment variables, and settings keys are available under
+canonical `ampi` identifiers (`/ampi-*`, `AMPI_*`, `ampiCore`, `ampiWeb`, and
+sibling settings), which take precedence; the legacy `/mmr-*`, `MMR_*`,
+`mmrCore`, and `mmrWeb` identifiers remain accepted for compatibility.
 
 The entrypoint default export and any `create<Extension>Extension(...)`
 factory are stable; everything else listed below is re-exported through
@@ -57,7 +58,7 @@ the package root.
 
 ---
 
-## `mmr-patch`
+## `ampi-patch`
 
 Local-utility extension: ships a real `apply_patch` custom tool for safe
 workspace edits.
@@ -71,18 +72,18 @@ part of the supported surface.
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `registerMmrPatchProviders` | function | Registers the patch MMR tool provider. Called by the extension entrypoint; safe to call from a host that bypasses the default extension load. |
+| `registerMmrPatchProviders` | function | Registers the patch ampi tool provider. Called by the extension entrypoint; safe to call from a host that bypasses the default extension load. |
 | `ApplyPatchError` | class | Thrown by the apply-patch engine for structured patch failures. |
 
 ### Usage
 
 Hosts that load `ampi` through Pi's extension manifest do not need to
 call any of these directly. See
-[`../src/extensions/mmr-patch/README.md`](../src/extensions/mmr-patch/README.md).
+[`../src/extensions/ampi-patch/README.md`](../src/extensions/ampi-patch/README.md).
 
 ---
 
-## `mmr-tasks`
+## `ampi-tasks`
 
 Local-utility extension: ships a session-local `task_list` (todo) tool
 and its pinned task-list widget.
@@ -96,7 +97,7 @@ are part of the supported surface.
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `registerMmrTasksProviders` | function | Registers the tasks MMR tool provider. Called by the extension entrypoint; safe to call from a host that bypasses the default extension load. |
+| `registerMmrTasksProviders` | function | Registers the tasks ampi tool provider. Called by the extension entrypoint; safe to call from a host that bypasses the default extension load. |
 | `createTodoListTool` | function | Constructs the `task_list` Pi tool (returns the Pi tool definition). |
 | `refreshTodoWidget` | function | Refreshes the pinned task-list widget. |
 | `TASK_LIST_WIDGET_ID` | constant | Stable widget id for the pinned task list. |
@@ -105,8 +106,8 @@ are part of the supported surface.
 | `findLatestPersistedTodoState`, `parsePersistedTodoState`, `toPersistedTodoState` | functions | Read/parse/serialize the persisted task-list state. |
 
 > Deprecated: `registerMmrToolboxProviders` is still re-exported from the
-> package root by the unregistered `mmr-toolbox` compatibility shim, which
-> now only re-exports `mmr-patch` and `mmr-tasks`. New code should call
+> package root by the unregistered `ampi-toolbox` compatibility shim, which
+> now only re-exports `ampi-patch` and `ampi-tasks`. New code should call
 > `registerMmrPatchProviders` and `registerMmrTasksProviders` directly.
 
 ### Re-exported types
@@ -122,11 +123,11 @@ call any of these directly. Consumers that build their own Pi runtime,
 or that want to inspect persisted task-list state from outside a Pi
 session, can use the `PersistedTodoState` helpers safely; they perform
 their own validation and never throw on malformed input. See
-[`../src/extensions/mmr-tasks/README.md`](../src/extensions/mmr-tasks/README.md).
+[`../src/extensions/ampi-tasks/README.md`](../src/extensions/ampi-tasks/README.md).
 
 ---
 
-## `mmr-web`
+## `ampi-web`
 
 Network-backed extension. Owns the `web_search` and `read_web_page`
 logical tools and registers them with Pi only when network access is
@@ -143,7 +144,7 @@ supported surface.
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `createMmrWebExtension` | function | Factory producing the Pi extension. Accepts `MmrWebFactoryOverrides` for tests; production callers pass no overrides. |
-| `createMmrWebToolProvider` | function | Constructs the `mmr-web` MMR tool provider. |
+| `createMmrWebToolProvider` | function | Constructs the `ampi-web` ampi tool provider. |
 | `createMmrWebFeatureGateProvider` | function | Constructs the feature-gate provider. |
 | `MMR_WEB_FEATURE_GATE` | constant | Feature-gate name (`"mmr-web"`). |
 | `MMR_WEB_PROVIDER_NAME` | constant | Provider identity string used in diagnostics. |
@@ -160,7 +161,7 @@ supported surface.
 
 `validateExternalHttpUrl` is the only piece other extensions should
 reach for directly: when an extension wants to dereference a
-user-supplied URL with the same SSRF policy that `mmr-web` applies, it
+user-supplied URL with the same SSRF policy that `ampi-web` applies, it
 should call this helper rather than reimplement the checks.
 
 API keys (e.g. `BRAVE_API_KEY`) remain environment-only and are never
@@ -168,13 +169,14 @@ exposed through this surface.
 
 ---
 
-## `mmr-github`
+## `ampi-github`
 
 Read-only GitHub repository tools. Owns the seven repository-provider tool
 names (`read_github`, `list_directory_github`, `glob_github`, `search_github`,
-`commit_search`, `diff_github`, `list_repositories`) and the `mmr-github`
-feature gate. Network access is off by default (`MMR_GITHUB_ENABLE`); the token
-is environment-only (`MMR_GITHUB_TOKEN` / `GITHUB_TOKEN`).
+`commit_search`, `diff_github`, `list_repositories`) and the `ampi-github`
+feature gate. Network access is off by default (`AMPI_GITHUB_ENABLE`; legacy
+`MMR_GITHUB_ENABLE` still accepted); the token is environment-only
+(`AMPI_GITHUB_TOKEN` / `GITHUB_TOKEN`).
 
 ### Stability
 
@@ -196,25 +198,25 @@ covered by deterministic tests.
 
 ### Usage
 
-The GitHub tools are the repository-provider surface for the `mmr-subagents`
+The GitHub tools are the repository-provider surface for the `ampi-workers`
 `librarian` worker. They are read-only (GET requests only) and never expose
 issue, pull request, branch, or write endpoints. See
-[`../src/extensions/mmr-github/README.md`](../src/extensions/mmr-github/README.md).
+[`../src/extensions/ampi-github/README.md`](../src/extensions/ampi-github/README.md).
 
 ---
 
-## `mmr-workers`
+## `ampi-workers`
 
 The merged worker extension (formerly the separate `mmr-subagents` and
 `mmr-async-tasks` extensions). It owns the blocking `Task`, `finder`,
 `oracle`, and `librarian` worker tools, the background task surface
 (`background: true` on finder/librarian/Task, the deprecated `start_task`
 alias, and `task_poll`/`task_wait`/`task_cancel`), the session-scoped
-background registry, and the `mmr-workers` feature gate. The pre-merge
+background registry, and the `ampi-workers` feature gate. The pre-merge
 gate ids (`mmr-subagents`, `mmr-async-tasks`, `mmr-subagents.async-tasks`)
 remain accepted aliases answered by the same provider. `librarian`
-resolves as `active` only when the read-only `mmr-github` tools are
-registered and source-owned by `mmr-github`.
+resolves as `active` only when the read-only `ampi-github` tools are
+registered and source-owned by `ampi-github`.
 
 ### v2 background parameters
 
@@ -269,10 +271,10 @@ changes.
 | `MMR_SUBAGENTS_ASYNC_TASKS_FEATURE_GATE`, `MMR_SUBAGENTS_ASYNC_TASK_TOOLS`, `MMR_SUBAGENTS_ASYNC_PUSH_ENV` | constants | Backward-compatible aliases. |
 | `createFinderTool`, `registerFinderTool`, `buildFinderWorkerSystemPrompt` | functions | Finder worker surface. |
 | `createOracleTool`, `registerOracleTool`, `buildOracleWorkerSystemPrompt` | functions | Oracle worker surface. |
-| `createLibrarianTool`, `registerLibrarianTool`, `buildLibrarianWorkerSystemPrompt`, `isLibrarianGithubToolPrerequisiteRegistered`, `MmrLibrarianContextWindowError`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_GATING_REASON` | functions/values | Librarian worker surface and gating helpers (gated on `mmr-github` tools). |
+| `createLibrarianTool`, `registerLibrarianTool`, `buildLibrarianWorkerSystemPrompt`, `isLibrarianGithubToolPrerequisiteRegistered`, `MmrLibrarianContextWindowError`, `LIBRARIAN_SUBAGENT_PROFILE_NAME`, `LIBRARIAN_GATING_REASON` | functions/values | Librarian worker surface and gating helpers (gated on `ampi-github` tools). |
 | `createTaskTool`, `registerTaskTool`, `buildTaskWorkerSystemPrompt`, `classifyTaskOutcome`, `coerceTaskParams`, `hasUsableTaskFinalText`, `TaskParamsError`, `TASK_SUBAGENT_PROFILE` | functions/values | Task worker surface. |
 | `*_TOOL_NAME`, `*_DESCRIPTION`, `*_PARAMETERS_SCHEMA`, `*_PROGRESS_PLACEHOLDER`, `*_PROMPT_GUIDELINES`, `*_PROMPT_SNIPPET`, `*_WORKER_TOOLS`, `*_DEFAULT_MODEL_PREFERENCES` | constants | Per-worker metadata. Tested directly. |
-| `buildHistoryReaderWorkerSystemPrompt`, `buildLibrarianWorkerRolePrompt` | functions | Cross-extension prompt builders kept in `mmr-workers/prompts.ts`. |
+| `buildHistoryReaderWorkerSystemPrompt`, `buildLibrarianWorkerRolePrompt` | functions | Cross-extension prompt builders kept in `ampi-workers/prompts.ts`. |
 | `runMmrSubagentWorker`, `createChildCliMmrSubagentRunner`, `createMmrSubagentRunnerFromRunWorker`, `buildMmrWorkerArgs`, `classifyMmrWorkerOutcome`, `truncateMmrWorkerOutput`, `getMmrWorkerFinalOutput`, `hasUsableMmrWorkerFinalOutput`, `emptyMmrWorkerUsageStats`, `resolveMmrWorkerPiInvocation`, `resolveMmrWorkerPiInvocationFromEnv` | functions | Worker-runner contract and helpers. |
 | `DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS`, `DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT`, `MMR_WORKER_INLINE_PROMPT_BYTE_LIMIT`, `MMR_WORKER_TRAIL_LIMIT` | constants | Worker-runner defaults. |
 | `ASYNC_TASK_TOOL_NAMES`, `ASYNC_TASK_AGENT_NAMES`, `START_TASK_TOOL_NAME`, `TASK_POLL_TOOL_NAME`, `TASK_WAIT_TOOL_NAME`, `TASK_CANCEL_TOOL_NAME` | constants | Background tool-name identifiers. Tested directly. |
@@ -323,12 +325,12 @@ factory wires everything Pi needs in a normal load.
 
 ---
 
-## `mmr-custom-subagents`
+## `ampi-custom-subagents`
 
 Custom Markdown subagent extension extracted from `mmr-subagents`. It
 discovers project-local Markdown subagent definitions, persists which are
 enabled, and registers per-subagent worker tools (named with the
-`MMR_CUSTOM_SUBAGENT_TOOL_PREFIX`) behind the `mmr-custom-subagents`
+`MMR_CUSTOM_SUBAGENT_TOOL_PREFIX`) behind the `ampi-custom-subagents`
 feature gate.
 
 Stable for: provider/factory entrypoints, the Markdown discovery/parse
@@ -341,8 +343,8 @@ step wired by the extension factory.
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `createMmrCustomSubagentsExtension` | function | Factory producing the Pi extension. |
-| `createMmrCustomSubagentsToolProvider` | function | MMR tool provider for discovered custom-subagent tools. |
-| `createMmrCustomSubagentsFeatureGateProvider` | function | Feature-gate provider for `mmr-custom-subagents`. |
+| `createMmrCustomSubagentsToolProvider` | function | ampi tool provider for discovered custom-subagent tools. |
+| `createMmrCustomSubagentsFeatureGateProvider` | function | Feature-gate provider for `ampi-custom-subagents`. |
 | `MMR_CUSTOM_SUBAGENTS_FEATURE_GATE`, `MMR_CUSTOM_SUBAGENTS_PROVIDER_NAME` | constants | Stable identifiers. |
 | `discoverMmrCustomSubagents`, `parseMmrCustomSubagentMarkdown`, `normalizeMmrCustomSubagentToolPatterns`, `toMmrCustomSubagentToolName` | functions | Markdown discovery, parsing, tool-pattern normalization, and tool-name derivation. Discovery only. |
 | `MMR_CUSTOM_SUBAGENT_TOOL_PREFIX`, `MMR_CUSTOM_SUBAGENT_MAX_FILE_BYTES`, `MMR_CUSTOM_SUBAGENT_MAX_TOOL_NAME_LENGTH`, `DEFAULT_MMR_CUSTOM_SUBAGENT_MAX_SCAN_DEPTH` | constants | Owned tool-name prefix and discovery bounds. |
@@ -357,17 +359,18 @@ step wired by the extension factory.
 
 The discovery and parse helpers let hosts and tests enumerate
 project-local Markdown subagent definitions without registering tools.
-The default extension factory wires discovery, the `/mmr-config` flow,
+The default extension factory wires discovery, the `/ampi-config` flow,
 and gated tool registration in a normal load.
 
 ---
 
-## `mmr-history`
+## `ampi-history`
 
 Opt-in extension that lets the agent search and read prior local Pi
 sessions across every project on disk, with deterministic redaction and
 a model-backed reader. Disabled by default; enabled by setting
-`MMR_HISTORY_ENABLE=true` before Pi starts.
+`AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted)
+before Pi starts.
 
 ### Stability
 
@@ -409,7 +412,7 @@ contract holds across every consumer of these helpers.
 
 ---
 
-## `mmr-session-fallback`
+## `ampi-session-fallback`
 
 Reactive extension that classifies provider quota / rate-limit errors
 and offers a session-scoped fallback override. Persists override state
@@ -462,5 +465,5 @@ running Pi session.
   changelog entries; do not parse or pattern-match against it from
   external code.
 - Deep imports under `src/extensions/<name>/<file>` are not stable
-  except where this document or `mmr-core-api.md` explicitly calls them
+  except where this document or `ampi-core-api.md` explicitly calls them
   out.

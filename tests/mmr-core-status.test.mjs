@@ -6,8 +6,8 @@ import { renderFooter, statusLineMatcher } from "./helpers/footer.mjs";
 after(cleanupLoadedSource);
 
 async function buildState(overrides = {}) {
-  const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-  const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+  const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+  const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
   const modeKey = overrides.modeKey ?? "smart";
   const mode = { ...getMmrMode(modeKey), ...(overrides.modeOverrides ?? {}) };
@@ -66,7 +66,7 @@ async function buildState(overrides = {}) {
 
 describe("mmr-core footer status", () => {
   it("owns the locked-mode footer with native Pi stats plus model and MMR mode", async () => {
-    const { updateMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { updateMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       effectiveContextWindow: 1000000,
       effectiveMaxInputTokens: 968000,
@@ -123,7 +123,7 @@ describe("mmr-core footer status", () => {
 
 
   it("uses per-mode context windows for footer denominators", async () => {
-    const { updateMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { updateMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const cases = [
       { modeKey: "smart", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 60000, usageContextWindow: 1000000, usagePercent: 20, percent: "20.0", contextWindow: "1.0M", model: "opus-4.8", mode: "smart" },
       // rush/deep carry no ampi profile, so the footer denominator is Pi's
@@ -168,7 +168,7 @@ describe("mmr-core footer status", () => {
   });
 
   it("restores Pi's native footer in free mode", async () => {
-    const { updateMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { updateMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({ modeKey: "free" });
     const footers = [];
     const statuses = [];
@@ -193,7 +193,7 @@ describe("mmr-core footer status", () => {
 
 describe("mmr-core /mmr-status", () => {
   it("explains source, configured fallback, tool resolution, gates, and state version", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       source: "flag",
       rejectedSources: [{ source: "settings", value: "fast", reason: "invalid mode" }],
@@ -231,7 +231,7 @@ describe("mmr-core /mmr-status", () => {
     assert.match(output, /Read -> read/);
     assert.match(output, /oracle -> missing/);
     assert.match(output, /Feature gates:/);
-    assert.match(output, /mmr-subagents: missing/);
+    assert.match(output, /ampi-workers: missing/);
     assert.match(output, /Policy warnings:/);
     assert.match(output, /Thinking: medium \(request policy: Anthropic adaptive\/high\)/);
     assert.match(output, /Context: 300k total \/ 64k max out \/ 236k max in/);
@@ -242,7 +242,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("reports baseline capture diagnostics", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const state = await buildState({ baselineCaptured: true, baselineModel: "openai/gpt-5.4" });
 
@@ -250,7 +250,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("reports librarian active and gated tool resolution", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const active = await buildState({
       modeOverrides: { availabilityNotes: [] },
       tools: {
@@ -261,17 +261,17 @@ describe("mmr-core /mmr-status", () => {
         gatedTools: [],
         disabledTools: [],
         decisions: [
-          { requested: "librarian", chosen: "librarian", chosenTools: ["librarian"], candidates: ["librarian"], status: "active", owner: "mmr-subagents", diagnostic: "librarian → librarian" },
+          { requested: "librarian", chosen: "librarian", chosenTools: ["librarian"], candidates: ["librarian"], status: "active", owner: "ampi-subagents", diagnostic: "librarian → librarian" },
         ],
       },
       featureGateDecisions: [
-        { gate: "mmr-subagents", status: "enabled", source: "mmr-subagents", reason: "mmr-subagents worker tools available: finder, oracle, Task, librarian." },
+        { gate: "ampi-subagents", status: "enabled", source: "ampi-subagents", reason: "ampi-subagents worker tools available: finder, oracle, Task, librarian." },
       ],
     });
     const activeStatus = formatMmrStatus(active);
     assert.match(activeStatus, /Active tools: librarian/);
-    assert.match(activeStatus, /librarian -> librarian \(active\) via mmr-subagents/);
-    assert.match(activeStatus, /mmr-subagents: enabled via mmr-subagents/);
+    assert.match(activeStatus, /librarian -> librarian \(active\) via ampi-subagents/);
+    assert.match(activeStatus, /ampi-subagents: enabled via ampi-subagents/);
 
     const gated = await buildState({
       modeOverrides: { availabilityNotes: [] },
@@ -288,23 +288,47 @@ describe("mmr-core /mmr-status", () => {
             chosenTools: [],
             candidates: [],
             status: "gated",
-            owner: "mmr-subagents",
-            diagnostic: "librarian: gated behind mmr-subagents (librarian: requires mmr-web with web_search and read_web_page active.)",
+            owner: "ampi-subagents",
+            diagnostic: "librarian: gated behind ampi-subagents (librarian: requires ampi-github read-only GitHub tools (set AMPI_GITHUB_ENABLE=true or legacy MMR_GITHUB_ENABLE=true).)",
           },
         ],
       },
       featureGateDecisions: [
-        { gate: "mmr-subagents", status: "enabled", source: "mmr-subagents", reason: "mmr-subagents worker tools available: finder, oracle, Task." },
+        { gate: "ampi-subagents", status: "enabled", source: "ampi-subagents", reason: "ampi-subagents worker tools available: finder, oracle, Task." },
       ],
     });
     const gatedStatus = formatMmrStatus(gated);
     assert.match(gatedStatus, /Gated tools: librarian/);
-    assert.match(gatedStatus, /librarian -> gated \(gated\) via mmr-subagents/);
-    assert.match(gatedStatus, /requires mmr-web with web_search and read_web_page active/);
+    assert.match(gatedStatus, /librarian -> gated \(gated\) via ampi-subagents/);
+    assert.match(gatedStatus, /requires ampi-github read-only GitHub tools/);
+  });
+
+  it("renders legacy mmr-* owner and gate labels from previously persisted diagnostics verbatim", async () => {
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
+    const legacy = await buildState({
+      modeOverrides: { availabilityNotes: [] },
+      tools: {
+        requestedTools: ["librarian"],
+        activeTools: ["librarian"],
+        missingTools: [],
+        deferredTools: [],
+        gatedTools: [],
+        disabledTools: [],
+        decisions: [
+          { requested: "librarian", chosen: "librarian", chosenTools: ["librarian"], candidates: ["librarian"], status: "active", owner: "mmr-subagents", diagnostic: "librarian → librarian" },
+        ],
+      },
+      featureGateDecisions: [
+        { gate: "mmr-subagents", status: "enabled", source: "mmr-subagents", reason: "mmr-subagents worker tools available: librarian." },
+      ],
+    });
+    const legacyStatus = formatMmrStatus(legacy);
+    assert.match(legacyStatus, /librarian -> librarian \(active\) via mmr-subagents/);
+    assert.match(legacyStatus, /mmr-subagents: enabled via mmr-subagents/);
   });
 
   it("reports the active mode input profile and no cap in free mode", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const smart = await buildState({ effectiveMaxInputTokens: 968000 });
     const free = await buildState({ modeKey: "free" });
@@ -316,7 +340,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("omits 'max out' and 'max in' from /mmr-status Context when the resolved provider does not accept max_output_tokens (openai-codex)", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const deepCodex = await buildState({
       modeKey: "deep",
@@ -343,7 +367,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("uses clamped active context metadata when a selected provider route is smaller", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const smart = await buildState({
       effectiveContextWindow: 200000,
@@ -356,7 +380,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("includes policy warnings alongside mode and tool state", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       modeOverrides: { availabilityNotes: ["Runtime subagent behavior is not implemented in mmr-core."] },
       modelResolution: {
@@ -387,7 +411,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("reports no policy warnings for a clean locked-mode state", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const status = formatMmrStatus(await buildState({ modeOverrides: { availabilityNotes: [] } }));
 
@@ -395,7 +419,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("does not warn about missing model resolution while free mode delegates to native Pi controls", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const status = formatMmrStatus(await buildState({ modeKey: "free" }));
 
@@ -405,12 +429,12 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("returns the unresolved message when state is missing", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     assert.match(formatMmrStatus(undefined), /not been resolved/i);
   });
 
   it("lists the settings files that were loaded for the current resolution", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       settingsFilesRead: ["/home/user/.pi/agent/settings.json", "/proj/.pi/settings.json"],
     });
@@ -421,7 +445,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("reports 'Settings files read: none' when no settings files were loaded", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({ settingsFilesRead: [] });
 
     const status = formatMmrStatus(state);
@@ -430,7 +454,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("surfaces settings load warnings under their own diagnostics group", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       settingsWarnings: [
         "Could not read MMR settings from /proj/.pi/settings.json: Unexpected token } in JSON at position 12",
@@ -444,7 +468,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("groups policy diagnostics by severity in /mmr-status", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       modelResolution: {
         fallbackApplied: true,
@@ -467,7 +491,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("omits the debug section unless debug output is requested", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       modelResolution: {
         candidates: [
@@ -501,7 +525,7 @@ describe("mmr-core /mmr-status", () => {
   });
 
   it("renders model/tool resolution debug detail when debug is requested", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildState({
       source: "flag",
       rejectedSources: [{ source: "settings", value: "fast", reason: "invalid mode" }],
@@ -547,7 +571,7 @@ describe("mmr-core /mmr-status", () => {
   // frozen byte-for-byte so the Item 5b shared-helper refactor cannot change
   // any rendered footer number.
   it("formats footer token counts byte-for-byte across boundary values", async () => {
-    const { formatFooterTokens } = await importSource("extensions/mmr-core/status.ts");
+    const { formatFooterTokens } = await importSource("extensions/ampi-core/status.ts");
     const cases = [
       [999, "999"],
       [1000, "1.0k"],
@@ -569,7 +593,7 @@ describe("mmr-core /mmr-status", () => {
   // the footer's own >=10M `Math.round(... )M` tail ("NaNM"). Pinned so the
   // shared-helper refactor cannot drift on non-boundary inputs.
   it("formats footer edge inputs (zero, negatives, non-integers, NaN) byte-for-byte", async () => {
-    const { formatFooterTokens } = await importSource("extensions/mmr-core/status.ts");
+    const { formatFooterTokens } = await importSource("extensions/ampi-core/status.ts");
     const cases = [
       [0, "0"],
       [-1, "-1"],

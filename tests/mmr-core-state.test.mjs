@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core persisted state", () => {
   it("restores the latest valid MMR mode state from Pi custom entries", async () => {
-    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/mmr-core/state.ts");
+    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/ampi-core/state.ts");
 
     const state = findLatestPersistedModeState([
       {
@@ -33,8 +33,8 @@ describe("mmr-core persisted state", () => {
   });
 
   it("serializes state with MMR naming and no legacy compatibility fields", async () => {
-    const { createMmrModeState, toPersistedModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrModeState, toPersistedModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("rush"),
@@ -78,8 +78,8 @@ describe("mmr-core persisted state", () => {
   });
 
   it("persists and restores native-control modes without model routing fields", async () => {
-    const { createMmrModeState, findLatestPersistedModeState, MMR_MODE_STATE_ENTRY, toPersistedModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrModeState, findLatestPersistedModeState, MMR_MODE_STATE_ENTRY, toPersistedModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     for (const mode of ["free"]) {
       const activeTools = ["read", "bash"];
@@ -123,8 +123,8 @@ describe("mmr-core persisted state", () => {
   });
 
   it("writes version 1 on every persisted state", async () => {
-    const { createMmrModeState, toPersistedModeState, MMR_MODE_STATE_VERSION } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrModeState, toPersistedModeState, MMR_MODE_STATE_VERSION } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     assert.equal(MMR_MODE_STATE_VERSION, 1);
 
@@ -150,7 +150,7 @@ describe("mmr-core persisted state", () => {
   });
 
   it("restores legacy unversioned persisted state and ignores future or malformed versions", async () => {
-    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/mmr-core/state.ts");
+    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/ampi-core/state.ts");
 
     const legacyOnly = findLatestPersistedModeState([
       {
@@ -187,7 +187,7 @@ describe("mmr-core persisted state", () => {
   });
 
   it("sanitizes invalid source/thinkingLevel values when restoring persisted state", async () => {
-    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/mmr-core/state.ts");
+    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/ampi-core/state.ts");
 
     const restored = findLatestPersistedModeState([
       {
@@ -245,8 +245,8 @@ describe("mmr-core persisted state", () => {
   });
 
   it("includes resolution decisions on createMmrModeState", async () => {
-    const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("smart"),

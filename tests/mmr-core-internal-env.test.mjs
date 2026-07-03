@@ -6,35 +6,35 @@ after(cleanupLoadedSource);
 
 describe("mmr-core internal env helpers", () => {
   it("parseBoolEnv treats undefined and trimmed-empty as not set", async () => {
-    const { parseBoolEnv } = await importSource("extensions/mmr-core/internal/env.ts");
+    const { parseBoolEnv } = await importSource("extensions/ampi-core/internal/env.ts");
     assert.equal(parseBoolEnv(undefined), undefined);
     assert.equal(parseBoolEnv(""), undefined);
     assert.equal(parseBoolEnv("   "), undefined);
   });
 
   it("parseBoolEnv recognizes the documented truthy strings (case-insensitive)", async () => {
-    const { parseBoolEnv } = await importSource("extensions/mmr-core/internal/env.ts");
+    const { parseBoolEnv } = await importSource("extensions/ampi-core/internal/env.ts");
     for (const value of ["true", "TRUE", "1", "yes", "YES", "on", "On", "  true  "]) {
       assert.equal(parseBoolEnv(value), true, `expected ${JSON.stringify(value)} to parse true`);
     }
   });
 
   it("parseBoolEnv recognizes the documented falsy strings (case-insensitive)", async () => {
-    const { parseBoolEnv } = await importSource("extensions/mmr-core/internal/env.ts");
+    const { parseBoolEnv } = await importSource("extensions/ampi-core/internal/env.ts");
     for (const value of ["false", "FALSE", "0", "no", "NO", "off", "Off", "  false  "]) {
       assert.equal(parseBoolEnv(value), false, `expected ${JSON.stringify(value)} to parse false`);
     }
   });
 
   it("parseBoolEnv returns undefined for unrecognized strings", async () => {
-    const { parseBoolEnv } = await importSource("extensions/mmr-core/internal/env.ts");
+    const { parseBoolEnv } = await importSource("extensions/ampi-core/internal/env.ts");
     for (const value of ["maybe", "2", "truthy", "garbage", "y", "n"]) {
       assert.equal(parseBoolEnv(value), undefined, `expected ${JSON.stringify(value)} to parse undefined`);
     }
   });
 
   it("mmr-history loadMmrHistorySettings preserves default-false semantics via the shared helper", async () => {
-    const { loadMmrHistorySettings } = await importSource("extensions/mmr-history/config.ts");
+    const { loadMmrHistorySettings } = await importSource("extensions/ampi-history/config.ts");
     // undefined / empty / unrecognized → false
     assert.equal(loadMmrHistorySettings({}).enabled, false);
     assert.equal(loadMmrHistorySettings({ MMR_HISTORY_ENABLE: "" }).enabled, false);
@@ -55,7 +55,7 @@ describe("mmr-core internal env helpers", () => {
   });
 
   it("mmr-web loadMmrWebSettings continues to treat empty env as not set", async () => {
-    const { loadMmrWebSettings } = await importSource("extensions/mmr-web/config.ts");
+    const { loadMmrWebSettings } = await importSource("extensions/ampi-web/config.ts");
     // No project/home files; the empty MMR_WEB_ENABLE value must not flip the default-false to true.
     const result = loadMmrWebSettings("/tmp/__pi_mmr_refactor_nonexistent__", {
       homeDirectory: "/tmp/__pi_mmr_refactor_nonexistent_home__",

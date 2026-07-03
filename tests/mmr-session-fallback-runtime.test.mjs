@@ -11,7 +11,7 @@ afterEach(() => {
 
 describe("mmr-session-fallback runtime reload guard", () => {
   it("rebuilds the runtime when a stale-shape singleton is on globalThis", async () => {
-    const runtime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const runtime = await importSource("extensions/ampi-session-fallback/runtime.ts");
 
     // Simulate an in-place reload leaving an incompatible instance behind:
     // `overrides` is a plain object, not a Map, and `transients` is missing.
@@ -29,7 +29,7 @@ describe("mmr-session-fallback runtime reload guard", () => {
   });
 
   it("reuses a compatible singleton across accessors", async () => {
-    const runtime = await importSource("extensions/mmr-session-fallback/runtime.ts");
+    const runtime = await importSource("extensions/ampi-session-fallback/runtime.ts");
 
     runtime.setMmrSessionFallbackOverride("session-2", { mode: "rush" });
     const instance = globalThis[RUNTIME_KEY];

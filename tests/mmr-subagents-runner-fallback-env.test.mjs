@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
-const ENV_MODULE = "extensions/mmr-core/subagent-model-override-env.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const ENV_MODULE = "extensions/ampi-core/subagent-model-override-env.ts";
 
 function fakeSpawnCapturing(calls) {
   return (command, args, options) => {
@@ -25,7 +25,7 @@ function fakeSpawnCapturing(calls) {
 describe("runner forwards session fallback override via env (#9)", () => {
   it("injects the model-preference override env var when an override is present", async () => {
     const { runMmrSubagentWorker } = await importSource(RUNNER_MODULE);
-    const { MMR_SUBAGENT_MODEL_PREFERENCES_ENV, parseMmrSubagentModelPreferencesEnv } = await importSource(ENV_MODULE);
+    const { AMPI_SUBAGENT_MODEL_PREFERENCES_ENV, MMR_SUBAGENT_MODEL_PREFERENCES_ENV, parseMmrSubagentModelPreferencesEnv } = await importSource(ENV_MODULE);
     const calls = [];
     const override = [
       { model: "claude-opus-4-6", providers: ["claude-subscription"], thinkingLevel: "high" },
@@ -44,14 +44,15 @@ describe("runner forwards session fallback override via env (#9)", () => {
     assert.equal(calls.length, 1);
     const env = calls[0].options?.env;
     assert.ok(env, "spawn must receive a custom env when an override is present");
-    assert.deepEqual(parseMmrSubagentModelPreferencesEnv(env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV]), override);
+    assert.deepEqual(parseMmrSubagentModelPreferencesEnv(env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV]), override);
+    assert.equal(env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV], undefined);
     // The rest of process.env is preserved so the child still resolves Pi.
     assert.equal(env.PATH, process.env.PATH);
   });
 
   it("scrubs the override env var from the child when no override is present", async () => {
     const { runMmrSubagentWorker } = await importSource(RUNNER_MODULE);
-    const { MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource(ENV_MODULE);
+    const { AMPI_SUBAGENT_MODEL_PREFERENCES_ENV, MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource(ENV_MODULE);
     const calls = [];
     await runMmrSubagentWorker(
       { profileName: "finder", prompt: "q", cwd: "/tmp/cwd" },
@@ -63,6 +64,7 @@ describe("runner forwards session fallback override via env (#9)", () => {
     // worker never inherits a stale override var. With no override, the var
     // must be absent (scrubbed), while the rest of the env is preserved.
     assert.ok(env, "runner passes a child env (scrubbed copy of process.env)");
+    assert.equal(env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV], undefined);
     assert.equal(env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV], undefined);
     assert.equal(env.PATH, process.env.PATH);
   });
@@ -72,9 +74,11 @@ describe("runner forwards session fallback override via env (#9)", () => {
     // carries the override) that then spawns a nested worker (e.g. finder)
     // with no override of its own: the nested child must NOT inherit it.
     const { runMmrSubagentWorker } = await importSource(RUNNER_MODULE);
-    const { MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource(ENV_MODULE);
+    const { AMPI_SUBAGENT_MODEL_PREFERENCES_ENV, MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource(ENV_MODULE);
     const original = process.env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV];
+    const originalAmpi = process.env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV];
     process.env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV] = JSON.stringify([{ model: "stale-route" }]);
+    process.env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV] = JSON.stringify([{ model: "stale-route" }]);
     const calls = [];
     try {
       await runMmrSubagentWorker(
@@ -84,8 +88,11 @@ describe("runner forwards session fallback override via env (#9)", () => {
     } finally {
       if (original === undefined) delete process.env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV];
       else process.env[MMR_SUBAGENT_MODEL_PREFERENCES_ENV] = original;
+      if (originalAmpi === undefined) delete process.env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV];
+      else process.env[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV] = originalAmpi;
     }
     assert.equal(calls.length, 1);
+    assert.equal(calls[0].options?.env?.[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV], undefined, "stale AMPI override var must be scrubbed from the child env");
     assert.equal(calls[0].options?.env?.[MMR_SUBAGENT_MODEL_PREFERENCES_ENV], undefined, "stale override var must be scrubbed from the child env");
   });
 });

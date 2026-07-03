@@ -33,8 +33,8 @@ function restoreArgv() {
   }
 }
 
-const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/ampi-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/ampi-github/index.ts";
 const GITHUB_TOOLS = [
   "read_github",
   "list_directory_github",
@@ -61,7 +61,7 @@ async function resetMmrGithubToolSourcePaths() {
   // validates through mmr-core's hasOwnedToolsFromOwner, and
   // registerMmrGithubToolSourcePath mirrors the path under the "mmr-github"
   // owner there. Resetting both keeps the cases isolated.
-  const { __resetMmrOwnedToolSourcePathsForTests } = await importSource("extensions/mmr-core/owned-tools.ts");
+  const { __resetMmrOwnedToolSourcePathsForTests } = await importSource("extensions/ampi-core/owned-tools.ts");
   __resetMmrGithubToolSourcePathsForTests();
   __resetMmrOwnedToolSourcePathsForTests();
   registerMmrGithubToolSourcePath(GITHUB_SOURCE_PATH);
@@ -87,7 +87,7 @@ const BASE_PROMPT = [
 ].join("\n");
 
 async function importRuntime() {
-  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(url);
 }
 
@@ -121,7 +121,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("registers subagent worker flags with descriptions", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, flagDefs } = createPi();
     extension(pi);
     assert.ok(flagDefs.has("mmr-subagent"), "must register --mmr-subagent flag");
@@ -135,7 +135,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("activates the 'finder' profile when --mmr-subagent=finder is set at session_start", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls, emits } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -171,8 +171,8 @@ describe("mmr-core subagent activation", () => {
     // resolve the same route the parent passed via --model, taking
     // precedence over the profile's default model preferences (never
     // persisted to settings).
-    const { MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource("extensions/mmr-core/subagent-model-override-env.ts");
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const { MMR_SUBAGENT_MODEL_PREFERENCES_ENV } = await importSource("extensions/ampi-core/subagent-model-override-env.ts");
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers, calls } = createPi({ flags: { "mmr-subagent": "finder" } });
     const { ctx } = createContext({
       // Both authenticated. Finder's default chain would pick gpt-5.4-mini
@@ -208,7 +208,7 @@ describe("mmr-core subagent activation", () => {
     // registered. This is the same contract `applyLockedMode` honors via
     // `resolveMmrTools(...).activeTools`, so deferred/gated/missing
     // tools never reach `pi.setActiveTools`.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     // Oracle's profile lists 7 tools; only the first three are
     // universally registered in this stub. The remaining four are
@@ -248,7 +248,7 @@ describe("mmr-core subagent activation", () => {
     // deferred core defaults use `preferExact` so cache-isolated loaders can
     // still activate them when Pi exposes same-name concrete tools. This now
     // covers mmr-web and the initial mmr-history read/find compatibility names.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers, calls } = createPi({
       activeTools: ["read", "grep", "find", "web_search", "read_web_page", "read_session", "find_session"],
       allTools: ["read", "grep", "find", "web_search", "read_web_page", "read_session", "find_session"],
@@ -274,7 +274,7 @@ describe("mmr-core subagent activation", () => {
     // (Anthropic, OpenAI Responses) use it instead of defaulting to a
     // higher provider default. Providers without such a lane resolve
     // `low` via mmr-core's existing thinking-level policy.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
     });
@@ -288,7 +288,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("exposes subagent runtime state via getMmrSubagentState after activation", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -313,7 +313,7 @@ describe("mmr-core subagent activation", () => {
     // base prompt Pi already assembled (including any `--append-system-prompt`
     // content) without any mmr-core rewrites. Returning `undefined`
     // from the handler is the canonical no-op shape Pi understands.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers } = createPi({
       flags: { "mmr-subagent": "finder" },
     });
@@ -336,7 +336,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("before_provider_request does not apply locked-mode policy when subagent is active", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers } = createPi({
       flags: { "mmr-subagent": "finder" },
     });
@@ -353,7 +353,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("tool_call does not block tools that are inside the subagent allowlist", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers } = createPi({
       activeTools: ["grep", "find", "read"],
       flags: { "mmr-subagent": "finder" },
@@ -369,7 +369,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("falls through to normal locked-mode activation when --mmr-subagent is unset", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers } = createPi();
     const { ctx } = createContext({
@@ -391,7 +391,7 @@ describe("mmr-core subagent activation", () => {
     // locked-mode policy. session_start MUST reset subagent state when
     // no `--mmr-subagent` flag is present, before applying any other
     // policy.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrSubagentState({
       profile: "finder",
@@ -420,7 +420,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("fails closed before any mutation when --mmr-subagent names an unknown profile", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls, emits } = createPi({
       flags: { "mmr-subagent": "no-such-profile" },
@@ -450,7 +450,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("fails closed before any mutation when no model route resolves", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -483,7 +483,7 @@ describe("mmr-core subagent activation", () => {
     // `ctx.model` may simply be Pi's default/restored model and must
     // not be treated as an explicit override.
     setMockedArgv(["--mmr-subagent", "finder", "--model", "claude-subscription/claude-opus-4-8"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -515,7 +515,7 @@ describe("mmr-core subagent activation", () => {
     // Activation must only validate ctx.model against the profile when
     // `--model` is actually on argv.
     setMockedArgv(["--mmr-subagent", "finder"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -540,7 +540,7 @@ describe("mmr-core subagent activation", () => {
 
   it("fails closed when explicit --tools on the CLI differ from the profile tool allowlist", async () => {
     setMockedArgv(["--mmr-subagent", "finder", "--tools", "bash,write"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -567,7 +567,7 @@ describe("mmr-core subagent activation", () => {
 
   it("accepts explicit --tools on the CLI that match the profile allowlist (order-independent)", async () => {
     setMockedArgv(["--mmr-subagent", "finder", "--tools", "read,find,grep"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       flags: { "mmr-subagent": "finder" },
@@ -588,7 +588,7 @@ describe("mmr-core subagent activation", () => {
   it("activates librarian when child GitHub tools are owned by mmr-github", async () => {
     await resetMmrGithubToolSourcePaths();
     setMockedArgv(["--mmr-subagent", "librarian", "--tools", GITHUB_TOOLS.join(",")]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       activeTools: [],
@@ -609,7 +609,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("fails closed before mutation when librarian child GitHub tools are not owned by mmr-github", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const cases = [
       { label: "missing sourceInfo", sourcePath: null },
@@ -633,7 +633,7 @@ describe("mmr-core subagent activation", () => {
 
       await assert.rejects(
         handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx),
-        /mmr-github-owned read-only GitHub tools/,
+        /ampi-github-owned read-only GitHub tools/,
         c.label,
       );
 
@@ -657,7 +657,7 @@ describe("mmr-core subagent activation", () => {
       "--mmr-subagent", "task-subagent",
       "--tools", "read,bash,edit,write,finder,skill,task_list",
     ]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       activeTools: ["read","bash","edit","write","finder","skill","task_list"],
@@ -686,7 +686,7 @@ describe("mmr-core subagent activation", () => {
   });
 
   it("uses --mmr-parent-mode to distinguish Rush Task thinking from non-Rush explicit worker routes", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const workerTools = ["read","bash","edit","write","finder","skill","task_list"];
     const cases = [
@@ -727,12 +727,12 @@ describe("mmr-core subagent activation", () => {
     }
   });
 
-  it("rejects invalid --mmr-parent-mode for mode-derived worker activation", async () => {
+  it("rejects invalid --ampi-parent-mode/--mmr-parent-mode for mode-derived worker activation", async () => {
     setMockedArgv([
       "--mmr-subagent", "task-subagent",
       "--mmr-parent-mode", "free",
     ]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const workerTools = ["read","bash","edit","write","finder","skill","task_list"];
     const { pi, handlers, calls } = createPi({
@@ -747,13 +747,13 @@ describe("mmr-core subagent activation", () => {
 
     await assert.rejects(
       handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx),
-      /invalid --mmr-parent-mode/i,
+      /invalid --ampi-parent-mode\/--mmr-parent-mode/i,
     );
 
     assert.equal(calls.setModel.length, 0);
     assert.equal(calls.setActiveTools.length, 0);
     assert.equal(runtime.getMmrSubagentState(), undefined);
-    assert.match(notifications.at(-1)?.message ?? "", /invalid --mmr-parent-mode/);
+    assert.match(notifications.at(-1)?.message ?? "", /invalid --ampi-parent-mode\/--mmr-parent-mode/);
   });
 
   it("rejects explicit --tools that include a deny-listed entry, even when present in profile.tools (F1 inverse)", async () => {
@@ -764,7 +764,7 @@ describe("mmr-core subagent activation", () => {
       "--mmr-subagent", "task-subagent",
       "--tools", "read,bash,edit,write,finder,skill,task_list,Task",
     ]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       activeTools: ["read","bash","edit","write","finder","skill","task_list","Task"],
@@ -799,7 +799,7 @@ describe("mmr-core subagent activation", () => {
     // registered. With only read/grep/find registered, the child still
     // activates cleanly and applies just those three as the active set.
     setMockedArgv(["--mmr-subagent", "oracle"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       activeTools: ["read", "grep", "find"],
@@ -833,7 +833,7 @@ describe("mmr-core subagent activation", () => {
     // must distinguish this intentional empty set from a deny/registered
     // collapse — the latter still fails closed with tools.empty.
     setMockedArgv(["--mmr-subagent", "history-reader"]);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers, calls } = createPi({
       activeTools: ["read", "grep", "find"],

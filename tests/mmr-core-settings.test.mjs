@@ -37,7 +37,7 @@ describe("mmr-core settings", () => {
         }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.defaultMode, "deep");
@@ -69,7 +69,7 @@ describe("mmr-core settings", () => {
       );
       writeFileSync(path.join(project, ".pi/settings.json"), "{ this is not valid json");
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.defaultMode, "deep");
@@ -98,7 +98,7 @@ describe("mmr-core settings", () => {
         JSON.stringify({ mmrCore: ["oops"] }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.defaultMode, "deep");
@@ -129,7 +129,7 @@ describe("mmr-core settings", () => {
         JSON.stringify({ mmrCore: { toolAliases: { oracle: ["mmr-oracle"] } } }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.defaultMode, "deep");
@@ -160,7 +160,7 @@ describe("mmr-core settings", () => {
         JSON.stringify({ mmrCore: { modelPreferences: ["gpt-5.5"] } }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.defaultMode, "deep");
@@ -193,7 +193,7 @@ describe("mmr-core settings - read path hardening", () => {
       const projectSettings = path.join(project, ".pi/settings.json");
       symlinkSync(outside, projectSettings);
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       // Symlinked file is refused on read: its defaultMode is not applied.
@@ -221,7 +221,7 @@ describe("mmr-core settings - read path hardening", () => {
       // Missing home file (directory exists, file does not); empty project file.
       writeFileSync(path.join(project, ".pi/settings.json"), "{}");
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const missingHome = loadMmrCoreSettings(project, home);
 
       // Missing file is not counted as read; present-but-empty file is.
@@ -265,7 +265,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
         JSON.stringify({ mmrCore: { lockedModeExtraTools: { all: ["g2", "g1"], smart: ["s1"] } } }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.deepEqual(loaded.settings.lockedModeExtraTools, {
@@ -304,7 +304,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
         }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.deepEqual(loaded.settings.lockedModeExtraTools, { rush: ["a", "b"] });
@@ -338,7 +338,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
         JSON.stringify({ mmrCore: { lockedModeExtraTools: ["read"] } }),
       );
 
-      const { loadMmrCoreSettings } = await importSource("extensions/mmr-core/settings.ts");
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.equal(loaded.settings.lockedModeExtraTools, undefined);

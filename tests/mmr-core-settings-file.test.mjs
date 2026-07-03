@@ -22,7 +22,7 @@ function tempDir() {
 
 describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
   it("treats a missing file as an empty object and writes valid JSON with trailing newline", async () => {
-    const { rewriteJsonSettingsFile } = await importSource("extensions/mmr-core/internal/settings-file.ts");
+    const { rewriteJsonSettingsFile } = await importSource("extensions/ampi-core/internal/settings-file.ts");
     const root = tempDir();
     try {
       const filePath = path.join(root, ".pi", "settings.json");
@@ -43,7 +43,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
   });
 
   it("leaves no temp files behind after a successful write", async () => {
-    const { rewriteJsonSettingsFile } = await importSource("extensions/mmr-core/internal/settings-file.ts");
+    const { rewriteJsonSettingsFile } = await importSource("extensions/ampi-core/internal/settings-file.ts");
     const root = tempDir();
     try {
       const dir = path.join(root, ".pi");
@@ -60,7 +60,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
   });
 
   it("refuses to overwrite a file whose contents are not valid JSON", async () => {
-    const { rewriteJsonSettingsFile } = await importSource("extensions/mmr-core/internal/settings-file.ts");
+    const { rewriteJsonSettingsFile } = await importSource("extensions/ampi-core/internal/settings-file.ts");
     const root = tempDir();
     try {
       const dir = path.join(root, ".pi");
@@ -80,7 +80,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
   });
 
   it("does not corrupt the original file when the transform throws", async () => {
-    const { rewriteJsonSettingsFile } = await importSource("extensions/mmr-core/internal/settings-file.ts");
+    const { rewriteJsonSettingsFile } = await importSource("extensions/ampi-core/internal/settings-file.ts");
     const root = tempDir();
     try {
       const dir = path.join(root, ".pi");
@@ -104,7 +104,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
 
   it("refuses to read or rewrite through a symlinked settings path", async () => {
     const { readJsonSettingsFile, rewriteJsonSettingsFile } = await importSource(
-      "extensions/mmr-core/internal/settings-file.ts",
+      "extensions/ampi-core/internal/settings-file.ts",
     );
     const root = tempDir();
     try {
@@ -126,7 +126,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
   });
 
   it("flags prototype-polluting object keys via isUnsafeObjectKey", async () => {
-    const { isUnsafeObjectKey } = await importSource("extensions/mmr-core/internal/settings-file.ts");
+    const { isUnsafeObjectKey } = await importSource("extensions/ampi-core/internal/settings-file.ts");
     assert.equal(isUnsafeObjectKey("__proto__"), true);
     assert.equal(isUnsafeObjectKey("prototype"), true);
     assert.equal(isUnsafeObjectKey("constructor"), true);
@@ -137,7 +137,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
 
 describe("mmr-core config-writer: prototype-pollution guards", () => {
   it("refuses an unsafe mode key", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
     assert.throws(
       () => applyMmrConfigUpdate({}, { modeModelPreferences: { mode: "__proto__", preferences: [{ model: "x" }] } }),
       /unsafe mode key/,
@@ -145,7 +145,7 @@ describe("mmr-core config-writer: prototype-pollution guards", () => {
   });
 
   it("refuses an unsafe subagent profile key", async () => {
-    const { applyMmrConfigUpdate } = await importSource("extensions/mmr-core/config-writer.ts");
+    const { applyMmrConfigUpdate } = await importSource("extensions/ampi-core/config-writer.ts");
     assert.throws(
       () =>
         applyMmrConfigUpdate({}, {

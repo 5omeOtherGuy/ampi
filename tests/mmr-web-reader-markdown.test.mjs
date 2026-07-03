@@ -40,18 +40,18 @@ function articleHtml({ title = "An Excellent Article", body = "", site = "Exampl
 
 describe("mmr-web reader/markdown — Readability + Turndown pipeline", () => {
   beforeEach(async () => {
-    const { __resetReaderToolchainForTests } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { __resetReaderToolchainForTests } = await importSource("extensions/ampi-web/reader/markdown.ts");
     __resetReaderToolchainForTests();
   });
 
   it("returns null when the HTML is shorter than the minimum input threshold", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     const md = await extractArticleToMarkdown("<p>tiny</p>", { maxBytes: 10_000 });
     assert.equal(md, null);
   });
 
   it("extracts the article body and drops nav/header/aside/footer chrome", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     const md = await extractArticleToMarkdown(articleHtml(), { maxBytes: 100_000 });
     assert.ok(md, "expected article extraction to succeed");
     assert.match(md, /An Excellent Article/);
@@ -66,7 +66,7 @@ describe("mmr-web reader/markdown — Readability + Turndown pipeline", () => {
   });
 
   it("converts GFM tables to Markdown tables", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     const html = articleHtml({
       title: "Benchmarks",
       body: `
@@ -95,7 +95,7 @@ describe("mmr-web reader/markdown — Readability + Turndown pipeline", () => {
   });
 
   it("converts fenced code blocks with a language hint", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     const html = articleHtml({
       title: "Code example",
       body: `
@@ -115,7 +115,7 @@ console.log(x + y);</code></pre>
   });
 
   it("returns non-null when Readability extracts any substantive body (caller uses Readability output)", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     // Even a sparse page (lots of one-character paragraphs) is treated as an
     // article by Readability’s scoring algorithm; the wrapper passes the
     // resulting Markdown through. The caller-side fallback to the legacy
@@ -130,7 +130,7 @@ console.log(x + y);</code></pre>
   it("caches the toolchain across calls; the reset seam restores cold-load behavior", async () => {
     // Sanity check the test seam: after a reset the next call still produces
     // valid output, proving the cache rebuild path is clean.
-    const mod = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const mod = await importSource("extensions/ampi-web/reader/markdown.ts");
     mod.__resetReaderToolchainForTests();
     const md1 = await mod.extractArticleToMarkdown(articleHtml(), { maxBytes: 100_000 });
     assert.ok(md1);
@@ -140,7 +140,7 @@ console.log(x + y);</code></pre>
   });
 
   it("applies the maxBytes UTF-8 cap and appends a truncation marker when exceeded", async () => {
-    const { extractArticleToMarkdown } = await importSource("extensions/mmr-web/reader/markdown.ts");
+    const { extractArticleToMarkdown } = await importSource("extensions/ampi-web/reader/markdown.ts");
     // Build a long article so the natural Markdown output far exceeds 200 bytes.
     const md = await extractArticleToMarkdown(articleHtml(), { maxBytes: 200 });
     assert.ok(md);
@@ -156,7 +156,7 @@ console.log(x + y);</code></pre>
 
 describe("mmr-web custom reader — end-to-end through Readability", () => {
   it("renders an article page through the new pipeline (no nav/footer chrome)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const html = articleHtml({ title: "End-to-end" });
     const calls = [];
@@ -176,7 +176,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("ignores a cookie-consent banner and extracts the real article body", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     // A page that DOES have a real article, plus a consent banner whose only
     // identifying signal is a data-* attribute (no "cookie" in id/class).
@@ -196,7 +196,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("preserves a legitimate article that is ABOUT cookies/privacy", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const html = articleHtml({
       title: "How browser cookies work",
@@ -219,7 +219,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("returns an honest diagnostic for a JavaScript app-shell page", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const shell = `<!DOCTYPE html><html><head><title>App</title></head><body>` +
       `<div id="__next">${"<div>Loading...</div>".repeat(12)}</div>` +
@@ -237,7 +237,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("returns a placeholder diagnostic for a loading-only body without shell markers", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const body = `<!DOCTYPE html><html><head><title>Wait</title></head><body><main>${"<p>Loading...</p>".repeat(10)}</main></body></html>`;
     const result = await braveReader(
@@ -250,7 +250,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("keeps small-but-legitimate pages readable (not flagged as empty)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const html = `<html><body><main><h1>Doc</h1><p>Hello <strong>world</strong>.</p></main></body></html>`;
     const result = await braveReader(
@@ -263,7 +263,7 @@ describe("mmr-web custom reader — end-to-end through Readability", () => {
   });
 
   it("preserves text/plain bodies verbatim (no Readability/Turndown applied)", async () => {
-    const { braveReader } = await importSource("extensions/mmr-web/brave.ts");
+    const { braveReader } = await importSource("extensions/ampi-web/brave.ts");
     const PUBLIC_DNS_STUB = async () => [{ address: "203.0.113.10", family: 4 }];
     const verbatim = "# Already markdown\n\nSecond *line*.\n\n```js\nlet x = 1;\n```\n";
     const fetchImpl = async () =>

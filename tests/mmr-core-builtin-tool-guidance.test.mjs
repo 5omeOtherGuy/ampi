@@ -42,14 +42,14 @@ function createState(mode) {
 
 describe("built-in tool guidance: module", () => {
   it("returns null when no covered built-in tool is active", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     assert.equal(buildBuiltinToolGuidance([]), null);
     assert.equal(buildBuiltinToolGuidance(["apply_patch", "task_list"]), null);
   });
 
   it("renders only the active built-in tools, in a stable order", async () => {
     const { buildBuiltinToolGuidance, MMR_BUILTIN_TOOL_GUIDANCE_HEADING } = await importSource(
-      "extensions/mmr-core/builtin-tool-guidance.ts",
+      "extensions/ampi-core/builtin-tool-guidance.ts",
     );
     const block = buildBuiltinToolGuidance(["edit", "bash"]);
     assert.ok(block, "block must be rendered when bash and edit are active");
@@ -68,7 +68,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("uses Pi-native parameter names in edit/write guidance", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["edit", "write"]);
     assert.ok(block);
     // Pi edit uses edits[].oldText / edits[].newText, not old_str/new_str.
@@ -83,7 +83,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("steers edit recovery away from identical retries", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["bash", "edit", "write"]);
     assert.ok(block);
     assert.match(block, /empty arguments or missing required fields/);
@@ -92,7 +92,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("warns that each edit item carries exactly oldText and newText with no extra keys", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["edit"]);
     assert.ok(block);
     // Positive shape: exactly two keys per item.
@@ -108,7 +108,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("does not require absolute paths (Pi allows relative paths)", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["read", "write", "edit"]);
     assert.ok(block);
     assert.equal(block.includes("MUST be absolute"), false, "Pi tools allow relative paths");
@@ -116,7 +116,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("does not reference Pi-absent parameters (no cwd / read_range)", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["bash", "read"]);
     assert.ok(block);
     assert.equal(/`cwd`/.test(block), false, "Pi bash has no cwd parameter");
@@ -124,7 +124,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("does not mention unrelated product names in rendered guidance", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["edit", "write", "read", "bash", "grep", "find"]);
     assert.ok(block);
     for (const term of [["A", "mp"].join(""), ["Source", "graph"].join("")]) {
@@ -133,8 +133,8 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("does not leak planned-tool names into the rendered guidance", async () => {
-    const { buildBuiltinToolGuidance } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
-    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
+    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/ampi-core/planned-catalog.ts");
     const block = buildBuiltinToolGuidance(["read", "bash", "write", "edit", "grep", "find"]);
     assert.ok(block);
     for (const entry of MMR_PLANNED_TOOL_CATALOG) {
@@ -145,7 +145,7 @@ describe("built-in tool guidance: module", () => {
   });
 
   it("extractActiveBuiltinToolNames picks built-in tool names from Pi's Available tools block", async () => {
-    const { extractActiveBuiltinToolNames } = await importSource("extensions/mmr-core/builtin-tool-guidance.ts");
+    const { extractActiveBuiltinToolNames } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = [
       "Available tools:",
       "- read: Read file contents",
@@ -167,7 +167,7 @@ describe("built-in tool guidance: module", () => {
 
 describe("built-in tool guidance: prompt assembly integration", () => {
   it("inserts a builtin-tool-guidance block between active-guidelines and pi-docs when built-ins are active", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
       state: createState("smart"),
       baseSystemPrompt: BASE_PROMPT,
@@ -183,7 +183,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   });
 
   it("flattened blocks still reproduce systemPrompt byte-for-byte", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
       state: createState("smart"),
       baseSystemPrompt: BASE_PROMPT,
@@ -194,7 +194,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   });
 
   it("renders the heading and per-tool sections for every active built-in", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
       state: createState("smart"),
       baseSystemPrompt: BASE_PROMPT,
@@ -208,7 +208,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   });
 
   it("omits guidance for tools that are not listed in Pi's Available tools block", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const baseWithoutEdit = BASE_PROMPT.replace(
       "- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call\n",
       "",
@@ -225,7 +225,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   });
 
   it("emits no builtin-tool-guidance block when no covered built-in is active", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     // Strip every covered built-in from the Available tools listing.
     let custom = BASE_PROMPT;
     for (const name of ["read", "bash", "edit", "write", "grep", "find"]) {
@@ -247,7 +247,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   });
 
   it("Pi-authored Available tools and Guidelines blocks remain byte-identical", async () => {
-    const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
       state: createState("smart"),
       baseSystemPrompt: BASE_PROMPT,

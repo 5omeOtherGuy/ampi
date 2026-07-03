@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core mode routing", () => {
   it("chooses explicit flag mode before session, settings, and default", async () => {
-    const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
     assert.deepEqual(
       resolveMmrModeSelection({
@@ -19,7 +19,7 @@ describe("mmr-core mode routing", () => {
   });
 
   it("chooses session mode before settings and default when no flag is provided", async () => {
-    const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
     assert.deepEqual(
       resolveMmrModeSelection({
@@ -31,7 +31,7 @@ describe("mmr-core mode routing", () => {
   });
 
   it("chooses settings mode before default and reports invalid settings", async () => {
-    const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
     assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fable" }), {
       mode: "fable",
@@ -50,13 +50,13 @@ describe("mmr-core mode routing", () => {
     assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fast" }), {
       mode: "smart",
       source: "default",
-      warnings: ['Ignoring invalid settings MMR mode "fast".'],
+      warnings: ['Ignoring invalid settings ampi mode "fast".'],
       rejectedSources: [{ source: "settings", value: "fast", reason: "invalid mode" }],
     });
   });
 
   it("captures all invalid sources as rejectedSources", async () => {
-    const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
     const result = resolveMmrModeSelection({
       flagValue: "warp",
@@ -74,7 +74,7 @@ describe("mmr-core mode routing", () => {
   });
 
   it("accepts free from flags and persisted session state", async () => {
-    const { resolveMmrModeSelection } = await importSource("extensions/mmr-core/routing.ts");
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
     assert.deepEqual(resolveMmrModeSelection({ flagValue: "free", persistedMode: "deep" }), {
       mode: "free",

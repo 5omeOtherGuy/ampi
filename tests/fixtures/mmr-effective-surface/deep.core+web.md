@@ -89,7 +89,7 @@ Available tools:
 - find: Find files by glob pattern (respects .gitignore)
 - ls: List directory contents
 - web_search: Search the public web for a research objective
-- read_web_page: Fetch a public http(s) page through mmr-web's custom reader and return Markdown text
+- read_web_page: Fetch a public http(s) page through ampi-web's custom reader and return Markdown text
 
 In addition to the tools above, you may have access to other custom tools depending on the project.
 
@@ -215,7 +215,7 @@ Current working directory: /test/cwd
 
 # web_search
 
-Owner: mmr-web
+Owner: ampi-web
 
 Prompt snippet: Search the public web for a research objective
 
@@ -224,7 +224,7 @@ Prompt guidelines:
 - Use web_search only for public, non-sensitive research; do not include secrets, API keys, or private data in web_search.objective or web_search.search_queries.
 
 Description:
-Search the web for information relevant to a research objective. Use when you need up-to-date or precise documentation. Use `read_web_page` to fetch full content from a specific URL. The active backend is one of: SearXNG (user-configured self-hosted instance via MMR_WEB_SEARXNG_URL, no API key required), Brave Search (requires BRAVE_API_KEY; a free `Data for AI` subscription key is sufficient), or DuckDuckGo HTML (built-in no-key fallback, best-effort and may be rate-limited). Optional filters are best-effort per backend: `include_domains`/`exclude_domains` restrict or drop results by host (suffix-aware, so a domain also matches its subdomains), `recency` (day/week/month/year) restricts by publication window, and `country` (ISO 3166-1 alpha-2) targets a region. Prefer these structured filters over `site:`/date operators written into the query text. A backend honors each filter natively, via local post-filter, or reports it as unsupported; `details.filters` reports the actual enforcement for every requested filter so nothing is silently ignored. Do NOT include secrets, API keys, or private data in the objective or search queries; they are sent to the upstream search engine.
+Search the web for information relevant to a research objective. Use when you need up-to-date or precise documentation. Use `read_web_page` to fetch full content from a specific URL. The active backend is one of: SearXNG (user-configured self-hosted instance via AMPI_WEB_SEARXNG_URL or legacy MMR_WEB_SEARXNG_URL, no API key required), Brave Search (requires BRAVE_API_KEY; a free `Data for AI` subscription key is sufficient), or DuckDuckGo HTML (built-in no-key fallback, best-effort and may be rate-limited). Optional filters are best-effort per backend: `include_domains`/`exclude_domains` restrict or drop results by host (suffix-aware, so a domain also matches its subdomains), `recency` (day/week/month/year) restricts by publication window, and `country` (ISO 3166-1 alpha-2) targets a region. Prefer these structured filters over `site:`/date operators written into the query text. A backend honors each filter natively, via local post-filter, or reports it as unsupported; `details.filters` reports the actual enforcement for every requested filter so nothing is silently ignored. Do NOT include secrets, API keys, or private data in the objective or search queries; they are sent to the upstream search engine.
 
 Parameters:
 ```json
@@ -295,9 +295,9 @@ Parameters:
 
 # read_web_page
 
-Owner: mmr-web
+Owner: ampi-web
 
-Prompt snippet: Fetch a public http(s) page through mmr-web's custom reader and return Markdown text
+Prompt snippet: Fetch a public http(s) page through ampi-web's custom reader and return Markdown text
 
 Prompt guidelines:
 - Use read_web_page to read the contents of a web page at a given URL. When only the url parameter is set, read_web_page returns the contents as Markdown; when an objective is provided, read_web_page returns excerpts relevant to that objective.
@@ -305,7 +305,7 @@ Prompt guidelines:
 - Use read_web_page only for public http(s) pages; do not use read_web_page for localhost, private IPs, link-local hosts, or non-Internet URLs.
 
 Description:
-Read the contents of a web page at a given URL. When only the url parameter is set, it returns the contents of the webpage converted to Markdown. When an objective is provided, it returns the most relevant verbatim excerpts (selected locally by keyword relevance, not summarized). The `forceRefetch` flag is accepted for compatibility but does not change behavior: the custom reader always performs a live fetch, so every read already returns the latest content. Do NOT use for localhost, private IPs, link-local hosts, or non-Internet URLs. Content is fetched directly through mmr-web's custom in-process reader, converted to Markdown with Readability + Turndown when available, and falls back to the lightweight built-in extractor when the page is not article-like or the Markdown pipeline cannot load.
+Read the contents of a web page at a given URL. When only the url parameter is set, it returns the contents of the webpage converted to Markdown. When an objective is provided, it returns the most relevant verbatim excerpts (selected locally by keyword relevance, not summarized). The `forceRefetch` flag is accepted for compatibility but does not change behavior: the custom reader always performs a live fetch, so every read already returns the latest content. Do NOT use for localhost, private IPs, link-local hosts, or non-Internet URLs. Content is fetched directly through ampi-web's custom in-process reader, converted to Markdown with Readability + Turndown when available, and falls back to the lightweight built-in extractor when the page is not article-like or the Markdown pipeline cannot load.
 
 Parameters:
 ```json

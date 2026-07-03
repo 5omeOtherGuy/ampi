@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const CONFIG_MODULE = "extensions/mmr-github/config.ts";
+const CONFIG_MODULE = "extensions/ampi-github/config.ts";
 
 function makeTempProject() {
   const home = mkdtempSync(path.join(tmpdir(), "mmr-gh-home-"));

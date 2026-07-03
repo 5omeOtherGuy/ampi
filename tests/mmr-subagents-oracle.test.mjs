@@ -39,12 +39,12 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
-const MODEL_RESOLVER_MODULE = "extensions/mmr-core/model-resolver.ts";
-const SUBAGENT_RESOLVER_MODULE = "extensions/mmr-core/subagent-resolver.ts";
-const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
+const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
+const MODEL_RESOLVER_MODULE = "extensions/ampi-core/model-resolver.ts";
+const SUBAGENT_RESOLVER_MODULE = "extensions/ampi-core/subagent-resolver.ts";
+const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
@@ -593,7 +593,7 @@ describe("oracle execute() seam", () => {
     assert.match(result.content[0].text, /TL;DR: ship it\./);
     assert.equal(result.details.exitCode, 0);
     assert.deepEqual(result.details.args, workerResult.args);
-    assert.equal(result.details.worker, "mmr-subagents.oracle");
+    assert.equal(result.details.worker, "ampi-workers.oracle");
   });
 
   it("returns a graceful aborted message when the worker is cancelled before producing output", async () => {

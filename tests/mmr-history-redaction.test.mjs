@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const REDACTION_MODULE = "extensions/mmr-history/redaction.ts";
+const REDACTION_MODULE = "extensions/ampi-history/redaction.ts";
 
 after(cleanupLoadedSource);
 

@@ -22,9 +22,9 @@ after(cleanupLoadedSource);
 
 describe("mmr-history prompt-builder ownership", () => {
   it("registers history-reader from mmr-history, not mmr-subagents", async () => {
-    const assembly = await importSource("extensions/mmr-core/subagent-prompt-assembly.ts");
-    const history = await importSource("extensions/mmr-history/index.ts");
-    const subagents = await importSource("extensions/mmr-workers/index.ts");
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const history = await importSource("extensions/ampi-history/index.ts");
+    const subagents = await importSource("extensions/ampi-workers/index.ts");
 
     assembly.clearMmrSubagentPromptBuilders();
     subagents.default(createMockPi().pi);
@@ -43,7 +43,7 @@ describe("mmr-history prompt-builder ownership", () => {
 
 describe("mmr-history query parsing and catalog search", () => {
   it("parses supported filters including file:, and reports unknown keys as unsupported", async () => {
-    const { parseSessionQuery } = await importSource("extensions/mmr-history/query.ts");
+    const { parseSessionQuery } = await importSource("extensions/ampi-history/query.ts");
     const parsed = parseSessionQuery('"history search" name:planning after:7d file:src/Index.ts ref:main author:me', new Date("2026-05-24T00:00:00Z"));
 
     assert.deepEqual(parsed.terms, ["history search"]);
@@ -57,7 +57,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("parses metadata, project, pagination, and explicit date filters", async () => {
-    const { parseSessionQuery } = await importSource("extensions/mmr-history/query.ts");
+    const { parseSessionQuery } = await importSource("extensions/ampi-history/query.ts");
     const parsed = parseSessionQuery(
       "provider:anthropic model:claude tool:bash label:checkpoint has:errors project:ampi cwd:worktree projectRef:abc123 since:today until:week created_after:2026-05-01 modified_before:2026-05-31 offset:20 sort:created",
       new Date("2026-05-24T12:34:56Z"),
@@ -79,7 +79,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("returns global Pi sessions newest-first with projectRef and never raw cwd/path", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-old", cwd: "/repo/a", name: "Old", modified: new Date("2026-05-20T00:00:00Z"), allMessagesText: "history search" }),
       sessionInfo({ id: "S-new", cwd: "/repo/b", name: "New", modified: new Date("2026-05-22T00:00:00Z"), allMessagesText: "history search with read_session" }),
@@ -100,7 +100,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("reports queryDiagnostics for applied and unsupported filters", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", allMessagesText: "history search" })];
 
     const { matches, queryDiagnostics } = await searchSessionsWithDiagnostics(
@@ -118,7 +118,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("dedupes by session id keeping the newest mtime", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-dup", cwd: "/repo/a", modified: new Date("2026-05-20T00:00:00Z"), allMessagesText: "history search" }),
       sessionInfo({ id: "S-dup", cwd: "/repo/a-renamed", modified: new Date("2026-05-22T00:00:00Z"), allMessagesText: "history search again" }),
@@ -132,7 +132,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("dedupes by session id with a deterministic tie-break (modified, created, path, id)", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     // Same id, same modified, different created/path. Newest `created`
     // must win; if created also tied, lower `path` then lower `id`.
     const sameModified = new Date("2026-05-22T00:00:00Z");
@@ -190,7 +190,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("queryDiagnostics filter strings redact sensitive substrings (file:/home/<user>/...)", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = {
       "S-1": { info: sessionInfo({ id: "S-1", allMessagesText: "history" }), files: new Set(["x.ts"]) },
     };
@@ -212,7 +212,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("buildMatch.matchedTerms redacts query tokens that carry sensitive substrings", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({
         id: "S-match",
@@ -232,7 +232,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("find_session details.query is the redacted form when redaction is opted in", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = [sessionInfo({ id: "S-1", allMessagesText: "alice" })];
     const deps = {
       getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000, redactionEnabled: true }),
@@ -249,7 +249,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("find_session keeps the RAW user query and raw match fields by default (redaction opt-in OFF), but still hashes projectRef", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = [
       sessionInfo({
         id: "S-raw",
@@ -284,7 +284,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("redacts sensitive content in name / firstMessage / preview", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({
         id: "S-secret",
@@ -303,7 +303,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("searchSessions leaves match fields RAW when redactionEnabled:false, keeps them hashed-projectRef, and redacts when true", async () => {
-    const { searchSessions } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessions } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({
         id: "S-secret",
@@ -328,7 +328,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("find_session.execute returns cross-project matches with deterministic redaction in both markdown and details", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     // Two sessions belonging to two different project cwds. The
     // catalog enumerates every local Pi session regardless of the
     // active workspace, so both must surface. Each fixture seeds
@@ -425,7 +425,7 @@ describe("mmr-history query parsing and catalog search", () => {
   });
 
   it("find_session.execute exposes pagination details and forwards offset", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = Array.from({ length: 4 }, (_, i) => sessionInfo({
       id: `S-${i}`,
       modified: new Date(`2026-05-${20 + i}T00:00:00Z`),
@@ -457,7 +457,7 @@ describe("mmr-history file: filter", () => {
   }
 
   it("matches sessions whose structured tool calls touched the requested path", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = {
       "S-hit": { info: sessionInfo({ id: "S-hit", allMessagesText: "work on auth" }), files: new Set(["src/auth.ts", "src/util.ts"]) },
       "S-miss": { info: sessionInfo({ id: "S-miss", allMessagesText: "work on auth" }), files: new Set(["src/other.ts"]) },
@@ -475,7 +475,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("case-insensitive partial path match", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = {
       "S-1": { info: sessionInfo({ id: "S-1", allMessagesText: "x" }), files: new Set(["src/auth.ts"]) },
     };
@@ -491,7 +491,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("requires ALL file: tokens to match (implicit AND)", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = {
       "S-both": { info: sessionInfo({ id: "S-both", allMessagesText: "x" }), files: new Set(["src/auth.ts", "src/util.ts"]) },
       "S-one": { info: sessionInfo({ id: "S-one", allMessagesText: "x" }), files: new Set(["src/auth.ts"]) },
@@ -508,7 +508,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("matches the same relative path against two different project cwds with distinct projectRefs", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = {
       "S-a": { info: sessionInfo({ id: "S-a", cwd: "/repo/a", allMessagesText: "auth" }), files: new Set(["src/auth.ts"]) },
       "S-b": { info: sessionInfo({ id: "S-b", cwd: "/repo/b", allMessagesText: "auth", modified: new Date("2026-05-19T00:00:00Z") }), files: new Set(["src/auth.ts"]) },
@@ -528,7 +528,7 @@ describe("mmr-history file: filter", () => {
 
   it("derives touched files from structured tool calls only, not bash output", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
 
     const structured = SessionManager.inMemory("/repo");
     structured.appendMessage({ role: "user", content: "please edit src/auth.ts" });
@@ -563,7 +563,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("absolute paths outside session cwd are dropped", async () => {
-    const { normalizeTouchedPath } = await importSource("extensions/mmr-history/session-index.ts");
+    const { normalizeTouchedPath } = await importSource("extensions/ampi-history/session-index.ts");
     assert.equal(normalizeTouchedPath("/repo/src/auth.ts", "/repo"), "src/auth.ts");
     assert.equal(normalizeTouchedPath("/other/src/auth.ts", "/repo"), undefined);
     assert.equal(normalizeTouchedPath("./src/auth.ts", "/repo"), "src/auth.ts");
@@ -573,7 +573,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("file: with no index available returns empty matches + non_applicable diagnostic, never a lexical fallthrough", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", allMessagesText: "auth" })];
 
     const { matches, queryDiagnostics } = await searchSessionsWithDiagnostics(
@@ -589,7 +589,7 @@ describe("mmr-history file: filter", () => {
   });
 
   it("file: against sessions with no structured tool-call evidence promotes to non_applicable", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const empty = { info: sessionInfo({ id: "S-empty", allMessagesText: "auth work" }), files: new Set() };
     const index = {
       async list() { return [empty.info]; },
@@ -610,7 +610,7 @@ describe("mmr-history file: filter", () => {
 
 describe("mmr-history git-identity canonicalization", () => {
   it("strips credentials from URL remotes and produces alias set", async () => {
-    const { repoIdentityFromUrl } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { repoIdentityFromUrl } = await importSource("extensions/ampi-history/git-identity.ts");
     const id = repoIdentityFromUrl("https://user:token@github.com/Owner/Repo.git");
 
     assert.ok(id);
@@ -628,7 +628,7 @@ describe("mmr-history git-identity canonicalization", () => {
   });
 
   it("parses SCP-style remotes (git@host:path)", async () => {
-    const { repoIdentityFromUrl } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { repoIdentityFromUrl } = await importSource("extensions/ampi-history/git-identity.ts");
     const id = repoIdentityFromUrl("git@github.com:owner/repo.git");
 
     assert.ok(id);
@@ -637,7 +637,7 @@ describe("mmr-history git-identity canonicalization", () => {
   });
 
   it("parses https remotes without .git", async () => {
-    const { repoIdentityFromUrl } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { repoIdentityFromUrl } = await importSource("extensions/ampi-history/git-identity.ts");
     const id = repoIdentityFromUrl("https://github.com/owner/repo");
 
     assert.ok(id);
@@ -646,7 +646,7 @@ describe("mmr-history git-identity canonicalization", () => {
   });
 
   it("returns undefined for empty, local-path, or malformed inputs", async () => {
-    const { repoIdentityFromUrl } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { repoIdentityFromUrl } = await importSource("extensions/ampi-history/git-identity.ts");
     assert.equal(repoIdentityFromUrl(""), undefined);
     assert.equal(repoIdentityFromUrl("   "), undefined);
     assert.equal(repoIdentityFromUrl("/local/repo/path"), undefined);
@@ -654,7 +654,7 @@ describe("mmr-history git-identity canonicalization", () => {
   });
 
   it("matchesRepoToken is case-insensitive and exact across aliases", async () => {
-    const { repoIdentityFromUrl, matchesRepoToken } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { repoIdentityFromUrl, matchesRepoToken } = await importSource("extensions/ampi-history/git-identity.ts");
     const id = repoIdentityFromUrl("git@github.com:Owner/Repo.git");
     assert.ok(matchesRepoToken(id, "Owner/Repo"));
     assert.ok(matchesRepoToken(id, "github.com/owner/repo"));
@@ -663,7 +663,7 @@ describe("mmr-history git-identity canonicalization", () => {
   });
 
   it("extractRemoteUrlFromGitConfig prefers origin and ignores other sections", async () => {
-    const { extractRemoteUrlFromGitConfig } = await importSource("extensions/mmr-history/git-identity.ts");
+    const { extractRemoteUrlFromGitConfig } = await importSource("extensions/ampi-history/git-identity.ts");
     const config = [
       "[core]",
       "\trepositoryformatversion = 0",
@@ -683,14 +683,14 @@ describe("mmr-history repo: filter (per-session)", () => {
       async resolve(cwd) {
         const url = map[cwd];
         if (!url) return undefined;
-        const { repoIdentityFromUrl } = await importSource("extensions/mmr-history/git-identity.ts");
+        const { repoIdentityFromUrl } = await importSource("extensions/ampi-history/git-identity.ts");
         return repoIdentityFromUrl(url);
       },
     };
   }
 
   it("matches sessions whose own project cwd canonicalizes to the queried alias", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo/owner-repo" })];
     const resolver = makeResolver({ "/repo/owner-repo": "git@github.com:owner/repo.git" });
 
@@ -706,7 +706,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("only returns the session whose own cwd matches when two projects are enumerated", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-a", cwd: "/repo/a", modified: new Date("2026-05-22T00:00:00Z") }),
       sessionInfo({ id: "S-b", cwd: "/repo/b", modified: new Date("2026-05-21T00:00:00Z") }),
@@ -726,7 +726,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("matches the host/owner/repo alias too", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo" })];
     const resolver = makeResolver({ "/repo": "https://github.com/owner/repo.git" });
 
@@ -740,7 +740,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("matches the credential-stripped URL alias even when query is credentialed", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo" })];
     const resolver = makeResolver({ "/repo": "https://user:token@github.com/owner/repo.git" });
 
@@ -757,7 +757,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("non-matching repo: returns zero matches with the filter still applied", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo" })];
     const resolver = makeResolver({ "/repo": "git@github.com:owner/repo.git" });
 
@@ -773,7 +773,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("repo: with NO candidate carrying a resolvable remote promotes to non_applicable", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo", allMessagesText: "history search" })];
     const resolver = makeResolver({}); // no remote for any cwd
 
@@ -790,7 +790,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("session with no remote does not match repo: but does not flip the diagnostic when another candidate resolves", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-noremote", cwd: "/repo/no-remote", modified: new Date("2026-05-22T00:00:00Z") }),
       sessionInfo({ id: "S-match", cwd: "/repo/owner-repo", modified: new Date("2026-05-21T00:00:00Z") }),
@@ -809,7 +809,7 @@ describe("mmr-history repo: filter (per-session)", () => {
   });
 
   it("multiple repo: tokens combine with implicit AND", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-1", cwd: "/repo" })];
     const resolver = makeResolver({ "/repo": "git@github.com:owner/repo.git" });
 
@@ -848,8 +848,8 @@ describe("mmr-history metadata and project filters", () => {
   }
 
   it("filters by model, provider, tool, label, and error/tool presence from session entries", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const { entriesA, entriesB } = makeIndexManagers();
     const sessions = [
       sessionInfo({ id: "S-a", path: "/tmp/a.jsonl", cwd: "/work/ampi-main", allMessagesText: "" }),
@@ -874,8 +874,8 @@ describe("mmr-history metadata and project filters", () => {
   });
 
   it("matches broader error signals for has:errors", async () => {
-    const { createSessionIndex } = await importSource("extensions/mmr-history/session-index.ts");
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { createSessionIndex } = await importSource("extensions/ampi-history/session-index.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-cancelled", allMessagesText: "" }),
       sessionInfo({ id: "S-stop", allMessagesText: "" }),
@@ -898,8 +898,8 @@ describe("mmr-history metadata and project filters", () => {
   });
 
   it("filters project/cwd internally without exposing raw paths, and supports projectRef lookup", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
-    const { projectRefFromCwd } = await importSource("extensions/mmr-history/redaction.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
+    const { projectRefFromCwd } = await importSource("extensions/ampi-history/redaction.ts");
     const sessions = [
       sessionInfo({ id: "S-main", cwd: "/home/me/projects/ampi", allMessagesText: "" }),
       sessionInfo({ id: "S-worktree", cwd: "/home/me/projects/ampi-history-filters", allMessagesText: "" }),
@@ -920,7 +920,7 @@ describe("mmr-history metadata and project filters", () => {
   });
 
   it("find_session tool keeps cwd/project query echoes private even when content redaction is off", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = [sessionInfo({ id: "S-main", cwd: "/home/me/projects/ampi", allMessagesText: "" })];
     const tool = createFindSessionTool({
       getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 4_000, redactionEnabled: false }),
@@ -937,7 +937,7 @@ describe("mmr-history metadata and project filters", () => {
   });
 
   it("reports metadata filters as non_applicable when no session index can inspect entries", async () => {
-    const { searchSessionsWithDiagnostics } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [sessionInfo({ id: "S-a", allMessagesText: "" })];
 
     const { matches, queryDiagnostics } = await searchSessionsWithDiagnostics(
@@ -956,7 +956,7 @@ describe("mmr-history metadata and project filters", () => {
 describe("mmr-history read_session", () => {
   it("extracts goal-focused excerpts from the active session context", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
-    const { readSessionForGoal } = await importSource("extensions/mmr-history/read-session.ts");
+    const { readSessionForGoal } = await importSource("extensions/ampi-history/read-session.ts");
     const manager = SessionManager.inMemory("/repo");
     manager.appendMessage({ role: "user", content: "We need a query parser for session history." });
     manager.appendMessage({ role: "assistant", content: "Use lexical excerpts first and keep paths private." });
@@ -975,7 +975,7 @@ describe("mmr-history read_session", () => {
   });
 
   it("resolveSessionById finds a session whose cwd is different from the active workspace", async () => {
-    const { resolveSessionById } = await importSource("extensions/mmr-history/session-catalog.ts");
+    const { resolveSessionById } = await importSource("extensions/ampi-history/session-catalog.ts");
     const sessions = [
       sessionInfo({ id: "S-here", cwd: "/repo/here" }),
       sessionInfo({ id: "S-elsewhere", cwd: "/repo/elsewhere" }),
@@ -988,7 +988,7 @@ describe("mmr-history read_session", () => {
   });
 
   it("tool resolves a unique session prefix and rejects ambiguous prefixes", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = [sessionInfo({ id: "abc123" }), sessionInfo({ id: "abc999" })];
     const deps = {
       getSettings: () => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000 }),
@@ -1008,7 +1008,7 @@ describe("mmr-history read_session", () => {
 
 describe("mmr-history extension registration", () => {
   it("keeps tools unregistered while the privacy gate is disabled", async () => {
-    const { createMmrHistoryExtension } = await importSource("extensions/mmr-history/index.ts");
+    const { createMmrHistoryExtension } = await importSource("extensions/ampi-history/index.ts");
     const registered = [];
     const pi = {
       registerTool(tool) { registered.push(tool.name); },
@@ -1020,7 +1020,7 @@ describe("mmr-history extension registration", () => {
   });
 
   it("registers only the canonical session tool names when enabled", async () => {
-    const { createMmrHistoryExtension } = await importSource("extensions/mmr-history/index.ts");
+    const { createMmrHistoryExtension } = await importSource("extensions/ampi-history/index.ts");
     const registered = [];
     const pi = {
       registerTool(tool) { registered.push(tool.name); },
@@ -1042,7 +1042,7 @@ describe("mmr-history extension registration", () => {
   });
 
   it("mmr-history provider does not claim the legacy thread aliases", async () => {
-    const { createMmrHistoryToolProvider } = await importSource("extensions/mmr-history/provider.ts");
+    const { createMmrHistoryToolProvider } = await importSource("extensions/ampi-history/provider.ts");
     const provider = createMmrHistoryToolProvider(() => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000 }));
     assert.ok(provider.resolve("find_session"));
     assert.ok(provider.resolve("read_session"));
@@ -1053,7 +1053,7 @@ describe("mmr-history extension registration", () => {
 
 describe("mmr-history shared SessionIndex (cache reuse)", () => {
   it("createDefaultMmrHistoryToolDeps exposes a shared sessionIndex", async () => {
-    const { createDefaultMmrHistoryToolDeps } = await importSource("extensions/mmr-history/tools.ts");
+    const { createDefaultMmrHistoryToolDeps } = await importSource("extensions/ampi-history/tools.ts");
     const deps = createDefaultMmrHistoryToolDeps(() => ({ enabled: true, maxResults: 10, maxExcerptBytes: 10_000 }));
     assert.ok(deps.sessionIndex, "default deps must carry a sessionIndex");
     assert.equal(typeof deps.sessionIndex.list, "function");
@@ -1061,7 +1061,7 @@ describe("mmr-history shared SessionIndex (cache reuse)", () => {
   });
 
   it("find_session routes through the shared sessionIndex instead of calling deps.listSessions directly", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const sessions = [sessionInfo({ id: "S-1", allMessagesText: "auth work" })];
     let listCalls = 0;
     let indexListCalls = 0;
@@ -1091,7 +1091,7 @@ describe("mmr-history shared SessionIndex (cache reuse)", () => {
   });
 
   it("read_session routes through the shared sessionIndex when resolving by id prefix", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");
     const sessions = [sessionInfo({ id: "abc123" })];
     let listCalls = 0;

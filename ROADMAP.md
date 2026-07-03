@@ -42,7 +42,7 @@ mode → model/thinking → active tools → prompt route → diagnostics
 
 1. **Complete the visible rebrand.** Add `/ampi-*` command aliases, `AMPI_*` env aliases, docs for both old and new identifiers, and first-class `./extensions/ampi-*` API docs while preserving existing `/mmr-*` compatibility.
 2. **Keep AMP parity explicit.** Keep the root README, [`docs/README.md`](docs/README.md), and [`docs/quick-reference.md`](docs/quick-reference.md) aligned with the shipped tool/subagent surface and parity gaps.
-3. **Mode/fallback explainability.** Expand `/mmr-status debug` with deterministic mode/fallback event history, not prompt classification or hidden routing.
+3. **Mode/fallback explainability.** Expand `/ampi-status debug` with deterministic mode/fallback event history, not prompt classification or hidden routing.
 4. **Background-worker polish.** Add richer metadata to the live task board and grouped completion notifications.
 5. **History and web ergonomics.** Add a session browser, smarter large-session windowing, and stored content/result IDs without weakening redaction or SSRF protections.
 6. **Custom subagent hardening.** Continue tightening setup/import diagnostics, safe defaults, and fixtures for `sa__*` tools.

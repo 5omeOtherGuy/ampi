@@ -10,7 +10,7 @@
  *   - the on-disk `src/extensions/*` directory set,
  *   - the subagent child keep-set (`MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS`),
  *   - the planned-tool catalog (`MMR_PLANNED_TOOL_CATALOG`),
- *   - the `mmr-core` -> sibling import direction.
+ *   - the `ampi-core` -> sibling import direction.
  *
  * It is intentionally dependency-free pure data so it can be imported in
  * isolation. As the greenfield extension split proceeds, each chunk updates the
@@ -37,7 +37,7 @@ export type MmrExtensionRiskClass =
 
 /**
  * Role this extension plays in subagent child-process scoping.
- *  - substrate    : always kept (owns the `--mmr-subagent` activation guard).
+ *  - substrate    : always kept (owns the `--ampi-subagent` activation guard).
  *  - worker-owner : registers subagent worker tools/profiles.
  *  - worker-dep   : owns tools a worker keep-set depends on.
  *  - none         : not part of any child keep-set.
@@ -66,15 +66,15 @@ export interface MmrExtensionManifestEntry {
 }
 
 /**
- * Current-state manifest. Reflects the pre-greenfield-split topology:
- * `mmr-toolbox` and `mmr-subagents` are still single aggregate extensions.
+ * Current canonical manifest. Compatibility aliases remain listed only where
+ * external callers can still import or query the old `mmr-*` identifiers.
  */
 export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Object.freeze([
   {
-    name: "mmr-core",
-    entrypoint: "./src/extensions/mmr-core/index.ts",
-    exportSubpath: "./extensions/mmr-core",
-    exportAliases: ["./extensions/ampi-core"],
+    name: "ampi-core",
+    entrypoint: "./src/extensions/ampi-core/index.ts",
+    exportSubpath: "./extensions/ampi-core",
+    exportAliases: ["./extensions/mmr-core"],
     autoLoaded: true,
     tools: [],
     dynamicTools: false,
@@ -83,10 +83,10 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "substrate",
   },
   {
-    name: "mmr-session-fallback",
-    entrypoint: "./src/extensions/mmr-session-fallback/index.ts",
-    exportSubpath: "./extensions/mmr-session-fallback",
-    exportAliases: ["./extensions/ampi-session-fallback"],
+    name: "ampi-session-fallback",
+    entrypoint: "./src/extensions/ampi-session-fallback/index.ts",
+    exportSubpath: "./extensions/ampi-session-fallback",
+    exportAliases: ["./extensions/mmr-session-fallback"],
     autoLoaded: true,
     tools: [],
     dynamicTools: false,
@@ -95,10 +95,10 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "none",
   },
   {
-    name: "mmr-patch",
-    entrypoint: "./src/extensions/mmr-patch/index.ts",
-    exportSubpath: "./extensions/mmr-patch",
-    exportAliases: ["./extensions/ampi-patch"],
+    name: "ampi-patch",
+    entrypoint: "./src/extensions/ampi-patch/index.ts",
+    exportSubpath: "./extensions/ampi-patch",
+    exportAliases: ["./extensions/mmr-patch"],
     autoLoaded: true,
     tools: ["apply_patch"],
     dynamicTools: false,
@@ -107,10 +107,10 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "none",
   },
   {
-    name: "mmr-tasks",
-    entrypoint: "./src/extensions/mmr-tasks/index.ts",
-    exportSubpath: "./extensions/mmr-tasks",
-    exportAliases: ["./extensions/ampi-tasks"],
+    name: "ampi-tasks",
+    entrypoint: "./src/extensions/ampi-tasks/index.ts",
+    exportSubpath: "./extensions/ampi-tasks",
+    exportAliases: ["./extensions/mmr-tasks"],
     autoLoaded: true,
     tools: ["task_list"],
     dynamicTools: false,
@@ -119,12 +119,12 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "worker-dep",
   },
   {
-    // Deprecated compatibility shim: split into mmr-patch + mmr-tasks. Not
+    // Deprecated compatibility shim: split into ampi-patch + ampi-tasks. Not
     // auto-loaded; re-exports the former `./extensions/mmr-toolbox` surface.
-    name: "mmr-toolbox",
-    entrypoint: "./src/extensions/mmr-toolbox/index.ts",
-    exportSubpath: "./extensions/mmr-toolbox",
-    exportAliases: ["./extensions/ampi-toolbox"],
+    name: "ampi-toolbox",
+    entrypoint: "./src/extensions/ampi-toolbox/index.ts",
+    exportSubpath: "./extensions/ampi-toolbox",
+    exportAliases: ["./extensions/mmr-toolbox"],
     autoLoaded: false,
     tools: [],
     dynamicTools: false,
@@ -133,22 +133,22 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "none",
   },
   {
-    name: "mmr-web",
-    entrypoint: "./src/extensions/mmr-web/index.ts",
-    exportSubpath: "./extensions/mmr-web",
-    exportAliases: ["./extensions/ampi-web"],
+    name: "ampi-web",
+    entrypoint: "./src/extensions/ampi-web/index.ts",
+    exportSubpath: "./extensions/ampi-web",
+    exportAliases: ["./extensions/mmr-web"],
     autoLoaded: true,
     tools: ["web_search", "read_web_page"],
     dynamicTools: false,
-    featureGates: ["mmr-web"],
+    featureGates: ["ampi-web", "mmr-web"],
     riskClass: "network",
     childRole: "worker-dep",
   },
   {
-    name: "mmr-github",
-    entrypoint: "./src/extensions/mmr-github/index.ts",
-    exportSubpath: "./extensions/mmr-github",
-    exportAliases: ["./extensions/ampi-github"],
+    name: "ampi-github",
+    entrypoint: "./src/extensions/ampi-github/index.ts",
+    exportSubpath: "./extensions/ampi-github",
+    exportAliases: ["./extensions/mmr-github"],
     autoLoaded: true,
     tools: [
       "read_github",
@@ -160,15 +160,15 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
       "list_repositories",
     ],
     dynamicTools: false,
-    featureGates: ["mmr-github"],
+    featureGates: ["ampi-github", "mmr-github"],
     riskClass: "remote-repo",
     childRole: "worker-dep",
   },
   {
-    name: "mmr-workers",
-    entrypoint: "./src/extensions/mmr-workers/index.ts",
-    exportSubpath: "./extensions/mmr-workers",
-    exportAliases: ["./extensions/ampi-workers"],
+    name: "ampi-workers",
+    entrypoint: "./src/extensions/ampi-workers/index.ts",
+    exportSubpath: "./extensions/ampi-workers",
+    exportAliases: ["./extensions/mmr-workers"],
     autoLoaded: true,
     tools: [
       "finder",
@@ -183,37 +183,46 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     ],
     dynamicTools: false,
     // One unified gate; the pre-merge ids stay accepted aliases.
-    featureGates: ["mmr-workers", "mmr-subagents", "mmr-async-tasks", "mmr-subagents.async-tasks"],
+    featureGates: [
+      "ampi-workers",
+      "ampi-subagents",
+      "ampi-async-tasks",
+      "ampi-subagents.async-tasks",
+      "mmr-workers",
+      "mmr-subagents",
+      "mmr-async-tasks",
+      "mmr-subagents.async-tasks",
+    ],
     riskClass: "subprocess",
     childRole: "worker-owner",
   },
   {
-    name: "mmr-custom-subagents",
-    entrypoint: "./src/extensions/mmr-custom-subagents/index.ts",
-    exportSubpath: "./extensions/mmr-custom-subagents",
-    exportAliases: ["./extensions/ampi-custom-subagents"],
+    name: "ampi-custom-subagents",
+    entrypoint: "./src/extensions/ampi-custom-subagents/index.ts",
+    exportSubpath: "./extensions/ampi-custom-subagents",
+    exportAliases: ["./extensions/mmr-custom-subagents"],
     autoLoaded: true,
     tools: [],
     dynamicTools: true,
-    featureGates: ["mmr-custom-subagents"],
+    featureGates: ["ampi-custom-subagents", "mmr-custom-subagents"],
     riskClass: "subprocess",
     childRole: "worker-owner",
   },
   {
-    name: "mmr-history",
-    entrypoint: "./src/extensions/mmr-history/index.ts",
-    exportSubpath: "./extensions/mmr-history",
-    exportAliases: ["./extensions/ampi-history"],
+    name: "ampi-history",
+    entrypoint: "./src/extensions/ampi-history/index.ts",
+    exportSubpath: "./extensions/ampi-history",
+    exportAliases: ["./extensions/mmr-history"],
     autoLoaded: true,
     tools: ["read_session", "find_session"],
     dynamicTools: false,
-    featureGates: ["mmr-history"],
+    featureGates: ["ampi-history", "mmr-history"],
     riskClass: "session-data",
     childRole: "worker-dep",
   },
   {
-    name: "mmr-debug",
-    entrypoint: "./src/extensions/mmr-debug/index.ts",
+    name: "ampi-debug",
+    entrypoint: "./src/extensions/ampi-debug/index.ts",
     exportSubpath: null,
     autoLoaded: false,
     tools: [],
@@ -225,20 +234,21 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
 ]);
 
 /**
- * Known `mmr-core` -> sibling-extension imports that currently violate the
+ * Known `ampi-core` -> sibling-extension imports that currently violate the
  * "core depends on no sibling" invariant. The dependency-direction guardrail
  * asserts core imports no sibling OUTSIDE this set, so new couplings fail while
  * these documented ones are driven to zero by later chunks:
  *
- * The set is now empty: `mmr-core` imports no sibling extension. Sibling
+ * The set is now empty: `ampi-core` imports no sibling extension. Sibling
  * extensions invert the former couplings by registering into core-owned
  * registries instead:
- *  - `/mmr-config` sections   -> `registerMmrConfigFlowSection` (was direct
- *    imports of `mmr-web`/`mmr-custom-subagents` config flows).
+ *  - `/ampi-config` and `/ampi-config` sections ->
+ *    `registerMmrConfigFlowSection` (was direct imports of web/custom-subagent
+ *    config flows).
  *  - subagent owned-tool gates -> `registerMmrOwnedToolSourcePath` +
- *    profile `requiredOwnedTools` (was a direct import of `mmr-github`).
+ *    profile `requiredOwnedTools` (was a direct import of GitHub ownership).
  *
- * Keep it empty: the architecture guardrail test fails if any `mmr-core`
+ * Keep it empty: the architecture guardrail test fails if any `ampi-core`
  * module imports a sibling extension that is not listed here.
  */
 export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([]);

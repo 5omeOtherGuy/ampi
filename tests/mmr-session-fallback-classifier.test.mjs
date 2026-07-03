@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-session-fallback quota classifier", () => {
   it("prompts for subscription usage-limit messages", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     const result = classifyMmrSessionFallbackError({
       provider: "openai-codex",
@@ -20,7 +20,7 @@ describe("mmr-session-fallback quota classifier", () => {
   });
 
   it("marks transient conditions retryable and hard quotas not retryable", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "rate_limit_error: 429" }).retryable, true);
     assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "overloaded_error: try again" }).retryable, true);
@@ -31,7 +31,7 @@ describe("mmr-session-fallback quota classifier", () => {
   });
 
   it("prompts for claude-subscription rate limits and for a persistent overload", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     assert.equal(classifyMmrSessionFallbackError({ provider: "claude-subscription", errorMessage: "rate_limit_error: 429" }).shouldPrompt, true);
     // Overload reaches message_end only after Pi's auto-retry is exhausted, so a
@@ -45,7 +45,7 @@ describe("mmr-session-fallback quota classifier", () => {
   });
 
   it("treats minimalcc-pi silent 200 stream stalls as Anthropic overload", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     const result = classifyMmrSessionFallbackError({
       provider: "claude-subscription",
@@ -63,7 +63,7 @@ describe("mmr-session-fallback quota classifier", () => {
   });
 
   it("recognizes OpenAI Codex rate-limit variants", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     for (const errorMessage of [
       "rate_limit_error: please slow down",
@@ -80,7 +80,7 @@ describe("mmr-session-fallback quota classifier", () => {
   });
 
   it("leaves generic API-key 429s to Pi retry unless the message is a hard quota", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     assert.equal(classifyMmrSessionFallbackError({ provider: "anthropic", errorMessage: "HTTP 429 rate limit" }).shouldPrompt, false);
     assert.equal(classifyMmrSessionFallbackError({ provider: "openai", errorMessage: "insufficient_quota: billing quota exceeded" }).shouldPrompt, true);
@@ -91,7 +91,7 @@ describe("mmr-session-fallback quota classifier", () => {
   // not. Guards against an accidental edit to the canonical id list shared via
   // isMmrSubscriptionProvider.
   it("prompts on rate limits for every subscription provider but not for API providers", async () => {
-    const { classifyMmrSessionFallbackError } = await importSource("extensions/mmr-session-fallback/classifier.ts");
+    const { classifyMmrSessionFallbackError } = await importSource("extensions/ampi-session-fallback/classifier.ts");
 
     for (const provider of ["claude-subscription", "openai-codex", "github-copilot"]) {
       const result = classifyMmrSessionFallbackError({ provider, errorMessage: "please slow down: rate limit" });

@@ -82,7 +82,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
   let assembleActiveSurface;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const assembly = await importSource("extensions/ampi-core/prompt-assembly.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
   });
 

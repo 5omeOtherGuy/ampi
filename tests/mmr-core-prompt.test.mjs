@@ -65,7 +65,7 @@ function repeatedLongInstructionLines(prompt) {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -87,7 +87,7 @@ function buildExtensionStub(handlers) {
 
 describe("mmr-core prompt layer", () => {
   it("renders each mode prompt against the fixture base prompt and matches its snapshot", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode, displayName: mode[0].toUpperCase() + mode.slice(1) });
@@ -98,8 +98,8 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("emits the shared tool-use posture only once per locked-mode prompt", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
-    const { MMR_TOOL_USE_POSTURE_LINE } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
+    const { MMR_TOOL_USE_POSTURE_LINE } = await importSource("extensions/ampi-core/prompt-assembly.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode, displayName: mode[0].toUpperCase() + mode.slice(1) });
@@ -113,7 +113,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not duplicate long instruction lines in locked-mode prompts", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode, displayName: mode[0].toUpperCase() + mode.slice(1) });
@@ -127,7 +127,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not duplicate shared guidance when reassembling an already MMR-rewritten prompt", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode, displayName: mode[0].toUpperCase() + mode.slice(1) });
@@ -142,7 +142,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("limits MMR-owned XML-style markers to the initial mode role marker", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const forbiddenMarkers = [
       "<smart>",
       "</smart>",
@@ -198,7 +198,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("instructs raw diagram output without diagram code fences (rush omits the diagrams fragment)", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const diagramSentence =
       "When a picture beats prose for architecture, flow, state, or relationships, draw it with box-drawing characters";
 
@@ -217,7 +217,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("embeds Pi's Available tools list verbatim under the Tool use heading for every mode", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const expectedToolsBlock = [
       "Available tools:",
       "- read: Read file contents",
@@ -243,7 +243,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves Pi-emitted registered-tool snippets and guidelines in the mode prompt", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const registeredToolLines = [
       "- apply_patch: Apply a Codex-format patch to workspace files",
       "- web_search: Search the public web through Brave Search for a research objective",
@@ -282,7 +282,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("embeds the Pi Guidelines block under the Tool use heading and passes every Pi-authored bullet through verbatim", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     // Phase D policy: never edit Pi-authored blocks. The two bullets that
     // earlier versions stripped now pass through alongside the rest.
     const allBullets = [
@@ -309,7 +309,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves the Pi tail (Project Context, skills, date, cwd) verbatim from the boundary onward", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const tailStartIdx = BASE_PROMPT.indexOf("# Project Context");
     const expectedTail = BASE_PROMPT.slice(tailStartIdx);
 
@@ -321,7 +321,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not duplicate the Available tools or Guidelines blocks", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode });
@@ -334,7 +334,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not emit legacy MMR markers or generated routing/policy sections", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const forbidden = [
       "<!-- mmr-core",
       "## MMR routing context",
@@ -356,14 +356,14 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("returns Pi's prompt unchanged in free mode", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const state = createState({ mode: "free", displayName: "Free", promptRoute: "default" });
     const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
     assert.equal(result, BASE_PROMPT);
   });
 
   it("returns Pi's prompt unchanged when boundary anchors are missing", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const customPrompt = "You are a custom assistant.\n\nNo Pi-style sections here.";
     const state = createState({ mode: "smart" });
     const result = buildMmrPromptLayer({ state, baseSystemPrompt: customPrompt });
@@ -371,7 +371,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not emit an MMR prompt block while free mode is active in before_agent_start", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
     runtime.setMmrModeState(createState({ mode: "free", displayName: "Free", promptRoute: "default" }));
@@ -386,7 +386,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("returns the new system prompt from before_agent_start when mode rewrites Pi's prompt", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
     runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", thinkingLevel: "xhigh" }));
@@ -405,7 +405,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("records and then clears a tool-selection mismatch on the live mode state across turns", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
     runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "bash"] }));
@@ -430,7 +430,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("drives built-in tool guidance from the prompt's tool selection, not the rendered tools block", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
     runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "grep"] }));
@@ -453,7 +453,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves Pi's appendSystemPrompt content inserted between the Pi docs block and the tail", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const piDocsEnd = BASE_PROMPT.indexOf("# Project Context");
     const beforeTail = BASE_PROMPT.slice(0, piDocsEnd);
     const tail = BASE_PROMPT.slice(piDocsEnd);
@@ -472,7 +472,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves content prepended by earlier extension handlers before Pi's identity line", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const PREPENDED = "<!-- earlier-extension:start -->\nEARLIER EXTENSION HEADER\n<!-- earlier-extension:end -->\n\n";
     const promptWithPrepend = `${PREPENDED}${BASE_PROMPT}`;
 
@@ -486,7 +486,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves content appended by extensions after Pi's tail", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const APPENDED = "\n\n<!-- footer-extension -->\nFOOTER EXTENSION CONTENT";
     const promptWithAppend = `${BASE_PROMPT}${APPENDED}`;
 
@@ -498,7 +498,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("preserves Current date and Current working directory when Pi omits the blank line before them (no append, no context, no skills)", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     // Pi attaches `\nCurrent date:` directly to the last Pi docs bullet (single \n) when there
     // is no appendSystemPrompt, no context files, and no skills.
     const minimalBase = [
@@ -540,7 +540,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("ignores prepended Available tools / Guidelines / Pi documentation sections that come before Pi's identity line", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const PREPENDED = [
       "EARLIER EXTENSION HEADER",
       "",
@@ -582,7 +582,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("passes prompt through unchanged when Pi auto-section order is invalid", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const corrupted = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users.",
       "",
@@ -611,7 +611,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not treat 'Pi documentation' inside a guideline bullet as the Pi docs header", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     // The Pi guideline body contains the literal substring `Pi documentation`. The parser must
     // anchor to the line-start `\n\nPi documentation (` instead of the substring.
     const baseWithPoisonGuideline = [
@@ -659,7 +659,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("does not treat 'Available tools:' or 'Guidelines:' substrings inside guideline bodies as auto-section headers", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const baseWithSubstringPoisons = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users.",
       "",
@@ -706,7 +706,7 @@ describe("mmr-core prompt layer", () => {
   });
 
   it("never includes future tool advertisements from templates (no static tool name lists from mode templates)", async () => {
-    const { buildMmrPromptLayer } = await importSource("extensions/mmr-core/prompt.ts");
+    const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const futureToolNames = [
       "finder",
       "oracle",

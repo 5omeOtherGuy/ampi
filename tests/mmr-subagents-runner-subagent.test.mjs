@@ -36,7 +36,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
 
 class MockProcess extends EventEmitter {
   constructor() {
@@ -86,7 +86,7 @@ describe("runMmrSubagentWorker — public API", () => {
 });
 
 describe("runMmrSubagentWorker — invocation shape", () => {
-  it("builds --mmr-subagent <profile> args and forwards parent mode, model, and tools", async () => {
+  it("builds --ampi-subagent <profile> args and forwards parent mode, model, and tools", async () => {
     const { runMmrSubagentWorker } = await importSource(RUNNER_MODULE);
     const { spawn, calls } = makeSpawnMock();
     const promise = runMmrSubagentWorker(
@@ -110,9 +110,9 @@ describe("runMmrSubagentWorker — invocation shape", () => {
       "json",
       "-p",
       "--no-session",
-      "--mmr-subagent",
+      "--ampi-subagent",
       "task-subagent",
-      "--mmr-parent-mode",
+      "--ampi-parent-mode",
       "rush",
       "--model",
       "openai-codex/gpt-5.4-mini",
@@ -155,7 +155,7 @@ describe("runMmrSubagentWorker — invocation shape", () => {
     await promise;
     assert.equal(calls[0].args.includes("--model"), false);
     assert.equal(calls[0].args.includes("--tools"), false);
-    assert.ok(calls[0].args.includes("--mmr-subagent"));
+    assert.ok(calls[0].args.includes("--ampi-subagent"));
     assert.ok(calls[0].args.includes("finder"));
   });
 });

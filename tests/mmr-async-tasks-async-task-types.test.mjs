@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TYPES_MODULE = "extensions/mmr-workers/async-task-types.ts";
-const REGISTRY_MODULE = "extensions/mmr-workers/async-task-registry.ts";
+const TYPES_MODULE = "extensions/ampi-workers/async-task-types.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
 
 after(cleanupLoadedSource);
 

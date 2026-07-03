@@ -17,7 +17,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-core/subagent-profiles.ts";
+const MODULE = "extensions/ampi-core/subagent-profiles.ts";
 
 describe("mmr-core subagent profile registry", () => {
   it("exposes a 'finder' profile with the canonical execution policy", async () => {

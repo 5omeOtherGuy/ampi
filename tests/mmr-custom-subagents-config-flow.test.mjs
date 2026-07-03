@@ -5,7 +5,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-custom-subagents/config-flow.ts";
+const MODULE = "extensions/ampi-custom-subagents/config-flow.ts";
 
 describe("mmr-subagents config-flow pure helpers", () => {
   it("derives a stable record id slug from a display name", async () => {

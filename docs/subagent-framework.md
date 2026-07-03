@@ -1,8 +1,8 @@
 # Subagent framework
 
-**Audience.** Maintainers adding or changing subagents in `mmr-subagents`, or extension authors implementing the subagent contracts owned by `mmr-core`.
+**Audience.** Maintainers adding or changing subagents in `ampi-workers`, or extension authors implementing the subagent contracts owned by `ampi-core`.
 
-**Related.** Concrete subagents: [`../src/extensions/mmr-workers/README.md`](../src/extensions/mmr-workers/README.md). Profile/registry surface: [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
+**Related.** Concrete subagents: [`../src/extensions/ampi-workers/README.md`](../src/extensions/ampi-workers/README.md). Profile/registry surface: [`ampi-core-api.md`](./ampi-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
 `ampi` separates the subagent framework from concrete subagents.
 
@@ -24,12 +24,12 @@ model policy, result mapping, and capability flags.
 - `Task` delegates bounded implementation or investigation work through a
   mode-derived worker prompt.
 - `librarian` researches remote repositories with the read-only GitHub
-  repository tools owned by `mmr-github` (`read_github`,
+  repository tools owned by `ampi-github` (`read_github`,
   `list_directory_github`, `glob_github`, `search_github`, `commit_search`,
   `diff_github`, `list_repositories`). It stays provider-gated until those
-  tools are registered and source-owned by `mmr-github`, and reports the gate
-  as `librarian: requires mmr-github read-only GitHub tools (set
-  MMR_GITHUB_ENABLE=true).` The GitHub tools are registered globally but are
+  tools are registered and source-owned by `ampi-github`, and reports the gate
+  as `librarian: requires ampi-github read-only GitHub tools (set
+  AMPI_GITHUB_ENABLE=true or legacy MMR_GITHUB_ENABLE=true).` The GitHub tools are registered globally but are
   not part of any user-facing mode's active set; the librarian worker
   activates them by name through its profile allowlist, so the parent gate
   checks registration + source ownership rather than parent-active state.
@@ -60,7 +60,7 @@ current child-process runner enforces it.
 Standalone profiles resolve a registered prompt builder and use that builder's
 output as the entire worker system prompt.
 
-Mode-derived profiles reuse an MMR mode prompt surface, replace the inherited
+Mode-derived profiles reuse an ampi mode prompt surface, replace the inherited
 `Available tools:` block with one rendered from the filtered worker manifest,
 and append a worker-role block from the registered prompt builder. Profiles can
 pin a concrete base mode or set `baseMode: "from-parent"`. The latter requires
@@ -72,7 +72,7 @@ before it is surfaced to the worker prompt renderer.
 
 ## Custom file-defined subagents
 
-`mmr-subagents/custom-loader.ts` provides discovery and parsing for Markdown
+`ampi-custom-subagents/custom-loader.ts` provides discovery and parsing for Markdown
 subagent definitions without auto-registering them at extension startup.
 
 The loader:

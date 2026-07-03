@@ -9,7 +9,7 @@ describe("mmr-session-fallback sustained-transient escalation", () => {
     const {
       isMmrSessionFallbackTransientSustained,
       nextMmrSessionFallbackTransientState,
-    } = await importSource("extensions/mmr-session-fallback/escalation.ts");
+    } = await importSource("extensions/ampi-session-fallback/escalation.ts");
 
     const state = nextMmrSessionFallbackTransientState(undefined, 1_000);
     assert.deepEqual(state, { count: 1, lastAt: 1_000 });
@@ -21,7 +21,7 @@ describe("mmr-session-fallback sustained-transient escalation", () => {
       MMR_SESSION_FALLBACK_SUSTAINED_WINDOW_MS,
       isMmrSessionFallbackTransientSustained,
       nextMmrSessionFallbackTransientState,
-    } = await importSource("extensions/mmr-session-fallback/escalation.ts");
+    } = await importSource("extensions/ampi-session-fallback/escalation.ts");
 
     const first = nextMmrSessionFallbackTransientState(undefined, 1_000);
     const second = nextMmrSessionFallbackTransientState(first, 1_000 + MMR_SESSION_FALLBACK_SUSTAINED_WINDOW_MS);
@@ -34,7 +34,7 @@ describe("mmr-session-fallback sustained-transient escalation", () => {
       MMR_SESSION_FALLBACK_SUSTAINED_WINDOW_MS,
       isMmrSessionFallbackTransientSustained,
       nextMmrSessionFallbackTransientState,
-    } = await importSource("extensions/mmr-session-fallback/escalation.ts");
+    } = await importSource("extensions/ampi-session-fallback/escalation.ts");
 
     const first = nextMmrSessionFallbackTransientState(undefined, 1_000);
     const late = nextMmrSessionFallbackTransientState(first, 1_001 + MMR_SESSION_FALLBACK_SUSTAINED_WINDOW_MS);

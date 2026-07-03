@@ -1,27 +1,27 @@
 # Prompt provenance
 
-**Audience.** Anyone reviewing `mmr-core` mode prompts, subagent prompts, or tool descriptions. Confirms what is `ampi`-authored and what is preserved from Pi or other sources.
+**Audience.** Anyone reviewing `ampi-core` mode prompts, subagent prompts, or tool descriptions. Confirms what is `ampi`-authored and what is preserved from Pi or other sources.
 
-**Related.** Prompt assembly contract: [`mmr-core-api.md`](./mmr-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
+**Related.** Prompt assembly contract: [`ampi-core-api.md`](./ampi-core-api.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
-`mmr-core` per-mode prompt text in this package is `ampi`-authored. No raw third-party prompt material is copied into the repository; prompt content is restated as `ampi`-owned guidance.
+`ampi-core` per-mode prompt text in this package is `ampi`-authored. No raw third-party prompt material is copied into the repository; prompt content is restated as `ampi`-owned guidance.
 
-## What `mmr-core` writes to the system prompt
+## What `ampi-core` writes to the system prompt
 
-- `smart`, `fable`, `rush`, and `deep` each use an ampi-authored mode template (intro, posture sections, closing line) in `src/extensions/mmr-core/prompt-content.ts` (re-exported by the `prompt-templates.ts` compatibility shim).
+- `smart`, `fable`, `rush`, and `deep` each use an ampi-authored mode template (intro, posture sections, closing line) in `src/extensions/ampi-core/prompt-content.ts` (re-exported by the `prompt-templates.ts` compatibility shim).
 - `rush` and `deep` intentionally carry different posture sections from `smart` rather than sharing one generic prompt.
 - `rush` uses low-latency, targeted-work guidance.
 - `deep` uses deliberate-investigation guidance with an explicit `## Diagnostic gate` Markdown section.
-- Mode/tool/policy state (active/missing/deferred tools, configured fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/mmr-status`, activation warnings, and the status bar.
+- Mode/tool/policy state (active/missing/deferred tools, configured fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/ampi-status`, activation warnings, and the status bar.
 
 ## How the rewrite is scoped
 
-- For each prompted locked-mode turn, `mmr-core` surgically replaces only Pi's auto-rendered head (identity line through the `Pi documentation` block) with the active mode prompt.
+- For each prompted locked-mode turn, `ampi-core` surgically replaces only Pi's auto-rendered head (identity line through the `Pi documentation` block) with the active mode prompt.
 - The only ampi-owned XML-style marker is the initial one-line role marker (`<mmr_mode name="smart">...</mmr_mode>`); mode sections use Markdown headings.
 - Pi's auto-rendered `Available tools:` block is embedded verbatim under `## Tool use`.
 - Pi's auto-rendered `Guidelines:` block is embedded under `## Tool use` with the two unconditional Pi bullets (`Be concise in your responses`, `Show file paths clearly when working with files`) stripped because the mode prompt covers them.
 - Everything outside the auto-rendered head is preserved byte-for-byte: content prepended by earlier `before_agent_start` handlers, Pi's `appendSystemPrompt` (`--append-system-prompt` / `APPEND_SYSTEM.md`), `# Project Context` / AGENTS.md, `<available_skills>`, the future subagents block, `Current date:`, `Current working directory:`, and any extension content appended after the tail.
-- When the auto head cannot be located (user-supplied `--system-prompt` / `SYSTEM.md`, or unexpected layout), `mmr-core` passes Pi's prompt through unchanged. The same applies in `free` mode.
+- When the auto head cannot be located (user-supplied `--system-prompt` / `SYSTEM.md`, or unexpected layout), `ampi-core` passes Pi's prompt through unchanged. The same applies in `free` mode.
 
 ## Non-goals
 

@@ -8,10 +8,10 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 // tool-call signal adapted to task cancellation; blocking runs appear on the
 // task board (cap-exempt, never deduplicated, no watchdog).
 
-const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
-const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
-const REGISTRY_MODULE = "extensions/mmr-workers/async-task-registry.ts";
-const TOOLS_MODULE = "extensions/mmr-workers/async-task-tools.ts";
+const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
+const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
 
 after(cleanupLoadedSource);
 
@@ -103,7 +103,7 @@ describe("blocking runs register in the async-task registry", () => {
     const result = await pending;
     const snapshot = registry.getTask("S", "b1");
     assert.equal(result, snapshot.finalToolResult, "blocking result IS the registry's materialized finalToolResult");
-    assert.equal(result.details.worker, "mmr-subagents.finder");
+    assert.equal(result.details.worker, "ampi-workers.finder");
     assert.equal(result.details.status, "success");
     // Renderer-only board reference (never in model content).
     assert.equal(result.details.sessionKey, "S");

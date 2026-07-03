@@ -59,8 +59,8 @@ describe("Phase D: assembleActiveSurface() public API", () => {
   let buildMmrPromptLayer;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
-    const prompt = await importSource("extensions/mmr-core/prompt.ts");
+    const assembly = await importSource("extensions/ampi-core/prompt-assembly.ts");
+    const prompt = await importSource("extensions/ampi-core/prompt.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
     buildMmrPromptLayer = prompt.buildMmrPromptLayer;
   });
@@ -116,7 +116,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
     });
 
     it(`emits rendered block kinds equal to the active recipe fragment list for ${mode}`, async () => {
-      const { MMR_MODE_PROMPT_RECIPES } = await importSource("extensions/mmr-core/prompt-registry.ts");
+      const { MMR_MODE_PROMPT_RECIPES } = await importSource("extensions/ampi-core/prompt-registry.ts");
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -244,7 +244,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
   }
 
   it("keeps planned-tool names and summaries out of shared guidance blocks", async () => {
-    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/mmr-core/planned-catalog.ts");
+    const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/ampi-core/planned-catalog.ts");
     for (const mode of PROMPTED_MODES) {
       const result = assembleActiveSurface({
         state: createState(mode),
@@ -342,7 +342,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
   let assembleActiveSurface;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const assembly = await importSource("extensions/ampi-core/prompt-assembly.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
   });
 
@@ -425,7 +425,7 @@ describe("assembleActiveSurface(): preserves Pi's tools interstitial byte-for-by
   let assembleActiveSurface;
 
   beforeEach(async () => {
-    const assembly = await importSource("extensions/mmr-core/prompt-assembly.ts");
+    const assembly = await importSource("extensions/ampi-core/prompt-assembly.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
   });
 

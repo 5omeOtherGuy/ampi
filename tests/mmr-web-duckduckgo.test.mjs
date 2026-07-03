@@ -52,7 +52,7 @@ function freshState() {
 
 describe("mmr-web DuckDuckGo client - search", () => {
   it("rejects an empty query", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     await assert.rejects(
       () => duckduckgoSearch({ query: "  ", maxResults: 5, maxResultBytes: 10000 }, { state: freshState() }),
       /non-empty query/,
@@ -60,7 +60,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("decodes uddg= redirect URLs back to the canonical target", async () => {
-    const { decodeDuckDuckGoRedirect } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { decodeDuckDuckGoRedirect } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     assert.equal(
       decodeDuckDuckGoRedirect("//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fpage%3Fq%3D1&rut=abc"),
       "https://example.com/page?q=1",
@@ -74,14 +74,14 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("does not double-decode percent-encoded bytes inside uddg target URLs", async () => {
-    const { decodeDuckDuckGoRedirect } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { decodeDuckDuckGoRedirect } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const target = "https://example.com/download/%25E2%259C%2593?q=%2520";
     const wrapped = `//duckduckgo.com/l/?uddg=${encodeURIComponent(target)}&rut=abc`;
     assert.equal(decodeDuckDuckGoRedirect(wrapped), target);
   });
 
   it("parses result rows from the HTML response", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       title1: "TypeScript", url1: "https://example.com/ts", snippet1: "Typed JavaScript",
       title2: "TS docs",    url2: "https://example.org/docs", snippet2: "Reference docs",
@@ -104,7 +104,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("decodes hex and decimal numeric HTML entities in titles and snippets", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       // &#x2014; = em dash, &#x27; = apostrophe, &#8212; = em dash (decimal)
       title1: "Rust &#x2014; Memory Safety", url1: "https://example.com/rust",
@@ -124,7 +124,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("reports a requested country filter as unsupported/none with a reason", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       title1: "A", url1: "https://example.com/a", snippet1: "alpha",
       title2: "B", url2: "https://example.org/b", snippet2: "beta",
@@ -144,7 +144,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("filters out result URLs that fail the public-web SSRF policy", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       title1: "ok",   url1: "https://example.com/ok", snippet1: "public",
       title2: "loop", url2: "http://127.0.0.1/internal", snippet2: "private",
@@ -158,7 +158,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("clamps to maxResults", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const rows = Array.from({ length: 6 }, (_, i) => `<div class="result results_links results_links_deep web-result">
   <div class="result__body">
     <h2 class="result__title"><a class="result__a" href="//duckduckgo.com/l/?uddg=${encodeURIComponent(`https://example.com/${i}`)}">t${i}</a></h2>
@@ -176,7 +176,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("detects a bot-challenge page and opens the backoff window", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const state = freshState();
     let now = 1_000_000;
     const html = `<!DOCTYPE html><html><body><p>Please verify you are a human.</p></body></html>`;
@@ -199,7 +199,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("opens the backoff window on HTTP 429", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const state = freshState();
     const { fetchImpl } = makeFetchMock([
       () => new Response("rate limited", { status: 429, headers: { "content-type": "text/plain" } }),
@@ -215,7 +215,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("returns cached results within the TTL without a second fetch", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       title1: "A", url1: "https://example.com/a", snippet1: "alpha",
       title2: "B", url2: "https://example.com/b", snippet2: "beta",
@@ -235,7 +235,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("re-fetches after the cache TTL expires", async () => {
-    const { duckduckgoSearch } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { duckduckgoSearch } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const html = ddgResultsPage({
       title1: "A", url1: "https://example.com/a", snippet1: "alpha",
       title2: "B", url2: "https://example.com/b", snippet2: "beta",
@@ -257,7 +257,7 @@ describe("mmr-web DuckDuckGo client - search", () => {
   });
 
   it("createDuckDuckGoSearchBackend returns a SearchBackend with id=duckduckgo", async () => {
-    const { createDuckDuckGoSearchBackend } = await importSource("extensions/mmr-web/search/duckduckgo.ts");
+    const { createDuckDuckGoSearchBackend } = await importSource("extensions/ampi-web/search/duckduckgo.ts");
     const backend = createDuckDuckGoSearchBackend({ state: freshState() });
     assert.equal(backend.id, "duckduckgo");
   });

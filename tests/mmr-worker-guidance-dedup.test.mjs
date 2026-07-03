@@ -16,8 +16,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const GUIDANCE_MODULE = "extensions/mmr-core/worker-tool-guidance.ts";
-const SCHEMA_MODULE = "extensions/mmr-workers/async-task-tool-schemas.ts";
+const GUIDANCE_MODULE = "extensions/ampi-core/worker-tool-guidance.ts";
+const SCHEMA_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
 
 const FULL_WORKER_SURFACE = [
   "Task",
@@ -36,11 +36,11 @@ describe("worker guidance single-render invariant", () => {
     const { buildUsingWorkersGuidance } = await importSource(GUIDANCE_MODULE);
     const block = buildUsingWorkersGuidance(FULL_WORKER_SURFACE);
     const guidelineSources = [
-      ["extensions/mmr-workers/task.ts", "TASK_PROMPT_GUIDELINES"],
-      ["extensions/mmr-workers/finder.ts", "FINDER_PROMPT_GUIDELINES"],
-      ["extensions/mmr-workers/librarian.ts", "LIBRARIAN_PROMPT_GUIDELINES"],
-      ["extensions/mmr-workers/oracle.ts", "ORACLE_PROMPT_GUIDELINES"],
-      ["extensions/mmr-workers/reviewer.ts", "REVIEWER_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/task.ts", "TASK_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/finder.ts", "FINDER_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/librarian.ts", "LIBRARIAN_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/oracle.ts", "ORACLE_PROMPT_GUIDELINES"],
+      ["extensions/ampi-workers/reviewer.ts", "REVIEWER_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "START_TASK_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "TASK_POLL_PROMPT_GUIDELINES"],
       [SCHEMA_MODULE, "TASK_WAIT_PROMPT_GUIDELINES"],

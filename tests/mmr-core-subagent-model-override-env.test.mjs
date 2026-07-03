@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-core/subagent-model-override-env.ts";
+const MODULE = "extensions/ampi-core/subagent-model-override-env.ts";
 
 describe("subagent model-preference env channel (#9)", () => {
   it("round-trips a normalized preference list", async () => {

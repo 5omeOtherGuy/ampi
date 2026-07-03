@@ -8,7 +8,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-core/worker-cli-flags.ts";
+const MODULE = "extensions/ampi-core/worker-cli-flags.ts";
 
 describe("extractExplicitWorkerCliFlags", () => {
   it("returns undefined fields when neither flag is present", async () => {

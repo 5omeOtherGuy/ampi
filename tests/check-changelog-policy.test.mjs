@@ -5,12 +5,12 @@ import { evaluateChangelogEntryPolicy, requiresChangelogEntry } from "../scripts
 
 describe("requiresChangelogEntry", () => {
   it("is true when a monitored file changed but CHANGELOG.md did not", () => {
-    assert.equal(requiresChangelogEntry(["src/extensions/mmr-core/index.ts"]), true);
+    assert.equal(requiresChangelogEntry(["src/extensions/ampi-core/index.ts"]), true);
     assert.equal(requiresChangelogEntry(["scripts/gate.sh", "README.md"]), true);
   });
 
   it("is false when CHANGELOG.md is among the changed files", () => {
-    assert.equal(requiresChangelogEntry(["src/extensions/mmr-core/index.ts", "CHANGELOG.md"]), false);
+    assert.equal(requiresChangelogEntry(["src/extensions/ampi-core/index.ts", "CHANGELOG.md"]), false);
   });
 
   it("is false when no monitored files changed", () => {
@@ -22,7 +22,7 @@ describe("requiresChangelogEntry", () => {
 describe("evaluateChangelogEntryPolicy", () => {
   it("returns nothing when CHANGELOG.md was changed", () => {
     const result = evaluateChangelogEntryPolicy({
-      monitoredChanges: ["src/extensions/mmr-core/index.ts"],
+      monitoredChanges: ["src/extensions/ampi-core/index.ts"],
       changelogChanged: true,
       env: {},
     });
@@ -49,19 +49,19 @@ describe("evaluateChangelogEntryPolicy", () => {
 
   it("emits a non-fatal notice (no error) by default when an entry is missing", () => {
     const result = evaluateChangelogEntryPolicy({
-      monitoredChanges: ["src/extensions/mmr-core/index.ts", "scripts/gate.sh"],
+      monitoredChanges: ["src/extensions/ampi-core/index.ts", "scripts/gate.sh"],
       changelogChanged: false,
       env: {},
     });
     assert.equal(result.error, undefined);
     assert.ok(result.notice, "expected a notice");
     assert.match(result.notice, /PR-body marker block/);
-    assert.match(result.notice, /src\/extensions\/mmr-core\/index\.ts/);
+    assert.match(result.notice, /src\/extensions\/ampi-core\/index\.ts/);
   });
 
   it("escalates to a blocking error under PI_MMR_CHANGELOG_REQUIRE_ENTRY=1", () => {
     const result = evaluateChangelogEntryPolicy({
-      monitoredChanges: ["src/extensions/mmr-core/index.ts"],
+      monitoredChanges: ["src/extensions/ampi-core/index.ts"],
       changelogChanged: false,
       env: { PI_MMR_CHANGELOG_REQUIRE_ENTRY: "1" },
     });
@@ -71,7 +71,7 @@ describe("evaluateChangelogEntryPolicy", () => {
 
   it("does not block under REQUIRE_ENTRY when the changelog was changed", () => {
     const result = evaluateChangelogEntryPolicy({
-      monitoredChanges: ["src/extensions/mmr-core/index.ts"],
+      monitoredChanges: ["src/extensions/ampi-core/index.ts"],
       changelogChanged: true,
       env: { PI_MMR_CHANGELOG_REQUIRE_ENTRY: "1" },
     });

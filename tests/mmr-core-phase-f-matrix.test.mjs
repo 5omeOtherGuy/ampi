@@ -85,10 +85,10 @@ const EXPECTED_TOOLS_BY_SET = {
 };
 
 const EXPECTED_OWNERS = {
-  apply_patch: "mmr-patch",
-  task_list: "mmr-tasks",
-  web_search: "mmr-web",
-  read_web_page: "mmr-web",
+  apply_patch: "ampi-patch",
+  task_list: "ampi-tasks",
+  web_search: "ampi-web",
+  read_web_page: "ampi-web",
 };
 
 function createState(mode) {
@@ -134,8 +134,8 @@ describe("Phase F: combined mode/tool-set matrix snapshots", () => {
   for (const mode of MATRIX_MODES) {
     for (const toolSet of BASELINE_TOOL_SETS) {
       it(`renders the ${mode}-mode effective surface for ${toolSet}`, async () => {
-        const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-        const { renderMmrPromptDebugFixture } = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+        const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+        const { renderMmrPromptDebugFixture } = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
         const activeToolManifest = await buildBaselineManifest(toolSet);
         const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);
         const result = assembleActiveSurface({
@@ -155,7 +155,7 @@ describe("Phase F: combined mode/tool-set matrix snapshots", () => {
 describe("Phase F: per-mode structural invariants across the matrix", () => {
   for (const mode of MATRIX_MARKER_MODES) {
     it(`${mode}: assembled prompt follows the expected coarse block order`, async () => {
-      const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+      const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -171,7 +171,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
     });
 
     it(`${mode}: Available tools, Guidelines, and Pi docs blocks are byte-identical to base.md`, async () => {
-      const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+      const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -191,7 +191,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
     });
 
     it(`${mode}: includes its own mode marker and excludes other modes' distinctive markers`, async () => {
-      const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+      const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -212,7 +212,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
 
     it(`${mode}: posture precedes tools, shared tool policy follows Pi docs, and style precedes response`, async () => {
       const { assembleActiveSurface, MMR_TOOL_USE_HEADING, MMR_TOOL_USE_POSTURE_LINE } = await importSource(
-        "extensions/mmr-core/prompt-assembly.ts",
+        "extensions/ampi-core/prompt-assembly.ts",
       );
       const result = assembleActiveSurface({
         state: createState(mode),
@@ -259,8 +259,8 @@ describe("Phase F: active-manifest invariants across the matrix", () => {
   for (const mode of MATRIX_MODES) {
     for (const toolSet of BASELINE_TOOL_SETS) {
       it(`${mode} / ${toolSet}: active manifest matches the expected tool set, each tool appears exactly once, owners are stable`, async () => {
-        const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-        const { renderMmrPromptDebugFixture } = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
+        const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+        const { renderMmrPromptDebugFixture } = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
         const activeToolManifest = await buildBaselineManifest(toolSet);
         const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);
         const result = assembleActiveSurface({
@@ -317,9 +317,9 @@ describe("Phase F: planned-tool negative-injection across the renderer-flattened
   for (const mode of MATRIX_MODES) {
     for (const toolSet of BASELINE_TOOL_SETS) {
       it(`${mode} / ${toolSet}: no planned-tool name leaks into the renderer-flattened effective surface`, async () => {
-        const { assembleActiveSurface } = await importSource("extensions/mmr-core/prompt-assembly.ts");
-        const { renderMmrPromptDebugFixture } = await importSource("extensions/mmr-core/prompt-debug-renderer.ts");
-        const planned = await importSource("extensions/mmr-core/planned-catalog.ts");
+        const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+        const { renderMmrPromptDebugFixture } = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+        const planned = await importSource("extensions/ampi-core/planned-catalog.ts");
         const activeToolManifest = await buildBaselineManifest(toolSet);
         const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);
         const result = assembleActiveSurface({
@@ -354,7 +354,7 @@ describe("Phase F: native-control passthrough invariant", () => {
         assembleActiveSurface,
         MMR_TOOL_USE_POSTURE_LINE,
         MMR_RESPONSE_STYLE_HEADING,
-      } = await importSource("extensions/mmr-core/prompt-assembly.ts");
+      } = await importSource("extensions/ampi-core/prompt-assembly.ts");
       const activeToolManifest = await buildBaselineManifest(toolSet);
       const result = assembleActiveSurface({
         state: createState(mode),

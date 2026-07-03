@@ -25,7 +25,7 @@ function createPi(options = {}) {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -37,7 +37,7 @@ beforeEach(async () => {
 
 describe("mmr-core before_provider_request hook", () => {
   it("applies the active locked-mode request policy to Anthropic payloads and leaves system blocks intact", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([SMART_MODEL]);
     const { pi, handlers } = createPi({ model: SMART_MODEL });
     extension(pi);
@@ -66,7 +66,7 @@ describe("mmr-core before_provider_request hook", () => {
     // "high"; the before_provider_request hook pins Anthropic effort "xhigh"
     // but retains the mode default max_tokens 64000, so both Smart presets
     // share the same 64k admission shape and differ only in reasoning effort.
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([SMART_MODEL]);
     const { pi, handlers, shortcuts } = createPi({ model: SMART_MODEL });
     extension(pi);
@@ -90,7 +90,7 @@ describe("mmr-core before_provider_request hook", () => {
   });
 
   it("managed model overrides disable locked-mode request-policy rewriting", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { ctx } = createContext([SMART_MODEL]);
     const { pi, handlers } = createPi({ model: SMART_MODEL });
@@ -123,7 +123,7 @@ describe("mmr-core before_provider_request hook", () => {
   });
 
   it("switching to free disables request-policy rewriting", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([SMART_MODEL]);
     const { pi, commands, handlers } = createPi({ model: SMART_MODEL });
     extension(pi);
@@ -139,7 +139,7 @@ describe("mmr-core before_provider_request hook", () => {
   });
 
   it("rush mode applies OpenAI Responses max output and no-thinking effort", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([RUSH_MODEL]);
     const { pi, commands, handlers } = createPi({ model: RUSH_MODEL });
     extension(pi);
@@ -154,7 +154,7 @@ describe("mmr-core before_provider_request hook", () => {
   });
 
   it("deep mode strips max output while keeping reasoning for openai-codex payloads without Codex markers", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([DEEP_MODEL]);
     const { pi, commands, handlers } = createPi({ model: DEEP_MODEL });
     extension(pi);

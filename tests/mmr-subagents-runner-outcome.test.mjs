@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const OUTCOME_MODULE = "extensions/mmr-workers/runner-outcome.ts";
-const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
+const OUTCOME_MODULE = "extensions/ampi-workers/runner-outcome.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
 
 after(cleanupLoadedSource);
 

@@ -65,7 +65,7 @@ const QUERY = process.env.LIBRARIAN_SMOKE_QUERY
   ?? "In 5omeOtherGuy/ampi, where is the mmr-subagents README documented?";
 const CONTEXT = process.env.LIBRARIAN_SMOKE_CONTEXT?.trim();
 const TIMEOUT_MS = Number.parseInt(process.env.LIBRARIAN_SMOKE_TIMEOUT_MS ?? "180000", 10);
-const WEB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-web/index.ts";
+const WEB_SOURCE_PATH = "/virtual/ampi/extensions/ampi-web/index.ts";
 
 function webHost() {
   const tools = [
@@ -93,11 +93,11 @@ function webHost() {
 }
 
 async function main() {
-  const promptsMod = await importSource("extensions/mmr-workers/prompts.ts");
+  const promptsMod = await importSource("extensions/ampi-workers/prompts.ts");
   promptsMod.registerMmrSubagentsPromptBuilders();
-  const ownershipMod = await importSource("extensions/mmr-web/tool-ownership.ts");
+  const ownershipMod = await importSource("extensions/ampi-web/tool-ownership.ts");
   ownershipMod.registerMmrWebToolSourcePath(WEB_SOURCE_PATH);
-  const librarianMod = await importSource("extensions/mmr-workers/librarian.ts");
+  const librarianMod = await importSource("extensions/ampi-workers/librarian.ts");
   const { createLibrarianTool, LIBRARIAN_WORKER_TOOLS } = librarianMod;
 
   const cwd = path.resolve(import.meta.dirname, "..", "..");

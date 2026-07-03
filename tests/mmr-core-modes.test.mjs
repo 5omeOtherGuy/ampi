@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core mode table", () => {
   it("defines smart and rush with the documented provider-neutral preferences", async () => {
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     assert.deepEqual(getMmrMode("smart").modelPreferences, [
       { model: "claude-opus-4-8" },
@@ -25,7 +25,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("defines deep with gpt-5.5 and an Opus fallback", async () => {
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     assert.deepEqual(getMmrMode("deep").modelPreferences, [
       { model: "gpt-5.5" },
@@ -36,7 +36,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("defines smart-family model-pinned variants", async () => {
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const smart = getMmrMode("smart");
     const fable = getMmrMode("fable");
@@ -51,7 +51,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("renders mode list using per-mode request thinking and context metadata", async () => {
-    const { formatMmrModeList } = await importSource("extensions/mmr-core/modes.ts");
+    const { formatMmrModeList } = await importSource("extensions/ampi-core/modes.ts");
 
     const list = formatMmrModeList();
 
@@ -62,7 +62,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("does not warn that shipped librarian support is still reserved", async () => {
-    const { MMR_MODE_KEYS, getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { MMR_MODE_KEYS, getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     for (const key of MMR_MODE_KEYS) {
       const notes = getMmrMode(key).availabilityNotes ?? [];
@@ -75,7 +75,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("keeps task_list in every enforced mode until a mode explicitly adopts Task as replacement", async () => {
-    const { MMR_MODE_KEYS, getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { MMR_MODE_KEYS, getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     for (const key of MMR_MODE_KEYS) {
       const mode = getMmrMode(key);
@@ -88,7 +88,7 @@ describe("mmr-core mode table", () => {
   });
 
   it("defines free as pure native Pi controls", async () => {
-    const { formatMmrModeList, getMmrMode, isMmrModeKey, MMR_MODE_KEYS } = await importSource("extensions/mmr-core/modes.ts");
+    const { formatMmrModeList, getMmrMode, isMmrModeKey, MMR_MODE_KEYS } = await importSource("extensions/ampi-core/modes.ts");
 
     const free = getMmrMode("free");
 

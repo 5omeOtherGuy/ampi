@@ -6,7 +6,7 @@
 
 It is **not** for:
 
-- Provider API keys, OAuth tokens, or credentials — those belong in environment variables or Pi's settings layer; never persist them in MMR-owned files.
+- Provider API keys, OAuth tokens, or credentials — those belong in environment variables or Pi's settings layer; never persist them in ampi-owned files.
 - Pi session transcripts, message history, or the interactive UI's own state — Pi owns those locations.
 - Per-workspace generated artifacts that the user might commit (build outputs, generated docs) — those belong in the workspace, gated by the user's normal `.gitignore`.
 - Test fixtures or development snapshots checked into the repo.
@@ -48,7 +48,7 @@ Any extension that persists per-user data must satisfy all of the following:
 - ❌ Writing under `<workspace>/.pi/`. Most repos do not gitignore `.pi/`.
 - ❌ Embedding user-visible paths or repo URLs in filenames. Hash them.
 - ❌ Sharing one JSON between unrelated features. One feature → one subdirectory under `data/ampi/`.
-- ❌ Persisting secrets, tokens, OAuth state, or anything else a Free-mode user would not expect MMR to keep.
+- ❌ Persisting secrets, tokens, OAuth state, or anything else a Free-mode user would not expect ampi to keep.
 - ❌ Silent migrations on read. Either keep the same `version` and respect it, or ship a versioned migration step with logging.
 - ❌ Re-implementing `PI_CODING_AGENT_DIR` env handling or `~`-expansion. Always call `getAgentDir()`.
 
@@ -65,7 +65,7 @@ The archived `task_list` coordination prototype used this shape:
 - In-process mutex: `withTaskStoreLock(storePath, fn)` chained promises per store path; the cleanup `finally` removed the entry so the inflight map stayed bounded.
 - Tests injected `baseDir` (a `mkdtempSync` directory) so suites did not pollute the developer's real `~/.pi/`.
 
-The active `mmr-tasks task_list` no longer uses this on-disk convention. It is a session-local todo list persisted as `mmr-tasks.todo-state` `CustomEntry` records in the current session log (`{ version: 2, tasks }`, while existing flat version 1 entries remain readable). Existing files under `data/ampi/task-list/` are intentionally left orphaned and can be recovered by checking out `archive/task-list-coordination-prototype-v1`.
+The active `ampi-tasks task_list` no longer uses this on-disk convention. It is a session-local todo list persisted as `ampi-tasks.todo-state` `CustomEntry` records in the current session log (`{ version: 2, tasks }`, while existing flat version 1 entries remain readable). Existing files under `data/ampi/task-list/` are intentionally left orphaned and can be recovered by checking out `archive/task-list-coordination-prototype-v1`.
 
 ## When you're about to ship a new feature that persists data
 

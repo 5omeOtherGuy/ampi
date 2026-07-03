@@ -4,11 +4,11 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const LIBRARIAN_MODULE = "extensions/mmr-workers/librarian.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
-const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
-const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/mmr-github/index.ts";
+const LIBRARIAN_MODULE = "extensions/ampi-workers/librarian.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
+const MMR_GITHUB_TOOL_OWNERSHIP_MODULE = "extensions/ampi-github/tool-ownership.ts";
+const GITHUB_SOURCE_PATH = "/virtual/ampi/extensions/ampi-github/index.ts";
 
 const GITHUB_TOOLS = [
   "read_github",
@@ -221,7 +221,7 @@ describe("librarian execute() validation and gating", () => {
       const tool = createLibrarianTool({ runWorker, pi: githubHost({ registered: c.registered }) });
       const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
       assert.equal(result.details.status, "provider-gated", c.label);
-      assert.match(firstText(result), /requires mmr-github read-only GitHub tools/);
+      assert.match(firstText(result), /requires ampi-github read-only GitHub tools/);
       assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
     }
   });
@@ -237,7 +237,7 @@ describe("librarian execute() validation and gating", () => {
       const tool = createLibrarianTool({ runWorker, pi: githubHost({ sourcePath: c.sourcePath }) });
       const result = await tool.execute("c", { query: "Explain acme/repo routing" }, undefined, undefined, makeCtx());
       assert.equal(result.details.status, "provider-gated", c.label);
-      assert.match(firstText(result), /requires mmr-github read-only GitHub tools/);
+      assert.match(firstText(result), /requires ampi-github read-only GitHub tools/);
       assert.equal(calls.length, 0, `${c.label}: gated calls must not spawn`);
     }
   });
@@ -353,7 +353,7 @@ describe("librarian execute() runner dispatch", () => {
     await tool.execute("c", { query: "Explain acme/repo" }, undefined, (partial) => { captured = partial; }, makeCtx());
     assert.ok(captured);
     assert.equal(captured.content[0].text, LIBRARIAN_PROGRESS_PLACEHOLDER);
-    assert.equal(captured.details.worker, "mmr-subagents.librarian");
+    assert.equal(captured.details.worker, "ampi-workers.librarian");
     assert.equal(captured.details.status, "success");
     assert.equal(captured.details.query, "Explain acme/repo");
     assert.equal(captured.details.trail[0].toolName, "search_github");

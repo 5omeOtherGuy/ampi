@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER = "extensions/mmr-workers/runner.ts";
-const INVOCATION = "extensions/mmr-workers/runner-invocation.ts";
+const RUNNER = "extensions/ampi-workers/runner.ts";
+const INVOCATION = "extensions/ampi-workers/runner-invocation.ts";
 
 describe("buildMmrWorkerArgs: childExtensionScope", () => {
   it("prepends --no-extensions and -e <path> before the mode flags", async () => {
@@ -13,12 +13,12 @@ describe("buildMmrWorkerArgs: childExtensionScope", () => {
     const args = mod.buildMmrWorkerArgs({
       prompt: "do it",
       profileName: "finder",
-      childExtensionScope: ["/pkg/src/extensions/mmr-core/index.ts", "/ext/provider/index.ts"],
+      childExtensionScope: ["/pkg/src/extensions/ampi-core/index.ts", "/ext/provider/index.ts"],
     });
     assert.deepEqual(args.slice(0, 5), [
       "--no-extensions",
       "-e",
-      "/pkg/src/extensions/mmr-core/index.ts",
+      "/pkg/src/extensions/ampi-core/index.ts",
       "-e",
       "/ext/provider/index.ts",
     ]);
@@ -57,7 +57,7 @@ describe("shouldRetryMmrChildWithFullDiscovery", () => {
     truncatedFinalOutput: "",
     agentStarted: true,
   };
-  const scope = ["/pkg/src/extensions/mmr-core/index.ts"];
+  const scope = ["/pkg/src/extensions/ampi-core/index.ts"];
 
   it("never retries an unrestricted run", async () => {
     const mod = await importSource(RUNNER);
@@ -139,10 +139,10 @@ describe("createMmrSubagentRunnerFromRunWorker: restricted retry", () => {
       profileName: "finder",
       prompt: "p",
       cwd: "/repo",
-      childExtensionScope: ["/pkg/src/extensions/mmr-core/index.ts"],
+      childExtensionScope: ["/pkg/src/extensions/ampi-core/index.ts"],
     });
     assert.equal(calls.length, 2);
-    assert.deepEqual(calls[0], ["/pkg/src/extensions/mmr-core/index.ts"]);
+    assert.deepEqual(calls[0], ["/pkg/src/extensions/ampi-core/index.ts"]);
     assert.equal(calls[1], undefined, "retry drops the scope -> full discovery");
     assert.equal(result.finalOutput, "done");
   });
@@ -159,7 +159,7 @@ describe("createMmrSubagentRunnerFromRunWorker: restricted retry", () => {
       profileName: "finder",
       prompt: "p",
       cwd: "/repo",
-      childExtensionScope: ["/pkg/src/extensions/mmr-core/index.ts"],
+      childExtensionScope: ["/pkg/src/extensions/ampi-core/index.ts"],
     });
     assert.equal(count, 1);
   });

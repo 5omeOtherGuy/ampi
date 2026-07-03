@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const TOOLS_MODULE = "extensions/mmr-github/tools.ts";
-const GLOB_MODULE = "extensions/mmr-github/glob.ts";
+const TOOLS_MODULE = "extensions/ampi-github/tools.ts";
+const GLOB_MODULE = "extensions/ampi-github/glob.ts";
 
 function settings(partial = {}) {
   return { enabled: true, token: undefined, apiBaseUrl: "https://api.github.test", requestTimeoutMs: 1000, maxResultBytes: 200000, ...partial };
@@ -362,7 +362,7 @@ describe("list_repositories", () => {
 
   it("falls back to public search when accessible enumeration is unauthorized (no token)", async () => {
     const mod = await importSource(TOOLS_MODULE);
-    const { GithubApiError } = await importSource("extensions/mmr-github/client.ts");
+    const { GithubApiError } = await importSource("extensions/ampi-github/client.ts");
     const fc = fakeClient({
       listAccessibleRepositories: () => { throw new GithubApiError("auth failed", 401); },
       searchRepositories: async () => ({ totalCount: 1, items: [repo("public/api")] }),
@@ -391,7 +391,7 @@ describe("registerMmrGithubTools", () => {
 
   it("registers all 7 read-only tools and records the source path when enabled", async () => {
     const mod = await importSource(TOOLS_MODULE);
-    const ownership = await importSource("extensions/mmr-github/tool-ownership.ts");
+    const ownership = await importSource("extensions/ampi-github/tool-ownership.ts");
     ownership.__resetMmrGithubToolSourcePathsForTests();
     const registered = [];
     const pi = { registerTool: (t) => registered.push(t.name) };

@@ -22,8 +22,8 @@ function fakeRegistry(models, authenticatedProviders = new Set(models.map((model
 }
 
 async function buildSampleState(overrides = {}) {
-  const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-  const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+  const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+  const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
   const mode = { ...getMmrMode(overrides.modeKey ?? "smart"), ...(overrides.modeOverrides ?? {}) };
 
   const modelResolution = {
@@ -47,7 +47,7 @@ async function buildSampleState(overrides = {}) {
     disabledTools: [],
     decisions: [
       { requested: "read", chosen: "read", chosenTools: ["read"], candidates: ["read"], status: "active", owner: "mmr-core", diagnostic: "read \u2192 read" },
-      { requested: "oracle", chosenTools: [], candidates: [], status: "deferred", owner: "mmr-subagents", diagnostic: "oracle: deferred until mmr-subagents ships" },
+      { requested: "oracle", chosenTools: [], candidates: [], status: "deferred", owner: "mmr-subagents", diagnostic: "oracle: deferred until ampi-workers ships" },
     ],
     ...(overrides.tools ?? {}),
   };
@@ -96,7 +96,7 @@ describe("mmr-core public API surface", () => {
 
 describe("mmr-core mode-state snapshot", () => {
   it("returns a deep copy that callers cannot use to mutate live runtime state", async () => {
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     const state = await buildSampleState();
 
     runtime.setMmrModeState(state);
@@ -128,7 +128,7 @@ describe("mmr-core mode-state snapshot", () => {
 
 describe("mmr-core worker model preference resolution", () => {
   it("selectMmrModelRoute picks the highest-priority registered+authenticated route without applying", async () => {
-    const { selectMmrModelRoute } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { selectMmrModelRoute } = await importSource("extensions/ampi-core/model-resolver.ts");
 
     const registry = fakeRegistry([
       { provider: "openai", id: "gpt-5.5" },
@@ -153,7 +153,7 @@ describe("mmr-core worker model preference resolution", () => {
   });
 
   it("selectMmrModelRoute falls back across families when preferred routes are unauthenticated", async () => {
-    const { selectMmrModelRoute } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { selectMmrModelRoute } = await importSource("extensions/ampi-core/model-resolver.ts");
 
     const registry = fakeRegistry(
       [
@@ -176,7 +176,7 @@ describe("mmr-core worker model preference resolution", () => {
   });
 
   it("selectMmrModelRoute returns undefined selection when no candidate is registered", async () => {
-    const { selectMmrModelRoute } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { selectMmrModelRoute } = await importSource("extensions/ampi-core/model-resolver.ts");
 
     const registry = fakeRegistry([]);
     const selection = selectMmrModelRoute({
@@ -189,7 +189,7 @@ describe("mmr-core worker model preference resolution", () => {
   });
 
   it("resolveAndApplyMmrModel still works and yields the same primary route as selectMmrModelRoute when Pi accepts the model", async () => {
-    const { selectMmrModelRoute, resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { selectMmrModelRoute, resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const registry = fakeRegistry([
       { provider: "openai-codex", id: "gpt-5.5" },
       { provider: "openai", id: "gpt-5.5" },
@@ -209,7 +209,7 @@ describe("mmr-core worker model preference resolution", () => {
 
 describe("mmr-core prompt route helper", () => {
   it("getMmrPromptRoute returns the prompt route for any mode key", async () => {
-    const { getMmrPromptRoute } = await importSource("extensions/mmr-core/runtime.ts");
+    const { getMmrPromptRoute } = await importSource("extensions/ampi-core/runtime.ts");
     assert.equal(getMmrPromptRoute("smart"), "default");
     assert.equal(getMmrPromptRoute("rush"), "rush");
     assert.equal(getMmrPromptRoute("deep"), "deep");
@@ -224,7 +224,7 @@ describe("mmr-core prompt route helper", () => {
 
 describe("mmr-core policy diagnostics", () => {
   it("returns an empty diagnostics array for a clean locked-mode state", async () => {
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
     const state = await buildSampleState({
       modeOverrides: { availabilityNotes: [] },
       tools: {
@@ -241,7 +241,7 @@ describe("mmr-core policy diagnostics", () => {
   });
 
   it("returns an empty diagnostics array in free mode regardless of model state", async () => {
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
     const state = await buildSampleState({
       modeKey: "free",
       modelResolution: {
@@ -266,7 +266,7 @@ describe("mmr-core policy diagnostics", () => {
   });
 
   it("emits structured diagnostics with codes and severity for fallback, missing tools, and availability notes", async () => {
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
     const state = await buildSampleState({
       modeOverrides: { availabilityNotes: ["Runtime subagent behavior is not implemented in mmr-core."] },
       modelResolution: {
@@ -307,7 +307,7 @@ describe("mmr-core policy diagnostics", () => {
   });
 
   it("emits a model.not-applied diagnostic when a locked mode resolved no usable model", async () => {
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
     const state = await buildSampleState({
       modelResolution: {
         targetModel: "gpt-5.5",
@@ -337,7 +337,7 @@ describe("mmr-core policy diagnostics", () => {
   });
 
   it("emits a tools.none-active diagnostic when activeTools is empty", async () => {
-    const { getMmrPolicyDiagnostics } = await importSource("extensions/mmr-core/diagnostics.ts");
+    const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
     const state = await buildSampleState({
       tools: {
         requestedTools: ["oracle"],
@@ -355,7 +355,7 @@ describe("mmr-core policy diagnostics", () => {
   });
 
   it("status output joins diagnostic messages so the human-readable warnings remain stable", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const state = await buildSampleState({
       modeOverrides: { availabilityNotes: ["Runtime subagent behavior is not implemented in mmr-core."] },
       modelResolution: {
@@ -383,9 +383,9 @@ describe("mmr-core policy diagnostics", () => {
 
 describe("mmr-core activation notifications use the policy diagnostic pipeline", () => {
   it("renders activation warnings from getMmrPolicyDiagnostics messages, with deferred tools appended separately", async () => {
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     runtime.setMmrModeState(undefined);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
 
     const handlers = new Map();
     const commands = new Map();
@@ -434,13 +434,13 @@ describe("mmr-core activation notifications use the policy diagnostic pipeline",
     // Diagnostic-derived: model.fallback-applied message.
     assert.match(activation.message, /model fallback applied: /);
     // Deferred-tool messages still surface, appended after policy warnings.
-    assert.match(activation.message, /oracle: deferred until mmr-subagents ships/);
+    assert.match(activation.message, /oracle: deferred until ampi-workers ships/);
   });
 });
 
 describe("mmr-core event constants", () => {
   it("exports a stable state-change event name from runtime and root", async () => {
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     const root = await importSource("index.ts");
     assert.equal(typeof runtime.MMR_EVENT_STATE_CHANGED, "string");
     assert.notEqual(runtime.MMR_EVENT_STATE_CHANGED.length, 0);
@@ -449,7 +449,7 @@ describe("mmr-core event constants", () => {
   });
 
   it("onMmrStateChanged hands each handler its own deep-cloned snapshot per emission", async () => {
-    const { onMmrStateChanged, MMR_EVENT_STATE_CHANGED } = await importSource("extensions/mmr-core/runtime.ts");
+    const { onMmrStateChanged, MMR_EVENT_STATE_CHANGED } = await importSource("extensions/ampi-core/runtime.ts");
 
     const subscribers = new Map();
     const pi = {
@@ -492,7 +492,7 @@ describe("mmr-core event constants", () => {
   });
 
   it("onMmrStateChanged forwards undefined payloads (state cleared) without throwing", async () => {
-    const { onMmrStateChanged, MMR_EVENT_STATE_CHANGED } = await importSource("extensions/mmr-core/runtime.ts");
+    const { onMmrStateChanged, MMR_EVENT_STATE_CHANGED } = await importSource("extensions/ampi-core/runtime.ts");
     const handlers = [];
     const pi = { events: { on: (_name, handler) => { handlers.push(handler); return () => {}; } } };
     const seen = [];
@@ -504,7 +504,7 @@ describe("mmr-core event constants", () => {
   });
 
   it("onMmrStateChanged returns the underlying unsubscribe function from Pi's event bus", async () => {
-    const { onMmrStateChanged } = await importSource("extensions/mmr-core/runtime.ts");
+    const { onMmrStateChanged } = await importSource("extensions/ampi-core/runtime.ts");
 
     let detached = 0;
     const subscribers = new Map();
@@ -530,7 +530,7 @@ describe("mmr-core event constants", () => {
   });
 
   it("onMmrStateChanged returns a no-op unsubscribe when the host's events.on returns void", async () => {
-    const { onMmrStateChanged } = await importSource("extensions/mmr-core/runtime.ts");
+    const { onMmrStateChanged } = await importSource("extensions/ampi-core/runtime.ts");
     const pi = { events: { on: () => undefined } };
     const unsubscribe = onMmrStateChanged(pi, () => {});
     assert.equal(typeof unsubscribe, "function");
@@ -538,9 +538,9 @@ describe("mmr-core event constants", () => {
   });
 
   it("the mmr-core extension emits MMR_EVENT_STATE_CHANGED on the Pi event bus when a mode is applied", async () => {
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     runtime.setMmrModeState(undefined);
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
 
     const handlers = new Map();
     const commands = new Map();

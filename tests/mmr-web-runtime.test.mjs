@@ -34,20 +34,20 @@ function makePi() {
 }
 
 async function importRuntime() {
-  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const url = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(url);
 }
 
 async function importCacheIsolatedRuntime() {
-  return importSource("extensions/mmr-core/runtime.ts");
+  return importSource("extensions/ampi-core/runtime.ts");
 }
 
 const LOCKED_MODES_THAT_REQUEST_WEB_TOOLS = ["smart", "fable", "rush", "deep"];
 
 describe("mmr-web covers every locked mode that requests web_search / read_web_page", () => {
   for (const mode of LOCKED_MODES_THAT_REQUEST_WEB_TOOLS) {
-    it(`${mode}: enabled + BRAVE_API_KEY -> web_search and read_web_page both active under mmr-web`, async () => {
-      const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    it(`${mode}: enabled + BRAVE_API_KEY -> web_search and read_web_page both active under ampi-web`, async () => {
+      const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
       const runtime = await importRuntime();
       const { pi } = makePi();
       createMmrWebExtension({ loadSettings: () => settings({ enabled: true, braveApiKey: "brv" }) })(pi);
@@ -59,15 +59,15 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       const search = resolved.decisions.find((d) => d.requested === "web_search");
       const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
       assert.equal(search?.status, "active", `web_search must be active in ${mode}`);
-      assert.equal(search?.owner, "mmr-web");
+      assert.equal(search?.owner, "ampi-web");
       assert.equal(reader?.status, "active", `read_web_page must be active in ${mode}`);
-      assert.equal(reader?.owner, "mmr-web");
+      assert.equal(reader?.owner, "ampi-web");
       assert.equal(resolved.activeTools.includes("web_search"), true);
       assert.equal(resolved.activeTools.includes("read_web_page"), true);
     });
 
-    it(`${mode}: enabled without API key -> both tools active and owned by mmr-web`, async () => {
-      const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    it(`${mode}: enabled without API key -> both tools active and owned by ampi-web`, async () => {
+      const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
       const runtime = await importRuntime();
       const { pi } = makePi();
       createMmrWebExtension({ loadSettings: () => settings({ enabled: true }) })(pi);
@@ -79,13 +79,13 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       const search = resolved.decisions.find((d) => d.requested === "web_search");
       const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
       assert.equal(search?.status, "active", `web_search must stay active in ${mode} so execution can report BRAVE_API_KEY setup`);
-      assert.equal(search?.owner, "mmr-web");
+      assert.equal(search?.owner, "ampi-web");
       assert.equal(reader?.status, "active");
-      assert.equal(reader?.owner, "mmr-web");
+      assert.equal(reader?.owner, "ampi-web");
     });
 
-    it(`${mode}: network disabled -> both web tools gated under mmr-web`, async () => {
-      const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    it(`${mode}: network disabled -> both web tools gated under ampi-web`, async () => {
+      const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
       const runtime = await importRuntime();
       const { pi } = makePi();
       createMmrWebExtension({ loadSettings: () => settings({ enabled: false }) })(pi);
@@ -96,16 +96,16 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       const search = resolved.decisions.find((d) => d.requested === "web_search");
       const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
       assert.equal(search?.status, "gated");
-      assert.equal(search?.owner, "mmr-web");
+      assert.equal(search?.owner, "ampi-web");
       assert.equal(reader?.status, "gated");
-      assert.equal(reader?.owner, "mmr-web");
+      assert.equal(reader?.owner, "ampi-web");
     });
   }
 });
 
 describe("mmr-web registration across cache-isolated extension entrypoints", () => {
-  it("shares mmr-web provider registrations with a separately imported mmr-core runtime", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+  it("shares ampi-web provider registrations with a separately imported ampi-core runtime", async () => {
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const runtime = await importCacheIsolatedRuntime();
     const { pi, tools } = makePi();
 
@@ -116,22 +116,22 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     const search = resolved.decisions.find((d) => d.requested === "web_search");
     const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "gated");
-    assert.equal(search.owner, "mmr-web");
-    assert.match(search.diagnostic, /MMR_WEB_ENABLE=true/);
+    assert.equal(search.owner, "ampi-web");
+    assert.match(search.diagnostic, /AMPI_WEB_ENABLE=true/);
     assert.equal(reader.status, "gated");
-    assert.equal(reader.owner, "mmr-web");
+    assert.equal(reader.owner, "ampi-web");
     assert.deepEqual(resolved.gatedTools.filter((tool) => tool === "web_search" || tool === "read_web_page").sort(), [
       "read_web_page",
       "web_search",
     ]);
 
-    const [gate] = runtime.resolveMmrFeatureGates(["mmr-web"]);
+    const [gate] = runtime.resolveMmrFeatureGates(["ampi-web"]);
     assert.equal(gate.status, "disabled");
-    assert.equal(gate.source, "mmr-web");
+    assert.equal(gate.source, "ampi-web");
   });
 
-  it("activates configured web tools through a separately imported mmr-core runtime", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+  it("activates configured web tools through a separately imported ampi-core runtime", async () => {
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const runtime = await importCacheIsolatedRuntime();
     const { pi, tools } = makePi();
 
@@ -144,13 +144,13 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     assert.equal(resolved.activeTools.includes("web_search"), true);
     assert.equal(resolved.activeTools.includes("read_web_page"), true);
 
-    const [gate] = runtime.resolveMmrFeatureGates(["mmr-web"]);
+    const [gate] = runtime.resolveMmrFeatureGates(["ampi-web"]);
     assert.equal(gate.status, "enabled");
-    assert.equal(gate.source, "mmr-web");
+    assert.equal(gate.source, "ampi-web");
   });
 
   it("keeps both tools active across cache isolation when only the key is missing", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const runtime = await importCacheIsolatedRuntime();
     const { pi, tools } = makePi();
 
@@ -165,16 +165,16 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     assert.equal(reader.status, "active");
     assert.equal(reader.chosen, "read_web_page");
 
-    const [gate] = runtime.resolveMmrFeatureGates(["mmr-web"]);
+    const [gate] = runtime.resolveMmrFeatureGates(["ampi-web"]);
     assert.equal(gate.status, "enabled");
-    assert.equal(gate.source, "mmr-web");
+    assert.equal(gate.source, "ampi-web");
     assert.match(gate.reason, /BRAVE_API_KEY/);
   });
 });
 
 describe("mmr-web extension factory", () => {
-  it("registers a tool provider that overrides mmr-core's deferred web tools", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+  it("registers a tool provider that overrides ampi-core's deferred web tools", async () => {
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const runtime = await importRuntime();
     const { pi } = makePi();
 
@@ -186,12 +186,12 @@ describe("mmr-web extension factory", () => {
     assert.equal(resolved.activeTools.includes("web_search"), true);
     assert.equal(resolved.activeTools.includes("read_web_page"), true);
     const decision = resolved.decisions.find((d) => d.requested === "web_search");
-    assert.equal(decision.owner, "mmr-web");
+    assert.equal(decision.owner, "ampi-web");
     assert.equal(decision.status, "active");
   });
 
   it("emits gated decisions when network is disabled", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const runtime = await importRuntime();
     const { pi, tools } = makePi();
 
@@ -203,15 +203,15 @@ describe("mmr-web extension factory", () => {
     const search = resolved.decisions.find((d) => d.requested === "web_search");
     const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "gated");
-    assert.equal(search.owner, "mmr-web");
+    assert.equal(search.owner, "ampi-web");
     assert.equal(reader.status, "gated");
-    assert.equal(reader.owner, "mmr-web");
+    assert.equal(reader.owner, "ampi-web");
     assert.equal(resolved.gatedTools.includes("web_search"), true);
     assert.equal(resolved.gatedTools.includes("read_web_page"), true);
   });
 
   it("session_start does NOT reload settings (one-shot to keep gate in sync with registered tools)", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const { pi, handlers } = makePi();
 
     let calls = 0;
@@ -232,7 +232,7 @@ describe("mmr-web extension factory", () => {
   });
 
   it("session_start drains initial-load warnings exactly once and never again", async () => {
-    const { createMmrWebExtension } = await importSource("extensions/mmr-web/index.ts");
+    const { createMmrWebExtension } = await importSource("extensions/ampi-web/index.ts");
     const { pi, handlers } = makePi();
 
     const factory = createMmrWebExtension({

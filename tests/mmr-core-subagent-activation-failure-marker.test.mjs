@@ -12,7 +12,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/mmr-core/subagent-resolver.ts";
+const MODULE = "extensions/ampi-core/subagent-resolver.ts";
 
 describe("MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX", () => {
   it("exports a stable, non-empty prefix", async () => {

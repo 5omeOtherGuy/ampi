@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const TASK_MODULE = "extensions/mmr-workers/task.ts";
-const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
+const TASK_MODULE = "extensions/ampi-workers/task.ts";
+const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 
 function makeWorkerResult(overrides = {}) {
   return {
@@ -199,7 +199,7 @@ describe("Task tool", () => {
     assert.match(calls[0].systemPrompt, /Task Worker Role/);
     assert.equal(calls[0].model, "openai-codex/gpt-5.5");
     assert.match(result.content[0].text, /worker finished/);
-    assert.equal(result.details.worker, "mmr-subagents.Task");
+    assert.equal(result.details.worker, "ampi-workers.Task");
     assert.equal(result.details.description, "Inspect task path");
     assert.deepEqual([...result.details.workerTools], [...TASK_WORKER_TOOLS]);
     assert.equal(result.details.model, "openai-codex/gpt-5.5");
@@ -342,7 +342,7 @@ describe("Task tool", () => {
     // → invocation.promptBaseMode. It catches regressions where one of
     // those default seams is broken even though every stubbed test
     // passes.
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     const { createTaskTool, TASK_SUBAGENT_PROFILE } = await importSource(TASK_MODULE);
     // Build a minimal MmrModelRegistryLike that satisfies the resolver's
     // route resolution against the task-subagent profile's pinned model
@@ -953,7 +953,7 @@ describe("Task tool", () => {
     // `prompt-base.unresolved`; Task surfaces that as an activation-style
     // failure and does not spawn. Previously, `resolveParentMode` mapped
     // free/missing to "smart", bypassing the resolver's fail-closed path.
-    const runtime = await importSource("extensions/mmr-core/runtime.ts");
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
     runtime.setMmrModeState(undefined);
     const { createTaskTool } = await importSource(TASK_MODULE);
     let runnerCalls = 0;
@@ -1008,7 +1008,7 @@ describe("Task tool", () => {
     // --no-skills so the assembled worker prompt is the only model-visible
     // system prompt.
     const { createTaskTool, TASK_WORKER_TOOLS } = await importSource(TASK_MODULE);
-    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-workers/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/runner.ts");
     const calls = [];
     const tool = createTaskTool({
       resolveInvocation: stubTaskInvocation({
@@ -1063,7 +1063,7 @@ describe("Task tool", () => {
     );
     assert.equal(builtArgs.includes("--no-context-files"), true);
     assert.equal(builtArgs.includes("--no-skills"), true);
-    const parentModeIndex = builtArgs.indexOf("--mmr-parent-mode");
+    const parentModeIndex = builtArgs.indexOf("--ampi-parent-mode");
     assert.notEqual(parentModeIndex, -1, "Task must pass parent-mode metadata to the child");
     assert.equal(builtArgs[parentModeIndex + 1], "rush");
     const toolsIndex = builtArgs.indexOf("--tools");
@@ -1076,7 +1076,7 @@ describe("Task tool", () => {
   });
 
   it("serializes an empty tools array as an explicit `--tools \"\"` ceiling, but omits the flag when tools is undefined", async () => {
-    const { buildMmrWorkerArgs } = await importSource("extensions/mmr-workers/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/runner.ts");
 
     // Empty array: the runner explicitly asked for no tools, so the child
     // must receive `--tools ""` (an empty ceiling) instead of falling back to

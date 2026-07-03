@@ -2,7 +2,7 @@
 
 **Audience.** Users running `ampi` alongside their own Pi extensions, tools, custom providers, or MCP servers, and contributors reasoning about how locked modes interact with foreign Pi surfaces.
 
-**Related.** Package overview: [`../README.md`](../README.md). Mode and tool semantics: [`../src/extensions/mmr-core/README.md`](../src/extensions/mmr-core/README.md). Architecture: [`reference-architecture.md`](reference-architecture.md).
+**Related.** Package overview: [`../README.md`](../README.md). Mode and tool semantics: [`../src/extensions/ampi-core/README.md`](../src/extensions/ampi-core/README.md). Architecture: [`reference-architecture.md`](reference-architecture.md).
 
 ## Summary
 
@@ -26,7 +26,7 @@ The stance below is per scenario. "Supported" means it works in locked modes tod
 
 Tools you register (custom extension tools, third-party tools, individual MCP server tools) are **blocked in locked modes by default** because they are not in the mode allowlist.
 
-- **You can use them** by listing their exact names in `mmrCore.lockedModeExtraTools` (see [mmr-core README](../src/extensions/mmr-core/README.md#locked-mode-extra-tools)). They merge into the active set additively and fail-closed is preserved.
+- **You can use them** by listing their exact names in `ampiCore.lockedModeExtraTools` (see [ampi-core README](../src/extensions/ampi-core/README.md#locked-mode-extra-tools)). They merge into the active set additively and fail-closed is preserved.
 - **We recommend** keeping the extra-tool list small and intentional. If you depend on many ad-hoc or dynamically named tools (common with large MCP servers), prefer **`free` mode**, which exposes everything without per-name configuration. Locked modes exist precisely to constrain the surface; opting dozens of tools back in defeats that purpose.
 
 We deliberately do **not** support wildcards, "allow all MCP", or source/path-based grants: tool source metadata is not portable across machines, and broad grants would turn a locked mode into a near-`free` mode silently.
@@ -51,7 +51,7 @@ If your extension registers a name `ampi` also owns (e.g. `handoff`, `Task`), Pi
 
 Custom provider extensions are considered in locked modes **only** when the model name matches a known family prefix (`claude-*`, `gpt-*`, `gemini-*`/`gemma-*`) and the provider id is one `ampi` expands from the explicit preference. For a novel provider id or model name:
 
-- **Supported** via `mmrCore.modelPreferences` — add an explicit `provider/model` route for the relevant mode(s); `ampi` will use it.
+- **Supported** via `ampiCore.modelPreferences` — add an explicit `provider/model` route for the relevant mode(s); `ampi` will use it.
 - Otherwise use **`free` mode**, where Pi's native model selection reaches any registered provider.
 
 ### Input transforms — Supported
@@ -88,7 +88,7 @@ Your own subagent/`Task`-style extension runs in the parent session like any oth
 | Rendering / built-in overrides | Supported | use anywhere |
 | Name collisions with ampi tools | Supported (last-writer) | use a distinct name |
 | `preset` / `tools` / `plan-mode` / native `setModel` | Drops to `free` | use in `free` |
-| Custom providers/models | Supported if family/provider matches | else `mmrCore.modelPreferences` or `free` |
+| Custom providers/models | Supported if family/provider matches | else `ampiCore.modelPreferences` or `free` |
 | Input transforms | Supported | use anywhere |
 | System-prompt append | Supported | use anywhere |
 | System-prompt head replacement | Not supported in locked modes | use `free` |

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const RESULT_MODULE = "extensions/mmr-workers/task-result.ts";
-const TASK_MODULE = "extensions/mmr-workers/task.ts";
+const RESULT_MODULE = "extensions/ampi-workers/task-result.ts";
+const TASK_MODULE = "extensions/ampi-workers/task.ts";
 
 after(cleanupLoadedSource);
 
@@ -86,7 +86,7 @@ describe("mmr-subagents task-result", () => {
 
     const idle = buildTaskProgressResult(makeSnapshot(), DETAILS_CTX);
     assert.deepEqual(idle.content, [{ type: "text", text: TASK_PROGRESS_PLACEHOLDER }]);
-    assert.equal(idle.details.worker, "mmr-subagents.Task");
+    assert.equal(idle.details.worker, "ampi-workers.Task");
     // Progress is always classified success; the final status needs the exit.
     assert.equal(idle.details.status, "success");
     assert.equal(idle.details.prompt, DETAILS_CTX.prompt);

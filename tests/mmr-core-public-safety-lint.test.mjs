@@ -138,7 +138,7 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
 
   it("the renderer module contains no forbidden tokens", () => {
     const text = readFileSync(
-      path.join(repoRoot, "src/extensions/mmr-core/prompt-debug-renderer.ts"),
+      path.join(repoRoot, "src/extensions/ampi-core/prompt-debug-renderer.ts"),
       "utf8",
     );
     const findings = lintPublicSafetyText(text, { surface: "prompt-debug-renderer.ts" });
@@ -151,13 +151,13 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
     // ampi-owned language; behavioral pins belong in the public surface
     // (types, JSDoc, tests) without anchoring to a private path.
     const surfaces = [
-      "src/extensions/mmr-workers/finder.ts",
-      "src/extensions/mmr-workers/oracle.ts",
-      "src/extensions/mmr-workers/task.ts",
-      "src/extensions/mmr-workers/runner.ts",
-      "src/extensions/mmr-workers/worker-trail.ts",
-      "src/extensions/mmr-core/subagent-resolver.ts",
-      "src/extensions/mmr-core/subagent-profiles.ts",
+      "src/extensions/ampi-workers/finder.ts",
+      "src/extensions/ampi-workers/oracle.ts",
+      "src/extensions/ampi-workers/task.ts",
+      "src/extensions/ampi-workers/runner.ts",
+      "src/extensions/ampi-workers/worker-trail.ts",
+      "src/extensions/ampi-core/subagent-resolver.ts",
+      "src/extensions/ampi-core/subagent-profiles.ts",
       "tests/mmr-subagents-finder.test.mjs",
       "tests/mmr-subagents-oracle.test.mjs",
       "tests/mmr-subagents-task.test.mjs",
@@ -182,10 +182,10 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
 
   it("Phase C-edited source files contain no forbidden tokens outside PRIVATE_REFERENCE regions", () => {
     const files = [
-      "src/extensions/mmr-web/tools.ts",
-      "src/extensions/mmr-patch/index.ts",
-      "src/extensions/mmr-tasks/index.ts",
-      "src/extensions/mmr-core/builtin-tool-guidance.ts",
+      "src/extensions/ampi-web/tools.ts",
+      "src/extensions/ampi-patch/index.ts",
+      "src/extensions/ampi-tasks/index.ts",
+      "src/extensions/ampi-core/builtin-tool-guidance.ts",
     ];
     const allFindings = [];
     for (const file of files) {

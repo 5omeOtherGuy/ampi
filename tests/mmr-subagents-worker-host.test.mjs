@@ -1,5 +1,5 @@
 // Regression proof for the PR 2 helper deduplication
-// (src/extensions/mmr-workers/worker-host.ts).
+// (src/extensions/ampi-workers/worker-host.ts).
 //
 // `resolveWorkerCwd` and `buildWorkerToolManifest` were previously duplicated
 // verbatim across the subagent tool modules. `buildWorkerToolManifest`
@@ -22,8 +22,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const WORKER_HOST_MODULE = "extensions/mmr-workers/worker-host.ts";
-const JSON_MODULE = "extensions/mmr-core/internal/json.ts";
+const WORKER_HOST_MODULE = "extensions/ampi-workers/worker-host.ts";
+const JSON_MODULE = "extensions/ampi-core/internal/json.ts";
 
 after(cleanupLoadedSource);
 

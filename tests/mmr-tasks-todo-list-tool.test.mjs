@@ -13,8 +13,8 @@
 //   - when every submitted item is `completed`, the *stored* list is cleared
 //     immediately; the tool result still echoes the submitted list.
 //
-// These tests intentionally fail until `extensions/mmr-tasks/todo-list.ts`
-// and `extensions/mmr-tasks/todo-list-tool.ts` land and `index.ts` is
+// These tests intentionally fail until `extensions/ampi-tasks/todo-list.ts`
+// and `extensions/ampi-tasks/todo-list-tool.ts` land and `index.ts` is
 // rewired to register the new tool in place of the old one.
 
 import assert from "node:assert/strict";
@@ -61,7 +61,7 @@ function makeCtx(session, overrides = {}) {
 }
 
 async function loadToolbox() {
-  const toolbox = await importSource("extensions/mmr-tasks/index.ts");
+  const toolbox = await importSource("extensions/ampi-tasks/index.ts");
   const { pi, calls, handlers } = createMockPi();
   toolbox.default(pi);
   return { toolbox, pi, calls, handlers };
@@ -74,7 +74,7 @@ async function loadToolboxLinked() {
   // that ctx.sessionManager.getEntries() will surface. This is how the real
   // Pi runtime behaves; the mock keeps them separate by default.
   pi.appendEntry = (customType, data) => session.append(customType, data);
-  const toolbox = await importSource("extensions/mmr-tasks/index.ts");
+  const toolbox = await importSource("extensions/ampi-tasks/index.ts");
   toolbox.default(pi);
   return { pi, handlers, session, toolbox };
 }
@@ -451,7 +451,7 @@ describe("mmr-tasks task_list — strict schema rejects legacy keys", () => {
   });
 });
 
-describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntry", () => {
+describe("mmr-tasks task_list — persistence as ampi-tasks.todo-state CustomEntry", () => {
   it("appends a versioned todo-state entry on every accepted write", async () => {
     const { pi, session } = await loadToolboxLinked();
     const tool = getTaskListTool(pi);
@@ -463,7 +463,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     const result = await callTaskList(tool, { tasks }, ctx);
     assert.notEqual(result?.isError, true, "valid input must not error");
 
-    const todoEntries = session.entries.filter((e) => e.customType === "mmr-tasks.todo-state");
+    const todoEntries = session.entries.filter((e) => e.customType === "ampi-tasks.todo-state");
     assert.equal(todoEntries.length, 1, "exactly one todo-state entry must be appended");
     const data = todoEntries[0].data;
     assert.equal(data?.version, 2, "persisted state must declare version: 2");
@@ -507,7 +507,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
 
     // A subsequent read of the latest todo-state entry must show the same list.
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     assert.ok(latest, "latest todo-state entry must be discoverable");
@@ -531,7 +531,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     }, ctx);
 
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     // The latest call submitted a single-item list with only Beta completed.
@@ -561,7 +561,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     assert.notEqual(result?.isError, true);
 
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     assert.deepEqual(latest?.tasks, [], "stored list must clear when allDone");
@@ -665,7 +665,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     ];
     await callTaskList(tool, { tasks }, ctx);
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     assert.deepEqual(latest?.tasks, tasks, "partial completion must persist as submitted");
@@ -688,7 +688,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     await callTaskList(tool, { tasks }, ctx);
 
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     assert.equal(latest?.version, 2);
@@ -702,7 +702,7 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
     const result = await callTaskList(tool, { tasks: [] }, ctx);
     assert.notEqual(result?.isError, true, "empty list must be a valid submission");
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const latest = findLatestPersistedTodoState(session.getEntries());
     assert.deepEqual(latest?.tasks, []);
@@ -711,14 +711,15 @@ describe("mmr-tasks task_list — persistence as mmr-tasks.todo-state CustomEntr
 
 describe("mmr-tasks task_list — persisted-state helpers (mirror mmr-core.mode-state)", () => {
   it("exports TODO_STATE_ENTRY and TODO_STATE_VERSION constants", async () => {
-    const mod = await importSource("extensions/mmr-tasks/todo-list.ts");
-    assert.equal(mod.TODO_STATE_ENTRY, "mmr-tasks.todo-state");
+    const mod = await importSource("extensions/ampi-tasks/todo-list.ts");
+    assert.equal(mod.TODO_STATE_ENTRY, "ampi-tasks.todo-state");
+    assert.equal(mod.LEGACY_TODO_STATE_ENTRY, "mmr-tasks.todo-state");
     assert.equal(mod.TODO_STATE_VERSION, 2);
   });
 
   it("findLatestPersistedTodoState walks last→first and skips unrelated entries", async () => {
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const entries = [
       { type: "custom", customType: "mmr-tasks.todo-state",
@@ -735,7 +736,7 @@ describe("mmr-tasks task_list — persisted-state helpers (mirror mmr-core.mode-
 
   it("still parses existing version 1 flat persisted state and ignores v1 subtasks", async () => {
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const entries = [{
       type: "custom",
@@ -761,7 +762,7 @@ describe("mmr-tasks task_list — persisted-state helpers (mirror mmr-core.mode-
 
   it("findLatestPersistedTodoState rejects future versions (returns undefined for that entry, continues scanning)", async () => {
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     const entries = [
       { type: "custom", customType: "mmr-tasks.todo-state",
@@ -777,7 +778,7 @@ describe("mmr-tasks task_list — persisted-state helpers (mirror mmr-core.mode-
 
   it("findLatestPersistedTodoState returns undefined when no entries match", async () => {
     const { findLatestPersistedTodoState } = await importSource(
-      "extensions/mmr-tasks/todo-list.ts",
+      "extensions/ampi-tasks/todo-list.ts",
     );
     assert.equal(findLatestPersistedTodoState([]), undefined);
     assert.equal(
@@ -1075,7 +1076,7 @@ describe("mmr-tasks task_list — widget gates on TUI run mode", () => {
 
   it("isTuiWidgetSurface: mode-aware on 0.78, hasUI-fallback on 0.77", async () => {
     const { isTuiWidgetSurface } = await importSource(
-      "extensions/mmr-tasks/todo-list-tool.ts",
+      "extensions/ampi-tasks/todo-list-tool.ts",
     );
     const ui = { setWidget() {} };
     // 0.78+ contexts: only "tui" is a widget surface.
@@ -1093,7 +1094,7 @@ describe("mmr-tasks task_list — widget gates on TUI run mode", () => {
 
   it("refreshTodoWidget renders in TUI mode", async () => {
     const { refreshTodoWidget } = await importSource(
-      "extensions/mmr-tasks/todo-list-tool.ts",
+      "extensions/ampi-tasks/todo-list-tool.ts",
     );
     const { ctx, widgetCalls } = makeWidgetCtxLike({ mode: "tui" });
     refreshTodoWidget(ctx, tasks);
@@ -1104,7 +1105,7 @@ describe("mmr-tasks task_list — widget gates on TUI run mode", () => {
 
   it("refreshTodoWidget is a no-op in RPC mode even when hasUI is true", async () => {
     const { refreshTodoWidget } = await importSource(
-      "extensions/mmr-tasks/todo-list-tool.ts",
+      "extensions/ampi-tasks/todo-list-tool.ts",
     );
     // Non-empty and empty lists must both emit zero widget traffic in RPC —
     // not even a clear-only call, since RPC ignores the factory anyway.
@@ -1119,7 +1120,7 @@ describe("mmr-tasks task_list — widget gates on TUI run mode", () => {
 
   it("refreshTodoWidget still renders on a 0.77 context (no mode) with hasUI", async () => {
     const { refreshTodoWidget } = await importSource(
-      "extensions/mmr-tasks/todo-list-tool.ts",
+      "extensions/ampi-tasks/todo-list-tool.ts",
     );
     const { ctx, widgetCalls } = makeWidgetCtxLike({ hasUI: true });
     refreshTodoWidget(ctx, tasks);

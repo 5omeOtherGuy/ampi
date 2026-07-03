@@ -4,12 +4,12 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
-const ORACLE_MODULE = "extensions/mmr-workers/oracle.ts";
-const RUNNER_MODULE = "extensions/mmr-workers/runner.ts";
+const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
+const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
 const ROOT_MODULE = "index.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
@@ -188,8 +188,8 @@ describe("child-CLI MmrSubagentRunner adapter", () => {
 
     assert.equal(calls.length, 1, "child-CLI runner must spawn exactly one Pi worker");
     const { args } = calls[0];
-    assert.ok(args.includes("--mmr-subagent"), "must include --mmr-subagent flag");
-    const profileIndex = args.indexOf("--mmr-subagent");
+    assert.ok(args.includes("--ampi-subagent"), "must include --ampi-subagent flag");
+    const profileIndex = args.indexOf("--ampi-subagent");
     assert.equal(args[profileIndex + 1], "finder");
     assert.ok(args.includes("--model"), "must include --model flag");
     const modelIndex = args.indexOf("--model");

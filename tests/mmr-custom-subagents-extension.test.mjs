@@ -8,7 +8,7 @@ import { createMockPi } from "./helpers/pi-stub.mjs";
 after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const customExtensionPath = "./src/extensions/mmr-custom-subagents/index.ts";
+const customExtensionPath = "./src/extensions/ampi-custom-subagents/index.ts";
 
 async function readPackageJson() {
   return JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -17,7 +17,7 @@ async function readPackageJson() {
 describe("mmr-custom-subagents extension", () => {
   it("is registered as a Pi package extension after mmr-subagents", async () => {
     const pkg = await readPackageJson();
-    const indexOfSubagents = pkg.pi.extensions.indexOf("./src/extensions/mmr-workers/index.ts");
+    const indexOfSubagents = pkg.pi.extensions.indexOf("./src/extensions/ampi-workers/index.ts");
     const indexOfCustom = pkg.pi.extensions.indexOf(customExtensionPath);
     assert.notEqual(indexOfSubagents, -1, "mmr-subagents must be registered");
     assert.notEqual(indexOfCustom, -1, "mmr-custom-subagents must be registered");
@@ -26,11 +26,11 @@ describe("mmr-custom-subagents extension", () => {
 
   it("exposes a package subpath for direct extension loading", async () => {
     const pkg = await readPackageJson();
-    assert.equal(pkg.exports["./extensions/mmr-custom-subagents"], customExtensionPath);
+    assert.equal(pkg.exports["./extensions/ampi-custom-subagents"], customExtensionPath);
   });
 
   it("exports a loadable extension factory and root public surface", async () => {
-    const mod = await importSource("extensions/mmr-custom-subagents/index.ts");
+    const mod = await importSource("extensions/ampi-custom-subagents/index.ts");
     const root = await importSource("index.ts");
     assert.equal(typeof mod.default, "function");
     assert.equal(typeof mod.createMmrCustomSubagentsExtension, "function");
@@ -40,7 +40,7 @@ describe("mmr-custom-subagents extension", () => {
   });
 
   it("registers no tools when no custom subagents are enabled", async () => {
-    const { createMmrCustomSubagentsExtension } = await importSource("extensions/mmr-custom-subagents/index.ts");
+    const { createMmrCustomSubagentsExtension } = await importSource("extensions/ampi-custom-subagents/index.ts");
     const { pi, tools, handlers } = createMockPi();
     createMmrCustomSubagentsExtension({ customSubagents: { cwd: "/tmp/no-custom-subagents" } })(pi);
     assert.deepEqual([...tools.keys()], []);

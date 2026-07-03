@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const QUERY_MODULE = "extensions/mmr-history/query.ts";
+const QUERY_MODULE = "extensions/ampi-history/query.ts";
 const NOW = new Date("2026-06-07T00:00:00Z");
 
 describe("mmr-history parseSessionQuery date filters", () => {

@@ -70,7 +70,7 @@ function createPi(options = {}) {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
@@ -81,7 +81,7 @@ beforeEach(async () => {
 
 describe("mmr-core free mode", () => {
   it("/mode free restores baseline tools, persists free, and leaves model/thinking untouched", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createLockedState());
     const { ctx, notifications } = createContext();
@@ -98,13 +98,13 @@ describe("mmr-core free mode", () => {
     assert.deepEqual(calls.setModel, []);
     assert.deepEqual(calls.setThinkingLevel, []);
     assert.equal(calls.appendEntry.length, 1);
-    assert.equal(calls.appendEntry[0][0], "mmr-core.mode-state");
+    assert.equal(calls.appendEntry[0][0], "ampi-core.mode-state");
     assert.equal(calls.appendEntry[0][1].mode, "free");
     assert.match(notifications.at(-1)?.message, /Free mode activated/i);
   });
 
   it("/mode free restores the model, thinking level, and tools captured before MMR activation", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
     const { ctx } = createContext([SMART_MODEL, FREE_MODEL], { model: FREE_MODEL });
@@ -128,7 +128,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("free mode disables the MMR prompt layer and tool-call blocking", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { pi, handlers } = createPi();
     runtime.setMmrModeState(createLockedState({ mode: "free", displayName: "Free", modelApplied: false, provider: "", model: "", activeTools: ["read"] }));
@@ -142,7 +142,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("switches to free with a warning when the user changes model while a locked mode is active", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { ctx, notifications } = createContext([SMART_MODEL]);
     const { pi, calls, handlers, setEventContext } = createPi({ activeTools: ["read", "bash", "grep"] });
@@ -175,7 +175,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("switches to free with a warning when the user changes thinking while a locked mode is active", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { ctx, notifications } = createContext([SMART_MODEL]);
     const { pi, calls, handlers } = createPi({ activeTools: ["read", "bash", "grep"] });
@@ -201,13 +201,13 @@ describe("mmr-core free mode", () => {
   });
 
   it("keeps persisted free mode on session start without model or thinking routing", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const { ctx, entries, statuses, footers } = createContext([SMART_MODEL]);
     const { pi, calls, handlers } = createPi({ activeTools: ["read", "bash", "grep"] });
     entries.push({
       type: "custom",
-      customType: "mmr-core.mode-state",
+      customType: "ampi-core.mode-state",
       data: { mode: "free", source: "command", provider: "", model: "", activeTools: ["read", "bash"], missingTools: [], deferredTools: [], appliedAt: "2026-05-08T00:00:00.000Z" },
     });
     extension(pi);
@@ -224,7 +224,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("does not switch to free for Pi restore model events", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createLockedState());
     const { ctx, notifications } = createContext([SMART_MODEL]);
@@ -240,7 +240,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("does not switch to free for managed model and thinking updates outside mode activation", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createLockedState());
     const { ctx, notifications } = createContext([SMART_MODEL, FREE_MODEL]);
@@ -264,7 +264,7 @@ describe("mmr-core free mode", () => {
   });
 
   it("does not switch to free for MMR-initiated model and thinking changes", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createLockedState());
     const { ctx, notifications } = createContext([RUSH_MODEL]);

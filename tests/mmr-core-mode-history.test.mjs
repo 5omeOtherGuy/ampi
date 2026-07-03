@@ -20,7 +20,7 @@ function event(overrides = {}) {
 
 describe("mmr-core mode/fallback history ring buffer", () => {
   it("appends events oldest-to-newest", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
     runtime.recordMmrModeEvent(event({ mode: "rush", at: "t1" }));
@@ -34,7 +34,7 @@ describe("mmr-core mode/fallback history ring buffer", () => {
   });
 
   it("collapses consecutive duplicate events but keeps distinct ones", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
     // Same observable content, different timestamp -> collapsed.
@@ -48,7 +48,7 @@ describe("mmr-core mode/fallback history ring buffer", () => {
   });
 
   it("trims FIFO to the bounded cap", async () => {
-    const mod = await importSource("extensions/mmr-core/runtime.ts");
+    const mod = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = mod.createMmrCoreRuntime();
     const cap = mod.MMR_MODE_HISTORY_LIMIT;
 
@@ -65,7 +65,7 @@ describe("mmr-core mode/fallback history ring buffer", () => {
   });
 
   it("returns copies that cannot mutate stored history", async () => {
-    const { createMmrCoreRuntime } = await importSource("extensions/mmr-core/runtime.ts");
+    const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
     runtime.recordMmrModeEvent(event({ at: "t1" }));
 
@@ -77,9 +77,9 @@ describe("mmr-core mode/fallback history ring buffer", () => {
 
 describe("/mmr-status debug mode/fallback history rendering", () => {
   it("renders the history block newest-first only in debug mode", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
-    const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
+    const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("smart"),
@@ -136,9 +136,9 @@ describe("/mmr-status debug mode/fallback history rendering", () => {
   });
 
   it("omits the history block when there is no history", async () => {
-    const { formatMmrStatus } = await importSource("extensions/mmr-core/status.ts");
-    const { createMmrModeState } = await importSource("extensions/mmr-core/state.ts");
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
+    const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
+    const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
       mode: getMmrMode("smart"),

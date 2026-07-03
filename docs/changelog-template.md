@@ -24,11 +24,11 @@ Omit empty headings. A heading that is present must contain at least one top-lev
 ```md
 ### Added
 
-- `mmr-core`: concise behavior summary. Include the user-visible effect, any new public API/settings/commands, and the deterministic tests or fixtures that cover it.
+- `ampi-core`: concise behavior summary. Include the user-visible effect, any new public API/settings/commands, and the deterministic tests or fixtures that cover it.
 ```
 
-Prefer extension-prefixed bullets such as `mmr-core`, `mmr-toolbox`, `mmr-web`, `mmr-subagents`, or `mmr-history`.
-For cross-extension changes, use `` `mmr-core` / `mmr-subagents`: ...``.
+Prefer extension-prefixed bullets such as `ampi-core`, `ampi-toolbox`, `ampi-web`, `ampi-workers`, or `ampi-history`.
+For cross-extension changes, use `` `ampi-core` / `ampi-workers`: ...``.
 
 ## GitHub-generated release notes
 
@@ -74,11 +74,11 @@ Wrap the bullets you want appended in HTML comments inside the PR body:
 <!-- ampi changelog:start -->
 ### Fixed
 
-- `mmr-core`: short, public-safe bullet describing the user-visible effect.
+- `ampi-core`: short, public-safe bullet describing the user-visible effect.
 
 ### Added
 
-- `mmr-web`: another bullet under a different canonical heading.
+- `ampi-web`: another bullet under a different canonical heading.
 <!-- ampi changelog:end -->
 ```
 

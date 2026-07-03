@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const FORMAT_MODULE = "extensions/mmr-workers/async-task-tool-format.ts";
-const SCHEMA_MODULE = "extensions/mmr-workers/async-task-tool-schemas.ts";
+const FORMAT_MODULE = "extensions/ampi-workers/async-task-tool-format.ts";
+const SCHEMA_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
 
 after(cleanupLoadedSource);
 
@@ -110,7 +110,7 @@ describe("fleet-aware model-visible guidance", () => {
 
   it("worker-tool fan-out guidance teaches grouped background calls, not start_task", async () => {
     const { WORKER_GROUP_FANOUT_GUIDANCE } = await importSource(
-      "extensions/mmr-core/worker-tool-guidance.ts",
+      "extensions/ampi-core/worker-tool-guidance.ts",
     );
     assert.match(WORKER_GROUP_FANOUT_GUIDANCE, /background: true/);
     assert.match(WORKER_GROUP_FANOUT_GUIDANCE, /same group key/);

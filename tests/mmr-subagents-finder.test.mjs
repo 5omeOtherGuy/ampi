@@ -1,5 +1,5 @@
 // Unit tests for the `mmr-subagents` finder tool — written test-first to
-// pin observable behavior before implementing src/extensions/mmr-workers/finder.ts.
+// pin observable behavior before implementing src/extensions/ampi-workers/finder.ts.
 //
 // Behavior pinned here (does NOT include the subprocess runner, which has
 // its own tests, or the provider/extension wiring, which is exercised in
@@ -43,12 +43,12 @@ initTheme(undefined, false);
 
 after(cleanupLoadedSource);
 
-const FINDER_MODULE = "extensions/mmr-workers/finder.ts";
-const PROMPTS_MODULE = "extensions/mmr-workers/prompts.ts";
-const PROMPT_ASSEMBLY_MODULE = "extensions/mmr-core/subagent-prompt-assembly.ts";
-const MODEL_RESOLVER_MODULE = "extensions/mmr-core/model-resolver.ts";
-const SUBAGENT_RESOLVER_MODULE = "extensions/mmr-core/subagent-resolver.ts";
-const PROFILES_MODULE = "extensions/mmr-core/subagent-profiles.ts";
+const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
+const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
+const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
+const MODEL_RESOLVER_MODULE = "extensions/ampi-core/model-resolver.ts";
+const SUBAGENT_RESOLVER_MODULE = "extensions/ampi-core/subagent-resolver.ts";
+const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
@@ -587,7 +587,7 @@ describe("finder execute() seam", () => {
     assert.equal(result.details.stderr, "  warning: noisy line\n");
     assert.deepEqual(result.details.args, workerResult.args);
     assert.equal(typeof result.details.usage.turns, "number");
-    assert.equal(result.details.worker, "mmr-subagents.finder");
+    assert.equal(result.details.worker, "ampi-workers.finder");
   });
 
   it("renders a successful finder run as completed (warning, not failed) when a non-fatal provider error was preserved", async () => {

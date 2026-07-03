@@ -20,13 +20,13 @@ function createPi(options = {}) {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
 describe("mmr-core mode activation", () => {
   it("fails clear and keeps previous mode state/tools when no deep model route is usable", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const previousState = {
       mode: "smart",
@@ -70,7 +70,7 @@ describe("mmr-core mode activation", () => {
   });
 
   it("fails closed and keeps previous state/tools/model when no active tools resolve", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const previousState = {
       mode: "smart",
@@ -117,7 +117,7 @@ describe("mmr-core mode activation", () => {
   });
 
   it("includes edit and write in setActiveTools when deep activates with Pi-native tools", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -144,7 +144,7 @@ describe("mmr-core mode activation", () => {
   });
 
   it("applies the per-mode thinking level for each locked mode", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -177,7 +177,7 @@ describe("mmr-core mode activation", () => {
   });
 
   it("falls rush back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -207,7 +207,7 @@ describe("mmr-core mode activation", () => {
   });
 
   it("surfaces deferred tool diagnostics in the activation notification warnings list", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
 
@@ -231,10 +231,10 @@ describe("mmr-core mode activation", () => {
     const activation = notifications.at(-1);
     assert.equal(activation.level, "warning");
     // Built-in deferred rules name the owning extension in the diagnostic.
-    assert.match(activation.message, /oracle: deferred until mmr-subagents ships/);
-    assert.match(activation.message, /finder: deferred until mmr-subagents ships/);
-    assert.match(activation.message, /web_search: deferred until mmr-web ships/);
-    assert.match(activation.message, /chart: deferred until mmr-tasks ships/);
-    assert.match(activation.message, /reviewer: deferred until mmr-subagents ships/);
+    assert.match(activation.message, /oracle: deferred until ampi-workers ships/);
+    assert.match(activation.message, /finder: deferred until ampi-workers ships/);
+    assert.match(activation.message, /web_search: deferred until ampi-web ships/);
+    assert.match(activation.message, /chart: deferred until ampi-tasks ships/);
+    assert.match(activation.message, /reviewer: deferred until ampi-workers ships/);
   });
 });

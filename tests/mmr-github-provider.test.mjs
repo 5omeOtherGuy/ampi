@@ -4,16 +4,16 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const PROVIDER_MODULE = "extensions/mmr-github/provider.ts";
-const OWNERSHIP_MODULE = "extensions/mmr-github/tool-ownership.ts";
+const PROVIDER_MODULE = "extensions/ampi-github/provider.ts";
+const OWNERSHIP_MODULE = "extensions/ampi-github/tool-ownership.ts";
 
 function settings(partial = {}) {
   return { enabled: false, token: undefined, apiBaseUrl: "https://api.github.test", requestTimeoutMs: 1000, maxResultBytes: 200000, ...partial };
 }
 
-describe("mmr-github provider", () => {
+describe("ampi-github provider", () => {
   it("gates every GitHub tool when disabled and claims them when enabled", async () => {
-    const { createMmrGithubToolProvider, MMR_GITHUB_FEATURE_GATE } = await importSource(PROVIDER_MODULE);
+    const { createMmrGithubToolProvider, AMPI_GITHUB_FEATURE_GATE } = await importSource(PROVIDER_MODULE);
     const { MMR_GITHUB_TOOL_NAMES } = await importSource(OWNERSHIP_MODULE);
 
     const disabled = createMmrGithubToolProvider(() => settings({ enabled: false }));
@@ -21,7 +21,7 @@ describe("mmr-github provider", () => {
       const rule = disabled.resolve(name);
       assert.ok(rule);
       assert.equal(rule.kind, "gated");
-      assert.equal(rule.gate, MMR_GITHUB_FEATURE_GATE);
+      assert.equal(rule.gate, AMPI_GITHUB_FEATURE_GATE);
     }
     assert.equal(disabled.resolve("read"), undefined, "must not claim unrelated names");
 
@@ -32,24 +32,25 @@ describe("mmr-github provider", () => {
   });
 
   it("reports disabled and enabled feature-gate reasons including auth state", async () => {
-    const { createMmrGithubFeatureGateProvider, MMR_GITHUB_FEATURE_GATE } = await importSource(PROVIDER_MODULE);
-    const off = createMmrGithubFeatureGateProvider(() => settings({ enabled: false })).evaluate(MMR_GITHUB_FEATURE_GATE);
+    const { createMmrGithubFeatureGateProvider, AMPI_GITHUB_FEATURE_GATE, MMR_GITHUB_FEATURE_GATE } = await importSource(PROVIDER_MODULE);
+    const off = createMmrGithubFeatureGateProvider(() => settings({ enabled: false })).evaluate(AMPI_GITHUB_FEATURE_GATE);
     assert.equal(off.status, "disabled");
-    assert.match(off.reason, /MMR_GITHUB_ENABLE=true/);
+    assert.match(off.reason, /AMPI_GITHUB_ENABLE=true/);
+    assert.equal(createMmrGithubFeatureGateProvider(() => settings({ enabled: false })).evaluate(MMR_GITHUB_FEATURE_GATE).status, "disabled");
 
-    const anon = createMmrGithubFeatureGateProvider(() => settings({ enabled: true })).evaluate(MMR_GITHUB_FEATURE_GATE);
+    const anon = createMmrGithubFeatureGateProvider(() => settings({ enabled: true })).evaluate(AMPI_GITHUB_FEATURE_GATE);
     assert.equal(anon.status, "enabled");
     assert.match(anon.reason, /anonymous/);
 
-    const auth = createMmrGithubFeatureGateProvider(() => settings({ enabled: true, token: "t" })).evaluate(MMR_GITHUB_FEATURE_GATE);
+    const auth = createMmrGithubFeatureGateProvider(() => settings({ enabled: true, token: "t" })).evaluate(AMPI_GITHUB_FEATURE_GATE);
     assert.match(auth.reason, /authenticated/);
 
-    const other = createMmrGithubFeatureGateProvider(() => settings()).evaluate("mmr-web");
-    assert.equal(other, undefined, "must only claim the mmr-github gate");
+    const other = createMmrGithubFeatureGateProvider(() => settings()).evaluate("ampi-web");
+    assert.equal(other, undefined, "must only claim the ampi-github gate");
   });
 });
 
-describe("mmr-github tool ownership", () => {
+describe("ampi-github tool ownership", () => {
   it("recognizes owned tools only by registered source path", async () => {
     const {
       __resetMmrGithubToolSourcePathsForTests,
@@ -57,7 +58,7 @@ describe("mmr-github tool ownership", () => {
       hasMmrGithubOwnedTools,
       MMR_GITHUB_TOOL_NAMES,
     } = await importSource(OWNERSHIP_MODULE);
-    const SRC = "/virtual/mmr-github/index.ts";
+    const SRC = "/virtual/ampi-github/index.ts";
     __resetMmrGithubToolSourcePathsForTests();
     registerMmrGithubToolSourcePath(SRC);
 

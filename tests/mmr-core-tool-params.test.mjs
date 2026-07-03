@@ -7,7 +7,7 @@ after(cleanupLoadedSource);
 
 describe("mmr-core tool parameter helpers", () => {
   it("returns typed params when the schema accepts the raw input", async () => {
-    const { checkMmrToolParams } = await importSource("extensions/mmr-core/tool-params.ts");
+    const { checkMmrToolParams } = await importSource("extensions/ampi-core/tool-params.ts");
     const schema = Type.Object({ query: Type.String() }, { additionalProperties: false });
     const raw = { query: "find auth checks" };
 
@@ -17,7 +17,7 @@ describe("mmr-core tool parameter helpers", () => {
   });
 
   it("reports a deterministic error for missing required fields", async () => {
-    const { checkMmrToolParams, MmrToolParamsError } = await importSource("extensions/mmr-core/tool-params.ts");
+    const { checkMmrToolParams, MmrToolParamsError } = await importSource("extensions/ampi-core/tool-params.ts");
     const schema = Type.Object({ query: Type.String() }, { additionalProperties: false });
 
     assert.throws(
@@ -32,7 +32,7 @@ describe("mmr-core tool parameter helpers", () => {
   });
 
   it("rejects extra fields when the schema is strict", async () => {
-    const { checkMmrToolParams } = await importSource("extensions/mmr-core/tool-params.ts");
+    const { checkMmrToolParams } = await importSource("extensions/ampi-core/tool-params.ts");
     const schema = Type.Object({ query: Type.String() }, { additionalProperties: false });
 
     assert.throws(

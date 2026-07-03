@@ -30,13 +30,13 @@ function createPi() {
 }
 
 async function importRuntime() {
-  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/mmr-core/runtime.ts")).href;
+  const runtimeUrl = pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href;
   return import(runtimeUrl);
 }
 
 describe("mmr-core lifecycle smoke", () => {
   it("loads the extension, resolves an initial mode, switches modes, and appends the MMR prompt layer", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
     const { ctx, notifications, statuses, footers } = createContext();
@@ -93,7 +93,7 @@ describe("mmr-core lifecycle smoke", () => {
       process.env.HOME = home;
       process.env.USERPROFILE = home;
 
-      const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+      const extension = (await importSource("extensions/ampi-core/index.ts")).default;
       const runtime = await importRuntime();
       runtime.setMmrModeState(undefined);
       const { ctx, notifications } = createContext();
@@ -121,7 +121,7 @@ describe("mmr-core lifecycle smoke", () => {
   });
 
   it("renders the /mmr-status debug section only when a debug arg is passed", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(undefined);
     const { ctx, notifications } = createContext();

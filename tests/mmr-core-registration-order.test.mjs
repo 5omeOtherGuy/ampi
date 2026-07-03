@@ -12,14 +12,14 @@ after(cleanupLoadedSource);
 // records commands/shortcuts/handlers as insertion-ordered Maps.
 describe("mmr-core registration order", () => {
   it("registers flags, commands, shortcuts, and hooks in a stable order", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, commands, shortcuts, handlers, flagDefs } = createMockPi();
 
     extension(pi);
 
-    assert.deepEqual([...flagDefs.keys()], ["mmr-mode", "mmr-subagent", "mmr-parent-mode"]);
+    assert.deepEqual([...flagDefs.keys()], ["ampi-mode", "mmr-mode", "ampi-subagent", "mmr-subagent", "ampi-parent-mode", "mmr-parent-mode"]);
 
-    assert.deepEqual([...commands.keys()], ["mode", "mmr-status", "mmr-changelog", "mmr-config"]);
+    assert.deepEqual([...commands.keys()], ["mode", "ampi-status", "mmr-status", "ampi-changelog", "mmr-changelog", "ampi-config", "mmr-config"]);
 
     assert.deepEqual([...shortcuts.keys()], ["ctrl+shift+s", "alt+m", "ctrl+space", "alt+r"]);
 
@@ -43,7 +43,7 @@ describe("mmr-core registration order", () => {
   // proxy and pin the exact global sequence the slim wiring shell must emit:
   // flags -> commands -> shortcuts -> hooks, in order.
   it("registers everything in one stable chronological sequence", async () => {
-    const extension = (await importSource("extensions/mmr-core/index.ts")).default;
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi } = createMockPi();
 
     const sequence = [];
@@ -80,12 +80,18 @@ describe("mmr-core registration order", () => {
     extension(recordingPi);
 
     assert.deepEqual(sequence, [
+      "flag:ampi-mode",
       "flag:mmr-mode",
+      "flag:ampi-subagent",
       "flag:mmr-subagent",
+      "flag:ampi-parent-mode",
       "flag:mmr-parent-mode",
       "command:mode",
+      "command:ampi-status",
       "command:mmr-status",
+      "command:ampi-changelog",
       "command:mmr-changelog",
+      "command:ampi-config",
       "command:mmr-config",
       "shortcut:ctrl+shift+s",
       "shortcut:alt+m",

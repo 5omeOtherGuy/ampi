@@ -7,7 +7,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 initTheme(undefined, false);
 after(cleanupLoadedSource);
 
-const PROGRESS_RENDERING_MODULE = "extensions/mmr-workers/progress-rendering.ts";
+const PROGRESS_RENDERING_MODULE = "extensions/ampi-workers/progress-rendering.ts";
 
 const fakeTheme = { fg: (_c, t) => t, bold: (t) => t, italic: (t) => t };
 const stripAnsi = (t) => t.replace(/\u001b\[[0-9;]*m/g, "").replace(/\u001b\][^\u0007]*\u0007/g, "");

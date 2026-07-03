@@ -7,8 +7,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const SRC = "extensions/mmr-debug/capture.ts";
-const INDEX = "extensions/mmr-debug/index.ts";
+const SRC = "extensions/ampi-debug/capture.ts";
+const INDEX = "extensions/ampi-debug/index.ts";
 
 /** Minimal fake ExtensionAPI that records registered event handlers. */
 function fakePi() {

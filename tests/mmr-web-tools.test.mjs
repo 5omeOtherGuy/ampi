@@ -57,7 +57,7 @@ function makeFetchMock(plan) {
 
 describe("mmr-web tool definitions", () => {
   it("createWebSearchTool returns a definition matching the public shape", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const tool = createWebSearchTool({ getSettings: () => settings() });
     assert.equal(tool.name, "web_search");
     assert.equal(typeof tool.promptSnippet, "string");
@@ -74,7 +74,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("createReadWebPageTool exposes url required, optional objective and forceRefetch", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const tool = createReadWebPageTool({ getSettings: () => settings() });
     assert.equal(tool.name, "read_web_page");
     assert.equal(typeof tool.promptSnippet, "string");
@@ -87,7 +87,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search execute uses search_queries[0] over objective, clamps max_results, and calls Brave", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({
         web: {
@@ -124,7 +124,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search falls back to objective when search_queries are missing/empty", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ web: { results: [{ title: "T", url: "https://x/", description: "d" }] } }),
     ]);
@@ -139,7 +139,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search rejects malformed inputs without calling fetch", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     const tool = createWebSearchTool({
       getSettings: () => settings({ enabled: true, braveApiKey: "brv" }),
@@ -151,7 +151,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search applies searchTimeoutMs to the Brave fetch", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     let observedSignal;
     const fetchImpl = (_input, init) => {
       observedSignal = init.signal;
@@ -173,7 +173,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search throws a clear BRAVE_API_KEY setup error when explicitly using the Brave backend without a key", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     const tool = createWebSearchTool({
       // Explicit searchBackend=brave; auto would fall back to DuckDuckGo now.
@@ -188,7 +188,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("web_search throws a clear error when network is disabled", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const tool = createWebSearchTool({
       getSettings: () => settings({ enabled: false }),
       getBraveOptions: () => ({}),
@@ -200,7 +200,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page rejects local URLs before fetching", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([]);
     const tool = createReadWebPageTool({
       getSettings: () => settings({ enabled: true }),
@@ -215,7 +215,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page applies readTimeoutMs to the custom reader fetch", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     let observedSignal;
     const fetchImpl = (_input, init) => {
       observedSignal = init.signal;
@@ -237,7 +237,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page returns full Markdown/plain text when objective is missing", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const body = `# Hello\n\nFull body text about birds.\n\n## Cooking\n\nUnrelated text.`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const tool = createReadWebPageTool({
@@ -255,7 +255,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page converts HTML through the custom reader", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const html = `<html><body><main><h1>Doc</h1><p>Hello <strong>world</strong>.</p></main></body></html>`;
     const { fetchImpl, calls } = makeFetchMock([() => htmlResponse(html)]);
     const tool = createReadWebPageTool({
@@ -270,7 +270,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page treats a blank objective as missing and records fallbackReason", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const body = `# Hello\n\nFull body text.`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const tool = createReadWebPageTool({
@@ -285,7 +285,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page returns excerpts when the objective matches passages", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const body = `# Birds\n\n## Sparrows\n\nThe house sparrow is common worldwide and lives near humans.\n\n## Cooking\n\nPasta sauce uses tomatoes and onions.`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const tool = createReadWebPageTool({
@@ -302,7 +302,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page joins multiple excerpts with the --- separator", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const body = `# Doc\n\n## A\n\nWidget overview here.\n\n## B\n\nMore widget details and behavior.\n\n## C\n\nUnrelated discussion of dolphins.`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const tool = createReadWebPageTool({
@@ -316,7 +316,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page falls back to full content when no passage is relevant", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const body = `# Birds\n\nSparrows and eagles are interesting.`;
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
     const tool = createReadWebPageTool({
@@ -331,7 +331,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page accepts forceRefetch but direct-fetches without provider cache headers", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([() => textResponse("# Page\n\nbody")]);
     const tool = createReadWebPageTool({
       getSettings: () => settings({ enabled: true }),
@@ -343,14 +343,14 @@ describe("mmr-web tool definitions", () => {
     assert.equal(result.details.forceRefetch, true);
     // The model-visible description must not promise cache-busting the reader
     // cannot provide.
-    const { READ_WEB_PAGE_DESCRIPTION } = await importSource("extensions/mmr-web/tools.ts");
+    const { READ_WEB_PAGE_DESCRIPTION } = await importSource("extensions/ampi-web/tools.ts");
     assert.doesNotMatch(READ_WEB_PAGE_DESCRIPTION, /cached version|days old/i);
   });
 
   it("read_web_page caps excerpted output at FINAL_CONTENT_CAP_BYTES with a truncation marker", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const { FINAL_CONTENT_CAP_BYTES, TRUNCATION_MARKER, MAX_EXCERPTS } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const sectionBody =
       "widget details paragraph repeats widget details ".repeat(600);
@@ -384,9 +384,9 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page caps full-Markdown fallback output at FINAL_CONTENT_CAP_BYTES with a truncation marker", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const { FINAL_CONTENT_CAP_BYTES, TRUNCATION_MARKER } = await importSource(
-      "extensions/mmr-web/excerpts.ts",
+      "extensions/ampi-web/excerpts.ts",
     );
     const body = "x".repeat(FINAL_CONTENT_CAP_BYTES + 50_000);
     const { fetchImpl } = makeFetchMock([() => textResponse(body)]);
@@ -410,7 +410,7 @@ describe("mmr-web tool definitions", () => {
   });
 
   it("read_web_page returns truncation details for large pages", async () => {
-    const { createReadWebPageTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createReadWebPageTool } = await importSource("extensions/ampi-web/tools.ts");
     const big = "z".repeat(2000);
     const { fetchImpl } = makeFetchMock([() => textResponse(big)]);
     const tool = createReadWebPageTool({
@@ -437,7 +437,7 @@ describe("mmr-web tool registration based on settings", () => {
   }
 
   it("registers nothing when network is disabled", async () => {
-    const { registerMmrWebTools } = await importSource("extensions/mmr-web/tools.ts");
+    const { registerMmrWebTools } = await importSource("extensions/ampi-web/tools.ts");
     const { pi, tools } = makePiStub();
     const result = registerMmrWebTools(pi, {
       getSettings: () => settings({ enabled: false }),
@@ -447,7 +447,7 @@ describe("mmr-web tool registration based on settings", () => {
   });
 
   it("registers both tools when enabled without an API key so web_search can report setup feedback", async () => {
-    const { registerMmrWebTools } = await importSource("extensions/mmr-web/tools.ts");
+    const { registerMmrWebTools } = await importSource("extensions/ampi-web/tools.ts");
     const { pi, tools } = makePiStub();
     const result = registerMmrWebTools(pi, {
       getSettings: () => settings({ enabled: true }),
@@ -457,7 +457,7 @@ describe("mmr-web tool registration based on settings", () => {
   });
 
   it("registers both tools when enabled and BRAVE_API_KEY is configured", async () => {
-    const { registerMmrWebTools } = await importSource("extensions/mmr-web/tools.ts");
+    const { registerMmrWebTools } = await importSource("extensions/ampi-web/tools.ts");
     const { pi, tools } = makePiStub();
     const result = registerMmrWebTools(pi, {
       getSettings: () => settings({ enabled: true, braveApiKey: "brv" }),
@@ -470,7 +470,7 @@ describe("mmr-web tool registration based on settings", () => {
 
 describe("mmr-web tool execution - SearXNG", () => {
   it("web_search routes through SearXNG when searxngUrl is configured", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ results: [
         { title: "A", url: "https://example.com/a", content: "alpha" },
@@ -494,7 +494,7 @@ describe("mmr-web tool execution - SearXNG", () => {
   });
 
   it("web_search reports a setup error when searxng is selected without a URL", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const tool = createWebSearchTool({
       getSettings: () => settings({ enabled: true, searchBackend: "searxng" }),
     });
@@ -505,7 +505,7 @@ describe("mmr-web tool execution - SearXNG", () => {
   });
 
   it("web_search prefers SearXNG over Brave when both configured (auto mode)", async () => {
-    const { createWebSearchTool } = await importSource("extensions/mmr-web/tools.ts");
+    const { createWebSearchTool } = await importSource("extensions/ampi-web/tools.ts");
     const { fetchImpl, calls } = makeFetchMock([
       () => jsonResponse({ results: [{ title: "sxng", url: "https://example.com/s" }] }),
     ]);

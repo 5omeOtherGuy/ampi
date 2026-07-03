@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const MODULE = "extensions/mmr-core/above-editor-dashboard.ts";
+const MODULE = "extensions/ampi-core/above-editor-dashboard.ts";
 
 after(cleanupLoadedSource);
 

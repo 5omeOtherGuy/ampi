@@ -23,7 +23,7 @@ function fakeRegistry(models, authenticatedProviders = new Set(models.map((model
 
 describe("mmr-core model resolver", () => {
   it("prefers subscription providers over API equivalents for the same model", async () => {
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const registry = fakeRegistry([
       { provider: "openai", id: "gpt-5.5" },
       { provider: "openai-codex", id: "gpt-5.5" },
@@ -49,7 +49,7 @@ describe("mmr-core model resolver", () => {
   });
 
   it("falls back across clearly defined model families when preferred targets are not usable", async () => {
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const registry = fakeRegistry(
       [
         { provider: "openai-codex", id: "gpt-5.5" },
@@ -80,7 +80,7 @@ describe("mmr-core model resolver", () => {
   });
 
   it("resolves haiku-4-5 against a registry entry that uses the date-suffixed id (and vice versa)", async () => {
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
 
     const subscriptionRegistry = fakeRegistry([
       { provider: "claude-subscription", id: "claude-haiku-4-5" },
@@ -129,8 +129,8 @@ describe("mmr-core model resolver", () => {
   });
 
   it("selects the shipped Fable Claude subscription route", async () => {
-    const { getMmrMode } = await importSource("extensions/mmr-core/modes.ts");
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const registry = fakeRegistry([
       { provider: "claude-subscription", id: "claude-fable-5" },
     ]);
@@ -148,7 +148,7 @@ describe("mmr-core model resolver", () => {
   });
 
   it("surfaces registry exceptions in candidate.reason instead of silently treating models as unauthenticated", async () => {
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const models = [{ provider: "openai", id: "gpt-5.5" }];
     const registry = {
       getAll() { return models; },
@@ -176,7 +176,7 @@ describe("mmr-core model resolver", () => {
   });
 
   it("continues to the next usable route when Pi rejects an authenticated candidate", async () => {
-    const { resolveAndApplyMmrModel } = await importSource("extensions/mmr-core/model-resolver.ts");
+    const { resolveAndApplyMmrModel } = await importSource("extensions/ampi-core/model-resolver.ts");
     const registry = fakeRegistry([
       { provider: "openai-codex", id: "gpt-5.5" },
       { provider: "openai", id: "gpt-5.5" },
@@ -202,7 +202,7 @@ describe("mmr-core model resolver", () => {
   // Item 1: the canonical subscription-provider id list is owned once by
   // mmr-core and exposed only as a predicate (no mutable Set export).
   it("identifies the canonical subscription providers via the shared predicate", async () => {
-    const { isMmrSubscriptionProvider } = await importSource("extensions/mmr-core/provider-constants.ts");
+    const { isMmrSubscriptionProvider } = await importSource("extensions/ampi-core/provider-constants.ts");
     for (const provider of ["claude-subscription", "openai-codex", "github-copilot"]) {
       assert.equal(isMmrSubscriptionProvider(provider), true, provider);
     }

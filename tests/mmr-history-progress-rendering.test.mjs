@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RENDERING_MODULE = "extensions/mmr-history/progress-rendering.ts";
+const RENDERING_MODULE = "extensions/ampi-history/progress-rendering.ts";
 
 const fakeTheme = {
   fg(_color, text) { return text; },
@@ -225,7 +225,7 @@ describe("mmr-history renderMmrHistoryResult — read_session", () => {
 
 describe("mmr-history renderers are wired onto the tool definitions", () => {
   it("createFindSessionTool registers renderCall and renderResult", async () => {
-    const { createFindSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createFindSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createFindSessionTool({
       getSettings: () => ({ enabled: true, maxResults: 10, defaultLimit: 5 }),
       listSessions: async () => ({ infos: [], hasMore: false }),
@@ -236,7 +236,7 @@ describe("mmr-history renderers are wired onto the tool definitions", () => {
   });
 
   it("createReadSessionTool registers renderCall and renderResult", async () => {
-    const { createReadSessionTool } = await importSource("extensions/mmr-history/tools.ts");
+    const { createReadSessionTool } = await importSource("extensions/ampi-history/tools.ts");
     const tool = createReadSessionTool({
       getSettings: () => ({ enabled: true, maxResults: 10, defaultLimit: 5 }),
       listSessions: async () => ({ infos: [], hasMore: false }),
