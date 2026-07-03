@@ -23,10 +23,7 @@ import {
 import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../ampi-core/model-resolver.js";
 import { loadMmrCoreSettings } from "../ampi-core/settings.js";
 import type { MmrActiveToolManifestEntry, MmrModelPreference } from "../ampi-core/types.js";
-import {
-  hasMmrGithubOwnedTools,
-  type MmrGithubToolInfoLike,
-} from "../ampi-github/tool-ownership.js";
+import { hasOwnedToolsFromOwner, type ToolInfoLike } from "../ampi-core/owned-tools.js";
 import { buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerSystemPromptFromPrompts } from "./prompts.js";
 import { resolveEffectiveRunner } from "./worker-fallback-run.js";
 import {
@@ -245,7 +242,7 @@ function resolveCtxModelRegistry<TModel extends MmrRegisteredModelLike>(
   return registry as MmrModelRegistryLike<TModel>;
 }
 
-function toolInfosFromAllTools(pi: ToolHostLike | undefined): readonly MmrGithubToolInfoLike[] | undefined {
+function toolInfosFromAllTools(pi: ToolHostLike | undefined): readonly ToolInfoLike[] | undefined {
   if (!pi) return undefined;
   try {
     const tools = pi.getAllTools?.();
@@ -268,13 +265,17 @@ function toolInfosFromAllTools(pi: ToolHostLike | undefined): readonly MmrGithub
  * `ampi-github` but are intentionally not part of any user-facing mode's
  * active tool set. The child worker activates them by name through
  * `--tools`, so the parent gate checks that every required tool is
- * registered and source-owned by `ampi-github` rather than active in the
- * parent.
+ * registered and source-owned per the librarian profile's
+ * `requiredOwnedTools` groups, validated through `ampi-core`'s generic
+ * owned-tools registry (no import of `ampi-github`). Fails closed when the
+ * profile or its ownership groups are missing.
  */
 export function isLibrarianGithubToolPrerequisiteRegistered(pi: ToolHostLike | undefined): boolean {
   const registered = toolInfosFromAllTools(pi);
   if (!registered) return false;
-  return hasMmrGithubOwnedTools(registered);
+  const groups = getMmrSubagentProfile(LIBRARIAN_SUBAGENT_PROFILE_NAME)?.requiredOwnedTools;
+  if (!groups || groups.length === 0) return false;
+  return groups.every((group) => hasOwnedToolsFromOwner(group.owner, group.toolNames, registered));
 }
 
 function coerceLibrarianParams(raw: unknown): LibrarianParams {

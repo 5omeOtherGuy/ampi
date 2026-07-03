@@ -275,6 +275,35 @@ describe("architecture manifest guardrails", () => {
     );
   });
 
+  it("sibling extensions import no other sibling outside the recorded allowlist", async () => {
+    const { MMR_SIBLING_IMPORT_ALLOWLIST, getMmrExtensionNames } = await loadManifest();
+    const allowed = new Set(MMR_SIBLING_IMPORT_ALLOWLIST);
+    const importRe = /from\s+"(?:\.\.\/)+(ampi-[a-z-]+)\//g;
+
+    const violations = [];
+    for (const name of new Set([...getMmrExtensionNames(), "ampi-toolbox", "ampi-debug"])) {
+      if (name === "ampi-core") continue;
+      const dir = path.join(extensionsDir, name);
+      for (const file of collectTsFiles(dir)) {
+        const text = readFileSync(file, "utf8");
+        let match;
+        while ((match = importRe.exec(text)) !== null) {
+          const sibling = match[1];
+          if (sibling === name || sibling === "ampi-core") continue;
+          const edge = `${name} -> ${sibling}`;
+          if (!allowed.has(edge)) {
+            violations.push(`${path.relative(repoRoot, file)}: ${edge}`);
+          }
+        }
+      }
+    }
+    assert.deepEqual(
+      violations,
+      [],
+      `sibling extensions must not import each other outside the allowlist [${[...allowed].join(", ")}]. New couplings:\n${violations.join("\n")}`,
+    );
+  });
+
   it("records the current ampi-core sibling-import exceptions as still present (drift detector)", async () => {
     const { MMR_CORE_SIBLING_IMPORT_EXCEPTIONS } = await loadManifest();
     const coreDir = path.join(extensionsDir, "ampi-core");

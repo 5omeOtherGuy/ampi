@@ -2,7 +2,7 @@ import {
   enforceContentLengthBudget,
   readTextWithByteLimit,
   truncateUtf8,
-} from "../http-utils.js";
+} from "../../ampi-core/internal/http-utils.js";
 import type { SearchResponse } from "./types.js";
 
 /**

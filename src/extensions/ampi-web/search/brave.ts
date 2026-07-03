@@ -2,7 +2,7 @@ import {
   combineSignal,
   readErrorPreview,
   redactApiKey,
-} from "../http-utils.js";
+} from "../../ampi-core/internal/http-utils.js";
 import { readSearchResponseBody } from "./body.js";
 import {
   applyDomainFilter,
