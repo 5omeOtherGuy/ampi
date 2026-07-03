@@ -266,12 +266,12 @@ describe("resolveMmrSubagentInvocation", () => {
     const registry = makeTaskRegistry();
 
     const cases = [
-      { parentMode: "smart",      expectedBase: "smart",      provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
-      { parentMode: "fable", expectedBase: "fable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "smart",      expectedBase: "smart",      provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
+      { parentMode: "fable", expectedBase: "fable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
       { parentMode: "rush",       expectedBase: "rush",       provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
       // Spec §6.1: deep aliases to smart for prompt base, route list,
       // selected route, and thinking level.
-      { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "low" },
+      { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
     ];
     for (const c of cases) {
       const result = resolveMmrSubagentInvocation({
@@ -296,7 +296,7 @@ describe("resolveMmrSubagentInvocation", () => {
     }
   });
 
-  // Cross-provider Opus 4.8 -> Anthropic "medium" effort contract.
+  // Cross-provider Opus 4.8 -> Anthropic "high" effort contract.
   //
   // This is a CONTRACT test, not a true wire-level test: ampi cannot import
   // the providers' real level->effort mappers (pi-ai's mapThinkingLevelToEffort
@@ -305,7 +305,7 @@ describe("resolveMmrSubagentInvocation", () => {
   // encode each provider's published Opus 4.8 `thinkingLevelMap` plus the shared
   // adaptive-effort default algorithm both providers use, and assert that the
   // canonical thinkingLevel ampi actually RESOLVES for that provider maps to
-  // Anthropic effort "medium". If ampi's per-provider levels drift, or a
+  // Anthropic effort "high". If ampi's per-provider levels drift, or a
   // provider's documented map drifts, this test fails loudly and the fixture
   // must be re-verified against the provider before updating.
   //
@@ -315,14 +315,14 @@ describe("resolveMmrSubagentInvocation", () => {
     {
       provider: "claude-subscription",
       model: "claude-opus-4-8",
-      expectedThinkingLevel: "low",
+      expectedThinkingLevel: "medium",
       // minimalcc-pi adaptive opus map: shifts each level up one notch.
       thinkingLevelMap: { minimal: "low", low: "medium", medium: "high", high: "xhigh", xhigh: "max" },
     },
     {
       provider: "anthropic",
       model: "claude-opus-4-8",
-      expectedThinkingLevel: "medium",
+      expectedThinkingLevel: "high",
       // pi-ai native opus map: only xhigh is mapped; everything else falls to
       // the identity default below.
       thinkingLevelMap: { xhigh: "xhigh" },
@@ -348,7 +348,7 @@ describe("resolveMmrSubagentInvocation", () => {
     }
   }
 
-  it("pins Task Opus 4.8 per provider so each contract-maps to Anthropic medium effort", async () => {
+  it("pins Task Opus 4.8 per provider so each contract-maps to Anthropic high effort", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("task-subagent");
@@ -358,8 +358,8 @@ describe("resolveMmrSubagentInvocation", () => {
     // uncontracted provider at the wrong effort.
     const opusPreferences = profile.modelPreferences.filter((p) => p.model === "claude-opus-4-8");
     assert.deepEqual(opusPreferences, [
-      { model: "claude-opus-4-8", providers: ["claude-subscription"], thinkingLevel: "low" },
-      { model: "claude-opus-4-8", providers: ["anthropic"], thinkingLevel: "medium" },
+      { model: "claude-opus-4-8", providers: ["claude-subscription"], thinkingLevel: "medium" },
+      { model: "claude-opus-4-8", providers: ["anthropic"], thinkingLevel: "high" },
     ]);
 
     for (const contract of OPUS_48_PROVIDER_EFFORT_CONTRACTS) {
@@ -377,8 +377,8 @@ describe("resolveMmrSubagentInvocation", () => {
         `provider "${contract.provider}" canonical thinking level`);
       assert.equal(
         contractEffortForThinkingLevel(result.selected.thinkingLevel, contract.thinkingLevelMap),
-        "medium",
-        `provider "${contract.provider}" must map to Anthropic effort "medium"`,
+        "high",
+        `provider "${contract.provider}" must map to Anthropic effort "high"`,
       );
     }
   });
@@ -442,7 +442,7 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(fable.ok, true);
     assert.equal(fable.promptBaseMode, "fable");
     assert.equal(fable.selected.model, "claude-opus-4-8");
-    assert.equal(fable.selected.thinkingLevel, "low");
+    assert.equal(fable.selected.thinkingLevel, "medium");
   });
 
   it("falls rush Task workers back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {

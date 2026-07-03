@@ -19,6 +19,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   project-local `-l` install, one-run `pi -e npm:@5omeotherguy/ampi`,
   `pi update --extensions` / `pi update npm:@5omeotherguy/ampi`, a git-source
   fallback, and a local-development path.
+- `ampi-core` / `ampi-workers`: the `Task` subagent's canonical Opus 4.8 route now
+  runs at Anthropic **high** reasoning effort (previously medium). The pinned
+  per-provider thinking levels were bumped so both routes land on high effort on
+  the wire — `claude-subscription/claude-opus-4-8` resolves at canonical `medium`
+  (its adaptive map shifts up one notch to high) and `anthropic/claude-opus-4-8`
+  resolves at canonical `high`. This resolves the prior asymmetry where the two
+  providers could diverge; `rush` Task workers are unaffected (GPT-5.5/Haiku with
+  thinking off). Covered by the updated per-provider effort-contract fixtures in
+  `tests/mmr-core-subagent-resolve.test.mjs`.
 
 ### Fixed
 
