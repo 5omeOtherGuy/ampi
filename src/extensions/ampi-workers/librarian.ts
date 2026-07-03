@@ -25,7 +25,7 @@ import { loadMmrCoreSettings } from "../ampi-core/settings.js";
 import type { MmrActiveToolManifestEntry, MmrModelPreference } from "../ampi-core/types.js";
 import { hasOwnedToolsFromOwner, type ToolInfoLike } from "../ampi-core/owned-tools.js";
 import { buildLibrarianWorkerSystemPrompt as buildLibrarianWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./worker-fallback-run.js";
+import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerRunPreparer,
@@ -33,9 +33,9 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolRunContext,
   type MmrWorkerToolSpec,
-} from "./worker-tool-factory.js";
+} from "./framework/worker-tool-factory.js";
 import { LIBRARIAN_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { buildWorkerToolManifest, type ToolHostLike } from "./worker-host.js";
+import { buildWorkerToolManifest, type ToolHostLike } from "./framework/worker-host.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
@@ -47,7 +47,7 @@ import {
   type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./runner.js";
+} from "./framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,

@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrWorkerTrailItem } from "./runner.js";
+import type { MmrWorkerTrailItem } from "./framework/runner.js";
 import {
   compactOneLine,
   type BackgroundTaskDetails,

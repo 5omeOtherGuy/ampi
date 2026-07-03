@@ -12,16 +12,16 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
   MmrPreparedWorkerRunResult,
   MmrSubagentRunner,
-} from "../ampi-core/worker-contract.js";
+} from "../../ampi-core/worker-contract.js";
 import {
   registerMmrWorkerHost,
   type MmrPrepareWorkerRunInput,
   type MmrRegisteredWorkerBinding,
   type MmrWorkerBindingSpec,
   type MmrWorkerHost,
-} from "../ampi-core/worker-host.js";
+} from "../../ampi-core/worker-host.js";
 import { registerMmrBackgroundAgent } from "./worker-binding-registry.js";
-import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
+import { renderMmrSubagentCall, renderMmrSubagentResult } from "../progress-rendering.js";
 import { createChildCliMmrSubagentRunner } from "./runner.js";
 import type { ToolHostLike } from "./worker-host.js";
 import {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const AGENTS_MODULE = "extensions/ampi-workers/worker-binding-registry.ts";
+const AGENTS_MODULE = "extensions/ampi-workers/framework/worker-binding-registry.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 const SCHEMAS_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
 const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";

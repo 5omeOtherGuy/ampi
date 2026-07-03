@@ -154,7 +154,7 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "src/extensions/ampi-workers/finder.ts",
       "src/extensions/ampi-workers/oracle.ts",
       "src/extensions/ampi-workers/task.ts",
-      "src/extensions/ampi-workers/runner.ts",
+      "src/extensions/ampi-workers/framework/runner.ts",
       "src/extensions/ampi-workers/worker-trail.ts",
       "src/extensions/ampi-core/subagent-resolver.ts",
       "src/extensions/ampi-core/subagent-profiles.ts",

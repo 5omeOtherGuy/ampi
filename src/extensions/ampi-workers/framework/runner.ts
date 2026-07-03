@@ -4,18 +4,18 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Readable } from "node:stream";
-import { isRecord } from "../ampi-core/internal/json.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
 import {
   AMPI_SUBAGENT_MODEL_PREFERENCES_ENV,
   MMR_SUBAGENT_MODEL_PREFERENCES_ENV,
   serializeMmrSubagentModelPreferencesEnv,
-} from "../ampi-core/subagent-model-override-env.js";
-import { extractMmrSubagentActivationFailure } from "../ampi-core/subagent-resolver.js";
-import type { MmrModelPreference } from "../ampi-core/types.js";
+} from "../../ampi-core/subagent-model-override-env.js";
+import { extractMmrSubagentActivationFailure } from "../../ampi-core/subagent-resolver.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
 import { buildMmrWorkerArgs, resolveMmrWorkerPiInvocation } from "./runner-invocation.js";
 import type { MmrWorkerInvocation } from "./runner-invocation.js";
-import { copyMmrWorkerTrailItem, createMmrWorkerTrailAggregator } from "./worker-trail.js";
-import type { MmrWorkerTrailItem } from "./worker-trail.js";
+import { copyMmrWorkerTrailItem, createMmrWorkerTrailAggregator } from "../worker-trail.js";
+import type { MmrWorkerTrailItem } from "../worker-trail.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   getMmrWorkerFinalOutput,
@@ -25,8 +25,8 @@ import {
 import { collectUsage, emptyMmrWorkerUsageStats, readString } from "./worker-usage.js";
 export { buildMmrWorkerArgs, resolveMmrWorkerPiInvocation, resolveMmrWorkerPiInvocationFromEnv } from "./runner-invocation.js";
 export type { MmrWorkerArgsOptions, MmrWorkerInvocation, MmrWorkerPiInvocationEnv } from "./runner-invocation.js";
-export { MMR_WORKER_TRAIL_LIMIT } from "./worker-trail.js";
-export type { MmrWorkerTrailItem } from "./worker-trail.js";
+export { MMR_WORKER_TRAIL_LIMIT } from "../worker-trail.js";
+export type { MmrWorkerTrailItem } from "../worker-trail.js";
 // Re-export the outcome classification/output-shaping helpers and the usage
 // helpers from their new homes (`runner-outcome.ts`, `worker-usage.ts`) so
 // this entry file remains the stable public surface for them.
@@ -61,7 +61,7 @@ import type {
   MmrWorkerProgressSnapshot,
   MmrWorkerResult,
   MmrWorkerUsageStats,
-} from "../ampi-core/worker-contract.js";
+} from "../../ampi-core/worker-contract.js";
 export type {
   MmrSubagentRunOptions,
   MmrSubagentRunProgress,
@@ -73,8 +73,8 @@ export type {
   MmrWorkerProgressSnapshot,
   MmrWorkerResult,
   MmrWorkerUsageStats,
-} from "../ampi-core/worker-contract.js";
-import type { MmrSubagentRunner } from "../ampi-core/worker-contract.js";
+} from "../../ampi-core/worker-contract.js";
+import type { MmrSubagentRunner } from "../../ampi-core/worker-contract.js";
 
 export const DEFAULT_MMR_WORKER_KILL_TIMEOUT_MS = 5_000;
 

@@ -1,4 +1,4 @@
-import { isRecord } from "../ampi-core/internal/json.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
 import type { MmrWorkerMessage, MmrWorkerUsageStats } from "./runner.js";
 
 /**

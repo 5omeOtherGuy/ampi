@@ -1,5 +1,5 @@
 import { isRecord } from "../ampi-core/internal/json.js";
-import type { MmrWorkerMessage } from "./runner.js";
+import type { MmrWorkerMessage } from "./framework/runner.js";
 
 export const MMR_WORKER_TRAIL_LIMIT = 32;
 const MMR_WORKER_TRAIL_PREVIEW_CHAR_LIMIT = 180;

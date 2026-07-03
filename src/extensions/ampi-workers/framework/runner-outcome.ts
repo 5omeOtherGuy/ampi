@@ -1,5 +1,5 @@
-import { isRecord } from "../ampi-core/internal/json.js";
-import { hasUsableMmrWorkerFinalOutput } from "../ampi-core/worker-outcome.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import { hasUsableMmrWorkerFinalOutput } from "../../ampi-core/worker-outcome.js";
 import type { MmrWorkerMessage, MmrWorkerResult } from "./runner.js";
 
 // Outcome classification moved to core (`ampi-core/worker-outcome.ts`) as
@@ -15,13 +15,13 @@ export {
   deriveAsyncTerminalOutcome,
   hasUsableMmrWorkerFinalOutput,
   resolveMmrWorkerPartialOutputPolicy,
-} from "../ampi-core/worker-outcome.js";
+} from "../../ampi-core/worker-outcome.js";
 export type {
   ClassifyMmrWorkerOutcomeOptions,
   MmrAsyncTerminalOutcome,
   MmrSubagentDetailsStatus,
   MmrWorkerOutcomeStatus,
-} from "../ampi-core/worker-outcome.js";
+} from "../../ampi-core/worker-outcome.js";
 
 /**
  * Pure outcome classification and final-output shaping for subagent worker
@@ -35,8 +35,8 @@ export type {
  * `./runner.js` are erased and create no runtime cycle.
  */
 
-export { DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT } from "../ampi-core/worker-contract.js";
-import { DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT } from "../ampi-core/worker-contract.js";
+export { DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT } from "../../ampi-core/worker-contract.js";
+import { DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT } from "../../ampi-core/worker-contract.js";
 
 export function getMmrWorkerFinalOutput(messages: readonly MmrWorkerMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

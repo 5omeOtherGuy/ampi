@@ -3,7 +3,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { getMmrSubagentState, registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { parseBoolEnv, readPreferredEnv } from "../ampi-core/internal/env.js";
-import { resetMmrWorkerFallbackState } from "./fallback.js";
+import { resetMmrWorkerFallbackState } from "./framework/fallback.js";
 import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./finder.js";
 import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./librarian.js";
 import { type ReviewerToolDeps, registerReviewerTool } from "./reviewer.js";
@@ -21,7 +21,7 @@ import {
   createMmrWorkersToolProvider,
   type MmrWorkersCapabilities,
 } from "./provider.js";
-import { registerMmrWorkersWorkerHost } from "./worker-host-impl.js";
+import { registerMmrWorkersWorkerHost } from "./framework/worker-host-impl.js";
 
 // Pi stamps every tool registered through `pi.registerTool` with the
 // `sourceInfo.path` of the extension entrypoint that called it. Recording

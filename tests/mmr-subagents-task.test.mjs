@@ -1008,7 +1008,7 @@ describe("Task tool", () => {
     // --no-skills so the assembled worker prompt is the only model-visible
     // system prompt.
     const { createTaskTool, TASK_WORKER_TOOLS } = await importSource(TASK_MODULE);
-    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/framework/runner.ts");
     const calls = [];
     const tool = createTaskTool({
       resolveInvocation: stubTaskInvocation({
@@ -1076,7 +1076,7 @@ describe("Task tool", () => {
   });
 
   it("serializes an empty tools array as an explicit `--tools \"\"` ceiling, but omits the flag when tools is undefined", async () => {
-    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/runner.ts");
+    const { buildMmrWorkerArgs } = await importSource("extensions/ampi-workers/framework/runner.ts");
 
     // Empty array: the runner explicitly asked for no tools, so the child
     // must receive `--tools ""` (an empty ceiling) instead of falling back to

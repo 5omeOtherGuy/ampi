@@ -21,7 +21,7 @@ import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../ampi-core/se
 import type { MmrModelPreference } from "../ampi-core/types.js";
 import { REVIEWER_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
 import { buildReviewerWorkerSystemPrompt as buildReviewerWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./worker-fallback-run.js";
+import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerRunPreparer,
@@ -30,8 +30,8 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolResolveInput,
   type MmrWorkerToolSpec,
-} from "./worker-tool-factory.js";
-import { type ToolHostLike } from "./worker-host.js";
+} from "./framework/worker-tool-factory.js";
+import { type ToolHostLike } from "./framework/worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -45,7 +45,7 @@ import {
   type MmrWorkerResult,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./runner.js";
+} from "./framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,

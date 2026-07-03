@@ -41,7 +41,7 @@ const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
 const GUIDANCE_MODULE = "extensions/ampi-core/worker-tool-guidance.ts";
-const BACKGROUND_AGENTS_MODULE = "extensions/ampi-workers/worker-binding-registry.ts";
+const BACKGROUND_AGENTS_MODULE = "extensions/ampi-workers/framework/worker-binding-registry.ts";
 
 beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);

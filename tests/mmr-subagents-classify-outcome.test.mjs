@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/framework/runner.ts";
 const ROOT_MODULE = "index.ts";
 
 // Minimal MmrWorkerResult shape sufficient for the classifier. The

@@ -24,13 +24,13 @@ after(cleanupLoadedSource);
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const CUSTOM_RUNTIME_MODULE = "extensions/ampi-custom-subagents/custom-runtime.ts";
 const CUSTOM_LOADER_MODULE = "extensions/ampi-custom-subagents/custom-loader.ts";
-const HOST_IMPL_MODULE = "extensions/ampi-workers/worker-host-impl.ts";
+const HOST_IMPL_MODULE = "extensions/ampi-workers/framework/worker-host-impl.ts";
 const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
 
 beforeEach(async () => {
   const { clearMmrDynamicSubagentProfiles } = await importSource("extensions/ampi-core/subagent-profiles.ts");
   const { clearMmrSubagentPromptBuilders } = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
-  const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/worker-binding-registry.ts");
+  const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
   clearMmrDynamicSubagentProfiles();
   clearMmrSubagentPromptBuilders();
   clearMmrDynamicBackgroundAgents();
@@ -158,7 +158,7 @@ describe("custom subagents through the worker-host seam", () => {
     const runner = { run: async (options) => { runCalls.push(options); return makeWorkerResult(); } };
     const { registry } = await setup({ runner });
     const { listMmrBackgroundAgents, getMmrBackgroundAgent } = await importSource(
-      "extensions/ampi-workers/worker-binding-registry.ts",
+      "extensions/ampi-workers/framework/worker-binding-registry.ts",
     );
     const agents = listMmrBackgroundAgents().map((descriptor) => descriptor.agent);
     assert.ok(agents.includes("sa__seam_writer"), `start_task must offer the custom worker (got: ${agents.join(", ")})`);

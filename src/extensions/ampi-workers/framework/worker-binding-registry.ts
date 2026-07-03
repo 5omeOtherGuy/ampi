@@ -27,12 +27,12 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "typebox";
 import type {
   MmrWorkerContractPreset,
-} from "../ampi-core/worker-contract.js";
-import type { MmrWorkerBindingExposure } from "../ampi-core/worker-host.js";
+} from "../../ampi-core/worker-contract.js";
+import type { MmrWorkerBindingExposure } from "../../ampi-core/worker-host.js";
 import {
   getMmrSubagentProfile,
   listMmrSubagentProfiles,
-} from "../ampi-core/subagent-profiles.js";
+} from "../../ampi-core/subagent-profiles.js";
 import type {
   MmrPreparedWorkerRunResult,
 } from "./worker-tool-factory.js";
@@ -42,20 +42,20 @@ import {
   FINDER_TOOL_NAME,
   FINDER_WORKER_TOOLS,
   type FinderToolDeps,
-} from "./finder.js";
+} from "../finder.js";
 import {
   createLibrarianRunPreparer,
   LIBRARIAN_PARAMETERS_SCHEMA,
   LIBRARIAN_TOOL_NAME,
   LIBRARIAN_WORKER_TOOLS,
   type LibrarianToolDeps,
-} from "./librarian.js";
+} from "../librarian.js";
 import {
   createTaskRunPreparer,
   TASK_SUBAGENT_PROFILE,
   TASK_TOOL_NAME,
   type TaskToolDeps,
-} from "./task.js";
+} from "../task.js";
 import {
   REVIEWER_PARAMETERS_SCHEMA,
   REVIEWER_SUBAGENT_PROFILE,
@@ -63,7 +63,7 @@ import {
   REVIEWER_WORKER_TOOLS,
   createReviewerRunPreparer,
   type ReviewerToolDeps,
-} from "./reviewer.js";
+} from "../reviewer.js";
 
 /** The agent `start_task` launches when the caller omits `agent`. */
 export const DEFAULT_MMR_BACKGROUND_AGENT = TASK_TOOL_NAME;

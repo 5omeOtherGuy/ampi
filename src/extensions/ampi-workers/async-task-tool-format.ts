@@ -27,7 +27,7 @@ import {
   listMmrBackgroundAgents,
   normalizeMmrBackgroundAgentName,
   type MmrBackgroundAgentDescriptor,
-} from "./worker-binding-registry.js";
+} from "./framework/worker-binding-registry.js";
 
 import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
 

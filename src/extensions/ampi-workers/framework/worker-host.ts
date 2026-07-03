@@ -13,9 +13,9 @@
  * tool modules import from here.
  */
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { isRecord } from "../ampi-core/internal/json.js";
-import { getMmrSessionIdentitySnapshot } from "../ampi-core/runtime.js";
-import type { MmrActiveToolManifestEntry } from "../ampi-core/types.js";
+import { isRecord } from "../../ampi-core/internal/json.js";
+import { getMmrSessionIdentitySnapshot } from "../../ampi-core/runtime.js";
+import type { MmrActiveToolManifestEntry } from "../../ampi-core/types.js";
 
 /**
  * Resolve the working directory for a worker invocation from the extension

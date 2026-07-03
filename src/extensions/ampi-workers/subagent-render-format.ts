@@ -1,6 +1,6 @@
 import { type AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { MMR_SUBAGENT_DETAILS_STATUS_VALUES, type MmrWorkerTrailItem, type MmrWorkerUsageStats } from "./runner.js";
+import { MMR_SUBAGENT_DETAILS_STATUS_VALUES, type MmrWorkerTrailItem, type MmrWorkerUsageStats } from "./framework/runner.js";
 import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,

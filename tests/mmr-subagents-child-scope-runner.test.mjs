@@ -4,8 +4,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const RUNNER = "extensions/ampi-workers/runner.ts";
-const INVOCATION = "extensions/ampi-workers/runner-invocation.ts";
+const RUNNER = "extensions/ampi-workers/framework/runner.ts";
+const INVOCATION = "extensions/ampi-workers/framework/runner-invocation.ts";
 
 describe("buildMmrWorkerArgs: childExtensionScope", () => {
   it("prepends --no-extensions and -e <path> before the mode flags", async () => {

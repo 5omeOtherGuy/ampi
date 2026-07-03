@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { MmrModelPreference } from "../ampi-core/types.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
 import type { MmrWorkerOutcomeStatus, MmrWorkerResult } from "./runner.js";
 
 /**

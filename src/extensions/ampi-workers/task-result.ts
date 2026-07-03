@@ -9,7 +9,7 @@ import {
   type MmrSubagentDetailsStatus,
   type MmrWorkerProgressSnapshot,
   type MmrWorkerResult,
-} from "./runner.js";
+} from "./framework/runner.js";
 import {
   buildSpawnedFinalDetailsBase,
   buildSpawnedProgressDetailsBase,

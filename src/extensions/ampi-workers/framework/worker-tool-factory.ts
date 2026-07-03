@@ -3,29 +3,29 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { loadMmrCoreSettings } from "../ampi-core/settings.js";
+import { loadMmrCoreSettings } from "../../ampi-core/settings.js";
 import type {
   MmrWorkerRunMode,
   MmrWorkerToolResolveInput,
   MmrWorkerToolRunContext,
   MmrWorkerToolSpec,
-} from "../ampi-core/worker-contract.js";
-import { classifyMmrWorkerOutcomeForProfile } from "../ampi-core/worker-outcome.js";
-import { attachWorkerRunEnvelope, buildWorkerRunEnvelope } from "./worker-run-envelope.js";
+} from "../../ampi-core/worker-contract.js";
+import { classifyMmrWorkerOutcomeForProfile } from "../../ampi-core/worker-outcome.js";
+import { attachWorkerRunEnvelope, buildWorkerRunEnvelope } from "../worker-run-envelope.js";
 import {
   getMmrSubagentProfile,
   type MmrSubagentPartialOutputPolicy,
-} from "../ampi-core/subagent-profiles.js";
-import type { MmrSubagentInvocation } from "../ampi-core/subagent-resolver.js";
-import type { MmrModelPreference } from "../ampi-core/types.js";
+} from "../../ampi-core/subagent-profiles.js";
+import type { MmrSubagentInvocation } from "../../ampi-core/subagent-resolver.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
 import { readMmrWorkerSessionId } from "./fallback.js";
-import { getMmrBackgroundDispatcher } from "./background-dispatch.js";
+import { getMmrBackgroundDispatcher } from "../background-dispatch.js";
 import {
   refreshBackgroundTaskWidget,
   renderMmrSubagentCall,
   renderMmrSubagentResult,
-} from "./progress-rendering.js";
-import { computeMmrChildExtensionScope } from "./child-extension-scope.js";
+} from "../progress-rendering.js";
+import { computeMmrChildExtensionScope } from "../child-extension-scope.js";
 import {
   resolveMmrWorkerSessionKey,
   resolveWorkerCwd,
@@ -39,8 +39,8 @@ import {
   getMmrAsyncTaskRegistry,
   type MmrAsyncTaskRegistry,
   type MmrAsyncTaskRun,
-} from "./async-task-registry.js";
-import { buildSpawnErrorWorkerResult } from "./task-result.js";
+} from "../async-task-registry.js";
+import { buildSpawnErrorWorkerResult } from "../task-result.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
   emptyMmrWorkerUsageStats,
@@ -49,7 +49,7 @@ import {
   type MmrWorkerProgressSnapshot,
   type MmrWorkerResult,
 } from "./runner.js";
-import { progressTextOrPlaceholder } from "./worker-result-shaping.js";
+import { progressTextOrPlaceholder } from "../worker-result-shaping.js";
 
 /**
  * Declarative worker-tool factory for the spawned-subagent tools
@@ -95,7 +95,7 @@ export type {
   MmrWorkerToolResolveInput,
   MmrWorkerToolRunContext,
   MmrWorkerToolSpec,
-} from "../ampi-core/worker-contract.js";
+} from "../../ampi-core/worker-contract.js";
 
 /** Runtime dependency seams every factory-built worker tool accepts. */
 export interface MmrWorkerToolFactoryDeps extends MmrWorkerRunnerResolutionDeps {

@@ -6,7 +6,7 @@ import type {
   MmrWorkerProgressSnapshot,
   MmrWorkerResult,
   MmrWorkerTrailItem,
-} from "./runner.js";
+} from "./framework/runner.js";
 import type {
   MmrAsyncTaskGroupNotifier,
   MmrAsyncTaskGroupSettleCallback,

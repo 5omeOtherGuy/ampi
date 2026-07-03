@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const MODULE = "extensions/ampi-workers/fallback.ts";
+const MODULE = "extensions/ampi-workers/framework/fallback.ts";
 
 let mod;
 beforeEach(async () => {

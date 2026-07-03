@@ -643,7 +643,7 @@ export {
   resolveMmrWorkerPiInvocationFromEnv,
   runMmrSubagentWorker,
   truncateMmrWorkerOutput,
-} from "./extensions/ampi-workers/runner.js";
+} from "./extensions/ampi-workers/framework/runner.js";
 export type {
   ClassifyMmrWorkerOutcomeOptions,
   MmrAsyncTerminalOutcome,
@@ -666,7 +666,7 @@ export type {
   MmrWorkerTrailItem,
   MmrWorkerUsageStats,
   RunMmrSubagentWorkerOptions,
-} from "./extensions/ampi-workers/runner.js";
+} from "./extensions/ampi-workers/framework/runner.js";
 export {
   AMPI_CUSTOM_SUBAGENTS_FEATURE_GATE,
   AMPI_CUSTOM_SUBAGENTS_PROVIDER_NAME,

@@ -6,7 +6,7 @@ after(cleanupLoadedSource);
 
 const FINDER_MODULE = "extensions/ampi-workers/finder.ts";
 const ORACLE_MODULE = "extensions/ampi-workers/oracle.ts";
-const RUNNER_MODULE = "extensions/ampi-workers/runner.ts";
+const RUNNER_MODULE = "extensions/ampi-workers/framework/runner.ts";
 const ROOT_MODULE = "index.ts";
 const PROMPTS_MODULE = "extensions/ampi-workers/prompts.ts";
 const PROMPT_ASSEMBLY_MODULE = "extensions/ampi-core/subagent-prompt-assembly.ts";

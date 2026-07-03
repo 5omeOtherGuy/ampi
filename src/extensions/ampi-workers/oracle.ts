@@ -23,16 +23,16 @@ import {
 import { loadMmrCoreSettings, type LoadedMmrCoreSettings } from "../ampi-core/settings.js";
 import type { MmrModelPreference } from "../ampi-core/types.js";
 import { buildOracleWorkerSystemPrompt as buildOracleWorkerSystemPromptFromPrompts } from "./prompts.js";
-import { resolveEffectiveRunner } from "./worker-fallback-run.js";
+import { resolveEffectiveRunner } from "./framework/worker-fallback-run.js";
 import {
   clipMmrWorkerDescription,
   createWorkerTool,
   resolveWorkerModelPreferencesOverride,
   type MmrWorkerToolResolveInput,
-} from "./worker-tool-factory.js";
+} from "./framework/worker-tool-factory.js";
 import { renderMmrSubagentCall, renderMmrSubagentResult } from "./progress-rendering.js";
 import { ORACLE_ALWAYS_BLOCKING_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { type ToolHostLike } from "./worker-host.js";
+import { type ToolHostLike } from "./framework/worker-host.js";
 import {
   resolveCtxMmrModelRegistry,
   resolveMmrWorkerModelContextWindowFromCtx,
@@ -41,7 +41,7 @@ import {
   type MmrSubagentRunner,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./runner.js";
+} from "./framework/runner.js";
 import {
   IMAGE_EXTENSIONS,
   buildOracleUserPrompt,

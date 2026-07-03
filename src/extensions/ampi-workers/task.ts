@@ -27,7 +27,7 @@ import { checkMmrToolParams } from "../ampi-core/tool-params.js";
 import type { MmrModelRegistryLike, MmrRegisteredModelLike } from "../ampi-core/model-resolver.js";
 import { loadMmrCoreSettings } from "../ampi-core/settings.js";
 import { TASK_BACKGROUND_GUIDANCE } from "../ampi-core/worker-tool-guidance.js";
-import { buildWorkerToolManifest, type ToolHostLike } from "./worker-host.js";
+import { buildWorkerToolManifest, type ToolHostLike } from "./framework/worker-host.js";
 import { readMmrModelContextWindow } from "./worker-model-metadata.js";
 import {
   createChildCliMmrSubagentRunner,
@@ -35,7 +35,7 @@ import {
   type MmrSubagentRunner,
   type MmrWorkerRunnerDeps,
   runMmrSubagentWorker,
-} from "./runner.js";
+} from "./framework/runner.js";
 import {
   TASK_PROGRESS_PLACEHOLDER,
   TASK_SUBAGENT_PROFILE,
@@ -54,7 +54,7 @@ import {
   type MmrWorkerRunPreparer,
   type MmrWorkerToolRunContext,
   type MmrWorkerToolSpec,
-} from "./worker-tool-factory.js";
+} from "./framework/worker-tool-factory.js";
 
 // Re-export the Task result/outcome shaping surface from its new home
 // (`task-result.ts`) so this entry file remains the stable public surface.

@@ -165,7 +165,7 @@ describe("worker-run envelope", () => {
 describe("worker-host exposure gating (ampi-workers host impl)", () => {
   it("prepareWorkerRun fails closed when the run mode is outside the binding's exposure", async () => {
     const { __resetMmrWorkerHostForTests, getMmrWorkerHost } = await importSource(HOST_MODULE);
-    const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/worker-host-impl.ts");
+    const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/framework/worker-host-impl.ts");
     __resetMmrWorkerHostForTests();
     registerMmrWorkersWorkerHost({ getAllTools: () => [], getActiveTools: () => [], getCommands: () => [] });
     const host = getMmrWorkerHost();
@@ -213,9 +213,9 @@ describe("worker-host exposure gating (ampi-workers host impl)", () => {
 
   it("honors a binding-level modelFallback \"disabled\" (never reads the shared session override)", async () => {
     const { __resetMmrWorkerHostForTests, getMmrWorkerHost } = await importSource(HOST_MODULE);
-    const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/worker-host-impl.ts");
+    const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/framework/worker-host-impl.ts");
     const { setMmrWorkerFallbackOverride, mmrWorkerFallbackScopeKey, resetMmrWorkerFallbackState } =
-      await importSource("extensions/ampi-workers/fallback.ts");
+      await importSource("extensions/ampi-workers/framework/fallback.ts");
     __resetMmrWorkerHostForTests();
     resetMmrWorkerFallbackState();
     registerMmrWorkersWorkerHost({ getAllTools: () => [], getActiveTools: () => [], getCommands: () => [] });

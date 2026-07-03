@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
-import type { MmrModelPreference } from "../ampi-core/types.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
+import type { MmrModelPreference } from "../../ampi-core/types.js";
 import {
   classifyMmrWorkerOutcomeForProfile,
   createChildCliMmrSubagentRunner,
