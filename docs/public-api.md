@@ -56,6 +56,18 @@ The entrypoint default export and any `create<Extension>Extension(...)`
 factory are stable; everything else listed below is re-exported through
 the package root.
 
+Every package-root symbol is exported under both its original `Mmr*` /
+`MMR_*` name and a brand-aligned `Ampi*` / `AMPI_*` alias (for example
+`getMmrModeState` / `getAmpiModeState`, `MMR_MODE_KEYS` / `AMPI_MODE_KEYS`).
+The `Mmr*` names remain the primary contract, and each alias keeps the same
+stability tier as the export it mirrors. Almost all aliases are additive
+exact re-exports of the same binding. The exception is a small set of
+hand-authored sibling constants — env-var names, provider names, feature-gate
+ids, and persisted-entry keys such as `AMPI_HISTORY_ENABLE_ENV` vs
+`MMR_HISTORY_ENABLE_ENV` — whose `Ampi*` value intentionally differs from the
+`Mmr*` value by the brand token. The tables below list the `Mmr*` names;
+substitute `Mmr`→`Ampi` / `MMR_`→`AMPI_` for the alias.
+
 ---
 
 ## `ampi-patch`
