@@ -71,6 +71,7 @@
   },
   "scripts": {
     "prepare": "node scripts/install-hooks.mjs",
+    "prepublishOnly": "node scripts/verify-pack.mjs",
     "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
     "test:one": "node --test",
     "test:watch": "node --test --watch",
@@ -89,7 +90,8 @@
     "worktrees:report": "bash scripts/list-merged-worktrees.sh",
     "gate": "bash scripts/gate.sh",
     "release:notes": "node scripts/github-release-notes.mjs",
-    "pack:dry-run": "npm pack --dry-run"
+    "pack:dry-run": "npm pack --dry-run",
+    "verify:pack": "node scripts/verify-pack.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
