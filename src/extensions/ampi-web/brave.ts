@@ -7,7 +7,7 @@
  *   - {@link ./search/brave.js}   — Brave Search client + SearchBackend.
  *   - {@link ./reader/direct.js}  — Custom in-process direct reader.
  *   - {@link ./reader/extract.js} — Minimal HTML\u2192Markdown extractor.
- *   - {@link ./http-utils.js}     — Shared streaming/abort/byte-cap helpers.
+ *   - {@link ../ampi-core/internal/http-utils.js}     — Shared streaming/abort/byte-cap helpers.
  *
  * New code should import from those modules directly. This barrel keeps
  * the previous symbol names available while consumers migrate. It can be

@@ -4,7 +4,7 @@ import {
   enforceContentLengthBudget,
   readErrorPreview,
   readTextWithByteLimit,
-} from "../ampi-web/http-utils.js";
+} from "../ampi-core/internal/http-utils.js";
 
 /**
  * Minimal, read-only GitHub REST client used by the `ampi-github` tools.

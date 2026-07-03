@@ -1,5 +1,7 @@
 /**
- * Shared HTTP helpers used by every `ampi-web` search/reader backend.
+ * Shared HTTP helpers used by the `ampi-web` search/reader backends and the
+ * `ampi-github` client (core-internal so network extensions need no
+ * sibling-extension import).
  *
  * These primitives bound memory and runtime per call so a hostile origin
  * cannot blow up the process with chunked responses, missing

@@ -253,6 +253,24 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
  */
 export const MMR_CORE_SIBLING_IMPORT_EXCEPTIONS: readonly string[] = Object.freeze([]);
 
+/**
+ * Known sibling-extension -> sibling-extension import edges (`ampi-core` is
+ * not a sibling: every extension may import core). Any other cross-extension
+ * import must go through a core-owned registry or seam instead of a direct
+ * import; the dependency-direction guardrail test fails on edges outside this
+ * set.
+ *
+ * `ampi-custom-subagents` and `ampi-history` consume workers through the
+ * core-registered worker-host seam (`ampi-core/worker-host.ts`) with zero
+ * direct `ampi-workers` imports. The only remaining edges are the deprecated
+ * `ampi-toolbox` compatibility shim re-exporting its former split-out
+ * surface; they are removed together with the shim.
+ */
+export const MMR_SIBLING_IMPORT_ALLOWLIST: readonly string[] = Object.freeze([
+  "ampi-toolbox -> ampi-patch",
+  "ampi-toolbox -> ampi-tasks",
+]);
+
 /** Convenience: the set of canonical extension directory names. */
 export function getMmrExtensionNames(): readonly string[] {
   return MMR_EXTENSION_MANIFEST.map((entry) => entry.name);

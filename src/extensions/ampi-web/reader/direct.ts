@@ -9,7 +9,7 @@ import {
   readTextWithByteLimit,
   redactApiKey,
   truncateUtf8,
-} from "../http-utils.js";
+} from "../../ampi-core/internal/http-utils.js";
 import { isPrivateIpLiteral, validateExternalHttpUrl } from "../url-policy.js";
 import { htmlToMarkdown } from "./extract.js";
 import { extractArticleToMarkdown } from "./markdown.js";

@@ -25,7 +25,7 @@
  * returns `null` and the caller falls back to the minimal extractor.
  */
 
-import { truncateUtf8 } from "../http-utils.js";
+import { truncateUtf8 } from "../../ampi-core/internal/http-utils.js";
 
 /**
  * Minimum number of characters Readability+Turndown must produce
