@@ -114,7 +114,7 @@ Concrete prompts live in [`prompts.ts`](prompts.ts):
 
 ### Librarian
 
-- Profile/tool name: `librarian`. Standalone; builder `librarian`. Model prefs `claude-opus-4-6` → `gpt-5.4`, thinking `medium`.
+- Profile/tool name: `librarian`. Standalone; builder `librarian`. Model prefs `gpt-5.5` off → `claude-opus-4-6` → `gpt-5.4`, thinking `off` (default librarian usage is GPT-5.5 with no reasoning).
 - Profile tool intent and effective worker tools: read-only GitHub repository tools from `ampi-github`. `allowMcp: false`, `allowToolbox: false`.
 - Prerequisite: parent process must have the required GitHub tools registered by `ampi-github` (same-named third-party tools are not sufficient) and active. The provider gates model visibility on this; `execute()` checks again before spawning.
 - Parameters: `{ query: string, context?: string }`. The worker prompt is remote-repository research only; local workspace work should use direct tools or `finder`.

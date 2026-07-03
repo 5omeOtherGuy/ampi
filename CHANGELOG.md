@@ -8,6 +8,12 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `ampi-workers` / `ampi-core`: the `librarian` subagent's default route is now
+  `gpt-5.5` with no reasoning (thinking `off`), since repository lookups are
+  retrieval-oriented. It falls back to `claude-opus-4-6` then `gpt-5.4` when
+  GPT-5.5 is not registered, and the profile now defaults to thinking `off` for
+  every route without a per-entry level. Model/thinking overrides via
+  `ampiCore.subagentModelPreferences.librarian` are unchanged.
 - Publishing readiness: the npm package is now the scoped public package
   `@5omeotherguy/ampi` (product and runtime brand remain `ampi`). `package.json`
   gains `publishConfig.access = "public"` and a `files` allowlist so the npm
