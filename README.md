@@ -45,34 +45,34 @@ Each locked mode swaps the whole harness together: model preference order, think
 
 ## Quick start
 
-Pi must already be installed and authenticated. `@5omeotherguy/ampi` is the npm
+Pi must already be installed and authenticated. `@skippermissions/ampi` is the npm
 package name; `ampi` is the product and runtime brand you see in commands, modes,
 and settings.
 
 Install for your user (recommended):
 
 ```bash
-pi install npm:@5omeotherguy/ampi
+pi install npm:@skippermissions/ampi
 ```
 
 Install for one project only (writes to `.pi/settings.json`, shareable with your
 team):
 
 ```bash
-pi install -l npm:@5omeotherguy/ampi
+pi install -l npm:@skippermissions/ampi
 ```
 
 Try it for a single run without installing:
 
 ```bash
-pi -e npm:@5omeotherguy/ampi --ampi-mode smart
+pi -e npm:@skippermissions/ampi --ampi-mode smart
 ```
 
 Keep it up to date:
 
 ```bash
 pi update --extensions            # update all Pi packages
-pi update npm:@5omeotherguy/ampi  # update just ampi
+pi update npm:@skippermissions/ampi  # update just ampi
 ```
 
 Prefer installing from git, or want an unreleased commit? Use the git source as
@@ -100,7 +100,7 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 1. Start in the default AMP-style mode:
 
    ```bash
-   pi -e npm:@5omeotherguy/ampi --ampi-mode smart
+   pi -e npm:@skippermissions/ampi --ampi-mode smart
    ```
 
 2. Inspect the resolved harness:

@@ -1,5 +1,5 @@
 {
-  "name": "@5omeotherguy/ampi",
+  "name": "@skippermissions/ampi",
   "version": "0.2.0",
   "description": "AMP Code-style harness for Pi Agent: locked modes, tools, workers, web, history, and fallback as one self-contained extension package.",
   "type": "module",
