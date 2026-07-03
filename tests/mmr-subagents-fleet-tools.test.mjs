@@ -4,6 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
 const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
+const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
 
 after(cleanupLoadedSource);
 
@@ -239,6 +240,27 @@ describe("start_task fleet settle/dispatch characterization", () => {
       runner.calls.every((c) => c.profileName === "task-subagent"),
       "every member resolved through the Task subagent profile",
     );
+  });
+
+  it("stamps every fleet member's final details envelope with runMode \"background\"", async () => {
+    const { startTask, registry, launch } = await makeFleetToolset();
+    const { readWorkerRunEnvelope } = await importSource(ENVELOPE_MODULE);
+    await startTask.execute("call-1", FLEET, undefined, undefined, CTX);
+    launch();
+    await flush();
+    const finished = registry.listTasks("S").finished;
+    assert.equal(finished.length, 3, "all three members settled");
+    for (const entry of finished) {
+      const snapshot = registry.getTask("S", entry.taskId);
+      assert.ok(snapshot?.finalToolResult, `member ${entry.taskId} has a projected final result`);
+      const envelope = readWorkerRunEnvelope(snapshot.finalToolResult.details);
+      assert.ok(envelope, `member ${entry.taskId} details carry the worker-run envelope`);
+      assert.equal(
+        envelope.run.runMode,
+        "background",
+        "a fleet-launched member persists runMode background (not the blocking default)",
+      );
+    }
   });
 
   it("rolls a mixed success/failure fleet group up to a failed group with per-outcome counts", async () => {

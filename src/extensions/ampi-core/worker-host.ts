@@ -117,11 +117,18 @@ const globalStore = globalThis as typeof globalThis & {
 /**
  * Register (or replace, by id) THE process-wide worker host. Idempotent:
  * `ampi-workers` calls this once at activation; re-activation with the same
- * id replaces the prior host.
+ * id replaces the prior host. A DIFFERENT id while a host is already live is
+ * rejected loudly (throws naming both ids) rather than silently clobbering it.
  */
 export function registerMmrWorkerHost(id: string, host: MmrWorkerHost): void {
   const trimmed = id.trim();
   if (trimmed.length === 0) throw new Error("registerMmrWorkerHost requires a non-empty id");
+  const existing = globalStore[AMPI_WORKER_HOST_GLOBAL_KEY];
+  if (existing !== undefined && existing.id !== trimmed) {
+    throw new Error(
+      `registerMmrWorkerHost: a worker host is already registered with id "${existing.id}"; refusing to replace it with id "${trimmed}".`,
+    );
+  }
   globalStore[AMPI_WORKER_HOST_GLOBAL_KEY] = { id: trimmed, host };
 }
 

@@ -610,6 +610,8 @@ export function createStartTaskTool(deps: AsyncTaskToolDeps = {}): ToolDefinitio
     if (!prep.ok) {
       return { error: inferToolErrorMessage(prep.result) ?? `invalid ${descriptor.agent} parameters` };
     }
+    // Envelope dual-write: fleet members launch on the background surface.
+    prep.prepared.runMode = "background";
     const prepared = prep.prepared;
     const startArgs = preparedStartArgs(descriptor, prepared, member);
     return {

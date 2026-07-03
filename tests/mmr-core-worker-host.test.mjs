@@ -42,6 +42,19 @@ describe("core worker-host seam", () => {
     assert.ok(key, "the host registration must be anchored on globalThis");
   });
 
+  it("refuses to replace a live host registered under a different id (fail loud)", async () => {
+    const { registerMmrWorkerHost, getMmrWorkerHost } = await importSource(HOST_MODULE);
+    const first = makeHost();
+    registerMmrWorkerHost("ampi-workers", first);
+    const second = makeHost();
+    assert.throws(
+      () => registerMmrWorkerHost("someone-else", second),
+      /ampi-workers[\s\S]*someone-else/,
+      "a different id must throw naming both ids",
+    );
+    assert.equal(getMmrWorkerHost(), first, "the original host stays registered after a rejected replacement");
+  });
+
   it("fails closed when no host is registered", async () => {
     const { requireMmrWorkerHost, registerMmrWorkerBinding, MmrWorkerHostUnavailableError } =
       await importSource(HOST_MODULE);
@@ -196,5 +209,80 @@ describe("worker-host exposure gating (ampi-workers host impl)", () => {
     );
     const ok = host.prepareWorkerRun({ agent: "sa__gated", rawParams: {}, ctx: { cwd: "/repo" }, runMode: "blocking" });
     assert.equal(ok.ok, true, "the declared exposure surface still prepares");
+  });
+
+  it("honors a binding-level modelFallback \"disabled\" (never reads the shared session override)", async () => {
+    const { __resetMmrWorkerHostForTests, getMmrWorkerHost } = await importSource(HOST_MODULE);
+    const { registerMmrWorkersWorkerHost } = await importSource("extensions/ampi-workers/worker-host-impl.ts");
+    const { setMmrWorkerFallbackOverride, mmrWorkerFallbackScopeKey, resetMmrWorkerFallbackState } =
+      await importSource("extensions/ampi-workers/fallback.ts");
+    __resetMmrWorkerHostForTests();
+    resetMmrWorkerFallbackState();
+    registerMmrWorkersWorkerHost({ getAllTools: () => [], getActiveTools: () => [], getCommands: () => [] });
+    const host = getMmrWorkerHost();
+    const runnerCalls = [];
+    const workerResult = {
+      messages: [], finalOutput: "ok", truncatedFinalOutput: "ok",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+      trail: [], prompt: "", cwd: "/repo", command: "pi", args: [], exitCode: 0, signal: null,
+      stderr: "", aborted: false, outputTruncated: false, ignoredJsonLines: 0, agentStarted: true,
+    };
+    // Binding-level modelFallback ONLY: the spec deliberately omits it, so a
+    // seam consumer relying on the documented contract knob must still get
+    // disabled behavior (the host must normalize it onto the effective spec).
+    host.registerWorkerBinding({
+      spec: {
+        toolName: "sa__fb",
+        profileName: "sa__fb",
+        description: "d",
+        promptSnippet: "s",
+        promptGuidelines: [],
+        parameters: { type: "object" },
+        progressPlaceholder: "p",
+        coerceParams: (raw) => raw,
+        resolveInvocation: (input) => ({
+          ok: true,
+          workerTools: [],
+          modelArg: input.modelPreferencesOverride ? "prov/fallback" : "prov/base",
+        }),
+        resolutionFailure: "fail-closed",
+        resolutionFailureResult: () => ({ content: [], details: {} }),
+        mirrorWorkerTools: false,
+        detailsWorkerTools: "profile-constant",
+        workerToolsConstant: [],
+        progressModelBinding: "initial",
+        describeRun: () => ({ description: "d", displayPrompt: "p" }),
+        buildUserPrompt: () => "p",
+        assembleSystemPrompt: () => "sys",
+        candidatePreferences: () => [],
+        buildProgressDetails: () => ({}),
+        buildFinalDetails: () => ({}),
+        buildFinalContent: () => "",
+      },
+      exposure: ["tool"],
+      contractPreset: "strict-delegated",
+      paramsHint: "{task}",
+      promptParamKey: "task",
+      modelFallback: "disabled",
+      runner: { run: (options) => { runnerCalls.push(options); return Promise.resolve(workerResult); } },
+    });
+    // Seed a stored session-scoped fallback override for this worker's scope.
+    // The shared-fallback path would apply it on the first run; the disabled
+    // path never reads it. sessionId/parentMode default to "-" (no session).
+    setMmrWorkerFallbackOverride(
+      mmrWorkerFallbackScopeKey({ profileName: "sa__fb" }),
+      [{ model: "fallback", providers: ["prov"] }],
+    );
+    const prep = host.prepareWorkerRun({ agent: "sa__fb", rawParams: {}, ctx: { cwd: "/repo" }, runMode: "blocking" });
+    assert.equal(prep.ok, true, "the binding prepares");
+    await prep.prepared.run({ signal: new AbortController().signal, onProgress: () => {} });
+    assert.equal(runnerCalls.length, 1, "disabled fallback runs the worker exactly once");
+    assert.equal(runnerCalls[0].model, "prov/base", "disabled path keeps the base route, ignoring the stored override");
+    assert.equal(
+      runnerCalls[0].modelPreferencesOverride,
+      undefined,
+      "disabled path forwards no fallback override to the runner",
+    );
+    resetMmrWorkerFallbackState();
   });
 });

@@ -50,7 +50,13 @@ export function createMmrWorkersWorkerHost(pi: ToolHostLike, defaultRunner?: Mmr
     registerWorkerBinding<TParams, TDetails, TRun = void>(
       binding: MmrWorkerBindingSpec<TParams, TDetails, TRun>,
     ): MmrRegisteredWorkerBinding<TDetails> {
-      const spec = binding.spec;
+      // Normalize the model-fallback knob onto the spec the factory reads:
+      // the binding-level field is the seam contract knob, but the factory
+      // only honors `spec.modelFallback`. Spec-level value wins when both set.
+      const spec =
+        binding.spec.modelFallback === undefined && binding.modelFallback !== undefined
+          ? { ...binding.spec, modelFallback: binding.modelFallback }
+          : binding.spec;
       const deps: MmrWorkerToolFactoryDeps = {
         pi,
         ...(binding.runner !== undefined ? { runner: binding.runner } : {}),
