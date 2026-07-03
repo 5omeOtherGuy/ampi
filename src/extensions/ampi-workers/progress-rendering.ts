@@ -12,12 +12,11 @@ import { reassertLowerAboveEditorWidgets } from "../ampi-core/above-editor-order
 import {
   formatTitle,
   statusBgFn,
-  statusFromDetails,
-  stripProvider,
+  statusColor,
+  statusLabel,
   textContent,
   type BackgroundTaskDetails,
   type RenderContextLike,
-  type RenderStatus,
   type SubagentProgressDetails,
   type SubagentTheme,
 } from "./subagent-render-format.js";
@@ -33,7 +32,6 @@ import {
   addFallbackNoticeBlock,
   addFinalOutputBox,
   addMarkdownBlock,
-  addTaskBox,
   addTrailComponents,
   taskPreviewForDisplay,
   WorkerStatusLineComponent,
@@ -69,7 +67,15 @@ import type {
   MmrAsyncTaskGroupSnapshot,
 } from "./async-task-registry.js";
 import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
-import { buildWorkerRunView, isMmrBackgroundWorkerDetails } from "./worker-run-view.js";
+import {
+  backgroundTaskRenderStatus,
+  buildWorkerRunFinal,
+  buildWorkerRunView,
+  isMmrBackgroundWorkerDetails,
+  type WorkerRunFinal,
+  type WorkerRunRow,
+  type WorkerRunSection,
+} from "./worker-run-view.js";
 
 /**
  * Live-state resolvers for the inline background card. Supplied by the async
@@ -464,9 +470,10 @@ export function renderMmrBackgroundTaskResult(
     });
   }
 
-  // 4. Single-task task_poll / task_wait / task_cancel → rich result card
-  //    (model header, Markdown body, trail, final output, usage line). This is
-  //    the result-retrieval surface and is unchanged.
+  // 4. Single-task task_poll / task_wait / task_cancel → the rich N=1 result
+  //    card, the SAME projection the blocking transcript card renders. The
+  //    background-specific status semantics (neutral cancelled, `• background`
+  //    badge, partial chip) are carried as WorkerRunFinal projection flags.
   const details = view.details;
   const renderStatus = backgroundTaskRenderStatus(details.status);
   if (!renderStatus || !details.taskId || !details.agent) {
@@ -474,52 +481,15 @@ export function renderMmrBackgroundTaskResult(
     addMarkdownBlock(container, output || details.errorMessage, theme, { paddingX: 1 });
     return container;
   }
-
-  // Reuse the subagent rendering building blocks so a polled background result
-  // matches a blocking subagent (model in the header, Markdown task body,
-  // trail, usage line), while keeping background-specific status semantics
-  // (neutral cancelled, the `background` badge).
-  const subDetails = view.final;
-  const model = stripProvider(subDetails.reportedModel ?? subDetails.model ?? details.resolvedModel);
-  const contextWindow = subDetails.contextWindow ?? details.contextWindow;
-  const expanded = options.expanded === true;
   const startDisplay = details.tool === "start_task" ? startTaskDisplayFromArgs(context?.args) : undefined;
-  const operation = backgroundTaskDisplayText(details, subDetails, startDisplay);
-
-  const container = new Container();
-  const box = new Box(1, 1, backgroundStatusBgFn(details.status, theme));
-  box.addChild(new Text(backgroundTaskHeaderLine(details, model, theme), 0, 0));
-  const preview = taskPreviewForDisplay(operation.collapsed, operation.expanded, expanded);
-  addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
-  if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
-  // Gate the error diagnostic on the raw status, not the coarse renderStatus
-  // (which folds cancelled into failed). A user-initiated cancel is neutral and
-  // must not surface an error-colored diagnostic.
-  if (details.errorMessage && details.status === "failed") {
-    addDiagnostic(box, details.errorMessage, renderStatus, theme);
-  }
-  container.addChild(box);
-
-  const cleanFinal = details.finalOutput?.trim() ?? "";
-  const trail = subDetails.trail ?? [];
-  if (expanded && trail.length > 0) {
-    container.addChild(new Spacer(1));
-    addTrailComponents(container, trail, cleanFinal, theme, context, operation.expanded ?? operation.collapsed, true);
-  }
-
-  if (cleanFinal && renderStatus !== "running") {
-    container.addChild(new Spacer(1));
-    addFinalOutputBox(container, cleanFinal, theme);
-  }
-
-  if (renderStatus !== "running" && (subDetails.usage || model)) {
-    container.addChild(new Spacer(1));
-    container.addChild(
-      new WorkerStatusLineComponent(details.agent, subDetails.usage, contextWindow, model, theme),
-    );
-  }
-
-  return container;
+  const final = buildWorkerRunFinal({
+    surface: "background",
+    details,
+    final: view.final,
+    startDisplay,
+    output: details.finalOutput?.trim() ?? "",
+  });
+  return renderWorkerRunCard(final, options.expanded === true, theme, context);
 }
 
 function asyncTaskCompletionHeaderLine(
@@ -567,6 +537,99 @@ export const renderAsyncTaskCompletionMessage: MessageRenderer<AsyncTaskCompleti
   }
 };
 
+// ---------------------------------------------------------------------------
+// The ONE rich N=1 card assembler. Both the blocking transcript card
+// (renderMmrSubagentResult) and the background-final poll card
+// (renderMmrBackgroundTaskResult branch 4) build their components here from a
+// WorkerRunFinal projection. Surface differences (background badge + neutral
+// status bg, partial chip, spacer placement, terminal-section gating, status-
+// line name) are projection flags, never a second assembly path.
+// ---------------------------------------------------------------------------
+
+function richCardHeaderLine(final: WorkerRunFinal, theme: SubagentTheme): string {
+  const title = formatTitle(final.headerName, final.model, theme);
+  if (final.surface === "background") {
+    const badge = theme.fg("muted", "background");
+    const outcome = final.partial ? ` ${theme.fg("warning", "partial")}` : "";
+    return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(final.backgroundStatus, theme)}${outcome}`;
+  }
+  return `${title}  ${theme.fg(statusColor(final.status), statusLabel(final.status))}`;
+}
+
+function richCardBoxBgFn(final: WorkerRunFinal, theme: SubagentTheme): (text: string) => string {
+  return final.surface === "background"
+    ? backgroundStatusBgFn(final.backgroundStatus, theme)
+    : statusBgFn(final.status, theme);
+}
+
+/**
+ * Render a {@link WorkerRunFinal} as the rich N=1 card: header task box
+ * (title + Markdown body + optional hint + optional diagnostic), optional
+ * fallback notice, optional expanded trail, optional final-output box, and
+ * optional usage status line. Pure over the projection: the only surface
+ * branching is the header/box-bg helpers above, driven by projection flags.
+ */
+export function renderWorkerRunCard(
+  final: WorkerRunFinal,
+  expanded: boolean,
+  theme: SubagentTheme,
+  context: RenderContextLike | undefined,
+): Component {
+  const container = new Container();
+
+  const box = new Box(1, 1, richCardBoxBgFn(final, theme));
+  box.addChild(new Text(richCardHeaderLine(final, theme), 0, 0));
+  const preview = taskPreviewForDisplay(final.collapsedBody, final.expandedBody, expanded);
+  const hasOperation = addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
+  if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
+  const hasDiagnostic = addDiagnostic(box, final.diagnostic, final.diagnosticStatus, theme);
+  container.addChild(box);
+  const hasTaskBody = hasOperation || hasDiagnostic;
+
+  addFallbackNoticeBlock(container, final.fallbackNotice, theme);
+
+  const addOutput = (space: boolean): void => {
+    if (!final.output || !final.showTerminalSections) return;
+    if (space) container.addChild(new Spacer(1));
+    addFinalOutputBox(container, final.output, theme);
+  };
+  const addStatusLine = (): void => {
+    if (!final.showTerminalSections || !(final.usage || final.model)) return;
+    container.addChild(new Spacer(1));
+    container.addChild(
+      new WorkerStatusLineComponent(final.statusLineName, final.usage, final.contextWindow, final.model, theme),
+    );
+  };
+
+  if (!expanded) {
+    addOutput(true);
+    addStatusLine();
+    return container;
+  }
+
+  // Background-final inserts a spacer before the trail when the raw trail is
+  // non-empty (even if every item is later skipped as an echo/duplicate); the
+  // blocking card never does. The output-box spacer is unconditional for
+  // background and conditional (only when a trail or task body precedes it) for
+  // blocking.
+  if (final.spaceBeforeTrailWhenExpanded === "whenRawTrailNonEmpty" && final.trail.length > 0) {
+    container.addChild(new Spacer(1));
+  }
+  const hasTrail = addTrailComponents(
+    container,
+    final.trail,
+    final.output,
+    theme,
+    context,
+    final.trailWorkerPrompt,
+    final.suppressDuplicateFinalOutput,
+  );
+
+  addOutput(final.spaceBeforeOutputWhenExpanded === "always" ? true : hasTrail || hasTaskBody);
+  addStatusLine();
+  return container;
+}
+
 export function renderMmrSubagentCall(
   toolName: string,
   args: unknown,
@@ -605,54 +668,20 @@ export function renderMmrSubagentResult(
     return renderMmrBackgroundTaskResult(toolName, result, options, theme, context, getMmrBackgroundCardExtras());
   }
   const details = result.details as SubagentProgressDetails | undefined;
-  const output = textContent(result).trim();
-  const expanded = options.expanded === true;
-  const isPartial = options.isPartial === true;
-  const model = stripProvider(details?.reportedModel ?? details?.model);
-  const status = statusFromDetails(details, isPartial, context);
-  const operation = operationLabel(toolName, details, context);
-  const expandedOperation = expandedOperationLabel(toolName, details, context);
-  const container = new Container();
   clearRenderedCall(context);
   markResultRendered(context);
-
-  const hasTaskBody = addTaskBox(container, toolName, details, operation, expanded, status, theme, expandedOperation);
-  addFallbackNoticeBlock(container, details?.fallbackNotice, theme);
-
-  if (!expanded) {
-    if (!isPartial && output) {
-      container.addChild(new Spacer(1));
-      addFinalOutputBox(container, output, theme);
-    }
-    if (!isPartial && (details?.usage || model)) {
-      container.addChild(new Spacer(1));
-      container.addChild(new WorkerStatusLineComponent(toolName, details?.usage, details?.contextWindow, model, theme));
-    }
-    return container;
-  }
-
-  const trail = details?.trail ?? [];
-  const hasTrail = addTrailComponents(
-    container,
-    trail,
-    output,
-    theme,
+  const final = buildWorkerRunFinal({
+    surface: "blocking",
+    toolName,
+    details,
+    isPartial: options.isPartial === true,
     context,
-    workerPromptFromArgs(toolName, details, context),
-    !isPartial,
-  );
-
-  if (!isPartial && output) {
-    if (hasTrail || hasTaskBody) container.addChild(new Spacer(1));
-    addFinalOutputBox(container, output, theme);
-  }
-
-  if (!isPartial && (details?.usage || model)) {
-    container.addChild(new Spacer(1));
-    container.addChild(new WorkerStatusLineComponent(toolName, details?.usage, details?.contextWindow, model, theme));
-  }
-
-  return container;
+    collapsedBody: operationLabel(toolName, details, context),
+    expandedBody: expandedOperationLabel(toolName, details, context),
+    trailWorkerPrompt: workerPromptFromArgs(toolName, details, context),
+    output: textContent(result).trim(),
+  });
+  return renderWorkerRunCard(final, options.expanded === true, theme, context);
 }
 
 
@@ -660,13 +689,6 @@ export function renderMmrSubagentResult(
 // Background board + per-call status primitives (folded from the former
 // background-task-rendering module: same consumers, one render module).
 // ---------------------------------------------------------------------------
-
-export function backgroundTaskRenderStatus(status: string | undefined): RenderStatus | undefined {
-  if (status === "running" || status === "cancelling") return "running";
-  if (status === "succeeded") return "succeeded";
-  if (status === "failed" || status === "cancelled") return "failed";
-  return undefined;
-}
 
 export function backgroundStatusBgFn(
   status: string | undefined,
@@ -691,39 +713,6 @@ export function backgroundStatusBadge(
   const concrete = status ?? "";
   const color = backgroundStatusColor(concrete);
   return `${theme.fg(color, backgroundStatusGlyph(concrete))} ${theme.fg(color, backgroundStatusWord(status))}`;
-}
-
-export function backgroundTaskHeaderLine(
-  details: BackgroundTaskDetails,
-  model: string | undefined,
-  theme: SubagentTheme,
-): string {
-  const title = formatTitle(details.agent ?? "background task", model, theme);
-  const badge = theme.fg("muted", "background");
-  const outcome = details.terminalOutcome === "partial" ? ` ${theme.fg("warning", "partial")}` : "";
-  return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(details.status, theme)}${outcome}`;
-}
-
-export function backgroundTaskDisplayText(
-  details: BackgroundTaskDetails,
-  subDetails: SubagentProgressDetails,
-  startDisplay: { collapsed?: string; expanded?: string } | undefined,
-): { collapsed?: string; expanded?: string } {
-  const expanded = details.prompt
-    ?? startDisplay?.expanded
-    ?? subDetails.query
-    ?? subDetails.prompt
-    ?? subDetails.task
-    ?? subDetails.description
-    ?? details.description;
-  const collapsed = details.description
-    ?? startDisplay?.collapsed
-    ?? subDetails.description
-    ?? subDetails.query
-    ?? subDetails.task
-    ?? subDetails.prompt
-    ?? expanded;
-  return { collapsed, expanded };
 }
 
 const BACKGROUND_STATUS_VALUES: ReadonlySet<string> = new Set([
@@ -908,7 +897,7 @@ function boardSections(
   board: MmrAsyncTaskBoard,
   resolveGroup: MmrWidgetGroupResolver | undefined,
   nowMs: number,
-): WidgetSection[] {
+): WorkerRunSection[] {
   const retainedFinished = board.finished.filter(
     (entry) =>
       typeof entry.completedAtMs === "number" &&
@@ -918,7 +907,7 @@ function boardSections(
   const entries = [...board.active, ...board.stalled, ...retainedFinished];
 
   const order: (string | undefined)[] = [];
-  const buckets = new Map<string | undefined, WidgetRow[]>();
+  const buckets = new Map<string | undefined, WorkerRunRow[]>();
   for (const entry of entries) {
     const key = entry.groupId;
     let bucket = buckets.get(key);
@@ -930,8 +919,8 @@ function boardSections(
     bucket.push(toRow(entry, board.generatedAtMs));
   }
 
-  const grouped: { section: WidgetSection; minCreated: number }[] = [];
-  let ungrouped: WidgetSection | undefined;
+  const grouped: { section: WorkerRunSection; minCreated: number }[] = [];
+  let ungrouped: WorkerRunSection | undefined;
   for (const key of order) {
     const rows = buckets.get(key)!.slice().sort(compareRows);
     if (key === undefined) {
@@ -983,8 +972,8 @@ function finishedOnlyClearDelayMs(board: MmrAsyncTaskBoard): number | undefined 
  * staged view, so the animation interval keeps driving frames throughout the
  * reveal.
  */
-function revealSections(sections: readonly WidgetSection[], nowMs: number): WidgetSection[] {
-  const out: WidgetSection[] = [];
+function revealSections(sections: readonly WorkerRunSection[], nowMs: number): WorkerRunSection[] {
+  const out: WorkerRunSection[] = [];
   for (const section of sections) {
     const rows = revealedRows(section.rows, nowMs);
     if (rows.length === 0) continue;
@@ -1001,7 +990,7 @@ function revealSections(sections: readonly WidgetSection[], nowMs: number): Widg
  * trailing sections drop and collapse into `… N more`.
  */
 function renderWidgetLines(
-  sections: readonly WidgetSection[],
+  sections: readonly WorkerRunSection[],
   theme: BackgroundViewTheme | undefined,
   activeFrame: string | undefined,
   maxRows = WIDGET_MAX_ROWS,

@@ -1868,3 +1868,65 @@ describe("inline background card animation", () => {
     assert.doesNotMatch(after, SPINNER);
   });
 });
+
+describe("shared rich-card assembler (one N=1 projection)", () => {
+  it("produces identical component structure and body from both entry points, modulo the background badge", async () => {
+    const { renderMmrSubagentResult, renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const usage = { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 1000, turns: 3 };
+    const trail = [{ type: "assistant", text: "shared trail body" }];
+    const model = "openai-codex/gpt-5.4-mini";
+    const output = "Shared final answer.";
+
+    // Blocking transcript card entry point.
+    const blocking = renderMmrSubagentResult(
+      "Task",
+      {
+        content: [{ type: "text", text: output }],
+        details: { reportedModel: model, exitCode: 0, signal: null, aborted: false, stopReason: "end_turn", contextWindow: 200_000, usage, trail },
+      },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ description: "Do the thing", prompt: "Do the thing in detail" }),
+    );
+
+    // Background-final poll card entry point, with equivalent inputs.
+    const background = renderMmrBackgroundTaskResult(
+      "task_poll",
+      {
+        content: [{ type: "text", text: "task_poll: Task task t1 succeeded." }],
+        details: {
+          worker: "ampi-workers.async-task",
+          tool: "task_poll",
+          agent: "Task",
+          taskId: "t1",
+          status: "succeeded",
+          description: "Do the thing",
+          prompt: "Do the thing in detail",
+          finalOutput: output,
+          contextWindow: 200_000,
+          final: { reportedModel: model, usage, trail },
+        },
+      },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ task_id: "t1" }),
+    );
+
+    // Same component tree assembled by the one shared path.
+    assert.deepEqual(collectComponentTypes(blocking), collectComponentTypes(background));
+
+    const blLines = normalize(renderText(blocking)).split("\n");
+    const bgLines = normalize(renderText(background)).split("\n");
+    // "completed" appears only on the header line; drop it and the remaining
+    // body/output/statusline lines must be byte-identical across surfaces.
+    const blHeaderIdx = blLines.findIndex((l) => l.includes("completed"));
+    const bgHeaderIdx = bgLines.findIndex((l) => l.includes("completed"));
+    assert.ok(blHeaderIdx >= 0 && bgHeaderIdx >= 0, "both cards render a completed header");
+    assert.ok(!blLines[blHeaderIdx].includes("background"), "blocking header has no background badge");
+    assert.ok(bgLines[bgHeaderIdx].includes("background"), "background header carries the background badge");
+    assert.deepEqual(
+      blLines.filter((_, i) => i !== blHeaderIdx),
+      bgLines.filter((_, i) => i !== bgHeaderIdx),
+    );
+  });
+});
