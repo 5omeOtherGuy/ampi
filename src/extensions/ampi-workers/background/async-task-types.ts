@@ -1,12 +1,12 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import type { MmrSubagentPartialOutputPolicy } from "../ampi-core/subagent-profiles.js";
+import type { MmrSubagentPartialOutputPolicy } from "../../ampi-core/subagent-profiles.js";
 import type {
   MmrAsyncTerminalOutcome,
   MmrWorkerProgressSnapshot,
   MmrWorkerResult,
   MmrWorkerTrailItem,
   MmrWorkerUsageStats,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 
 /**
  * Public types and tuning constants for the async background-task registry

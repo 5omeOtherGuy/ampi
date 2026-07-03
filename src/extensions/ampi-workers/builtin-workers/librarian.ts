@@ -5,7 +5,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background-dispatch.js";
+import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background/background-dispatch.js";
 import { isRecord } from "../../ampi-core/internal/json.js";
 import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
 import { checkMmrToolParams } from "../../ampi-core/tool-params.js";

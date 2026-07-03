@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
-const FORMAT_MODULE = "extensions/ampi-workers/async-task-tool-format.ts";
-const SCHEMA_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
+const FORMAT_MODULE = "extensions/ampi-workers/background/async-task-tool-format.ts";
+const SCHEMA_MODULE = "extensions/ampi-workers/background/async-task-tool-schemas.ts";
 
 after(cleanupLoadedSource);
 

@@ -3,9 +3,9 @@ import { after, afterEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
-const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
-const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
-const DISPATCH_MODULE = "extensions/ampi-workers/background-dispatch.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
+const DISPATCH_MODULE = "extensions/ampi-workers/background/background-dispatch.ts";
 const FINDER_MODULE = "extensions/ampi-workers/builtin-workers/finder.ts";
 const LIBRARIAN_MODULE = "extensions/ampi-workers/builtin-workers/librarian.ts";
 const TASK_MODULE = "extensions/ampi-workers/builtin-workers/task.ts";

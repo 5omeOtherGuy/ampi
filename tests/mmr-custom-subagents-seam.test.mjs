@@ -25,7 +25,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const CUSTOM_RUNTIME_MODULE = "extensions/ampi-custom-subagents/custom-runtime.ts";
 const CUSTOM_LOADER_MODULE = "extensions/ampi-custom-subagents/custom-loader.ts";
 const HOST_IMPL_MODULE = "extensions/ampi-workers/framework/worker-host-impl.ts";
-const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
 
 beforeEach(async () => {
   const { clearMmrDynamicSubagentProfiles } = await importSource("extensions/ampi-core/subagent-profiles.ts");

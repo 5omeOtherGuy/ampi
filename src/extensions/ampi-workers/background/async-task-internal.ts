@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import type { MmrSubagentPartialOutputPolicy } from "../ampi-core/subagent-profiles.js";
+import type { MmrSubagentPartialOutputPolicy } from "../../ampi-core/subagent-profiles.js";
 import type {
   MmrAsyncTerminalOutcome,
   MmrWorkerProgressSnapshot,
   MmrWorkerResult,
   MmrWorkerTrailItem,
-} from "./framework/runner.js";
+} from "../framework/runner.js";
 import type {
   MmrAsyncTaskGroupNotifier,
   MmrAsyncTaskGroupSettleCallback,

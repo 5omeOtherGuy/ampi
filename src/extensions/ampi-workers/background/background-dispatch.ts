@@ -12,7 +12,7 @@
  */
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { BackgroundCardExtras } from "./progress-rendering.js";
+import type { BackgroundCardExtras } from "../progress-rendering.js";
 
 /**
  * The shared v2 background fields every backgroundable worker tool's schema

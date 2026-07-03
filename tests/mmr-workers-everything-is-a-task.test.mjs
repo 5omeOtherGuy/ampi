@@ -10,8 +10,8 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const FINDER_MODULE = "extensions/ampi-workers/builtin-workers/finder.ts";
 const ORACLE_MODULE = "extensions/ampi-workers/builtin-workers/oracle.ts";
-const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
-const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
 
 after(cleanupLoadedSource);
 

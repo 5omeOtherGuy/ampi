@@ -17,7 +17,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 const GUIDANCE_MODULE = "extensions/ampi-core/worker-tool-guidance.ts";
-const SCHEMA_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
+const SCHEMA_MODULE = "extensions/ampi-workers/background/async-task-tool-schemas.ts";
 
 const FULL_WORKER_SURFACE = [
   "Task",

@@ -4,22 +4,22 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
+import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
 import {
   buildTaskFinalResult,
   type TaskToolDeps,
-} from "./builtin-workers/task.js";
-import type { FinderToolDeps } from "./builtin-workers/finder.js";
-import type { LibrarianToolDeps } from "./builtin-workers/librarian.js";
-import type { ReviewerToolDeps } from "./builtin-workers/reviewer.js";
+} from "../builtin-workers/task.js";
+import type { FinderToolDeps } from "../builtin-workers/finder.js";
+import type { LibrarianToolDeps } from "../builtin-workers/librarian.js";
+import type { ReviewerToolDeps } from "../builtin-workers/reviewer.js";
 import type {
   MmrPreparedWorkerRun,
   MmrPreparedWorkerRunResult,
-} from "./framework/worker-tool-factory.js";
+} from "../framework/worker-tool-factory.js";
 import {
   getMmrBackgroundAgent,
   type MmrBackgroundAgentDescriptor,
-} from "./framework/worker-binding-registry.js";
+} from "../framework/worker-binding-registry.js";
 import { inferToolErrorMessage } from "./async-task-tool-format.js";
 import {
   ASYNC_TASK_COMPLETION_CUSTOM_TYPE,
@@ -30,7 +30,7 @@ import {
   renderAsyncTaskCompletionMessage,
   renderMmrBackgroundTaskCall,
   renderMmrBackgroundTaskResult,
-} from "./progress-rendering.js";
+} from "../progress-rendering.js";
 import {
   getMmrAsyncTaskRegistry,
   type MmrAsyncTaskGroupSnapshot,
@@ -89,7 +89,7 @@ import {
   summarizeTrail,
   validationResult,
 } from "./async-task-tool-format.js";
-import { resolveMmrWorkerSessionKey } from "./framework/worker-host.js";
+import { resolveMmrWorkerSessionKey } from "../framework/worker-host.js";
 
 export {
   AMPI_SUBAGENTS_ASYNC_PUSH_ENV,

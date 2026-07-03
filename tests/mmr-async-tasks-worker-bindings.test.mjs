@@ -4,9 +4,9 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const AGENTS_MODULE = "extensions/ampi-workers/framework/worker-binding-registry.ts";
 const PROFILES_MODULE = "extensions/ampi-core/subagent-profiles.ts";
-const SCHEMAS_MODULE = "extensions/ampi-workers/async-task-tool-schemas.ts";
-const TOOLS_MODULE = "extensions/ampi-workers/async-task-tools.ts";
-const REGISTRY_MODULE = "extensions/ampi-workers/async-task-registry.ts";
+const SCHEMAS_MODULE = "extensions/ampi-workers/background/async-task-tool-schemas.ts";
+const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
+const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
 
 after(cleanupLoadedSource);
 

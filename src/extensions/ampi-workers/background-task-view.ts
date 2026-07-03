@@ -19,7 +19,7 @@ import type {
   MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
   MmrAsyncTaskGroupStatus,
-} from "./async-task-registry.js";
+} from "./background/async-task-registry.js";
 import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,

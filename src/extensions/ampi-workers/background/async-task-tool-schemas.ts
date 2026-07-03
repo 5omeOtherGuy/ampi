@@ -1,5 +1,5 @@
 import { Type, type Static, type TSchema } from "typebox";
-import { checkMmrToolParams, MmrToolParamsError } from "../ampi-core/tool-params.js";
+import { checkMmrToolParams, MmrToolParamsError } from "../../ampi-core/tool-params.js";
 import {
   MAX_TASK_WAIT_TIMEOUT_MS,
   type MmrAsyncTaskBoard,
@@ -11,7 +11,7 @@ import {
   DEFAULT_MMR_BACKGROUND_AGENT,
   listMmrBackgroundAgents,
   type MmrBackgroundAgentDescriptor,
-} from "./framework/worker-binding-registry.js";
+} from "../framework/worker-binding-registry.js";
 
 export const START_TASK_TOOL_NAME = "start_task";
 export const TASK_POLL_TOOL_NAME = "task_poll";

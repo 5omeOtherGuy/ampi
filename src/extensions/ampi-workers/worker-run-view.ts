@@ -28,7 +28,7 @@ import {
   type SubagentProgressDetails,
 } from "./subagent-render-format.js";
 import type { WidgetRow, WidgetSection } from "./background-task-view.js";
-import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
+import type { AsyncTaskFleetDetails } from "./background/async-task-tool-schemas.js";
 
 /** Shared projection aliases: every worker surface renders these shapes. */
 export type WorkerRunRow = WidgetRow;

@@ -15,7 +15,7 @@ import {
   type AsyncTaskToolDeps,
   MMR_SUBAGENTS_ASYNC_PUSH_ENV,
   registerAsyncTaskTools,
-} from "./async-task-tools.js";
+} from "./background/async-task-tools.js";
 import {
   createMmrWorkersFeatureGateProvider,
   createMmrWorkersToolProvider,

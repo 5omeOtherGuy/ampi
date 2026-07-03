@@ -36,7 +36,7 @@ import {
   taskPreviewForDisplay,
   WorkerStatusLineComponent,
 } from "./subagent-trail-components.js";
-import { getMmrBackgroundCardExtras } from "./background-dispatch.js";
+import { getMmrBackgroundCardExtras } from "./background/background-dispatch.js";
 import {
   advanceLoaderFrame,
   backgroundStatusColor,
@@ -65,8 +65,8 @@ import type {
   MmrAsyncTaskBoard,
   MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
-} from "./async-task-registry.js";
-import type { AsyncTaskFleetDetails } from "./async-task-tool-schemas.js";
+} from "./background/async-task-registry.js";
+import type { AsyncTaskFleetDetails } from "./background/async-task-tool-schemas.js";
 import {
   backgroundTaskRenderStatus,
   buildWorkerRunFinal,

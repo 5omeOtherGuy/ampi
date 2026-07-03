@@ -1,12 +1,12 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import { compactOneLine as sharedCompactOneLine } from "./background-task-view.js";
+import { compactOneLine as sharedCompactOneLine } from "../background-task-view.js";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { MmrWorkerTrailItem } from "./worker-trail.js";
+import type { MmrWorkerTrailItem } from "../worker-trail.js";
 import {
   buildTaskFinalResult,
   buildTaskProgressResult,
   type TaskDetailsContext,
-} from "./builtin-workers/task.js";
+} from "../builtin-workers/task.js";
 import {
   isValidAsyncTaskGroupId,
   type MmrAsyncTaskBoard,
@@ -27,9 +27,9 @@ import {
   listMmrBackgroundAgents,
   normalizeMmrBackgroundAgentName,
   type MmrBackgroundAgentDescriptor,
-} from "./framework/worker-binding-registry.js";
+} from "../framework/worker-binding-registry.js";
 
-import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
+import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
 
 /** The error text a failed pre-spawn/tool result reports via its details. */
 export function inferToolErrorMessage(result: AgentToolResult<unknown>): string | undefined {

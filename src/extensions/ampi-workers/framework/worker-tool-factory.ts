@@ -19,7 +19,7 @@ import {
 import type { MmrSubagentInvocation } from "../../ampi-core/subagent-resolver.js";
 import type { MmrModelPreference } from "../../ampi-core/types.js";
 import { readMmrWorkerSessionId } from "./fallback.js";
-import { getMmrBackgroundDispatcher } from "../background-dispatch.js";
+import { getMmrBackgroundDispatcher } from "../background/background-dispatch.js";
 import {
   refreshBackgroundTaskWidget,
   renderMmrSubagentCall,
@@ -39,7 +39,7 @@ import {
   getMmrAsyncTaskRegistry,
   type MmrAsyncTaskRegistry,
   type MmrAsyncTaskRun,
-} from "../async-task-registry.js";
+} from "../background/async-task-registry.js";
 import { buildSpawnErrorWorkerResult } from "../builtin-workers/task-result.js";
 import {
   DEFAULT_MMR_WORKER_OUTPUT_BYTE_LIMIT,
