@@ -85,7 +85,7 @@ describe("worker-run-view", () => {
   });
 });
 
-const ENVELOPE_MODULE = "extensions/ampi-workers/worker-run-envelope.ts";
+const ENVELOPE_MODULE = "extensions/ampi-workers/rendering/worker-run-envelope.ts";
 
 describe("buildWorkerRunFinal (rich N=1 projection)", () => {
   it("projects blocking status/model/diagnostic/body precedence from legacy details", async () => {
