@@ -15,15 +15,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   every route without a per-entry level. Model/thinking overrides via
   `ampiCore.subagentModelPreferences.librarian` are unchanged.
 - Publishing readiness: the npm package is now the scoped public package
-  `@5omeotherguy/ampi` (product and runtime brand remain `ampi`). `package.json`
+  `@skippermissions/ampi` (product and runtime brand remain `ampi`). `package.json`
   gains `publishConfig.access = "public"` and a `files` allowlist so the npm
   tarball ships only the runtime source, package metadata, `README.md`,
   `LICENSE`, `CHANGELOG.md`, and user docs — local-only and dev-only files
   (CI config, hooks, contributor scripts, tests, private notes) and the
   developer-only `ampi-debug` extension are no longer packaged. The README
-  install/update guide is now npm-first: `pi install npm:@5omeotherguy/ampi`,
-  project-local `-l` install, one-run `pi -e npm:@5omeotherguy/ampi`,
-  `pi update --extensions` / `pi update npm:@5omeotherguy/ampi`, a git-source
+  install/update guide is now npm-first: `pi install npm:@skippermissions/ampi`,
+  project-local `-l` install, one-run `pi -e npm:@skippermissions/ampi`,
+  `pi update --extensions` / `pi update npm:@skippermissions/ampi`, a git-source
   fallback, and a local-development path.
 - `ampi-core` / `ampi-workers`: the `Task` subagent's canonical Opus 4.8 route now
   runs at Anthropic **high** reasoning effort (previously medium). The pinned

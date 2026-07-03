@@ -8,12 +8,12 @@
 
 Anything not listed here is internal and may change without warning. The contract has two import paths:
 
-- **Package root** — `import { ... } from "@5omeotherguy/ampi"` (resolves to
+- **Package root** — `import { ... } from "@skippermissions/ampi"` (resolves to
   `src/index.ts`). Use this in production code.
-- **Preferred extension subpath** — `import { ... } from "@5omeotherguy/ampi/extensions/ampi-core"`
+- **Preferred extension subpath** — `import { ... } from "@skippermissions/ampi/extensions/ampi-core"`
   (resolves to the extension entry point). Use this only when wiring
   the extension into a Pi package manifest.
-- **Compatibility subpath** — `import { ... } from "@5omeotherguy/ampi/extensions/mmr-core"`.
+- **Compatibility subpath** — `import { ... } from "@skippermissions/ampi/extensions/mmr-core"`.
   The `mmr-*` subpaths remain supported for existing consumers.
 
 Internal modules under `ampi/src/extensions/ampi-core/<file>` are not
@@ -52,8 +52,8 @@ package root are stable.
 ## Modes
 
 ```ts
-import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } from "@5omeotherguy/ampi";
-import type { MmrModeDefinition, MmrModeKey } from "@5omeotherguy/ampi";
+import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } from "@skippermissions/ampi";
+import type { MmrModeDefinition, MmrModeKey } from "@skippermissions/ampi";
 ```
 
 - `MMR_MODE_KEYS`: ordered tuple `("smart", "fable", "rush", "deep", "free")`.
@@ -65,8 +65,8 @@ import type { MmrModeDefinition, MmrModeKey } from "@5omeotherguy/ampi";
 ## Mode state
 
 ```ts
-import { getMmrModeState, getMmrModeStateSnapshot } from "@5omeotherguy/ampi";
-import type { MmrModeState } from "@5omeotherguy/ampi";
+import { getMmrModeState, getMmrModeStateSnapshot } from "@skippermissions/ampi";
+import type { MmrModeState } from "@skippermissions/ampi";
 ```
 
 - `getMmrModeStateSnapshot()` — **preferred for new code.** Returns a
@@ -106,8 +106,8 @@ import {
   registerMmrToolProvider,
   resolveMmrTools,
   isToolAllowed,
-} from "@5omeotherguy/ampi";
-import type { MmrToolProvider, MmrToolResolution, MmrToolRule } from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
+import type { MmrToolProvider, MmrToolResolution, MmrToolRule } from "@skippermissions/ampi";
 ```
 
 - `registerMmrToolProvider(provider)` — register an extension-owned
@@ -141,7 +141,7 @@ next mode resolution include its rules without ordering constraints.
 ## Worker-tool model resolution
 
 ```ts
-import { selectMmrModelRoute, resolveAndApplyMmrModel } from "@5omeotherguy/ampi";
+import { selectMmrModelRoute, resolveAndApplyMmrModel } from "@skippermissions/ampi";
 import type {
   MmrModelPreference,
   MmrModelRouteSelection,
@@ -149,7 +149,7 @@ import type {
   MmrModelRegistryLike,
   ResolveAndApplyMmrModelArgs,
   SelectMmrModelRouteArgs,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 ```
 
 - `selectMmrModelRoute({ modelPreferences, modeThinkingLevel?, registry })`
@@ -175,13 +175,13 @@ import {
   createMmrFeatureGateRegistry,
   registerMmrFeatureGateProvider,
   resolveMmrFeatureGates,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 import type {
   MmrFeatureGateDecision,
   MmrFeatureGateProvider,
   MmrFeatureGateProviderDecision,
   MmrFeatureGateRegistry,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 ```
 
 - `registerMmrFeatureGateProvider(provider)` — push a provider onto
@@ -210,7 +210,7 @@ import {
   getMmrSubagentState,
   listMmrSubagentProfiles,
   resolveMmrSubagentInvocation,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 import type {
   ExplicitWorkerCliFlags,
   MmrSubagentBaseMode,
@@ -224,7 +224,7 @@ import type {
   MmrSubagentState,
   MmrSubagentToolResolution,
   ResolveMmrSubagentInvocationArgs,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 ```
 
 Subagent workers run as a dedicated, non-locked execution route in a
@@ -337,8 +337,8 @@ not user-extensible at runtime.
 ## Prompt route
 
 ```ts
-import { getMmrPromptRoute } from "@5omeotherguy/ampi";
-import type { MmrPromptRoute } from "@5omeotherguy/ampi";
+import { getMmrPromptRoute } from "@skippermissions/ampi";
+import type { MmrPromptRoute } from "@skippermissions/ampi";
 ```
 
 - `getMmrPromptRoute(modeKey)` — returns `"default" | "rush" | "deep"`.
@@ -349,12 +349,12 @@ import type { MmrPromptRoute } from "@5omeotherguy/ampi";
 ## Policy diagnostics
 
 ```ts
-import { getMmrPolicyDiagnostics } from "@5omeotherguy/ampi";
+import { getMmrPolicyDiagnostics } from "@skippermissions/ampi";
 import type {
   MmrPolicyDiagnostic,
   MmrPolicyDiagnosticCode,
   MmrPolicyDiagnosticSeverity,
-} from "@5omeotherguy/ampi";
+} from "@skippermissions/ampi";
 ```
 
 - `getMmrPolicyDiagnostics(state)` — returns a list of structured
@@ -381,8 +381,8 @@ diagnostics for any deferred tools.
 ## Event bus
 
 ```ts
-import { MMR_EVENT_STATE_CHANGED, onMmrStateChanged } from "@5omeotherguy/ampi";
-import type { MmrEventBusHost, MmrStateChangedHandler } from "@5omeotherguy/ampi";
+import { MMR_EVENT_STATE_CHANGED, onMmrStateChanged } from "@skippermissions/ampi";
+import type { MmrEventBusHost, MmrStateChangedHandler } from "@skippermissions/ampi";
 ```
 
 The `ampi-core` extension emits `MMR_EVENT_STATE_CHANGED`
@@ -419,8 +419,8 @@ request/response. For queries, use the read APIs above.
 ## Persisted state
 
 ```ts
-import { AMPI_MODE_STATE_ENTRY, findLatestPersistedModeState } from "@5omeotherguy/ampi";
-import type { MmrModeState } from "@5omeotherguy/ampi";
+import { AMPI_MODE_STATE_ENTRY, findLatestPersistedModeState } from "@skippermissions/ampi";
+import type { MmrModeState } from "@skippermissions/ampi";
 ```
 
 - `AMPI_MODE_STATE_ENTRY` — the `customType` string used for persisted

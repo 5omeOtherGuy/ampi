@@ -25,13 +25,13 @@ Identical to `ampi-core`:
 
 ## Import paths
 
-- **Package root** — `import { ... } from "@5omeotherguy/ampi"` (resolves to
+- **Package root** — `import { ... } from "@skippermissions/ampi"` (resolves to
   `src/index.ts`). Use this in production code.
 - **Preferred extension entrypoint** — `import extension from
-  "@5omeotherguy/ampi/extensions/ampi-<family>"` when wiring an extension into a Pi
+  "@skippermissions/ampi/extensions/ampi-<family>"` when wiring an extension into a Pi
   package manifest.
 - **Compatibility entrypoint** — `import extension from
-  "@5omeotherguy/ampi/extensions/mmr-<family>"`. The `mmr-*` subpaths remain supported
+  "@skippermissions/ampi/extensions/mmr-<family>"`. The `mmr-*` subpaths remain supported
   for existing consumers.
 
 | Family | Preferred subpath | Compatibility subpath |

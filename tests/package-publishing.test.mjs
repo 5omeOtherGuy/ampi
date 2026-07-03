@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const SCOPED_NAME = "@5omeotherguy/ampi";
+const SCOPED_NAME = "@skippermissions/ampi";
 
 async function readJson(rel) {
   return JSON.parse(await readFile(path.join(repoRoot, rel), "utf8"));
@@ -40,7 +40,7 @@ function packFiles() {
 }
 
 // Publishing readiness: ampi ships to npm as the scoped package
-// `@5omeotherguy/ampi` (public), and the tarball must carry only the
+// `@skippermissions/ampi` (public), and the tarball must carry only the
 // runtime/package-user surface — never local-only, dev-only, or private files.
 describe("npm publishing metadata", () => {
   it("declares the scoped public package name in package.json", async () => {
