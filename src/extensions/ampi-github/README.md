@@ -59,7 +59,7 @@ The `AMPI_GITHUB_*` env names below are canonical; the legacy `MMR_GITHUB_*` equ
 | Setting | Env | Default | Notes |
 | --- | --- | --- | --- |
 | `enabled` | `AMPI_GITHUB_ENABLE` | `false` | Master switch for outbound GitHub access. |
-| `token` | `AMPI_GITHUB_TOKEN` / `GITHUB_TOKEN` | unset | Env only; required for search/private/higher limits. |
+| `token` | `AMPI_GITHUB_TOKEN` / `MMR_GITHUB_TOKEN` / `GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_PERSONAL_ACCESS_TOKEN` | unset | Env only, first present in that precedence order; required for search/private/higher limits. |
 | `apiBaseUrl` | `AMPI_GITHUB_API_URL` | `https://api.github.com` | Test override; GitHub Enterprise Server is not supported in this slice. |
 | `requestTimeoutMs` | `AMPI_GITHUB_TIMEOUT_MS` | `30000` | Per-request timeout. |
 | `maxResultBytes` | `AMPI_GITHUB_MAX_RESULT_BYTES` | `200000` | Response cap; file contents have a larger bounded path before slicing. |
@@ -108,7 +108,7 @@ All `ampi-github` tools intentionally **return** a normal result whose `details.
 
 - **Tools are `missing`.** `AMPI_GITHUB_ENABLE` is unset or Pi was not restarted after enabling it.
 - **Tools are `gated`.** The extension is known but disabled; set `AMPI_GITHUB_ENABLE=true` or `ampiGithub.enabled=true` and restart.
-- **`search_github` fails.** Code search requires `AMPI_GITHUB_TOKEN` or `GITHUB_TOKEN`.
+- **`search_github` fails.** Code search requires a token via one of `AMPI_GITHUB_TOKEN`, `MMR_GITHUB_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_PERSONAL_ACCESS_TOKEN`.
 - **Private repo read fails.** The token is missing or does not have access to that repository.
 - **`librarian` stays `gated`.** Ensure `ampi-github` tools are registered by this extension, then inspect `/ampi-status debug`.
 - **Large file read fails.** Retry with a smaller `read_range`.
