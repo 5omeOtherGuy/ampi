@@ -59,3 +59,25 @@ export function readPreferredEnv(
 
   return undefined;
 }
+
+/**
+ * Read the first present (non-empty, non-whitespace) env variable from an
+ * ordered list of names. Generalizes `readPreferredEnv` to more than two
+ * candidates so a setting can accept several conventional aliases (e.g. a
+ * GitHub token under branded names plus the ecosystem-standard
+ * `GITHUB_TOKEN`, `GH_TOKEN`, and `GITHUB_PERSONAL_ACCESS_TOKEN`). Empty
+ * strings are skipped so shell wrappers that materialize absent env vars as
+ * `""` do not mask a later candidate.
+ */
+export function readFirstPresentEnv(
+  env: NodeJS.ProcessEnv,
+  ...names: string[]
+): PreferredEnvValue | undefined {
+  for (const name of names) {
+    const value = env[name];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return { name, value };
+    }
+  }
+  return undefined;
+}

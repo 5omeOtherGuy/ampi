@@ -51,6 +51,44 @@ describe("loadMmrGithubSettings", () => {
     }
   });
 
+  it("reads token from GH_TOKEN and GITHUB_PERSONAL_ACCESS_TOKEN when the branded names are unset", async () => {
+    const { loadMmrGithubSettings } = await importSource(CONFIG_MODULE);
+    const { home, cwd, cleanup } = makeTempProject();
+    try {
+      const gh = loadMmrGithubSettings(cwd, { homeDirectory: home, env: { GH_TOKEN: "tok-gh" } });
+      assert.equal(gh.settings.token, "tok-gh");
+      const pat = loadMmrGithubSettings(cwd, { homeDirectory: home, env: { GITHUB_PERSONAL_ACCESS_TOKEN: "tok-pat" } });
+      assert.equal(pat.settings.token, "tok-pat");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("resolves token precedence AMPI > MMR > GITHUB_TOKEN > GH_TOKEN > GITHUB_PERSONAL_ACCESS_TOKEN", async () => {
+    const { loadMmrGithubSettings } = await importSource(CONFIG_MODULE);
+    const { home, cwd, cleanup } = makeTempProject();
+    try {
+      const full = {
+        AMPI_GITHUB_TOKEN: "tok-ampi",
+        MMR_GITHUB_TOKEN: "tok-mmr",
+        GITHUB_TOKEN: "tok-github",
+        GH_TOKEN: "tok-gh",
+        GITHUB_PERSONAL_ACCESS_TOKEN: "tok-pat",
+      };
+      assert.equal(loadMmrGithubSettings(cwd, { homeDirectory: home, env: { ...full } }).settings.token, "tok-ampi");
+      delete full.AMPI_GITHUB_TOKEN;
+      assert.equal(loadMmrGithubSettings(cwd, { homeDirectory: home, env: { ...full } }).settings.token, "tok-mmr");
+      delete full.MMR_GITHUB_TOKEN;
+      assert.equal(loadMmrGithubSettings(cwd, { homeDirectory: home, env: { ...full } }).settings.token, "tok-github");
+      delete full.GITHUB_TOKEN;
+      assert.equal(loadMmrGithubSettings(cwd, { homeDirectory: home, env: { ...full } }).settings.token, "tok-gh");
+      delete full.GH_TOKEN;
+      assert.equal(loadMmrGithubSettings(cwd, { homeDirectory: home, env: { ...full } }).settings.token, "tok-pat");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("reads enabled/apiBaseUrl/timeouts from settings files but warns and ignores a settings-file token", async () => {
     const { loadMmrGithubSettings } = await importSource(CONFIG_MODULE);
     const { home, cwd, cleanup } = makeTempProject();

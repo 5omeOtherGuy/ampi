@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { parseBoolEnv, readPreferredEnv } from "../ampi-core/internal/env.js";
+import { parseBoolEnv, readFirstPresentEnv, readPreferredEnv } from "../ampi-core/internal/env.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 
 /**
@@ -16,9 +16,10 @@ export interface MmrGithubSettings {
   /** Network access master switch. Off by default; opt-in per the extension policy. */
   enabled: boolean;
   /**
-   * Optional GitHub API token. Loaded from the `AMPI_GITHUB_TOKEN`
-   * environment variable (preferred), then legacy `MMR_GITHUB_TOKEN`, then
-   * `GITHUB_TOKEN`. Never read from
+   * Optional GitHub API token. Loaded from the first present environment
+   * variable in precedence order: `AMPI_GITHUB_TOKEN` (preferred), legacy
+   * `MMR_GITHUB_TOKEN`, then the ecosystem-standard `GITHUB_TOKEN`,
+   * `GH_TOKEN` (gh CLI), and `GITHUB_PERSONAL_ACCESS_TOKEN`. Never read from
    * settings files, which are commonly committed or synced and would leak
    * the secret. Unauthenticated requests are permitted for public endpoints
    * but are subject to GitHub's strict anonymous rate limits, and the code
@@ -181,7 +182,7 @@ export function loadMmrGithubSettings(
     merged = { ...merged, ...extracted.values };
     if (extracted.hasToken) {
       warnings.push(
-        `Ignoring ${extracted.rootKey}.token in ${filePath}: the GitHub token must come from the AMPI_GITHUB_TOKEN, MMR_GITHUB_TOKEN, or GITHUB_TOKEN environment variable, not from settings files (which are commonly committed or synced).`,
+        `Ignoring ${extracted.rootKey}.token in ${filePath}: the GitHub token must come from an environment variable (AMPI_GITHUB_TOKEN, MMR_GITHUB_TOKEN, GITHUB_TOKEN, GH_TOKEN, or GITHUB_PERSONAL_ACCESS_TOKEN), not from settings files (which are commonly committed or synced).`,
       );
     }
     if (extracted.invalidApiBaseUrl !== undefined) {
@@ -194,7 +195,14 @@ export function loadMmrGithubSettings(
   const enableEnv = parseBoolEnv(readPreferredEnv(env, AMPI_GITHUB_ENABLE_ENV, MMR_GITHUB_ENABLE_ENV)?.value);
   if (enableEnv !== undefined) merged.enabled = enableEnv;
 
-  const tokenEnv = readPreferredEnv(env, "AMPI_GITHUB_TOKEN", "MMR_GITHUB_TOKEN")?.value ?? env.GITHUB_TOKEN;
+  const tokenEnv = readFirstPresentEnv(
+    env,
+    "AMPI_GITHUB_TOKEN",
+    "MMR_GITHUB_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "GITHUB_PERSONAL_ACCESS_TOKEN",
+  )?.value;
   if (typeof tokenEnv === "string" && tokenEnv.trim()) {
     merged.token = tokenEnv.trim();
   }

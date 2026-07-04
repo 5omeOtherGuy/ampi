@@ -33,6 +33,19 @@ describe("mmr-core internal env helpers", () => {
     }
   });
 
+  it("readFirstPresentEnv returns the first non-empty name in order, skipping empty/whitespace", async () => {
+    const { readFirstPresentEnv } = await importSource("extensions/ampi-core/internal/env.ts");
+    assert.deepEqual(
+      readFirstPresentEnv({ A: "", B: "  ", C: "val-c", D: "val-d" }, "A", "B", "C", "D"),
+      { name: "C", value: "val-c" },
+    );
+    assert.deepEqual(
+      readFirstPresentEnv({ A: "val-a" }, "A", "B"),
+      { name: "A", value: "val-a" },
+    );
+    assert.equal(readFirstPresentEnv({ A: "", B: "   " }, "A", "B", "MISSING"), undefined);
+  });
+
   it("mmr-history loadMmrHistorySettings preserves default-false semantics via the shared helper", async () => {
     const { loadMmrHistorySettings } = await importSource("extensions/ampi-history/config.ts");
     // undefined / empty / unrecognized → false
