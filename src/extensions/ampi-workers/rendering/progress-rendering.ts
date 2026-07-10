@@ -66,6 +66,7 @@ import type {
   MmrAsyncTaskBoardEntry,
   MmrAsyncTaskGroupSnapshot,
 } from "../background/async-task-registry.js";
+import { isTerminalGroupStatus } from "../background/async-task-types.js";
 import type { AsyncTaskFleetDetails } from "../background/async-task-tool-schemas.js";
 import {
   backgroundTaskRenderStatus,
@@ -113,13 +114,15 @@ interface CardBuild {
  * component's `render`, but it does NOT re-run the tool's `renderResult`, so a
  * card that captured live state at construction would freeze.
  *
- * Spawn cards (start_task / fleet declaration / group-opener) are GATED: while
- * the run is in progress the live, animated state lives ONLY in the pinned
- * aboveEditor widget and the inline card renders nothing (`settled === false`).
- * Once the run finishes (`settled === true`) the card LATCHES a static
- * completed snapshot and keeps showing it even after the live board drops the
- * rows. Non-gated result cards (an explicit group task_poll/task_wait/
- * task_cancel) return `settled === undefined` and render live every frame.
+ * Spawn cards (start_task / fleet declaration / group-opener) AND explicit
+ * group control cards (task_poll / task_wait / task_cancel with a group_id) are
+ * GATED: while the run is in progress the live, animated state lives ONLY in the
+ * pinned aboveEditor widget and the inline card renders nothing
+ * (`settled === false`). Once the run finishes — or a frozen terminal group
+ * snapshot is replayed with no live board — the card LATCHES a static completed
+ * snapshot (`settled === true`) and keeps showing it even after the live board
+ * drops the rows. Non-gated result cards (the rich single-task result) return
+ * `settled === undefined` and render every frame.
  */
 class BackgroundCardComponent implements Component {
   private build: (() => CardBuild) | undefined;
@@ -178,14 +181,15 @@ type CardSectionBuilder = (live: CardLiveState) => WidgetSection;
  * (a headed section per declared group) — the only thing a card kind supplies
  * is how its sections resolve rows for a frame.
  *
- * `gated` cards (every spawn surface: start_task single, group opener, fleet
- * declaration) render NOTHING while the run is in flight — the live, animated
- * state lives only in the pinned aboveEditor widget — then latch a static
- * completed snapshot once every row settles (see
- * {@link BackgroundCardComponent}). Non-gated cards (an explicit group
- * task_poll/task_wait/task_cancel result) render live every frame: staged
- * reveal on the shared cadence, the shared loader frame on running rows, and a
- * muted member-count fallback when no live registry backs a replayed group.
+ * `gated` cards (every spawn surface — start_task single, group opener, fleet
+ * declaration — AND explicit group task_poll/task_wait/task_cancel results)
+ * render NOTHING while the run is in flight — the live, animated state lives
+ * only in the pinned aboveEditor widget — then latch a static snapshot once every
+ * row settles, or once a frozen terminal group snapshot replays with no live
+ * board (static header + muted member-count fallback); see
+ * {@link BackgroundCardComponent}. Non-gated cards (the rich single-task
+ * background result) render every frame: staged reveal on the shared cadence and
+ * the shared loader frame on running rows.
  */
 function renderBackgroundWorkerCard(options: {
   sessionKey: string | undefined;
@@ -207,14 +211,35 @@ function renderBackgroundWorkerCard(options: {
     const allRows = sections.flatMap((s) => s.rows);
 
     if (gated) {
-      // Invisible until every row across every section settles; then a static
-      // completed snapshot.
-      const settled = allRows.length > 0 && allRows.every((r) => isTerminalRowStatus(r.status));
-      if (!settled) return { lines: [], settled: false };
-      return {
-        lines: sections.flatMap((section) => renderWidgetSection(section, theme, undefined)),
-        settled: true,
-      };
+      // Invisible until settled; then a static snapshot that latches. There are
+      // two ways to settle:
+      //  - live rows present and all terminal (the run finished on the board), or
+      //  - NO live rows but every section carries a frozen TERMINAL group
+      //    snapshot (replay / TTL-pruned board): the completed group summary is
+      //    still human-visible history, so render the static header + count
+      //    fallback per the frozen-view replay contract.
+      // Running or not-yet-terminal groups with no live rows stay empty — their
+      // live, animated state lives only in the pinned aboveEditor widget.
+      const hasLiveRows = allRows.length > 0;
+      const rowsSettled = hasLiveRows && allRows.every((r) => isTerminalRowStatus(r.status));
+      const frozenTerminal =
+        !hasLiveRows &&
+        sections.length > 0 &&
+        sections.every((s) => s.group !== undefined && isTerminalGroupStatus(s.group.status));
+      if (!rowsSettled && !frozenTerminal) return { lines: [], settled: false };
+      const lines: string[] = [];
+      for (const section of sections) {
+        lines.push(...renderWidgetSection(section, theme, undefined));
+        if (section.rows.length === 0) {
+          // Frozen replay section: the header carries status + counts; add a
+          // muted member-count line so the card is not a lone header.
+          const total = section.group?.counts.total;
+          if (typeof total === "number" && total > 0) {
+            lines.push(`  ${theme.fg("muted", `${total} task${total === 1 ? "" : "s"}`)}`);
+          }
+        }
+      }
+      return { lines, settled: true };
     }
 
     // Staged reveal keeps a freshly resolved live card invisible during the
@@ -426,9 +451,13 @@ export function renderMmrBackgroundTaskResult(
   }
 
   // 2. Group control result (task_poll / task_wait / task_cancel with group_id)
-  //    → one consolidated member-list card, rendered live every frame. The
-  //    verbose model-facing group text carried in `content` is intentionally
-  //    never drawn into the transcript.
+  //    → one consolidated member-list card. GATED like the spawn cards: the
+  //    live, animated group state lives ONLY in the pinned aboveEditor widget,
+  //    so a poll on a still-running group renders nothing inline (this is what
+  //    keeps repeated polls from stacking N live cards that thrash the
+  //    transcript on the widget's animation clock). Once every member settles
+  //    the card latches a static completed checklist. The verbose model-facing
+  //    group text carried in `content` is intentionally never drawn.
   if (view.surface === "group-control") {
     clearRenderedCall(context);
     if (!view.groupId) return new Container();
@@ -437,7 +466,7 @@ export function renderMmrBackgroundTaskResult(
       extras,
       theme,
       buildSections: [groupSectionBuilder(view.details, view.groupId)],
-      gated: false,
+      gated: true,
     });
   }
 

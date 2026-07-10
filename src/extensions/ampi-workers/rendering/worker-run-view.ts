@@ -58,7 +58,9 @@ export function isMmrBackgroundWorkerDetails(details: unknown): details is Backg
  *    GATED card (rows animate ready→running→terminal in place).
  *  - `"board"` — task_poll list mode; static grouped board snapshot.
  *  - `"group-control"` — group task_poll/task_wait/task_cancel; one
- *    consolidated member-list card rendered live every frame (not gated).
+ *    consolidated member-list card, GATED like the spawn card (the live,
+ *    animated group state lives only in the pinned widget, so it renders
+ *    nothing until every member settles, then latches a static checklist).
  *  - `"spawn"` — start_task single/group-opener or a named tool's
  *    `background: true` start; GATED card (invisible until settled, then a
  *    latched static snapshot).
@@ -70,7 +72,7 @@ export function isMmrBackgroundWorkerDetails(details: unknown): details is Backg
 export type WorkerRunView =
   | { surface: "fleet"; details: BackgroundTaskDetails; fleet: AsyncTaskFleetDetails; gated: true }
   | { surface: "board"; details: BackgroundTaskDetails; board: unknown }
-  | { surface: "group-control"; details: BackgroundTaskDetails; groupId: string | undefined; gated: false }
+  | { surface: "group-control"; details: BackgroundTaskDetails; groupId: string | undefined; gated: true }
   | { surface: "spawn"; details: BackgroundTaskDetails; groupId: string | undefined; groupOpener: boolean; gated: true }
   | { surface: "background-final"; details: BackgroundTaskDetails; final: SubagentProgressDetails }
   | { surface: "blocking"; details: SubagentProgressDetails | undefined; envelope?: MmrWorkerRunEnvelopeV1 }
@@ -103,7 +105,7 @@ export function buildWorkerRunView(details: unknown): WorkerRunView {
       return { surface: "board", details: bg, board: bg.board };
     }
     if (bg.group !== undefined) {
-      return { surface: "group-control", details: bg, groupId: bg.groupId, gated: false };
+      return { surface: "group-control", details: bg, groupId: bg.groupId, gated: true };
     }
     if (!isMmrBackgroundWorkerDetails(details)) return { surface: "plain" };
     if (bg.tool === "start_task" || bg.backgroundStart === true) {
