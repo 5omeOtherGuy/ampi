@@ -37,6 +37,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Fixed
 
+- `ampi-workers`: gate the inline group `task_poll`/`task_wait`/`task_cancel`
+  card so it no longer renders live every frame in the transcript. Repeated polls
+  of a running subagent group previously stacked animated cards that made the
+  pane jump up and down; the pinned background-tasks widget is now the single
+  live surface, and the inline card latches a static checklist once the group
+  settles. A frozen terminal group snapshot still renders its static header and
+  member count on replay. Covered by `tests/mmr-subagents-progress-rendering.test.mjs`
+  and `tests/mmr-subagents-worker-run-view.test.mjs`.
+
 - deps: require `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`,
   and `@earendil-works/pi-tui` at `^0.80.3`. The 0.79.x agent shipped an
   `npm-shrinkwrap.json` pinning nested `protobufjs`/`ws`/`undici` versions with
