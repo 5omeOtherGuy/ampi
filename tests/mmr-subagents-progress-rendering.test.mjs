@@ -1331,12 +1331,12 @@ describe("background task rendering", () => {
     assert.equal(normalize(renderText(card)).trim(), "", "a running group task_poll must render nothing inline");
   });
 
-  it("renders nothing for a group task_poll with no live registry (transcript holds only static settled records)", async () => {
+  it("renders nothing for a still-running group task_poll with no live registry (only settled snapshots replay)", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // Replay / no live registry: the gated group card never settles (no board),
-    // so it stays empty. The live state was in the widget; the transcript keeps
-    // only static settled records (the settled poll below), never a frozen
-    // "running" header that would misreport historical state.
+    // Replay / no live registry with a NON-terminal (running) frozen snapshot:
+    // the gated card stays empty. The live state was in the widget, and a frozen
+    // "running" header would misreport historical state — only terminal group
+    // snapshots latch a static record on replay.
     const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 2, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 2 } };
     const replay = normalize(renderText(renderMmrBackgroundTaskResult(
       "task_poll",
@@ -1585,7 +1585,7 @@ describe("background task rendering", () => {
     assert.doesNotMatch(rendered, /treat it as stale/);
   });
 
-  it("renders nothing for a group task_poll with no live registry (no redundant summary card on replay)", async () => {
+  it("renders the frozen header + task count for a settled group task_poll with no live registry (replay)", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "observed", taskIds: ["t1", "t2", "t3", "t4"], counts: { running: 0, succeeded: 4, failed: 0, cancelled: 0, partial: 0, total: 4 } };
     const component = renderMmrBackgroundTaskResult(
@@ -1594,13 +1594,14 @@ describe("background task rendering", () => {
       { expanded: false, isPartial: false },
       fakeTheme,
       makeContext({ group_id: "group_abc123" }),
-      // No extras → replay path; the gated card never resolves live rows to
-      // settle, so it renders nothing. Per-task completion push messages carry
-      // the durable outcome record; this summary card is intentionally dropped.
+      // No extras → replay path. The gated card treats a frozen TERMINAL group
+      // snapshot as settled and latches the static header + a muted count so
+      // reload/history keeps the completed group record.
     );
     const rendered = normalize(renderText(component));
 
-    assert.equal(rendered.trim(), "");
+    assert.match(rendered, /▸ swarm review · group_abc123 +● completed · 4\/4/);
+    assert.match(rendered, /4 tasks/);
     // The verbose model-facing retrieval text must never reach the transcript.
     assert.doesNotMatch(rendered, /Group status observed/);
     assert.doesNotMatch(rendered, /treat it as stale/);
