@@ -426,9 +426,13 @@ export function renderMmrBackgroundTaskResult(
   }
 
   // 2. Group control result (task_poll / task_wait / task_cancel with group_id)
-  //    → one consolidated member-list card, rendered live every frame. The
-  //    verbose model-facing group text carried in `content` is intentionally
-  //    never drawn into the transcript.
+  //    → one consolidated member-list card. GATED like the spawn cards: the
+  //    live, animated group state lives ONLY in the pinned aboveEditor widget,
+  //    so a poll on a still-running group renders nothing inline (this is what
+  //    keeps repeated polls from stacking N live cards that thrash the
+  //    transcript on the widget's animation clock). Once every member settles
+  //    the card latches a static completed checklist. The verbose model-facing
+  //    group text carried in `content` is intentionally never drawn.
   if (view.surface === "group-control") {
     clearRenderedCall(context);
     if (!view.groupId) return new Container();
@@ -437,7 +441,7 @@ export function renderMmrBackgroundTaskResult(
       extras,
       theme,
       buildSections: [groupSectionBuilder(view.details, view.groupId)],
-      gated: false,
+      gated: true,
     });
   }
 

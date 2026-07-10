@@ -21,7 +21,7 @@ describe("worker-run-view", () => {
     const group = buildWorkerRunView({ ...base, group: { status: "running" }, groupId: "group_abc123" });
     assert.equal(group.surface, "group-control");
     assert.equal(group.groupId, "group_abc123");
-    assert.equal(group.gated, false);
+    assert.equal(group.gated, true);
 
     const spawn = buildWorkerRunView({ ...base, tool: "start_task", taskId: "t1" });
     assert.equal(spawn.surface, "spawn");

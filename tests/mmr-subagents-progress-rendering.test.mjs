@@ -1301,10 +1301,42 @@ describe("background task rendering", () => {
     assert.doesNotMatch(singleCard, /⠋/, "a settled single card shows no spinner");
   });
 
-  it("shows the full replay card immediately when no live registry is available (reveal disabled)", async () => {
+  it("gates the group task_poll card while the group is running so it never animates inline", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
-    // No extras/resolveBoard => members.length === 0 => the card is never
-    // clipped by the staged reveal: header + the muted task-count fallback.
+    // A manual task_poll on a still-running group must NOT draw a live, animated
+    // inline card: the pinned aboveEditor widget is the sole live surface. The
+    // card stays a mounted (gated) BackgroundCardComponent that renders no lines
+    // while any member runs — this is what prevents N stacked polls from
+    // thrashing the transcript on the widget's animation clock.
+    const now = Date.now();
+    const past = now - 60_000;
+    const groupBoard = {
+      version: 1, generatedAtMs: now, counts: { active: 2, stalled: 0, finished: 0 },
+      active: [
+        { taskId: "t1", status: "running", freshness: "healthy", agent: "finder", description: "mmr-core integration points", createdAtMs: past, startedAtMs: past, updatedAtMs: now, runtimeMs: 0, groupId: "group_abc123" },
+        { taskId: "t2", status: "running", freshness: "healthy", agent: "finder", description: "subagents wiring", createdAtMs: past, startedAtMs: past, updatedAtMs: now, runtimeMs: 0, groupId: "group_abc123" },
+      ],
+      stalled: [], finished: [],
+    };
+    const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 2, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 2 } };
+    const card = renderMmrBackgroundTaskResult(
+      "task_poll",
+      { content: [{ type: "text", text: "task_poll: group group_abc123 running." }], details: { worker: "mmr-subagents.async-task", tool: "task_poll", groupId: "group_abc123", group, sessionKey: "s1" } },
+      { expanded: false, isPartial: false },
+      fakeTheme,
+      makeContext({ group_id: "group_abc123" }),
+      { resolveBoard: () => groupBoard, resolveGroup: () => group },
+    );
+    assert.equal(card.constructor.name, "BackgroundCardComponent");
+    assert.equal(normalize(renderText(card)).trim(), "", "a running group task_poll must render nothing inline");
+  });
+
+  it("renders nothing for a group task_poll with no live registry (transcript holds only static settled records)", async () => {
+    const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    // Replay / no live registry: the gated group card never settles (no board),
+    // so it stays empty. The live state was in the widget; the transcript keeps
+    // only static settled records (the settled poll below), never a frozen
+    // "running" header that would misreport historical state.
     const group = { groupId: "group_abc123", status: "running", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "pending", taskIds: ["t1", "t2"], counts: { running: 2, succeeded: 0, failed: 0, cancelled: 0, partial: 0, total: 2 } };
     const replay = normalize(renderText(renderMmrBackgroundTaskResult(
       "task_poll",
@@ -1313,8 +1345,7 @@ describe("background task rendering", () => {
       fakeTheme,
       makeContext({ group_id: "group_abc123" }),
     )));
-    assert.match(replay, /▸ swarm review · group_abc123 +● running · 0\/2/);
-    assert.match(replay, /2 tasks/);
+    assert.equal(replay.trim(), "");
   });
 
   it("reveals a settled group/single card immediately even with recent createdAtMs (no active worker)", async () => {
@@ -1554,7 +1585,7 @@ describe("background task rendering", () => {
     assert.doesNotMatch(rendered, /treat it as stale/);
   });
 
-  it("falls back to a header with a task count when no live registry is available", async () => {
+  it("renders nothing for a group task_poll with no live registry (no redundant summary card on replay)", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const group = { groupId: "group_abc123", status: "completed", label: "swarm review", generatedAtMs: 0, createdAtMs: 0, updatedAtMs: 0, completionPush: "observed", taskIds: ["t1", "t2", "t3", "t4"], counts: { running: 0, succeeded: 4, failed: 0, cancelled: 0, partial: 0, total: 4 } };
     const component = renderMmrBackgroundTaskResult(
@@ -1563,12 +1594,14 @@ describe("background task rendering", () => {
       { expanded: false, isPartial: false },
       fakeTheme,
       makeContext({ group_id: "group_abc123" }),
-      // No extras → replay path; the card draws the header + a muted count.
+      // No extras → replay path; the gated card never resolves live rows to
+      // settle, so it renders nothing. Per-task completion push messages carry
+      // the durable outcome record; this summary card is intentionally dropped.
     );
     const rendered = normalize(renderText(component));
 
-    assert.match(rendered, /▸ swarm review · group_abc123 +● completed · 4\/4/);
-    assert.match(rendered, /4 tasks/);
+    assert.equal(rendered.trim(), "");
+    // The verbose model-facing retrieval text must never reach the transcript.
     assert.doesNotMatch(rendered, /Group status observed/);
     assert.doesNotMatch(rendered, /treat it as stale/);
   });
