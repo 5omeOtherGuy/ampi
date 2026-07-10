@@ -1376,7 +1376,7 @@ describe("background task rendering", () => {
     assert.match(groupCard, /✓ finder subagents wiring/);
   });
 
-  it("uses the short description when collapsed and the full prompt when expanded", async () => {
+  it("renders a still-running polled task as an empty gated card (live view is in the widget)", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const result = {
       content: [{ type: "text", text: "task_poll: finder task task_1 is running." }],
@@ -1395,6 +1395,7 @@ describe("background task rendering", () => {
       },
     };
 
+    // While the task is running, the inline card is gated — renders empty.
     const collapsed = normalize(renderText(renderMmrBackgroundTaskResult(
       "task_poll",
       result,
@@ -1402,22 +1403,10 @@ describe("background task rendering", () => {
       fakeTheme,
       makeContext({ task_id: "task_1" }),
     )));
-    assert.match(collapsed, /Confirm background widget header removed/);
-    assert.match(collapsed, /ctrl\+o to expand/i);
-    assert.doesNotMatch(collapsed, /Verify the background-task widget no longer renders/);
-
-    const expanded = normalize(renderText(renderMmrBackgroundTaskResult(
-      "task_poll",
-      result,
-      { expanded: true, isPartial: false },
-      fakeTheme,
-      makeContext({ task_id: "task_1" }),
-    )));
-    assert.match(expanded, /Verify the background-task widget no longer renders a 'Background agents' header/);
-    assert.doesNotMatch(expanded, /ctrl\+o to expand/i);
+    assert.strictEqual(collapsed, "", "running poll result should render empty (gated)");
   });
 
-  it("renders a still-running polled task as a subagent-style box with its model", async () => {
+  it("still-running polled task renders empty gated card, not a subagent-style box", async () => {
     const { renderMmrBackgroundTaskResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const component = renderMmrBackgroundTaskResult(
       "task_poll",
@@ -1440,12 +1429,9 @@ describe("background task rendering", () => {
     );
     const rendered = normalize(renderText(component));
 
-    assert.match(rendered, /finder • gpt-5\.4-mini • background ⠋ running/);
-    assert.doesNotMatch(rendered, /in background/);
-    assert.match(rendered, /Find async task rendering/);
-    assert.match(rendered, /ctrl\+o to expand/i);
-    assert.doesNotMatch(rendered, /Find async task rendering in progress-rendering\.ts/);
-    assert.doesNotMatch(rendered, /task_poll: finder task/);
+    // Running polls now produce a gated (empty) component — the pinned
+    // above-editor widget shows the live status instead.
+    assert.strictEqual(rendered, "", "running task should not render an inline card");
   });
 
   it("renders a collapsed terminal background task with its model and final output", async () => {

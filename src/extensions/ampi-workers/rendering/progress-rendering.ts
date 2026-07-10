@@ -499,12 +499,29 @@ export function renderMmrBackgroundTaskResult(
     });
   }
 
-  // 4. Single-task task_poll / task_wait / task_cancel → the rich N=1 result
-  //    card, the SAME projection the blocking transcript card renders. The
-  //    background-specific status semantics (neutral cancelled, `• background`
-  //    badge, partial chip) are carried as WorkerRunFinal projection flags.
+  // 4. Single-task task_poll / task_wait / task_cancel result.
+  //    When the task is still running, use a gated inline card (identical to
+  //    the spawn surface) so the transcript shows nothing while the pinned
+  //    above-editor widget provides the live view. Each subsequent poll
+  //    replaces the same gated component rather than appending a new card.
+  //    Once the task reaches a terminal status the card latches a static
+  //    completed view.
   const details = view.details;
   const renderStatus = backgroundTaskRenderStatus(details.status);
+
+  // Still running → gated card that stays empty until the task settles.
+  if (renderStatus === "running" && details.taskId) {
+    clearRenderedCall(context);
+    return renderBackgroundWorkerCard({
+      sessionKey: details.sessionKey,
+      extras,
+      theme,
+      buildSections: [singleSectionBuilder(details)],
+      gated: true,
+    });
+  }
+
+  // Terminal or unrecognised → rich result card.
   if (!renderStatus || !details.taskId || !details.agent) {
     const container = new Container();
     addMarkdownBlock(container, output || details.errorMessage, theme, { paddingX: 1 });
