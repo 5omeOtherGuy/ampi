@@ -181,14 +181,15 @@ type CardSectionBuilder = (live: CardLiveState) => WidgetSection;
  * (a headed section per declared group) — the only thing a card kind supplies
  * is how its sections resolve rows for a frame.
  *
- * `gated` cards (every spawn surface: start_task single, group opener, fleet
- * declaration) render NOTHING while the run is in flight — the live, animated
- * state lives only in the pinned aboveEditor widget — then latch a static
- * completed snapshot once every row settles (see
- * {@link BackgroundCardComponent}). Non-gated cards (an explicit group
- * task_poll/task_wait/task_cancel result) render live every frame: staged
- * reveal on the shared cadence, the shared loader frame on running rows, and a
- * muted member-count fallback when no live registry backs a replayed group.
+ * `gated` cards (every spawn surface — start_task single, group opener, fleet
+ * declaration — AND explicit group task_poll/task_wait/task_cancel results)
+ * render NOTHING while the run is in flight — the live, animated state lives
+ * only in the pinned aboveEditor widget — then latch a static snapshot once every
+ * row settles, or once a frozen terminal group snapshot replays with no live
+ * board (static header + muted member-count fallback); see
+ * {@link BackgroundCardComponent}. Non-gated cards (the rich single-task
+ * background result) render every frame: staged reveal on the shared cadence and
+ * the shared loader frame on running rows.
  */
 function renderBackgroundWorkerCard(options: {
   sessionKey: string | undefined;
