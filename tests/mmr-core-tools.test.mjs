@@ -289,32 +289,25 @@ describe("mmr-core tool registry", () => {
 });
 
 describe("mmr-core tool registry - per-mode matrices", () => {
-  it("resolves smart and fable modes to read/bash/edit/write against Pi-native tools", async () => {
+  it("resolves medium to read/bash/edit/write against Pi-native tools", async () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    for (const mode of ["smart", "fable"]) {
-      const resolved = resolveMmrTools(mode, available);
-      assert.deepEqual(
-        [...resolved.activeTools].sort(),
-        ["bash", "edit", "read", "write"],
-        `${mode}: per-mode active tools`,
-      );
-      // smart-family delegate search/list to model-backed tools, so direct grep/find/ls are not requested.
-      assert.equal(resolved.activeTools.includes("grep"), false, `${mode}: grep is not requested in smart-family`);
-      assert.equal(resolved.activeTools.includes("find"), false, `${mode}: find is not requested in smart-family`);
-      assert.equal(resolved.activeTools.includes("ls"), false, `${mode}: ls is not requested in smart-family`);
-      assert.equal(resolved.deferredTools.includes("oracle"), true, `${mode}: oracle is deferred`);
-      assert.equal(resolved.deferredTools.includes("finder"), true, `${mode}: finder is deferred`);
-      assert.equal(resolved.deferredTools.includes("web_search"), true, `${mode}: web_search is deferred`);
-    }
+    const resolved = resolveMmrTools("medium", available);
+    assert.deepEqual([...resolved.activeTools].sort(), ["bash", "edit", "read", "write"]);
+    assert.equal(resolved.activeTools.includes("grep"), false);
+    assert.equal(resolved.activeTools.includes("find"), false);
+    assert.equal(resolved.activeTools.includes("ls"), false);
+    assert.equal(resolved.deferredTools.includes("oracle"), true);
+    assert.equal(resolved.deferredTools.includes("finder"), true);
+    assert.equal(resolved.deferredTools.includes("web_search"), true);
   });
 
   it("resolves rush to keep direct grep/find alongside read/bash/edit/write", async () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    const resolved = resolveMmrTools("rush", available);
+    const resolved = resolveMmrTools("low", available);
     assert.equal(resolved.activeTools.includes("grep"), true);
     assert.equal(resolved.activeTools.includes("find"), true);
     assert.equal(resolved.activeTools.includes("read"), true);
@@ -324,23 +317,23 @@ describe("mmr-core tool registry - per-mode matrices", () => {
     assert.equal(resolved.deferredTools.includes("Task"), true);
   });
 
-  it("resolves deep using bash, apply_patch, and write (each requested directly)", async () => {
+  it("resolves high and ultra using the Deep tool set", async () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
 
-    const withConcretePatch = resolveMmrTools("deep", ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"]);
-    assert.deepEqual([...withConcretePatch.activeTools].sort(), ["apply_patch", "bash", "write"]);
+    for (const mode of ["high", "ultra"]) {
+      const withConcretePatch = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"]);
+      assert.deepEqual([...withConcretePatch.activeTools].sort(), ["apply_patch", "bash", "write"]);
 
-    // Without apply_patch, deep still activates the directly requested write/bash.
-    const fallback = resolveMmrTools("deep", ["read", "bash", "edit", "write", "grep", "find", "ls"]);
-    assert.equal(fallback.activeTools.includes("bash"), true);
-    assert.equal(fallback.activeTools.includes("edit"), false);
-    assert.equal(fallback.activeTools.includes("write"), true);
-    assert.equal(fallback.deferredTools.includes("apply_patch"), true);
-    // deep does not request read directly; reading is delegated.
-    assert.equal(fallback.activeTools.includes("read"), false);
-    assert.equal(fallback.deferredTools.includes("oracle"), true);
-    assert.equal(fallback.deferredTools.includes("finder"), true);
-    assert.equal(fallback.deferredTools.includes("chart"), true);
+      const fallback = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls"]);
+      assert.equal(fallback.activeTools.includes("bash"), true);
+      assert.equal(fallback.activeTools.includes("edit"), false);
+      assert.equal(fallback.activeTools.includes("write"), true);
+      assert.equal(fallback.deferredTools.includes("apply_patch"), true);
+      assert.equal(fallback.activeTools.includes("read"), false);
+      assert.equal(fallback.deferredTools.includes("oracle"), true);
+      assert.equal(fallback.deferredTools.includes("finder"), true);
+      assert.equal(fallback.deferredTools.includes("chart"), true);
+    }
   });
 });
 
@@ -350,7 +343,7 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "claude-opus-4-8",
@@ -392,7 +385,7 @@ describe("mmr-core tool registry - state and diagnostics surface", () => {
     const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "claude-opus-4-8",
@@ -455,7 +448,7 @@ describe("mmr-core tool registry - root API", () => {
       resolve: (toolName) => (toolName === "oracle" ? { kind: "active" } : undefined),
     });
 
-    const resolved = runtime.resolveMmrTools("smart", ["read", "bash", "edit", "write", "oracle"]);
+    const resolved = runtime.resolveMmrTools("medium", ["read", "bash", "edit", "write", "oracle"]);
     assert.equal(resolved.activeTools.includes("oracle"), true);
     const oracleDecision = resolved.decisions.find((d) => d.requested === "oracle");
     assert.equal(oracleDecision.status, "active");

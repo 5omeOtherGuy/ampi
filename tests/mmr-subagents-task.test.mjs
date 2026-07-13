@@ -46,8 +46,8 @@ function stubTaskInvocation(overrides = {}) {
     ok: true,
     profile: { name: "task-subagent" },
     promptRoute: "mode-derived",
-    parentMode: overrides.parentMode ?? "smart",
-    promptBaseMode: overrides.promptBaseMode ?? overrides.parentMode ?? "smart",
+    parentMode: overrides.parentMode ?? "medium",
+    promptBaseMode: overrides.promptBaseMode ?? overrides.parentMode ?? "medium",
     selected: {
       provider: overrides.provider ?? "claude-subscription",
       model: overrides.model ?? "claude-opus-4-8",
@@ -138,7 +138,7 @@ describe("Task worker prompt builder", () => {
       baseSystemPrompt: "BASE",
       activeToolManifest: [],
       cwd: "/tmp/repo",
-      parentMode: "smart",
+      parentMode: "medium",
     });
     assert.match(result.systemPrompt, /Task Worker Role/);
     assert.match(result.systemPrompt, /bounded task/i);
@@ -192,7 +192,7 @@ describe("Task tool", () => {
     );
     assert.equal(calls.length, 1);
     assert.equal(calls[0].profileName, "task-subagent");
-    assert.equal(calls[0].parentMode, "smart");
+    assert.equal(calls[0].parentMode, "medium");
     assert.equal(calls[0].prompt, "Inspect the task path");
     assert.equal(calls[0].cwd, "/tmp/repo");
     assert.deepEqual([...calls[0].tools], [...TASK_WORKER_TOOLS]);
@@ -258,7 +258,7 @@ describe("Task tool", () => {
     });
     await tool.execute("call-1", { prompt: "Do it", description: "Do it" }, undefined, undefined, { cwd: "/tmp/repo" });
     assert.equal(calls.length, 1);
-    assert.match(calls[0].systemPrompt, /<mmr_mode name="smart">/);
+    assert.match(calls[0].systemPrompt, /<mmr_mode name="medium">/);
     assert.match(calls[0].systemPrompt, /Available tools:\n- read: Read files\.\n- bash: Run shell commands\./);
     assert.doesNotMatch(calls[0].systemPrompt, /- Task: Spawn workers\./);
     assert.match(calls[0].systemPrompt, /## Task Worker Role/);
@@ -377,8 +377,8 @@ describe("Task tool", () => {
     // Set a Task-enabled parent mode so resolveParentMode() returns a
     // concrete MmrModeKey and the from-parent profile resolves promptBase.
     runtime.setMmrModeState({
-      mode: "smart",
-      sourceProfile: "smart",
+      mode: "medium",
+      sourceProfile: "medium",
       promptRoute: "default",
       modelChosen: true,
       thinkingChosen: false,
@@ -426,7 +426,7 @@ describe("Task tool", () => {
       assert.equal(calls[0].model, "claude-subscription/claude-opus-4-8");
       // Worker prompt assembled via parent-mode-aware path and includes
       // exactly the resolved workerTools, not the parent active set.
-      assert.match(calls[0].systemPrompt, /<mmr_mode name="smart">/);
+      assert.match(calls[0].systemPrompt, /<mmr_mode name="medium">/);
       assert.match(calls[0].systemPrompt, /- read: Read files\./);
       assert.match(calls[0].systemPrompt, /- task_list: Manage task list\./);
       assert.doesNotMatch(calls[0].systemPrompt, /- Task: Spawn workers\./);
@@ -829,8 +829,8 @@ describe("Task tool", () => {
         promptRoute: "mode-derived",
         candidates: [],
         diagnostics: [],
-        parentMode: "smart",
-        promptBaseMode: "smart",
+        parentMode: "medium",
+        promptBaseMode: "medium",
         workerTools: [],
         toolResolution: { intendedTools: [], deniedTools: ["Task", "oracle", "librarian", "handoff"], omittedTools: [] },
       }),
@@ -880,7 +880,7 @@ describe("Task tool", () => {
           profile: { name: TASK_SUBAGENT_PROFILE },
           promptRoute: "mode-derived",
           parentMode: input.parentMode,
-          promptBaseMode: input.parentMode ?? "smart",
+          promptBaseMode: input.parentMode ?? "medium",
           selected: {
             provider: "openai-codex",
             model: "gpt-5.5",
@@ -952,7 +952,7 @@ describe("Task tool", () => {
     // or missing), the invocation resolver must emit
     // `prompt-base.unresolved`; Task surfaces that as an activation-style
     // failure and does not spawn. Previously, `resolveParentMode` mapped
-    // free/missing to "smart", bypassing the resolver's fail-closed path.
+    // free/missing to "medium", bypassing the resolver's fail-closed path.
     const runtime = await importSource("extensions/ampi-core/runtime.ts");
     runtime.setMmrModeState(undefined);
     const { createTaskTool } = await importSource(TASK_MODULE);
@@ -1012,8 +1012,8 @@ describe("Task tool", () => {
     const calls = [];
     const tool = createTaskTool({
       resolveInvocation: stubTaskInvocation({
-        parentMode: "rush",
-        promptBaseMode: "rush",
+        parentMode: "low",
+        promptBaseMode: "low",
         provider: "openai-codex",
         model: "gpt-5.5",
         thinkingLevel: "off",
@@ -1034,7 +1034,7 @@ describe("Task tool", () => {
     );
     assert.equal(calls.length, 1);
     assert.equal(calls[0].systemPromptDelivery, "replace");
-    assert.equal(calls[0].parentMode, "rush");
+    assert.equal(calls[0].parentMode, "low");
     assert.deepEqual([...calls[0].tools], [...TASK_WORKER_TOOLS]);
     assert.equal(calls[0].model, "openai-codex/gpt-5.5");
 
@@ -1044,7 +1044,7 @@ describe("Task tool", () => {
       {
         profileName: "task-subagent",
         prompt: "Investigate",
-        parentMode: "rush",
+        parentMode: "low",
         model: "openai-codex/gpt-5.5",
         tools: [...TASK_WORKER_TOOLS],
         systemPromptDelivery: "replace",
@@ -1065,7 +1065,7 @@ describe("Task tool", () => {
     assert.equal(builtArgs.includes("--no-skills"), true);
     const parentModeIndex = builtArgs.indexOf("--ampi-parent-mode");
     assert.notEqual(parentModeIndex, -1, "Task must pass parent-mode metadata to the child");
-    assert.equal(builtArgs[parentModeIndex + 1], "rush");
+    assert.equal(builtArgs[parentModeIndex + 1], "low");
     const toolsIndex = builtArgs.indexOf("--tools");
     assert.notEqual(toolsIndex, -1, "--tools must be present");
     assert.equal(

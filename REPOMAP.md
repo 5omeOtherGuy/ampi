@@ -75,7 +75,7 @@ Foundation routing extension. It owns mode consistency across model choice, thin
 Important files:
 
 - `index.ts` — Pi extension entry point.
-- `modes.ts` — mode table (`smart`, `fable`, `rush`, `deep`, `free`) and metadata.
+- `modes.ts` — mode table (`low`, `medium`, `high`, `ultra`, `free`), migration aliases, and metadata.
 - `mode-controller.ts` — shared state manager for mode transitions and UI updates.
 - `model-resolver.ts` — provider-neutral preference expansion and route selection.
 - `routing.ts` — resolves the active mode from settings and flags.

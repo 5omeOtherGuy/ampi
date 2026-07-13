@@ -265,7 +265,7 @@ describe("mmr-subagents extension factory", () => {
     createMmrWorkersExtension()(pi);
 
     const available = ["read", "bash", "edit", "write", "grep", "find", "web_search", "read_web_page", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("smart", available);
+    const resolved = runtime.resolveMmrTools("medium", available);
     for (const shipped of ["finder", "oracle", "Task", "librarian"]) {
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision, `${shipped} must produce a decision`);
@@ -283,7 +283,7 @@ describe("mmr-subagents extension factory", () => {
     createMmrWorkersExtension()(pi);
 
     const available = ["read", "bash", "edit", "write", "grep", "find", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("smart", available);
+    const resolved = runtime.resolveMmrTools("medium", available);
     for (const shipped of ["finder", "oracle", "Task"]) {
       const decision = resolved.decisions.find((d) => d.requested === shipped);
       assert.ok(decision, `${shipped} must produce a decision`);
@@ -307,7 +307,7 @@ describe("mmr-subagents extension factory", () => {
     createMmrWorkersExtension()(pi);
 
     const available = ["read", "bash", "edit", "write", "grep", "find", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("smart", available);
+    const resolved = runtime.resolveMmrTools("medium", available);
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "gated");
@@ -326,7 +326,7 @@ describe("mmr-subagents extension factory", () => {
     createMmrWorkersExtension()(pi);
 
     const available = ["read", "bash", "edit", "write", "grep", "find", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("smart", available);
+    const resolved = runtime.resolveMmrTools("medium", available);
     const decision = resolved.decisions.find((d) => d.requested === "librarian");
     assert.ok(decision, "librarian must produce a decision");
     assert.equal(decision.status, "active");
@@ -339,7 +339,7 @@ describe("mmr-subagents extension factory", () => {
     const { pi } = makePi();
     createMmrWorkersExtension()(pi);
 
-    const resolved = runtime.resolveMmrTools("smart", ["read", "bash", "edit", "write", "grep", "find"]);
+    const resolved = runtime.resolveMmrTools("medium", ["read", "bash", "edit", "write", "grep", "find"]);
     const readDecision = resolved.decisions.find((d) => d.requested === "read");
     assert.ok(readDecision);
     assert.notEqual(readDecision.owner, "ampi-workers", "read must not be claimed by mmr-workers");
@@ -382,7 +382,7 @@ describe("mmr-subagents registration across cache-isolated extension entrypoints
     createMmrWorkersExtension()(pi);
 
     const resolved = runtime.resolveMmrTools(
-      "smart",
+      "medium",
       ["read", "bash", "edit", "write", "grep", "find", "finder", "oracle", "Task", "librarian"],
     );
     for (const shipped of ["finder", "oracle", "Task"]) {

@@ -352,7 +352,7 @@ function resolveCtxModelRegistry<TModel extends MmrRegisteredModelLike>(
  * `undefined` when the parent has no Task-enabled locked mode (no
  * snapshot, or snapshot mode is `"free"`), so the invocation resolver
  * can emit `prompt-base.unresolved` for `from-parent` profiles instead
- * of silently falling back to `"smart"`.
+ * of silently falling back to `"medium"`.
  */
 function resolveParentMode(): MmrModeKey | undefined {
   const mode = getMmrModeStateSnapshot()?.mode;
@@ -610,10 +610,10 @@ function taskToolBlueprint(deps: TaskToolDeps): {
         // After a successful resolution, `invocation.promptBaseMode` is
         // defined for mode-derived profiles (Task is always mode-derived
         // `from-parent`); fall back to the parent mode snapshot when
-        // present, otherwise pin `smart` so prompt assembly always sees
+        // present, otherwise pin `medium` so prompt assembly always sees
         // a concrete mode key.
         const promptParentMode: MmrModeKey =
-          runCtx.invocation?.promptBaseMode ?? runCtx.runData.parentMode ?? "smart";
+          runCtx.invocation?.promptBaseMode ?? runCtx.runData.parentMode ?? "medium";
         const promptInput: TaskWorkerSystemPromptInput = {
           cwd,
           parentMode: promptParentMode,
@@ -640,8 +640,8 @@ function taskToolBlueprint(deps: TaskToolDeps): {
         };
       },
       // Rank/suggest fallback candidates from the parent mode's chain
-      // when the profile declares mode-specific preferences (e.g. rush
-      // uses a cheaper chain), falling back to the default chain.
+      // when the profile declares mode-specific preferences (Low uses a
+      // cheaper chain), falling back to the default chain.
       candidatePreferences: (runCtx) =>
         (runCtx.runData.parentMode !== undefined
           ? requireTaskProfile().modeModelPreferences?.[runCtx.runData.parentMode]

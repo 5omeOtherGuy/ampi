@@ -154,7 +154,7 @@ describe("ampi-patch apply_patch tool registration", () => {
     const registry = createMmrToolRegistry();
     toolbox.registerMmrPatchProviders(registry);
 
-    const deepMode = getMmrMode("deep");
+    const deepMode = getMmrMode("high");
     const resolved = registry.resolve(deepMode.tools, ["bash", "edit", "write", "apply_patch"]);
 
     const applyPatchDecision = resolved.decisions.find((d) => d.requested === "apply_patch");

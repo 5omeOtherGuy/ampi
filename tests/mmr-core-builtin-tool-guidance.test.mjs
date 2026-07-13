@@ -169,7 +169,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   it("inserts a builtin-tool-guidance block between active-guidelines and pi-docs when built-ins are active", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -185,7 +185,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   it("flattened blocks still reproduce systemPrompt byte-for-byte", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -196,7 +196,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   it("renders the heading and per-tool sections for every active built-in", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -214,7 +214,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
       "",
     );
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: baseWithoutEdit,
       activeToolManifest: [],
     });
@@ -233,7 +233,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
       custom = custom.replace(re, "");
     }
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: custom,
       activeToolManifest: [],
     });
@@ -249,7 +249,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
   it("Pi-authored Available tools and Guidelines blocks remain byte-identical", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });

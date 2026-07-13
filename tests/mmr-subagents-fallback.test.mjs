@@ -124,8 +124,8 @@ describe("failure counting + override scope (#9)", () => {
   });
 
   it("includes parent mode in the scope key (Task routes differ per mode)", () => {
-    const smart = mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "task-subagent", parentMode: "smart" });
-    const rush = mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "task-subagent", parentMode: "rush" });
+    const smart = mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "task-subagent", parentMode: "medium" });
+    const rush = mod.mmrWorkerFallbackScopeKey({ sessionId: "s1", profileName: "task-subagent", parentMode: "low" });
     assert.notEqual(smart, rush);
   });
 

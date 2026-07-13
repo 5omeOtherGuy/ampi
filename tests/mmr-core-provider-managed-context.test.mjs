@@ -70,7 +70,7 @@ function buildCtx(models, notifications, setModelCalls = []) {
 }
 
 describe("mmr-core provider-managed context selection", () => {
-  it("caps the smart Opus route to a 300k context window via a shallow clone", async () => {
+  it("caps the Medium fallback model to the inherited 300k safety window", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
@@ -87,17 +87,14 @@ describe("mmr-core provider-managed context selection", () => {
     assert.equal(handlers.has("turn_end"), false, "MMR must not use extension manual compaction after turns");
     assert.equal(handlers.has("agent_end"), false, "MMR must leave auto-compaction to Pi and the selected provider route");
     assert.equal(setModelCalls.length, 1);
-    // smart caps the active model to 300k so Pi's native compaction/footer run
-    // at 300k. The cap is a shallow clone: provider/id preserved, original
-    // registry object left untouched.
-    assert.notEqual(setModelCalls[0], models[0], "smart must pass a capped clone, not the registry object");
+    assert.notEqual(setModelCalls[0], models[0]);
     assert.equal(setModelCalls[0].provider, "claude-subscription");
     assert.equal(setModelCalls[0].id, "claude-opus-4-8");
     assert.equal(setModelCalls[0].contextWindow, 300_000);
-    assert.equal(models[0].contextWindow, 1_000_000, "registry model object must not be mutated");
+    assert.equal(models[0].contextWindow, 1_000_000, "registered model remains unchanged");
   });
 
-  it("falls back to GPT when the smart Opus route is absent", async () => {
+  it("uses GPT-5.5 as Medium's primary route with the inherited 300k safety window", async () => {
     const runtime = await importRuntime();
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
 
@@ -107,37 +104,33 @@ describe("mmr-core provider-managed context selection", () => {
     const handlers = new Map();
     const setModelCalls = [];
     const notifications = [];
-    const pi = buildPi(setModelCalls, notifications, handlers, "smart");
+    const pi = buildPi(setModelCalls, notifications, handlers, "medium");
     const ctx = buildCtx(models, notifications, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     assert.equal(setModelCalls.length, 1);
-    // The smart cap is mode-keyed, so the GPT fallback's 400k window is also
-    // capped down to 300k (a shallow clone), not the registry object.
     assert.notEqual(setModelCalls[0], models[0]);
     assert.equal(setModelCalls[0].provider, "openai-codex");
     assert.equal(setModelCalls[0].id, "gpt-5.5");
     assert.equal(setModelCalls[0].contextWindow, 300_000);
-    assert.equal(models[0].contextWindow, 400_000, "registry model object must not be mutated");
+    assert.equal(models[0].contextWindow, 400_000, "registered model remains unchanged");
 
     const state = runtime.getMmrModeState();
-    assert.equal(state?.mode, "smart");
+    assert.equal(state?.mode, "medium");
     assert.equal(state?.provider, "openai-codex");
     assert.equal(state?.model, "gpt-5.5");
     assert.equal(state?.thinkingLevel, "medium");
-    // smart caps the active window to 300k regardless of route, so the display
-    // profile is min(300k profile, 300k capped) = 300k.
-    assert.equal(state?.effectiveContextWindow, 300_000, "smart caps the active window to 300k on any route");
+    assert.equal(state?.effectiveContextWindow, 300_000);
 
-    const activation = notifications.find((entry) => /MMR mode activated: Smart/.test(entry.message));
+    const activation = notifications.find((entry) => /MMR mode activated: Medium/.test(entry.message));
     assert.ok(activation, "activation notification must be emitted on flag source");
-    assert.equal(activation.level, "warning");
-    assert.match(activation.message, /model fallback applied/);
+    assert.equal(activation.level, "warning", "deferred tools still produce a warning notification");
+    assert.doesNotMatch(activation.message, /model fallback applied/);
   });
 
-  it("does not emit the context.registered-exceeds-profile diagnostic when the selected route matches the mode profile", async () => {
+  it("does not emit a context profile diagnostic after Medium applies its 300k cap", async () => {
     const runtime = await importRuntime();
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { getMmrPolicyDiagnostics } = await importSource("extensions/ampi-core/diagnostics.ts");
@@ -155,9 +148,6 @@ describe("mmr-core provider-managed context selection", () => {
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     const state = runtime.getMmrModeState();
-    // smart caps the active Opus window to 300k, so both the recorded window
-    // and the display profile collapse to 300k and the mismatch diagnostic
-    // stays quiet.
     assert.equal(state?.registeredContextWindow, 300_000);
     assert.equal(state?.effectiveContextWindow, 300_000);
     const diagnostics = getMmrPolicyDiagnostics(state);

@@ -25,37 +25,36 @@ beforeEach(async () => {
 });
 
 describe("withMmrModeContextCap (pure)", () => {
-  it("exports a 300k smart context window (kept in sync with the smart policy window)", async () => {
+  it("moves the legacy Smart 300k window to Medium", async () => {
     const { MMR_SMART_CONTEXT_WINDOW, getMmrModeContextWindowCap } = await importContextCap();
     assert.equal(MMR_SMART_CONTEXT_WINDOW, 300_000);
-    assert.equal(getMmrModeContextWindowCap("smart"), 300_000);
+    assert.equal(getMmrModeContextWindowCap("medium"), 300_000);
   });
 
-  it("resolves the per-mode cap from each mode's request policy", async () => {
+  it("caps Medium while leaving Low, High, Ultra, and Free on their registered windows", async () => {
     const { getMmrModeContextWindowCap } = await importContextCap();
-    assert.equal(getMmrModeContextWindowCap("smart"), 300_000);
-    assert.equal(getMmrModeContextWindowCap("fable"), undefined, "Fable routes run at Pi's native window");
-    assert.equal(getMmrModeContextWindowCap("rush"), undefined, "GPT-primary modes run at Pi's native window");
-    assert.equal(getMmrModeContextWindowCap("deep"), undefined, "GPT-primary modes run at Pi's native window");
-    assert.equal(getMmrModeContextWindowCap("free"), undefined, "free has no policy, so no cap");
-    assert.equal(getMmrModeContextWindowCap("nonsense"), undefined, "unknown modes do not cap");
+    assert.equal(getMmrModeContextWindowCap("medium"), 300_000);
+    for (const mode of ["low", "high", "ultra", "free", "nonsense"]) {
+      assert.equal(getMmrModeContextWindowCap(mode), undefined, `${mode} has no ampi context cap`);
+    }
   });
 
-  it("caps smart from 1M down to 300k, returning a clone that preserves other fields", async () => {
+  it("caps Medium by cloning the model and passes the other tiers through unchanged", async () => {
     const { withMmrModeContextCap } = await importContextCap();
-    const model = { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 };
-    const capped = withMmrModeContextCap("smart", model);
-    assert.notEqual(capped, model, "should return a clone when capping");
+    const mediumModel = { provider: "openai-codex", id: "gpt-5.5", contextWindow: 372_000, maxTokens: 128_000 };
+    const capped = withMmrModeContextCap("medium", mediumModel);
+    assert.notEqual(capped, mediumModel);
     assert.equal(capped.contextWindow, 300_000);
-    assert.equal(capped.provider, "claude-subscription");
-    assert.equal(capped.id, "claude-opus-4-8");
-    assert.equal(capped.maxTokens, 32_000);
-    assert.equal(model.contextWindow, 1_000_000, "must not mutate the input");
+
+    for (const mode of ["low", "high", "ultra"]) {
+      const model = { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 };
+      assert.equal(withMmrModeContextCap(mode, model), model);
+    }
   });
 
-  it("does not cap fable/rush/deep — Fable and GPT/Codex routes keep Pi's native window", async () => {
+  it("does not cap Low, High, or Ultra", async () => {
     const { withMmrModeContextCap } = await importContextCap();
-    for (const mode of ["fable", "rush", "deep"]) {
+    for (const mode of ["ultra", "low", "high"]) {
       const model = { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 128_000 };
       const result = withMmrModeContextCap(mode, model);
       assert.equal(result, model, `expected the untouched model for mode=${mode}`);
@@ -75,22 +74,22 @@ describe("withMmrModeContextCap (pure)", () => {
   it("no-ops when the window is already at or below the cap", async () => {
     const { withMmrModeContextCap } = await importContextCap();
     const atCap = { provider: "p", id: "m", contextWindow: 300_000 };
-    assert.equal(withMmrModeContextCap("smart", atCap), atCap);
+    assert.equal(withMmrModeContextCap("medium", atCap), atCap);
     const below = { provider: "p", id: "m", contextWindow: 200_000 };
-    assert.equal(withMmrModeContextCap("smart", below), below);
+    assert.equal(withMmrModeContextCap("medium", below), below);
     // A custom provider with a smaller window than an uncapped mode stays authoritative.
     const smallGpt = { provider: "openai", id: "m", contextWindow: 250_000 };
-    assert.equal(withMmrModeContextCap("fable", smallGpt), smallGpt);
+    assert.equal(withMmrModeContextCap("ultra", smallGpt), smallGpt);
   });
 
   it("no-ops when the window is missing or non-finite", async () => {
     const { withMmrModeContextCap } = await importContextCap();
     const noWindow = { provider: "p", id: "m" };
-    assert.equal(withMmrModeContextCap("smart", noWindow), noWindow);
+    assert.equal(withMmrModeContextCap("medium", noWindow), noWindow);
     const infinite = { provider: "p", id: "m", contextWindow: Number.POSITIVE_INFINITY };
-    assert.equal(withMmrModeContextCap("smart", infinite), infinite);
+    assert.equal(withMmrModeContextCap("medium", infinite), infinite);
     const nan = { provider: "p", id: "m", contextWindow: Number.NaN };
-    assert.equal(withMmrModeContextCap("smart", nan), nan);
+    assert.equal(withMmrModeContextCap("medium", nan), nan);
   });
 });
 
@@ -144,27 +143,27 @@ function buildCtx(models, setModelCalls, notifications = []) {
 }
 
 describe("mmr-core activation context cap", () => {
-  it("fable mode passes the registered model unchanged (no cap)", async () => {
+  it("ultra mode passes GPT-5.6 Sol through at its registered window", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
-      { provider: "claude-subscription", id: "claude-fable-5", contextWindow: 1_000_000, maxTokens: 128_000 },
+      { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];
-    const pi = buildPi(setModelCalls, handlers, "fable");
+    const pi = buildPi(setModelCalls, handlers, "ultra");
     const ctx = buildCtx(models, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     assert.equal(setModelCalls.length, 1);
-    assert.equal(setModelCalls[0], models[0], "fable must pass the registry model through unchanged");
-    assert.equal(setModelCalls[0].contextWindow, 1_000_000);
+    assert.equal(setModelCalls[0], models[0]);
+    assert.equal(setModelCalls[0].contextWindow, 372_000);
   });
 });
 
 describe("mmr-core defensive reassertion", () => {
-  it("re-applies the cap when the active model drifts back to an uncapped window", async () => {
+  it("reasserts Medium's inherited 300k cap after provider registration drift", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
       { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
@@ -176,7 +175,8 @@ describe("mmr-core defensive reassertion", () => {
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(setModelCalls.length, 1, "session_start applies the cap once");
+    assert.equal(setModelCalls.length, 1, "session_start applies the selected model once");
+    assert.notEqual(setModelCalls.at(-1), models[0]);
     assert.equal(setModelCalls.at(-1).contextWindow, 300_000);
 
     // Simulate a provider (re)registration wiping the override: the active model
@@ -185,27 +185,28 @@ describe("mmr-core defensive reassertion", () => {
     assert.equal(ctx.model.contextWindow, 1_000_000);
 
     await handlers.get("input")({ type: "input", text: "hi", source: "interactive" }, ctx);
-    assert.equal(setModelCalls.at(-1).contextWindow, 300_000, "input hook reasserts the cap");
+    assert.equal(setModelCalls.length, 3, "input hook reapplies the cap");
+    assert.notEqual(setModelCalls.at(-1), models[0]);
+    assert.equal(setModelCalls.at(-1).contextWindow, 300_000);
     assert.equal(setModelCalls.at(-1).provider, "claude-subscription");
     assert.equal(setModelCalls.at(-1).id, "claude-opus-4-8");
   });
 
-  it("leaves a GPT-primary mode (deep) at Pi's native window through session_start and input", async () => {
+  it("leaves High at Pi's native window through session_start and input", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
-    // deep routes to an OpenAI model; give it a 1M native window to prove
-    // the GPT/Codex modes carry no ampi cap and pass the native window
-    // through untouched.
+    // High routes to an OpenAI model; give it a 1M native window to prove
+    // uncapped tiers preserve Pi's registered window.
     const models = [
       { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];
-    const pi = buildPi(setModelCalls, handlers, "deep");
+    const pi = buildPi(setModelCalls, handlers, "high");
     const ctx = buildCtx(models, setModelCalls);
 
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(setModelCalls.at(-1).contextWindow, 1_000_000, "session_start keeps deep at the native window");
+    assert.equal(setModelCalls.at(-1).contextWindow, 1_000_000, "session_start keeps High at the native window");
 
     // Simulate a provider (re)registration; the native window must be preserved.
     setModelCalls.push(models[0]);
@@ -244,8 +245,8 @@ describe("mmr-core defensive reassertion", () => {
   it("does not reassert when the active model drifted to a different provider/id (genuine native change)", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
-      { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 32_000 },
       { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 32_000 },
+      { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];

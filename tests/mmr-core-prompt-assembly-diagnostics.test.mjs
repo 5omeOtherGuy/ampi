@@ -27,7 +27,7 @@ const DIAGNOSTICS_MODULE = "extensions/ampi-core/diagnostics.ts";
 function makeState(overrides = {}) {
   return {
     version: 1,
-    mode: "deep",
+    mode: "high",
     displayName: "Deep",
     source: "settings",
     targetModel: "claude-opus-4-8",
@@ -39,7 +39,7 @@ function makeState(overrides = {}) {
     modelFallbackApplied: false,
     modelCandidates: [],
     thinkingLevel: "high",
-    promptRoute: "deep",
+    promptRoute: "high",
     requestedTools: ["read", "bash"],
     activeTools: ["read", "bash"],
     missingTools: [],
@@ -64,7 +64,7 @@ describe("assembleActiveSurface(): passthroughReason", () => {
   it("leaves passthroughReason undefined on a successful splice", async () => {
     const { assembleActiveSurface } = await importSource(ASSEMBLY_MODULE);
     const result = assembleActiveSurface({
-      state: makeState({ mode: "smart" }),
+      state: makeState({ mode: "medium" }),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -86,7 +86,7 @@ describe("assembleActiveSurface(): passthroughReason", () => {
   it("reports identity-anchor-missing when Pi's identity line is absent", async () => {
     const { assembleActiveSurface } = await importSource(ASSEMBLY_MODULE);
     const result = assembleActiveSurface({
-      state: makeState({ mode: "smart" }),
+      state: makeState({ mode: "medium" }),
       baseSystemPrompt: "A custom system prompt with no Pi-style head.",
       activeToolManifest: [],
     });
@@ -98,7 +98,7 @@ describe("assembleActiveSurface(): passthroughReason", () => {
     // Identity line present, but no Available tools:/Guidelines:/Pi docs sections.
     const base = `${MMR_IDENTITY_LINE} You help users.\n\nSomething else entirely.`;
     const result = assembleActiveSurface({
-      state: makeState({ mode: "smart" }),
+      state: makeState({ mode: "medium" }),
       baseSystemPrompt: base,
       activeToolManifest: [],
     });
@@ -123,7 +123,7 @@ describe("assembleActiveSurface(): passthroughReason", () => {
       "Current date: 2026-01-01",
     ].join("\n");
     const result = assembleActiveSurface({
-      state: makeState({ mode: "smart" }),
+      state: makeState({ mode: "medium" }),
       baseSystemPrompt: base,
       activeToolManifest: [],
     });

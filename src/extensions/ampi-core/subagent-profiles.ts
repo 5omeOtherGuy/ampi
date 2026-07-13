@@ -15,8 +15,8 @@ import type { MmrModeKey, MmrModelPreference } from "./types.js";
  *   Reserved for workers that should behave like a sub-instance of a
  *   parent mode (e.g. Task).
  *
- * Distinct from the user-facing `MmrPromptRoute`
- * (`default`/`rush`/`deep`/`free`): subagent workers are not locked
+ * Distinct from the user-facing `MmrPromptRoute` (`default`/`deep`): subagent
+ * workers are not locked
  * modes, do not capture/restore Pi baselines, and do not apply
  * locked-mode prompt templates. `ampi-core` preserves Pi's base prompt
  * and the worker's `--append-system-prompt` content as-is unless a
@@ -378,9 +378,9 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   "task-subagent": deepFreeze({
     name: "task-subagent",
     displayName: "Task Subagent",
-    // Pinned Task route order: claude-opus-4-8 is the canonical Task route
-    // shared by all Task-enabled modes (including deep, which aliases to smart
-    // through the resolver). The goal is Anthropic *high* reasoning effort on
+    // Pinned Task route order shared by every Task-enabled parent tier. The
+    // worker preserves the canonical parent prompt family through the resolver.
+    // The goal is Anthropic *high* reasoning effort on
     // the wire whenever the Task worker runs on Opus 4.8.
     //
     // The canonical thinking level required to land on Anthropic effort
@@ -414,15 +414,11 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
       { model: "claude-haiku-4-5-20251001", thinkingLevel: "low" },
       { model: "claude-haiku-4-5", thinkingLevel: "low" },
     ],
-    // Rush workers follow the parent mode's latency-first route instead of
-    // the shared high-capability Task default: GPT-5.5 with thinking off,
-    // falling back to Haiku 4.5 with thinking off when GPT routes are not
-    // registered or authenticated.
+    // Low-mode workers follow the parent mode's lower-cost route.
     modeModelPreferences: {
-      rush: [
-        { model: "gpt-5.5", thinkingLevel: "off" },
-        { model: "claude-haiku-4-5-20251001", thinkingLevel: "off" },
-        { model: "claude-haiku-4-5", thinkingLevel: "off" },
+      low: [
+        { model: "gpt-5.6-terra", thinkingLevel: "medium" },
+        { model: "gpt-5.5", thinkingLevel: "medium" },
       ],
     },
     // Concrete Pi/MMR names matching the task worker's intended tool

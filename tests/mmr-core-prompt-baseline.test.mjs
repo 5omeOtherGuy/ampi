@@ -56,7 +56,7 @@ function createState(mode) {
   };
 }
 
-const MODES = ["smart", "fable", "rush", "deep"];
+const MODES = ["medium", "ultra", "low", "high"];
 
 // Coarse-grained block order. Each entry is a substring that uniquely
 // identifies the start of a block in the rendered prompt; the substrings
@@ -175,15 +175,15 @@ describe("Phase B baseline: effective-surface snapshots (renderer + buildMmrProm
   });
 
   for (const toolSet of BASELINE_TOOL_SETS) {
-    it(`renders the smart-mode effective surface for ${toolSet}`, async () => {
+    it(`renders the medium-mode effective surface for ${toolSet}`, async () => {
       const activeToolManifest = await buildBaselineManifest(toolSet);
       const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);
       const systemPrompt = buildMmrPromptLayer({
-        state: createState("smart"),
+        state: createState("medium"),
         baseSystemPrompt,
       });
       const result = {
-        mode: "smart",
+        mode: "medium",
         provider: "claude-subscription",
         model: "claude-opus-4-8",
         blocks: [],
@@ -191,7 +191,7 @@ describe("Phase B baseline: effective-surface snapshots (renderer + buildMmrProm
         activeToolManifest,
       };
       const rendered = renderMmrPromptDebugFixture(result);
-      assertFixtureMatches(`smart.${toolSet}.md`, rendered);
+      assertFixtureMatches(`medium.${toolSet}.md`, rendered);
     });
   }
 });

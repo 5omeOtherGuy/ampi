@@ -52,7 +52,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
+const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 
 describe("Phase D: assembleActiveSurface() public API", () => {
   let assembleActiveSurface;
@@ -156,9 +156,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
         activeToolManifest: [],
       });
       const kinds = result.blocks.map((b) => b.kind);
-      // The shared coding guidance is split into named fragments. Every mode
-      // keeps these always-present coding fragments; rush is the only mode that
-      // drops `diagrams`, so it is asserted separately, not here.
+      // Every current tier keeps all shared coding fragments, including diagrams.
       const alwaysPresentCodingKinds = [
         "autonomy",
         "discovery-discipline",
@@ -176,11 +174,9 @@ describe("Phase D: assembleActiveSurface() public API", () => {
           `mode ${mode}: coding fragment ${codingKind} must appear exactly once`,
         );
       }
-      // Diagrams is the one mode-gated coding fragment: present once everywhere
-      // except rush-style modes, which drop it.
       assert.equal(
         kinds.filter((k) => k === "diagrams").length,
-        mode === "rush" ? 0 : 1,
+        1,
         `mode ${mode}: diagrams fragment count`,
       );
       const autonomyIdx = kinds.indexOf("autonomy");
@@ -193,9 +189,8 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       const collaborationIdx = kinds.indexOf("collaboration");
       const responseStyleIdx = kinds.indexOf("response-style");
       assert.ok(autonomyIdx < carefulActionsIdx, `mode ${mode}: task/risk posture must stay in order`);
-      // Only rush-style modes and deep render a mode posture; the smart family's empty
-      // posture is skipped by the renderer.
-      if (mode === "rush" || mode === "deep") {
+      // High and Ultra render Deep posture; Low and Medium render Smart.
+      if (mode === "high" || mode === "ultra") {
         assert.ok(carefulActionsIdx < modePostureIdx, `mode ${mode}: shared posture must precede mode posture`);
         assert.ok(modePostureIdx < collaborationIdx, `mode ${mode}: mode posture must precede collaboration style`);
       } else {
@@ -263,8 +258,8 @@ describe("Phase D: assembleActiveSurface() public API", () => {
         "collaboration",
       ]);
       const sharedBlocks = result.blocks.filter((b) => sharedGuidanceKinds.has(b.kind));
-      // 1 tool-guidance block + 8 coding fragments, minus diagrams for rush-style modes.
-      assert.equal(sharedBlocks.length, mode === "rush" ? 8 : 9, `${mode}: must emit all shared guidance blocks`);
+      // 1 tool-guidance block + 8 coding fragments.
+      assert.equal(sharedBlocks.length, 9, `${mode}: must emit all shared guidance blocks`);
       const sharedText = sharedBlocks.map((b) => b.text).join("\n");
       for (const entry of MMR_PLANNED_TOOL_CATALOG) {
         const namePattern = new RegExp(`\\b${entry.name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`);
@@ -298,7 +293,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
   it("unrecognized base (no identity line) falls back to passthrough", () => {
     const weirdBase = "Custom system prompt with no identity line.\n";
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: weirdBase,
       activeToolManifest: [],
     });
@@ -309,7 +304,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
 
   it("forwards provider and model when caller supplies them", () => {
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
       provider: "claude-subscription",
@@ -330,7 +325,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       },
     ];
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: manifest,
     });
@@ -358,7 +353,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
     // BASE_PROMPT's Available tools block lists all six curated built-ins,
     // but the resolved active set here omits grep/find.
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
       activeToolNames: ["read", "bash", "edit", "write"],
@@ -375,7 +370,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
     );
     assert.ok(!baseWithoutGrep.includes("- grep:"));
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: baseWithoutGrep,
       activeToolManifest: [],
       activeToolNames: ["read", "grep"],
@@ -385,7 +380,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
 
   it("ignores non-built-in names in activeToolNames", () => {
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
       activeToolNames: ["read", "finder", "task_list", "web_search"],
@@ -395,7 +390,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
 
   it("suppresses the guidance block for an empty activeToolNames set", () => {
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
       activeToolNames: [],
@@ -406,7 +401,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
 
   it("falls back to the rendered tools block when activeToolNames is omitted", () => {
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -439,7 +434,7 @@ describe("assembleActiveSurface(): preserves Pi's tools interstitial byte-for-by
     );
     assert.ok(base.includes(sentinel));
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: base,
       activeToolManifest: [],
     });

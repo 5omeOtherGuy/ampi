@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { readPreferredEnv } from "./internal/env.js";
 import { hasOwnedToolsFromOwner, type ToolInfoLike } from "./owned-tools.js";
-import { isMmrModeKey } from "./modes.js";
+import { resolveMmrModeKey } from "./modes.js";
 import { setMmrSubagentState, type MmrSubagentState } from "./runtime.js";
 import { loadMmrCoreSettings } from "./settings.js";
 import {
@@ -147,13 +147,14 @@ export async function applyMmrSubagentProfile(
     : undefined;
   let parentMode: MmrModeKey | undefined;
   if (explicitFlags.parentMode !== undefined) {
-    if (!isMmrModeKey(explicitFlags.parentMode) || explicitFlags.parentMode === "free") {
+    const resolvedParentMode = resolveMmrModeKey(explicitFlags.parentMode);
+    if (!resolvedParentMode || resolvedParentMode === "free") {
       failClosedSubagent(
         `Subagent "${profile.name}" was invoked with invalid --ampi-parent-mode/--mmr-parent-mode ${JSON.stringify(explicitFlags.parentMode)}.`,
         ctx,
       );
     }
-    parentMode = explicitFlags.parentMode;
+    parentMode = resolvedParentMode;
   }
 
   // Single resolver for parent spawn and child activation. We pass

@@ -24,7 +24,7 @@ function fakeRegistry(models, authenticatedProviders = new Set(models.map((model
 async function buildSampleState(overrides = {}) {
   const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
   const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
-  const mode = { ...getMmrMode(overrides.modeKey ?? "smart"), ...(overrides.modeOverrides ?? {}) };
+  const mode = { ...getMmrMode(overrides.modeKey ?? "medium"), ...(overrides.modeOverrides ?? {}) };
 
   const modelResolution = {
     targetModel: "claude-opus-4-8",
@@ -210,15 +210,16 @@ describe("mmr-core worker model preference resolution", () => {
 describe("mmr-core prompt route helper", () => {
   it("getMmrPromptRoute returns the prompt route for any mode key", async () => {
     const { getMmrPromptRoute } = await importSource("extensions/ampi-core/runtime.ts");
-    assert.equal(getMmrPromptRoute("smart"), "default");
-    assert.equal(getMmrPromptRoute("rush"), "rush");
-    assert.equal(getMmrPromptRoute("deep"), "deep");
+    assert.equal(getMmrPromptRoute("medium"), "default");
+    assert.equal(getMmrPromptRoute("low"), "default");
+    assert.equal(getMmrPromptRoute("high"), "deep");
+    assert.equal(getMmrPromptRoute("ultra"), "deep");
     assert.equal(getMmrPromptRoute("free"), "default");
   });
 
   it("root getMmrPromptRoute is exported", async () => {
     const root = await importSource("index.ts");
-    assert.equal(root.getMmrPromptRoute("rush"), "rush");
+    assert.equal(root.getMmrPromptRoute("low"), "default");
   });
 });
 
@@ -427,7 +428,7 @@ describe("mmr-core activation notifications use the policy diagnostic pipeline",
     };
 
     await handlers.get("session_start")({}, ctx);
-    await commands.get("mode").handler("deep", ctx);
+    await commands.get("mode").handler("high", ctx);
 
     const activation = notifications.at(-1);
     assert.equal(activation.level, "warning");
@@ -467,7 +468,7 @@ describe("mmr-core event constants", () => {
     onMmrStateChanged(pi, (state) => seenB.push(state));
 
     const livePayload = {
-      mode: "smart",
+      mode: "medium",
       activeTools: ["read"],
       missingTools: [],
       deferredTools: [],
@@ -580,12 +581,12 @@ describe("mmr-core event constants", () => {
     };
 
     await handlers.get("session_start")({}, ctx);
-    await commands.get("mode").handler("deep", ctx);
+    await commands.get("mode").handler("high", ctx);
     const afterDeep = emissions.filter((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED).length;
     assert.notEqual(afterDeep, 0, "expected at least one state-change emission after applying a mode");
 
     const lastDeep = emissions.findLast((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED);
-    assert.equal(lastDeep.payload?.mode, "deep");
+    assert.equal(lastDeep.payload?.mode, "high");
 
     // Raw bus payload is the deep-frozen runtime singleton (single-clone
     // contract): attempts to mutate must throw, and consecutive emissions
@@ -593,9 +594,9 @@ describe("mmr-core event constants", () => {
     // applications via the shared reference.
     assert.equal(Object.isFrozen(lastDeep.payload), true);
     assert.throws(() => lastDeep.payload.activeTools.push("compromised"), /read only|object is not extensible|Cannot add property/i);
-    await commands.get("mode").handler("rush", ctx);
+    await commands.get("mode").handler("low", ctx);
     const lastRush = emissions.findLast((entry) => entry.name === runtime.MMR_EVENT_STATE_CHANGED);
-    assert.equal(lastRush.payload?.mode, "rush");
+    assert.equal(lastRush.payload?.mode, "low");
     assert.notEqual(lastRush.payload, lastDeep.payload, "each apply produces a fresh state object");
   });
 });

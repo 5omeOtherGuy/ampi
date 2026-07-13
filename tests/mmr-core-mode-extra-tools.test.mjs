@@ -12,20 +12,20 @@ describe("mmr-core mode-extra-tool provider hook", () => {
 
     registerMmrModeExtraToolProvider({
       name: "test-a",
-      getExtraTools: ({ modeKey }) => (modeKey === "deep" ? ["sa__alpha", "sa__beta"] : []),
+      getExtraTools: ({ modeKey }) => (modeKey === "high" ? ["sa__alpha", "sa__beta"] : []),
     });
     registerMmrModeExtraToolProvider({
       name: "test-b",
-      getExtraTools: ({ modeKey }) => (modeKey === "deep" ? ["sa__beta", "sa__gamma"] : ["sa__smartonly"]),
+      getExtraTools: ({ modeKey }) => (modeKey === "high" ? ["sa__beta", "sa__gamma"] : ["sa__smartonly"]),
     });
     registerMmrModeExtraToolProvider({
       name: "test-throws",
       getExtraTools: () => { throw new Error("boom"); },
     });
 
-    const deep = resolveMmrModeExtraTools("deep", "/repo");
+    const deep = resolveMmrModeExtraTools("high", "/repo");
     assert.deepEqual(deep, ["sa__alpha", "sa__beta", "sa__gamma"], "deduped union; throwing provider ignored");
-    const smart = resolveMmrModeExtraTools("smart", "/repo");
+    const smart = resolveMmrModeExtraTools("medium", "/repo");
     assert.deepEqual(smart, ["sa__smartonly"]);
   });
 
@@ -33,7 +33,7 @@ describe("mmr-core mode-extra-tool provider hook", () => {
     const { registerMmrModeExtraToolProvider, resolveMmrModeExtraTools } = await importSource(RUNTIME_MODULE);
     registerMmrModeExtraToolProvider({ name: "reload", getExtraTools: () => ["sa__old"] });
     registerMmrModeExtraToolProvider({ name: "reload", getExtraTools: () => ["sa__new"] });
-    const result = resolveMmrModeExtraTools("deep", "/repo");
+    const result = resolveMmrModeExtraTools("high", "/repo");
     assert.ok(result.includes("sa__new"));
     assert.ok(!result.includes("sa__old"), "same-name provider replaced, not stacked");
   });

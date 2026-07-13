@@ -9,10 +9,7 @@ function anthropicPayload(overrides = {}) {
     model: "claude-opus-4-8",
     messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
     max_tokens: 1024,
-    system: [
-      { type: "text", text: "Pi baseline system prompt.", cache_control: { type: "ephemeral" } },
-      { type: "text", text: "MMR prompt", cache_control: { type: "ephemeral" } },
-    ],
+    system: [{ type: "text", text: "Pi baseline system prompt." }],
     tools: [{ name: "read" }],
     ...overrides,
   };
@@ -29,352 +26,168 @@ function openaiPayload(overrides = {}) {
 }
 
 describe("mmr-core request policy", () => {
-  it("applies smart Anthropic adaptive thinking and max_tokens without touching system/messages/tools", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = anthropicPayload({ output_config: { some_future_field: true } });
-    const originalSystem = JSON.stringify(payload.system);
-    const originalMessages = JSON.stringify(payload.messages);
-    const originalTools = JSON.stringify(payload.tools);
+  it("pins the low-to-ultra OpenAI reasoning split", async () => {
+    const { MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
 
-    const smart = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart);
-
-    assert.notEqual(smart, payload);
-    assert.equal(smart.max_tokens, 64000);
-    assert.deepEqual(smart.thinking, { type: "adaptive", display: "summarized" });
-    assert.deepEqual(smart.output_config, { some_future_field: true, effort: "high" });
-    assert.equal(JSON.stringify(smart.system), originalSystem);
-    assert.equal(JSON.stringify(smart.messages), originalMessages);
-    assert.equal(JSON.stringify(smart.tools), originalTools);
-    assert.equal(payload.max_tokens, 1024, "original payload is not mutated");
+    assert.deepEqual(Object.keys(MMR_REQUEST_POLICIES), ["low", "medium", "high", "ultra"]);
+    assert.equal(MMR_REQUEST_POLICIES.low.openaiResponses.reasoning.effort, "medium");
+    assert.equal(MMR_REQUEST_POLICIES.medium.openaiResponses.reasoning.effort, "medium");
+    assert.equal(MMR_REQUEST_POLICIES.high.openaiResponses.reasoning.effort, "xhigh");
+    assert.equal(MMR_REQUEST_POLICIES.ultra.openaiResponses.reasoning.effort, "xhigh");
+    for (const policy of [MMR_REQUEST_POLICIES.low, MMR_REQUEST_POLICIES.high, MMR_REQUEST_POLICIES.ultra]) {
+      assert.equal(policy.openaiResponses.maxOutputTokens, 128000);
+      assert.equal(policy.contextWindow, undefined);
+      assert.equal(policy.effectiveMaxInputTokens, undefined);
+    }
+    assert.equal(MMR_REQUEST_POLICIES.medium.openaiResponses.maxOutputTokens, 128000);
+    assert.equal(MMR_REQUEST_POLICIES.medium.contextWindow, 300000);
+    assert.equal(MMR_REQUEST_POLICIES.medium.effectiveMaxInputTokens, 172000);
   });
 
-  it("applies fable Anthropic adaptive medium reasoning with 128k max_tokens for Fable 5", async () => {
+  it("applies each mode's OpenAI Responses effort without mutating messages or tools", async () => {
     const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const originalSystem = JSON.stringify(anthropicPayload().system);
+    for (const [mode, effort] of [["low", "medium"], ["medium", "medium"], ["high", "xhigh"], ["ultra", "xhigh"]]) {
+      const payload = openaiPayload({ max_output_tokens: 4096, reasoning: { effort: "low", encrypted: true } });
+      const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES[mode]);
+      assert.notEqual(result, payload);
+      assert.equal(result.max_output_tokens, 128000);
+      assert.deepEqual(result.reasoning, { effort, encrypted: true, summary: "auto" });
+      assert.deepEqual(result.input, payload.input);
+      assert.deepEqual(payload.reasoning, { effort: "low", encrypted: true });
+    }
+  });
+
+  it("leaves Anthropic fallback payloads to Pi's selected thinking level", async () => {
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
+    const payload = anthropicPayload({ thinking: { type: "adaptive" }, output_config: { effort: "high" } });
+    for (const policy of Object.values(MMR_REQUEST_POLICIES)) {
+      assert.equal(applyMmrRequestPolicy(payload, policy), payload);
+    }
+  });
+
+  it("still supports Anthropic-shaped worker policies without touching system/messages/tools", async () => {
+    const { applyMmrRequestPolicy } = await importSource("extensions/ampi-core/request-policy.ts");
     const payload = anthropicPayload({
-      model: "claude-fable-5",
-      max_tokens: 1024,
-      thinking: { type: "adaptive", display: "summarized" },
-      output_config: { some_future_field: true, effort: "low" },
+      anthropic_beta: ["interleaved-thinking-2025-05-14"],
+      output_config: { future: true },
+    });
+    const result = applyMmrRequestPolicy(payload, {
+      anthropic: {
+        maxTokens: 64000,
+        thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "xhigh" },
+      },
     });
 
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.fable);
-
-    assert.notEqual(result, payload);
-    assert.equal(result.max_tokens, 128000);
+    assert.equal(result.max_tokens, 64000);
     assert.deepEqual(result.thinking, { type: "adaptive", display: "summarized" });
-    assert.deepEqual(result.output_config, { some_future_field: true, effort: "medium" });
-    assert.equal(JSON.stringify(result.system), originalSystem);
-    assert.equal(payload.max_tokens, 1024, "original payload is not mutated");
-  });
-
-  it("applies rush OpenAI Responses with reasoning effort none and 128k max output", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      max_output_tokens: 4096,
-      reasoning: { effort: "medium", encrypted: true },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.rush);
-
-    assert.notEqual(result, payload);
-    assert.equal(result.max_output_tokens, 128000);
-    assert.deepEqual(result.reasoning, { effort: "none", encrypted: true });
-    assert.deepEqual(result.input, payload.input);
-    assert.deepEqual(payload.reasoning, { effort: "medium", encrypted: true }, "original payload is not mutated");
-  });
-
-  it("does not apply an Anthropic budget-thinking override in rush fallback routes", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = anthropicPayload({
-      model: "claude-haiku-4-5-20251001",
-      thinking: { type: "disabled" },
-      output_config: { keep: "value" },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.rush);
-
-    assert.equal(result, payload);
-    assert.equal(MMR_REQUEST_POLICIES.rush.anthropic, undefined);
-  });
-
-  it("applies deep OpenAI Responses reasoning and max_output_tokens for the public Responses shape", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      max_output_tokens: 4096,
-      reasoning: { effort: "low", encrypted: true },
-      include: ["reasoning.encrypted_content"],
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.deep);
-
-    assert.notEqual(result, payload);
-    assert.equal(result.max_output_tokens, 128000);
-    assert.deepEqual(result.reasoning, { effort: "medium", encrypted: true, summary: "auto" });
-    assert.deepEqual(result.input, payload.input);
-    assert.deepEqual(result.include, ["reasoning.encrypted_content"]);
-    assert.equal(payload.max_output_tokens, 4096, "original payload is not mutated");
-  });
-
-  it("skips max_output_tokens for Codex-variant payloads identified by top-level instructions string", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      instructions: "You are a helpful assistant.",
-      reasoning: { effort: "low" },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.deep);
-
-    assert.equal("max_output_tokens" in result, false, "Codex backend rejects max_output_tokens; do not set it");
-    assert.deepEqual(result.reasoning, { effort: "medium", summary: "auto" });
-    assert.equal(result.instructions, "You are a helpful assistant.");
-    assert.deepEqual(result.input, payload.input);
-  });
-
-  it("skips max_output_tokens for Codex-variant payloads identified by text.verbosity", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      text: { verbosity: "low" },
-      reasoning: { effort: "low" },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.deep);
-
-    assert.equal("max_output_tokens" in result, false);
-    assert.deepEqual(result.reasoning, { effort: "medium", summary: "auto" });
-    assert.deepEqual(result.text, { verbosity: "low" });
-  });
-
-  it("still strips an inbound max_output_tokens out of Codex-variant payloads (does not echo it back)", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      instructions: "sys",
-      max_output_tokens: 4096,
-      reasoning: { effort: "low" },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.deep);
-
-    assert.equal("max_output_tokens" in result, false, "Codex variant must not carry max_output_tokens forward");
-  });
-
-  it("uses the resolved provider id to strip max_output_tokens from openai-codex Responses payloads without Codex markers", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = openaiPayload({
-      max_output_tokens: 4096,
-      reasoning: { effort: "low" },
-    });
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.deep, { providerId: "openai-codex" });
-
-    assert.equal("max_output_tokens" in result, false, "openai-codex rejects max_output_tokens even when the payload lacks Codex-only markers");
-    assert.deepEqual(result.reasoning, { effort: "medium", summary: "auto" });
-  });
-
-  it("leaves free mode and unknown provider payloads untouched", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = { model: "future-provider-model", data: { prompt: "hi" } };
-
-    assert.equal(applyMmrRequestPolicy(payload, undefined), payload);
-    assert.equal(applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart), payload);
-  });
-
-  it("leaves lookalike custom/chat payloads untouched unless provider-shape markers are present", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const openAiChatLikePayload = {
-      model: "gpt-4.1",
-      messages: [{ role: "user", content: "hi" }],
-      max_tokens: 4096,
-      stream: true,
-    };
-    const customInputPayload = {
-      model: "future-provider-model",
-      input: [{ role: "user", content: "hi" }],
-      stream: true,
-    };
-    const bodyBetaOnlyPayload = {
-      model: "claude-opus-4-8",
-      messages: [{ role: "user", content: "hi" }],
-      max_tokens: 4096,
-      anthropic_beta: ["interleaved-thinking-2025-05-14"],
-    };
-
-    assert.equal(applyMmrRequestPolicy(openAiChatLikePayload, MMR_REQUEST_POLICIES.smart), openAiChatLikePayload);
-    assert.equal(applyMmrRequestPolicy(customInputPayload, MMR_REQUEST_POLICIES.deep), customInputPayload);
-    assert.equal(applyMmrRequestPolicy(bodyBetaOnlyPayload, MMR_REQUEST_POLICIES.smart), bodyBetaOnlyPayload);
-  });
-
-  it("drops stray body-level anthropic_beta from matched Anthropic Messages payloads", async () => {
-    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = {
-      ...anthropicPayload(),
-      anthropic_beta: ["interleaved-thinking-2025-05-14"],
-    };
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart);
-
+    assert.deepEqual(result.output_config, { future: true, effort: "xhigh" });
     assert.equal("anthropic_beta" in result, false);
-    assert.equal("anthropic_beta" in payload, true, "original payload is not mutated");
+    assert.deepEqual(result.system, payload.system);
+    assert.deepEqual(result.messages, payload.messages);
+    assert.deepEqual(result.tools, payload.tools);
+    assert.equal(payload.max_tokens, 1024);
   });
 
-  it("does not write runtime-only effectiveMaxInputTokens into provider payloads", async () => {
+  it("strips max_output_tokens for Codex variants while retaining mode reasoning", async () => {
     const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const payload = anthropicPayload();
-
-    const result = applyMmrRequestPolicy(payload, MMR_REQUEST_POLICIES.smart);
-
-    assert.equal("effectiveMaxInputTokens" in result, false);
-    assert.equal("contextWindow" in result, false);
-    assert.equal(MMR_REQUEST_POLICIES.smart.contextWindow, 300000);
-    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 236000);
-  });
-
-  it("leaves GPT/Codex modes without a context profile and clamps smart's input profile to smaller provider registrations", async () => {
-    const { clampPolicyToRegisteredModel, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-
-    // GPT/Codex-primary modes set no context profile, so they run at Pi's own
-    // registered window. Only the request policy (max output) is carried.
-    for (const mode of ["rush", "deep"]) {
-      assert.equal(MMR_REQUEST_POLICIES[mode].contextWindow, undefined, `${mode} carries no contextWindow`);
-      assert.equal(MMR_REQUEST_POLICIES[mode].effectiveMaxInputTokens, undefined, `${mode} carries no effectiveMaxInputTokens`);
-      assert.equal(MMR_REQUEST_POLICIES[mode].openaiResponses.maxOutputTokens, 128000, `${mode} still carries its output policy`);
-      // Clamping against a registered codex model must not invent a window.
-      const clamped = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode], { contextWindow: 272_000, maxTokens: 128_000 });
-      assert.equal(clamped.contextWindow, undefined, `${mode} stays native after clamping`);
+    for (const overrides of [
+      { instructions: "sys", max_output_tokens: 4096, reasoning: { effort: "low" } },
+      { text: { verbosity: "low" }, max_output_tokens: 4096, reasoning: { effort: "low" } },
+    ]) {
+      const result = applyMmrRequestPolicy(openaiPayload(overrides), MMR_REQUEST_POLICIES.ultra);
+      assert.equal("max_output_tokens" in result, false);
+      assert.deepEqual(result.reasoning, { effort: "xhigh", summary: "auto" });
     }
 
-    assert.equal(MMR_REQUEST_POLICIES.fable.contextWindow, undefined, "fable carries no contextWindow");
-    assert.equal(MMR_REQUEST_POLICIES.fable.effectiveMaxInputTokens, undefined, "fable carries no effectiveMaxInputTokens");
-    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.maxTokens, 128000, "fable still carries its output policy");
-    const clampedFable = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.fable, { contextWindow: 1_000_000, maxTokens: 128_000 });
-    assert.equal(clampedFable.contextWindow, undefined, "fable stays native after clamping");
+    const providerResult = applyMmrRequestPolicy(
+      openaiPayload({ max_output_tokens: 4096, reasoning: { effort: "low" } }),
+      MMR_REQUEST_POLICIES.medium,
+      { providerId: "openai-codex" },
+    );
+    assert.equal("max_output_tokens" in providerResult, false);
+    assert.deepEqual(providerResult.reasoning, { effort: "medium", summary: "auto" });
+  });
 
-    // smart's display profile is now 300k/236k. Callers pass the already-capped
-    // active model here, so a 300k Opus window leaves the profile unchanged.
-    const cappedOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 300_000, maxTokens: 64_000 });
-    assert.equal(cappedOpus.effectiveMaxInputTokens, 236000);
-    assert.equal(cappedOpus.contextWindow, 300000);
+  it("leaves free, unknown, and lookalike payload shapes untouched", async () => {
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
+    const unknown = { model: "future-provider-model", data: { prompt: "hi" } };
+    const chatLike = { model: "gpt-4.1", messages: [{ role: "user", content: "hi" }], max_tokens: 4096 };
+    const customInput = { model: "future-provider-model", input: [{ role: "user", content: "hi" }] };
 
-    const smallCustomOpus = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.smart, { contextWindow: 200_000, maxTokens: 64_000 });
-    assert.equal(smallCustomOpus.effectiveMaxInputTokens, 136000);
-    assert.equal(smallCustomOpus.contextWindow, 200000);
+    assert.equal(applyMmrRequestPolicy(unknown, undefined), unknown);
+    assert.equal(applyMmrRequestPolicy(unknown, MMR_REQUEST_POLICIES.medium), unknown);
+    assert.equal(applyMmrRequestPolicy(chatLike, MMR_REQUEST_POLICIES.medium), chatLike);
+    assert.equal(applyMmrRequestPolicy(customInput, MMR_REQUEST_POLICIES.high), customInput);
+  });
+
+  it("does not write runtime-only context metadata into provider payloads", async () => {
+    const { applyMmrRequestPolicy, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
+    const result = applyMmrRequestPolicy(
+      openaiPayload({ max_output_tokens: 4096, reasoning: { effort: "low" } }),
+      MMR_REQUEST_POLICIES.medium,
+    );
+    assert.equal("effectiveMaxInputTokens" in result, false);
+    assert.equal("contextWindow" in result, false);
+  });
+
+  it("preserves Medium's inherited 300k context safety profile", async () => {
+    const { clampPolicyToRegisteredModel, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
+    const medium = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES.medium, { contextWindow: 372000, maxTokens: 128000 });
+    assert.equal(medium.contextWindow, 300000);
+    assert.equal(medium.effectiveMaxInputTokens, 172000);
+
+    for (const mode of ["low", "high", "ultra"]) {
+      const clamped = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode], { contextWindow: 372000, maxTokens: 128000 });
+      assert.equal(clamped.contextWindow, undefined, `${mode} stays native after clamping`);
+      assert.equal(clamped.effectiveMaxInputTokens, undefined, `${mode} carries no input cap`);
+    }
+  });
+
+  it("formats request-policy token counts byte-for-byte across boundary values", async () => {
+    const { formatMmrPolicyContext, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
+    const cases = [
+      [999, "999"], [1000, "1k"], [1500, "1.5k"], [12345, "12.3k"],
+      [999999, "1000.0k"], [1000000, "1M"], [1500000, "1.5M"],
+      [9999999, "10.0M"], [10000000, "10M"],
+    ];
+    for (const [input, expected] of cases) {
+      const rendered = formatMmrPolicyContext(MMR_REQUEST_POLICIES.medium, { contextWindow: input });
+      assert.ok(rendered.startsWith(`${expected} total`), `formatTokenCount(${input})`);
+    }
   });
 });
 
 describe("mmr-core thinking-level toggle", () => {
-  it("identifies the toggleable modes and their default levels", async () => {
-    const { isToggleableMmrMode, getDefaultToggleThinkingLevel, getMmrModeThinkingOptions } =
+  it("pins toggle defaults to each mode's configured default", async () => {
+    const { getDefaultToggleThinkingLevel, getMmrModeThinkingOptions, isToggleableMmrMode } =
       await importSource("extensions/ampi-core/request-policy.ts");
 
-    for (const mode of ["smart", "fable", "deep"]) {
-      assert.equal(isToggleableMmrMode(mode), true, `${mode} should be toggleable`);
-      assert.equal(getDefaultToggleThinkingLevel(mode), "medium");
-    }
-    for (const mode of ["rush", "free"]) {
-      assert.equal(isToggleableMmrMode(mode), false, `${mode} should not be toggleable`);
-    }
-
-    assert.deepEqual(getMmrModeThinkingOptions("smart"), [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }]);
-    assert.deepEqual(getMmrModeThinkingOptions("fable"), [{ level: "medium" }, { level: "high" }, { level: "low" }]);
-    assert.deepEqual(getMmrModeThinkingOptions("deep"), [{ level: "medium" }, { level: "xhigh" }]);
+    assert.equal(isToggleableMmrMode("low"), false);
+    assert.equal(isToggleableMmrMode("free"), false);
+    assert.deepEqual(getMmrModeThinkingOptions("medium"), [{ level: "medium" }, { level: "high" }]);
+    assert.deepEqual(getMmrModeThinkingOptions("high"), [{ level: "xhigh" }, { level: "medium" }]);
+    assert.deepEqual(getMmrModeThinkingOptions("ultra"), [{ level: "xhigh" }, { level: "high" }, { level: "medium" }]);
+    assert.equal(getDefaultToggleThinkingLevel("medium"), "medium");
+    assert.equal(getDefaultToggleThinkingLevel("high"), "xhigh");
+    assert.equal(getDefaultToggleThinkingLevel("ultra"), "xhigh");
   });
 
-  it("alternates between the two configured levels", async () => {
+  it("cycles each configured toggle in order and wraps", async () => {
     const { getOtherToggleThinkingLevel } = await importSource("extensions/ampi-core/request-policy.ts");
-
-    assert.equal(getOtherToggleThinkingLevel("smart", "medium"), "high");
-    assert.equal(getOtherToggleThinkingLevel("smart", "high"), "medium");
-    // Unrecognized/undefined current level lands on the non-default preset.
-    assert.equal(getOtherToggleThinkingLevel("smart", undefined), "high");
-    assert.equal(getOtherToggleThinkingLevel("fable", "medium"), "high");
-    assert.equal(getOtherToggleThinkingLevel("deep", "xhigh"), "medium");
+    assert.equal(getOtherToggleThinkingLevel("medium", "medium"), "high");
+    assert.equal(getOtherToggleThinkingLevel("medium", "high"), "medium");
+    assert.equal(getOtherToggleThinkingLevel("high", "xhigh"), "medium");
+    assert.equal(getOtherToggleThinkingLevel("high", "medium"), "xhigh");
+    assert.equal(getOtherToggleThinkingLevel("ultra", "xhigh"), "high");
+    assert.equal(getOtherToggleThinkingLevel("ultra", "high"), "medium");
+    assert.equal(getOtherToggleThinkingLevel("ultra", "medium"), "xhigh");
   });
 
-  it("cycles three-preset modes in order and wraps around", async () => {
-    const { getOtherToggleThinkingLevel } = await importSource("extensions/ampi-core/request-policy.ts");
-
-    // medium (default) -> high -> low -> medium (wraps).
-    for (const mode of ["fable"]) {
-      assert.equal(getOtherToggleThinkingLevel(mode, "medium"), "high");
-      assert.equal(getOtherToggleThinkingLevel(mode, "high"), "low");
-      assert.equal(getOtherToggleThinkingLevel(mode, "low"), "medium");
-      // Unrecognized/undefined current level lands on the second preset, same as
-      // the two-preset modes.
-      assert.equal(getOtherToggleThinkingLevel(mode, undefined), "high");
-    }
-  });
-
-  it("maps Smart high to Anthropic xhigh effort while keeping the 64k output default, without mutating the source", async () => {
+  it("applies toggled OpenAI effort without mutating shared policy", async () => {
     const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
       await importSource("extensions/ampi-core/request-policy.ts");
-
-    const smartHigh = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "high");
-    // Pi/session level is high; Anthropic adaptive effort is remapped to xhigh
-    // (Pi high -> Anthropic xhigh on the Opus route), but the output budget
-    // stays at the mode default 64k, so the displayed max input is unchanged.
-    assert.equal(smartHigh.anthropic.maxTokens, 64000);
-    assert.equal(smartHigh.anthropic.thinking.outputConfigEffort, "xhigh");
-    assert.equal(smartHigh.effectiveMaxInputTokens, 236000);
-    // OpenAI Responses effort tracks the Pi level (high), not the Anthropic remap.
-    assert.equal(smartHigh.openaiResponses.reasoning.effort, "high");
-    // Source policy stays at its 64k/high Anthropic default (pure transform).
-    assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.maxTokens, 64000);
-    assert.equal(MMR_REQUEST_POLICIES.smart.anthropic.thinking.outputConfigEffort, "high");
-    assert.equal(MMR_REQUEST_POLICIES.smart.effectiveMaxInputTokens, 236000);
-    assert.equal(MMR_REQUEST_POLICIES.smart.openaiResponses.reasoning.effort, "medium");
-
-    // Smart medium aligns to the Option-1 native map: Pi medium -> Anthropic
-    // high (64k), while OpenAI Responses effort tracks the Pi level (medium).
-    const smartMedium = applyMmrThinkingLevelToPolicy("smart", MMR_REQUEST_POLICIES.smart, "medium");
-    assert.equal(smartMedium.anthropic.maxTokens, 64000);
-    assert.equal(smartMedium.anthropic.thinking.outputConfigEffort, "high");
-    assert.equal(smartMedium.openaiResponses.reasoning.effort, "medium");
-    assert.equal(smartMedium.effectiveMaxInputTokens, 236000);
-
-    for (const level of ["low", "medium", "high"]) {
-      const fable = applyMmrThinkingLevelToPolicy("fable", MMR_REQUEST_POLICIES.fable, level);
-      assert.equal(fable.anthropic.thinking.outputConfigEffort, level);
-      assert.equal(fable.anthropic.maxTokens, 128000);
-    }
-  });
-
-  it("echoes each fable toggle level directly as the Anthropic adaptive effort, without mutating the source", async () => {
-    const { applyMmrThinkingLevelToPolicy, MMR_REQUEST_POLICIES } =
-      await importSource("extensions/ampi-core/request-policy.ts");
-
-    for (const level of ["low", "medium", "high"]) {
-      const result = applyMmrThinkingLevelToPolicy("fable", MMR_REQUEST_POLICIES.fable, level);
-      assert.equal(result.anthropic.thinking.outputConfigEffort, level, `${level}: Anthropic effort tracks the Pi level directly`);
-      assert.equal(result.anthropic.maxTokens, 128000, `${level}: output budget stays at the mode default`);
-    }
-    // Source policy stays at its medium default (pure transform).
-    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.thinking.outputConfigEffort, "medium");
-    assert.equal(MMR_REQUEST_POLICIES.fable.anthropic.maxTokens, 128000);
-  });
-
-  // Boundary-value parity pins for request-policy's compact token formatter,
-  // exercised through its public surface (formatMmrPolicyContext renders
-  // `<formatTokenCount(contextWindow)> total ...`). This format is
-  // INTENTIONALLY DISTINCT from status.ts's footer formatter (Item 2:
-  // keep-with-comments). It uses Number.isInteger gating + toFixed rather than
-  // Math.round, so e.g. 12345 -> "12.3k" here vs "12k" in the footer. These
-  // pins guard against an accidental unifying edit collapsing the two formats.
-  it("formats request-policy token counts byte-for-byte across boundary values", async () => {
-    const { formatMmrPolicyContext, MMR_REQUEST_POLICIES } = await importSource("extensions/ampi-core/request-policy.ts");
-    const cases = [
-      [999, "999"],
-      [1000, "1k"],
-      [1500, "1.5k"],
-      [12345, "12.3k"],
-      [999999, "1000.0k"],
-      [1000000, "1M"],
-      [1500000, "1.5M"],
-      [9999999, "10.0M"],
-      [10000000, "10M"],
-    ];
-    for (const [input, expected] of cases) {
-      const rendered = formatMmrPolicyContext(MMR_REQUEST_POLICIES.smart, { contextWindow: input });
-      assert.ok(rendered.startsWith(`${expected} total`), `formatTokenCount(${input})`);
-    }
+    const toggled = applyMmrThinkingLevelToPolicy("medium", MMR_REQUEST_POLICIES.medium, "high");
+    assert.equal(toggled.openaiResponses.reasoning.effort, "high");
+    assert.equal(MMR_REQUEST_POLICIES.medium.openaiResponses.reasoning.effort, "medium");
   });
 });

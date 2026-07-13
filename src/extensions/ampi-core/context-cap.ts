@@ -8,9 +8,9 @@
  * whose `contextWindow` is capped to the mode's advertised window therefore
  * makes Pi compact and display exactly as it natively would at that window —
  * no bespoke compaction shim required — even when the route's native window is
- * larger (e.g. `smart` pins its 1M Opus route to 300k). The GPT/Codex-primary
- * modes (`rush`, `deep`) set no `contextWindow`, so this is a pure
- * no-op for them and every GPT/Codex route runs at Pi's own registered window.
+ * larger. Medium inherits the former Smart 300k safety profile. Low, High, and
+ * Ultra set no `contextWindow`, so this is a pure no-op for those tiers and
+ * every such route runs at Pi's registered window.
  *
  * The cap is derived from each mode's own request policy so the window Pi
  * compacts against and the window the mode advertises stay in sync (single
@@ -22,10 +22,10 @@
 import { MMR_REQUEST_POLICIES } from "./request-policy.js";
 
 /**
- * Smart-mode active-model context window. Kept as a named export for
- * call sites and tests; derived from the smart policy so it cannot drift.
+ * Legacy-named export for Medium's inherited 300k active-model context window.
+ * Derived from the Medium policy so it cannot drift.
  */
-export const MMR_SMART_CONTEXT_WINDOW = getMmrModeContextWindowCap("smart") ?? 300_000;
+export const MMR_SMART_CONTEXT_WINDOW = getMmrModeContextWindowCap("medium") ?? 300_000;
 
 /**
  * Resolve the context-window cap for a mode, or `undefined` when the mode does
@@ -40,7 +40,7 @@ export function getMmrModeContextWindowCap(modeKey: string): number | undefined 
 
 /**
  * Clone-and-cap a model's `contextWindow` for a given mode. No-op unless the
- * mode declares a cap (`smart`; `free` and the GPT/Codex-primary modes do not)
+ * mode declares a cap (currently Medium; Free and the other locked tiers do not)
  * and the model's window exceeds that cap. Caps DOWN only, so a
  * custom provider with a smaller window stays authoritative.
  *

@@ -30,13 +30,13 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
 
       const returned = rewriteJsonSettingsFile(filePath, (existing) => {
         assert.deepEqual(existing, {});
-        return { mmrCore: { defaultMode: "deep" } };
+        return { mmrCore: { defaultMode: "high" } };
       });
 
       assert.equal(returned, filePath);
       const text = readFileSync(filePath, "utf8");
       assert.equal(text.endsWith("\n"), true);
-      assert.deepEqual(JSON.parse(text), { mmrCore: { defaultMode: "deep" } });
+      assert.deepEqual(JSON.parse(text), { mmrCore: { defaultMode: "high" } });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -86,7 +86,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
       const dir = path.join(root, ".pi");
       mkdirSync(dir, { recursive: true });
       const filePath = path.join(dir, "settings.json");
-      const original = `${JSON.stringify({ mmrCore: { defaultMode: "smart" } }, null, 2)}\n`;
+      const original = `${JSON.stringify({ mmrCore: { defaultMode: "medium" } }, null, 2)}\n`;
       writeFileSync(filePath, original);
 
       assert.throws(() => {
@@ -130,7 +130,7 @@ describe("mmr-core internal settings-file: atomic + symlink-safe", () => {
     assert.equal(isUnsafeObjectKey("__proto__"), true);
     assert.equal(isUnsafeObjectKey("prototype"), true);
     assert.equal(isUnsafeObjectKey("constructor"), true);
-    assert.equal(isUnsafeObjectKey("deep"), false);
+    assert.equal(isUnsafeObjectKey("high"), false);
     assert.equal(isUnsafeObjectKey("finder"), false);
   });
 });

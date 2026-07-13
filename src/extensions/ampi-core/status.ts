@@ -26,8 +26,8 @@ function getRequestPolicyForState(state: MmrModeState) {
   const policy = MMR_REQUEST_POLICIES[state.mode as LockedMmrModeKey];
   // Toggleable modes carry a runtime thinking level that the static policy
   // does not encode. Derive the displayed policy from the applied level so
-  // the Thinking/Context lines reflect the current toggle (including Smart's
-  // larger high-thinking output budget) rather than the medium default.
+  // the Thinking/Context lines reflect the current in-mode toggle rather than
+  // the static default.
   if (isToggleableMmrMode(state.mode) && isMmrToggleThinkingLevel(state.thinkingLevel)) {
     return applyMmrThinkingLevelToPolicy(state.mode, policy, state.thinkingLevel);
   }

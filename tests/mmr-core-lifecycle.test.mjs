@@ -13,9 +13,8 @@ after(cleanupLoadedSource);
 
 const MODELS = [
   { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
-  { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
   { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400_000, maxTokens: 128_000 },
-  { provider: "claude-subscription", id: "claude-haiku-4-5" },
+  { provider: "openai-codex", id: "gpt-5.6-terra", contextWindow: 372_000, maxTokens: 128_000 },
 ];
 
 function createContext() {
@@ -50,26 +49,26 @@ describe("mmr-core lifecycle smoke", () => {
     assert.equal(typeof handlers.get("before_agent_start"), "function");
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.equal(statuses.at(-1)?.value, undefined);
     assert.equal(typeof footers.at(-1), "function");
     const footer = footers.at(-1)({ requestRender: () => {} }, { fg: (_name, value) => value }, { getGitBranch: () => "main", onBranchChange: () => () => {}, getExtensionStatuses: () => new Map(), getAvailableProviderCount: () => 1 });
     const footerLines = footer.render(100);
     assert.equal(footerLines.length, 2);
     assert.match(footerLines[0], /\(main\)$/);
-    assert.match(footerLines[1], /\?%\/300k \(auto\)\s+opus-4\.8 • smart$/);
+    assert.match(footerLines[1], /\?%\/300k \(auto\)\s+gpt-5\.5 • medium$/);
 
-    await commands.get("mode").handler("rush", ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "rush");
-    assert.equal(calls.setModel.at(-1)?.id, "gpt-5.5");
-    assert.equal(calls.setThinkingLevel.at(-1), "off");
-    assert.match(notifications.at(-1)?.message, /MMR mode activated: Rush \(rush\)/);
+    await commands.get("mode").handler("low", ctx);
+    assert.equal(runtime.getMmrModeState()?.mode, "low");
+    assert.equal(calls.setModel.at(-1)?.id, "gpt-5.6-terra");
+    assert.equal(calls.setThinkingLevel.at(-1), "medium");
+    assert.match(notifications.at(-1)?.message, /MMR mode activated: Low \(low\)/);
 
     const result = await handlers.get("before_agent_start")({ systemPrompt: BASE_PROMPT, systemPromptOptions: {} });
-    assert.match(result.systemPrompt, /^You are an expert coding assistant operating inside pi, a coding agent harness\. <mmr_mode name="rush">You and the user share one workspace\./);
+    assert.match(result.systemPrompt, /^You are an expert coding assistant operating inside pi, a coding agent harness\. <mmr_mode name="low">You are pair programming with the user/);
     assert.match(result.systemPrompt, /<\/mmr_mode>\n\n## Autonomy and persistence/);
-    assert.match(result.systemPrompt, /## Rush mode[\s\S]*## Tool use/);
-    assert.match(result.systemPrompt, /## Response style\n\nSpeed and low token use are the priority:/);
+    assert.doesNotMatch(result.systemPrompt, /## Deep mode/);
+    assert.match(result.systemPrompt, /## Response style/);
     assert.doesNotMatch(result.systemPrompt, /<!-- mmr-core/);
     assert.doesNotMatch(result.systemPrompt, /### Tool policy/);
   });
@@ -87,7 +86,7 @@ describe("mmr-core lifecycle smoke", () => {
       const homeSettingsPath = path.join(home, ".pi/agent/settings.json");
       const projectSettingsPath = path.join(project, ".pi/settings.json");
 
-      writeFileSync(homeSettingsPath, JSON.stringify({ mmrCore: { defaultMode: "smart" } }));
+      writeFileSync(homeSettingsPath, JSON.stringify({ mmrCore: { defaultMode: "medium" } }));
       writeFileSync(projectSettingsPath, JSON.stringify({ mmrCore: { toolAliases: "oops" } }));
 
       process.env.HOME = home;

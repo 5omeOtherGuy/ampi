@@ -8,6 +8,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ### Changed
 
+- `ampi-core`: replace the shipped `smart`/`fable`/`rush`/`deep` mode set with
+  canonical `low`/`medium`/`high`/`ultra` tiers. Low uses GPT-5.6 Terra at
+  medium reasoning; Medium uses GPT-5.5 at medium reasoning and retains the
+  300k Smart safety profile; High uses GPT-5.5 at `xhigh`; Ultra uses GPT-5.6
+  Sol at Pi's maximum `xhigh` effort. Low and Medium use the Smart prompt
+  family, while High and Ultra use the Deep prompt family. Existing mode names
+  remain accepted as migration aliases, and Free mode remains unchanged.
 - `ampi-workers` / `ampi-core`: the `librarian` subagent's default route is now
   `gpt-5.5` with no reasoning (thinking `off`), since repository lookups are
   retrieval-oriented. It falls back to `claude-opus-4-6` then `gpt-5.4` when

@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 // pin the structural invariants of MMR_MODE_PROMPT_TEMPLATES so accidental
 // deletion or key drift fails loudly without requiring a fixture refresh.
 
-const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
+const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 
 describe("mmr-core prompt templates - structural invariants", () => {
   it("exports exactly one template per prompted (non-free) locked mode", async () => {
@@ -18,7 +18,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     assert.equal("free" in MMR_MODE_PROMPT_TEMPLATES, false, "free mode must not have a prompt template");
   });
 
-  it("every template has a non-empty tag, intro, and closingLine; only rush and deep carry a posture", async () => {
+  it("every template has a non-empty tag, intro, and closingLine; only high and ultra carry a deep posture", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       const template = MMR_MODE_PROMPT_TEMPLATES[mode];
@@ -31,13 +31,12 @@ describe("mmr-core prompt templates - structural invariants", () => {
       assert.equal(typeof template.closingLine, "string");
       assert.ok(template.closingLine.length > 10, `${mode}: closingLine is non-trivial`);
     }
-    // The smart family mirrors the authoritative default template, whose
-    // framing lives entirely in the intro and body fragments — no posture.
-    for (const mode of ["smart", "fable"]) {
+    // Low and Medium use the Smart prompt; High and Ultra use Deep.
+    for (const mode of ["low", "medium"]) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, "", `${mode}: smart-family modes render no posture section`);
     }
-    for (const mode of ["rush", "deep"]) {
-      assert.ok(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections.length > 100, `${mode}: postureSections is non-trivial`);
+    for (const mode of ["high", "ultra"]) {
+      assert.ok(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections.length > 100, `${mode}: deep-family postureSections is non-trivial`);
     }
   });
 
@@ -71,41 +70,38 @@ describe("mmr-core prompt templates - structural invariants", () => {
     }
   });
 
-  it("mode-specific posture headings are present (rush/deep)", async () => {
+  it("deep-family posture headings are present for high and ultra", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /## Rush mode/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Discovery: minimum evidence/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /Communication: outcome first/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.postureSections, /no extended reasoning/);
-
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.deep.postureSections, /## Deep mode/);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.deep.postureSections, /## Diagnostic gate/);
+    for (const mode of ["high", "ultra"]) {
+      assert.match(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, /## Deep mode/);
+      assert.match(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, /## Diagnostic gate/);
+    }
   });
 
   it("introductions identify the mode by name or role to avoid silent mis-routing", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     // Each intro must mention its mode or a unique role marker so a copy-paste
     // bug between entries fails loudly.
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.rush.intro, /fewest useful tool loops/i);
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.deep.intro, /Deep mode/i);
-    // The smart family intentionally does not name itself (default framing);
-    // verify it carries the pair-programming framing it's known for.
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.smart.intro, /pair programming/i);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.low.intro, /pair programming/i);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.medium.intro, /pair programming/i);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.high.intro, /Deep mode/i);
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.ultra.intro, /Deep mode/i);
   });
 
-  it("smart-family variants render the smart system prompt verbatim apart from the mode tag", async () => {
+  it("each prompt family renders verbatim apart from the mode tag", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
-    for (const mode of ["fable"]) {
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.smart.intro, `${mode}: intro matches smart`);
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, MMR_MODE_PROMPT_TEMPLATES.smart.postureSections, `${mode}: posture matches smart`);
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].closingLine, MMR_MODE_PROMPT_TEMPLATES.smart.closingLine, `${mode}: closing matches smart`);
+    for (const [variant, base] of [["low", "medium"], ["ultra", "high"]]) {
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[variant].intro, MMR_MODE_PROMPT_TEMPLATES[base].intro, `${variant}: intro matches ${base}`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[variant].postureSections, MMR_MODE_PROMPT_TEMPLATES[base].postureSections, `${variant}: posture matches ${base}`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[variant].closingLine, MMR_MODE_PROMPT_TEMPLATES[base].closingLine, `${variant}: closing matches ${base}`);
     }
   });
 
-  it("closingLine differs between distinct framings (smart family shares one)", async () => {
+  it("Smart and Deep families use distinct closing lines", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
-    const closings = ["smart", "rush", "deep"].map((mode) => MMR_MODE_PROMPT_TEMPLATES[mode].closingLine);
-    assert.equal(new Set(closings).size, closings.length, "smart, rush, and deep must define distinct closing lines");
+    assert.notEqual(MMR_MODE_PROMPT_TEMPLATES.medium.closingLine, MMR_MODE_PROMPT_TEMPLATES.high.closingLine);
+    assert.equal(MMR_MODE_PROMPT_TEMPLATES.low.closingLine, MMR_MODE_PROMPT_TEMPLATES.medium.closingLine);
+    assert.equal(MMR_MODE_PROMPT_TEMPLATES.ultra.closingLine, MMR_MODE_PROMPT_TEMPLATES.high.closingLine);
   });
 
   it("postureSections never re-introduces a leading or trailing blank line that the renderer would double", async () => {

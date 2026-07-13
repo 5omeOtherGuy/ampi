@@ -1,5 +1,5 @@
 import { resolveMmrFeatureGates } from "./feature-gates.js";
-import { isMmrModeKey } from "./modes.js";
+import { resolveMmrModeKey } from "./modes.js";
 import { isThinkingLevel } from "./settings.js";
 import type {
   MmrFeatureGateDecision,
@@ -172,12 +172,14 @@ function parsePersistedModeState(data: unknown): PersistedMmrModeState | undefin
   const version = validatePersistedVersion(candidate.version);
   if (version === undefined) return undefined;
 
-  if (typeof candidate.mode !== "string" || !isMmrModeKey(candidate.mode)) return undefined;
+  if (typeof candidate.mode !== "string") return undefined;
+  const mode = resolveMmrModeKey(candidate.mode);
+  if (!mode) return undefined;
 
   const model = typeof candidate.model === "string" ? candidate.model : "";
   return {
     version,
-    mode: candidate.mode,
+    mode,
     source: isMmrModeSelectionSource(candidate.source) ? candidate.source : "session",
     targetModel: typeof candidate.targetModel === "string" ? candidate.targetModel : model,
     requestedModels: readStringArray(candidate.requestedModels),

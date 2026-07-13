@@ -9,7 +9,7 @@ async function buildState(overrides = {}) {
   const { createMmrModeState } = await importSource("extensions/ampi-core/state.ts");
   const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
-  const modeKey = overrides.modeKey ?? "smart";
+  const modeKey = overrides.modeKey ?? "medium";
   const mode = { ...getMmrMode(modeKey), ...(overrides.modeOverrides ?? {}) };
   const baseModelResolution = modeKey === "free"
     ? {
@@ -118,18 +118,18 @@ describe("mmr-core footer status", () => {
     assert.equal(statuses.at(-1)?.value, undefined);
     assert.equal(typeof footers.at(-1), "function");
     assert.equal(lines[0], "~/projects/ampi (main)");
-    assert.match(lines[1], /^↑558k ↓68k R22M W167k \$12\.981 \(sub\) 19\.5%\/1.0M \(auto\)\s+opus-4\.8 • smart$/);
+    assert.match(lines[1], /^↑558k ↓68k R22M W167k \$12\.981 \(sub\) 19\.5%\/1\.0M \(auto\)\s+opus-4\.8 • medium$/);
   });
 
 
   it("uses per-mode context windows for footer denominators", async () => {
     const { updateMmrStatus } = await importSource("extensions/ampi-core/status.ts");
     const cases = [
-      { modeKey: "smart", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 60000, usageContextWindow: 1000000, usagePercent: 20, percent: "20.0", contextWindow: "1.0M", model: "opus-4.8", mode: "smart" },
-      // rush/deep carry no ampi profile, so the footer denominator is Pi's
+      { modeKey: "medium", effectiveContextWindow: 1000000, effectiveMaxInputTokens: 968000, tokens: 60000, usageContextWindow: 1000000, usagePercent: 20, percent: "20.0", contextWindow: "1.0M", model: "opus-4.8", mode: "medium" },
+      // Low and High carry no ampi profile, so the footer denominator is Pi's
       // own registered window reported through getContextUsage (here 272k).
-      { modeKey: "rush", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "rush" },
-      { modeKey: "deep", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "deep" },
+      { modeKey: "low", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "low" },
+      { modeKey: "high", effectiveContextWindow: undefined, effectiveMaxInputTokens: undefined, tokens: 78000, usageContextWindow: 272000, usagePercent: 28.7, percent: 28.7, contextWindow: "272k", model: "gpt-5.5", mode: "high" },
     ];
 
     for (const testCase of cases) {
@@ -138,8 +138,8 @@ describe("mmr-core footer status", () => {
         effectiveContextWindow: testCase.effectiveContextWindow,
         effectiveMaxInputTokens: testCase.effectiveMaxInputTokens,
         modelResolution: {
-          selectedProvider: testCase.modeKey === "deep" || testCase.modeKey === "rush" ? "openai-codex" : "claude-subscription",
-          selectedModel: testCase.modeKey === "smart" ? "claude-opus-4-8" : testCase.modeKey === "rush" ? "gpt-5.5" : testCase.modeKey === "deep" ? "gpt-5.5" : "claude-opus-4-8",
+          selectedProvider: testCase.modeKey === "high" || testCase.modeKey === "low" ? "openai-codex" : "claude-subscription",
+          selectedModel: testCase.modeKey === "medium" ? "claude-opus-4-8" : testCase.modeKey === "low" ? "gpt-5.5" : testCase.modeKey === "high" ? "gpt-5.5" : "claude-opus-4-8",
         },
       });
       const footers = [];
@@ -221,7 +221,7 @@ describe("mmr-core /mmr-status", () => {
 
     const output = formatMmrStatus(state);
 
-    assert.match(output, /Mode: Smart \(smart\)/);
+    assert.match(output, /Mode: Medium \(medium\)/);
     assert.match(output, /Selected source: flag/);
     assert.match(output, /Rejected sources:/);
     assert.match(output, /settings="fast"/);
@@ -233,8 +233,8 @@ describe("mmr-core /mmr-status", () => {
     assert.match(output, /Feature gates:/);
     assert.match(output, /ampi-workers: missing/);
     assert.match(output, /Policy warnings:/);
-    assert.match(output, /Thinking: medium \(request policy: Anthropic adaptive\/high\)/);
-    assert.match(output, /Context: 300k total \/ 64k max out \/ 236k max in/);
+    assert.match(output, /Thinking: medium \(request policy: OpenAI Responses medium \(summary auto\)\)/);
+    assert.match(output, /Context: 300k total \/ 128k max out \/ 172k max in/);
     assert.match(output, /Context cap: model default/);
     assert.doesNotMatch(output, /Native compaction note:/);
     assert.match(output, /Baseline captured: no/);
@@ -330,11 +330,11 @@ describe("mmr-core /mmr-status", () => {
   it("reports the active mode input profile and no cap in free mode", async () => {
     const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
-    const smart = await buildState({ effectiveMaxInputTokens: 968000 });
+    const medium = await buildState({ effectiveMaxInputTokens: 968000 });
     const free = await buildState({ modeKey: "free" });
 
-    assert.match(formatMmrStatus(smart), /Context cap: 968000 input tokens \(mode profile\)/);
-    assert.doesNotMatch(formatMmrStatus(smart), /Native compaction note:/);
+    assert.match(formatMmrStatus(medium), /Context cap: 968000 input tokens \(mode profile\)/);
+    assert.doesNotMatch(formatMmrStatus(medium), /Native compaction note:/);
     assert.match(formatMmrStatus(free), /Context cap: none/);
     assert.doesNotMatch(formatMmrStatus(free), /Native compaction note:/);
   });
@@ -342,8 +342,8 @@ describe("mmr-core /mmr-status", () => {
   it("omits 'max out' and 'max in' from /mmr-status Context when the resolved provider does not accept max_output_tokens (openai-codex)", async () => {
     const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
-    const deepCodex = await buildState({
-      modeKey: "deep",
+    const highCodex = await buildState({
+      modeKey: "high",
       modelResolution: {
         targetModel: "gpt-5.5",
         requestedModels: ["gpt-5.5", "gpt-5.4"],
@@ -358,8 +358,8 @@ describe("mmr-core /mmr-status", () => {
       effectiveMaxInputTokens: undefined,
     });
 
-    const status = formatMmrStatus(deepCodex);
-    // deep carries no ampi context profile and Codex streams output in-window,
+    const status = formatMmrStatus(highCodex);
+    // High carries no ampi context profile and Codex streams output in-window,
     // so there is no total/max-out/max-in to show — Pi's native window applies.
     assert.match(status, /Context: provider default/);
     assert.doesNotMatch(status, /max out/);
@@ -369,14 +369,14 @@ describe("mmr-core /mmr-status", () => {
   it("uses clamped active context metadata when a selected provider route is smaller", async () => {
     const { formatMmrStatus } = await importSource("extensions/ampi-core/status.ts");
 
-    const smart = await buildState({
+    const medium = await buildState({
       effectiveContextWindow: 200000,
       effectiveMaxOutputTokens: 64000,
       effectiveMaxInputTokens: 136000,
     });
 
-    assert.match(formatMmrStatus(smart), /Context: 200k total \/ 64k max out \/ 136k max in/);
-    assert.match(formatMmrStatus(smart), /Context cap: 136000 input tokens \(mode profile\)/);
+    assert.match(formatMmrStatus(medium), /Context: 200k total \/ 64k max out \/ 136k max in/);
+    assert.match(formatMmrStatus(medium), /Context cap: 136000 input tokens \(mode profile\)/);
   });
 
   it("includes policy warnings alongside mode and tool state", async () => {

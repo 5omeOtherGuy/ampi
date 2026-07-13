@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getProjectMmrSettingsPath } from "../ampi-core/config-writer.js";
-import { isMmrModeKey } from "../ampi-core/modes.js";
+import { resolveMmrModeKey } from "../ampi-core/modes.js";
 import { isThinkingLevel } from "../ampi-core/settings.js";
 import type { MmrLockedModeKey } from "../ampi-core/types.js";
 import {
@@ -134,8 +134,9 @@ function parseModeList(raw: string): MmrLockedModeKey[] | undefined {
   const tokens = raw.split(",").map((token) => token.trim()).filter(Boolean);
   const modes: MmrLockedModeKey[] = [];
   for (const token of tokens) {
-    if (!isMmrModeKey(token) || token === "free") return undefined;
-    if (!modes.includes(token as MmrLockedModeKey)) modes.push(token as MmrLockedModeKey);
+    const mode = resolveMmrModeKey(token);
+    if (!mode || mode === "free") return undefined;
+    if (!modes.includes(mode)) modes.push(mode);
   }
   return modes.length > 0 ? modes : undefined;
 }
@@ -184,20 +185,20 @@ function recordIdExists(settingsPath: string, id: string): boolean {
 async function pickModes(ctx: ExtensionContext): Promise<MmrCustomSubagentModeScope | undefined> {
   const choice = await ctx.ui.select("Modes that may call this subagent", [
     "allLocked (every locked mode)",
-    "deep",
-    "smart",
+    "high",
+    "medium",
     "custom (enter a comma-separated list)",
     CANCEL,
   ]);
   if (!choice || choice === CANCEL) return undefined;
   if (choice.startsWith("allLocked")) return "allLocked";
-  if (choice === "deep") return ["deep"];
-  if (choice === "smart") return ["smart"];
-  const raw = await ctx.ui.input("Modes (comma-separated: smart, fable, rush, deep)", "deep");
+  if (choice === "high") return ["high"];
+  if (choice === "medium") return ["medium"];
+  const raw = await ctx.ui.input("Modes (comma-separated: low, medium, high, ultra)", "high");
   if (raw === undefined) return undefined;
   const modes = parseModeList(raw);
   if (!modes) {
-    ctx.ui.notify("No valid locked modes entered; expected smart, fable, rush, or deep.", "error");
+    ctx.ui.notify("No valid locked modes entered; expected low, medium, high, or ultra.", "error");
     return undefined;
   }
   return modes;

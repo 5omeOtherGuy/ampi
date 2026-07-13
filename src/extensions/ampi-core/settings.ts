@@ -4,15 +4,17 @@ import path from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { readJsonSettingsFile } from "./internal/settings-file.js";
 import { isRecord } from "./internal/json.js";
-import { isMmrModeKey } from "./modes.js";
-import type { MmrCoreSettings, MmrModelPreference } from "./types.js";
+import { resolveMmrModeKey } from "./modes.js";
+import type { MmrCoreSettings, MmrLockedModeKey, MmrModelPreference } from "./types.js";
 
 /**
  * Locked mode keys plus the `all` bucket accepted by `lockedModeExtraTools`.
  * `free` is native-control, not locked, so it does not own a setting bucket.
  */
-function isLockedModeExtraToolsKey(key: string): boolean {
-  return key === "all" || (isMmrModeKey(key) && key !== "free");
+function resolveLockedModeExtraToolsKey(key: string): "all" | MmrLockedModeKey | undefined {
+  if (key === "all") return "all";
+  const mode = resolveMmrModeKey(key);
+  return mode && mode !== "free" ? mode : undefined;
 }
 
 function readToolNameList(value: unknown): string[] {
@@ -41,14 +43,15 @@ function readLockedModeExtraTools(
   // is safe here.
   const result: Partial<Record<string, string[]>> = {};
   for (const [key, names] of Object.entries(value)) {
-    if (!isLockedModeExtraToolsKey(key)) {
+    const resolvedKey = resolveLockedModeExtraToolsKey(key);
+    if (!resolvedKey) {
       context.warnings.push(
-        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (smart, fable, rush, deep). "free" is not configurable.`,
+        `Ignoring ${context.settingPath}.${key} in ${context.filePath}: expected "all" or a locked mode key (low, medium, high, ultra). "free" is not configurable.`,
       );
       continue;
     }
     const list = readToolNameList(names);
-    if (list.length > 0) result[key] = list;
+    if (list.length > 0) result[resolvedKey] = list;
   }
   return Object.keys(result).length > 0
     ? (result as MmrCoreSettings["lockedModeExtraTools"])
@@ -145,8 +148,9 @@ function readModelPreferencesRecord(
   }
   const result: MmrCoreSettings["modelPreferences"] = {};
 
-  for (const [mode, preferences] of Object.entries(value)) {
-    if (!isMmrModeKey(mode) || !Array.isArray(preferences)) continue;
+  for (const [modeKey, preferences] of Object.entries(value)) {
+    const mode = resolveMmrModeKey(modeKey);
+    if (!mode || !Array.isArray(preferences)) continue;
     const normalized = preferences.map(readModelPreference).filter((preference): preference is MmrModelPreference => Boolean(preference));
     if (normalized.length > 0) result[mode] = normalized;
   }
@@ -237,8 +241,8 @@ function extractMmrCoreSettings(
 
   const { raw, rootKey } = selected;
   const settings: MmrCoreSettings = {};
-  if (typeof raw.defaultMode === "string") settings.defaultMode = raw.defaultMode;
-  if (typeof raw.mode === "string") settings.defaultMode = raw.mode;
+  if (typeof raw.defaultMode === "string") settings.defaultMode = resolveMmrModeKey(raw.defaultMode) ?? raw.defaultMode;
+  if (typeof raw.mode === "string") settings.defaultMode = resolveMmrModeKey(raw.mode) ?? raw.mode;
 
   if ("toolAliases" in raw) {
     context.warnings.push(

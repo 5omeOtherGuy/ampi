@@ -8,16 +8,15 @@
 
 ## What `ampi-core` writes to the system prompt
 
-- `smart`, `fable`, `rush`, and `deep` each use an ampi-authored mode template (intro, posture sections, closing line) in `src/extensions/ampi-core/prompt-content.ts` (re-exported by the `prompt-templates.ts` compatibility shim).
-- `rush` and `deep` intentionally carry different posture sections from `smart` rather than sharing one generic prompt.
-- `rush` uses low-latency, targeted-work guidance.
-- `deep` uses deliberate-investigation guidance with an explicit `## Diagnostic gate` Markdown section.
+- `low`, `medium`, `high`, and `ultra` each use an ampi-authored mode template in `src/extensions/ampi-core/prompt-content.ts` (re-exported by the `prompt-templates.ts` compatibility shim).
+- Low and Medium use the Smart prompt family: the same intro, body fragments, and closing guidance with tier-specific markers.
+- High and Ultra use the Deep prompt family, including deliberate-investigation guidance and the explicit `## Diagnostic gate` Markdown section.
 - Mode/tool/policy state (active/missing/deferred tools, configured fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/ampi-status`, activation warnings, and the status bar.
 
 ## How the rewrite is scoped
 
 - For each prompted locked-mode turn, `ampi-core` surgically replaces only Pi's auto-rendered head (identity line through the `Pi documentation` block) with the active mode prompt.
-- The only ampi-owned XML-style marker is the initial one-line role marker (`<mmr_mode name="smart">...</mmr_mode>`); mode sections use Markdown headings.
+- The only ampi-owned XML-style marker is the initial one-line role marker (for example, `<mmr_mode name="medium">...</mmr_mode>`); mode sections use Markdown headings.
 - Pi's auto-rendered `Available tools:` block is embedded verbatim under `## Tool use`.
 - Pi's auto-rendered `Guidelines:` block is embedded under `## Tool use` with the two unconditional Pi bullets (`Be concise in your responses`, `Show file paths clearly when working with files`) stripped because the mode prompt covers them.
 - Everything outside the auto-rendered head is preserved byte-for-byte: content prepended by earlier `before_agent_start` handlers, Pi's `appendSystemPrompt` (`--append-system-prompt` / `APPEND_SYSTEM.md`), `# Project Context` / AGENTS.md, `<available_skills>`, the future subagents block, `Current date:`, `Current working directory:`, and any extension content appended after the tail.

@@ -1,18 +1,28 @@
 import type { MmrModeDefinition, MmrModeKey } from "./types.js";
 import { MMR_REQUEST_POLICIES, formatMmrPolicyContext, formatMmrPolicyThinking } from "./request-policy.js";
 
-export const DEFAULT_MMR_MODE: MmrModeKey = "smart";
+export const DEFAULT_MMR_MODE: MmrModeKey = "medium";
 
-export const MMR_MODE_KEYS = ["smart", "fable", "rush", "deep", "free"] as const satisfies readonly MmrModeKey[];
+export const MMR_MODE_KEYS = ["low", "medium", "high", "ultra", "free"] as const satisfies readonly MmrModeKey[];
 
-/**
- * Modes intentionally hidden from the interactive mode picker
- * (`ctrl+shift+s` / `alt+m`) and the `ctrl+space` cycle. A hidden mode stays a
- * fully valid mode key — reachable via `/mode <key>`, the `mmr-mode` flag, and
- * settings `defaultMode` — but is never surfaced through a hotkey. `fable` is
- * selectable only via `/mode fable`.
- */
-export const MMR_HOTKEY_HIDDEN_MODE_KEYS = ["fable"] as const satisfies readonly MmrModeKey[];
+/** Legacy mode names accepted at configuration and command boundaries. */
+export const MMR_LEGACY_MODE_ALIASES = {
+  rush: "low",
+  smart: "medium",
+  deep: "high",
+  fable: "ultra",
+} as const satisfies Record<string, MmrModeKey>;
+
+/** Resolve a canonical mode key or a legacy compatibility alias. */
+export function resolveMmrModeKey(value: string): MmrModeKey | undefined {
+  if ((MMR_MODE_KEYS as readonly string[]).includes(value)) return value as MmrModeKey;
+  return Object.hasOwn(MMR_LEGACY_MODE_ALIASES, value)
+    ? MMR_LEGACY_MODE_ALIASES[value as keyof typeof MMR_LEGACY_MODE_ALIASES]
+    : undefined;
+}
+
+/** Modes intentionally hidden from the interactive mode picker and cycle. */
+export const MMR_HOTKEY_HIDDEN_MODE_KEYS = [] as const satisfies readonly MmrModeKey[];
 
 /** Mode keys offered through the interactive hotkeys (picker + cycle). */
 export const MMR_HOTKEY_MODE_KEYS: readonly MmrModeKey[] = MMR_MODE_KEYS.filter(
@@ -85,88 +95,84 @@ export const MMR_RUSH_TOOL_NAMES = [
  * by identity against the active Pi tool inventory and reports unavailable
  * extension-owned tools as deferred via the exact-name status catalog.
  */
+export const MMR_DEEP_TOOL_NAMES = [
+  "bash",
+  "apply_patch",
+  "write",
+  "web_search",
+  "read_web_page",
+  "chart",
+  "skill",
+  "read_session",
+  "find_session",
+  "librarian",
+  "oracle",
+  "Task",
+  "start_task",
+  "task_poll",
+  "task_wait",
+  "task_cancel",
+  "finder",
+  "reviewer",
+  "task_list",
+  "handoff",
+] satisfies string[];
+
 export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
-  smart: {
-    key: "smart",
-    displayName: "Smart",
-    description: "Balanced default mode for general coding tasks.",
+  low: {
+    key: "low",
+    displayName: "Low",
+    description: "Fast, low-cost mode for small, well-defined tasks.",
     modelPreferences: [
-      { model: "claude-opus-4-8" },
+      { model: "gpt-5.6-terra" },
       { model: "gpt-5.5" },
     ],
-    // Default thinking level. Smart is a toggleable mode: the MMR-owned alt+r
-    // shortcut flips it between the two presets in `MMR_MODE_THINKING_TOGGLES`
-    // (medium/high) without releasing the mode.
     thinkingLevel: "medium",
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
-    featureGates: ["ampi-workers"],
-  },
-
-  fable: {
-    key: "fable",
-    displayName: "Fable",
-    description: "Smart-style balanced mode with Claude Fable 5 (Claude Code subscription) as its model preference. Toggleable thinking (low/medium/high).",
-    modelPreferences: [
-      { model: "claude-fable-5", providers: ["claude-subscription"] },
-    ],
-    // Default thinking level; alt+r cycles through medium -> high -> low.
-    thinkingLevel: "medium",
-    tools: MMR_SMART_TOOL_NAMES,
-    promptRoute: "default",
-    featureGates: ["ampi-workers"],
-  },
-
-  rush: {
-    key: "rush",
-    displayName: "Rush",
-    description: "Fast, low-token GPT-5.5 mode for small, well-defined tasks.",
-    modelPreferences: [
-      { model: "gpt-5.5", thinkingLevel: "off" },
-      { model: "claude-haiku-4-5-20251001", thinkingLevel: "off" },
-      { model: "claude-haiku-4-5", thinkingLevel: "off" },
-    ],
-    thinkingLevel: "off",
     tools: MMR_RUSH_TOOL_NAMES,
-    promptRoute: "rush",
+    promptRoute: "default",
     featureGates: ["ampi-workers"],
   },
 
-  deep: {
-    key: "deep",
-    displayName: "Deep",
-    description: "Reasoning-heavy mode for difficult investigations.",
+  medium: {
+    key: "medium",
+    displayName: "Medium",
+    description: "Balanced intelligence, speed, and cost for most tasks.",
     modelPreferences: [
       { model: "gpt-5.5" },
       { model: "claude-opus-4-8" },
     ],
-    // Default thinking level; alt+r toggles between medium and xhigh.
     thinkingLevel: "medium",
-    // `write` is deliberately exposed in deep alongside `apply_patch`. A narrow
-    // create tool matters when an atomic patch is heavier than needed; revisit
-    // when the deep tool set is hardened further.
-    tools: [
-      "bash",
-      "apply_patch",
-      "write",
-      "web_search",
-      "read_web_page",
-      "chart",
-      "skill",
-      "read_session",
-      "find_session",
-      "librarian",
-      "oracle",
-      "Task",
-      "start_task",
-      "task_poll",
-      "task_wait",
-      "task_cancel",
-      "finder",
-      "reviewer",
-      "task_list",
-      "handoff",
+    tools: MMR_SMART_TOOL_NAMES,
+    promptRoute: "default",
+    featureGates: ["ampi-workers"],
+  },
+
+  high: {
+    key: "high",
+    displayName: "High",
+    description: "Deep reasoning for hard tasks.",
+    modelPreferences: [
+      { model: "gpt-5.5" },
+      { model: "claude-opus-4-8" },
     ],
+    thinkingLevel: "xhigh",
+    tools: MMR_DEEP_TOOL_NAMES,
+    promptRoute: "deep",
+    featureGates: ["ampi-workers", "ampi-history", "ampi-web"],
+  },
+
+  ultra: {
+    key: "ultra",
+    displayName: "Ultra",
+    description: "Maximum-effort GPT-5.6 Sol mode for hard, open-ended tasks.",
+    modelPreferences: [
+      { model: "gpt-5.6-sol" },
+      { model: "gpt-5.5" },
+    ],
+    // Pi exposes xhigh as its highest OpenAI reasoning level; GPT-5.6 Sol uses
+    // that lane for the requested maximum-effort profile.
+    thinkingLevel: "xhigh",
+    tools: MMR_DEEP_TOOL_NAMES,
     promptRoute: "deep",
     featureGates: ["ampi-workers", "ampi-history", "ampi-web"],
   },

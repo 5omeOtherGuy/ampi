@@ -8,12 +8,12 @@ import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs"
 after(cleanupLoadedSource);
 
 const SMART_MODEL = { provider: "claude-subscription", id: "claude-opus-4-8" };
-const RUSH_MODEL = { provider: "claude-subscription", id: "claude-haiku-4-5" };
+const LOW_MODEL = { provider: "openai-codex", id: "gpt-5.6-terra" };
 const FREE_MODEL = { provider: "openai", id: "gpt-5.4" };
 
 function createLockedState(overrides = {}) {
   return {
-    mode: "smart",
+    mode: "medium",
     displayName: "Smart",
     source: "command",
     targetModel: "claude-opus-4-8",
@@ -112,7 +112,7 @@ describe("mmr-core free mode", () => {
     extension(pi);
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     calls.setActiveTools.length = 0;
     calls.setModel.length = 0;
     calls.setThinkingLevel.length = 0;
@@ -150,7 +150,7 @@ describe("mmr-core free mode", () => {
     extension(pi);
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     calls.setActiveTools.length = 0;
     calls.setModel.length = 0;
     calls.setThinkingLevel.length = 0;
@@ -171,7 +171,7 @@ describe("mmr-core free mode", () => {
     assert.match(notifications.at(-1)?.message, /MMR mode prompt is disabled/);
     assert.match(notifications.at(-1)?.message, /MMR tool allowlist is disabled/);
     assert.match(notifications.at(-1)?.message, /Standard Pi tools are restored/);
-    assert.match(notifications.at(-1)?.message, /\/mode smart/);
+    assert.match(notifications.at(-1)?.message, /\/mode low/);
   });
 
   it("switches to free with a warning when the user changes thinking while a locked mode is active", async () => {
@@ -182,7 +182,7 @@ describe("mmr-core free mode", () => {
     extension(pi);
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     calls.setActiveTools.length = 0;
     calls.setModel.length = 0;
     calls.setThinkingLevel.length = 0;
@@ -233,7 +233,7 @@ describe("mmr-core free mode", () => {
 
     await handlers.get("model_select")({ type: "model_select", model: SMART_MODEL, previousModel: undefined, source: "restore" }, ctx);
 
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.deepEqual(calls.setActiveTools, []);
     assert.deepEqual(calls.appendEntry, []);
     assert.deepEqual(notifications, []);
@@ -253,7 +253,7 @@ describe("mmr-core free mode", () => {
       pi.setThinkingLevel("low");
     });
 
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.deepEqual(calls.setModel, [FREE_MODEL]);
     assert.deepEqual(calls.setThinkingLevel, ["low"]);
     assert.deepEqual(calls.setActiveTools, []);
@@ -267,15 +267,15 @@ describe("mmr-core free mode", () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createLockedState());
-    const { ctx, notifications } = createContext([RUSH_MODEL]);
+    const { ctx, notifications } = createContext([LOW_MODEL]);
     const { pi, calls, commands, setEventContext } = createPi({ emitInternalEvents: true });
     setEventContext(ctx);
     extension(pi);
 
-    await commands.get("mode").handler("rush", ctx);
+    await commands.get("mode").handler("low", ctx);
 
-    assert.equal(runtime.getMmrModeState()?.mode, "rush");
-    assert.deepEqual(calls.appendEntry.map((entry) => entry[1].mode), ["rush"]);
+    assert.equal(runtime.getMmrModeState()?.mode, "low");
+    assert.deepEqual(calls.appendEntry.map((entry) => entry[1].mode), ["low"]);
     assert.equal(notifications.some((notification) => /switched to Free mode/.test(notification.message)), false);
   });
 });

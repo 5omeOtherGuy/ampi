@@ -71,76 +71,51 @@ export interface MmrRequestPolicy {
  * Per-mode policies for each locked MMR mode. Free mode has no policy;
  * ampi-core's hook is a no-op while the native-control mode is active.
  *
- * Notes on the shape choices:
- * - SMART uses adaptive thinking with `output_config.effort=high` and
- *   `max_tokens=64000` for its Opus 4.8 profile. SMART's GPT fallback sets
- *   only Responses reasoning effort (no `max_output_tokens` override), so
- *   Opus-specific output caps do not leak onto GPT payloads.
- * - FABLE pins Claude Fable 5 on the `claude-subscription` provider with
- *   adaptive thinking and `max_tokens=128000`. Its toggle presets
- *   (low/medium/high) set no `anthropicEffort` override, so the Pi level echoes
- *   directly as the Anthropic adaptive effort.
- * - RUSH uses OpenAI Responses with `reasoning.effort=none` and
- *   `max_output_tokens=128000` for the GPT-5.5 profile. Its Haiku fallback
- *   relies on the mode's `thinkingLevel: "off"` rather than an Anthropic
- *   budget-thinking override.
- * - DEEP uses OpenAI Responses with `reasoning.effort=medium` and
- *   `summary=auto`, plus `max_output_tokens=128000`.
+ * Notes on the mode profiles:
+ * - LOW and MEDIUM use OpenAI Responses `medium` reasoning with a 128k output
+ *   reservation. MEDIUM inherits the former Smart 300k safety/compaction
+ *   profile, leaving 172k effective input after that reservation.
+ * - HIGH and ULTRA use OpenAI Responses `xhigh` reasoning with a 128k output
+ *   reservation. Pi exposes `xhigh` as its maximum OpenAI reasoning lane.
  * - Context triples are the mode's total context window / max output / max
  *   input. They are surfaced in `/mode` and `/ampi-status`. This module does
  *   not write any context fields into provider payloads. A mode that sets a
  *   `contextWindow` caps the active model's `contextWindow` to that profile
  *   total at the `setModel` call site (see `context-cap.ts`), so Pi's native
  *   compaction/overflow/footer run at the advertised window even when the
- *   route's native window is larger (e.g. `smart` pins its Opus route to 300k).
- *   The routes without an MMR-owned context profile (`fable`, `rush`, `deep`)
- *   intentionally set no `contextWindow`, so every route runs at Pi's own registered
- *   window (the observed Codex backend limit) with no ampi override. The cap
- *   is cap-down only, so a smaller custom route stays authoritative, and `free`
+ *   route's native window is larger. LOW, HIGH, and ULTRA intentionally set no
+ *   `contextWindow`, so those routes run at Pi's registered window. The cap is
+ *   cap-down only, so a smaller custom route stays authoritative, and `free`
  *   (no policy) is never capped.
  */
 export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrRequestPolicy> = {
-  smart: {
-    anthropic: {
-      maxTokens: 64000,
-      // Anthropic adaptive effort follows the native Opus route's Pi-level map
-      // (Option 1: Pi medium -> Anthropic high). The medium toggle preset pins
-      // the same value; the high preset maps Pi high -> Anthropic xhigh.
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "high" },
-    },
-    openaiResponses: {
-      reasoning: { effort: "medium", summary: "auto" },
-    },
-    // smart caps the active Opus route to a 300k window (see context-cap.ts);
-    // every locked mode caps to its profile total this way. Keep the display
-    // metadata consistent: 300k total - 64k max-output = 236k.
-    contextWindow: 300_000,
-    effectiveMaxInputTokens: 236_000,
-  },
-  fable: {
-    anthropic: {
-      maxTokens: 128000,
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
-    },
-    // No context override: Fable routes run at Pi's registered window.
-  },
-  rush: {
-    openaiResponses: {
-      maxOutputTokens: 128000,
-      reasoning: { effort: "none" },
-    },
-    // No context override; GPT/Codex routes run at Pi's registered window.
-  },
-  deep: {
-    anthropic: {
-      thinking: { type: "adaptive", display: "summarized", outputConfigEffort: "medium" },
-    },
+  low: {
     openaiResponses: {
       maxOutputTokens: 128000,
       reasoning: { effort: "medium", summary: "auto" },
     },
-    // No context override; GPT/Codex routes run at Pi's registered window. The
-    // Opus fallback likewise runs at its native window (only `smart` pins Opus).
+  },
+  medium: {
+    openaiResponses: {
+      maxOutputTokens: 128000,
+      reasoning: { effort: "medium", summary: "auto" },
+    },
+    contextWindow: 300000,
+    effectiveMaxInputTokens: 172000,
+  },
+  high: {
+    openaiResponses: {
+      maxOutputTokens: 128000,
+      reasoning: { effort: "xhigh", summary: "auto" },
+    },
+  },
+  ultra: {
+    openaiResponses: {
+      maxOutputTokens: 128000,
+      // Pi's highest OpenAI reasoning lane is xhigh; GPT-5.6 Sol uses it for
+      // the mode's maximum-effort default.
+      reasoning: { effort: "xhigh", summary: "auto" },
+    },
   },
 };
 
@@ -156,11 +131,8 @@ export type MmrToggleThinkingLevel = "low" | "medium" | "high" | "xhigh";
 /**
  * One toggle preset for a toggleable mode. `level` is the Pi/session thinking
  * level and the OpenAI Responses `reasoning.effort`. `anthropicEffort`, when
- * set, overrides the Anthropic adaptive `output_config.effort` so the wire
- * effort matches the native provider's Pi-level->Anthropic-effort mapping
- * (Smart maps Pi `high` -> Anthropic `xhigh`) instead of echoing the Pi level
- * string verbatim. `maxTokens`, when set, overrides the mode's Anthropic
- * `max_tokens` for this level.
+ * set, overrides Anthropic adaptive `output_config.effort`. `maxTokens`, when
+ * set, overrides the mode's Anthropic `max_tokens` for this level.
  */
 export interface MmrModeThinkingOption {
   level: MmrToggleThinkingLevel;
@@ -174,22 +146,15 @@ export interface MmrModeThinkingOption {
  * The type requires at least two presets so a single-preset "toggle" can
  * never be declared by mistake.
  *
- * Smart's high preset asks for Anthropic `xhigh` effort (Pi `high` maps to
- * Anthropic `xhigh` on the Opus route) while keeping the Anthropic output
- * budget at the mode default (64k). Both Smart presets therefore send the
- * same 64k admission shape and differ only in adaptive reasoning effort
- * (`high` vs `xhigh`).
- *
- * Fable cycles three presets (medium -> high -> low -> medium). It does
- * not override `anthropicEffort`, so each Pi level echoes directly as the
- * Anthropic adaptive effort.
+ * MEDIUM toggles medium ↔ high, HIGH toggles xhigh ↔ medium, and ULTRA cycles
+ * xhigh → high → medium → xhigh. LOW intentionally has no in-mode toggle.
  */
 export type MmrModeThinkingToggleOptions = readonly [MmrModeThinkingOption, MmrModeThinkingOption, ...MmrModeThinkingOption[]];
 
 export const MMR_MODE_THINKING_TOGGLES = {
-  smart: [{ level: "medium", anthropicEffort: "high" }, { level: "high", anthropicEffort: "xhigh" }],
-  fable: [{ level: "medium" }, { level: "high" }, { level: "low" }],
-  deep: [{ level: "medium" }, { level: "xhigh" }],
+  medium: [{ level: "medium" }, { level: "high" }],
+  high: [{ level: "xhigh" }, { level: "medium" }],
+  ultra: [{ level: "xhigh" }, { level: "high" }, { level: "medium" }],
 } as const satisfies Partial<Record<MmrModeKey, MmrModeThinkingToggleOptions>>;
 
 export type MmrToggleableModeKey = keyof typeof MMR_MODE_THINKING_TOGGLES;
@@ -244,9 +209,8 @@ export function applyMmrThinkingLevelToPolicy(
 ): MmrRequestPolicy {
   const next: MmrRequestPolicy = { ...policy };
   const option = findThinkingOption(modeKey, level);
-  // Anthropic adaptive effort follows the provider's Pi-level->effort mapping
-  // when a preset pins it (Smart high -> xhigh); otherwise it echoes the Pi
-  // level. OpenAI Responses effort always tracks the Pi level below.
+  // Anthropic adaptive effort echoes the Pi level unless a preset pins a
+  // provider-specific value. OpenAI Responses effort tracks the Pi level.
   const anthropicEffort: MmrAnthropicEffort = option?.anthropicEffort ?? level;
 
   if (policy.anthropic) {

@@ -1,4 +1,4 @@
-import { DEFAULT_MMR_MODE, isMmrModeKey } from "./modes.js";
+import { DEFAULT_MMR_MODE, resolveMmrModeKey } from "./modes.js";
 import type { MmrModeKey, MmrModeSelection, MmrModeSelectionSource, MmrRejectedModeSource } from "./types.js";
 
 export interface ResolveMmrModeSelectionInput {
@@ -37,8 +37,12 @@ export function resolveMmrModeSelection(input: ResolveMmrModeSelectionInput): Mm
   for (const entry of sources) {
     const candidate = normalizeMode(entry.value);
     if (!candidate) continue;
-    if (isMmrModeKey(candidate)) {
-      if (!selected) selected = { mode: candidate, source: entry.source };
+    const mode = resolveMmrModeKey(candidate);
+    if (mode) {
+      if (candidate !== mode) {
+        warnings.push(`Legacy ampi mode "${candidate}" maps to "${mode}".`);
+      }
+      if (!selected) selected = { mode, source: entry.source };
       continue;
     }
     warnings.push(`Ignoring invalid ${entry.invalidDescription} ampi mode "${candidate}".`);

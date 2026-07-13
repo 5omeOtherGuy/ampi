@@ -21,7 +21,7 @@
 
 Implemented in `ampi-core`:
 
-- locked modes: `smart`, `fable`, `rush`, and `deep`; native-control mode: `free`;
+- locked modes: `low`, `medium`, `high`, and `ultra`; native-control mode: `free`;
 - mode selection via `--ampi-mode`, `/mode`, persisted session state, settings, or default;
 - provider-neutral model preference resolution with subscription-first preference ordering;
 - thinking-level application for the selected model;
@@ -175,14 +175,14 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `grep` | Pi (core) | Identity-resolved. |
 | `find` | Pi (core) | Identity-resolved. |
 | `ls` | Pi (core) | Identity-resolved. |
-| `apply_patch` | `ampi-patch` | Real tool in `ampi-patch`; deferred when the extension is not loaded. Deep mode requests `apply_patch`, `edit`, and `write` independently. |
+| `apply_patch` | `ampi-patch` | Real tool in `ampi-patch`; deferred when the extension is not loaded. High/Ultra request `apply_patch`, `edit`, and `write` independently. |
 | `task_list` | `ampi-tasks` | Real tool in `ampi-tasks` (session-local todo); kept available in every enforced mode until each mode explicitly adopts a future `Task` subagent replacement. |
 | `chart` | `ampi-tasks` | Deferred. |
 | `web_search` | `ampi-web` | Active when network is enabled. Uses SearXNG when configured, Brave when keyed, and DuckDuckGo HTML as a no-key fallback. `WebSearchDetails.backend` reports the concrete path. |
 | `read_web_page` | `ampi-web` | Active when network is enabled; uses the custom in-process reader and needs no provider key. |
-| `Task` | `ampi-subagents` | Active in `smart`/`fable`/`rush`/`deep` modes. Mode-derived bounded worker uses `ampi-core`'s `task-subagent` profile. |
-| `finder` | `ampi-subagents` | Active in `smart`/`fable`/`rush`/`deep` modes. Read-only worker (`--tools grep,find,read`) uses `ampi-core`'s subagent execution profile. |
-| `oracle` | `ampi-subagents` | Active in `smart`/`fable`/`rush`/`deep` modes. Advisory worker uses `ampi-core`'s `oracle` profile. |
+| `Task` | `ampi-subagents` | Active in `low`/`medium`/`high`/`ultra`. Mode-derived bounded worker uses `ampi-core`'s `task-subagent` profile. |
+| `finder` | `ampi-subagents` | Active in `low`/`medium`/`high`/`ultra`. Read-only worker (`--tools grep,find,read`) uses `ampi-core`'s subagent execution profile. |
+| `oracle` | `ampi-subagents` | Active in `low`/`medium`/`high`/`ultra`. Advisory worker uses `ampi-core`'s `oracle` profile. |
 | `librarian` | `ampi-subagents` | Gated behind source-owned read-only `ampi-github` tools; remote repository research uses the `librarian` profile. |
 | `read_github` | `ampi-github` | Active when GitHub access is enabled; reads files or lists directories. |
 | `list_directory_github` | `ampi-github` | Active when GitHub access is enabled; lists directory entries. |
@@ -208,7 +208,7 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 - avoids network access and provider payload mutation;
 - registers itself through `registerMmrToolProvider(...)`. The exact-name status catalog in `ampi-core` credits `ampi-patch` as the owner of `apply_patch` even when extension module caches are isolated, so `/ampi-status` always names the right owning extension.
 
-When `ampi-patch` is not loaded, deep mode's `apply_patch` request resolves as `deferred`. Deep mode also requests `edit` and `write` directly, so narrow edit/write capability is preserved by request structure (not by registry fallback).
+When `ampi-patch` is not loaded, High/Ultra's `apply_patch` request resolves as `deferred`. Those tiers also request `write` directly, so file-mutation capability is preserved by request structure (not by registry fallback).
 
 ## Module notes
 

@@ -32,19 +32,19 @@ describe("mmr-core locked-mode extra tools - helpers", () => {
     const { selectExtraToolNames } = await importSource("extensions/ampi-core/extra-tools.ts");
     const extras = {
       all: ["alpha", "beta", "read", " beta "],
-      deep: ["gamma", "alpha"],
-      smart: ["delta"],
+      high: ["gamma", "alpha"],
+      medium: ["delta"],
     };
 
-    const names = selectExtraToolNames("deep", extras, ["read", "bash"]);
+    const names = selectExtraToolNames("high", extras, ["read", "bash"]);
     // read excluded (base), beta deduped/trimmed, alpha from all wins once, gamma from deep.
     assert.deepEqual(names, ["alpha", "beta", "gamma"]);
   });
 
   it("selectExtraToolNames returns empty for undefined extras or no matches", async () => {
     const { selectExtraToolNames } = await importSource("extensions/ampi-core/extra-tools.ts");
-    assert.deepEqual(selectExtraToolNames("smart", undefined, ["read"]), []);
-    assert.deepEqual(selectExtraToolNames("smart", { deep: ["x"] }, ["read"]), []);
+    assert.deepEqual(selectExtraToolNames("medium", undefined, ["read"]), []);
+    assert.deepEqual(selectExtraToolNames("medium", { high: ["x"] }, ["read"]), []);
   });
 
   it("relabelExtraOwners rewrites only mmr-core owners to user-allowlist", async () => {
@@ -97,7 +97,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-"));
     try {
       writeProjectSettings(tempRoot, {
-        lockedModeExtraTools: { all: ["my_tool"], deep: ["deep_tool"], smart: ["smart_only"] },
+        lockedModeExtraTools: { all: ["my_tool"], high: ["deep_tool"], medium: ["smart_only"] },
       });
 
       const { pi, calls, commands, handlers } = createMockPi({
@@ -116,7 +116,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       extension(pi);
 
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-      await commands.get("mode").handler("deep", ctx);
+      await commands.get("mode").handler("high", ctx);
 
       const active = calls.setActiveTools.at(-1);
       assert.equal(active.includes("my_tool"), true, "all-bucket extra is active");
@@ -156,7 +156,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       extension(pi);
 
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-      await commands.get("mode").handler("deep", ctx);
+      await commands.get("mode").handler("high", ctx);
 
       const active = calls.setActiveTools.at(-1);
       assert.equal(active.includes("my_tool"), true, "non-reserved extra still active");
@@ -190,14 +190,14 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       extension(pi);
 
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-      await commands.get("mode").handler("deep", ctx);
+      await commands.get("mode").handler("high", ctx);
 
       // Activation succeeded (deep base tools applied); ghost tool not active.
       const active = calls.setActiveTools.at(-1);
       assert.equal(active.includes("ghost_tool"), false);
       assert.equal(active.includes("write"), true);
       const state = runtime.getMmrModeState();
-      assert.equal(state.mode, "deep");
+      assert.equal(state.mode, "high");
       assert.equal(state.missingTools.includes("ghost_tool"), true);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
@@ -207,7 +207,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
   it("extra tools never satisfy the fail-closed zero-base-tools abort", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
-    const previousState = { mode: "smart", displayName: "Smart", activeTools: ["read"], missingTools: [], deferredTools: [] };
+    const previousState = { mode: "medium", displayName: "Smart", activeTools: ["read"], missingTools: [], deferredTools: [] };
     runtime.setMmrModeState(previousState);
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-extra-"));
@@ -228,7 +228,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
 
       await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
       const setActiveBefore = calls.setActiveTools.length;
-      await commands.get("mode").handler("deep", ctx);
+      await commands.get("mode").handler("high", ctx);
 
       // Deep activation aborts: no base tools resolved, extra must not rescue it.
       assert.equal(calls.setActiveTools.length, setActiveBefore, "no new setActiveTools after aborted deep");

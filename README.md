@@ -16,10 +16,10 @@ Use `ampi` as-is for the intended experience. Advanced users can override models
 
 ### AMP-style harness modes
 
-- **`smart`** — default balanced coding mode with broad tools, provider-neutral model preferences, managed thinking, and the full coding posture.
-- **`fable`** — Claude Fable 5 preference for Claude Code subscription users, with the same balanced Smart posture and a low/medium/high thinking cycle.
-- **`rush`** — fast, low-token mode for small or mechanical changes.
-- **`deep`** — reasoning-heavy mode for hard debugging, design, reviews, migrations, and multi-step implementation.
+- **`low`** — GPT-5.6 Terra at medium reasoning for quick, focused work, with the Smart prompt posture.
+- **`medium`** — default balanced mode using GPT-5.5 at medium reasoning, the Smart prompt posture, and the inherited 300k context safety profile.
+- **`high`** — GPT-5.5 at extra-high reasoning with the Deep prompt posture for demanding implementation and debugging.
+- **`ultra`** — GPT-5.6 Sol at Pi's maximum supported `xhigh` effort with the Deep prompt posture.
 - **`free`** — exit hatch back to stock Pi behavior with ampi-owned tools removed.
 
 Each locked mode swaps the whole harness together: model preference order, thinking policy, context profile, active-tool allowlist, subagent defaults, and model-visible prompt posture. Mode resolution is deterministic and inspectable; there is no hidden prompt classifier or silent automatic model switching.
@@ -65,7 +65,7 @@ pi install -l npm:@skippermissions/ampi
 Try it for a single run without installing:
 
 ```bash
-pi -e npm:@skippermissions/ampi --ampi-mode smart
+pi -e npm:@skippermissions/ampi --ampi-mode medium
 ```
 
 Keep it up to date:
@@ -88,8 +88,9 @@ Inside Pi:
 ```text
 /ampi-status
 /ampi-status debug
-/mode rush
-/mode deep
+/mode low
+/mode high
+/mode ultra
 /mode free
 ```
 
@@ -100,7 +101,7 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 1. Start in the default AMP-style mode:
 
    ```bash
-   pi -e npm:@skippermissions/ampi --ampi-mode smart
+   pi -e npm:@skippermissions/ampi --ampi-mode medium
    ```
 
 2. Inspect the resolved harness:
@@ -113,9 +114,10 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 3. Switch modes by intent:
 
    ```text
-   /mode rush       # quick, low-token turns
-   /mode deep       # hard reasoning, planning, review, migration work
-   /mode fable      # Claude Fable 5 on a Claude Code subscription
+   /mode low        # quick, focused turns with GPT-5.6 Terra
+   /mode medium     # balanced default with the Smart prompt posture
+   /mode high       # demanding work with the Deep prompt posture
+   /mode ultra      # GPT-5.6 Sol at maximum supported effort
    /mode free       # stock Pi behavior; ampi-owned tools removed
    ```
 
@@ -140,23 +142,23 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 
 | Intent | Mode | What ampi controls |
 | --- | --- | --- |
-| Balanced coding | `smart` | Default model preference order, medium/high thinking toggle, broad AMP-style tools, full coding posture |
-| Claude Code subscription path | `fable` | Claude Fable 5 via `claude-subscription`, low/medium/high thinking toggle, Smart-style tools |
-| Fast edits | `rush` | Fast model preferences, thinking off, lower-token posture, focused tools |
-| Hard work | `deep` | Reasoning-first model preferences, deeper posture, patching/research/history/subagent tools |
+| Quick, focused work | `low` | GPT-5.6 Terra then GPT-5.5, medium reasoning, Smart prompt posture, focused tools |
+| Balanced coding | `medium` | GPT-5.5 then Claude Opus 4.8, medium reasoning, Smart prompt posture, broad tools, 300k context safety profile |
+| Demanding work | `high` | GPT-5.5 then Claude Opus 4.8, extra-high reasoning, Deep prompt posture and broad research/subagent tools |
+| Maximum effort | `ultra` | GPT-5.6 Sol then GPT-5.5, Pi `xhigh` reasoning, Deep prompt posture and broad research/subagent tools |
 | Native Pi | `free` | Releases ampi model/thinking/prompt/tool enforcement |
 
-Mode selection precedence: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` → `smart`.
+Mode selection precedence: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` values are accepted and migrate to `low`, `medium`, `high`, and `ultra`, respectively.
 
 Useful controls:
 
 ```text
 /mode              # show current mode
-/mode deep         # switch mode
+/mode high         # switch mode
 /ampi-status       # current harness status
 /ampi-status debug # model/tool/source diagnostics
 Ctrl+Shift+S       # mode picker  (Alt+M fallback)
-Ctrl+Space         # cycle smart → rush → deep
+Ctrl+Space         # cycle low → medium → high → ultra
 Alt+R              # toggle the active mode's thinking preset where supported
 ```
 
@@ -200,9 +202,9 @@ Non-secret settings live in Pi settings files. Secrets belong in environment var
 ```json
 {
   "ampiCore": {
-    "defaultMode": "rush",
+    "defaultMode": "low",
     "modelPreferences": {
-      "deep": [{ "model": "gpt-5.5", "thinkingLevel": "medium" }]
+      "high": [{ "model": "gpt-5.5", "thinkingLevel": "xhigh" }]
     },
     "subagentModelPreferences": {
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
@@ -263,7 +265,7 @@ Work on ampi from a local clone and load the working tree directly:
 git clone https://github.com/5omeOtherGuy/ampi
 cd ampi
 npm install
-pi -e "$PWD" --ampi-mode smart   # run the local checkout
+pi -e "$PWD" --ampi-mode medium  # run the local checkout
 ```
 
 Checks:

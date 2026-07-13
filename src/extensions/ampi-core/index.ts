@@ -5,7 +5,7 @@ import { registerMmrLifecycleHooks } from "./lifecycle-hooks.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("ampi-mode", {
-    description: "Start with an ampi mode: smart, fable, rush, deep, or free",
+    description: "Start with an ampi mode: low, medium, high, ultra, or free",
     type: "string",
   });
 

@@ -199,7 +199,7 @@ describe("mmr-core persisted state with feature gate decisions", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "gpt-5.5",

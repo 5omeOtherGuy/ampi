@@ -54,8 +54,8 @@ describe("extractExplicitWorkerCliFlags", () => {
 
   it("extracts `--mmr-parent-mode <value>` and `--mmr-parent-mode=<value>`", async () => {
     const { extractExplicitWorkerCliFlags } = await importSource(MODULE);
-    const spaceSeparated = extractExplicitWorkerCliFlags(["--mmr-parent-mode", "rush"]);
-    assert.equal(spaceSeparated.parentMode, "rush");
+    const spaceSeparated = extractExplicitWorkerCliFlags(["--mmr-parent-mode", "low"]);
+    assert.equal(spaceSeparated.parentMode, "low");
     const joined = extractExplicitWorkerCliFlags(["--mmr-parent-mode=smart"]);
     assert.equal(joined.parentMode, "smart");
   });
@@ -76,7 +76,7 @@ describe("extractExplicitWorkerCliFlags", () => {
       "--no-tools",
       "--no-builtin-tools",
       "--mmr-parent",
-      "rush",
+      "low",
     ]);
     assert.equal(result.explicitModel, undefined);
     assert.equal(result.explicitTools, undefined);
@@ -91,16 +91,16 @@ describe("extractExplicitWorkerCliFlags", () => {
       "--tools",
       "x,y",
       "--mmr-parent-mode",
-      "smart",
+      "medium",
       "--model",
       "c/d",
       "--tools",
       "p,q",
       "--mmr-parent-mode",
-      "rush",
+      "low",
     ]);
     assert.equal(explicitModel, "c/d");
     assert.deepEqual([...(explicitTools ?? [])], ["p", "q"]);
-    assert.equal(parentMode, "rush");
+    assert.equal(parentMode, "low");
   });
 });

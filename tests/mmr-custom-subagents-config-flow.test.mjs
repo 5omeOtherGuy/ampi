@@ -84,9 +84,9 @@ describe("mmr-subagents config-flow pure helpers", () => {
 
     const projDest = resolveImportDestination({ plan, destination: "project", cwd: "/work/proj", homeDir: "/home/u" });
     const projInput = buildImportConfigInput(plan, {
-      toolName: "sa__scout", model: "inherit", tools: ["read"], modes: ["deep"], destination: projDest,
+      toolName: "sa__scout", model: "inherit", tools: ["read"], modes: ["high"], destination: projDest,
     });
     assert.equal(projInput.input.projects, undefined, "project destination omits projects scope");
-    assert.deepEqual(projInput.input.modes, ["deep"]);
+    assert.deepEqual(projInput.input.modes, ["high"]);
   });
 });

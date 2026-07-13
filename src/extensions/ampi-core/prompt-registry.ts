@@ -142,11 +142,9 @@ export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = [
 ] as const satisfies readonly MmrPromptFragmentId[];
 
 /**
- * Rush trims the diagrams fragment from the shared coding guidance. Rush
- * optimizes for latency and token economy with terse output, so the
- * multi-line box-drawing example is the lowest-value shared section for it.
- * Every other shared coding fragment (autonomy, discovery, pragmatism,
- * verification, careful actions, file links, collaboration) is retained.
+ * Legacy Rush sequence retained for public compatibility. Canonical Low uses
+ * the full Smart-family default sequence; no current mode uses this trimmed
+ * sequence.
  */
 export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.filter(
   (fragmentId) => fragmentId !== "diagrams",
@@ -311,10 +309,10 @@ function recipe(
 }
 
 export const MMR_MODE_PROMPT_RECIPES = {
-  smart: recipe("smart"),
-  fable: recipe("fable"),
-  rush: recipe("rush", MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE),
-  deep: recipe("deep", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
+  low: recipe("low"),
+  medium: recipe("medium"),
+  high: recipe("high", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
+  ultra: recipe("ultra", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
 
 function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {
@@ -327,10 +325,10 @@ function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {
 }
 
 export const MMR_MODE_PROMPT_TEMPLATES = {
-  smart: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.smart),
-  fable: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.fable),
-  rush: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.rush),
-  deep: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.deep),
+  low: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.low),
+  medium: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.medium),
+  high: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.high),
+  ultra: templateFromRecipe(MMR_MODE_PROMPT_RECIPES.ultra),
 } satisfies Record<PromptedMmrModeKey, MmrModeBlockTemplate>;
 
 export function getMmrModePromptRecipe(mode: string): MmrModePromptRecipe | undefined {

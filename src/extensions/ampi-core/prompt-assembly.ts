@@ -134,8 +134,7 @@ function renderLegacyMmrTail(previousRecipe: MmrModePromptRecipe): string {
  * previously-injected MMR tail when `assembleActiveSurface` re-runs on an
  * already-assembled prompt, so the blocks are replaced rather than duplicated.
  * Mode-independent: the parent prompt fed into a re-assembly may have been
- * produced for a different mode (e.g. a `deep` parent aliased to a `smart` Task
- * base). Includes the legacy all-posture tail shape so already-captured parent
+ * produced for a different canonical parent mode. Includes the legacy all-posture tail shape so already-captured parent
  * prompts from older `ampi` versions still strip cleanly.
  */
 const PREVIOUS_MMR_TAILS: readonly string[] = [

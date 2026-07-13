@@ -7,7 +7,7 @@ after(cleanupLoadedSource);
 function event(overrides = {}) {
   return {
     at: "2026-05-08T00:00:00.000Z",
-    mode: "smart",
+    mode: "medium",
     previousMode: undefined,
     source: "command",
     model: "claude-subscription/claude-opus-4-8",
@@ -23,14 +23,14 @@ describe("mmr-core mode/fallback history ring buffer", () => {
     const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
-    runtime.recordMmrModeEvent(event({ mode: "rush", at: "t1" }));
-    runtime.recordMmrModeEvent(event({ mode: "smart", previousMode: "rush", at: "t2" }));
+    runtime.recordMmrModeEvent(event({ mode: "low", at: "t1" }));
+    runtime.recordMmrModeEvent(event({ mode: "medium", previousMode: "low", at: "t2" }));
 
     const history = runtime.getMmrModeHistory();
     assert.equal(history.length, 2);
-    assert.equal(history[0].mode, "rush");
-    assert.equal(history[1].mode, "smart");
-    assert.equal(history[1].previousMode, "rush");
+    assert.equal(history[0].mode, "low");
+    assert.equal(history[1].mode, "medium");
+    assert.equal(history[1].previousMode, "low");
   });
 
   it("collapses consecutive duplicate events but keeps distinct ones", async () => {
@@ -71,7 +71,7 @@ describe("mmr-core mode/fallback history ring buffer", () => {
 
     const first = runtime.getMmrModeHistory();
     first[0].mode = "MUTATED";
-    assert.equal(runtime.getMmrModeHistory()[0].mode, "smart");
+    assert.equal(runtime.getMmrModeHistory()[0].mode, "medium");
   });
 });
 
@@ -82,7 +82,7 @@ describe("/mmr-status debug mode/fallback history rendering", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "claude-opus-4-8",
@@ -108,11 +108,11 @@ describe("/mmr-status debug mode/fallback history rendering", () => {
     });
 
     const modeHistory = [
-      event({ at: "2026-05-08T00:00:00.000Z", mode: "rush", source: "default", model: "gpt-5.5/x" }),
+      event({ at: "2026-05-08T00:00:00.000Z", mode: "low", source: "default", model: "gpt-5.5/x" }),
       event({
         at: "2026-05-08T00:01:00.000Z",
-        mode: "smart",
-        previousMode: "rush",
+        mode: "medium",
+        previousMode: "low",
         source: "command",
         model: "claude-subscription/claude-opus-4-8",
         fallbackApplied: true,
@@ -127,8 +127,8 @@ describe("/mmr-status debug mode/fallback history rendering", () => {
     // With debug: history block present, newest first, with transition + fallback.
     const debug = formatMmrStatus(state, { debug: true, modeHistory });
     assert.ok(debug.includes("Mode/fallback history (newest first):"));
-    const newestIdx = debug.indexOf("rush → smart (source: command)");
-    const oldestIdx = debug.indexOf("rush (source: default)");
+    const newestIdx = debug.indexOf("low → medium (source: command)");
+    const oldestIdx = debug.indexOf("low (source: default)");
     assert.ok(newestIdx >= 0, "expected newest transition line");
     assert.ok(oldestIdx >= 0, "expected oldest entry line");
     assert.ok(newestIdx < oldestIdx, "newest entry must render before oldest");
@@ -141,7 +141,7 @@ describe("/mmr-status debug mode/fallback history rendering", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "claude-opus-4-8",
