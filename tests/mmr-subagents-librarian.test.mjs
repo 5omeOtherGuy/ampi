@@ -277,7 +277,7 @@ describe("librarian execute() runner dispatch", () => {
       },
       controller.signal,
       undefined,
-      makeCtx(),
+      makeCtx([{ provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 200000 }]),
     );
     assert.equal(calls.length, 1);
     const options = calls[0];
@@ -285,7 +285,7 @@ describe("librarian execute() runner dispatch", () => {
     assert.equal(options.prompt, "Context: Focus on default-branch behavior.\n\nQuery: Explain acme/repo routing.");
     assert.equal(options.cwd, "/abs/project");
     assert.deepEqual([...options.tools], [...LIBRARIAN_WORKER_TOOLS]);
-    assert.equal(options.model, "claude-subscription/claude-opus-4-6");
+    assert.equal(options.model, "openai-codex/gpt-5.6-sol");
     assert.equal(options.systemPrompt, "LIBRARIAN SYSTEM PROMPT");
     assert.equal(options.systemPromptDelivery, "replace");
     // Every run registers in the async-task registry, which owns the worker
@@ -298,7 +298,7 @@ describe("librarian execute() runner dispatch", () => {
     assert.equal(result.details.status, "success");
     assert.equal(result.details.query, "Explain acme/repo routing.");
     assert.equal(result.details.context, "Focus on default-branch behavior.");
-    assert.equal(result.details.model, "claude-subscription/claude-opus-4-6");
+    assert.equal(result.details.model, "openai-codex/gpt-5.6-sol");
     assert.deepEqual([...result.details.workerTools], [...LIBRARIAN_WORKER_TOOLS]);
   });
 

@@ -11,7 +11,7 @@
 //   4. Worker tool allowlist matches the mmr-core oracle profile (7
 //      tools, including those owned by sibling extensions whose
 //      shipping state is independent).
-//   5. Model selector prefers GPT-5.5, falls back to Claude Opus 4.6,
+//   5. Model selector prefers GPT-5.6 Sol at high reasoning, falls back to Claude Opus 4.6,
 //      returns undefined when neither is registered.
 //   6. execute() rejects missing/blank task before spawning a worker.
 //   7. execute() calls the injected runner with profileName="oracle",
@@ -131,7 +131,7 @@ describe("oracle tool definition", () => {
     const tool = createOracleTool();
     assert.match(tool.description, /Consult the oracle/);
     assert.match(tool.description, /AI advisor/);
-    assert.match(tool.description, /GPT-5\.5 reasoning model/);
+    assert.match(tool.description, /GPT-5\.6 Sol high reasoning model/);
     assert.match(tool.description, /The oracle has access to the following tools:/);
     assert.match(tool.description, /^- read$/m);
     assert.match(tool.description, /^- grep$/m);
@@ -262,14 +262,14 @@ describe("oracle worker system prompt", () => {
 });
 
 describe("ORACLE_DEFAULT_MODEL_PREFERENCES", () => {
-  it("lists GPT-5.5 first and Claude Opus 4.6 as the fallback", async () => {
+  it("lists GPT-5.6 Sol first and Claude Opus 4.6 as the fallback", async () => {
     const { ORACLE_DEFAULT_MODEL_PREFERENCES } = await importSource(ORACLE_MODULE);
     const prefs = [...ORACLE_DEFAULT_MODEL_PREFERENCES];
-    const firstGpt = prefs.findIndex((entry) => /(^|\/)gpt-5\.5$/.test(entry));
+    const firstGpt = prefs.findIndex((entry) => /(^|\/)gpt-5\.6-sol$/.test(entry));
     const firstOpus = prefs.findIndex((entry) => /(^|\/)claude-opus-4-6$/.test(entry));
-    assert.notEqual(firstGpt, -1, "expected a GPT-5.5 preference");
+    assert.notEqual(firstGpt, -1, "expected a GPT-5.6 Sol preference");
     assert.notEqual(firstOpus, -1, "expected a Claude Opus 4.6 preference");
-    assert.ok(firstGpt < firstOpus, "GPT-5.5 must precede Claude Opus 4.6");
+    assert.ok(firstGpt < firstOpus, "GPT-5.6 Sol must precede Claude Opus 4.6");
   });
 });
 
@@ -326,7 +326,7 @@ describe("oracle execute() seam", () => {
       { task: "Review the auth module." },
       controller.signal,
       undefined,
-      { cwd: "/abs/project", modelRegistry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.5" }]) },
+      { cwd: "/abs/project", modelRegistry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.6-sol" }]) },
     );
     assert.equal(calls.length, 1);
     const options = calls[0];
@@ -347,10 +347,10 @@ describe("oracle execute() seam", () => {
     assert.ok(options.signal instanceof AbortSignal, "runner must receive the registry-owned task signal");
     assert.notEqual(options.signal, controller.signal);
     assert.equal(options.signal.aborted, false);
-    assert.equal(options.model, "openai-codex/gpt-5.5");
+    assert.equal(options.model, "openai-codex/gpt-5.6-sol");
     assert.match(options.prompt, /Task: Review the auth module\./);
     assert.equal(typeof options.outputByteLimit, "number");
-    assert.equal(result.details.model, "openai-codex/gpt-5.5");
+    assert.equal(result.details.model, "openai-codex/gpt-5.6-sol");
     assert.equal(result.details.cwd, "/abs/project");
     assert.deepEqual([...result.details.workerTools], [...ORACLE_WORKER_TOOLS]);
   });
@@ -511,12 +511,12 @@ describe("oracle execute() seam", () => {
       cwd: "/abs/project",
       modelRegistry: makeRegistry([
         { provider: "openai", id: "gpt-5.4" },
-        { provider: "openai-codex", id: "gpt-5.5" },
+        { provider: "openai-codex", id: "gpt-5.6-sol" },
         { provider: "claude-subscription", id: "claude-opus-4-6" },
       ]),
     };
     await tool.execute("c", { task: "review" }, undefined, undefined, ctx);
-    assert.equal(calls[0].model, "openai-codex/gpt-5.5");
+    assert.equal(calls[0].model, "openai-codex/gpt-5.6-sol");
   });
 
   it("forwards runner progress as a Pi tool update with renderable child-tool activity", async () => {
@@ -864,10 +864,10 @@ describe("oracle parent↔child route agreement", () => {
     const { resolveMmrSubagentInvocation } = await importSource(SUBAGENT_RESOLVER_MODULE);
     const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
     const profile = getMmrSubagentProfile("oracle");
-    // Registry includes the profile's primary (GPT-5.5) plus the Claude
-    // Opus 4.6 fallback so the resolver has a real route to pick.
+    // Registry includes the profile's primary (GPT-5.6 Sol) plus the Claude
+    // Opus 4.6 fallback; the primary must win whenever it is available.
     const registry = makeRegistry([
-      { provider: "openai-codex", id: "gpt-5.5" },
+      { provider: "openai-codex", id: "gpt-5.6-sol" },
       { provider: "claude-subscription", id: "claude-opus-4-6" },
     ]);
 

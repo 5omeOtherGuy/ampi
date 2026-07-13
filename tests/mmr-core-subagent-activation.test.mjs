@@ -222,7 +222,7 @@ describe("mmr-core subagent activation", () => {
       flags: { "mmr-subagent": "oracle" },
     });
     const { ctx } = createContext({
-      models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+      models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
     });
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
@@ -255,7 +255,7 @@ describe("mmr-core subagent activation", () => {
       flags: { "mmr-subagent": "oracle" },
     });
     const { ctx } = createContext({
-      models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+      models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
     });
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
@@ -807,7 +807,7 @@ describe("mmr-core subagent activation", () => {
       flags: { "mmr-subagent": "oracle" },
     });
     const { ctx, notifications } = createContext({
-      models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+      models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
     });
     extension(pi);
 
