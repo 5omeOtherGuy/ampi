@@ -16,14 +16,14 @@ describe("mmr-core mode table", () => {
     assert.equal(getMmrMode("low").promptRoute, "default");
 
     assert.deepEqual(getMmrMode("medium").modelPreferences, [
-      { model: "gpt-5.5" },
+      { model: "gpt-5.6-sol" },
       { model: "claude-opus-4-8" },
     ]);
     assert.equal(getMmrMode("medium").thinkingLevel, "medium");
     assert.equal(getMmrMode("medium").promptRoute, "default");
 
     assert.deepEqual(getMmrMode("high").modelPreferences, [
-      { model: "gpt-5.5" },
+      { model: "gpt-5.6-sol" },
       { model: "claude-opus-4-8" },
     ]);
     assert.equal(getMmrMode("high").thinkingLevel, "xhigh");
@@ -51,8 +51,8 @@ describe("mmr-core mode table", () => {
     const list = formatMmrModeList();
 
     assert.match(list, /low\s+gpt-5\.6-terra → gpt-5\.5 — thinking: OpenAI Responses medium \(summary auto\); context: 128k max out/);
-    assert.match(list, /medium\s+gpt-5\.5 → claude-opus-4-8 — thinking: OpenAI Responses medium \(summary auto\); context: 300k total \/ 128k max out \/ 172k max in/);
-    assert.match(list, /high\s+gpt-5\.5 → claude-opus-4-8 — thinking: OpenAI Responses xhigh \(summary auto\); context: 128k max out/);
+    assert.match(list, /medium\s+gpt-5\.6-sol → claude-opus-4-8 — thinking: OpenAI Responses medium \(summary auto\); context: 300k total \/ 128k max out \/ 172k max in/);
+    assert.match(list, /high\s+gpt-5\.6-sol → claude-opus-4-8 — thinking: OpenAI Responses xhigh \(summary auto\); context: 128k max out/);
     assert.match(list, /ultra\s+gpt-5\.6-sol → gpt-5\.5 — thinking: OpenAI Responses xhigh \(summary auto\); context: 128k max out/);
   });
 

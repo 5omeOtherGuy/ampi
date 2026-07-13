@@ -15,6 +15,7 @@ const MODELS = [
   { provider: "claude-subscription", id: "claude-opus-4-8", contextWindow: 1_000_000, maxTokens: 128_000 },
   { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400_000, maxTokens: 128_000 },
   { provider: "openai-codex", id: "gpt-5.6-terra", contextWindow: 372_000, maxTokens: 128_000 },
+  { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 },
 ];
 
 function createContext() {
@@ -56,7 +57,7 @@ describe("mmr-core lifecycle smoke", () => {
     const footerLines = footer.render(100);
     assert.equal(footerLines.length, 2);
     assert.match(footerLines[0], /\(main\)$/);
-    assert.match(footerLines[1], /\?%\/300k \(auto\)\s+gpt-5\.5 • medium$/);
+    assert.match(footerLines[1], /\?%\/300k \(auto\)\s+gpt-5\.6-sol • medium$/);
 
     await commands.get("mode").handler("low", ctx);
     assert.equal(runtime.getMmrModeState()?.mode, "low");

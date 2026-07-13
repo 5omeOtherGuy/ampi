@@ -41,7 +41,7 @@ describe("withMmrModeContextCap (pure)", () => {
 
   it("caps Medium by cloning the model and passes the other tiers through unchanged", async () => {
     const { withMmrModeContextCap } = await importContextCap();
-    const mediumModel = { provider: "openai-codex", id: "gpt-5.5", contextWindow: 372_000, maxTokens: 128_000 };
+    const mediumModel = { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 };
     const capped = withMmrModeContextCap("medium", mediumModel);
     assert.notEqual(capped, mediumModel);
     assert.equal(capped.contextWindow, 300_000);
@@ -197,7 +197,7 @@ describe("mmr-core defensive reassertion", () => {
     // High routes to an OpenAI model; give it a 1M native window to prove
     // uncapped tiers preserve Pi's registered window.
     const models = [
-      { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 128_000 },
+      { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 1_000_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];
@@ -214,7 +214,7 @@ describe("mmr-core defensive reassertion", () => {
 
     await handlers.get("input")({ type: "input", text: "hi", source: "interactive" }, ctx);
     assert.equal(setModelCalls.at(-1).contextWindow, 1_000_000, "input hook keeps the native window");
-    assert.equal(setModelCalls.at(-1).id, "gpt-5.5");
+    assert.equal(setModelCalls.at(-1).id, "gpt-5.6-sol");
   });
 
   it("does not reassert while a subagent worker is active", async () => {
@@ -245,8 +245,8 @@ describe("mmr-core defensive reassertion", () => {
   it("does not reassert when the active model drifted to a different provider/id (genuine native change)", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const models = [
-      { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 32_000 },
       { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 },
+      { provider: "openai", id: "gpt-5.5", contextWindow: 1_000_000, maxTokens: 32_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];

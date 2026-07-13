@@ -27,7 +27,7 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+Space` cycles
 
 `low`, `medium`, `high`, and `ultra` apply a locked-mode profile (model preferences, request policy, context profile, active-tool allowlist, ampi-owned prompt block). `free` releases all enforcement and restores the pre-ampi baseline.
 
-- **Model resolution** is provider-neutral against the live Pi registry. Defaults are Low: GPT-5.6 Terra → GPT-5.5; Medium: GPT-5.5 → Claude Opus 4.8; High: GPT-5.5 → Claude Opus 4.8; Ultra: GPT-5.6 Sol → GPT-5.5. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route.
+- **Model resolution** is provider-neutral against the live Pi registry. Defaults are Low: GPT-5.6 Terra → GPT-5.5; Medium: GPT-5.6 Sol → Claude Opus 4.8; High: GPT-5.6 Sol → Claude Opus 4.8; Ultra: GPT-5.6 Sol → GPT-5.5. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route.
 - **Prompt families**: Low and Medium use the Smart system-prompt family. High and Ultra use the Deep system-prompt family and Deep fragment ordering.
 - **Pi baseline thinking** per mode: Low/Medium `medium`; High/Ultra `xhigh`. Request-level thinking is enforced separately by the per-mode request-policy hook.
 - **Thinking-level toggle (`alt+r`)**: Medium cycles `medium ↔ high`; High cycles `xhigh ↔ medium`; Ultra cycles `xhigh → high → medium → xhigh`. Low is intentionally not toggleable. The toggle drives both Pi's thinking level and OpenAI Responses reasoning effort, is session-scoped, and uses a dedicated key because Pi reserves `shift+tab` (`app.thinking.cycle`).

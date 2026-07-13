@@ -17,8 +17,8 @@ Use `ampi` as-is for the intended experience. Advanced users can override models
 ### AMP-style harness modes
 
 - **`low`** — GPT-5.6 Terra at medium reasoning for quick, focused work, with the Smart prompt posture.
-- **`medium`** — default balanced mode using GPT-5.5 at medium reasoning, the Smart prompt posture, and the inherited 300k context safety profile.
-- **`high`** — GPT-5.5 at extra-high reasoning with the Deep prompt posture for demanding implementation and debugging.
+- **`medium`** — default balanced mode using GPT-5.6 Sol at medium reasoning, the Smart prompt posture, and the inherited 300k context safety profile.
+- **`high`** — GPT-5.6 Sol at extra-high reasoning with the Deep prompt posture for demanding implementation and debugging.
 - **`ultra`** — GPT-5.6 Sol at Pi's maximum supported `xhigh` effort with the Deep prompt posture.
 - **`free`** — exit hatch back to stock Pi behavior with ampi-owned tools removed.
 
@@ -115,8 +115,8 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 
    ```text
    /mode low        # quick, focused turns with GPT-5.6 Terra
-   /mode medium     # balanced default with the Smart prompt posture
-   /mode high       # demanding work with the Deep prompt posture
+   /mode medium     # balanced default on GPT-5.6 Sol with the Smart prompt posture
+   /mode high       # demanding GPT-5.6 Sol work with the Deep prompt posture
    /mode ultra      # GPT-5.6 Sol at maximum supported effort
    /mode free       # stock Pi behavior; ampi-owned tools removed
    ```
@@ -143,8 +143,8 @@ The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `
 | Intent | Mode | What ampi controls |
 | --- | --- | --- |
 | Quick, focused work | `low` | GPT-5.6 Terra then GPT-5.5, medium reasoning, Smart prompt posture, focused tools |
-| Balanced coding | `medium` | GPT-5.5 then Claude Opus 4.8, medium reasoning, Smart prompt posture, broad tools, 300k context safety profile |
-| Demanding work | `high` | GPT-5.5 then Claude Opus 4.8, extra-high reasoning, Deep prompt posture and broad research/subagent tools |
+| Balanced coding | `medium` | GPT-5.6 Sol then Claude Opus 4.8, medium reasoning, Smart prompt posture, broad tools, 300k context safety profile |
+| Demanding work | `high` | GPT-5.6 Sol then Claude Opus 4.8, extra-high reasoning, Deep prompt posture and broad research/subagent tools |
 | Maximum effort | `ultra` | GPT-5.6 Sol then GPT-5.5, Pi `xhigh` reasoning, Deep prompt posture and broad research/subagent tools |
 | Native Pi | `free` | Releases ampi model/thinking/prompt/tool enforcement |
 

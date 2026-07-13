@@ -7,7 +7,7 @@ import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs"
 
 after(cleanupLoadedSource);
 
-const MEDIUM_MODEL = { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400_000, maxTokens: 128_000 };
+const MEDIUM_MODEL = { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 400_000, maxTokens: 128_000 };
 const LOW_MODEL = { provider: "openai-codex", id: "gpt-5.6-terra", contextWindow: 372_000, maxTokens: 128_000 };
 const HIGH_MODEL = MEDIUM_MODEL;
 
@@ -45,7 +45,7 @@ describe("mmr-core before_provider_request hook", () => {
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
     const payload = {
-      model: "gpt-5.5",
+      model: "gpt-5.6-sol",
       input: [],
       instructions: "system",
       max_output_tokens: 4096,
@@ -68,7 +68,7 @@ describe("mmr-core before_provider_request hook", () => {
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
     await shortcuts.get("alt+r").handler(ctx);
 
-    const payload = { model: "gpt-5.5", input: [], instructions: "system", reasoning: { effort: "low" } };
+    const payload = { model: "gpt-5.6-sol", input: [], instructions: "system", reasoning: { effort: "low" } };
     const result = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);
 
     assert.deepEqual(result.reasoning, { effort: "high", summary: "auto" });
@@ -147,7 +147,7 @@ describe("mmr-core before_provider_request hook", () => {
 
     await commands.get("mode").handler("high", ctx);
 
-    const payload = { model: "gpt-5.5", input: [], stream: true, max_output_tokens: 4096 };
+    const payload = { model: "gpt-5.6-sol", input: [], stream: true, max_output_tokens: 4096 };
     const result = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);
 
     assert.equal("max_output_tokens" in result, false, "openai-codex rejects max_output_tokens even when Pi omits Codex-only payload markers");

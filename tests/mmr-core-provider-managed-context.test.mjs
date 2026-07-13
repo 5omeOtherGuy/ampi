@@ -94,12 +94,12 @@ describe("mmr-core provider-managed context selection", () => {
     assert.equal(models[0].contextWindow, 1_000_000, "registered model remains unchanged");
   });
 
-  it("uses GPT-5.5 as Medium's primary route with the inherited 300k safety window", async () => {
+  it("uses GPT-5.6 Sol as Medium's primary route with the inherited 300k safety window", async () => {
     const runtime = await importRuntime();
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
 
     const models = [
-      { provider: "openai-codex", id: "gpt-5.5", contextWindow: 400_000, maxTokens: 128_000 },
+      { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 372_000, maxTokens: 128_000 },
     ];
     const handlers = new Map();
     const setModelCalls = [];
@@ -113,14 +113,14 @@ describe("mmr-core provider-managed context selection", () => {
     assert.equal(setModelCalls.length, 1);
     assert.notEqual(setModelCalls[0], models[0]);
     assert.equal(setModelCalls[0].provider, "openai-codex");
-    assert.equal(setModelCalls[0].id, "gpt-5.5");
+    assert.equal(setModelCalls[0].id, "gpt-5.6-sol");
     assert.equal(setModelCalls[0].contextWindow, 300_000);
-    assert.equal(models[0].contextWindow, 400_000, "registered model remains unchanged");
+    assert.equal(models[0].contextWindow, 372_000, "registered model remains unchanged");
 
     const state = runtime.getMmrModeState();
     assert.equal(state?.mode, "medium");
     assert.equal(state?.provider, "openai-codex");
-    assert.equal(state?.model, "gpt-5.5");
+    assert.equal(state?.model, "gpt-5.6-sol");
     assert.equal(state?.thinkingLevel, "medium");
     assert.equal(state?.effectiveContextWindow, 300_000);
 

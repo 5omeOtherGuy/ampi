@@ -7,10 +7,9 @@ import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs"
 
 after(cleanupLoadedSource);
 
-const MEDIUM_MODEL = { provider: "openai-codex", id: "gpt-5.5" };
+const SOL_MODEL = { provider: "openai-codex", id: "gpt-5.6-sol" };
 const LOW_MODEL = { provider: "openai-codex", id: "gpt-5.6-terra" };
-const ULTRA_MODEL = { provider: "openai-codex", id: "gpt-5.6-sol" };
-const MODELS = [LOW_MODEL, MEDIUM_MODEL, ULTRA_MODEL];
+const MODELS = [LOW_MODEL, SOL_MODEL];
 
 function createState(mode) {
   const displayName = mode[0].toUpperCase() + mode.slice(1);
@@ -157,7 +156,7 @@ describe("mmr-core mode shortcuts", () => {
     assert.match(selectCalls[0].title, /current: medium/);
     assert.equal(runtime.getMmrModeState()?.mode, "high");
     assert.equal(calls.setModel.length, 1);
-    assert.equal(calls.setModel[0].id, MEDIUM_MODEL.id);
+    assert.equal(calls.setModel[0].id, SOL_MODEL.id);
     assert.equal(calls.appendEntry.at(-1)?.[1].mode, "high");
   });
 
@@ -187,7 +186,7 @@ describe("mmr-core mode shortcuts", () => {
     await commands.get("mode").handler("ultra", ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "ultra");
-    assert.equal(calls.setModel.at(-1)?.id, ULTRA_MODEL.id);
+    assert.equal(calls.setModel.at(-1)?.id, SOL_MODEL.id);
     assert.equal(calls.appendEntry.at(-1)?.[1].mode, "ultra");
   });
 
