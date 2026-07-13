@@ -110,7 +110,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       });
       const { ctx } = createMockExtensionContext({
         cwd: tempRoot,
-        models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+        models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
         authenticated: true,
       });
       extension(pi);
@@ -150,7 +150,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       });
       const { ctx } = createMockExtensionContext({
         cwd: tempRoot,
-        models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+        models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
         authenticated: true,
       });
       extension(pi);
@@ -184,7 +184,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       });
       const { ctx } = createMockExtensionContext({
         cwd: tempRoot,
-        models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+        models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
         authenticated: true,
       });
       extension(pi);
@@ -221,7 +221,7 @@ describe("mmr-core locked-mode extra tools - activation", () => {
       });
       const { ctx, notifications } = createMockExtensionContext({
         cwd: tempRoot,
-        models: [{ provider: "openai-codex", id: "gpt-5.5" }],
+        models: [{ provider: "openai-codex", id: "gpt-5.6-sol" }],
         authenticated: true,
       });
       extension(pi);

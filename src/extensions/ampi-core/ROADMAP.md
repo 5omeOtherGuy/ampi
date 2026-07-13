@@ -25,8 +25,8 @@ Current modes:
 | Mode | Current target model | Thinking | Prompt route |
 | --- | --- | --- | --- |
 | `low` | `gpt-5.6-terra` → `gpt-5.5` | OpenAI Responses medium | `default` (Smart family) |
-| `medium` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses medium | `default` (Smart family) |
-| `high` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses xhigh | `deep` |
+| `medium` | `gpt-5.6-sol` → `claude-opus-4-8` | OpenAI Responses medium | `default` (Smart family) |
+| `high` | `gpt-5.6-sol` → `claude-opus-4-8` | OpenAI Responses xhigh | `deep` |
 | `ultra` | `gpt-5.6-sol` → `gpt-5.5` | OpenAI Responses xhigh (maximum Pi lane) | `deep` |
 | `free` | native Pi controls | native Pi controls | Pi standard prompt |
 
@@ -75,7 +75,7 @@ Tasks:
 
 - Add an explicit zero-active-tools policy instead of blindly accepting `pi.setActiveTools([])`. ✅ Implemented as fail-closed: refuse activation before model/tool mutation, keep previous ampi state/tools/model, and show a clear error.
 - Add model resolver policy for unavailable models. ✅ Baseline implemented with subscription-first route resolution and ordered model fallbacks.
-- Resolve deep-mode provider mismatch. ✅ Baseline uses provider-neutral `gpt-5.5` and lets the resolver prefer `openai-codex` over API providers.
+- Resolve deep-mode provider mismatch. ✅ Baseline uses provider-neutral `gpt-5.6-sol` and lets the resolver prefer `openai-codex` over API providers.
 - Add lifecycle smoke tests around extension load, mode command, and prompt hook behavior. ✅
 - Expand `/ampi-status` to show mode source, model found/applied, active/missing/deferred tools, and policy warnings. ✅
 

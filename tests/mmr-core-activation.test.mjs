@@ -64,7 +64,7 @@ describe("mmr-core mode activation", () => {
     assert.deepEqual(calls.appendEntry, []);
     assert.equal(notifications.at(-1)?.level, "error");
     assert.match(notifications.at(-1)?.message, /Could not activate High mode/);
-    assert.match(notifications.at(-1)?.message, /gpt-5\.5/);
+    assert.match(notifications.at(-1)?.message, /gpt-5\.6-sol/);
     assert.match(notifications.at(-1)?.message, /claude-opus-4-8/);
     assert.doesNotMatch(notifications.at(-1)?.message, /gpt-5\.4/);
   });
@@ -100,7 +100,7 @@ describe("mmr-core mode activation", () => {
       allTools: [{ name: "unrelated" }],
       setModelResult: true,
     });
-    const { ctx, notifications } = createContext([{ provider: "openai-codex", id: "gpt-5.5" }], { authenticated: true });
+    const { ctx, notifications } = createContext([{ provider: "openai-codex", id: "gpt-5.6-sol" }], { authenticated: true });
     extension(pi);
 
     await commands.get("mode").handler("high", ctx);
@@ -133,7 +133,7 @@ describe("mmr-core mode activation", () => {
       ],
       setModelResult: true,
     });
-    const { ctx } = createContext([{ provider: "openai-codex", id: "gpt-5.5" }], { authenticated: true });
+    const { ctx } = createContext([{ provider: "openai-codex", id: "gpt-5.6-sol" }], { authenticated: true });
     extension(pi);
 
     await commands.get("mode").handler("high", ctx);
@@ -153,6 +153,7 @@ describe("mmr-core mode activation", () => {
       { provider: "claude-subscription", id: "claude-haiku-4-5" },
       { provider: "openai-codex", id: "gpt-5.4" },
       { provider: "openai-codex", id: "gpt-5.5" },
+      { provider: "openai-codex", id: "gpt-5.6-sol" },
     ];
     const { pi, calls, commands } = createPi({
       allTools: [
@@ -223,7 +224,7 @@ describe("mmr-core mode activation", () => {
       ],
       setModelResult: true,
     });
-    const { ctx, notifications } = createContext([{ provider: "openai-codex", id: "gpt-5.5" }], { authenticated: true });
+    const { ctx, notifications } = createContext([{ provider: "openai-codex", id: "gpt-5.6-sol" }], { authenticated: true });
     extension(pi);
 
     await commands.get("mode").handler("high", ctx);
