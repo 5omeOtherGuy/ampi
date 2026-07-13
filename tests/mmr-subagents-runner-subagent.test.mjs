@@ -92,7 +92,7 @@ describe("runMmrSubagentWorker — invocation shape", () => {
     const promise = runMmrSubagentWorker(
       {
         profileName: "task-subagent",
-        parentMode: "rush",
+        parentMode: "low",
         prompt: "Find routing code",
         cwd: "/tmp/project",
         model: "openai-codex/gpt-5.4-mini",
@@ -113,7 +113,7 @@ describe("runMmrSubagentWorker — invocation shape", () => {
       "--ampi-subagent",
       "task-subagent",
       "--ampi-parent-mode",
-      "rush",
+      "low",
       "--model",
       "openai-codex/gpt-5.4-mini",
       "--tools",

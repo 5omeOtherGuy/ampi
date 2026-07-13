@@ -56,11 +56,13 @@ import { DEFAULT_MMR_MODE, MMR_MODE_KEYS, MMR_MODES, getMmrMode, isMmrModeKey } 
 import type { MmrModeDefinition, MmrModeKey } from "@skippermissions/ampi";
 ```
 
-- `MMR_MODE_KEYS`: ordered tuple `("smart", "fable", "rush", "deep", "free")`.
+- `MMR_MODE_KEYS`: ordered tuple `("low", "medium", "high", "ultra", "free")`.
 - `MMR_MODES`: read-only mode table.
-- `getMmrMode(key)`: returns the `MmrModeDefinition` for a key.
-- `isMmrModeKey(value)`: type guard for incoming user/session strings.
-- `DEFAULT_MMR_MODE`: `"smart"`.
+- `getMmrMode(key)`: returns the `MmrModeDefinition` for a canonical key.
+- `isMmrModeKey(value)`: type guard for canonical mode strings.
+- `DEFAULT_MMR_MODE`: `"medium"`.
+
+Runtime/configuration boundaries also accept the migration aliases `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`; persisted state is normalized to canonical names.
 
 ## Mode state
 
@@ -82,14 +84,12 @@ import type { MmrModeState } from "@skippermissions/ampi";
 context profile after provider-size clamping. `undefined` means no ampi
 override for that dimension (use the selected provider's registered
 behavior). These values are not persisted and are never written to provider
-payloads. ampi-core passes the selected registry model directly to
-`pi.setModel(...)`; Pi-native auto-compaction follows the selected provider
-route's registered model metadata. Only `smart` (236k max-input under its
-300k profile) carries an ampi context profile before provider-size
-clamping; the other locked modes
-(`fable`, `rush`, `deep`) carry no ampi context override and run
-at the selected provider's registered window. `free` carries no ampi
-context profile because Pi-native model/context controls stay in charge.
+payloads. Medium inherits the former Smart profile: 300k total, 172k max input,
+and a 128k output reservation. The selected registry model is cloned and capped
+down to 300k before `pi.setModel(...)`, so Pi-native compaction follows that
+window. Low, High, and Ultra carry no ampi context override and run at the
+selected provider's registered window. `free` carries no ampi context profile
+because Pi-native model/context controls stay in charge.
 
 `MmrModeState.baselineCaptured` / `baselineModel` are runtime-only
 status diagnostics. They show whether ampi-core has a pre-ampi restore
@@ -247,15 +247,14 @@ allowlist.
   the first registered + authenticated provider/model from the profile's
   preferences via `selectMmrModelRoute`, then layers on subagent-specific
   policy:
-  - resolves `promptBaseMode` from `profile.baseMode` (concrete mode key,
-    or `from-parent` aliased through `deep → smart`);
+  - resolves `promptBaseMode` from `profile.baseMode` (a concrete canonical mode
+    key, or `from-parent` using the canonical parent tier);
   - computes the effective `workerTools` as
     `(profile.tools \ profile.denyTools) ∩ registeredTools`;
   - fails closed when `profile.tools.length > 0` collapses to an empty
     `workerTools` (intentional `tools: []` profiles pass through);
   - applies `profile.modeModelPreferences[promptBaseMode ?? parentMode]`
-    when present so mode-derived workers can use parent-mode-specific
-    routes while preserving prompt-base aliases such as `deep → smart`;
+    when present so mode-derived workers can use parent-tier-specific routes;
   - validates any caller-supplied `explicitModel` against the resolved
     route and `explicitTools` against `workerTools` order-independent;
   - forwards `modelPreferencesOverride` for settings-driven Task model preferences
@@ -341,10 +340,8 @@ import { getMmrPromptRoute } from "@skippermissions/ampi";
 import type { MmrPromptRoute } from "@skippermissions/ampi";
 ```
 
-- `getMmrPromptRoute(modeKey)` — returns `"default" | "rush" | "deep"`.
-  Prompt-aware extensions branch on this rather than reading mode
-  definitions or `MmrModeState.promptRoute` directly through internal
-  modules.
+- `getMmrPromptRoute(modeKey)` — returns `"default" | "deep"`.
+  Low/Medium resolve to `default`; High/Ultra resolve to `deep`.
 
 ## Policy diagnostics
 

@@ -39,9 +39,7 @@ import { AMPI_MODE_STATE_ENTRY, createMmrModeState, findLatestPersistedModeState
 import { updateMmrStatus } from "./status.js";
 import type { MmrCoreSettings, MmrLockedModeKey, MmrModeKey, MmrModeSelectionSource, MmrModeState, MmrModelPreference, MmrRejectedModeSource } from "./types.js";
 
-// Hotkey rotations (picker + cycle) draw from the hotkey-visible mode set, so
-// hotkey-hidden modes (e.g. `fable`) are reachable only via `/mode <key>`. The
-// cycle additionally drops `free`, which the picker still offers.
+// The picker includes every canonical mode; the cycle drops `free`.
 const CYCLABLE_MMR_MODE_KEYS: MmrModeKey[] = MMR_HOTKEY_MODE_KEYS.filter((mode) => mode !== "free");
 
 export interface ApplyModeOptions {
@@ -124,7 +122,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     "- MMR tool allowlist is disabled.",
     "- Standard Pi tools are restored.",
     "",
-    "Use /mode smart, /mode fable, /mode rush, or /mode deep to re-enter a managed mode.",
+    "Use /mode low, /mode medium, /mode high, or /mode ultra to re-enter a managed mode.",
   ].join("\n");
 
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
@@ -137,8 +135,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let applyingMmrMode = false;
   let modeCycleQueue: Promise<void> = Promise.resolve();
   let thinkingToggleQueue: Promise<void> = Promise.resolve();
-  // Per-mode, session-scoped thinking-level toggle overrides for toggleable
-  // modes (smart/fable/deep). Lives only in process memory: persisted mode
+  // Per-mode, session-scoped thinking-level overrides for Medium, High, and
+  // Ultra. Lives only in process memory: persisted mode
   // state records the applied thinking level for diagnostics, but the toggle
   // default is re-derived on each apply so stale persisted levels never pin a
   // mode away from its default after a reload.
@@ -352,8 +350,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
 
     captureBaseline(ctx);
 
-    // Toggleable modes (smart/fable/deep) carry a runtime thinking-level
-    // override flipped by the MMR-owned alt+r shortcut. Re-derive the effective level on every
+    // Toggleable modes carry a runtime thinking-level override flipped by the
+    // ampi-owned alt+r shortcut. Re-derive the effective level on every
     // apply (override or the mode default), force every candidate to it so the
     // active and fallback routes agree with the wire reasoning effort, and use
     // it as the mode thinking level passed to model resolution.
@@ -402,9 +400,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         modeThinkingLevel: effectiveThinkingLevel,
         registry: ctx.modelRegistry,
         // Cap the active model's context window to the mode's advertised
-        // profile window (e.g. smart pins Opus to 300k). The GPT/Codex-primary
-        // modes set no profile, so this is a no-op and they run at Pi's own
-        // registered window. Native Pi stores the passed object directly and
+        // profile window (Medium inherits a 300k cap). Modes without a profile
+        // run at Pi's own registered window. Native Pi stores the passed object directly and
         // keys all compaction/overflow/footer/usage off `model.contextWindow`,
         // so a capped clone makes Pi compact and display exactly as it would at
         // the capped window. No-op for `free`, for modes without a cap, and for
@@ -429,7 +426,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // Apply the same mode cap used at the setModel call site so policy
       // clamping and the recorded `registeredContextWindow` reflect the
       // window Pi will actually compact against, not the uncapped registry
-      // value. Truthful status: for smart this collapses both to 300k, so the
+      // value. For Medium this collapses both to 300k, so the
       // `context.registered-exceeds-profile` diagnostic stays quiet.
       const selectedModel = registeredModel ? withMmrModeContextCap(mode.key, registeredModel) : undefined;
       const basePolicy = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode.key], selectedModel);
@@ -547,7 +544,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   }
 
   /**
-   * Re-apply the smart-mode context cap if the active model drifted back to an
+   * Re-apply Medium's context cap if the active model drifted back to an
    * uncapped window. The only Pi path that re-resolves the active model from
    * the registry (wiping our capped clone) is `_refreshCurrentModelFromRegistry`,
    * reached from provider (un)registration — e.g. `/login` or another
@@ -651,7 +648,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (!state || !isToggleableMmrMode(state.mode)) {
       if (state && ctx.hasUI !== false) {
         ctx.ui.notify(
-          `MMR thinking toggle is only available in smart, fable, or deep (current: ${state?.mode ?? "none"}).`,
+          `MMR thinking toggle is only available in medium, high, or ultra (current: ${state?.mode ?? "none"}).`,
           "info",
         );
       }

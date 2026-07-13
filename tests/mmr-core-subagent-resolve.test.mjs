@@ -298,6 +298,7 @@ describe("resolveMmrSubagentInvocation", () => {
   function makeTaskRegistry() {
     return makeRegistry([
       { provider: "claude-subscription", id: "claude-opus-4-8" },
+      { provider: "openai-codex", id: "gpt-5.6-terra" },
       { provider: "openai-codex", id: "gpt-5.5" },
       { provider: "claude-subscription", id: "claude-opus-4-6" },
       { provider: "claude-subscription", id: "claude-haiku-4-5-20251001" },
@@ -317,12 +318,10 @@ describe("resolveMmrSubagentInvocation", () => {
     const registry = makeTaskRegistry();
 
     const cases = [
-      { parentMode: "smart",      expectedBase: "smart",      provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
-      { parentMode: "fable", expectedBase: "fable", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
-      { parentMode: "rush",       expectedBase: "rush",       provider: "openai-codex",       model: "gpt-5.5",              thinkingLevel: "off"  },
-      // Spec §6.1: deep aliases to smart for prompt base, route list,
-      // selected route, and thinking level.
-      { parentMode: "deep",     expectedBase: "smart",    provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
+      { parentMode: "medium", expectedBase: "medium", provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
+      { parentMode: "ultra",  expectedBase: "ultra",  provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
+      { parentMode: "low",    expectedBase: "low",    provider: "openai-codex",       model: "gpt-5.6-terra",       thinkingLevel: "medium" },
+      { parentMode: "high",   expectedBase: "high",   provider: "claude-subscription", model: "claude-opus-4-8", thinkingLevel: "medium" },
     ];
     for (const c of cases) {
       const result = resolveMmrSubagentInvocation({
@@ -417,7 +416,7 @@ describe("resolveMmrSubagentInvocation", () => {
       const result = resolveMmrSubagentInvocation({
         profile,
         registry: makeRegistry([{ provider: contract.provider, id: contract.model }]),
-        parentMode: "smart",
+        parentMode: "medium",
         registeredTools: TASK_REGISTERED_TOOLS,
       });
 
@@ -448,7 +447,7 @@ describe("resolveMmrSubagentInvocation", () => {
         { provider: "openrouter", id: "claude-opus-4-8" },
         { provider: "openai-codex", id: "gpt-5.5" },
       ]),
-      parentMode: "smart",
+      parentMode: "medium",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
 
@@ -458,14 +457,14 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(result.selected.thinkingLevel, "medium");
   });
 
-  it("uses the prompt-base alias when looking up mode-specific Task worker routes", async () => {
+  it("uses each canonical parent mode as the Task prompt base", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const baseProfile = getMmrSubagentProfile("task-subagent");
     const profile = {
       ...baseProfile,
       modeModelPreferences: {
-        smart: [{ model: "claude-haiku-4-5", thinkingLevel: "minimal" }],
+        medium: [{ model: "claude-haiku-4-5", thinkingLevel: "minimal" }],
       },
     };
     const registry = makeRegistry([
@@ -476,46 +475,46 @@ describe("resolveMmrSubagentInvocation", () => {
     const deep = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "deep",
+      parentMode: "high",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
     assert.equal(deep.ok, true);
-    assert.equal(deep.promptBaseMode, "smart");
-    assert.equal(deep.selected.model, "claude-haiku-4-5");
-    assert.equal(deep.selected.thinkingLevel, "minimal");
+    assert.equal(deep.promptBaseMode, "high");
+    assert.equal(deep.selected.model, "claude-opus-4-8");
+    assert.equal(deep.selected.thinkingLevel, "medium");
 
     const fable = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "fable",
+      parentMode: "ultra",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
     assert.equal(fable.ok, true);
-    assert.equal(fable.promptBaseMode, "fable");
+    assert.equal(fable.promptBaseMode, "ultra");
     assert.equal(fable.selected.model, "claude-opus-4-8");
     assert.equal(fable.selected.thinkingLevel, "medium");
   });
 
-  it("falls rush Task workers back to Haiku 4.5 with thinking off when GPT routes are unavailable", async () => {
+  it("falls low Task workers back to GPT-5.5 at medium effort when Terra is unavailable", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("task-subagent");
     const registry = makeRegistry([
-      { provider: "claude-subscription", id: "claude-haiku-4-5" },
+      { provider: "openai-codex", id: "gpt-5.5" },
     ]);
 
     const result = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "rush",
+      parentMode: "low",
       registeredTools: TASK_REGISTERED_TOOLS,
     });
 
     assert.equal(result.ok, true);
-    assert.equal(result.selected.provider, "claude-subscription");
-    assert.equal(result.selected.model, "claude-haiku-4-5");
-    assert.equal(result.selected.thinkingLevel, "off");
-    assert.match(result.diagnostics.map((d) => d.message).join("\n"), /gpt-5\.5/);
+    assert.equal(result.selected.provider, "openai-codex");
+    assert.equal(result.selected.model, "gpt-5.5");
+    assert.equal(result.selected.thinkingLevel, "medium");
+    assert.match(result.diagnostics.map((d) => d.message).join("\n"), /gpt-5\.6-terra/);
   });
 
   it("fails closed when parent mode is missing or free for from-parent profiles", async () => {
@@ -566,16 +565,15 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.deepEqual([...result.workerTools], TASK_REGISTERED_TOOLS);
   });
 
-  it("with invocationContext=child-activation uses parentMode, not model id, for Rush-specific Task thinking", async () => {
+  it("with invocationContext=child-activation uses the parent mode for Task model preferences", async () => {
     const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("task-subagent");
     const cases = [
-      { label: "smart GPT fallback", parentMode: "smart", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
-      { label: "rush GPT primary", parentMode: "rush", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "off" },
-      { label: "smart Haiku fallback", parentMode: "smart", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "low" },
-      { label: "rush Haiku fallback", parentMode: "rush", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "off" },
-      { label: "no parent mode defaults, does not infer Rush", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
+      { label: "medium GPT fallback", parentMode: "medium", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
+      { label: "low GPT fallback", parentMode: "low", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
+      { label: "medium Haiku fallback", parentMode: "medium", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "low" },
+      { label: "no parent mode uses profile defaults", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
     ];
 
     for (const c of cases) {
@@ -606,7 +604,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const result = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "smart",
+      parentMode: "medium",
       // Host registers nothing the profile wants.
       registeredTools: ["unrelated_tool"],
     });
@@ -664,7 +662,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const denied = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "smart",
+      parentMode: "medium",
       registeredTools: TASK_REGISTERED_TOOLS,
       explicitTools: [...TASK_REGISTERED_TOOLS, "Task"],
     });
@@ -675,7 +673,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const ok = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "smart",
+      parentMode: "medium",
       registeredTools: TASK_REGISTERED_TOOLS,
       explicitTools: [...TASK_REGISTERED_TOOLS].sort(),
     });
@@ -713,7 +711,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("task-subagent");
     const registry = makeTaskRegistry();
-    const baseArgs = { profile, registry, parentMode: "smart", registeredTools: TASK_REGISTERED_TOOLS };
+    const baseArgs = { profile, registry, parentMode: "medium", registeredTools: TASK_REGISTERED_TOOLS };
 
     const defaultResult = resolveMmrSubagentInvocation(baseArgs);
     assert.equal(defaultResult.ok, true);
@@ -738,7 +736,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const { getMmrSubagentProfile } = await importSource(PROFILES);
     const profile = getMmrSubagentProfile("task-subagent");
     const registry = makeTaskRegistry();
-    const baseArgs = { profile, registry, parentMode: "smart", registeredTools: TASK_REGISTERED_TOOLS };
+    const baseArgs = { profile, registry, parentMode: "medium", registeredTools: TASK_REGISTERED_TOOLS };
 
     const unknown = resolveMmrSubagentInvocation({ ...baseArgs, capabilityProfile: "root" });
     assert.equal(unknown.ok, false);
@@ -797,7 +795,7 @@ describe("resolveMmrSubagentInvocation", () => {
     const result = resolveMmrSubagentInvocation({
       profile,
       registry,
-      parentMode: "deep",
+      parentMode: "high",
       registeredTools: TASK_REGISTERED_TOOLS,
       // Settings-driven override: prefer gpt-5.5 at medium.
       modelPreferencesOverride: [{ model: "gpt-5.5", thinkingLevel: "medium" }],
@@ -806,8 +804,7 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(result.selected.provider, "openai-codex");
     assert.equal(result.selected.model, "gpt-5.5");
     assert.equal(result.selected.thinkingLevel, "medium");
-    // Deep → smart aliasing for prompt base is preserved regardless of
-    // model preference override.
-    assert.equal(result.promptBaseMode, "smart");
+    // The canonical High prompt base is preserved regardless of override.
+    assert.equal(result.promptBaseMode, "high");
   });
 });

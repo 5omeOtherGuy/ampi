@@ -14,7 +14,7 @@
 //      `Task`, `oracle`, and `librarian` stay gated.
 //   4. `createMmrWorkersExtension()(pi)` actually registers a concrete
 //      Pi tool named `finder` via `pi.registerTool`.
-//   5. After loading the extension, `resolveMmrTools("smart", ...)` shows
+//   5. After loading the extension, `resolveMmrTools("medium", ...)` shows
 //      `finder` as `active` with owner `mmr-subagents` (gated `Task`/
 //      `oracle`/`librarian` still appear, but never `finder`).
 
@@ -115,7 +115,7 @@ describe("mmr-subagents extension factory wires up finder", () => {
     createMmrWorkersExtension()(pi);
 
     const resolved = runtime.resolveMmrTools(
-      "smart",
+      "medium",
       ["read", "bash", "edit", "write", "grep", "find", "finder", "Task"],
     );
     for (const shipped of ["finder", "Task"]) {

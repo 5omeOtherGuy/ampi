@@ -354,7 +354,7 @@ function buildMinimalBaseModeState(baseMode: MmrModeKey): MmrModeState {
     modelApplied: true,
     modelFallbackApplied: false,
     modelCandidates: [],
-    promptRoute: baseMode === "rush" ? "rush" : baseMode === "deep" ? "deep" : "default",
+    promptRoute: baseMode === "high" || baseMode === "ultra" ? "deep" : "default",
     requestedTools: [],
     activeTools: [],
     missingTools: [],
@@ -433,7 +433,7 @@ export function assembleMmrSubagentSurface(
   const resolvedBaseMode = resolveModeDerivedBaseMode(profile, parentMode);
   // Fail closed when a caller-provided `modeState` disagrees with the
   // resolved base mode. Otherwise the splice path could quietly use the
-  // wrong prompt template (e.g. pinned `baseMode: "rush"` while the
+  // wrong prompt template (e.g. pinned `baseMode: "low"` while the
   // caller passes a `deep` modeState).
   if (modeState !== undefined && modeState.mode !== resolvedBaseMode) {
     throw new Error(

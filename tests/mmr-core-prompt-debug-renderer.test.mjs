@@ -64,7 +64,7 @@ function webSearchManifestEntry() {
 
 function buildAssemblyResult(overrides = {}) {
   return {
-    mode: "smart",
+    mode: "medium",
     provider: "claude-subscription",
     model: "claude-opus-4-8",
     blocks: [],

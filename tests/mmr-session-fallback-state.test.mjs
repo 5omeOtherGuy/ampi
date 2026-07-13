@@ -15,7 +15,7 @@ describe("mmr-session-fallback persisted state", () => {
 
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",
@@ -44,7 +44,7 @@ describe("mmr-session-fallback persisted state", () => {
 
     const override = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",

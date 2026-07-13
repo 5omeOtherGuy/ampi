@@ -32,8 +32,8 @@ Shell and GitHub-backed worker slices shipped:
 - ✅ `ampi-workers` registers a tool provider that returns each owned
   logical name (`Task`, `finder`, `oracle`, `librarian`); `finder`,
   `oracle`, and `Task` resolve through `{ kind: "active" }`
-  and are reported as **active** in modes that request them (`smart`,
-  `fable`, `rush`, `deep`); `librarian` resolves active only
+  and are reported as **active** in modes that request them (`low`,
+  `medium`, `high`, `ultra`); `librarian` resolves active only
   while the required read-only GitHub tools are registered by `ampi-github`
   and source-owned, otherwise it is provider-attributed `gated` behind the
   `ampi-workers` feature gate with the per-tool `ampi-github` prerequisite reason.
@@ -74,7 +74,7 @@ Finder slice shipped:
   `errorMessage: "subagent activation failed: <reason>"`,
   `FinderDetails.subagentActivationError`, finder visible content)
   even when Pi itself exits 0.
-- ✅ Effective-surface fixture `smart.core+subagents.md` snapshots the
+- ✅ Effective-surface fixture `medium.core+subagents.md` snapshots the
   model-facing prompt and active-tools manifest with `finder`
   registered.
 - ✅ Live smoke `tests/smoke/finder-live-smoke.mjs` runs a real Pi

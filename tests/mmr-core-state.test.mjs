@@ -12,7 +12,7 @@ describe("mmr-core persisted state", () => {
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { mode: "rush", source: "command", provider: "claude-subscription", model: "claude-haiku-4-5" },
+        data: { mode: "low", source: "command", provider: "claude-subscription", model: "claude-haiku-4-5" },
       },
       {
         type: "custom",
@@ -22,14 +22,26 @@ describe("mmr-core persisted state", () => {
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { mode: "deep", source: "command", provider: "openai", model: "gpt-5.5" },
+        data: { mode: "high", source: "command", provider: "openai", model: "gpt-5.5" },
       },
     ]);
 
-    assert.equal(state?.mode, "deep");
+    assert.equal(state?.mode, "high");
     assert.equal(state?.source, "command");
     assert.equal(state?.provider, "openai");
     assert.equal(state?.targetModel, "gpt-5.5");
+  });
+
+  it("normalizes legacy mode names while restoring persisted state", async () => {
+    const { findLatestPersistedModeState, MMR_MODE_STATE_ENTRY } = await importSource("extensions/ampi-core/state.ts");
+    for (const [legacy, canonical] of [["rush", "low"], ["smart", "medium"], ["deep", "high"], ["fable", "ultra"]]) {
+      const restored = findLatestPersistedModeState([{
+        type: "custom",
+        customType: MMR_MODE_STATE_ENTRY,
+        data: { mode: legacy, source: "command" },
+      }]);
+      assert.equal(restored?.mode, canonical);
+    }
   });
 
   it("serializes state with MMR naming and no legacy compatibility fields", async () => {
@@ -37,7 +49,7 @@ describe("mmr-core persisted state", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("rush"),
+      mode: getMmrMode("low"),
       source: "command",
       modelResolution: {
         targetModel: "claude-haiku-4-5",
@@ -59,7 +71,7 @@ describe("mmr-core persisted state", () => {
 
     assert.deepEqual(toPersistedModeState(state), {
       version: 1,
-      mode: "rush",
+      mode: "low",
       source: "command",
       targetModel: "claude-haiku-4-5",
       requestedModels: ["claude-haiku-4-5", "gpt-5.4-mini"],
@@ -129,7 +141,7 @@ describe("mmr-core persisted state", () => {
     assert.equal(MMR_MODE_STATE_VERSION, 1);
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "gpt-5.5",
@@ -156,31 +168,31 @@ describe("mmr-core persisted state", () => {
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { mode: "rush", source: "command", provider: "openai", model: "gpt-5.4-mini" },
+        data: { mode: "low", source: "command", provider: "openai", model: "gpt-5.4-mini" },
       },
     ]);
-    assert.equal(legacyOnly?.mode, "rush");
+    assert.equal(legacyOnly?.mode, "low");
     assert.equal(legacyOnly?.version, 1, "legacy state should be normalized to version 1");
 
     const ignoresFuture = findLatestPersistedModeState([
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { version: 1, mode: "smart", source: "command", provider: "openai", model: "gpt-5.5" },
+        data: { version: 1, mode: "medium", source: "command", provider: "openai", model: "gpt-5.5" },
       },
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { version: 999, mode: "deep", source: "command", provider: "openai", model: "gpt-5.5" },
+        data: { version: 999, mode: "high", source: "command", provider: "openai", model: "gpt-5.5" },
       },
     ]);
-    assert.equal(ignoresFuture?.mode, "smart", "future version must be skipped, falling back to last v1");
+    assert.equal(ignoresFuture?.mode, "medium", "future version must be skipped, falling back to last v1");
 
     const ignoresMalformed = findLatestPersistedModeState([
       {
         type: "custom",
         customType: MMR_MODE_STATE_ENTRY,
-        data: { version: "oops", mode: "deep", source: "command" },
+        data: { version: "oops", mode: "high", source: "command" },
       },
     ]);
     assert.equal(ignoresMalformed, undefined);
@@ -195,7 +207,7 @@ describe("mmr-core persisted state", () => {
         customType: MMR_MODE_STATE_ENTRY,
         data: {
           version: 1,
-          mode: "smart",
+          mode: "medium",
           source: "not-a-real-source",
           provider: "openai",
           model: "gpt-5.5",
@@ -205,7 +217,7 @@ describe("mmr-core persisted state", () => {
       },
     ]);
 
-    assert.equal(restored?.mode, "smart");
+    assert.equal(restored?.mode, "medium");
     assert.equal(restored?.source, "session", "invalid source must be coerced to the session default, not propagated");
     assert.equal(restored?.thinkingLevel, undefined, "invalid thinkingLevel must be dropped, not propagated");
 
@@ -215,7 +227,7 @@ describe("mmr-core persisted state", () => {
         customType: MMR_MODE_STATE_ENTRY,
         data: {
           version: 1,
-          mode: "deep",
+          mode: "high",
           source: { evil: true },
           provider: "openai",
           model: "gpt-5.5",
@@ -231,7 +243,7 @@ describe("mmr-core persisted state", () => {
         customType: MMR_MODE_STATE_ENTRY,
         data: {
           version: 1,
-          mode: "rush",
+          mode: "low",
           source: "flag",
           provider: "anthropic",
           model: "claude-haiku-4-5",
@@ -249,7 +261,7 @@ describe("mmr-core persisted state", () => {
     const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
 
     const state = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "flag",
       rejectedSources: [{ source: "settings", value: "fast", reason: "invalid mode" }],
       modelResolution: {

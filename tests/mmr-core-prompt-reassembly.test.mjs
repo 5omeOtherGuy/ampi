@@ -53,7 +53,7 @@ function createState(mode) {
   };
 }
 
-const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
+const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 
 // Distinctive per-mode body markers. The smart family renders no posture
 // section, so smart is identified by its family-only "Investigate before
@@ -88,7 +88,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
 
   it("places task/risk posture before tool guidance and preserves that order across re-assembly", () => {
     const first = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -100,7 +100,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     assertBefore(first.systemPrompt, TOOL_USE_HEADING, DIAGRAMS_HEADING, "fresh smart prompt");
 
     const second = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: first.systemPrompt,
       activeToolManifest: [],
     });
@@ -171,7 +171,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
 
   it("re-assembling a deep prompt as a smart Task base carries the smart tail exactly once", () => {
     const deep = assembleActiveSurface({
-      state: createState("deep"),
+      state: createState("high"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
@@ -182,7 +182,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     );
 
     const smartFromDeep = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt: deep.systemPrompt,
       activeToolManifest: [],
     });

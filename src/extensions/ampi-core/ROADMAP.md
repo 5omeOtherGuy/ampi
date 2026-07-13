@@ -24,22 +24,21 @@ Current modes:
 
 | Mode | Current target model | Thinking | Prompt route |
 | --- | --- | --- | --- |
-| `smart` | `claude-opus-4-8` → `gpt-5.5` | Anthropic adaptive/high or OpenAI Responses medium | `default` |
-| `fable` | `claude-fable-5` (claude-subscription) | Anthropic adaptive, toggleable low/medium/high | `default` |
-| `rush` | `gpt-5.5` → `claude-haiku-4-5-20251001` → `claude-haiku-4-5` | OpenAI Responses none, Haiku fallback thinking off | `rush` |
-| `deep` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses medium or Anthropic adaptive/xhigh | `deep` |
+| `low` | `gpt-5.6-terra` → `gpt-5.5` | OpenAI Responses medium | `default` (Smart family) |
+| `medium` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses medium | `default` (Smart family) |
+| `high` | `gpt-5.5` → `claude-opus-4-8` | OpenAI Responses xhigh | `deep` |
+| `ultra` | `gpt-5.6-sol` → `gpt-5.5` | OpenAI Responses xhigh (maximum Pi lane) | `deep` |
 | `free` | native Pi controls | native Pi controls | Pi standard prompt |
 
-`smart`, `fable`, `rush`, `deep`, and `free` are stable development mode
-keys; see the public-safety checklist in the top-level roadmap.
+`low`, `medium`, `high`, `ultra`, and `free` are the canonical mode keys. Legacy names normalize at runtime boundaries for migration.
 
 Implemented surfaces:
 
-- `--ampi-mode smart|fable|rush|deep|free`
+- `--ampi-mode low|medium|high|ultra|free`
 - `/mode`, `/mode <mode>`
 - `/ampi-status` (with mode/source, model found/applied, active/missing/deferred/gated tools, settings files read, diagnostics by severity, optional `Debug` section)
 - `/ampi-status` policy warnings for fallback, missing-tool, zero-tool, and mode availability diagnostics
-- mode selection precedence: flag → persisted session state → settings → `smart`
+- mode selection precedence: flag → persisted session state → settings → `medium`
 - settings support via `ampiCore` (legacy `mmr.core`/`mmrCore` still read)
 - subscription-first model route resolution against registered/authenticated Pi models
 - ordered model fallback application through Pi APIs
@@ -119,7 +118,7 @@ Implemented:
 - ✅ Missing reserved tools are non-fatal and are shown as missing/deferred in status and prompt text.
 - ✅ Locked modes set active tools, block disallowed `tool_call` events, and fail closed when no active tools resolve.
 - ✅ Prompt snapshot/consistency tests catch active/missing/deferred tool drift.
-- ✅ Per-mode tool matrices follow the project tool capability matrix: `smart`/`fable` delegate search/list to model-backed tools, `rush` keeps direct `grep`/`find`, and `deep` requests `bash`, `apply_patch`, and `write` directly.
+- ✅ Per-mode tool matrices follow the project tool capability matrix: Low keeps direct `grep`/`find`, Medium uses the broader Smart-family set, and High/Ultra request `bash`, `apply_patch`, and `write` directly.
 - ✅ Registry rules carry metadata: requested name, chosen Pi tool name, owner extension (e.g. `ampi-workers`, `ampi-history`, `ampi-web`, `ampi-toolbox`, `ampi-toolbox-mcp`, `ampi-skills`), explicit status (`active`/`missing`/`deferred`/`gated`/`disabled`), and user-facing diagnostic text exposed in `MmrToolDecision`.
 - ✅ `registerMmrToolProvider(...)` API: later extensions claim ownership for the exact names they own and report `active`/`gated`/`disabled`/`deferred` status; latest registration wins. An exact-name catalog credits owning extensions for deferred tools.
 - ✅ Tests cover identity dedup (same name requested twice) and gated/disabled tools (excluded from `activeTools`, surfaced in dedicated `gatedTools` / `disabledTools` buckets, blocked by `tool_call`).
@@ -136,11 +135,11 @@ Status: ✅ Complete (assembly maturity extensions tracked in Milestone 6).
 
 Goal: make the model-visible system prompt reflect the resolved mode while keeping all other Pi/extension content authoritative.
 
-Current status: ampi-authored per-mode templates and snapshots are implemented. `before_agent_start` surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) with a custom mode prompt. The only ampi-owned XML-style marker is the initial one-line role marker (`<mmr_mode name="smart">...</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:` and `Guidelines:` are embedded under `## Tool use` so they stay in sync with active tools and are passed through byte-identically. Mode/tool/policy diagnostics are kept out of the prompt and surfaced through `/ampi-status`, activation warnings, and the status bar.
+Current status: ampi-authored per-mode templates and snapshots are implemented. `before_agent_start` surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) with a custom mode prompt. The only ampi-owned XML-style marker is the initial one-line role marker (for example, `<mmr_mode name="medium">...</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:` and `Guidelines:` are embedded under `## Tool use` so they stay in sync with active tools and are passed through byte-identically. Mode/tool/policy diagnostics are kept out of the prompt and surfaced through `/ampi-status`, activation warnings, and the status bar.
 
 Tasks:
 
-- [x] Introduce per-mode prompt templates for `smart`, `fable`, `rush`, and `deep`.
+- [x] Introduce per-mode prompt templates for `low`, `medium`, `high`, and `ultra`.
 - [x] Keep the rewrite scoped to Pi's auto head; preserve any content prepended by earlier handlers, Pi's `appendSystemPrompt`, `# Project Context` / AGENTS.md, `<available_skills>`, future subagents block, `Current date:`, `Current working directory:`, and any extension-appended tail content byte-for-byte.
 - [x] Embed Pi's auto-rendered `Available tools:` and `Guidelines:` under `## Tool use` so the model never sees a stale or duplicated tool list. (Initial implementation stripped two unconditional Pi bullets the mode prompt covers; current policy is byte-identical passthrough — see Milestone 6.)
 - [x] Add prompt snapshot tests for each mode plus behavioral tests covering free mode, custom-prompt passthrough, prepended-extension preservation, `appendSystemPrompt` preservation, and tail-appended preservation.

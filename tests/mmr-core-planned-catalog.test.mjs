@@ -24,7 +24,7 @@ after(cleanupLoadedSource);
 const promptFixtureDir = path.join(import.meta.dirname, "fixtures/mmr-core-prompts");
 const BASE_PROMPT = readFileSync(path.join(promptFixtureDir, "base.md"), "utf8");
 
-const PROMPTED_MODES = ["smart", "fable", "rush", "deep"];
+const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 const ALL_MODES = [...PROMPTED_MODES, "free"];
 
 function createState(mode) {
@@ -41,8 +41,8 @@ function createState(mode) {
     modelFallbackApplied: false,
     modelFallbackReason: undefined,
     modelCandidates: [],
-    thinkingLevel: mode === "deep" ? "xhigh" : "medium",
-    promptRoute: mode === "deep" ? "deep" : "default",
+    thinkingLevel: mode === "high" ? "xhigh" : "medium",
+    promptRoute: mode === "high" ? "high" : "default",
     requestedTools: ["Read", "Bash"],
     activeTools: ["read", "bash"],
     missingTools: [],

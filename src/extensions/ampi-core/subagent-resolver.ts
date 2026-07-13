@@ -270,8 +270,8 @@ export function resolveMmrSubagentRoute<TModel extends MmrRegisteredModelLike>(
  *
  * Layers on top of the internal {@link resolveMmrSubagentRoute} and
  * adds:
- *  - parent-mode aware `promptBaseMode` with `deep → smart` aliasing for
- *    `from-parent` profiles;
+ *  - parent-mode aware `promptBaseMode` that preserves the canonical parent
+ *    tier for `from-parent` profiles;
  *  - effective worker tool set computed as
  *    `(profile.tools \ profile.denyTools) ∩ registeredTools`;
  *  - fail-closed when the worker tool set is empty;
@@ -314,7 +314,7 @@ interface MmrSubagentInvocationBase {
    * Resolved parent mode for prompt assembly. Computed from
    * `profile.baseMode`:
    *  - concrete mode key → that key;
-   *  - `"from-parent"` → `parentMode === "deep" ? "smart" : parentMode`;
+   *  - `"from-parent"` → the canonical `parentMode`;
    *  - undefined for `standalone` profiles.
    */
   readonly promptBaseMode?: MmrModeKey;
@@ -413,12 +413,7 @@ function resolvePromptBaseMode(
       failure: `Subagent "${profile.name}" is mode-derived (baseMode "from-parent") but no Task-enabled parent mode is active.`,
     };
   }
-  // Spec §6.1: deep aliases to smart for prompt base, route list,
-  // selected route, and thinking level. The route list / selected route
-  // / thinking aliasing is realized by the profile being pinned to a
-  // single `modelPreferences` array shared by all Task-enabled modes;
-  // here we only need to flip the prompt-base key from deep to smart.
-  return { promptBaseMode: parentMode === "deep" ? "smart" : parentMode };
+  return { promptBaseMode: parentMode };
 }
 
 function resolveInvocationModelPreferences(
@@ -487,7 +482,7 @@ export function resolveMmrSubagentInvocation<TModel extends MmrRegisteredModelLi
   const invocationContext = args.invocationContext ?? "parent-spawn";
   const diagnostics: MmrSubagentResolveDiagnostic[] = [];
 
-  // 1. Resolve prompt base mode (deep → smart aliasing for from-parent).
+  // 1. Resolve the canonical prompt base mode for mode-derived workers.
   const promptBaseRes = resolvePromptBaseMode(profile, parentMode, invocationContext);
   const baseModeFailure = promptBaseRes.failure;
   const promptBaseMode = promptBaseRes.promptBaseMode;

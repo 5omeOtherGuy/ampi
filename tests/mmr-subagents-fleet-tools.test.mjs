@@ -15,8 +15,8 @@ function stubTaskInvocation() {
     ok: true,
     profile: { name: "task-subagent" },
     promptRoute: "mode-derived",
-    parentMode: "smart",
-    promptBaseMode: "smart",
+    parentMode: "medium",
+    promptBaseMode: "medium",
     selected: {
       provider: "claude-subscription",
       model: "claude-opus-4-8",

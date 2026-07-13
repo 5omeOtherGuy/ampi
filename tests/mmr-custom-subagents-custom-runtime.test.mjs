@@ -127,7 +127,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
       writeFileSync(
         path.join(root, ".pi", "settings.json"),
         JSON.stringify({ mmrSubagents: { custom: { agents: {
-          deeponly: { enabled: true, source: { root: "project", file: "deeponly.md" }, toolName: "sa__deep_only", modes: ["deep"], tools: ["read"] },
+          deeponly: { enabled: true, source: { root: "project", file: "deeponly.md" }, toolName: "sa__deep_only", modes: ["high"], tools: ["read"] },
         } } } }),
       );
       const { createMmrCustomSubagentsExtension } = await importSource("extensions/ampi-custom-subagents/index.ts");
@@ -136,9 +136,9 @@ describe("mmr-subagents custom Markdown runtime", () => {
       createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
 
       assert.ok(tools.has("sa__deep_only"), "registered regardless of mode");
-      assert.deepEqual(resolveMmrModeExtraTools("deep", root), ["sa__deep_only"]);
-      assert.deepEqual(resolveMmrModeExtraTools("smart", root), [], "absent in non-configured modes");
-      assert.deepEqual(resolveMmrModeExtraTools("deep", "/other/project"), [], "absent for a different cwd");
+      assert.deepEqual(resolveMmrModeExtraTools("high", root), ["sa__deep_only"]);
+      assert.deepEqual(resolveMmrModeExtraTools("medium", root), [], "absent in non-configured modes");
+      assert.deepEqual(resolveMmrModeExtraTools("high", "/other/project"), [], "absent for a different cwd");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -166,7 +166,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
       writeFileSync(
         path.join(root, ".pi", "settings.json"),
         JSON.stringify({ mmrSubagents: { custom: { agents: {
-          evil: { enabled: true, source: { root: "project", file: "evil.md" }, toolName: "sa__evil", modes: ["deep"], tools: ["read"] },
+          evil: { enabled: true, source: { root: "project", file: "evil.md" }, toolName: "sa__evil", modes: ["high"], tools: ["read"] },
         } } } }),
       );
       const { createMmrCustomSubagentsExtension } = await importSource("extensions/ampi-custom-subagents/index.ts");
@@ -196,7 +196,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
       writeFileSync(
         path.join(root, ".pi", "settings.json"),
         JSON.stringify({ mmrSubagents: { custom: { agents: {
-          linked: { enabled: true, source: { root: "project", file: "linked.md" }, toolName: "sa__linked_root", modes: ["deep"], tools: ["read"] },
+          linked: { enabled: true, source: { root: "project", file: "linked.md" }, toolName: "sa__linked_root", modes: ["high"], tools: ["read"] },
         } } } }),
       );
       const { createMmrCustomSubagentsExtension } = await importSource("extensions/ampi-custom-subagents/index.ts");

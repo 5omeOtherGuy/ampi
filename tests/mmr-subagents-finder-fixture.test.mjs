@@ -83,7 +83,7 @@ function assertFixtureMatches(filename, actual) {
   );
 }
 
-describe("ampi-workers effective surface: smart mode with finder active", () => {
+describe("ampi-workers effective surface: medium mode with finder active", () => {
   it("renders an active-tools section that names finder and pins the manifest snapshot", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const { renderMmrPromptDebugFixture } = await importSource(
@@ -92,7 +92,7 @@ describe("ampi-workers effective surface: smart mode with finder active", () => 
     const activeToolManifest = [await finderManifestEntry()];
     const baseSystemPrompt = buildBasePromptForActiveManifest(BASE_PROMPT, activeToolManifest);
     const result = assembleActiveSurface({
-      state: createState("smart"),
+      state: createState("medium"),
       baseSystemPrompt,
       activeToolManifest,
       provider: "claude-subscription",
@@ -112,6 +112,6 @@ describe("ampi-workers effective surface: smart mode with finder active", () => 
     }
 
     const rendered = renderMmrPromptDebugFixture(result);
-    assertFixtureMatches("smart.core+subagents.md", rendered);
+    assertFixtureMatches("medium.core+subagents.md", rendered);
   });
 });

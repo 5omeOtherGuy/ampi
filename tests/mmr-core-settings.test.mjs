@@ -21,8 +21,8 @@ describe("mmr-core settings", () => {
         JSON.stringify({
           mmr: {
             core: {
-              defaultMode: "rush",
-              modelPreferences: { deep: ["gpt-5.5", "claude-opus-4-8"] },
+              defaultMode: "low",
+              modelPreferences: { high: ["gpt-5.5", "claude-opus-4-8"] },
             },
           },
         }),
@@ -31,8 +31,8 @@ describe("mmr-core settings", () => {
         path.join(project, ".pi/settings.json"),
         JSON.stringify({
           mmrCore: {
-            defaultMode: "deep",
-            modelPreferences: { deep: ["openai-codex/gpt-5.5", { model: "claude-opus-4-8", thinkingLevel: "xhigh" }] },
+            defaultMode: "high",
+            modelPreferences: { high: ["openai-codex/gpt-5.5", { model: "claude-opus-4-8", thinkingLevel: "xhigh" }] },
           },
         }),
       );
@@ -40,16 +40,55 @@ describe("mmr-core settings", () => {
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.defaultMode, "high");
       assert.equal(loaded.settings.toolAliases, undefined);
       assert.deepEqual(loaded.settings.modelPreferences, {
-        deep: [
+        high: [
           { model: "gpt-5.5", providers: ["openai-codex"] },
           { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
         ],
       });
       assert.equal(loaded.filesRead.length, 2);
       assert.deepEqual(loaded.warnings, []);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes legacy mode keys in defaults, model preferences, and extra tools", async () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-settings-legacy-modes-"));
+    try {
+      const home = path.join(tempRoot, "home");
+      const project = path.join(tempRoot, "project");
+      mkdirSync(path.join(project, ".pi"), { recursive: true });
+      writeFileSync(path.join(project, ".pi/settings.json"), JSON.stringify({
+        mmrCore: {
+          defaultMode: "fable",
+          modelPreferences: {
+            rush: ["gpt-5.6-terra"],
+            smart: ["gpt-5.5"],
+            deep: ["gpt-5.5"],
+            fable: ["gpt-5.6-sol"],
+          },
+          lockedModeExtraTools: {
+            rush: ["low_tool"],
+            smart: ["medium_tool"],
+            deep: ["high_tool"],
+            fable: ["ultra_tool"],
+          },
+        },
+      }));
+
+      const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
+      const loaded = loadMmrCoreSettings(project, home);
+      assert.equal(loaded.settings.defaultMode, "ultra");
+      assert.deepEqual(Object.keys(loaded.settings.modelPreferences), ["low", "medium", "high", "ultra"]);
+      assert.deepEqual(loaded.settings.lockedModeExtraTools, {
+        low: ["low_tool"],
+        medium: ["medium_tool"],
+        high: ["high_tool"],
+        ultra: ["ultra_tool"],
+      });
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -65,14 +104,14 @@ describe("mmr-core settings", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "high" } }),
       );
       writeFileSync(path.join(project, ".pi/settings.json"), "{ this is not valid json");
 
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.defaultMode, "high");
       assert.deepEqual(loaded.filesRead, [path.join(home, ".pi/agent/settings.json")]);
       assert.equal(loaded.warnings.length, 1);
       assert.match(loaded.warnings[0], /Could not read MMR settings from .*\/project\/\.pi\/settings\.json/);
@@ -91,7 +130,7 @@ describe("mmr-core settings", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "high" } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),
@@ -101,7 +140,7 @@ describe("mmr-core settings", () => {
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.defaultMode, "high");
       assert.equal(loaded.filesRead.length, 2);
       assert.ok(
         loaded.warnings.some((w) => /mmrCore/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
@@ -122,7 +161,7 @@ describe("mmr-core settings", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "high" } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),
@@ -132,7 +171,7 @@ describe("mmr-core settings", () => {
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.defaultMode, "high");
       assert.equal(loaded.settings.toolAliases, undefined);
       assert.ok(
         loaded.warnings.some((w) => /toolAliases/.test(w) && /removed/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
@@ -153,7 +192,7 @@ describe("mmr-core settings", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "high" } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),
@@ -163,7 +202,7 @@ describe("mmr-core settings", () => {
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.equal(loaded.settings.defaultMode, "deep");
+      assert.equal(loaded.settings.defaultMode, "high");
       assert.equal(loaded.settings.modelPreferences, undefined);
       assert.ok(
         loaded.warnings.some((w) => /modelPreferences/.test(w) && /\/project\/\.pi\/settings\.json/.test(w)),
@@ -186,10 +225,10 @@ describe("mmr-core settings - read path hardening", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "rush" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "low" } }),
       );
       const outside = path.join(tempRoot, "outside.json");
-      writeFileSync(outside, JSON.stringify({ mmrCore: { defaultMode: "deep" } }));
+      writeFileSync(outside, JSON.stringify({ mmrCore: { defaultMode: "high" } }));
       const projectSettings = path.join(project, ".pi/settings.json");
       symlinkSync(outside, projectSettings);
 
@@ -197,14 +236,14 @@ describe("mmr-core settings - read path hardening", () => {
       const loaded = loadMmrCoreSettings(project, home);
 
       // Symlinked file is refused on read: its defaultMode is not applied.
-      assert.equal(loaded.settings.defaultMode, "rush");
+      assert.equal(loaded.settings.defaultMode, "low");
       assert.deepEqual(loaded.filesRead, [path.join(home, ".pi/agent/settings.json")]);
       assert.equal(loaded.warnings.length, 1);
       assert.match(loaded.warnings[0], /Could not read MMR settings from .*\/project\/\.pi\/settings\.json/);
       assert.match(loaded.warnings[0], /symbolic link/);
 
       // The symlink target is never modified by a read.
-      assert.deepEqual(JSON.parse(readFileSync(outside, "utf8")), { mmrCore: { defaultMode: "deep" } });
+      assert.deepEqual(JSON.parse(readFileSync(outside, "utf8")), { mmrCore: { defaultMode: "high" } });
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
@@ -232,14 +271,14 @@ describe("mmr-core settings - read path hardening", () => {
       // Add a valid home file: both files now read.
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "deep" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "high" } }),
       );
       const both = loadMmrCoreSettings(project, home);
       assert.deepEqual(both.filesRead, [
         path.join(home, ".pi/agent/settings.json"),
         path.join(project, ".pi/settings.json"),
       ]);
-      assert.equal(both.settings.defaultMode, "deep");
+      assert.equal(both.settings.defaultMode, "high");
       assert.deepEqual(both.warnings, []);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
@@ -258,11 +297,11 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmr: { core: { lockedModeExtraTools: { all: ["g1"], deep: ["d1"] } } } }),
+        JSON.stringify({ mmr: { core: { lockedModeExtraTools: { all: ["g1"], high: ["d1"] } } } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),
-        JSON.stringify({ mmrCore: { lockedModeExtraTools: { all: ["g2", "g1"], smart: ["s1"] } } }),
+        JSON.stringify({ mmrCore: { lockedModeExtraTools: { all: ["g2", "g1"], medium: ["s1"] } } }),
       );
 
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
@@ -270,8 +309,8 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
 
       assert.deepEqual(loaded.settings.lockedModeExtraTools, {
         all: ["g1", "g2"],
-        deep: ["d1"],
-        smart: ["s1"],
+        high: ["d1"],
+        medium: ["s1"],
       });
       assert.deepEqual(loaded.warnings, []);
     } finally {
@@ -289,7 +328,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "smart" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "medium" } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),
@@ -298,7 +337,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
             lockedModeExtraTools: {
               free: ["nope"],
               bogus: ["nope"],
-              rush: ["  a  ", "a", "b"],
+              low: ["  a  ", "a", "b"],
             },
           },
         }),
@@ -307,7 +346,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
       const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
       const loaded = loadMmrCoreSettings(project, home);
 
-      assert.deepEqual(loaded.settings.lockedModeExtraTools, { rush: ["a", "b"] });
+      assert.deepEqual(loaded.settings.lockedModeExtraTools, { low: ["a", "b"] });
       assert.ok(
         loaded.warnings.some((w) => w.includes("lockedModeExtraTools.free") && w.includes("not configurable")),
         `expected a free-key warning, got ${JSON.stringify(loaded.warnings)}`,
@@ -331,7 +370,7 @@ describe("mmr-core settings - lockedModeExtraTools", () => {
 
       writeFileSync(
         path.join(home, ".pi/agent/settings.json"),
-        JSON.stringify({ mmrCore: { defaultMode: "smart" } }),
+        JSON.stringify({ mmrCore: { defaultMode: "medium" } }),
       );
       writeFileSync(
         path.join(project, ".pi/settings.json"),

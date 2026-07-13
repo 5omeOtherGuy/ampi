@@ -17,21 +17,22 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 ## Status and enablement
 
-Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `smart`. The selected mode is persisted as a `ampi-core.mode-state` custom session entry on every explicit change.
+Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `medium`. The selected mode is persisted as an `ampi-core.mode-state` custom session entry on every explicit change. Legacy names normalize at input boundaries: `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick a mode, `Ctrl+Space` cycles `smart → rush → deep`. `fable` is valid through `/mode fable`, `--ampi-mode fable`, and settings, but is hidden from the hotkey cycle. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+Space` cycles `low → medium → high → ultra` while excluding `free`. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
 ### Locked modes
 
-`smart`, `fable`, `rush`, `deep` apply a locked-mode profile (model preferences, request policy, context profile, active-tool allowlist, ampi-owned prompt block). `free` releases all enforcement and restores the pre-ampi baseline.
+`low`, `medium`, `high`, and `ultra` apply a locked-mode profile (model preferences, request policy, context profile, active-tool allowlist, ampi-owned prompt block). `free` releases all enforcement and restores the pre-ampi baseline.
 
-- **Model resolution** is provider-neutral against the live Pi registry. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route; `claude-haiku-4-5` and `claude-haiku-4-5-20251001` are aliases.
-- **Pi baseline thinking** per mode: `smart` medium, `fable` medium, `rush` off, `deep` medium. Request-level thinking is enforced separately by the per-mode request policy hook.
-- **Thinking-level toggle (`alt+r`)**: `smart`, `fable`, and `deep` are toggleable. The ampi-owned `alt+r` shortcut cycles the active mode through its configured presets in place without releasing the mode — `smart` Opus medium↔high, `deep` GPT medium↔xhigh, `fable` Fable medium→high→low→medium. The toggle drives the Pi thinking level and the wire reasoning effort. For `smart`, the Anthropic adaptive effort follows the native Opus route's Pi-level map (Option 1): the medium preset (Pi `medium`) maps to Anthropic `high`, and the high preset (Pi `high`) maps to Anthropic `xhigh`; both presets keep the Anthropic output budget at 64k so the displayed max-input remains 236k on the capped 300k Opus route. OpenAI Responses effort tracks the Pi level (`medium`/`high`). `fable` sets no Anthropic-effort override, so each Pi level (`low`/`medium`/`high`) echoes directly as the Anthropic adaptive effort, keeping the mode's output budget fixed across presets. The toggle is lightweight (concise status line, no mode-activation banner) and no-ops in non-toggleable modes. Toggle overrides are session-scoped (process memory); the default preset is re-derived on each apply. A dedicated key is used because Pi reserves `shift+tab` (`app.thinking.cycle`) and extensions cannot override it.
+- **Model resolution** is provider-neutral against the live Pi registry. Defaults are Low: GPT-5.6 Terra → GPT-5.5; Medium: GPT-5.5 → Claude Opus 4.8; High: GPT-5.5 → Claude Opus 4.8; Ultra: GPT-5.6 Sol → GPT-5.5. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route.
+- **Prompt families**: Low and Medium use the Smart system-prompt family. High and Ultra use the Deep system-prompt family and Deep fragment ordering.
+- **Pi baseline thinking** per mode: Low/Medium `medium`; High/Ultra `xhigh`. Request-level thinking is enforced separately by the per-mode request-policy hook.
+- **Thinking-level toggle (`alt+r`)**: Medium cycles `medium ↔ high`; High cycles `xhigh ↔ medium`; Ultra cycles `xhigh → high → medium → xhigh`. Low is intentionally not toggleable. The toggle drives both Pi's thinking level and OpenAI Responses reasoning effort, is session-scoped, and uses a dedicated key because Pi reserves `shift+tab` (`app.thinking.cycle`).
 - **Request policy** rewrites only token/reasoning fields on `before_provider_request` (`max_tokens`, `max_output_tokens`, Anthropic `thinking` / `output_config.effort`, OpenAI Responses `reasoning`). Never mutates provider identity, auth, headers, base URLs, messages, system blocks, or tools.
-- **Context profiles**: `smart` 300k/236k/64k (Anthropic branch), `fable` native, `rush` native, `deep` native. A mode that declares a profile total caps its active model's `contextWindow` down to it via a shallow clone at the `setModel` call site (`context-cap.ts`), derived from the mode's own request policy so the enforced and advertised windows stay in sync. This makes Pi's native compaction, overflow, footer, percent, and `getContextUsage()` run at the profile window even when the route's native window is larger (e.g. `smart` pins its Opus route to 300k). The modes without an ampi-owned context profile (`fable`, `rush`, `deep`) intentionally run at Pi's own registered window with no ampi override that could drift from Pi's metadata. Capping is cap-down only, so a smaller custom route stays authoritative, and `free` (no policy) is never capped. The cap is reasserted defensively if a provider (re)registration (e.g. `/login`) transiently re-resolves the active model to its uncapped window.
+- **Context profiles**: Medium inherits the former Smart 300k total / 172k max-input / 128k max-output safety profile. Low, High, and Ultra use Pi's registered model window. A declared profile caps the active model's `contextWindow` down via a shallow clone at `setModel`; smaller custom windows remain authoritative, `free` is never capped, and the cap is reasserted if provider registration transiently restores the uncapped model object.
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
 - **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+r` for the in-mode thinking toggle that does not release.
 
@@ -58,13 +59,13 @@ Locked modes ship a fixed allowlist, so a user's own extension tools, third-part
   "ampiCore": {
     "lockedModeExtraTools": {
       "all": ["my_tool", "mcp__server__search"], // every locked mode
-      "deep": ["deep_only_tool"]                  // deep only
+      "high": ["high_only_tool"]                  // high only
     }
   }
 }
 ```
 
-- Keys: `all` plus any locked mode (`smart`, `fable`, `rush`, `deep`). `free` and unknown keys are ignored with a warning.
+- Keys: `all` plus any locked mode (`low`, `medium`, `high`, `ultra`). `free` and unknown keys are ignored with a warning; legacy mode names normalize to their canonical tier.
 - Exact-name only (no aliases); names trim/dedupe; global and project settings merge additively per key.
 - Extras merge into the active set *after* the base allowlist and are credited to a `user-allowlist` owner in `/ampi-status` when they resolve by plain identity.
 - Fail-closed is preserved: extras never satisfy the zero-active-tools activation abort (only a mode's own tools can), and a missing extra is a non-fatal no-op surfaced as `missing`.
@@ -80,9 +81,9 @@ Free mode disables all ampi enforcement and restores the baseline captured befor
 
 Per-turn rewrite via `before_agent_start` consumes Pi's already-rendered native prompt as the base prompt. The active base/fragment map lives in [`prompt-registry.ts`](prompt-registry.ts): `pi-native-default-v1` records Pi's identity and section anchors, `MMR_PROMPT_FRAGMENTS` describes Pi-native passthrough fragments and ampi-owned fragments, and each prompted mode has a recipe (`basePromptId` + ordered fragment IDs + mode-specific intro/posture/response style). Adding a prompted mode should be a registry entry plus model/tool policy, not a new ad hoc prompt splice.
 
-The renderer surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) by rendering the recipe fragments in order. The only ampi-owned XML marker is the initial one-line role marker (`<mmr_mode name="smart">…</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:`, `Guidelines:`, and `Pi documentation` blocks remain Pi-native fragments and embed byte-identically under `## Tool use`.
+The renderer surgically replaces Pi's auto-rendered head (identity line through the `Pi documentation` block) by rendering the recipe fragments in order. The only ampi-owned XML marker is the initial one-line role marker (for example, `<mmr_mode name="medium">…</mmr_mode>`); mode sections use Markdown headings. Pi's auto `Available tools:`, `Guidelines:`, and `Pi documentation` blocks remain Pi-native fragments and embed byte-identically under `## Tool use`.
 
-Content prepended by earlier handlers is preserved byte-for-byte before the rewritten identity line. Pi's `appendSystemPrompt`, `# Project Context`, `<available_skills>`, host/extension blocks after the documentation section, `Current date:` / `Current working directory:`, and tail-appended extension content are preserved byte-for-byte as the `preserved-tail` fragment. Pi prompts pass through unchanged when the auto head cannot be located (e.g. user-supplied `--system-prompt`) and in `free` mode. ampi-owned built-in-tool guidance, shared tool guidance, mode posture, and response style are separate fragments. The shared coding guidance is further split into named fragments (`autonomy`, `discovery-discipline`, `pragmatism`, `verification`, `careful-actions`, `diagrams`, `file-links`, `collaboration`) so a recipe can include only the sections a mode needs; the default recipe renders all of them in order (byte-identical to the prior single block), and `rush` is the one mode that drops `diagrams` for token economy.
+Content prepended by earlier handlers is preserved byte-for-byte before the rewritten identity line. Pi's `appendSystemPrompt`, `# Project Context`, `<available_skills>`, host/extension blocks after the documentation section, `Current date:` / `Current working directory:`, and tail-appended extension content are preserved byte-for-byte as the `preserved-tail` fragment. Pi prompts pass through unchanged when the auto head cannot be located (e.g. user-supplied `--system-prompt`) and in `free` mode. ampi-owned built-in-tool guidance, shared tool guidance, mode posture, and response style are separate fragments. Low/Medium use the complete Smart-family default recipe; High/Ultra use the Deep ordering and its `engineering-judgment` fragment.
 
 ### Subagent profiles
 
@@ -92,7 +93,7 @@ Profile fields ([`subagent-profiles.ts`](subagent-profiles.ts)):
 
 - `name`, `displayName` — identifier and human-facing label.
 - `modelPreferences` — ordered worker-model preferences resolved against the local Pi registry.
-- `modeModelPreferences?` — optional parent-mode-specific overrides (mode-derived only); lookup follows the resolved prompt-base key (`deep → smart` aliases). Task uses this so Rush workers follow Rush's GPT-5.5 / Haiku route.
+- `modeModelPreferences?` — optional parent-mode-specific overrides (mode-derived only). Task uses this so Low workers follow Low's Terra/GPT-5.5 route.
 - `thinkingLevel?` — optional; defaults to Pi's default thinking level when omitted.
 - `tools` — profile-intent concrete tool allowlist. `resolveMmrSubagentInvocation(...)` computes effective worker tools as `(profile.tools \ profile.denyTools) ∩ registeredTools` when the host supplies a registered set, otherwise just `profile.tools \ profile.denyTools`.
 - `denyTools?` — removed from the effective set. Recursive/advisory tools (`Task`, `oracle`, `librarian`, `handoff`) belong here for broad workers.
@@ -117,7 +118,7 @@ Registered profiles:
 | `history-reader` | standalone             | `[]` (`maxTurns: 1`)                                                                                                                               | `antigravity/gemini-3.5-flash-extra-low` → `gpt-5.4-mini` → `claude-haiku-4-5` (Gemini primary is provider-pinned; fallbacks expand with provider hints) | `minimal` | false / false |
 | `oracle`         | standalone, `oracle`   | `[read, grep, find, web_search, read_web_page, read_session, find_session]` (child filters out unregistered sibling-extension tools)                | `gpt-5.5` xhigh → `claude-opus-4-6` high                                                                                                                  | `xhigh`   | false / false |
 | `librarian`      | standalone, `librarian`| `[read_github, list_directory_github, glob_github, search_github, commit_search, diff_github, list_repositories]`                                  | `gpt-5.5` off → `claude-opus-4-6` → `gpt-5.4`                                                                                                                  | `off` | false / false |
-| `task-subagent`  | mode-derived, `Task`   | `[read, bash, edit, write, read_web_page, web_search, finder, skill, task_list]` minus `denyTools: [Task, oracle, librarian, handoff]` | `claude-opus-4-8` high → `gpt-5.5` medium → `claude-opus-4-6` high → Haiku 4.5 low; Rush override: `gpt-5.5` off → Haiku 4.5 off                | varies   | false / false |
+| `task-subagent`  | mode-derived, `Task`   | `[read, bash, edit, write, read_web_page, web_search, finder, skill, task_list]` minus `denyTools: [Task, oracle, librarian, handoff]` | provider-pinned Claude Opus 4.8 → GPT-5.5 medium → Claude Opus 4.6 medium → Haiku 4.5 low; Low override: GPT-5.6 Terra medium → GPT-5.5 medium | varies   | false / false |
 
 Pure route resolver lives in [`subagent-resolver.ts`](subagent-resolver.ts).
 
@@ -126,7 +127,7 @@ Pure route resolver lives in [`subagent-resolver.ts`](subagent-resolver.ts).
 `assembleMmrSubagentSurface` ([`subagent-prompt-assembly.ts`](subagent-prompt-assembly.ts)) returns an `MmrSubagentPromptAssemblyResult` mirroring `MmrPromptAssemblyResult` (`{ profile, blocks, systemPrompt, activeToolManifest }`) so the same renderers and effective-surface fixtures drive both surfaces.
 
 - **Standalone** (`finder`, `oracle`, `history-reader`, `librarian`). The profile owns the entire prompt. Assembly resolves `profile.promptBuilder` against the registry, calls the builder with `{ profile, cwd, baseSystemPrompt, modeState? }`, and returns its output as the system prompt plus a single `standalone-prompt` block.
-- **Mode-derived** (`task-subagent`). Derives from `profile.baseMode` (with `from-parent` resolved by the invocation resolver and `deep` aliased to `smart` for prompt base). Assembly calls `assembleActiveSurface` with a minimal mode state stamped for the resolved base mode, rewrites the `active-tools` block from the subagent-filtered worker manifest, then appends one `subagent-worker-role` block. Flattened blocks reproduce `systemPrompt` byte-for-byte.
+- **Mode-derived** (`task-subagent`). Derives from `profile.baseMode`, with `from-parent` resolved by the invocation resolver. Assembly preserves the canonical parent tier, calls `assembleActiveSurface` with a minimal mode state stamped for that tier, rewrites the `active-tools` block from the subagent-filtered worker manifest, then appends one `subagent-worker-role` block. Flattened blocks reproduce `systemPrompt` byte-for-byte.
 
 Ownership: `ampi-core` owns the framework, registry, and contract. Concrete prompt text and builder registrations live in `ampi-workers`. Builders are pure synchronous functions and must not perform I/O. The active tool manifest is filtered down to the resolver's effective `workerTools` (or the profile's tool intent for backwards-compatible callers) before being surfaced. Missing/unregistered builders fail closed.
 

@@ -66,7 +66,7 @@ function makeTaskProfile() {
     // Task gets every smart-mode active tool except subagent surfaces.
     tools: Object.freeze(["read", "bash", "grep", "find"]),
     promptRoute: "mode-derived",
-    baseMode: "smart",
+    baseMode: "medium",
     promptBuilder: "task",
     allowMcp: false,
     allowToolbox: false,
@@ -327,7 +327,7 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.equal(result.subagent, "Task");
     assert.equal(result.profile.name, "Task");
     // The base mode prompt-assembly head must appear.
-    assert.match(result.systemPrompt, /mmr_mode name="smart"/);
+    assert.match(result.systemPrompt, /mmr_mode name="medium"/);
     // The appended worker-role block must appear at the end.
     assert.match(result.systemPrompt, /## Task Worker Role/);
     assert.match(result.systemPrompt, /do not spawn another Task/);
@@ -401,11 +401,11 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [{ name: "read", owner: "pi", promptGuidelines: [], description: "", schema: {} }],
       cwd: "/abs/repo",
-      parentMode: "rush",
+      parentMode: "low",
     });
 
-    assert.match(result.systemPrompt, /mmr_mode name="rush"/);
-    assert.match(result.systemPrompt, /parent=rush/);
+    assert.match(result.systemPrompt, /mmr_mode name="low"/);
+    assert.match(result.systemPrompt, /parent=low/);
     assert.deepEqual(result.activeToolManifest.map((entry) => entry.name), ["read"]);
   });
 
@@ -447,8 +447,8 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     registerMmrSubagentPromptBuilder("task", () => "## Task Worker Role\n");
     const mismatchedModeState = {
       version: 1,
-      mode: "deep",
-      displayName: "deep",
+      mode: "high",
+      displayName: "high",
       source: "settings",
       targetModel: "",
       requestedModels: [],
@@ -493,8 +493,8 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     registerMmrSubagentPromptBuilder("parent-derived-fixture", () => "## Worker Role\n");
     const rushModeState = {
       version: 1,
-      mode: "rush",
-      displayName: "rush",
+      mode: "low",
+      displayName: "low",
       source: "settings",
       targetModel: "",
       requestedModels: [],
@@ -504,7 +504,7 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
       modelApplied: true,
       modelFallbackApplied: false,
       modelCandidates: [],
-      promptRoute: "rush",
+      promptRoute: "default",
       requestedTools: [],
       activeTools: [],
       missingTools: [],
@@ -529,7 +529,7 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
           baseSystemPrompt: BASE_PROMPT,
           activeToolManifest: [],
           cwd: "/abs/repo",
-          parentMode: "smart",
+          parentMode: "medium",
           modeState: rushModeState,
         }),
       /baseMode|modeState\.mode/i,

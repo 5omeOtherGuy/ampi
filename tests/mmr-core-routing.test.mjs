@@ -10,11 +10,11 @@ describe("mmr-core mode routing", () => {
 
     assert.deepEqual(
       resolveMmrModeSelection({
-        flagValue: "rush",
-        persistedMode: "deep",
-        settingsMode: "fable",
+        flagValue: "low",
+        persistedMode: "high",
+        settingsMode: "ultra",
       }),
-      { mode: "rush", source: "flag", warnings: [], rejectedSources: [] },
+      { mode: "low", source: "flag", warnings: [], rejectedSources: [] },
     );
   });
 
@@ -23,32 +23,32 @@ describe("mmr-core mode routing", () => {
 
     assert.deepEqual(
       resolveMmrModeSelection({
-        persistedMode: "deep",
-        settingsMode: "fable",
+        persistedMode: "high",
+        settingsMode: "ultra",
       }),
-      { mode: "deep", source: "session", warnings: [], rejectedSources: [] },
+      { mode: "high", source: "session", warnings: [], rejectedSources: [] },
     );
   });
 
   it("chooses settings mode before default and reports invalid settings", async () => {
     const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fable" }), {
-      mode: "fable",
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "ultra" }), {
+      mode: "ultra",
       source: "settings",
       warnings: [],
       rejectedSources: [],
     });
 
-    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "deep" }), {
-      mode: "deep",
+    assert.deepEqual(resolveMmrModeSelection({ settingsMode: "high" }), {
+      mode: "high",
       source: "settings",
       warnings: [],
       rejectedSources: [],
     });
 
     assert.deepEqual(resolveMmrModeSelection({ settingsMode: "fast" }), {
-      mode: "smart",
+      mode: "medium",
       source: "default",
       warnings: ['Ignoring invalid settings ampi mode "fast".'],
       rejectedSources: [{ source: "settings", value: "fast", reason: "invalid mode" }],
@@ -64,7 +64,7 @@ describe("mmr-core mode routing", () => {
       settingsMode: "fast",
     });
 
-    assert.equal(result.mode, "smart");
+    assert.equal(result.mode, "medium");
     assert.equal(result.source, "default");
     assert.deepEqual(result.rejectedSources, [
       { source: "flag", value: "warp", reason: "invalid mode" },
@@ -73,17 +73,25 @@ describe("mmr-core mode routing", () => {
     ]);
   });
 
+  it("normalizes legacy names at flag, session, and settings boundaries", async () => {
+    const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
+    assert.equal(resolveMmrModeSelection({ flagValue: "rush" }).mode, "low");
+    assert.equal(resolveMmrModeSelection({ persistedMode: "smart" }).mode, "medium");
+    assert.equal(resolveMmrModeSelection({ settingsMode: "deep" }).mode, "high");
+    assert.equal(resolveMmrModeSelection({ settingsMode: "fable" }).mode, "ultra");
+  });
+
   it("accepts free from flags and persisted session state", async () => {
     const { resolveMmrModeSelection } = await importSource("extensions/ampi-core/routing.ts");
 
-    assert.deepEqual(resolveMmrModeSelection({ flagValue: "free", persistedMode: "deep" }), {
+    assert.deepEqual(resolveMmrModeSelection({ flagValue: "free", persistedMode: "high" }), {
       mode: "free",
       source: "flag",
       warnings: [],
       rejectedSources: [],
     });
 
-    assert.deepEqual(resolveMmrModeSelection({ persistedMode: "free", settingsMode: "smart" }), {
+    assert.deepEqual(resolveMmrModeSelection({ persistedMode: "free", settingsMode: "medium" }), {
       mode: "free",
       source: "session",
       warnings: [],

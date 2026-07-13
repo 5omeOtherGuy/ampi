@@ -380,7 +380,7 @@ describe("mmr-core subagent activation", () => {
     });
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    assert.equal(runtime.getMmrModeState()?.mode, "smart");
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.equal(runtime.getMmrSubagentState(), undefined);
   });
 
@@ -685,15 +685,14 @@ describe("mmr-core subagent activation", () => {
     assert.ok(runtime.getMmrSubagentState());
   });
 
-  it("uses --mmr-parent-mode to distinguish Rush Task thinking from non-Rush explicit worker routes", async () => {
+  it("uses --mmr-parent-mode to apply Low-specific Task routes", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const workerTools = ["read","bash","edit","write","finder","skill","task_list"];
     const cases = [
-      { label: "smart GPT fallback", parentMode: "smart", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
-      { label: "rush GPT primary", parentMode: "rush", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "off" },
-      { label: "smart Haiku fallback", parentMode: "smart", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "low" },
-      { label: "rush Haiku fallback", parentMode: "rush", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "off" },
+      { label: "medium GPT fallback", parentMode: "medium", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
+      { label: "low GPT fallback", parentMode: "low", provider: "openai-codex", model: "gpt-5.5", thinkingLevel: "medium" },
+      { label: "medium Haiku fallback", parentMode: "medium", provider: "claude-subscription", model: "claude-haiku-4-5", thinkingLevel: "low" },
     ];
 
     for (const c of cases) {

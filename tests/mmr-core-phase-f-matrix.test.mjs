@@ -29,33 +29,25 @@ const BASE_PROMPT = readFileSync(path.join(promptFixtureDir, "base.md"), "utf8")
 
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 
-// smart-family variants render the smart system prompt verbatim apart from the
-// <mmr_mode name="..."> tag. They are excluded from the matrix snapshots and
-// the per-(mode × tool-set) invariant loops so that release-time renames touch
-// fewer fixtures, but they stay in the structural marker checks
-// (MATRIX_MARKER_MODES) so that the per-mode tag isolation invariant still
-// covers them.
-const MATRIX_MODES = ["smart", "rush", "deep"];
-const MATRIX_MARKER_MODES = ["smart", "fable", "rush", "deep"];
+// Prompt-family variants render the same system prompt apart from the
+// <mmr_mode name="..."> tag. One mode from each family is excluded from the
+// matrix snapshots to avoid redundant fixtures, while all four stay in the
+// structural marker checks.
+const MATRIX_MODES = ["medium", "low", "high"];
+const MATRIX_MARKER_MODES = ["medium", "ultra", "low", "high"];
 
-// Distinguishing per-mode markers. The smart family (smart, fable) shares
-// one prompt body, so each member is identified by its <mmr_mode name="...">
-// tag. Rush and Deep have distinctive posture-body sentences.
 const MODE_MARKERS = {
-  smart: '<mmr_mode name="smart">',
-  fable: '<mmr_mode name="fable">',
-  rush: "You run with no extended reasoning",
-  deep: "Deep mode is for difficult reasoning,",
+  medium: '<mmr_mode name="medium">',
+  ultra: '<mmr_mode name="ultra">',
+  low: '<mmr_mode name="low">',
+  high: '<mmr_mode name="high">',
 };
 
-// Markers that must NOT appear in a mode's rendered prompt (other modes'
-// distinctive markers). The smart family shares its prompt body, so its
-// members exclude each other's mode tags rather than body text.
 const MODE_FOREIGN_MARKERS = {
-  smart: ['<mmr_mode name="fable">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  fable: ['<mmr_mode name="smart">', "You run with no extended reasoning", "Deep mode is for difficult reasoning,"],
-  rush: ['<mmr_mode name="smart">', '<mmr_mode name="fable">', "Deep mode is for difficult reasoning,"],
-  deep: ['<mmr_mode name="smart">', '<mmr_mode name="fable">', "You run with no extended reasoning"],
+  medium: ['<mmr_mode name="low">', '<mmr_mode name="high">', '<mmr_mode name="ultra">', "Deep mode is for difficult reasoning,"],
+  low: ['<mmr_mode name="medium">', '<mmr_mode name="high">', '<mmr_mode name="ultra">', "Deep mode is for difficult reasoning,"],
+  high: ['<mmr_mode name="low">', '<mmr_mode name="medium">', '<mmr_mode name="ultra">'],
+  ultra: ['<mmr_mode name="low">', '<mmr_mode name="medium">', '<mmr_mode name="high">'],
 };
 
 // Expected coarse block order. Matches the existing Phase B baseline.
@@ -105,8 +97,8 @@ function createState(mode) {
     modelFallbackApplied: false,
     modelFallbackReason: undefined,
     modelCandidates: [],
-    thinkingLevel: mode === "deep" ? "xhigh" : "medium",
-    promptRoute: mode === "deep" ? "deep" : "default",
+    thinkingLevel: mode === "high" || mode === "ultra" ? "xhigh" : "medium",
+    promptRoute: mode === "high" || mode === "ultra" ? "deep" : "default",
     requestedTools: ["Read", "Bash"],
     activeTools: ["read", "bash"],
     missingTools: [],
@@ -222,9 +214,8 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       const sp = result.systemPrompt;
       const autonomyIdx = sp.indexOf("## Autonomy and persistence");
       const carefulActionsIdx = sp.indexOf("## Executing actions with care");
-      // Only rush and deep render a mode posture; the smart family carries its
-      // framing in the intro and body fragments.
-      const postureMarker = mode === "rush" ? "## Rush mode" : mode === "deep" ? "## Deep mode" : undefined; // smart family falls through to undefined (no posture)
+      // High and Ultra render the Deep posture; Low and Medium use Smart.
+      const postureMarker = mode === "high" || mode === "ultra" ? "## Deep mode" : undefined;
       const collaborationIdx = sp.indexOf("## Working with the user");
       const responseStyleIdx = sp.indexOf("## Response style");
       const toolHeadingIdx = sp.indexOf(MMR_TOOL_USE_HEADING);
@@ -233,7 +224,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       const guidelinesIdx = sp.indexOf("Guidelines:");
       const docsIdx = sp.indexOf("Pi documentation (");
       const sharedToolIdx = sp.indexOf("## Tool execution policy");
-      const styleIdx = mode === "rush" ? sp.indexOf("## File links") : sp.indexOf("## Diagrams");
+      const styleIdx = sp.indexOf("## Diagrams");
       assert.ok(toolHeadingIdx !== -1 && leadInIdx !== -1, `${mode}: missing tool-use heading or lead-in`);
       assert.ok(autonomyIdx < carefulActionsIdx, `${mode}: task/risk posture must stay in order`);
       if (postureMarker !== undefined) {
@@ -369,10 +360,10 @@ describe("Phase F: native-control passthrough invariant", () => {
       const mmrOnlyTokens = [
         MMR_TOOL_USE_POSTURE_LINE,
         MMR_RESPONSE_STYLE_HEADING,
-        '<mmr_mode name="smart">',
-        '<mmr_mode name="fable">',
-        '<mmr_mode name="rush">',
-        '<mmr_mode name="deep">',
+        '<mmr_mode name="medium">',
+        '<mmr_mode name="ultra">',
+        '<mmr_mode name="low">',
+        '<mmr_mode name="high">',
         "You run with no extended reasoning",
         "Deep mode is for difficult reasoning,",
       ];

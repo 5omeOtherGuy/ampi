@@ -42,7 +42,7 @@ async function importCacheIsolatedRuntime() {
   return importSource("extensions/ampi-core/runtime.ts");
 }
 
-const LOCKED_MODES_THAT_REQUEST_WEB_TOOLS = ["smart", "fable", "rush", "deep"];
+const LOCKED_MODES_THAT_REQUEST_WEB_TOOLS = ["medium", "ultra", "low", "high"];
 
 describe("mmr-web covers every locked mode that requests web_search / read_web_page", () => {
   for (const mode of LOCKED_MODES_THAT_REQUEST_WEB_TOOLS) {
@@ -112,7 +112,7 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     createMmrWebExtension({ loadSettings: () => settings({ enabled: false }) })(pi);
 
     assert.equal(tools.length, 0, "disabled mmr-web must not register concrete network tools");
-    const resolved = runtime.resolveMmrTools("deep", ["read", "bash", "edit", "write", "apply_patch"]);
+    const resolved = runtime.resolveMmrTools("high", ["read", "bash", "edit", "write", "apply_patch"]);
     const search = resolved.decisions.find((d) => d.requested === "web_search");
     const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "gated");
@@ -138,7 +138,7 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     createMmrWebExtension({ loadSettings: () => settings({ enabled: true, braveApiKey: "brv" }) })(pi);
 
     const availableTools = ["read", "bash", "edit", "write", "apply_patch", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("deep", availableTools);
+    const resolved = runtime.resolveMmrTools("high", availableTools);
     assert.equal(resolved.deferredTools.includes("web_search"), false);
     assert.equal(resolved.deferredTools.includes("read_web_page"), false);
     assert.equal(resolved.activeTools.includes("web_search"), true);
@@ -157,7 +157,7 @@ describe("mmr-web registration across cache-isolated extension entrypoints", () 
     createMmrWebExtension({ loadSettings: () => settings({ enabled: true }) })(pi);
 
     const availableTools = ["read", "bash", "edit", "write", "apply_patch", ...tools.map((tool) => tool.name)];
-    const resolved = runtime.resolveMmrTools("deep", availableTools);
+    const resolved = runtime.resolveMmrTools("high", availableTools);
     const search = resolved.decisions.find((d) => d.requested === "web_search");
     const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "active");
@@ -182,7 +182,7 @@ describe("mmr-web extension factory", () => {
     const factory = createMmrWebExtension({ loadSettings: () => current });
     factory(pi);
 
-    const resolved = runtime.resolveMmrTools("smart", ["read", "bash", "edit", "write", "web_search", "read_web_page"]);
+    const resolved = runtime.resolveMmrTools("medium", ["read", "bash", "edit", "write", "web_search", "read_web_page"]);
     assert.equal(resolved.activeTools.includes("web_search"), true);
     assert.equal(resolved.activeTools.includes("read_web_page"), true);
     const decision = resolved.decisions.find((d) => d.requested === "web_search");
@@ -199,7 +199,7 @@ describe("mmr-web extension factory", () => {
     factory(pi);
 
     assert.equal(tools.length, 0, "no Pi tools registered when disabled");
-    const resolved = runtime.resolveMmrTools("smart", ["read", "bash", "edit", "write"]);
+    const resolved = runtime.resolveMmrTools("medium", ["read", "bash", "edit", "write"]);
     const search = resolved.decisions.find((d) => d.requested === "web_search");
     const reader = resolved.decisions.find((d) => d.requested === "read_web_page");
     assert.equal(search.status, "gated");

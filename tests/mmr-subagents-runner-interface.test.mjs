@@ -86,7 +86,7 @@ describe("createMmrSubagentRunnerFromRunWorker — shared test-injection adapter
     const runner = createMmrSubagentRunnerFromRunWorker(fakeRunWorker);
     const result = await runner.run({
       profileName: "finder",
-      parentMode: "rush",
+      parentMode: "low",
       prompt: "q",
       cwd: "/tmp/cwd",
       model: "openai/gpt-5.4-mini",
@@ -96,7 +96,7 @@ describe("createMmrSubagentRunnerFromRunWorker — shared test-injection adapter
     });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].profileName, "finder");
-    assert.equal(calls[0].parentMode, "rush");
+    assert.equal(calls[0].parentMode, "low");
     assert.equal(calls[0].prompt, "q");
     assert.equal(calls[0].model, "openai/gpt-5.4-mini");
     assert.deepEqual(calls[0].tools, ["read", "grep"]);

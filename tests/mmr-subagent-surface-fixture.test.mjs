@@ -410,7 +410,7 @@ describe("mmr-subagent-surface: Task fixture", () => {
       baseSystemPrompt,
       activeToolManifest: buildTaskActiveManifest(),
       cwd: "/abs/repo",
-      parentMode: "smart",
+      parentMode: "medium",
     });
 
     const rendered = renderMmrPromptDebugFixture(result);
@@ -427,7 +427,7 @@ describe("mmr-subagent-surface: Task fixture", () => {
     assert.match(rendered, /^# task_list$/m);
     assert.doesNotMatch(rendered, /^# Task$/m);
     assert.doesNotMatch(rendered, /^# oracle$/m);
-    assert.match(rendered, /<mmr_mode name="smart">/);
+    assert.match(rendered, /<mmr_mode name="medium">/);
     assert.match(rendered, /## Task Worker Role/);
     assert.match(rendered, /Return a compact result, not a transcript/);
     assertNoRepeatedLongSystemPromptLines("Task", rendered);
@@ -437,13 +437,13 @@ describe("mmr-subagent-surface: Task fixture", () => {
 
   it("does not duplicate parent mode guidance when Task receives an already-rewritten parent prompt", () => {
     const profile = getMmrSubagentProfile("task-subagent");
-    const rewrittenParentPrompt = readFileSync(path.join(import.meta.dirname, "fixtures/mmr-core-prompts/smart.md"), "utf8");
+    const rewrittenParentPrompt = readFileSync(path.join(import.meta.dirname, "fixtures/mmr-core-prompts/medium.md"), "utf8");
     const result = assembleMmrSubagentSurface({
       profile,
       baseSystemPrompt: rewrittenParentPrompt,
       activeToolManifest: buildTaskActiveManifest(),
       cwd: "/abs/repo",
-      parentMode: "smart",
+      parentMode: "medium",
     });
 
     const rendered = renderMmrPromptDebugFixture(result);

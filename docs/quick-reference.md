@@ -6,20 +6,20 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 
 | I want to... | Use | Notes |
 | --- | --- | --- |
-| Default balanced coding | `/mode smart` | Default when no flag/session/settings override exists |
-| Balanced coding on a Claude Code subscription | `/mode fable` | Smart posture pinned to Claude Fable 5 via `claude-subscription`, toggleable low/medium/high thinking |
-| Fast, low-token turns | `/mode rush` | Smaller posture for quick edits and short loops |
-| Deep reasoning, planning, review | `/mode deep` | Use for hard debugging, architecture, migrations, and reviews |
+| Quick, focused work | `/mode low` | GPT-5.6 Terra, medium reasoning, Smart prompt family |
+| Default balanced coding | `/mode medium` | GPT-5.5, medium reasoning, Smart prompt family, 300k safety profile |
+| Demanding implementation/debugging | `/mode high` | GPT-5.5, extra-high reasoning, Deep prompt family |
+| Maximum-effort work | `/mode ultra` | GPT-5.6 Sol, Pi `xhigh` reasoning, Deep prompt family |
 | Stock Pi behavior | `/mode free` | Releases ampi locks and removes ampi-owned tools |
 
 ```text
 /mode              # show current mode
-/mode deep         # switch mode
+/mode high         # switch mode
 /ampi-status        # concise locked-mode status
 /ampi-status debug  # model preference candidates, tool resolution, policy details
 ```
 
-Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `smart`.
+Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` inputs normalize to `low`, `medium`, `high`, and `ultra`.
 
 ## Workers and subagents
 
@@ -83,7 +83,7 @@ Minimal settings example:
 ```json
 {
   "ampiCore": {
-    "defaultMode": "rush",
+    "defaultMode": "low",
     "subagentModelPreferences": {
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
     }

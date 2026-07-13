@@ -27,7 +27,7 @@ describe("mmr-core shared runtime API", () => {
 
     const runtime = createMmrCoreRuntime();
     const built = createMmrModeState({
-      mode: getMmrMode("smart"),
+      mode: getMmrMode("medium"),
       source: "command",
       modelResolution: {
         targetModel: "gpt-5.5",
@@ -51,7 +51,7 @@ describe("mmr-core shared runtime API", () => {
     assert.equal(Object.isFrozen(live.resolution), true, "nested objects must also be frozen");
 
     assert.throws(() => { live.activeTools.push("bash"); }, /read only|object is not extensible|Cannot add property/i);
-    assert.throws(() => { live.mode = "deep"; }, /read only|Cannot assign/i);
+    assert.throws(() => { live.mode = "high"; }, /read only|Cannot assign/i);
 
     // Snapshot returns an unfrozen deep clone, safe for callers to mutate.
     const snapshot = runtime.getMmrModeStateSnapshot();
@@ -65,9 +65,9 @@ describe("mmr-core shared runtime API", () => {
     const { createMmrCoreRuntime } = await importSource("extensions/ampi-core/runtime.ts");
     const runtime = createMmrCoreRuntime();
 
-    assert.deepEqual(runtime.resolveMmrModel("rush"), {
-      targetModel: "gpt-5.5",
-      requestedModels: ["gpt-5.5", "claude-haiku-4-5-20251001", "claude-haiku-4-5"],
+    assert.deepEqual(runtime.resolveMmrModel("low"), {
+      targetModel: "gpt-5.6-terra",
+      requestedModels: ["gpt-5.6-terra", "gpt-5.5"],
       modelFound: false,
       modelApplied: false,
       fallbackApplied: false,
@@ -78,7 +78,7 @@ describe("mmr-core shared runtime API", () => {
       name: "mmr-subagents-test",
       resolve: (toolName) => (toolName === "oracle" ? { kind: "active" } : undefined),
     });
-    const resolved = runtime.resolveMmrTools("deep", ["read", "bash", "edit", "write", "oracle"]);
+    const resolved = runtime.resolveMmrTools("high", ["read", "bash", "edit", "write", "oracle"]);
 
     assert.equal(resolved.activeTools.includes("oracle"), true);
   });

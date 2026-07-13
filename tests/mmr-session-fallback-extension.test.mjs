@@ -11,7 +11,7 @@ const OTHER_MODEL = { provider: "openai", id: "gpt-5.5", reasoning: true };
 
 function lockedSmartState(overrides = {}) {
   return {
-    mode: "smart",
+    mode: "medium",
     displayName: "Smart",
     source: "command",
     targetModel: "claude-opus-4-8",
@@ -254,7 +254,7 @@ describe("mmr-session-fallback extension", () => {
     fallbackRuntime.setMmrSessionFallbackOverride("session-1", {
       version: 1,
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",
@@ -278,7 +278,7 @@ describe("mmr-session-fallback extension", () => {
     fallbackRuntime.setMmrSessionFallbackOverride("session-1", {
       version: 1,
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",
@@ -305,7 +305,7 @@ describe("mmr-session-fallback extension", () => {
     const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/ampi-session-fallback/state.ts");
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",
@@ -413,7 +413,7 @@ describe("mmr-session-fallback extension", () => {
     const { MMR_SESSION_FALLBACK_ENTRY, toPersistedMmrSessionFallbackOverride } = await importSource("extensions/ampi-session-fallback/state.ts");
     const persisted = toPersistedMmrSessionFallbackOverride({
       sessionId: "session-1",
-      mode: "smart",
+      mode: "medium",
       failingProvider: "claude-subscription",
       failingModel: "claude-opus-4-8",
       selectedProvider: "anthropic",

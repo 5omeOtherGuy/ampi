@@ -149,8 +149,8 @@ Concrete prompts live in [`profiles/prompts.ts`](profiles/prompts.ts):
 
 ### Task
 
-- Parent tool name: `Task`. Profile name: `task-subagent`. Mode-derived; `baseMode: "from-parent"` (with `deep` using the `smart` prompt base). Parent mode must be a Task-enabled locked mode; missing or `free` parent state fails closed before spawn.
-- Default model preferences: `claude-opus-4-8` high → `gpt-5.5` medium → `claude-opus-4-6` high → `claude-haiku-4-5-20251001` low → `claude-haiku-4-5` low. Rush overrides: `gpt-5.5` off → Haiku 4.5 off.
+- Parent tool name: `Task`. Profile name: `task-subagent`. Mode-derived; `baseMode: "from-parent"`, preserving the canonical parent tier and its Smart/Deep prompt family. Parent mode must be a Task-enabled locked mode; missing or `free` parent state fails closed before spawn.
+- Default model preferences: provider-pinned Claude Opus 4.8 → GPT-5.5 medium → Claude Opus 4.6 medium → Haiku 4.5 low. Low overrides this with GPT-5.6 Terra medium → GPT-5.5 medium.
 - Profile tool intent: `[read, bash, edit, write, read_web_page, web_search, finder, skill, task_list]`. `denyTools` removes `Task`, `oracle`, `librarian`, `handoff`. The per-call worker tool set is the deny-aware registered-tool intersection, passed explicitly via `--tools` and used for the worker `Available tools:` block.
 - Parameters: `{ prompt: string, description: string }`; caps `TASK_PROMPT_MAX_BYTES` (8 KiB), `TASK_DESCRIPTION_MAX_BYTES` (512 B).
 - Parent spawn passes `--ampi-parent-mode`, resolver-selected `--model`, effective `--tools`, and exact system-prompt replacement.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
@@ -10,13 +10,15 @@ after(cleanupLoadedSource);
 const fixtureDir = path.join(import.meta.dirname, "fixtures/mmr-core-prompts");
 const BASE_PROMPT = readFileSync(path.join(fixtureDir, "base.md"), "utf8");
 
+const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
+
 function readModeFixture(mode) {
   return readFileSync(path.join(fixtureDir, `${mode}.md`), "utf8");
 }
 
 function createState(overrides = {}) {
   return {
-    mode: "smart",
+    mode: "medium",
     displayName: "Smart",
     source: "settings",
     targetModel: "claude-opus-4-8",
@@ -41,15 +43,15 @@ function createState(overrides = {}) {
   };
 }
 
-const MODES = ["smart", "fable", "rush", "deep"];
+const MODES = ["medium", "ultra", "low", "high"];
 
 const PI_IDENTITY_LINE = "You are an expert coding assistant operating inside pi, a coding agent harness.";
 
 const MODE_MARKER_OPENINGS = {
-  smart: '<mmr_mode name="smart">You are pair programming with the user to solve their coding task.',
-  fable: '<mmr_mode name="fable">You are pair programming with the user to solve their coding task.',
-  rush: '<mmr_mode name="rush">You and the user share one workspace.',
-  deep: '<mmr_mode name="deep">You are an autonomous coding agent in Deep mode.',
+  medium: '<mmr_mode name="medium">You are pair programming with the user to solve their coding task.',
+  low: '<mmr_mode name="low">You are pair programming with the user to solve their coding task.',
+  high: '<mmr_mode name="high">You are an autonomous coding agent in Deep mode.',
+  ultra: '<mmr_mode name="ultra">You are an autonomous coding agent in Deep mode.',
 };
 
 function repeatedLongInstructionLines(prompt) {
@@ -92,6 +94,7 @@ describe("mmr-core prompt layer", () => {
     for (const mode of MODES) {
       const state = createState({ mode, displayName: mode[0].toUpperCase() + mode.slice(1) });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
+      if (UPDATE_FIXTURES) writeFileSync(path.join(fixtureDir, `${mode}.md`), result);
       assert.equal(result, readModeFixture(mode), `${mode}: rendered prompt must match fixture`);
       assert.equal(result.startsWith(`${PI_IDENTITY_LINE} ${MODE_MARKER_OPENINGS[mode]}`), true);
     }
@@ -197,7 +200,7 @@ describe("mmr-core prompt layer", () => {
     }
   });
 
-  it("instructs raw diagram output without diagram code fences (rush omits the diagrams fragment)", async () => {
+  it("instructs raw diagram output without diagram code fences in every tier", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const diagramSentence =
       "When a picture beats prose for architecture, flow, state, or relationships, draw it with box-drawing characters";
@@ -205,13 +208,8 @@ describe("mmr-core prompt layer", () => {
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
-      if (mode === "rush") {
-        // Rush-style modes trim the diagrams fragment for token economy.
-        assert.equal(result.includes(diagramSentence), false, `${mode}: rush recipe drops the diagrams fragment`);
-        assert.equal(result.includes("## Diagrams"), false, `${mode}: rush-style modes must not render the diagrams section`);
-      } else {
-        assert.equal(result.includes(diagramSentence), true, `${mode}: diagrams fragment must render`);
-      }
+      assert.equal(result.includes(diagramSentence), true, `${mode}: diagrams fragment must render`);
+      assert.equal(result.includes("## Diagrams"), true, `${mode}: diagrams section must render`);
       assert.equal(result.includes("```diagram"), false, `${mode}: must not force diagram code fences`);
     }
   });
@@ -365,7 +363,7 @@ describe("mmr-core prompt layer", () => {
   it("returns Pi's prompt unchanged when boundary anchors are missing", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const customPrompt = "You are a custom assistant.\n\nNo Pi-style sections here.";
-    const state = createState({ mode: "smart" });
+    const state = createState({ mode: "medium" });
     const result = buildMmrPromptLayer({ state, baseSystemPrompt: customPrompt });
     assert.equal(result, customPrompt);
   });
@@ -389,7 +387,7 @@ describe("mmr-core prompt layer", () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
-    runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", thinkingLevel: "xhigh" }));
+    runtime.setMmrModeState(createState({ mode: "high", displayName: "High", promptRoute: "deep", thinkingLevel: "xhigh" }));
     extension(buildExtensionStub(handlers));
 
     const result = await handlers.get("before_agent_start")({
@@ -401,14 +399,14 @@ describe("mmr-core prompt layer", () => {
       },
     });
 
-    assert.equal(result.systemPrompt, readModeFixture("deep"));
+    assert.equal(result.systemPrompt, readModeFixture("high"));
   });
 
   it("records and then clears a tool-selection mismatch on the live mode state across turns", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
-    runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "bash"] }));
+    runtime.setMmrModeState(createState({ mode: "high", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "bash"] }));
     extension(buildExtensionStub(handlers));
 
     // Pi rendered the prompt from only `read`; `bash` is active but absent
@@ -433,7 +431,7 @@ describe("mmr-core prompt layer", () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     const handlers = new Map();
-    runtime.setMmrModeState(createState({ mode: "deep", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "grep"] }));
+    runtime.setMmrModeState(createState({ mode: "high", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "grep"] }));
     extension(buildExtensionStub(handlers));
 
     // Pi rendered `Available tools:` without grep (snippet-gated), but grep is

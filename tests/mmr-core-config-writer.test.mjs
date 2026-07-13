@@ -14,17 +14,17 @@ describe("mmr-core config-writer", () => {
     const existing = {
       mmrWeb: { enabled: true },
       mmrCore: {
-        defaultMode: "deep",
+        defaultMode: "high",
         toolAliases: { oracle: ["mmr-oracle"] },
         modelPreferences: {
-          rush: [{ model: "claude-haiku-4-5" }],
+          low: [{ model: "claude-haiku-4-5" }],
         },
       },
     };
 
     const next = applyMmrConfigUpdate(existing, {
       modeModelPreferences: {
-        mode: "deep",
+        mode: "high",
         preferences: [
           { model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" },
         ],
@@ -32,15 +32,15 @@ describe("mmr-core config-writer", () => {
     });
 
     assert.deepEqual(next.mmrWeb, { enabled: true });
-    assert.equal(next.mmrCore.defaultMode, "deep");
+    assert.equal(next.mmrCore.defaultMode, "high");
     assert.deepEqual(next.mmrCore.toolAliases, { oracle: ["mmr-oracle"] });
     assert.deepEqual(next.mmrCore.modelPreferences, {
-      rush: [{ model: "claude-haiku-4-5" }],
-      deep: [{ model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" }],
+      low: [{ model: "claude-haiku-4-5" }],
+      high: [{ model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" }],
     });
 
     // Input is not mutated.
-    assert.deepEqual(existing.mmrCore.modelPreferences, { rush: [{ model: "claude-haiku-4-5" }] });
+    assert.deepEqual(existing.mmrCore.modelPreferences, { low: [{ model: "claude-haiku-4-5" }] });
   });
 
   it("writes a subagent override and serializes a bare-model preference as a string", async () => {
@@ -65,7 +65,7 @@ describe("mmr-core config-writer", () => {
 
     const existing = {
       mmrCore: {
-        defaultMode: "smart",
+        defaultMode: "medium",
         subagentModelPreferences: {
           finder: ["gpt-5.4-mini"],
           oracle: ["gpt-5.4"],
@@ -78,7 +78,7 @@ describe("mmr-core config-writer", () => {
     });
 
     assert.deepEqual(next.mmrCore.subagentModelPreferences, { finder: ["gpt-5.4-mini"] });
-    assert.equal(next.mmrCore.defaultMode, "smart");
+    assert.equal(next.mmrCore.defaultMode, "medium");
   });
 
   it("removes the mmrCore block entirely when the last entry is cleared", async () => {
@@ -86,13 +86,13 @@ describe("mmr-core config-writer", () => {
 
     const existing = {
       mmrCore: {
-        modelPreferences: { rush: ["claude-haiku-4-5"] },
+        modelPreferences: { low: ["claude-haiku-4-5"] },
       },
       mmrWeb: { enabled: true },
     };
 
     const next = applyMmrConfigUpdate(existing, {
-      modeModelPreferences: { mode: "rush", preferences: [] },
+      modeModelPreferences: { mode: "low", preferences: [] },
     });
 
     assert.equal("mmrCore" in next, false);
@@ -104,7 +104,7 @@ describe("mmr-core config-writer", () => {
 
     const existing = {
       mmr: {
-        core: { defaultMode: "smart" },
+        core: { defaultMode: "medium" },
       },
     };
 
@@ -114,7 +114,7 @@ describe("mmr-core config-writer", () => {
 
     assert.equal("mmrCore" in next, false);
     assert.deepEqual(next.mmr.core, {
-      defaultMode: "smart",
+      defaultMode: "medium",
       subagentModelPreferences: { finder: ["gpt-5.4-mini"] },
     });
   });
@@ -136,7 +136,7 @@ describe("mmr-core config-writer", () => {
 
       writeMmrCoreConfigFile(filePath, {
         modeModelPreferences: {
-          mode: "deep",
+          mode: "high",
           preferences: [{ model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" }],
         },
       });
@@ -150,7 +150,7 @@ describe("mmr-core config-writer", () => {
       const loaded = loadMmrCoreSettings(project, home);
 
       assert.deepEqual(loaded.settings.modelPreferences, {
-        deep: [{ model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" }],
+        high: [{ model: "gpt-5.5", providers: ["openai-codex"], thinkingLevel: "high" }],
       });
       assert.deepEqual(loaded.settings.subagentModelPreferences, {
         finder: [{ model: "gpt-5.4-mini" }],
@@ -175,7 +175,7 @@ describe("mmr-core config-writer", () => {
 
       assert.throws(
         () => writeMmrCoreConfigFile(filePath, {
-          modeModelPreferences: { mode: "smart", preferences: [{ model: "gpt-5.5" }] },
+          modeModelPreferences: { mode: "medium", preferences: [{ model: "gpt-5.5" }] },
         }),
         /not valid JSON/,
       );
@@ -318,20 +318,20 @@ describe("mmr-core config-flow: renders current values from disk, not stale snap
       mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
       mkdirSync(path.join(project, ".pi"), { recursive: true });
 
-      // Custom 'deep' preference that differs from both the mode default
+      // Custom High preference that differs from both the mode default
       // (gpt-5.5 → claude-opus-4-8) and the stale binding (empty).
       writeFileSync(
         path.join(project, ".pi/settings.json"),
-        JSON.stringify({ mmrCore: { modelPreferences: { deep: ["openai-codex/o5-preview"] } } }),
+        JSON.stringify({ mmrCore: { modelPreferences: { high: ["openai-codex/o5-preview"] } } }),
       );
 
       const captured = [];
       await withTempHome(home, () => runMmrConfigFlow(makeCtx(project, captured, "mode"), staleBindings()));
 
-      const deepChoice = captured.find((choice) => choice.startsWith("deep \u2014"));
-      assert.ok(deepChoice, `expected a 'deep' mode choice, got ${JSON.stringify(captured)}`);
-      assert.match(deepChoice, /openai-codex\/o5-preview/, "deep current value should reflect the on-disk preference");
-      assert.doesNotMatch(deepChoice, /gpt-5\.5/, "deep current value must not fall back to the stale binding's mode default");
+      const highChoice = captured.find((choice) => choice.startsWith("high \u2014"));
+      assert.ok(highChoice, `expected a 'high' mode choice, got ${JSON.stringify(captured)}`);
+      assert.match(highChoice, /openai-codex\/o5-preview/, "High current value should reflect the on-disk preference");
+      assert.doesNotMatch(highChoice, /gpt-5\.5/, "High current value must not fall back to the stale binding's mode default");
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

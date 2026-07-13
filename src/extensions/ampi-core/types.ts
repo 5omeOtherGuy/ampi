@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 
-export type MmrModeKey = "smart" | "fable" | "rush" | "deep" | "free";
+export type MmrModeKey = "low" | "medium" | "high" | "ultra" | "free";
 
 /**
  * Locked mode keys (modes that apply model/thinking/request/prompt policy).
@@ -9,7 +9,7 @@ export type MmrModeKey = "smart" | "fable" | "rush" | "deep" | "free";
  */
 export type MmrLockedModeKey = Exclude<MmrModeKey, "free">;
 
-export type MmrPromptRoute = "default" | "rush" | "deep";
+export type MmrPromptRoute = "default" | "deep";
 
 export type MmrModeSelectionSource = "flag" | "command" | "session" | "settings" | "default" | "native";
 
@@ -272,8 +272,8 @@ export interface MmrModeState {
    * Runtime-only context window of the selected provider model that Pi will
    * actually compact against. This is the registry-declared window after the
    * mode's active-model cap (`withMmrModeContextCap`) is applied: a mode that
-   * sets a profile caps down to it (e.g. smart 300k), while the GPT/Codex
-   * modes set none and keep Pi's registered window. For a capped route
+   * sets a profile caps down to it (e.g. Medium at 300k), while the uncapped
+   * modes keep Pi's registered window. For a capped route
    * at/above the profile this equals the profile window. Captured so diagnostics can detect when this effective
    * window exceeds the mode's display profile (`effectiveContextWindow`).
    * Pi-native compaction follows this window; the per-mode cap normally

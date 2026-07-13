@@ -30,7 +30,7 @@ mode → model/thinking → active tools → prompt route → diagnostics
 
 ## Parity already achieved
 
-- Whole-harness locked modes: `smart`, `fable`, `rush`, `deep`, `free`.
+- Whole-harness locked modes: `low`, `medium`, `high`, `ultra`, `free`.
 - Provider-neutral model preference order that works with subscription and API-key providers.
 - Per-mode thinking/context/tool/prompt policy.
 - Status/config/debug surfaces for deterministic mode resolution.
@@ -128,4 +128,4 @@ Public text includes docs, code comments, test names, fixtures, snapshots, packa
 - Do not include credentials, raw provider payloads, local session data, private analysis, exact local paths, or non-public provenance.
 - Public AMP Code terminology and parity positioning are allowed when written in repo-owned words and grounded in implemented behavior.
 - Keep model-visible prompt/tool metadata aligned with the implementation and the active tool surface.
-- Keep mode keys (`smart`, `fable`, `rush`, `deep`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`, `reviewer`) stable unless a coordinated migration plan exists.
+- Keep canonical mode keys (`low`, `medium`, `high`, `ultra`, `free`) and subagent names (`finder`, `oracle`, `librarian`, `history-reader`, `task-subagent`, `Task`, `reviewer`) stable. The coordinated tier migration keeps `rush`, `smart`, `deep`, and `fable` as accepted input aliases.

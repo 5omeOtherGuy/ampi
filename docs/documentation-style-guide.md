@@ -85,7 +85,7 @@ When describing a tool's resolution, use the same five-state vocabulary as the c
 - **Tables summarize; bullets explain.** Use a table to compare ≥ 2 things on the same shape. Long behavior belongs in bullets under the table.
 - **Max 4 columns** when possible. Wider tables wrap badly on narrow terminals and GitHub mobile.
 - **Avoid paragraph cells.** If a cell would exceed ~12 words, replace the column with a bullet list below the table.
-- **Code-format identifiers.** Settings keys (`ampiCore.defaultMode`), env vars (`BRAVE_API_KEY`), tool names (`web_search`), modes (`smart`), and file paths (`src/extensions/...`).
+- **Code-format identifiers.** Settings keys (`ampiCore.defaultMode`), env vars (`BRAVE_API_KEY`), tool names (`web_search`), modes (`medium`), and file paths (`src/extensions/...`).
 - **Lists are unordered unless order matters.** Use ordered lists for procedures, precedence chains, and lifecycle steps; otherwise `-`.
 - **Sentence case headings.** `## Diagnostics and troubleshooting`, not `## Diagnostics And Troubleshooting`.
 

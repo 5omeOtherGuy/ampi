@@ -724,7 +724,7 @@ describe("mmr-tasks task_list — persisted-state helpers (mirror mmr-core.mode-
     const entries = [
       { type: "custom", customType: "mmr-tasks.todo-state",
         data: { version: 1, tasks: [{ content: "old", activeForm: "olding", status: "pending" }] } },
-      { type: "custom", customType: "mmr-core.mode-state", data: { mode: "smart" } },
+      { type: "custom", customType: "mmr-core.mode-state", data: { mode: "medium" } },
       { type: "custom", customType: "mmr-tasks.todo-state",
         data: { version: 1, tasks: [{ content: "new", activeForm: "newing", status: "completed" }] } },
       { type: "session_info", name: "foo" },

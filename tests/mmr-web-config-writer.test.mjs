@@ -31,11 +31,11 @@ describe("mmr-web config-writer", () => {
   it("preserves unrelated top-level keys (mmrCore) and unrelated mmrWeb fields", async () => {
     const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
-      mmrCore: { defaultMode: "deep" },
+      mmrCore: { defaultMode: "high" },
       mmrWeb: { enabled: true, maxResultBytes: 12345 },
     };
     const next = applyMmrWebConfigUpdate(existing, { backend: "brave" });
-    assert.deepEqual(next.mmrCore, { defaultMode: "deep" });
+    assert.deepEqual(next.mmrCore, { defaultMode: "high" });
     assert.deepEqual(next.mmrWeb, { enabled: true, maxResultBytes: 12345, backend: "brave" });
     // Input is not mutated.
     assert.deepEqual(existing.mmrWeb, { enabled: true, maxResultBytes: 12345 });
@@ -44,10 +44,10 @@ describe("mmr-web config-writer", () => {
   it("supports the nested mmr.web layout and keeps it nested if that's how the file is shaped", async () => {
     const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
-      mmr: { core: { defaultMode: "deep" }, web: { enabled: true } },
+      mmr: { core: { defaultMode: "high" }, web: { enabled: true } },
     };
     const next = applyMmrWebConfigUpdate(existing, { searchBackend: "brave" });
-    assert.deepEqual(next.mmr.core, { defaultMode: "deep" });
+    assert.deepEqual(next.mmr.core, { defaultMode: "high" });
     assert.deepEqual(next.mmr.web, { enabled: true, searchBackend: "brave" });
     assert.equal(next.mmrWeb, undefined, "must not invent a flat block when nested layout was in use");
   });
@@ -64,11 +64,11 @@ describe("mmr-web config-writer", () => {
   it("drops the mmrWeb block entirely when the last field is cleared", async () => {
     const { applyMmrWebConfigUpdate } = await importSource("extensions/ampi-web/config-writer.ts");
     const existing = {
-      mmrCore: { defaultMode: "deep" },
+      mmrCore: { defaultMode: "high" },
       mmrWeb: { backend: "brave" },
     };
     const next = applyMmrWebConfigUpdate(existing, { backend: "clear" });
-    assert.deepEqual(next, { mmrCore: { defaultMode: "deep" } });
+    assert.deepEqual(next, { mmrCore: { defaultMode: "high" } });
     assert.equal("mmrWeb" in next, false);
   });
 

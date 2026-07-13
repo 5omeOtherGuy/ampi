@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runMmrConfigFlow } from "./config-flow.js";
-import { formatMmrModeList, isMmrModeKey, MMR_MODE_KEYS } from "./modes.js";
+import { formatMmrModeList, MMR_MODE_KEYS, resolveMmrModeKey } from "./modes.js";
 import { getMmrModeHistory, getMmrModeState } from "./runtime.js";
 import { showMmrChangelogCommand } from "./changelog.js";
 import { formatMmrStatus } from "./status.js";
@@ -40,12 +40,13 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
         return;
       }
 
-      if (!isMmrModeKey(requested)) {
+      const mode = resolveMmrModeKey(requested);
+      if (!mode) {
         ctx.ui.notify(`Unknown ampi mode "${requested}". Available modes: ${MMR_MODE_KEYS.join(", ")}`, "error");
         return;
       }
 
-      await controller.applyMode(requested, ctx, { source: "command", persist: true, notify: true });
+      await controller.applyMode(mode, ctx, { source: "command", persist: true, notify: true });
     },
   });
 
@@ -118,7 +119,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   // silently shadow one of them. `alt+r` is free across ampi and is not a
   // Pi default binding.
   pi.registerShortcut("alt+r", {
-    description: "Toggle ampi thinking level (smart/fable/deep)",
+    description: "Toggle ampi thinking level (medium/high/ultra)",
     handler: async (ctx) => {
       await controller.toggleThinkingFromShortcut(ctx);
     },

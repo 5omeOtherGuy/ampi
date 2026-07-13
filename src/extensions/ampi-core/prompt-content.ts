@@ -170,13 +170,11 @@ export const SHARED_CODING_GUIDANCE = SHARED_CODING_GUIDANCE_FRAGMENT_IDS.map(
 
 // --- Mode-specific coding-guidance overrides ---
 //
-// The shared fragments above are the base text (rush renders them unchanged).
-// Smart-family modes (smart, fable) and deep override the four body
-// fragments where the authoritative mode framings diverge: smart-family uses
-// the default-template framing (action-assumptive, absolute investigate rule,
-// hard verification floor); deep uses the deep-template framing (outcome-first
-// smallest useful definition of done, discovery discipline, risk-scaled
-// verification, engineering judgment).
+// Low and Medium use the Smart-family body overrides; High and Ultra use the
+// Deep-family overrides. The Smart family keeps the action-assumptive default
+// framing, absolute investigate rule, and hard verification floor. The Deep
+// family uses an outcome-first definition of done, discovery discipline,
+// risk-scaled verification, and engineering judgment.
 
 const SMART_FAMILY_AUTONOMY = block([
   "## Autonomy and persistence",
@@ -300,15 +298,16 @@ const DEEP_CODING_GUIDANCE_OVERRIDES: Partial<Record<SharedCodingGuidanceFragmen
 };
 
 /**
- * Per-mode body-fragment overrides. Modes without an entry (rush) render the
- * shared base fragments unchanged.
+ * Per-mode body-fragment overrides. Low and Medium share the Smart-family
+ * override; High and Ultra share the Deep-family override.
  */
 export const MODE_CODING_GUIDANCE_OVERRIDES: Partial<
   Record<PromptedMmrModeKey, Partial<Record<SharedCodingGuidanceFragmentId, string>>>
 > = {
-  smart: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  fable: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
-  deep: DEEP_CODING_GUIDANCE_OVERRIDES,
+  low: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
+  medium: SMART_FAMILY_CODING_GUIDANCE_OVERRIDES,
+  high: DEEP_CODING_GUIDANCE_OVERRIDES,
+  ultra: DEEP_CODING_GUIDANCE_OVERRIDES,
 };
 
 /** Resolve a shared coding-guidance fragment to its mode-specific text. */
@@ -321,19 +320,6 @@ export function resolveModeCodingGuidanceFragment(
 }
 
 // --- Mode postures ---
-
-const RUSH_POSTURE = block([
-  "## Rush mode",
-  "",
-  "Rush is the token-economy mode: smallest correct outcome, fewest tool loops, lowest latency. You run with no extended reasoning — don't compensate with long plans, broad exploration, or verbose output.",
-  "",
-  "- Scope: treat the request as a bounded ticket. If it is broad, unclear, destructive, irreversible, or security-sensitive, ask one narrow question or state the smallest safe assumption and proceed. Answer questions, plan requests, and brainstorming without editing.",
-  "- Discovery: minimum evidence. Use direct lookups first — exact text or filename search, targeted reads — and behavior-level search only when those miss. Budget one focused loop, a second only if the first misses the edit site or the check. Stop the moment you can name the files to change and the validating check; never re-read or broaden past that point.",
-  "- Editing: apply the smallest correct change directly with the active edit tool, on existing patterns — terse user-facing text, clear maintainable code, the existing UI design system. No new files, helpers, dependencies, config, or refactors unless the task requires them. Build on foreign changes that touch the task; ask only on conflict. If the task is too large to do safely, name the smaller target you can deliver now instead of expanding scope.",
-  "- Verification: one narrow check — focused test, typecheck, lint, or smoke — taking the command from AGENTS.md or project instructions when present; skip only for read-only answers or trivial text changes. When a check fails, separate breakage you caused from pre-existing or environment failures: fix yours, report the rest with the next smallest action.",
-  "- Communication: outcome first — one short paragraph or 1-3 bullets naming changed files and the check result; one line for simple questions. At most one sentence before or between tool calls; no process narration, no noisy command output.",
-  "- Stop when the outcome is implemented and the check passed, or the blocker is clear and the next smallest action is stated.",
-]);
 
 const DEEP_POSTURE = block([
   "## Deep mode",
@@ -352,7 +338,7 @@ const DEEP_POSTURE = block([
 // --- Mode templates: intros, postures, closing lines ---
 
 export interface MmrModeBlockTemplate {
-  /** Mode key encoded in the one-line role marker, e.g. `<mmr_mode name="smart">`. */
+  /** Mode key encoded in the one-line role marker, e.g. `<mmr_mode name="medium">`. */
   tag: string;
   /** Mode-specific opening prose inside the one-line role marker. */
   intro: string;
@@ -363,10 +349,8 @@ export interface MmrModeBlockTemplate {
 }
 
 /**
- * Smart-family template body (smart, fable). Both modes render the smart
- * system prompt verbatim — same intro, no posture section (the
- * authoritative default template carries its framing entirely in the intro and
- * body fragments), same closing line — and differ only in the mode tag.
+ * Smart-family template body shared by Low and Medium. Both tiers render the
+ * same intro, body fragments, and closing line, differing only in the mode tag.
  */
 const SMART_FAMILY_TEMPLATE_BODY = {
   intro:
@@ -376,26 +360,28 @@ const SMART_FAMILY_TEMPLATE_BODY = {
     "You MUST answer concisely with fewer than 4 lines of text (not including tool use or code generation), unless the user asks for more detail.",
 } as const;
 
+const DEEP_TEMPLATE_BODY = {
+  intro: "You are an autonomous coding agent in Deep mode. You and the user share one workspace, and your job is to deliver the outcome they're after. You bring a senior engineer's judgment: you read the codebase before you change it, you prefer the smallest correct change, and you carry the work through implementation and verification rather than stopping at a proposal. When the user redirects you, adapt immediately and keep moving toward the result.",
+  postureSections: DEEP_POSTURE,
+  closingLine:
+    "Lead with the outcome. For simple work, use 1-2 short paragraphs plus an optional verification line; for larger work, use at most 2-3 short sections or 4-6 flat bullets — if the answer starts becoming a changelog or file-by-file inventory, compress it before sending. Separate confirmed facts from conjecture, and state the residual risk and the follow-up checks that would close it.",
+} as const;
+
 export const MMR_MODE_PROMPT_TEMPLATES = {
-  smart: {
-    tag: "smart",
+  low: {
+    tag: "low",
     ...SMART_FAMILY_TEMPLATE_BODY,
   },
-  fable: {
-    tag: "fable",
+  medium: {
+    tag: "medium",
     ...SMART_FAMILY_TEMPLATE_BODY,
   },
-  rush: {
-    tag: "rush",
-    intro: "You and the user share one workspace. Deliver the smallest correct outcome with the fewest useful tool loops, and verify what you change.",
-    postureSections: RUSH_POSTURE,
-    closingLine: "Speed and low token use are the priority: do the smallest correct thing, verify narrowly, report honestly, and stop.",
+  high: {
+    tag: "high",
+    ...DEEP_TEMPLATE_BODY,
   },
-  deep: {
-    tag: "deep",
-    intro: "You are an autonomous coding agent in Deep mode. You and the user share one workspace, and your job is to deliver the outcome they're after. You bring a senior engineer's judgment: you read the codebase before you change it, you prefer the smallest correct change, and you carry the work through implementation and verification rather than stopping at a proposal. When the user redirects you, adapt immediately and keep moving toward the result.",
-    postureSections: DEEP_POSTURE,
-    closingLine:
-      "Lead with the outcome. For simple work, use 1-2 short paragraphs plus an optional verification line; for larger work, use at most 2-3 short sections or 4-6 flat bullets — if the answer starts becoming a changelog or file-by-file inventory, compress it before sending. Separate confirmed facts from conjecture, and state the residual risk and the follow-up checks that would close it.",
+  ultra: {
+    tag: "ultra",
+    ...DEEP_TEMPLATE_BODY,
   },
 } satisfies Record<PromptedMmrModeKey, MmrModeBlockTemplate>;

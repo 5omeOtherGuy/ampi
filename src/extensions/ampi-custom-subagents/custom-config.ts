@@ -4,7 +4,7 @@ import path from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { rewriteJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
-import { isMmrModeKey } from "../ampi-core/modes.js";
+import { resolveMmrModeKey } from "../ampi-core/modes.js";
 import { isThinkingLevel } from "../ampi-core/settings.js";
 import type { MmrLockedModeKey } from "../ampi-core/types.js";
 import {
@@ -171,13 +171,14 @@ function normalizeModeScope(
   }
   const modes: MmrLockedModeKey[] = [];
   for (const entry of value) {
-    if (typeof entry !== "string" || !isMmrModeKey(entry) || entry === "free") {
+    const mode = typeof entry === "string" ? resolveMmrModeKey(entry) : undefined;
+    if (!mode || mode === "free") {
       ctx.warnings.push(
-        `Ignoring invalid mode "${String(entry)}" for ${ctx.rootKey}.custom.agents.${ctx.id} in ${ctx.filePath}: expected a locked mode key (smart, fable, rush, deep).`,
+        `Ignoring invalid mode "${String(entry)}" for ${ctx.rootKey}.custom.agents.${ctx.id} in ${ctx.filePath}: expected a locked mode key (low, medium, high, ultra).`,
       );
       continue;
     }
-    if (!modes.includes(entry)) modes.push(entry);
+    if (!modes.includes(mode)) modes.push(mode);
   }
   return modes;
 }

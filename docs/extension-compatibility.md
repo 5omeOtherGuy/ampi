@@ -6,7 +6,7 @@
 
 ## Summary
 
-`ampi` is additive to Pi. It does not remove or rename anything you install; it only changes what is *active* while one of its **locked modes** (`smart`, `fable`, `rush`, `deep`) is selected. In **`free` mode**, `ampi` releases all enforcement and behaves as if it were not installed (it only drops its own tool registrations), so every Pi extension works normally.
+`ampi` is additive to Pi. It does not remove anything you install; it only changes what is *active* while one of its **locked modes** (`low`, `medium`, `high`, `ultra`) is selected. In **`free` mode**, `ampi` releases all enforcement and behaves as if it were not installed (it only drops its own tool registrations), so every Pi extension works normally. Legacy mode names remain accepted as migration aliases.
 
 Three locked-mode mechanics drive every interaction below:
 
@@ -56,7 +56,7 @@ Custom provider extensions are considered in locked modes **only** when the mode
 
 ### Input transforms — Supported
 
-`inline-bash`, `input-transform`, `file-trigger`, `send-user-message` chain normally. The only edge: in `smart` mode an auto-compaction may handle a submission and replay it post-compaction, which can re-order a transform for that one submission. Cooperative in practice.
+`inline-bash`, `input-transform`, `file-trigger`, `send-user-message` chain normally. The only edge: in `medium` mode an auto-compaction may handle a submission and replay it post-compaction, which can re-order a transform for that one submission. Cooperative in practice.
 
 ### System-prompt extensions — Supported (append) / not supported (head replacement)
 
@@ -64,7 +64,7 @@ Append-style extensions (`pirate`, `claude-rules`, `prompt-customizer`, `system-
 
 ### Compaction extensions — Supported with recommendation
 
-`custom-compaction`, `trigger-compact`, and similar overlap `smart` mode's auto-compaction. Both triggers can fire; behavior depends on load order and thresholds. If you run your own compaction policy, prefer a non-`smart` locked mode or `free` to avoid double-triggering.
+`custom-compaction`, `trigger-compact`, and similar overlap Medium's inherited 300k compaction profile. Both triggers can fire; behavior depends on load order and thresholds. If you run your own compaction policy, prefer Low, High, Ultra, or `free` to avoid double-triggering.
 
 ### UI, footer/header, widgets, games, session metadata — Supported
 
@@ -92,6 +92,6 @@ Your own subagent/`Task`-style extension runs in the parent session like any oth
 | Input transforms | Supported | use anywhere |
 | System-prompt append | Supported | use anywhere |
 | System-prompt head replacement | Not supported in locked modes | use `free` |
-| Compaction extensions | Supported | avoid `smart`, or use `free` |
+| Compaction extensions | Supported | avoid `medium`, or use `free` |
 | UI / metadata / git / resources | Supported | use anywhere |
 | Subagent extensions | Supported in parent only | n/a |

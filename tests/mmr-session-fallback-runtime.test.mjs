@@ -21,8 +21,8 @@ describe("mmr-session-fallback runtime reload guard", () => {
     assert.equal(runtime.getMmrSessionFallbackOverrideSnapshot("session-1"), undefined);
 
     // After rebuild the runtime is usable and round-trips overrides.
-    runtime.setMmrSessionFallbackOverride("session-1", { mode: "deep" });
-    assert.deepEqual(runtime.getMmrSessionFallbackOverrideSnapshot("session-1"), { mode: "deep" });
+    runtime.setMmrSessionFallbackOverride("session-1", { mode: "high" });
+    assert.deepEqual(runtime.getMmrSessionFallbackOverrideSnapshot("session-1"), { mode: "high" });
 
     // The stale plain object was replaced by a real Map-backed runtime.
     assert.ok(globalThis[RUNTIME_KEY].overrides instanceof Map);
@@ -31,11 +31,11 @@ describe("mmr-session-fallback runtime reload guard", () => {
   it("reuses a compatible singleton across accessors", async () => {
     const runtime = await importSource("extensions/ampi-session-fallback/runtime.ts");
 
-    runtime.setMmrSessionFallbackOverride("session-2", { mode: "rush" });
+    runtime.setMmrSessionFallbackOverride("session-2", { mode: "low" });
     const instance = globalThis[RUNTIME_KEY];
 
     // A subsequent accessor sees the same shared state and same instance.
-    assert.deepEqual(runtime.getMmrSessionFallbackOverrideSnapshot("session-2"), { mode: "rush" });
+    assert.deepEqual(runtime.getMmrSessionFallbackOverrideSnapshot("session-2"), { mode: "low" });
     runtime.clearMmrSessionFallbackOverride("session-2");
     assert.equal(runtime.getMmrSessionFallbackOverrideSnapshot("session-2"), undefined);
     assert.equal(globalThis[RUNTIME_KEY], instance);
