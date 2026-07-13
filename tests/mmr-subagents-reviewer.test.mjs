@@ -15,7 +15,7 @@
 //   3. Guidelines stay a single routing line naming reviewer.
 //   4. The `reviewer` subagent profile is standalone, read-only by
 //      contract (read/grep/find/bash, no MCP/toolbox), backgroundable, and
-//      uses GPT-5.5 at medium effort.
+//      uses GPT-5.6 Terra at medium effort.
 //   5. The worker system prompt pins the review method: merge-base
 //      origin/HEAD reference commands, read-only guardrails, low
 //      persistence, the oversized-diff abort, severity/type taxonomy, and
@@ -144,7 +144,7 @@ describe("reviewer tool definition", () => {
 });
 
 describe("reviewer subagent profile", () => {
-  it("is standalone, read-only by contract, backgroundable, and uses GPT-5.5 medium", async () => {
+  it("is standalone, read-only by contract, backgroundable, and uses GPT-5.6 Terra medium", async () => {
     const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
     const profile = getMmrSubagentProfile("reviewer");
     assert.ok(profile, "mmr-core must expose a reviewer subagent profile");
@@ -156,7 +156,7 @@ describe("reviewer subagent profile", () => {
     assert.notEqual(profile.backgroundable, false, "reviewer must be backgroundable");
     assert.equal(profile.thinkingLevel, "medium");
     assert.deepEqual([...profile.modelPreferences], [
-      { model: "gpt-5.5", thinkingLevel: "medium" },
+      { model: "gpt-5.6-terra", thinkingLevel: "medium" },
     ]);
   });
 
@@ -260,7 +260,7 @@ describe("reviewer execute() seam", () => {
     assert.equal(calls.length, 0, "runner must not be invoked when params are invalid");
   });
 
-  it("calls the injected runner with the assembled prompt, profile, and the GPT-5.5 route", async () => {
+  it("calls the injected runner with the assembled prompt, profile, and the GPT-5.6 Terra route", async () => {
     const { createReviewerTool, REVIEWER_WORKER_TOOLS } = await importSource(REVIEWER_MODULE);
     const { runWorker, calls } = makeRunnerSpy();
     const tool = createReviewerTool({
@@ -274,7 +274,7 @@ describe("reviewer execute() seam", () => {
       undefined,
       {
         cwd: "/abs/project",
-        modelRegistry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.5" }]),
+        modelRegistry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.6-terra" }]),
       },
     );
     assert.equal(calls.length, 1);
@@ -285,7 +285,7 @@ describe("reviewer execute() seam", () => {
     // does not mirror --tools (same contract as finder).
     assert.equal(options.tools, undefined);
     assert.equal(options.systemPrompt, "SP for /abs/project");
-    assert.equal(options.model, "openai-codex/gpt-5.5");
+    assert.equal(options.model, "openai-codex/gpt-5.6-terra");
     assert.equal(options.profileName, "reviewer");
     assert.equal(result.details.cwd, "/abs/project");
     assert.deepEqual([...result.details.workerTools], [...REVIEWER_WORKER_TOOLS]);

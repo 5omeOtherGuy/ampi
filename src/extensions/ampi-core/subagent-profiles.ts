@@ -278,15 +278,14 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   oracle: deepFreeze({
     name: "oracle",
     displayName: "Oracle",
-    // Oracle is the high-capability advisory worker. Primary route is
-    // GPT-5.5 at XHIGH reasoning; the Claude Opus 4.6 fallback runs at
-    // HIGH so the advisor still delivers strong reasoning even when the
-    // primary provider is not authenticated.
+    // Oracle is the high-capability advisory worker. GPT-5.6 Sol at HIGH is
+    // the primary route; Claude Opus 4.6 remains the HIGH fallback when the
+    // primary provider is unavailable.
     modelPreferences: [
-      { model: "gpt-5.5", thinkingLevel: "xhigh" },
+      { model: "gpt-5.6-sol", thinkingLevel: "high" },
       { model: "claude-opus-4-6", thinkingLevel: "high" },
     ],
-    thinkingLevel: "xhigh",
+    thinkingLevel: "high",
     // The full advisory tool surface. Pi-native concrete names where a
     // direct equivalent exists (Read → read, Grep → grep, glob → find);
     // ampi-web / ampi-history names where the tool is owned by a sibling
@@ -317,10 +316,10 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   "reviewer": deepFreeze({
     name: "reviewer",
     displayName: "Code Review",
-    // Code review uses GPT-5.5 at medium effort; settings can still override
+    // Code review uses GPT-5.6 Terra at medium effort; settings can still override
     // `subagentModelPreferences.reviewer` when an operator needs a local route.
     modelPreferences: [
-      { model: "gpt-5.5", thinkingLevel: "medium" },
+      { model: "gpt-5.6-terra", thinkingLevel: "medium" },
     ],
     thinkingLevel: "medium",
     // Read-only review surface: local reads/searches plus bash for the
@@ -342,13 +341,13 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
   librarian: deepFreeze({
     name: "librarian",
     displayName: "Librarian",
-    // Default librarian usage is GPT-5.5 with no reasoning (thinking off):
+    // Default librarian usage is GPT-5.6 Sol with no reasoning (thinking off):
     // repository lookups are retrieval-oriented, so the primary route runs
     // reasoning-free for latency/cost, falling back to Opus 4.6 then GPT-5.4
-    // when GPT-5.5 is not registered. The profile-level `thinkingLevel: "off"`
+    // when GPT-5.6 Sol is not registered. The profile-level `thinkingLevel: "off"`
     // applies to every fallback that carries no per-entry level.
     modelPreferences: [
-      { model: "gpt-5.5", thinkingLevel: "off" },
+      { model: "gpt-5.6-sol", thinkingLevel: "off" },
       { model: "claude-opus-4-6" },
       { model: "gpt-5.4" },
     ],

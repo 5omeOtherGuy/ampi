@@ -148,7 +148,7 @@ export const ORACLE_PROMPT_GUIDELINES: readonly string[] = [
 ];
 
 export const ORACLE_DESCRIPTION = [
-  "Consult the oracle - an AI advisor powered by OpenAI's GPT-5.5 reasoning model that can plan, review, and provide expert guidance.",
+  "Consult the oracle - an AI advisor powered by OpenAI's GPT-5.6 Sol high reasoning model that can plan, review, and provide expert guidance.",
   "",
   ORACLE_ALWAYS_BLOCKING_GUIDANCE,
   "",

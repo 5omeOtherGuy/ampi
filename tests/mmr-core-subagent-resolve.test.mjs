@@ -172,15 +172,15 @@ describe("resolveMmrSubagentRoute", () => {
     const primary = resolveMmrSubagentRoute({
       profile,
       registry: makeRegistry([
-        { provider: "openai-codex", id: "gpt-5.5" },
+        { provider: "openai-codex", id: "gpt-5.6-sol" },
         { provider: "claude-subscription", id: "claude-opus-4-6" },
         { provider: "openai-codex", id: "gpt-5.4" },
       ]),
     });
     assert.equal(primary.ok, true);
-    // Default librarian usage: GPT-5.5 with no reasoning (thinking off).
+    // Default librarian usage: GPT-5.6 Sol with no reasoning (thinking off).
     assert.equal(primary.selected.provider, "openai-codex");
-    assert.equal(primary.selected.model, "gpt-5.5");
+    assert.equal(primary.selected.model, "gpt-5.6-sol");
     assert.equal(primary.selected.thinkingLevel, "off");
     assert.deepEqual([...primary.tools], [
       "read_github",
@@ -193,7 +193,7 @@ describe("resolveMmrSubagentRoute", () => {
     ]);
     assert.equal(primary.promptRoute, "standalone");
 
-    // Opus 4.6 fallback when GPT-5.5 is not registered; still reasoning-free
+    // Opus 4.6 fallback only when GPT-5.6 Sol is unavailable; still reasoning-free
     // (inherits the profile-level thinking-off default).
     const fallback = resolveMmrSubagentRoute({
       profile,
@@ -215,6 +215,40 @@ describe("resolveMmrSubagentRoute", () => {
     assert.equal(lastFallback.ok, true);
     assert.equal(lastFallback.selected.provider, "openai-codex");
     assert.equal(lastFallback.selected.model, "gpt-5.4");
+  });
+
+  it("resolves the registered Oracle and reviewer primary routes with their exact thinking levels", async () => {
+    const { resolveMmrSubagentRoute } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const cases = [
+      { name: "oracle", model: "gpt-5.6-sol", thinkingLevel: "high", fallback: "claude-opus-4-6" },
+      { name: "reviewer", model: "gpt-5.6-terra", thinkingLevel: "medium" },
+    ];
+    for (const expected of cases) {
+      const profile = getMmrSubagentProfile(expected.name);
+      assert.ok(profile, `${expected.name} profile must be registered`);
+      assert.equal(profile.modelPreferences[0]?.model, expected.model);
+      assert.equal(profile.modelPreferences[0]?.thinkingLevel, expected.thinkingLevel);
+      const registryModels = [{ provider: "openai-codex", id: expected.model }];
+      if (expected.fallback) registryModels.push({ provider: "claude-subscription", id: expected.fallback });
+      const result = resolveMmrSubagentRoute({ profile, registry: makeRegistry(registryModels) });
+      assert.equal(result.ok, true);
+      assert.equal(result.selected.model, expected.model);
+      assert.equal(result.selected.thinkingLevel, expected.thinkingLevel);
+    }
+  });
+
+  it("uses Oracle's fallback only when GPT-5.6 Sol is unavailable", async () => {
+    const { resolveMmrSubagentRoute } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("oracle");
+    const result = resolveMmrSubagentRoute({
+      profile,
+      registry: makeRegistry([{ provider: "claude-subscription", id: "claude-opus-4-6" }]),
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.selected.model, "claude-opus-4-6");
+    assert.equal(result.selected.thinkingLevel, "high");
   });
 
   it("fails closed for librarian model and explicit-tool mismatches", async () => {

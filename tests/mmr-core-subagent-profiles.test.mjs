@@ -127,16 +127,16 @@ describe("mmr-core subagent profile registry", () => {
     );
     assert.equal(
       profile.thinkingLevel,
-      "xhigh",
-      "oracle profile must use xhigh reasoning by default",
+      "high",
+      "oracle profile must use high reasoning by default",
     );
     assert.ok(Array.isArray(profile.modelPreferences));
     assert.ok(profile.modelPreferences.length >= 2, "oracle must list a primary and at least one fallback");
     const prefIds = profile.modelPreferences.map((preference) => preference.model);
     assert.deepEqual(
       prefIds,
-      ["gpt-5.5", "claude-opus-4-6"],
-      "oracle profile model preferences must be GPT-5.5 then Claude Opus 4.6",
+      ["gpt-5.6-sol", "claude-opus-4-6"],
+      "oracle profile model preferences must be GPT-5.6 Sol then Claude Opus 4.6",
     );
     const opus = profile.modelPreferences.find((p) => p.model === "claude-opus-4-6");
     assert.equal(
@@ -170,8 +170,8 @@ describe("mmr-core subagent profile registry", () => {
     ]);
     assert.equal(profile.thinkingLevel, "off");
     const prefIds = profile.modelPreferences.map((preference) => preference.model);
-    assert.deepEqual(prefIds, ["gpt-5.5", "claude-opus-4-6", "gpt-5.4"]);
-    // Default librarian usage runs reasoning-free: the GPT-5.5 primary carries
+    assert.deepEqual(prefIds, ["gpt-5.6-sol", "claude-opus-4-6", "gpt-5.4"]);
+    // Default librarian usage runs reasoning-free: the GPT-5.6 Sol primary carries
     // an explicit thinking-off level.
     assert.equal(profile.modelPreferences[0].thinkingLevel, "off");
   });
