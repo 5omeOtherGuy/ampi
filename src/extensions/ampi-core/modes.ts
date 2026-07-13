@@ -138,7 +138,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     displayName: "Medium",
     description: "Balanced intelligence, speed, and cost for most tasks.",
     modelPreferences: [
-      { model: "gpt-5.5" },
+      { model: "gpt-5.6-sol" },
       { model: "claude-opus-4-8" },
     ],
     thinkingLevel: "medium",
@@ -152,7 +152,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     displayName: "High",
     description: "Deep reasoning for hard tasks.",
     modelPreferences: [
-      { model: "gpt-5.5" },
+      { model: "gpt-5.6-sol" },
       { model: "claude-opus-4-8" },
     ],
     thinkingLevel: "xhigh",
