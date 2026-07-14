@@ -55,6 +55,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | Data storage conventions | [`data-storage-conventions.md`](data-storage-conventions.md) |
 | Prompt provenance | [`prompt-provenance.md`](prompt-provenance.md) |
 | Documentation style | [`documentation-style-guide.md`](documentation-style-guide.md) |
+| Architecture decision records | [`adr/README.md`](adr/README.md) |
 
 ## Contributor navigation
 
