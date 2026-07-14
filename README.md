@@ -4,207 +4,150 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Pi package](https://img.shields.io/badge/Pi-package-7c3aed)
 
-> AMP Code but in Pi Agent.
+> A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
 
-`ampi` is a faithful, self-contained AMP Code-style harness for Pi Agent. It brings the AMP-style coding workflow into Pi as a production-ready extension package for the implemented workflows: opinionated locked modes, curated tools, subagents, background workers, web/repository/session context, fallback behavior, and strong defaults that aim for AMP Code parity while still running on **your** Pi install, subscriptions, API keys, models, and settings.
+`ampi` is a Pi Agent extension package. It replaces Pi's default coding posture with a small set of **locked modes** — each a complete bundle of model preferences, thinking policy, tool allowlist, and prompt — and picks which provider and model actually serves each mode by walking an ordered preference list against the models your Pi install has registered. Routing is **rule-based and inspectable**: there is no prompt classifier and no silent model switching. It runs entirely on your own Pi install, subscriptions, API keys, and settings.
 
-ampi is not an official AMP Code package. It is an independent Pi extension that implements the listed AMP-style behavior in repo-owned code and tracks remaining parity gaps below.
+The npm package name is `@skippermissions/ampi`; `ampi` is the name you see in commands, modes, flags, and settings. (The project's internal id is `mmr`, the "multi-model router", which still appears as an accepted alias.)
 
-Use `ampi` as-is for the intended experience. Advanced users can override models, subagent routes, optional gates, and custom Markdown subagents, but the package ships with a complete default posture so a fresh install already feels like AMP Code inside Pi.
+## Highlights
 
-## What ampi already gives you
+- **Deterministic, mode-based routing.** You pick an intent (a mode); ampi resolves a concrete provider/model route from that mode's ordered preference list. Mode selection and route resolution are pure rules — same inputs, same route — and every decision is visible in `/ampi-status debug`.
+- **Auth-probing route resolution.** For each preferred model, ampi enumerates the provider routes that could serve it, probes each for registration and configured auth (`hasConfiguredAuth` / OAuth checks), and applies the first route that is registered, authenticated, and accepted by Pi. Skipped routes keep a recorded reason ("not registered", "registered but not authenticated", and so on).
+- **Subscription-first ordering.** Routes are grouped subscription/OAuth providers first, then API-key providers, then everything else, and ordered within each group by a fixed provider priority — so a Claude or Codex subscription is preferred over a metered API key for the same model, without you wiring it up per mode.
+- **Quota-aware session fallback.** When the active route fails at the end of a turn, ampi classifies the error per provider — usage limit, rate limit, overload, silent capacity stall, or hard quota — and distinguishes transient conditions (retryable, may self-heal) from hard ones. When it warrants, it surfaces an explicit fallback prompt instead of quietly changing your model.
+- **Subagents and background fleets.** Built-in workers (`finder`, `oracle`, `librarian`, `Task`, `reviewer`) run as separate Pi subprocesses with their own resolved routes; work can be launched in the background with a live TUI task board and `task_poll` / `task_wait` / `task_cancel` controls. Custom Markdown subagents (`sa__*`) can be imported with scoped tools and models.
+- **Opt-in reach.** Web search/page reading, read-only GitHub tools, and prior-session recall are separate extensions, off by default, and gated behind explicit environment flags.
 
-### AMP-style harness modes
+## Requirements
 
-- **`low`** — GPT-5.6 Terra at medium reasoning for quick, focused work, with the Smart prompt posture.
-- **`medium`** — default balanced mode using GPT-5.6 Sol at medium reasoning, the Smart prompt posture, and the inherited 300k context safety profile.
-- **`high`** — GPT-5.6 Sol at extra-high reasoning with the Deep prompt posture for demanding implementation and debugging.
-- **`ultra`** — GPT-5.6 Sol at Pi's maximum supported `xhigh` effort with the Deep prompt posture.
-- **`free`** — exit hatch back to stock Pi behavior with ampi-owned tools removed.
+Pi must already be installed and authenticated with at least one provider. ampi is a Pi extension, not a standalone CLI; it declares Pi's packages as peer dependencies and needs Node.js 22.19+.
 
-Each locked mode swaps the whole harness together: model preference order, thinking policy, context profile, active-tool allowlist, subagent defaults, and model-visible prompt posture. Mode resolution is deterministic and inspectable; there is no hidden prompt classifier or silent automatic model switching.
-
-### AMP Code-style parity features already implemented
-
-- **Whole-harness mode switching** via `--ampi-mode`, `/mode`, hotkeys, and persisted session/settings state.
-- **Provider-neutral model preferences** that prefer subscription/OAuth providers first, then API-key providers, then other registered providers.
-- **Your subscriptions and keys**: Claude subscription, OpenAI/Codex, API-key providers, Brave Search, GitHub tokens, and SearXNG all stay under your control.
-- **Managed thinking and context policy** per mode, including mode-local thinking toggles and context display/capping where the mode owns it.
-- **Prompt posture replacement** that preserves Pi's own tool list, docs, project context, skills, date/cwd, and tail content while replacing the coding harness head.
-- **Exact active-tool allowlists** with `/ampi-status debug` diagnostics for active, gated, disabled, deferred, and missing tools.
-- **Safe local patching** through `apply_patch`, including path-safety checks across the workspace and sibling worktrees.
-- **Session-local planning** through `task_list`, rendered as a pinned Pi widget.
-- **Subagents**: `finder`, `oracle`, `librarian`, `Task`, `reviewer`, the internal `history-reader`, and custom Markdown `sa__*` subagents.
-- **Background work fleets**: `background: true`, grouped launches, live TUI task board, automatic completion delivery, and `task_poll` / `task_wait` / `task_cancel` controls.
-- **Repository research** with `librarian` plus read-only GitHub tools (`read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories`).
-- **Web research** with `web_search` and `read_web_page`, including SearXNG, Brave Search, DuckDuckGo fallback, domain filters, recency filters where supported, SSRF protections, and readable-page extraction.
-- **Prior-session recall** with `find_session` and `read_session`, opaque project refs instead of raw paths, opt-in content redaction, and a read-only history-reader worker.
-- **Subscription quota/capacity fallback** for provider failures, with explicit retry messaging instead of silent route mutation.
-- **Custom subagent import/setup** for Markdown agent definitions with safe tool mapping, per-mode scope, model/thinking config, and project/global enablement.
-- **Production guardrails**: deterministic tests, no live API calls in the committed suite, fail-closed activation, exact-name tool ownership, source-owned Free-mode cleanup, and public-safe prompt provenance.
-
-## Quick start
-
-Pi must already be installed and authenticated. `@skippermissions/ampi` is the npm
-package name; `ampi` is the product and runtime brand you see in commands, modes,
-and settings.
-
-Install for your user (recommended):
+## Install
 
 ```bash
-pi install npm:@skippermissions/ampi
+pi install npm:@skippermissions/ampi          # install for your user (recommended)
+pi install -l npm:@skippermissions/ampi       # install for one project (.pi/settings.json)
+pi -e npm:@skippermissions/ampi --ampi-mode medium  # try once without installing
 ```
 
-Install for one project only (writes to `.pi/settings.json`, shareable with your
-team):
+Keep it current:
 
 ```bash
-pi install -l npm:@skippermissions/ampi
+pi update --extensions                # update all Pi packages
+pi update npm:@skippermissions/ampi   # update just ampi
 ```
 
-Try it for a single run without installing:
+Prefer git, or want an unreleased commit? Use the git source (pin with `@<ref>`):
+
+```bash
+pi install git:github.com/5omeOtherGuy/ampi
+```
+
+## First minutes
 
 ```bash
 pi -e npm:@skippermissions/ampi --ampi-mode medium
 ```
 
-Keep it up to date:
-
-```bash
-pi update --extensions            # update all Pi packages
-pi update npm:@skippermissions/ampi  # update just ampi
-```
-
-Prefer installing from git, or want an unreleased commit? Use the git source as
-a fallback (pin a tag or commit with `@<ref>`):
-
-```bash
-pi install git:github.com/5omeOtherGuy/ampi
-pi install -l git:github.com/5omeOtherGuy/ampi
-```
-
-Inside Pi:
+Then, inside Pi:
 
 ```text
-/ampi-status
-/ampi-status debug
-/mode low
-/mode high
-/mode ultra
-/mode free
+/ampi-status         # the resolved harness: mode, model, active tools
+/ampi-status debug   # per-route diagnostics — which routes were tried, chosen, or skipped and why
+/mode low            # quick, focused turns
+/mode high           # demanding implementation, debugging, and review
+/mode ultra          # maximum supported reasoning effort
+/mode free           # stock Pi behavior; ampi-owned tools removed
 ```
 
-The control surface is canonical `ampi`: `/ampi-*` commands, `--ampi-*` flags, `AMPI_*` env vars, and `ampi*` settings. The legacy `/mmr-*`, `--mmr-*`, `MMR_*`, and `mmr*` identifiers remain accepted as aliases for existing setups.
+Delegate bounded work to subagents:
 
-## First two minutes
+```text
+Use finder to locate where provider model preferences are resolved.
+Ask oracle to review the mode activation design.
+Use Task to update the focused docs file and run the narrow check.
+Use reviewer to review all uncommitted changes.
+```
 
-1. Start in the default AMP-style mode:
+Enable optional reach only when you want it:
 
-   ```bash
-   pi -e npm:@skippermissions/ampi --ampi-mode medium
-   ```
+```bash
+export AMPI_WEB_ENABLE=true
+export AMPI_GITHUB_ENABLE=true
+export AMPI_HISTORY_ENABLE=true
+```
 
-2. Inspect the resolved harness:
-
-   ```text
-   /ampi-status
-   /ampi-status debug
-   ```
-
-3. Switch modes by intent:
-
-   ```text
-   /mode low        # quick, focused turns with GPT-5.6 Terra
-   /mode medium     # balanced default on GPT-5.6 Sol with the Smart prompt posture
-   /mode high       # demanding GPT-5.6 Sol work with the Deep prompt posture
-   /mode ultra      # GPT-5.6 Sol at maximum supported effort
-   /mode free       # stock Pi behavior; ampi-owned tools removed
-   ```
-
-4. Delegate bounded work:
-
-   ```text
-   Use finder to locate where provider model preferences are resolved.
-   Ask oracle to review the mode activation design.
-   Use Task to update the focused docs file and run the narrow check.
-   Use reviewer to review all uncommitted changes.
-   ```
-
-5. Enable optional reach only when needed:
-
-   ```bash
-   export AMPI_WEB_ENABLE=true
-   export AMPI_GITHUB_ENABLE=true
-   export AMPI_HISTORY_ENABLE=true
-   ```
+Control surface: `/ampi-*` commands, `--ampi-*` flags, `AMPI_*` env vars, and `ampi*` settings. The legacy `mmr` spellings (`/mmr-*`, `--mmr-*`, `MMR_*`, `mmr*`) remain accepted as aliases.
 
 ## Modes
 
-| Intent | Mode | What ampi controls |
+Each mode is a complete, locked harness. Switching modes swaps the model preference order, thinking policy, context profile, tool allowlist, and prompt together.
+
+| Mode | Model preference order | Optimized for |
 | --- | --- | --- |
-| Quick, focused work | `low` | GPT-5.6 Terra then GPT-5.5, medium reasoning, Smart prompt posture, focused tools |
-| Balanced coding | `medium` | GPT-5.6 Sol then Claude Opus 4.8, medium reasoning, Smart prompt posture, broad tools, 300k context safety profile |
-| Demanding work | `high` | GPT-5.6 Sol then Claude Opus 4.8, extra-high reasoning, Deep prompt posture and broad research/subagent tools |
-| Maximum effort | `ultra` | GPT-5.6 Sol then GPT-5.5, Pi `xhigh` reasoning, Deep prompt posture and broad research/subagent tools |
-| Native Pi | `free` | Releases ampi model/thinking/prompt/tool enforcement |
+| `low` | `gpt-5.6-terra` → `gpt-5.5` | Quick, focused work with medium reasoning and the Smart prompt posture |
+| `medium` | `gpt-5.6-sol` → `claude-opus-4-8` | Balanced default coding with medium reasoning and a 300k context safety profile |
+| `high` | `gpt-5.6-sol` → `claude-opus-4-8` | Demanding work with extra-high reasoning and the Deep prompt posture |
+| `ultra` | `gpt-5.6-sol` → `gpt-5.5` | Maximum effort with Pi's `xhigh` reasoning and the Deep prompt posture |
+| `free` | native Pi controls | Releases ampi model/thinking/prompt/tool enforcement |
 
-Mode selection precedence: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` values are accepted and migrate to `low`, `medium`, `high`, and `ultra`, respectively.
+Mode selection precedence: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` values are accepted and migrate to `low`, `medium`, `high`, and `ultra`, respectively.
 
-Useful controls:
+Model IDs above are the shipped defaults; you can override the preference list per mode and per subagent in settings.
+
+Interactive controls:
 
 ```text
-/mode              # show current mode
-/mode high         # switch mode
-/ampi-status       # current harness status
-/ampi-status debug # model/tool/source diagnostics
-Ctrl+Shift+S       # mode picker  (Alt+M fallback)
-Ctrl+Space         # cycle low → medium → high → ultra
-Alt+R              # toggle the active mode's thinking preset where supported
+/mode                # show current mode
+/mode high           # switch mode
+Ctrl+Shift+S         # mode picker (Alt+M fallback)
+Ctrl+Space           # cycle low → medium → high → ultra
+Alt+R                # toggle the active mode's thinking preset where supported
 ```
 
-## Tools and subagents
+## Providers
 
-| Need | Use |
-| --- | --- |
-| Safe file patches | `apply_patch` |
-| Session todo plan | `task_list` |
-| Behavior-level codebase search | `finder` |
-| Expert planning/review/debugging advice | `oracle` |
-| Scoped implementation/investigation/repair | `Task` |
-| Independent background work | `background: true`, `task_poll`, `task_wait`, `task_cancel` |
-| Independent diff/code review | `reviewer` |
-| Remote GitHub research | `librarian` |
-| Direct read-only GitHub operations | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
-| Public web search/read | `web_search`, `read_web_page` |
-| Prior Pi session recall | `find_session`, `read_session` |
-| Custom workers | Markdown `sa__*` subagents imported through `/ampi-config` |
+ampi routes against whatever providers your Pi install registers. The built-in priority order recognizes ten, grouped so subscriptions win first:
 
-## Feature map
+- **Subscription / OAuth:** `claude-subscription`, `openai-codex`, `github-copilot`
+- **API key:** `anthropic`, `openai`, `azure-openai-responses`
+- **Other registered providers:** `google`, `google-vertex`, `openrouter`, `vercel-ai-gateway`
 
-| Extension family | Default | User value |
+A registered provider outside this list still routes; it just sorts into the last group. Model-ID aliases (for example a bare ID and its date-suffixed publication ID) are resolved so a preference written either way still matches.
+
+## How routing and fallback work
+
+**Resolving a route.** For the active mode, ampi reads the ordered model preference list. For each preferred model it builds the candidate provider routes (the model's default providers plus any registered provider that offers it), sorts them subscription-first then by provider priority, and probes each for registration and configured auth. The first route that is registered, authenticated, and accepted by Pi becomes the active model. If earlier routes were skipped, the reason is recorded and shown in `/ampi-status debug`; worker tools use the same resolver to pick a route without disturbing the session's active model.
+
+**Falling back mid-session.** The `ampi-session-fallback` extension watches for provider errors at the end of a turn and classifies them by provider and message: hard usage/quota limits, rate limits, overloads, and Anthropic silent-capacity stalls, separating transient conditions (which may self-heal, so the prompt is deferred) from hard ones (which escalate immediately). When a condition warrants it, ampi offers an explicit fallback rather than mutating your route silently.
+
+## Extensions
+
+The package ships as a set of Pi extensions; the network and history ones are off until you enable them.
+
+| Extension | Default | What it adds |
 | --- | --- | --- |
-| `ampi-core` (`mmr-core` runtime id) | On | Locked modes, model resolution, request/thinking policy, active tools, prompt rewrite, diagnostics, config flow |
-| `ampi-patch` | On | Safe `apply_patch` editing |
+| `ampi-core` | On | Locked modes, route resolution, thinking/context policy, prompt rewrite, diagnostics, config flow |
+| `ampi-session-fallback` | On | Quota/rate-limit/overload classification and explicit fallback |
+| `ampi-patch` | On | Path-safe `apply_patch` editing |
 | `ampi-tasks` | On | Session-local `task_list` planning widget |
-| `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets, worker trails |
-| `ampi-custom-subagents` | On | Markdown-defined `sa__*` workers with scoped tools/models/thinking |
-| `ampi-session-fallback` | On | Explicit fallback on subscription quota, rate limits, overloads, and capacity stalls |
-| `ampi-web` | Off | Opt-in web search/page reading through your chosen backend |
-| `ampi-github` | Off | Opt-in read-only GitHub tools and librarian prerequisite |
-| `ampi-history` | Off | Opt-in local Pi session search and reuse |
-
-The package also exposes `./extensions/ampi-*` export aliases while keeping legacy `./extensions/mmr-*` subpaths for existing consumers.
+| `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
+| `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
+| `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
+| `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
+| `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |
 
 ## Configure your own defaults
 
-Non-secret settings live in Pi settings files. Secrets belong in environment variables.
+Non-secret settings live in Pi settings files (`~/.pi/agent/settings.json`, `<project>/.pi/settings.json`); secrets go in environment variables. Restart Pi after changing settings or gating env vars.
 
 ```json
 {
   "ampiCore": {
-    "defaultMode": "low",
+    "defaultMode": "rush",
     "modelPreferences": {
-      "high": [{ "model": "gpt-5.5", "thinkingLevel": "xhigh" }]
+      "deep": [{ "model": "gpt-5.5", "thinkingLevel": "medium" }]
     },
     "subagentModelPreferences": {
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
@@ -222,30 +165,11 @@ export BRAVE_API_KEY="..."
 export AMPI_GITHUB_TOKEN="ghp_xxx"
 ```
 
-The `AMPI_*` env vars take precedence; the legacy `MMR_*` names (for example `MMR_WEB_ENABLE`) are still accepted.
+Some safety defaults worth knowing: locked modes are fail-closed (no usable model or an empty tool set aborts activation before any change); `free` mode removes only ampi-owned tools; GitHub and search keys are read from the environment, not settings files; `read_web_page` rejects localhost and private/link-local targets; and history hides raw session paths behind opaque refs, with content redaction available via `AMPI_HISTORY_REDACT=true`.
 
-Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Restart Pi after changing settings or env vars that gate tool registration.
+## Status
 
-## Production safety
-
-- Locked modes are **fail-closed**: no usable model or zero active tools aborts activation before mutation.
-- Free mode removes only ampi-owned tools; third-party tools keep working.
-- Network and history features are opt-in and gated.
-- GitHub tokens and web/search keys are read from env, not settings files.
-- `read_web_page` rejects localhost/private/link-local targets.
-- History always hides raw session file paths/project roots behind opaque refs; content redaction is opt-in with `AMPI_HISTORY_REDACT=true`.
-- Worker runs are bounded, surfaced in the TUI, and report non-normal outcomes explicitly.
-
-## What is still missing
-
-ampi is production-ready for the implemented AMP Code-style workflow, but parity work continues:
-
-- Continued `/mmr-*`, `--mmr-*`, `MMR_*`, and `mmr*` legacy-alias compatibility alongside the canonical `ampi` surface.
-- A richer `/ampi-status debug` history of deterministic mode/fallback events.
-- More background-widget metadata and grouped completion polish.
-- A TUI browser for prior sessions and stored web/research result IDs.
-- A proxy-first MCP tool surface with the same gated/self-contained posture.
-- Optional worktree isolation for child workers after safety semantics are pinned.
+**Pre-1.0 and a work in progress.** ampi is at `0.2.0`, developed against specific Pi releases (see the peer-dependency ranges in `package.json`), and it moves fast. Expect rough edges and breaking changes between versions. The default model IDs track current releases and will change. In-progress and planned work is tracked in [`ROADMAP.md`](ROADMAP.md); recent items include richer fallback-event history in `/ampi-status debug`, more background-widget metadata, a TUI browser for prior sessions and stored research results, and an MCP tool surface with the same gated, self-contained posture. Tests are deterministic and make no live provider calls, so the committed suite does not exercise real network behavior.
 
 ## Documentation
 
@@ -254,12 +178,9 @@ ampi is production-ready for the implemented AMP Code-style workflow, but parity
 - **Public API:** [`docs/public-api.md`](docs/public-api.md), [`docs/ampi-core-api.md`](docs/ampi-core-api.md)
 - **Architecture:** [`docs/reference-architecture.md`](docs/reference-architecture.md)
 - **Subagents:** [`docs/subagent-framework.md`](docs/subagent-framework.md)
-- **Compatibility:** [`docs/extension-compatibility.md`](docs/extension-compatibility.md)
 - **Contributor map:** [`INDEX.md`](INDEX.md), [`REPOMAP.md`](REPOMAP.md), [`ROADMAP.md`](ROADMAP.md)
 
 ## Development
-
-Work on ampi from a local clone and load the working tree directly:
 
 ```bash
 git clone https://github.com/5omeOtherGuy/ampi
@@ -271,14 +192,11 @@ pi -e "$PWD" --ampi-mode medium  # run the local checkout
 Checks:
 
 ```bash
-npm test
+npm test          # deterministic; no live provider/API calls
 npm run lint
 npm run check
 npm run pack:dry-run
-pi -e "$PWD" --list-models
 ```
-
-Tests are deterministic and must not make live provider/API calls. Documentation conventions: [`docs/documentation-style-guide.md`](docs/documentation-style-guide.md).
 
 ## License
 
