@@ -97,7 +97,7 @@ describe("mmr-core prompt registry", () => {
       assert.equal(recipe.tag, mode);
       assert.equal(typeof recipe.intro, "string");
       assert.ok(recipe.intro.length > 20, `${mode}: intro must be substantive`);
-      assert.equal(recipe.postureSections, "", `${mode}: captured prompt renders no synthetic posture section`);
+      assert.equal(recipe.postureSections, "", `${mode}: new system prompt renders no synthetic posture section`);
       assert.equal(typeof recipe.closingLine, "string");
       assert.ok(recipe.closingLine.length > 10, `${mode}: closingLine must be substantive`);
     }
@@ -120,7 +120,7 @@ describe("mmr-core prompt registry", () => {
     }
   });
 
-  it("uses the compact captured sequence for medium and the full sequence for low/high/ultra", () => {
+  it("uses the compact new system prompt sequence for medium and the full sequence for low/high/ultra", () => {
     const {
       MMR_MODE_PROMPT_RECIPES,
       MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE,

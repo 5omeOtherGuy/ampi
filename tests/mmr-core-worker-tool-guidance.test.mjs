@@ -48,7 +48,7 @@ describe("buildUsingWorkersGuidance", () => {
     assert.doesNotMatch(withoutOracle, /oracle/);
   });
 
-  it("adds the captured oracle restraint only for high mode when oracle is active", async () => {
+  it("adds the new high-mode oracle restraint only when oracle is active", async () => {
     const { buildUsingWorkersGuidance } = await importSource(MODULE);
     const high = buildUsingWorkersGuidance(["oracle"], "high");
     assert.match(high, /do not call it routinely/i);

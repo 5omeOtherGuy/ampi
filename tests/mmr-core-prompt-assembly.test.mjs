@@ -57,12 +57,15 @@ const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 describe("Phase D: assembleActiveSurface() public API", () => {
   let assembleActiveSurface;
   let buildMmrPromptLayer;
+  let modePromptRecipes;
 
   beforeEach(async () => {
     const assembly = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const prompt = await importSource("extensions/ampi-core/prompt.ts");
+    const registry = await importSource("extensions/ampi-core/prompt-registry.ts");
     assembleActiveSurface = assembly.assembleActiveSurface;
     buildMmrPromptLayer = prompt.buildMmrPromptLayer;
+    modePromptRecipes = registry.MMR_MODE_PROMPT_RECIPES;
   });
 
   it("exports assembleActiveSurface as a function", () => {
@@ -115,8 +118,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       );
     });
 
-    it(`emits rendered block kinds equal to the active recipe fragment list for ${mode}`, async () => {
-      const { MMR_MODE_PROMPT_RECIPES } = await importSource("extensions/ampi-core/prompt-registry.ts");
+    it(`emits rendered block kinds equal to the active recipe fragment list for ${mode}`, () => {
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -132,11 +134,10 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       // BASE_PROMPT carries Pi built-ins, so the optional builtin-tool-guidance
       // fragment is rendered. The rendered block kinds must therefore equal the
       // active recipe's fragment list exactly — this is what makes per-mode
-      // fragment selection (e.g. rush dropping diagrams) observable. Smart-family
-      // recipes declare mode-posture but render no block for their empty posture,
-      // and BASE_PROMPT lists no worker tools, so the optional using-workers
-      // fragment renders no block either.
-      const recipe = MMR_MODE_PROMPT_RECIPES[mode];
+      // fragment selection observable. Recipes may declare mode-posture while
+      // rendering no block for an empty posture, and BASE_PROMPT lists no worker
+      // tools, so the optional using-workers fragment renders no block either.
+      const recipe = modePromptRecipes[mode];
       const expectedKinds = recipe.fragments.filter(
         (fragmentId) =>
           (fragmentId !== "mode-posture" || recipe.postureSections !== "") &&
@@ -149,63 +150,59 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       );
     });
 
-    it(`emits posture before tools and style before response for ${mode}`, () => {
+    it(`emits the new system prompt fragment order for ${mode}`, () => {
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
         activeToolManifest: [],
       });
       const kinds = result.blocks.map((b) => b.kind);
-      // Every current tier keeps all shared coding fragments, including diagrams.
-      const alwaysPresentCodingKinds = [
-        "autonomy",
-        "discovery-discipline",
-        "pragmatism",
-        "verification",
-        "careful-actions",
-        "file-links",
-        "collaboration",
-      ];
+      const recipe = modePromptRecipes[mode];
       assert.equal(kinds.filter((k) => k === "shared-tool-guidance").length, 1);
-      for (const codingKind of alwaysPresentCodingKinds) {
-        assert.equal(
-          kinds.filter((k) => k === codingKind).length,
-          1,
-          `mode ${mode}: coding fragment ${codingKind} must appear exactly once`,
+      assert.equal(kinds.indexOf("mode-posture"), -1, `mode ${mode}: new system prompt has no synthetic posture`);
+      assert.match(result.blocks[kinds.indexOf("response-style")].text, /## Response style/);
+
+      if (mode === "medium") {
+        assert.deepEqual(
+          kinds.filter((kind) => [
+            "autonomy",
+            "discovery-discipline",
+            "tool-lead-in",
+            "pi-docs",
+            "shared-tool-guidance",
+            "careful-actions",
+            "pragmatism",
+            "verification",
+            "collaboration",
+            "response-style",
+          ].includes(kind)),
+          [
+            "autonomy",
+            "discovery-discipline",
+            "tool-lead-in",
+            "pi-docs",
+            "shared-tool-guidance",
+            "careful-actions",
+            "pragmatism",
+            "verification",
+            "collaboration",
+            "response-style",
+          ],
         );
-      }
-      assert.equal(
-        kinds.filter((k) => k === "diagrams").length,
-        1,
-        `mode ${mode}: diagrams fragment count`,
-      );
-      const autonomyIdx = kinds.indexOf("autonomy");
-      const carefulActionsIdx = kinds.indexOf("careful-actions");
-      const modePostureIdx = kinds.indexOf("mode-posture");
-      const toolLeadInIdx = kinds.indexOf("tool-lead-in");
-      const piDocsIdx = kinds.indexOf("pi-docs");
-      const sharedToolIdx = kinds.indexOf("shared-tool-guidance");
-      const fileLinksIdx = kinds.indexOf("file-links");
-      const collaborationIdx = kinds.indexOf("collaboration");
-      const responseStyleIdx = kinds.indexOf("response-style");
-      assert.ok(autonomyIdx < carefulActionsIdx, `mode ${mode}: task/risk posture must stay in order`);
-      // High and Ultra render Deep posture; Low and Medium render Smart.
-      if (mode === "high" || mode === "ultra") {
-        assert.ok(carefulActionsIdx < modePostureIdx, `mode ${mode}: shared posture must precede mode posture`);
-        assert.ok(modePostureIdx < collaborationIdx, `mode ${mode}: mode posture must precede collaboration style`);
+        assert.equal(kinds.includes("diagrams"), false);
+        assert.equal(kinds.includes("file-links"), false);
+        assert.match(result.blocks[kinds.indexOf("autonomy")].text, /## Operating principles/);
+        assert.match(result.blocks[kinds.indexOf("collaboration")].text, /## Communication/);
       } else {
-        assert.equal(modePostureIdx, -1, `mode ${mode}: smart-family modes render no mode-posture block`);
-        assert.ok(carefulActionsIdx < collaborationIdx, `mode ${mode}: shared posture must precede collaboration style`);
+        for (const fragmentId of recipe.fragments) {
+          if (fragmentId === "mode-posture" || fragmentId === "using-workers") continue;
+          assert.equal(kinds.filter((kind) => kind === fragmentId).length, 1, `${mode}: ${fragmentId} appears once`);
+        }
+        assert.ok(kinds.indexOf("response-style") < kinds.indexOf("tool-lead-in"));
+        assert.ok(kinds.indexOf("shared-tool-guidance") < kinds.indexOf("diagrams"));
+        assert.match(result.blocks[kinds.indexOf("autonomy")].text, /## Autonomy and persistence/);
+        assert.match(result.blocks[kinds.indexOf("collaboration")].text, /## Working with the user/);
       }
-      assert.ok(collaborationIdx < responseStyleIdx, `mode ${mode}: collaboration style must precede response style`);
-      assert.ok(responseStyleIdx < toolLeadInIdx, `mode ${mode}: response style must precede tool guidance`);
-      assert.ok(toolLeadInIdx < piDocsIdx, `mode ${mode}: Pi tool/docs blocks must stay in order`);
-      assert.ok(piDocsIdx < sharedToolIdx, `mode ${mode}: Pi docs must precede shared tool execution policy`);
-      assert.ok(sharedToolIdx < fileLinksIdx, `mode ${mode}: tool execution policy must precede remaining style guidance`);
-      assert.match(result.blocks[sharedToolIdx].text, /## Tool execution policy/);
-      assert.match(result.blocks[autonomyIdx].text, /## Autonomy and persistence/);
-      assert.match(result.blocks[collaborationIdx].text, /## Working with the user/);
-      assert.match(result.blocks[responseStyleIdx].text, /## Response style/);
     });
 
     it(`active-guidelines block is byte-identical to the Pi-authored Guidelines block for ${mode}`, () => {
@@ -258,8 +255,10 @@ describe("Phase D: assembleActiveSurface() public API", () => {
         "collaboration",
       ]);
       const sharedBlocks = result.blocks.filter((b) => sharedGuidanceKinds.has(b.kind));
-      // 1 tool-guidance block + 8 coding fragments.
-      assert.equal(sharedBlocks.length, 9, `${mode}: must emit all shared guidance blocks`);
+      const expectedSharedCount = modePromptRecipes[mode].fragments.filter(
+        (fragmentId) => sharedGuidanceKinds.has(fragmentId),
+      ).length;
+      assert.equal(sharedBlocks.length, expectedSharedCount, `${mode}: must emit the recipe's shared guidance blocks`);
       const sharedText = sharedBlocks.map((b) => b.text).join("\n");
       for (const entry of MMR_PLANNED_TOOL_CATALOG) {
         const namePattern = new RegExp(`\\b${entry.name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\b`);

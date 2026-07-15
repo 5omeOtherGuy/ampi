@@ -18,7 +18,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     assert.equal("free" in MMR_MODE_PROMPT_TEMPLATES, false, "free mode must not have a prompt template");
   });
 
-  it("every template has a non-empty tag, intro, and closingLine; captured levels carry no synthetic mode posture", async () => {
+  it("every template has a non-empty tag, intro, and closingLine; new system prompts carry no synthetic mode posture", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       const template = MMR_MODE_PROMPT_TEMPLATES[mode];
@@ -32,7 +32,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
       assert.ok(template.closingLine.length > 10, `${mode}: closingLine is non-trivial`);
     }
     for (const mode of PROMPTED_MODES) {
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, "", `${mode}: captured prompt renders no synthetic posture section`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, "", `${mode}: new system prompt renders no synthetic posture section`);
     }
   });
 
@@ -66,7 +66,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     }
   });
 
-  it("captured templates do not add legacy Deep posture sections", async () => {
+  it("new system prompts do not add legacy Deep posture sections", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of PROMPTED_MODES) {
       assert.doesNotMatch(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, /## Deep mode/);
@@ -82,7 +82,7 @@ describe("mmr-core prompt templates - structural invariants", () => {
     }
   });
 
-  it("low, high, and ultra share the captured base template apart from the mode tag", async () => {
+  it("low, high, and ultra share the new base template apart from the mode tag", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of ["high", "ultra"]) {
       assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.low.intro, `${mode}: intro matches low`);
