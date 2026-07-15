@@ -6,6 +6,18 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Changed
+
+- `ampi-core`: tightened the low/medium/high/ultra mode system prompts for
+  information density — duplicated guidance now has a single home per rendered
+  prompt and the remaining prose is compressed with unchanged guidance
+  semantics; rendered-prompt and effective-surface fixtures updated.
+
+### Documentation
+
+- Aligned `prompt-provenance.md`, `quick-reference.md`, and the `ampi-core`
+  README with the full/compact prompt-body split.
+
 ## 0.3.1 — 2026-07-15
 
 ### Changed
