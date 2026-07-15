@@ -20,3 +20,5 @@ docs/private/
 AGENTS.md
 .claude/commands/refine-prompt.md
 .claude/commands/audit-prompt.md
+# Local-only captured prompt material (never commit).
+docs/system_prompts_new.md
