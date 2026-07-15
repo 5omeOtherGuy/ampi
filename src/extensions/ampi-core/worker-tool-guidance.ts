@@ -136,6 +136,10 @@ const USING_WORKERS_PARTS: readonly UsingWorkersPart[] = [
   // guidance and renders once as the tool's Guidelines bullet.
 ];
 
+/** High and Ultra share the stricter oracle-use threshold. */
+export const HIGH_ULTRA_ORACLE_RESTRAINT_GUIDANCE =
+  "In High and Ultra modes, reserve oracle for genuinely difficult work or a second expert opinion that materially improves a complex plan or review. Do not call it routinely or twice in succession; continue the task yourself and apply its advice before seeking another consultation.";
+
 /**
  * Render the `## Using workers` block restricted to the given active tool
  * names. Returns `null` when no worker tool is active so the caller can skip
@@ -147,6 +151,7 @@ const USING_WORKERS_PARTS: readonly UsingWorkersPart[] = [
  */
 export function buildUsingWorkersGuidance(
   activeToolNames: readonly string[],
+  mode?: string,
 ): string | null {
   const active = new Set(activeToolNames);
   if (!USING_WORKERS_TOOL_NAMES.some((name) => active.has(name))) return null;
@@ -156,6 +161,9 @@ export function buildUsingWorkersGuidance(
     if (part.text === ORACLE_ALWAYS_BLOCKING_GUIDANCE) return oracleNeedsBlockingNote;
     return part.requiresAnyOf.some((name) => active.has(name));
   }).map((part) => part.text);
+  if ((mode === "high" || mode === "ultra") && active.has("oracle")) {
+    paragraphs.push(HIGH_ULTRA_ORACLE_RESTRAINT_GUIDANCE);
+  }
   return `${MMR_USING_WORKERS_HEADING}\n\n${paragraphs.join("\n\n")}`;
 }
 

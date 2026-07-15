@@ -48,6 +48,20 @@ describe("buildUsingWorkersGuidance", () => {
     assert.doesNotMatch(withoutOracle, /oracle/);
   });
 
+  it("gives high and ultra the same oracle restraint when oracle is active", async () => {
+    const { buildUsingWorkersGuidance } = await importSource(MODULE);
+    const high = buildUsingWorkersGuidance(["oracle"], "high");
+    const ultra = buildUsingWorkersGuidance(["oracle"], "ultra");
+    assert.equal(ultra, high);
+    assert.match(high, /do not call it routinely/i);
+    assert.match(high, /apply its advice/i);
+    for (const mode of ["low", "medium"]) {
+      assert.doesNotMatch(buildUsingWorkersGuidance(["oracle"], mode), /do not call it routinely/i);
+    }
+    assert.equal(buildUsingWorkersGuidance([], "high"), null);
+    assert.equal(buildUsingWorkersGuidance([], "ultra"), null);
+  });
+
   it("includes result-delivery semantics only when poll/wait tools are active", async () => {
     const { buildUsingWorkersGuidance } = await importSource(MODULE);
     const withPoll = buildUsingWorkersGuidance(["Task", "task_poll", "task_wait"]);

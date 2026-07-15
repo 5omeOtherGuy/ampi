@@ -29,10 +29,10 @@ const BASE_PROMPT = readFileSync(path.join(promptFixtureDir, "base.md"), "utf8")
 
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 
-// Prompt-family variants render the same system prompt apart from the
-// <mmr_mode name="..."> tag. One mode from each family is excluded from the
-// matrix snapshots to avoid redundant fixtures, while all four stay in the
-// structural marker checks.
+// New system prompt variants render the same system prompt apart from the
+// <mmr_mode name="..."> tag where their level-specific guidance is identical.
+// Ultra is excluded from matrix snapshots because it matches Low apart from
+// the tag, while all four modes remain in structural marker checks.
 const MATRIX_MODES = ["medium", "low", "high"];
 const MATRIX_MARKER_MODES = ["medium", "ultra", "low", "high"];
 
@@ -44,14 +44,14 @@ const MODE_MARKERS = {
 };
 
 const MODE_FOREIGN_MARKERS = {
-  medium: ['<mmr_mode name="low">', '<mmr_mode name="high">', '<mmr_mode name="ultra">', "Deep mode is for difficult reasoning,"],
-  low: ['<mmr_mode name="medium">', '<mmr_mode name="high">', '<mmr_mode name="ultra">', "Deep mode is for difficult reasoning,"],
+  medium: ['<mmr_mode name="low">', '<mmr_mode name="high">', '<mmr_mode name="ultra">'],
+  low: ['<mmr_mode name="medium">', '<mmr_mode name="high">', '<mmr_mode name="ultra">'],
   high: ['<mmr_mode name="low">', '<mmr_mode name="medium">', '<mmr_mode name="ultra">'],
   ultra: ['<mmr_mode name="low">', '<mmr_mode name="medium">', '<mmr_mode name="high">'],
 };
 
 // Expected coarse block order. Matches the existing Phase B baseline.
-const EXPECTED_NON_LARGE_BLOCK_ORDER = [
+const EXPECTED_FULL_BLOCK_ORDER = [
   '<mmr_mode name="',
   "## Autonomy and persistence",
   "## Executing actions with care",
@@ -63,6 +63,29 @@ const EXPECTED_NON_LARGE_BLOCK_ORDER = [
   "## Built-in tool guidance",
   "Pi documentation (",
   "## Tool execution policy",
+  "## Diagrams",
+  "# Project Context",
+  "Current date:",
+  "Current working directory:",
+];
+
+const EXPECTED_MEDIUM_BLOCK_ORDER = [
+  '<mmr_mode name="medium">',
+  "## Operating principles",
+  "## Frame the task",
+  "## Plan before acting",
+  "## Codebase discovery",
+  "## Tool use",
+  "Available tools:",
+  "Guidelines:",
+  "## Built-in tool guidance",
+  "Pi documentation (",
+  "## Tool execution policy",
+  "## Executing actions with care",
+  "## Implementation style",
+  "## Verification",
+  "## Communication",
+  "## Response style",
   "# Project Context",
   "Current date:",
   "Current working directory:",
@@ -153,7 +176,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
         baseSystemPrompt: BASE_PROMPT,
         activeToolManifest: [],
       });
-      const expectedBlockOrder = EXPECTED_NON_LARGE_BLOCK_ORDER;
+      const expectedBlockOrder = mode === "medium" ? EXPECTED_MEDIUM_BLOCK_ORDER : EXPECTED_FULL_BLOCK_ORDER;
       let cursor = 0;
       for (const marker of expectedBlockOrder) {
         const idx = result.systemPrompt.indexOf(marker, cursor);
@@ -202,7 +225,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       }
     });
 
-    it(`${mode}: posture precedes tools, shared tool policy follows Pi docs, and style precedes response`, async () => {
+    it(`${mode}: new system prompt preserves its tool and guidance ordering`, async () => {
       const { assembleActiveSurface, MMR_TOOL_USE_HEADING, MMR_TOOL_USE_POSTURE_LINE } = await importSource(
         "extensions/ampi-core/prompt-assembly.ts",
       );
@@ -212,36 +235,42 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
         activeToolManifest: [],
       });
       const sp = result.systemPrompt;
-      const autonomyIdx = sp.indexOf("## Autonomy and persistence");
-      const carefulActionsIdx = sp.indexOf("## Executing actions with care");
-      // High and Ultra render the Deep posture; Low and Medium use Smart.
-      const postureMarker = mode === "high" || mode === "ultra" ? "## Deep mode" : undefined;
-      const collaborationIdx = sp.indexOf("## Working with the user");
-      const responseStyleIdx = sp.indexOf("## Response style");
       const toolHeadingIdx = sp.indexOf(MMR_TOOL_USE_HEADING);
       const leadInIdx = sp.indexOf(MMR_TOOL_USE_POSTURE_LINE);
       const availIdx = sp.indexOf("Available tools:");
       const guidelinesIdx = sp.indexOf("Guidelines:");
       const docsIdx = sp.indexOf("Pi documentation (");
       const sharedToolIdx = sp.indexOf("## Tool execution policy");
-      const styleIdx = sp.indexOf("## Diagrams");
+      const responseStyleIdx = sp.indexOf("## Response style");
       assert.ok(toolHeadingIdx !== -1 && leadInIdx !== -1, `${mode}: missing tool-use heading or lead-in`);
-      assert.ok(autonomyIdx < carefulActionsIdx, `${mode}: task/risk posture must stay in order`);
-      if (postureMarker !== undefined) {
-        const postureIdx = sp.indexOf(postureMarker);
-        assert.ok(carefulActionsIdx < postureIdx, `${mode}: shared posture must precede mode posture`);
-        assert.ok(postureIdx < collaborationIdx, `${mode}: mode posture must precede collaboration`);
-      } else {
-        assert.ok(carefulActionsIdx < collaborationIdx, `${mode}: shared posture must precede collaboration`);
-      }
-      assert.ok(collaborationIdx < responseStyleIdx, `${mode}: collaboration must precede response style`);
-      assert.ok(responseStyleIdx < toolHeadingIdx, `${mode}: response style must precede tool guidance`);
-      assert.ok(sharedToolIdx < styleIdx, `${mode}: shared tool policy must precede remaining style guidance`);
       assert.ok(toolHeadingIdx < availIdx, `${mode}: ## Tool use must precede Available tools:`);
       assert.ok(leadInIdx < availIdx, `${mode}: tool-use lead-in must precede Available tools:`);
       assert.ok(availIdx < guidelinesIdx, `${mode}: Available tools must precede Guidelines`);
       assert.ok(guidelinesIdx < docsIdx, `${mode}: Guidelines must precede Pi documentation`);
       assert.ok(docsIdx < sharedToolIdx, `${mode}: Pi documentation must precede shared tool guidance`);
+
+      if (mode === "medium") {
+        const operatingIdx = sp.indexOf("## Operating principles");
+        const carefulActionsIdx = sp.indexOf("## Executing actions with care");
+        const implementationIdx = sp.indexOf("## Implementation style");
+        const communicationIdx = sp.indexOf("## Communication");
+        assert.ok(operatingIdx < toolHeadingIdx, `${mode}: operating principles must precede tools`);
+        assert.ok(sharedToolIdx < carefulActionsIdx, `${mode}: shared tool policy must precede careful actions`);
+        assert.ok(carefulActionsIdx < implementationIdx, `${mode}: careful actions must precede implementation style`);
+        assert.ok(implementationIdx < communicationIdx, `${mode}: implementation style must precede communication`);
+        assert.ok(communicationIdx < responseStyleIdx, `${mode}: communication must precede response style`);
+        assert.equal(sp.includes("## Diagrams"), false, `${mode}: compact prompt omits diagrams`);
+      } else {
+        const autonomyIdx = sp.indexOf("## Autonomy and persistence");
+        const carefulActionsIdx = sp.indexOf("## Executing actions with care");
+        const collaborationIdx = sp.indexOf("## Working with the user");
+        const diagramsIdx = sp.indexOf("## Diagrams");
+        assert.ok(autonomyIdx < carefulActionsIdx, `${mode}: autonomy must precede careful actions`);
+        assert.ok(carefulActionsIdx < collaborationIdx, `${mode}: careful actions must precede collaboration`);
+        assert.ok(collaborationIdx < responseStyleIdx, `${mode}: collaboration must precede response style`);
+        assert.ok(responseStyleIdx < toolHeadingIdx, `${mode}: response style must precede tool guidance`);
+        assert.ok(sharedToolIdx < diagramsIdx, `${mode}: shared tool policy must precede diagrams`);
+      }
     });
   }
 });

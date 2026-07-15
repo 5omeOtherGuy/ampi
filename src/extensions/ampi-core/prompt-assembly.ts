@@ -300,6 +300,7 @@ export function assembleActiveSurface(
   );
   const usingWorkersText = buildUsingWorkersGuidance(
     input.activeToolNames ?? extractActiveWorkerToolNames(toolsBlockText),
+    mode,
   );
 
   // Each fragment owns its trailing separators so that concatenating all

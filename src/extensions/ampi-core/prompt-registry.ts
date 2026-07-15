@@ -94,33 +94,6 @@ export const MMR_PROMPT_BASES = {
 export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
   "identity",
   "autonomy",
-  "discovery-discipline",
-  "pragmatism",
-  "verification",
-  "careful-actions",
-  "mode-posture",
-  "collaboration",
-  "response-style",
-  "tool-lead-in",
-  "active-tools",
-  "active-guidelines",
-  "builtin-tool-guidance",
-  "using-workers",
-  "pi-docs",
-  "shared-tool-guidance",
-  "diagrams",
-  "file-links",
-  "preserved-tail",
-] as const satisfies readonly MmrPromptFragmentId[];
-
-/**
- * Deep reorders the body to the authoritative deep-template sequence
- * (autonomy, pragmatism, discovery, engineering judgment, verification) and is
- * the only mode that renders the deep-only `engineering-judgment` fragment.
- */
-export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = [
-  "identity",
-  "autonomy",
   "pragmatism",
   "discovery-discipline",
   "engineering-judgment",
@@ -142,8 +115,36 @@ export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = [
 ] as const satisfies readonly MmrPromptFragmentId[];
 
 /**
+ * Medium's compact layout frames and plans first, presents the live
+ * tool surface next, then closes with implementation, verification, and
+ * communication guidance. Its communication fragment owns file-link behavior,
+ * and the Medium system prompt has no diagram section.
+ */
+export const MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE = [
+  "identity",
+  "autonomy",
+  "discovery-discipline",
+  "tool-lead-in",
+  "active-tools",
+  "active-guidelines",
+  "builtin-tool-guidance",
+  "using-workers",
+  "pi-docs",
+  "shared-tool-guidance",
+  "careful-actions",
+  "pragmatism",
+  "verification",
+  "collaboration",
+  "response-style",
+  "preserved-tail",
+] as const satisfies readonly MmrPromptFragmentId[];
+
+/** Legacy export retained for callers that still use the former family name. */
+export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE;
+
+/**
  * Legacy Rush sequence retained for public compatibility. Canonical Low uses
- * the full Smart-family default sequence; no current mode uses this trimmed
+ * the full default sequence; no current mode uses this trimmed
  * sequence.
  */
 export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.filter(
@@ -310,9 +311,9 @@ function recipe(
 
 export const MMR_MODE_PROMPT_RECIPES = {
   low: recipe("low"),
-  medium: recipe("medium"),
-  high: recipe("high", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
-  ultra: recipe("ultra", MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE),
+  medium: recipe("medium", MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE),
+  high: recipe("high"),
+  ultra: recipe("ultra"),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
 
 function templateFromRecipe(recipe: MmrModePromptRecipe): MmrModeBlockTemplate {
