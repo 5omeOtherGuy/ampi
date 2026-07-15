@@ -240,7 +240,7 @@ export const MMR_PROMPT_FRAGMENTS = {
     id: "engineering-judgment",
     blockKind: "engineering-judgment",
     source: "mmr-core",
-    summary: "Deep-only engineering-judgment guidance: choose conservatively when implementation details are open, scale test coverage with blast radius.",
+    summary: "Full-body engineering-judgment guidance: choose conservatively when implementation details are open, scale test coverage with blast radius.",
   },
   verification: {
     id: "verification",

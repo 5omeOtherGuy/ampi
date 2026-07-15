@@ -9,8 +9,8 @@
 ## What `ampi-core` writes to the system prompt
 
 - `low`, `medium`, `high`, and `ultra` each use an ampi-authored mode template in `src/extensions/ampi-core/prompt-content.ts` (re-exported by the `prompt-templates.ts` compatibility shim).
-- Low and Medium use the Smart prompt family: the same intro, body fragments, and closing guidance with tier-specific markers.
-- High and Ultra use the Deep prompt family, including deliberate-investigation guidance and the explicit `## Diagnostic gate` Markdown section.
+- Low, High, and Ultra share the full prompt body: the same autonomous-agent intro, body fragments, and closing guidance with tier-specific mode markers.
+- Medium uses the compact prompt body: task framing, planning, and codebase-discovery sections up front, with implementation, verification, and communication guidance after the tool surface.
 - Mode/tool/policy state (active/missing/deferred tools, configured fallback details, feature gates, availability notes) is **not** written into the model-visible prompt. It is exposed through `MmrModeState`, `/ampi-status`, activation warnings, and the status bar.
 
 ## How the rewrite is scoped
