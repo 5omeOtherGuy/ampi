@@ -6,6 +6,16 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+## 0.3.1 — 2026-07-15
+
+### Changed
+
+- `ampi-core`: tune locked-mode system prompts for the current model profiles and
+  clarify that Low, Medium, High, and Ultra are model-effort levels rather than
+  task-specific modes. Medium uses compact task framing, Low uses full workflow
+  guidance, and High and Ultra share full guidance with stricter direction on
+  when to use `oracle`. Free mode remains unchanged.
+
 ## 0.3.0 — 2026-07-14
 
 ### Changed
