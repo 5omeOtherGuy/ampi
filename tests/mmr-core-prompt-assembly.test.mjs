@@ -162,7 +162,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       assert.equal(kinds.indexOf("mode-posture"), -1, `mode ${mode}: new system prompt has no synthetic posture`);
       assert.match(result.blocks[kinds.indexOf("response-style")].text, /## Response style/);
 
-      if (mode === "medium") {
+      if (mode === "low") {
         assert.deepEqual(
           kinds.filter((kind) => [
             "autonomy",

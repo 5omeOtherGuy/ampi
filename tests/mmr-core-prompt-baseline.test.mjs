@@ -80,8 +80,8 @@ const EXPECTED_FULL_BLOCK_ORDER = [
   "Current working directory:",
 ];
 
-const EXPECTED_MEDIUM_BLOCK_ORDER = [
-  '<mmr_mode name="medium">',
+const EXPECTED_COMPACT_BLOCK_ORDER = [
+  '<mmr_mode name="low">',
   "## Operating principles",
   "## Frame the task",
   "## Plan before acting",
@@ -118,7 +118,7 @@ describe("Phase B baseline: buildMmrPromptLayer block ordering", () => {
         baseSystemPrompt: BASE_PROMPT,
       });
 
-      const expectedBlockOrder = mode === "medium" ? EXPECTED_MEDIUM_BLOCK_ORDER : EXPECTED_FULL_BLOCK_ORDER;
+      const expectedBlockOrder = mode === "low" ? EXPECTED_COMPACT_BLOCK_ORDER : EXPECTED_FULL_BLOCK_ORDER;
       let cursor = 0;
       for (const marker of expectedBlockOrder) {
         const idx = rendered.indexOf(marker, cursor);

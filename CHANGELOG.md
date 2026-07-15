@@ -6,6 +6,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Fixed
+
+- `ampi-core`: assign the compact task-framing system prompt to Low and move
+  Medium onto the full prompt shared with High and Ultra. Prompt prose is
+  unchanged; rendered-prompt and effective-surface fixtures cover the corrected
+  mapping.
+
 ## 0.3.1 — 2026-07-15
 
 ### Changed

@@ -170,11 +170,11 @@ export const SHARED_CODING_GUIDANCE = SHARED_CODING_GUIDANCE_FRAGMENT_IDS.map(
 
 // --- Mode-specific coding-guidance overrides ---
 //
-// Low, High, and Ultra share the full new system prompt body. Medium uses the
-// compact new system prompt structure, with task framing and planning grouped
-// into the existing discovery fragment so the registry can preserve one stable fragment vocabulary.
+// Low uses the compact new system prompt structure, with task framing and
+// planning grouped into the existing discovery fragment. Medium, High, and
+// Ultra share the full new system prompt body.
 
-const MEDIUM_OPERATING_PRINCIPLES = block([
+const COMPACT_OPERATING_PRINCIPLES = block([
   "## Operating principles",
   "",
   "- For implementation work, change the code instead of stopping at a proposal.",
@@ -184,7 +184,7 @@ const MEDIUM_OPERATING_PRINCIPLES = block([
   "- Done means the requested outcome works, unrelated work remains untouched, and verification has passed or its blocker is stated plainly.",
 ]);
 
-const MEDIUM_TASK_DISCOVERY = block([
+const COMPACT_TASK_DISCOVERY = block([
   "## Frame the task",
   "",
   "Before non-trivial work, establish the goal, the code and documentation that define current behavior, the repository constraints, and the observable signal that will prove completion.",
@@ -201,7 +201,7 @@ const MEDIUM_TASK_DISCOVERY = block([
   "- Do not rely on remembered API behavior when local code or current documentation can settle it.",
 ]);
 
-const MEDIUM_IMPLEMENTATION_STYLE = block([
+const COMPACT_IMPLEMENTATION_STYLE = block([
   "## Implementation style",
   "",
   "- Match the nearby naming, structure, and abstractions, but fix root causes rather than copying a local workaround.",
@@ -212,7 +212,7 @@ const MEDIUM_IMPLEMENTATION_STYLE = block([
   "- Review the finished diff for regressions and leftovers: dead code, stale comments, unused imports, and references to what was replaced.",
 ]);
 
-const MEDIUM_VERIFICATION = block([
+const COMPACT_VERIFICATION = block([
   "## Verification",
   "",
   "Complete the loop: implement, update tests when behavior changes, run the narrowest meaningful checks, and broaden them when shared contracts are affected.",
@@ -220,7 +220,7 @@ const MEDIUM_VERIFICATION = block([
   "If a check fails, read the error and make a relevant change before rerunning it. Report every failed or skipped check explicitly; never imply that unrun verification passed.",
 ]);
 
-const MEDIUM_COMMUNICATION = block([
+const COMPACT_COMMUNICATION = block([
   "## Communication",
   "",
   "- Keep progress updates to decisions, relevant discoveries, blockers, and verification results; do not expose hidden reasoning traces or narrate every mechanical step.",
@@ -270,7 +270,7 @@ const DEEP_VERIFICATION = block([
 ]);
 
 /**
- * "Engineering judgment" belongs to the full body used by Low, High, and
+ * "Engineering judgment" belongs to the full body used by Medium, High, and
  * Ultra. The existing export name remains stable for compatibility.
  */
 export const DEEP_ENGINEERING_JUDGMENT = block([
@@ -282,17 +282,18 @@ export const DEEP_ENGINEERING_JUDGMENT = block([
   "- Let test coverage scale with risk and blast radius: focused for narrow changes, broader when the work touches shared behavior, cross-module contracts, or user-facing workflows.",
 ]);
 
-const MEDIUM_CODING_GUIDANCE_OVERRIDES: Partial<Record<SharedCodingGuidanceFragmentId, string>> = {
-  autonomy: MEDIUM_OPERATING_PRINCIPLES,
-  "discovery-discipline": MEDIUM_TASK_DISCOVERY,
-  pragmatism: MEDIUM_IMPLEMENTATION_STYLE,
-  verification: MEDIUM_VERIFICATION,
-  collaboration: MEDIUM_COMMUNICATION,
+const COMPACT_CODING_GUIDANCE_OVERRIDES: Partial<Record<SharedCodingGuidanceFragmentId, string>> = {
+  autonomy: COMPACT_OPERATING_PRINCIPLES,
+  "discovery-discipline": COMPACT_TASK_DISCOVERY,
+  pragmatism: COMPACT_IMPLEMENTATION_STYLE,
+  verification: COMPACT_VERIFICATION,
+  collaboration: COMPACT_COMMUNICATION,
 };
 
 /**
- * Low, High, and Ultra reuse the shared collaboration fragment (the refinement
- * rule); their response-density guidance lives solely in the closing line.
+ * Medium, High, and Ultra reuse the shared collaboration fragment (the
+ * refinement rule); their response-density guidance lives solely in the
+ * closing line.
  */
 const FULL_CODING_GUIDANCE_OVERRIDES: Partial<Record<SharedCodingGuidanceFragmentId, string>> = {
   autonomy: DEEP_AUTONOMY,
@@ -301,12 +302,12 @@ const FULL_CODING_GUIDANCE_OVERRIDES: Partial<Record<SharedCodingGuidanceFragmen
   verification: DEEP_VERIFICATION,
 };
 
-/** Low, High, and Ultra share the full body; Medium uses its compact body. */
+/** Medium, High, and Ultra share the full body; Low uses the compact body. */
 export const MODE_CODING_GUIDANCE_OVERRIDES: Partial<
   Record<PromptedMmrModeKey, Partial<Record<SharedCodingGuidanceFragmentId, string>>>
 > = {
-  low: FULL_CODING_GUIDANCE_OVERRIDES,
-  medium: MEDIUM_CODING_GUIDANCE_OVERRIDES,
+  low: COMPACT_CODING_GUIDANCE_OVERRIDES,
+  medium: FULL_CODING_GUIDANCE_OVERRIDES,
   high: FULL_CODING_GUIDANCE_OVERRIDES,
   ultra: FULL_CODING_GUIDANCE_OVERRIDES,
 };
@@ -333,7 +334,7 @@ export interface MmrModeBlockTemplate {
   closingLine: string;
 }
 
-/** Full template body shared by Low, High, and Ultra. */
+/** Full template body shared by Medium, High, and Ultra. */
 const FULL_TEMPLATE_BODY = {
   intro:
     "You are ampi's autonomous coding agent. You share the user's workspace; deliver the requested outcome with senior engineering judgment, carrying the work through implementation and verification. Adapt immediately when the user redirects you.",
@@ -342,8 +343,8 @@ const FULL_TEMPLATE_BODY = {
     "Start with the shortest complete answer and add only detail that helps the user review, decide, or act: what changed, why, verification, and unresolved risk. Prefer conclusions over narration; omit mechanical inventories that do not affect the result.",
 } as const;
 
-/** Compact template body used only by Medium. */
-const MEDIUM_TEMPLATE_BODY = {
+/** Compact template body used only by Low. */
+const COMPACT_TEMPLATE_BODY = {
   intro:
     "You are ampi's coding agent, working directly in the user's repository. Read, plan, implement, and verify the latest request, then report the outcome and the evidence that confirms it.",
   postureSections: "",
@@ -354,11 +355,11 @@ const MEDIUM_TEMPLATE_BODY = {
 export const MMR_MODE_PROMPT_TEMPLATES = {
   low: {
     tag: "low",
-    ...FULL_TEMPLATE_BODY,
+    ...COMPACT_TEMPLATE_BODY,
   },
   medium: {
     tag: "medium",
-    ...MEDIUM_TEMPLATE_BODY,
+    ...FULL_TEMPLATE_BODY,
   },
   high: {
     tag: "high",

@@ -66,8 +66,8 @@ describe("mmr-core lifecycle smoke", () => {
     assert.match(notifications.at(-1)?.message, /MMR mode activated: Low \(low\)/);
 
     const result = await handlers.get("before_agent_start")({ systemPrompt: BASE_PROMPT, systemPromptOptions: {} });
-    assert.match(result.systemPrompt, /^You are an expert coding assistant operating inside pi, a coding agent harness\. <mmr_mode name="low">You are ampi's autonomous coding agent\./);
-    assert.match(result.systemPrompt, /<\/mmr_mode>\n\n## Autonomy and persistence/);
+    assert.match(result.systemPrompt, /^You are an expert coding assistant operating inside pi, a coding agent harness\. <mmr_mode name="low">You are ampi's coding agent, working directly in the user's repository\./);
+    assert.match(result.systemPrompt, /<\/mmr_mode>\n\n## Operating principles/);
     assert.doesNotMatch(result.systemPrompt, /## Deep mode/);
     assert.match(result.systemPrompt, /## Response style/);
     assert.doesNotMatch(result.systemPrompt, /<!-- mmr-core/);

@@ -74,48 +74,48 @@ describe("mmr-core prompt templates - structural invariants", () => {
     }
   });
 
-  it("introductions distinguish the compact medium level from the shared low/high/ultra role", async () => {
+  it("introductions distinguish the compact low level from the shared medium/high/ultra role", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
-    assert.match(MMR_MODE_PROMPT_TEMPLATES.medium.intro, /ampi's coding agent/i);
-    for (const mode of ["low", "high", "ultra"]) {
+    assert.match(MMR_MODE_PROMPT_TEMPLATES.low.intro, /ampi's coding agent/i);
+    for (const mode of ["medium", "high", "ultra"]) {
       assert.match(MMR_MODE_PROMPT_TEMPLATES[mode].intro, /autonomous coding agent/i);
     }
   });
 
-  it("low, high, and ultra share the new base template apart from the mode tag", async () => {
+  it("medium, high, and ultra share the full base template apart from the mode tag", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
     for (const mode of ["high", "ultra"]) {
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.low.intro, `${mode}: intro matches low`);
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, MMR_MODE_PROMPT_TEMPLATES.low.postureSections, `${mode}: posture matches low`);
-      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].closingLine, MMR_MODE_PROMPT_TEMPLATES.low.closingLine, `${mode}: closing matches low`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].intro, MMR_MODE_PROMPT_TEMPLATES.medium.intro, `${mode}: intro matches medium`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].postureSections, MMR_MODE_PROMPT_TEMPLATES.medium.postureSections, `${mode}: posture matches medium`);
+      assert.equal(MMR_MODE_PROMPT_TEMPLATES[mode].closingLine, MMR_MODE_PROMPT_TEMPLATES.medium.closingLine, `${mode}: closing matches medium`);
     }
   });
 
-  it("medium keeps its distinct compact response style", async () => {
+  it("low keeps its distinct compact response style", async () => {
     const { MMR_MODE_PROMPT_TEMPLATES } = await importSource("extensions/ampi-core/prompt-templates.ts");
-    assert.notEqual(MMR_MODE_PROMPT_TEMPLATES.medium.closingLine, MMR_MODE_PROMPT_TEMPLATES.low.closingLine);
-    assert.equal(MMR_MODE_PROMPT_TEMPLATES.low.closingLine, MMR_MODE_PROMPT_TEMPLATES.high.closingLine);
-    assert.equal(MMR_MODE_PROMPT_TEMPLATES.low.closingLine, MMR_MODE_PROMPT_TEMPLATES.ultra.closingLine);
+    assert.notEqual(MMR_MODE_PROMPT_TEMPLATES.low.closingLine, MMR_MODE_PROMPT_TEMPLATES.medium.closingLine);
+    assert.equal(MMR_MODE_PROMPT_TEMPLATES.medium.closingLine, MMR_MODE_PROMPT_TEMPLATES.high.closingLine);
+    assert.equal(MMR_MODE_PROMPT_TEMPLATES.medium.closingLine, MMR_MODE_PROMPT_TEMPLATES.ultra.closingLine);
   });
 
-  it("medium uses the compact task-framing sections while low/high/ultra share the full guidance", async () => {
+  it("low uses the compact task-framing sections while medium/high/ultra share the full guidance", async () => {
     const { resolveModeCodingGuidanceFragment } = await importSource("extensions/ampi-core/prompt-content.ts");
-    const mediumAutonomy = resolveModeCodingGuidanceFragment("medium", "autonomy");
-    const mediumDiscovery = resolveModeCodingGuidanceFragment("medium", "discovery-discipline");
-    const mediumPragmatism = resolveModeCodingGuidanceFragment("medium", "pragmatism");
-    const mediumCollaboration = resolveModeCodingGuidanceFragment("medium", "collaboration");
-    assert.match(mediumAutonomy, /^## Operating principles/);
-    assert.match(mediumDiscovery, /## Frame the task/);
-    assert.match(mediumDiscovery, /## Plan before acting/);
-    assert.match(mediumDiscovery, /## Codebase discovery/);
-    assert.match(mediumPragmatism, /^## Implementation style/);
-    assert.match(mediumCollaboration, /^## Communication/);
+    const lowAutonomy = resolveModeCodingGuidanceFragment("low", "autonomy");
+    const lowDiscovery = resolveModeCodingGuidanceFragment("low", "discovery-discipline");
+    const lowPragmatism = resolveModeCodingGuidanceFragment("low", "pragmatism");
+    const lowCollaboration = resolveModeCodingGuidanceFragment("low", "collaboration");
+    assert.match(lowAutonomy, /^## Operating principles/);
+    assert.match(lowDiscovery, /## Frame the task/);
+    assert.match(lowDiscovery, /## Plan before acting/);
+    assert.match(lowDiscovery, /## Codebase discovery/);
+    assert.match(lowPragmatism, /^## Implementation style/);
+    assert.match(lowCollaboration, /^## Communication/);
 
     for (const fragmentId of ["autonomy", "discovery-discipline", "pragmatism", "verification", "collaboration"]) {
-      const low = resolveModeCodingGuidanceFragment("low", fragmentId);
-      assert.equal(resolveModeCodingGuidanceFragment("high", fragmentId), low, `high: ${fragmentId} matches low`);
-      assert.equal(resolveModeCodingGuidanceFragment("ultra", fragmentId), low, `ultra: ${fragmentId} matches low`);
-      assert.notEqual(resolveModeCodingGuidanceFragment("medium", fragmentId), low, `medium: ${fragmentId} stays distinct`);
+      const medium = resolveModeCodingGuidanceFragment("medium", fragmentId);
+      assert.equal(resolveModeCodingGuidanceFragment("high", fragmentId), medium, `high: ${fragmentId} matches medium`);
+      assert.equal(resolveModeCodingGuidanceFragment("ultra", fragmentId), medium, `ultra: ${fragmentId} matches medium`);
+      assert.notEqual(resolveModeCodingGuidanceFragment("low", fragmentId), medium, `low: ${fragmentId} stays distinct`);
     }
   });
 

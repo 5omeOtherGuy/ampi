@@ -28,7 +28,7 @@ const EXPECTED_FULL_SEQUENCE = [
   "preserved-tail",
 ];
 
-const EXPECTED_MEDIUM_SEQUENCE = [
+const EXPECTED_COMPACT_SEQUENCE = [
   "identity",
   "autonomy",
   "discovery-discipline",
@@ -69,7 +69,7 @@ describe("mmr-core prompt registry", () => {
     assert.equal(piNativeBase.dateTailAnchor, "\nCurrent date:");
 
     assert.deepEqual(MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_FULL_SEQUENCE);
-    for (const fragmentId of new Set([...EXPECTED_FULL_SEQUENCE, ...EXPECTED_MEDIUM_SEQUENCE])) {
+    for (const fragmentId of new Set([...EXPECTED_FULL_SEQUENCE, ...EXPECTED_COMPACT_SEQUENCE])) {
       assert.ok(MMR_PROMPT_FRAGMENTS[fragmentId], `${fragmentId}: fragment metadata must exist`);
     }
   });
@@ -92,7 +92,7 @@ describe("mmr-core prompt registry", () => {
       const recipe = MMR_MODE_PROMPT_RECIPES[mode];
       assert.equal(recipe.mode, mode);
       assert.equal(recipe.basePromptId, "pi-native-default-v1");
-      const expectedFragments = mode === "medium" ? EXPECTED_MEDIUM_SEQUENCE : EXPECTED_FULL_SEQUENCE;
+      const expectedFragments = mode === "low" ? EXPECTED_COMPACT_SEQUENCE : EXPECTED_FULL_SEQUENCE;
       assert.deepEqual(recipe.fragments, expectedFragments, `${mode}: expected fragment sequence`);
       assert.equal(recipe.tag, mode);
       assert.equal(typeof recipe.intro, "string");
@@ -120,25 +120,27 @@ describe("mmr-core prompt registry", () => {
     }
   });
 
-  it("uses the compact new system prompt sequence for medium and the full sequence for low/high/ultra", () => {
+  it("uses the compact new system prompt sequence for low and the full sequence for medium/high/ultra", () => {
     const {
       MMR_MODE_PROMPT_RECIPES,
       MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE,
       MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE,
+      MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE,
       MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE,
     } = registry;
     assert.deepEqual(MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_FULL_SEQUENCE);
     assert.deepEqual(MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_FULL_SEQUENCE);
-    assert.deepEqual(MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_MEDIUM_SEQUENCE);
-    assert.deepEqual(MMR_MODE_PROMPT_RECIPES.medium.fragments, MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE);
-    for (const mode of ["low", "high", "ultra"]) {
+    assert.deepEqual(MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_COMPACT_SEQUENCE);
+    assert.equal(MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE, MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE);
+    assert.deepEqual(MMR_MODE_PROMPT_RECIPES.low.fragments, MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE);
+    for (const mode of ["medium", "high", "ultra"]) {
       assert.deepEqual(MMR_MODE_PROMPT_RECIPES[mode].fragments, MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE);
       assert.equal(MMR_MODE_PROMPT_RECIPES[mode].fragments.includes("engineering-judgment"), true);
       assert.equal(MMR_MODE_PROMPT_RECIPES[mode].fragments.includes("diagrams"), true);
     }
-    assert.equal(MMR_MODE_PROMPT_RECIPES.medium.fragments.includes("engineering-judgment"), false);
-    assert.equal(MMR_MODE_PROMPT_RECIPES.medium.fragments.includes("diagrams"), false);
-    assert.equal(MMR_MODE_PROMPT_RECIPES.medium.fragments.includes("file-links"), false);
+    assert.equal(MMR_MODE_PROMPT_RECIPES.low.fragments.includes("engineering-judgment"), false);
+    assert.equal(MMR_MODE_PROMPT_RECIPES.low.fragments.includes("diagrams"), false);
+    assert.equal(MMR_MODE_PROMPT_RECIPES.low.fragments.includes("file-links"), false);
   });
 
   it("keeps shared coding fragment ids, text map, and registry metadata aligned", async () => {
