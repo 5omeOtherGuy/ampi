@@ -56,6 +56,8 @@ export interface MmrCustomSubagentDefinition {
    * notice to the user.
    */
   toolsDeclared: boolean;
+  /** Whether this custom worker may run through background task tools. Defaults off. */
+  background?: boolean;
   skills: readonly string[];
   isolatedContext: boolean;
 }
@@ -374,6 +376,7 @@ export function parseMmrCustomSubagentMarkdown(
     readStringList(parsed.attributes, MMR_CUSTOM_SUBAGENT_TOOL_KEYS),
   );
   if (toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) return undefined;
+  const background = readBoolean(parsed.attributes, "background");
   const skills = readStringList(parsed.attributes, ["skills"]);
   const systemPrompt = parsed.body.replaceAll("{baseDir}", baseDir).trimEnd();
 
@@ -389,6 +392,7 @@ export function parseMmrCustomSubagentMarkdown(
     ...(thinkingLevel ? { thinkingLevel } : {}),
     toolPatterns,
     toolsDeclared,
+    background,
     skills,
     isolatedContext,
   };

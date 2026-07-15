@@ -292,6 +292,7 @@ function createProfile(definition: MmrCustomSubagentDefinition): MmrSubagentProf
     tools: [...effectiveCustomSubagentToolPatterns(definition)],
     ...(definition.thinkingLevel ? { thinkingLevel: definition.thinkingLevel } : {}),
     denyTools: MMR_SUBAGENT_SHARED_DENY_TOOLS,
+    backgroundable: definition.background === true,
     promptRoute: "standalone",
     promptBuilder: definition.toolName,
     allowMcp: false,
@@ -649,13 +650,12 @@ export function registerMmrCustomSubagentDefinition(
   registerMmrSubagentProfile(createProfile(definition));
   registerMmrSubagentPromptBuilder(definition.toolName, () => definition.systemPrompt);
   // Register through the core worker-host seam: the shared worker-tool
-  // factory builds the blocking tool AND the background descriptor from one
-  // spec, so blocking sa__* runs register in the async-task registry
-  // (board/widget visible) and background runs share the same preparation
-  // path — no bespoke execute, no tool-execute adapter.
+  // factory always builds the blocking tool and, when `background: true`
+  // opted this definition in, also exposes the same preparation path through
+  // the background registry. No bespoke execute or tool-execute adapter.
   const registered = registerMmrWorkerBinding({
     spec: createCustomSubagentSpec(pi, definition),
-    exposure: ["tool", "background"],
+    exposure: definition.background === true ? ["tool", "background"] : ["tool"],
     contractPreset: "strict-delegated",
     paramsHint: "{task}",
     promptParamKey: "task",

@@ -78,6 +78,7 @@ async function makeDefinition() {
       "description: Writes through the seam.",
       "model: openai-codex/gpt-5.5",
       "tools: read",
+      "background: true",
       "---",
       "Write.",
     ].join("\n"),

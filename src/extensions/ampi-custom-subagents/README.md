@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Public API: [`../.
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On (loaded; no model-visible tools until you enable a subagent) | `sa__<slug>` worker tools, `/ampi-config` setup/import flow | enabled config record + valid in-scope Markdown | `/ampi-status`, `/ampi-config`, tool result `details` |
+| On (loaded; no model-visible tools until you enable a subagent) | `sa__<slug>` worker tools, opt-in background execution, `/ampi-config` setup/import flow | enabled config record + valid in-scope Markdown | `/ampi-status`, `/ampi-config`, tool result `details` |
 
 ## When to use it
 
@@ -41,6 +41,7 @@ Enablement is config-driven and is the privilege boundary. Records live under `a
 - A record carries `enabled`, `source: { root: "global" | "project", file }`, `toolName`, `modes` scope, optional global-only `projects` scope, and the resolved `model`/`thinkingLevel`/`tools`. The record's fields win over the Markdown frontmatter.
 - `toolName` must match the `sa__<slug>` shape; `source.file` must be relative with no `..` segments; reserved ids are rejected. Enabled source files are read with realpath containment under their Pi-owned root, so a symlink pointing outside the root is refused.
 - **Per-mode exposure:** an enabled subagent is registered as a tool but only enters a locked mode's active set when that mode is in the record's `modes` scope, merged through `ampi-core`'s mode-extra-tool provider. A custom subagent never appears in Free mode, and the reserved `sa__*` namespace is excluded from hand-listing in the user-controlled extra-tools setting.
+- **Background execution is explicit:** add the boolean frontmatter field `background: true` to let `start_task` select that custom worker. Omitted, false, and non-boolean values keep it foreground-only.
 
 The `/ampi-config` setup/import flow writes these records for you: it scans Pi-owned and legacy candidates, recommends a read-only-by-default toolset, maps legacy tool aliases, blocks recursive/advisory/MCP/mutation tools, asks for modes and project scope, copies external Markdown into a Pi-owned root, and writes an enabled record.
 
@@ -53,6 +54,12 @@ Discovery (`discoverMmrCustomSubagents`/`parseMmrCustomSubagentMarkdown`) is har
 ### Registration
 
 At activation, enabled records are resolved, their source Markdown parsed, and the record fields overlaid to produce the final definition. Each one registers a subagent profile, a prompt builder, and the `sa__<slug>` Pi tool against the shared `ampi-workers` framework, so custom workers reuse the same child-worker runner and prompt-assembly contract as the concrete subagents.
+
+### Background execution
+
+Custom subagents remain blocking by default. A definition with `background: true` is also registered with the existing `ampi-workers` background surface and can be launched with `start_task` by selecting its `sa__<slug>` agent name and passing `{ task }` in `params`. It then uses the same session-scoped registry, polling, waiting, cancellation, concurrency, and completion-delivery behavior as built-in background workers.
+
+Background custom workers keep the normal custom-subagent tool intersection and shared deny list. They cannot call `Task`, `start_task`, `task_poll`, `task_wait`, `task_cancel`, `oracle`, or `librarian`, so enabling background execution does not open recursive worker spawning.
 
 ### Worker prompt, model, and tools
 

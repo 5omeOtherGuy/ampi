@@ -90,6 +90,26 @@ describe("mmr-subagents custom sa__ loader framework", () => {
     assert.equal(definition.systemPrompt, `Inspect ${path.dirname(filePath)} and report concise findings.`);
   });
 
+  it("parses background as an explicit opt-in and defaults it off", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
+    const parse = (backgroundLine) => parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", "agents", "background.md"),
+      markdown: [
+        "---",
+        "type: subagent",
+        "name: Background Worker",
+        ...(backgroundLine ? [backgroundLine] : []),
+        "---",
+        "Body.",
+      ].join("\n"),
+    });
+
+    assert.equal(parse()?.background, false, "background execution is off when omitted");
+    assert.equal(parse("background: false")?.background, false);
+    assert.equal(parse("background: true")?.background, true);
+    assert.equal(parse("background: yes")?.background, false, "only a boolean true opts in");
+  });
+
   it("parses frontmatter whose closing fence is at EOF", async () => {
     const { parseMmrCustomSubagentMarkdown } = await importSource(LOADER_MODULE);
     const definition = parseMmrCustomSubagentMarkdown({

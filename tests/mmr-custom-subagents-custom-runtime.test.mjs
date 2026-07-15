@@ -303,6 +303,47 @@ describe("mmr-subagents custom Markdown runtime", () => {
     assert.equal(getMmrSubagentProfile("sa__deep_thinker")?.thinkingLevel, "high");
   });
 
+  it("exposes custom workers to background tools only when frontmatter opts in", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
+    const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
+    const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
+    const { listMmrBackgroundAgents } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
+    const parse = (name, background) => parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", ".pi", "subagents", `${name}.md`),
+      markdown: [
+        "---",
+        "type: subagent",
+        `name: ${name}`,
+        "tools: read",
+        ...(background ? ["background: true"] : []),
+        "---",
+        "Work carefully.",
+      ].join("\n"),
+    });
+    const foregroundOnly = parse("Foreground Only", false);
+    const backgroundWorker = parse("Background Worker", true);
+    assert.ok(foregroundOnly);
+    assert.ok(backgroundWorker);
+
+    const { pi } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
+    const runner = { run: async () => makeWorkerResult() };
+    registerMmrCustomSubagentDefinition(pi, foregroundOnly, { runner });
+    registerMmrCustomSubagentDefinition(pi, backgroundWorker, { runner });
+
+    assert.equal(getMmrSubagentProfile("sa__foreground_only")?.backgroundable, false);
+    assert.equal(getMmrSubagentProfile("sa__background_worker")?.backgroundable, true);
+    const backgroundAgents = listMmrBackgroundAgents().map((descriptor) => descriptor.agent);
+    assert.equal(backgroundAgents.includes("sa__foreground_only"), false);
+    assert.equal(backgroundAgents.includes("sa__background_worker"), true);
+    for (const recursiveTool of ["Task", "start_task", "task_poll", "task_wait", "task_cancel"]) {
+      assert.equal(
+        getMmrSubagentProfile("sa__background_worker")?.denyTools?.includes(recursiveTool),
+        true,
+        `${recursiveTool} remains denied for background custom workers`,
+      );
+    }
+  });
+
   it("defaults to the standard toolset and surfaces a fallback notice when no tools field is present", async () => {
     const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
     const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);

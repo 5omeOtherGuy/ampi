@@ -133,11 +133,11 @@ export interface MmrSubagentProfile {
   readonly partialOutputPolicy?: MmrSubagentPartialOutputPolicy;
   /**
    * Whether this worker may run as a background task (`start_task`).
-   * Defaults to `true` when omitted, so registered profiles — including
-   * runtime-registered custom Markdown subagents — are backgroundable
-   * unless they opt out. `oracle` (always blocking by contract) and
-   * `history-reader` (an internal extraction worker, not a public
-   * background agent) declare `false`.
+   * Defaults to `true` when omitted for built-in and generic runtime profiles.
+   * Profiles that require explicit background opt-in, such as custom Markdown
+   * subagents, declare this field on every registered profile. `oracle`
+   * (always blocking by contract) and `history-reader` (an internal extraction
+   * worker, not a public background agent) declare `false`.
    */
   readonly backgroundable?: boolean;
   /**
