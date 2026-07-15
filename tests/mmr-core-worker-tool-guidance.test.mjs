@@ -48,6 +48,17 @@ describe("buildUsingWorkersGuidance", () => {
     assert.doesNotMatch(withoutOracle, /oracle/);
   });
 
+  it("adds the captured oracle restraint only for high mode when oracle is active", async () => {
+    const { buildUsingWorkersGuidance } = await importSource(MODULE);
+    const high = buildUsingWorkersGuidance(["oracle"], "high");
+    assert.match(high, /do not call it routinely/i);
+    assert.match(high, /apply its advice/i);
+    for (const mode of ["low", "medium", "ultra"]) {
+      assert.doesNotMatch(buildUsingWorkersGuidance(["oracle"], mode), /do not call it routinely/i);
+    }
+    assert.equal(buildUsingWorkersGuidance([], "high"), null);
+  });
+
   it("includes result-delivery semantics only when poll/wait tools are active", async () => {
     const { buildUsingWorkersGuidance } = await importSource(MODULE);
     const withPoll = buildUsingWorkersGuidance(["Task", "task_poll", "task_wait"]);
