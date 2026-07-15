@@ -78,20 +78,28 @@ async function makeDefinition() {
       "description: Writes through the seam.",
       "model: openai-codex/gpt-5.5",
       "tools: read",
+      "background: true",
       "---",
       "Write.",
     ].join("\n"),
   });
 }
 
-async function setup({ runner, taskIds = ["c1", "c2"] } = {}) {
+async function setup({
+  runner,
+  taskIds = ["c1", "c2"],
+  isBackgroundAvailable,
+} = {}) {
   const { registerMmrWorkersWorkerHost } = await importSource(HOST_IMPL_MODULE);
   const { createMmrAsyncTaskRegistry } = await importSource(REGISTRY_MODULE);
   const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
   const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
   registerMmrWorkersWorkerHost(pi);
   const definition = await makeDefinition();
-  registerMmrCustomSubagentDefinition(pi, definition, { runner });
+  registerMmrCustomSubagentDefinition(pi, definition, {
+    runner,
+    ...(isBackgroundAvailable !== undefined ? { isBackgroundAvailable } : {}),
+  });
   let next = 0;
   const registry = createMmrAsyncTaskRegistry({ idFactory: () => taskIds[next++] ?? `c${next}` });
   return { pi, tools, registry, definition };
@@ -172,6 +180,33 @@ describe("custom subagents through the worker-host seam", () => {
     assert.equal(runCalls[0].profileName, "sa__seam_writer");
     assert.equal(outcome.finalOutput, "custom answer");
     void registry;
+  });
+
+  it("rejects background dispatch when mode policy leaves the custom tool inactive", async () => {
+    const runCalls = [];
+    const runner = { run: async (options) => { runCalls.push(options); return makeWorkerResult(); } };
+    const { registry } = await setup({ runner, isBackgroundAvailable: () => false });
+    const { listMmrBackgroundAgents } = await importSource(
+      "extensions/ampi-workers/framework/worker-binding-registry.ts",
+    );
+    const tools = await importSource("extensions/ampi-workers/background/async-task-tools.ts");
+
+    assert.equal(
+      listMmrBackgroundAgents().some((descriptor) => descriptor.agent === "sa__seam_writer"),
+      true,
+      "the static start_task schema may list the custom worker before mode selection",
+    );
+    const startTask = tools.createStartTaskTool({ registry, sessionKey: "mode-scope" });
+    const result = await startTask.execute(
+      "call-inactive",
+      { agent: "sa__seam_writer", params: { task: "bypass mode scope" } },
+      undefined,
+      undefined,
+      CTX(),
+    );
+    assert.match(result.details.errorMessage ?? "", /not available in the current mode or project/);
+    assert.equal(runCalls.length, 0, "the inactive worker must never spawn");
+    assert.equal(registry.listTasks("mode-scope").counts.active, 0, "the rejected call creates no task record");
   });
 
   it("never inherits the shared model fallback: a failing run spawns exactly once", async () => {

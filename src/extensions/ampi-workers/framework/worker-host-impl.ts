@@ -89,7 +89,19 @@ export function createMmrWorkersWorkerHost(pi: ToolHostLike, defaultRunner?: Mmr
           start: {
             parametersSchema: spec.parameters,
             workerTools: binding.boardWorkerTools ?? spec.workerToolsConstant,
-            prepareRun: (_deps, params, ctx) => prepareRun(params, ctx),
+            prepareRun: (_deps, params, ctx) => {
+              if (binding.isBackgroundAvailable !== undefined && !binding.isBackgroundAvailable()) {
+                const message = `${spec.toolName}: background execution is not available in the current mode or project.`;
+                return {
+                  ok: false,
+                  result: {
+                    content: [{ type: "text", text: message }],
+                    details: { worker: "ampi-workers.worker-host", tool: spec.toolName, errorMessage: message },
+                  },
+                };
+              }
+              return prepareRun(params, ctx);
+            },
           },
         });
       }

@@ -18,6 +18,8 @@ beforeEach(async () => {
   const { clearMmrSubagentPromptBuilders } = await importSource(PROMPT_ASSEMBLY_MODULE);
   clearMmrDynamicSubagentProfiles();
   clearMmrSubagentPromptBuilders();
+  const { setMmrModeState } = await importSource("extensions/ampi-core/runtime.ts");
+  setMmrModeState(undefined);
   // Production ordering: ampi-workers activates before ampi-custom-subagents
   // and self-registers the core worker-host seam custom subagents consume.
   const { clearMmrDynamicBackgroundAgents } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
@@ -122,7 +124,7 @@ describe("mmr-subagents custom Markdown runtime", () => {
       mkdirSync(piAgents, { recursive: true });
       writeFileSync(
         path.join(piAgents, "deeponly.md"),
-        ["---", "name: Deep Only", "description: Deep mode only.", "---", "Body."].join("\n"),
+        ["---", "name: Deep Only", "description: Deep mode only.", "background: true", "---", "Body."].join("\n"),
       );
       writeFileSync(
         path.join(root, ".pi", "settings.json"),
@@ -131,7 +133,8 @@ describe("mmr-subagents custom Markdown runtime", () => {
         } } } }),
       );
       const { createMmrCustomSubagentsExtension } = await importSource("extensions/ampi-custom-subagents/index.ts");
-      const { resolveMmrModeExtraTools } = await importSource("extensions/ampi-core/runtime.ts");
+      const { resolveMmrModeExtraTools, setMmrModeState } = await importSource("extensions/ampi-core/runtime.ts");
+      const { getMmrBackgroundAgent } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
       const { pi, tools } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
       createMmrCustomSubagentsExtension({ customSubagents: { cwd: root, homeDir: path.join(root, "home") } })(pi);
 
@@ -139,6 +142,27 @@ describe("mmr-subagents custom Markdown runtime", () => {
       assert.deepEqual(resolveMmrModeExtraTools("high", root), ["sa__deep_only"]);
       assert.deepEqual(resolveMmrModeExtraTools("medium", root), [], "absent in non-configured modes");
       assert.deepEqual(resolveMmrModeExtraTools("high", "/other/project"), [], "absent for a different cwd");
+
+      setMmrModeState({ mode: "high" });
+      const descriptor = getMmrBackgroundAgent("sa__deep_only");
+      assert.ok(descriptor);
+      const allowed = descriptor.start.prepareRun(
+        {},
+        { task: "allowed mode" },
+        { cwd: root },
+        { toolCallId: "allowed" },
+      );
+      assert.equal(allowed.ok, true, "background dispatch prepares the custom worker in an allowed mode");
+
+      setMmrModeState({ mode: "medium" });
+      const denied = descriptor.start.prepareRun(
+        {},
+        { task: "wrong mode" },
+        { cwd: root },
+        { toolCallId: "denied" },
+      );
+      assert.equal(denied.ok, false, "background dispatch rejects the custom worker outside its configured modes");
+      assert.match(denied.result.content[0].text, /not available in the current mode or project/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -301,6 +325,47 @@ describe("mmr-subagents custom Markdown runtime", () => {
     const { pi } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
     registerMmrCustomSubagentDefinition(pi, definition, { runner: { run: async () => makeWorkerResult() } });
     assert.equal(getMmrSubagentProfile("sa__deep_thinker")?.thinkingLevel, "high");
+  });
+
+  it("exposes custom workers to background tools only when frontmatter opts in", async () => {
+    const { parseMmrCustomSubagentMarkdown } = await importSource(CUSTOM_LOADER_MODULE);
+    const { registerMmrCustomSubagentDefinition } = await importSource(CUSTOM_RUNTIME_MODULE);
+    const { getMmrSubagentProfile } = await importSource(PROFILES_MODULE);
+    const { listMmrBackgroundAgents } = await importSource("extensions/ampi-workers/framework/worker-binding-registry.ts");
+    const parse = (name, background) => parseMmrCustomSubagentMarkdown({
+      filePath: path.join("/repo", ".pi", "subagents", `${name}.md`),
+      markdown: [
+        "---",
+        "type: subagent",
+        `name: ${name}`,
+        "tools: read",
+        ...(background ? ["background: true"] : []),
+        "---",
+        "Work carefully.",
+      ].join("\n"),
+    });
+    const foregroundOnly = parse("Foreground Only", false);
+    const backgroundWorker = parse("Background Worker", true);
+    assert.ok(foregroundOnly);
+    assert.ok(backgroundWorker);
+
+    const { pi } = createMockPi({ activeTools: ["read"], allTools: ["read"] });
+    const runner = { run: async () => makeWorkerResult() };
+    registerMmrCustomSubagentDefinition(pi, foregroundOnly, { runner });
+    registerMmrCustomSubagentDefinition(pi, backgroundWorker, { runner });
+
+    assert.equal(getMmrSubagentProfile("sa__foreground_only")?.backgroundable, false);
+    assert.equal(getMmrSubagentProfile("sa__background_worker")?.backgroundable, true);
+    const backgroundAgents = listMmrBackgroundAgents().map((descriptor) => descriptor.agent);
+    assert.equal(backgroundAgents.includes("sa__foreground_only"), false);
+    assert.equal(backgroundAgents.includes("sa__background_worker"), true);
+    for (const recursiveTool of ["Task", "start_task", "task_poll", "task_wait", "task_cancel"]) {
+      assert.equal(
+        getMmrSubagentProfile("sa__background_worker")?.denyTools?.includes(recursiveTool),
+        true,
+        `${recursiveTool} remains denied for background custom workers`,
+      );
+    }
   });
 
   it("defaults to the standard toolset and surfaces a fallback notice when no tools field is present", async () => {

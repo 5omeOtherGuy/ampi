@@ -87,6 +87,8 @@ export interface CustomSubagentDetails extends MmrSpawnedSubagentWorkerDetailsBa
 export interface CustomSubagentToolDeps {
   runner?: MmrSubagentRunner;
   outputByteLimit?: number;
+  /** Live owner-policy gate used only when this worker is exposed in background. */
+  isBackgroundAvailable?: () => boolean;
 }
 
 export interface RegisterMmrCustomSubagentToolsOptions extends CustomSubagentToolDeps {
@@ -292,6 +294,7 @@ function createProfile(definition: MmrCustomSubagentDefinition): MmrSubagentProf
     tools: [...effectiveCustomSubagentToolPatterns(definition)],
     ...(definition.thinkingLevel ? { thinkingLevel: definition.thinkingLevel } : {}),
     denyTools: MMR_SUBAGENT_SHARED_DENY_TOOLS,
+    backgroundable: definition.background === true,
     promptRoute: "standalone",
     promptBuilder: definition.toolName,
     allowMcp: false,
@@ -649,24 +652,33 @@ export function registerMmrCustomSubagentDefinition(
   registerMmrSubagentProfile(createProfile(definition));
   registerMmrSubagentPromptBuilder(definition.toolName, () => definition.systemPrompt);
   // Register through the core worker-host seam: the shared worker-tool
-  // factory builds the blocking tool AND the background descriptor from one
-  // spec, so blocking sa__* runs register in the async-task registry
-  // (board/widget visible) and background runs share the same preparation
-  // path — no bespoke execute, no tool-execute adapter.
+  // factory always builds the blocking tool and, when `background: true`
+  // opted this definition in, also exposes the same preparation path through
+  // the background registry. No bespoke execute or tool-execute adapter.
   const registered = registerMmrWorkerBinding({
     spec: createCustomSubagentSpec(pi, definition),
-    exposure: ["tool", "background"],
+    exposure: definition.background === true ? ["tool", "background"] : ["tool"],
     contractPreset: "strict-delegated",
     paramsHint: "{task}",
     promptParamKey: "task",
     boardWorkerTools: effectiveCustomSubagentToolPatterns(definition),
     modelFallback: "disabled",
+    ...(deps.isBackgroundAvailable !== undefined
+      ? { isBackgroundAvailable: deps.isBackgroundAvailable }
+      : {}),
     ...(deps.runner !== undefined ? { runner: deps.runner } : {}),
     ...(deps.outputByteLimit !== undefined ? { outputByteLimit: deps.outputByteLimit } : {}),
   });
   registerAmpiOwnedTool(definition.toolName);
   pi.registerTool(registered.tool);
   return registered.tool;
+}
+
+function customSubagentModesAllowMode(
+  modes: MmrCustomSubagentRecord["modes"],
+  modeKey: MmrLockedModeKey,
+): boolean {
+  return modes === "allLocked" || modes.includes(modeKey);
 }
 
 /**
@@ -710,7 +722,15 @@ export function registerMmrCustomSubagentTools(
     if (!definition.toolName.startsWith(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX)) continue;
     if (definition.toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) continue;
     seen.add(record.toolName);
-    const tool = registerMmrCustomSubagentDefinition(pi, definition, options);
+    const tool = registerMmrCustomSubagentDefinition(pi, definition, {
+      ...options,
+      isBackgroundAvailable: () => {
+        const mode = getMmrModeStateSnapshot()?.mode;
+        return mode !== undefined
+          && mode !== "free"
+          && customSubagentModesAllowMode(record.modes, mode as MmrLockedModeKey);
+      },
+    });
     registered.push({ tool, record });
   }
 
@@ -737,7 +757,7 @@ function registerCustomSubagentModeExtraProvider(
       if (path.resolve(queryCwd) !== resolvedCwd) return [];
       const result: string[] = [];
       for (const entry of entries) {
-        const allowed = entry.modes === "allLocked" || entry.modes.includes(modeKey as MmrLockedModeKey);
+        const allowed = customSubagentModesAllowMode(entry.modes, modeKey as MmrLockedModeKey);
         if (allowed) result.push(entry.toolName);
       }
       return result;

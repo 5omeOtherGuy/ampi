@@ -40,6 +40,11 @@ export interface MmrWorkerBindingSpec<TParams = unknown, TDetails = unknown, TRu
   spec: MmrWorkerToolSpec<TParams, TDetails, TRun>;
   /** Which consumption surfaces may resolve this binding. */
   exposure: readonly MmrWorkerBindingExposure[];
+  /**
+   * Optional live gate for the background surface. Sibling-owned workers use
+   * this to preserve their mode/project policy when exposed through start_task.
+   */
+  isBackgroundAvailable?: () => boolean;
   /** Behavior-named pinned-contract preset this binding declares. */
   contractPreset: MmrWorkerContractPreset;
   /** Params shape shown in the start_task schema text, e.g. `"{task}"`. */
