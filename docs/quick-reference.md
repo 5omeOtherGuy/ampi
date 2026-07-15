@@ -6,10 +6,10 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 
 | I want to... | Use | Notes |
 | --- | --- | --- |
-| Quick, focused work | `/mode low` | GPT-5.6 Terra, medium reasoning, Smart prompt family |
-| Default balanced coding | `/mode medium` | GPT-5.6 Sol, medium reasoning, Smart prompt family, 300k safety profile |
-| Demanding implementation/debugging | `/mode high` | GPT-5.6 Sol, extra-high reasoning, Deep prompt family |
-| Maximum-effort work | `/mode ultra` | GPT-5.6 Sol, Pi `xhigh` reasoning, Deep prompt family |
+| Quick, focused work | `/mode low` | GPT-5.6 Terra, medium reasoning, full prompt body |
+| Default balanced coding | `/mode medium` | GPT-5.6 Sol, medium reasoning, compact prompt body, 300k safety profile |
+| Demanding implementation/debugging | `/mode high` | GPT-5.6 Sol, extra-high reasoning, full prompt body |
+| Maximum-effort work | `/mode ultra` | GPT-5.6 Sol, Pi `xhigh` reasoning, full prompt body |
 | Stock Pi behavior | `/mode free` | Releases ampi locks and removes ampi-owned tools |
 
 ```text
