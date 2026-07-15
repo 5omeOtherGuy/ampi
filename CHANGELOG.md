@@ -6,18 +6,6 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
-### Changed
-
-- `ampi-core`: tightened the low/medium/high/ultra mode system prompts for
-  information density — duplicated guidance now has a single home per rendered
-  prompt and the remaining prose is compressed with unchanged guidance
-  semantics; rendered-prompt and effective-surface fixtures updated.
-
-### Documentation
-
-- Aligned `prompt-provenance.md`, `quick-reference.md`, and the `ampi-core`
-  README with the full/compact prompt-body split.
-
 ## 0.3.1 — 2026-07-15
 
 ### Changed
@@ -27,6 +15,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   task-specific modes. Medium uses compact task framing, Low uses full workflow
   guidance, and High and Ultra share full guidance with stricter direction on
   when to use `oracle`. Free mode remains unchanged.
+- `ampi-core`: tighten the Low, Medium, High, and Ultra system prompts for
+  information density. Duplicated guidance now has a single home per rendered
+  prompt, while the remaining prose is more compact without changing its
+  behavior.
+
+### Documentation
+
+- Update the public reference docs to describe the full and compact prompt-body
+  profiles.
 
 ## 0.3.0 — 2026-07-14
 
