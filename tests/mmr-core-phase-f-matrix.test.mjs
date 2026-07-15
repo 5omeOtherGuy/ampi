@@ -31,7 +31,7 @@ const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 
 // New system prompt variants render the same system prompt apart from the
 // <mmr_mode name="..."> tag where their level-specific guidance is identical.
-// Ultra is excluded from matrix snapshots because it matches Low apart from
+// Ultra is excluded from matrix snapshots because it matches Medium apart from
 // the tag, while all four modes remain in structural marker checks.
 const MATRIX_MODES = ["medium", "low", "high"];
 const MATRIX_MARKER_MODES = ["medium", "ultra", "low", "high"];
@@ -69,8 +69,8 @@ const EXPECTED_FULL_BLOCK_ORDER = [
   "Current working directory:",
 ];
 
-const EXPECTED_MEDIUM_BLOCK_ORDER = [
-  '<mmr_mode name="medium">',
+const EXPECTED_COMPACT_BLOCK_ORDER = [
+  '<mmr_mode name="low">',
   "## Operating principles",
   "## Frame the task",
   "## Plan before acting",
@@ -176,7 +176,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
         baseSystemPrompt: BASE_PROMPT,
         activeToolManifest: [],
       });
-      const expectedBlockOrder = mode === "medium" ? EXPECTED_MEDIUM_BLOCK_ORDER : EXPECTED_FULL_BLOCK_ORDER;
+      const expectedBlockOrder = mode === "low" ? EXPECTED_COMPACT_BLOCK_ORDER : EXPECTED_FULL_BLOCK_ORDER;
       let cursor = 0;
       for (const marker of expectedBlockOrder) {
         const idx = result.systemPrompt.indexOf(marker, cursor);
@@ -249,7 +249,7 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       assert.ok(guidelinesIdx < docsIdx, `${mode}: Guidelines must precede Pi documentation`);
       assert.ok(docsIdx < sharedToolIdx, `${mode}: Pi documentation must precede shared tool guidance`);
 
-      if (mode === "medium") {
+      if (mode === "low") {
         const operatingIdx = sp.indexOf("## Operating principles");
         const carefulActionsIdx = sp.indexOf("## Executing actions with care");
         const implementationIdx = sp.indexOf("## Implementation style");

@@ -10,7 +10,7 @@
 // but forward changed). Both failures are observable here:
 //   (a) byte-stable idempotence per mode (re-assembly is a no-op and still a
 //       real rewrite, not a passthrough), and
-//   (b) cross-mode strip (a full parent re-assembled as compact Medium carries
+//   (b) cross-mode strip (a full parent re-assembled as compact Low carries
 //       the Medium tail exactly once and no full-only sections).
 //
 // This complements the existing `mmr-core-prompt.test.mjs` duplication guard
@@ -55,15 +55,15 @@ function createState(mode) {
 
 const PROMPTED_MODES = ["medium", "ultra", "low", "high"];
 
-const MEDIUM_OPERATING_HEADING = "## Operating principles";
-const MEDIUM_CLOSING_LINE =
+const COMPACT_OPERATING_HEADING = "## Operating principles";
+const COMPACT_CLOSING_LINE =
   "Lead with the outcome, then summarize changed behavior and verification. Keep the reply concise unless more detail helps the user review or decide.";
 const AUTONOMY_HEADING = "## Autonomy and persistence";
 const CAREFUL_ACTIONS_HEADING = "## Executing actions with care";
 const TOOL_USE_HEADING = "## Tool use";
 const DIAGRAMS_HEADING = "## Diagrams";
 const FULL_COLLABORATION_HEADING = "## Working with the user";
-const MEDIUM_COMMUNICATION_HEADING = "## Communication";
+const COMPACT_COMMUNICATION_HEADING = "## Communication";
 const RESPONSE_STYLE_HEADING = "## Response style";
 
 function assertBefore(prompt, before, after, message) {
@@ -84,24 +84,24 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
 
   it("places task/risk posture before tool guidance and preserves that order across re-assembly", () => {
     const first = assembleActiveSurface({
-      state: createState("medium"),
+      state: createState("low"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
     assert.equal(first.passthroughReason, undefined, "first assembly must rewrite Pi's prompt");
 
-    assertBefore(first.systemPrompt, MEDIUM_OPERATING_HEADING, TOOL_USE_HEADING, "fresh medium prompt");
-    assertBefore(first.systemPrompt, TOOL_USE_HEADING, CAREFUL_ACTIONS_HEADING, "fresh medium prompt");
-    assertBefore(first.systemPrompt, CAREFUL_ACTIONS_HEADING, RESPONSE_STYLE_HEADING, "fresh medium prompt");
+    assertBefore(first.systemPrompt, COMPACT_OPERATING_HEADING, TOOL_USE_HEADING, "fresh low prompt");
+    assertBefore(first.systemPrompt, TOOL_USE_HEADING, CAREFUL_ACTIONS_HEADING, "fresh low prompt");
+    assertBefore(first.systemPrompt, CAREFUL_ACTIONS_HEADING, RESPONSE_STYLE_HEADING, "fresh low prompt");
 
     const second = assembleActiveSurface({
-      state: createState("medium"),
+      state: createState("low"),
       baseSystemPrompt: first.systemPrompt,
       activeToolManifest: [],
     });
     assert.equal(second.systemPrompt, first.systemPrompt, "compact prompt must re-assemble byte-stably");
     assert.equal(second.passthroughReason, undefined, "re-assembly must remain a real rewrite");
-    assert.equal(second.systemPrompt.split(MEDIUM_OPERATING_HEADING).length - 1, 1, "operating-principles heading must not duplicate");
+    assert.equal(second.systemPrompt.split(COMPACT_OPERATING_HEADING).length - 1, 1, "operating-principles heading must not duplicate");
     assert.equal(second.systemPrompt.split(TOOL_USE_HEADING).length - 1, 1, "tool-use heading must not duplicate");
   });
 
@@ -113,8 +113,8 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
         activeToolManifest: [],
       });
       assert.equal(first.passthroughReason, undefined, `${mode}: first assembly must rewrite Pi's prompt`);
-      const collaborationHeading = mode === "medium" ? MEDIUM_COMMUNICATION_HEADING : FULL_COLLABORATION_HEADING;
-      if (mode === "medium") {
+      const collaborationHeading = mode === "low" ? COMPACT_COMMUNICATION_HEADING : FULL_COLLABORATION_HEADING;
+      if (mode === "low") {
         assertBefore(first.systemPrompt, TOOL_USE_HEADING, collaborationHeading, `${mode} fresh prompt`);
         assertBefore(first.systemPrompt, TOOL_USE_HEADING, RESPONSE_STYLE_HEADING, `${mode} fresh prompt`);
       } else {
@@ -170,7 +170,7 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     });
   }
 
-  it("re-assembling a full prompt as Medium carries the compact tail exactly once", () => {
+  it("re-assembling a full prompt as Low carries the compact tail exactly once", () => {
     const full = assembleActiveSurface({
       state: createState("high"),
       baseSystemPrompt: BASE_PROMPT,
@@ -179,27 +179,27 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
     assert.equal(full.passthroughReason, undefined, "full assembly must rewrite Pi's prompt");
     assert.ok(full.systemPrompt.includes(AUTONOMY_HEADING), "full assembly must contain its autonomy heading");
 
-    const mediumFromFull = assembleActiveSurface({
-      state: createState("medium"),
+    const lowFromFull = assembleActiveSurface({
+      state: createState("low"),
       baseSystemPrompt: full.systemPrompt,
       activeToolManifest: [],
     });
     assert.equal(
-      mediumFromFull.passthroughReason,
+      lowFromFull.passthroughReason,
       undefined,
-      "re-assembling a full parent as Medium must be a real rewrite, not passthrough",
+      "re-assembling a full parent as Low must be a real rewrite, not passthrough",
     );
 
-    const sp = mediumFromFull.systemPrompt;
+    const sp = lowFromFull.systemPrompt;
     assert.equal(
-      sp.split(MEDIUM_OPERATING_HEADING).length - 1,
+      sp.split(COMPACT_OPERATING_HEADING).length - 1,
       1,
-      "Medium operating principles must appear exactly once after cross-mode re-assembly",
+      "Low operating principles must appear exactly once after cross-mode re-assembly",
     );
     assert.equal(
-      sp.split(MEDIUM_CLOSING_LINE).length - 1,
+      sp.split(COMPACT_CLOSING_LINE).length - 1,
       1,
-      "Medium closing line must appear exactly once after cross-mode re-assembly",
+      "Low closing line must appear exactly once after cross-mode re-assembly",
     );
     assert.equal(sp.includes(AUTONOMY_HEADING), false, "the full autonomy heading must be stripped");
     assert.equal(sp.includes(DIAGRAMS_HEADING), false, "the full diagrams section must be stripped");

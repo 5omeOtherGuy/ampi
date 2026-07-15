@@ -48,8 +48,8 @@ const MODES = ["medium", "ultra", "low", "high"];
 const PI_IDENTITY_LINE = "You are an expert coding assistant operating inside pi, a coding agent harness.";
 
 const MODE_MARKER_OPENINGS = {
-  medium: '<mmr_mode name="medium">You are ampi\'s coding agent, working directly in the user\'s repository.',
-  low: '<mmr_mode name="low">You are ampi\'s autonomous coding agent.',
+  medium: '<mmr_mode name="medium">You are ampi\'s autonomous coding agent.',
+  low: '<mmr_mode name="low">You are ampi\'s coding agent, working directly in the user\'s repository.',
   high: '<mmr_mode name="high">You are ampi\'s autonomous coding agent.',
   ultra: '<mmr_mode name="ultra">You are ampi\'s autonomous coding agent.',
 };
@@ -200,20 +200,20 @@ describe("mmr-core prompt layer", () => {
     }
   });
 
-  it("keeps diagram guidance in the full new system prompts and omits it from compact Medium", async () => {
+  it("keeps diagram guidance in the full new system prompts and omits it from compact Low", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const diagramSentence =
       "When a picture beats prose for architecture, flow, state, or relationships, draw it with box-drawing characters";
 
-    for (const mode of ["low", "high", "ultra"]) {
+    for (const mode of ["medium", "high", "ultra"]) {
       const result = buildMmrPromptLayer({ state: createState({ mode }), baseSystemPrompt: BASE_PROMPT });
       assert.equal(result.includes(diagramSentence), true, `${mode}: diagrams fragment must render`);
       assert.equal(result.includes("## Diagrams"), true, `${mode}: diagrams section must render`);
       assert.equal(result.includes("```diagram"), false, `${mode}: must not force diagram code fences`);
     }
-    const medium = buildMmrPromptLayer({ state: createState({ mode: "medium" }), baseSystemPrompt: BASE_PROMPT });
-    assert.equal(medium.includes("## Diagrams"), false);
-    assert.equal(medium.includes(diagramSentence), false);
+    const low = buildMmrPromptLayer({ state: createState({ mode: "low" }), baseSystemPrompt: BASE_PROMPT });
+    assert.equal(low.includes("## Diagrams"), false);
+    assert.equal(low.includes(diagramSentence), false);
   });
 
   it("embeds Pi's Available tools list verbatim under the Tool use heading for every mode", async () => {
