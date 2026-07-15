@@ -87,6 +87,8 @@ export interface CustomSubagentDetails extends MmrSpawnedSubagentWorkerDetailsBa
 export interface CustomSubagentToolDeps {
   runner?: MmrSubagentRunner;
   outputByteLimit?: number;
+  /** Live owner-policy gate used only when this worker is exposed in background. */
+  isBackgroundAvailable?: () => boolean;
 }
 
 export interface RegisterMmrCustomSubagentToolsOptions extends CustomSubagentToolDeps {
@@ -661,12 +663,22 @@ export function registerMmrCustomSubagentDefinition(
     promptParamKey: "task",
     boardWorkerTools: effectiveCustomSubagentToolPatterns(definition),
     modelFallback: "disabled",
+    ...(deps.isBackgroundAvailable !== undefined
+      ? { isBackgroundAvailable: deps.isBackgroundAvailable }
+      : {}),
     ...(deps.runner !== undefined ? { runner: deps.runner } : {}),
     ...(deps.outputByteLimit !== undefined ? { outputByteLimit: deps.outputByteLimit } : {}),
   });
   registerAmpiOwnedTool(definition.toolName);
   pi.registerTool(registered.tool);
   return registered.tool;
+}
+
+function customSubagentModesAllowMode(
+  modes: MmrCustomSubagentRecord["modes"],
+  modeKey: MmrLockedModeKey,
+): boolean {
+  return modes === "allLocked" || modes.includes(modeKey);
 }
 
 /**
@@ -710,7 +722,15 @@ export function registerMmrCustomSubagentTools(
     if (!definition.toolName.startsWith(MMR_CUSTOM_SUBAGENT_TOOL_PREFIX)) continue;
     if (definition.toolPatterns.some(isUnsafeMmrCustomSubagentToolPattern)) continue;
     seen.add(record.toolName);
-    const tool = registerMmrCustomSubagentDefinition(pi, definition, options);
+    const tool = registerMmrCustomSubagentDefinition(pi, definition, {
+      ...options,
+      isBackgroundAvailable: () => {
+        const mode = getMmrModeStateSnapshot()?.mode;
+        return mode !== undefined
+          && mode !== "free"
+          && customSubagentModesAllowMode(record.modes, mode as MmrLockedModeKey);
+      },
+    });
     registered.push({ tool, record });
   }
 
@@ -737,7 +757,7 @@ function registerCustomSubagentModeExtraProvider(
       if (path.resolve(queryCwd) !== resolvedCwd) return [];
       const result: string[] = [];
       for (const entry of entries) {
-        const allowed = entry.modes === "allLocked" || entry.modes.includes(modeKey as MmrLockedModeKey);
+        const allowed = customSubagentModesAllowMode(entry.modes, modeKey as MmrLockedModeKey);
         if (allowed) result.push(entry.toolName);
       }
       return result;

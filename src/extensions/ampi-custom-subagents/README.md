@@ -57,7 +57,7 @@ At activation, enabled records are resolved, their source Markdown parsed, and t
 
 ### Background execution
 
-Custom subagents remain blocking by default. A definition with `background: true` is also registered with the existing `ampi-workers` background surface and can be launched with `start_task` by selecting its `sa__<slug>` agent name and passing `{ task }` in `params`. It then uses the same session-scoped registry, polling, waiting, cancellation, concurrency, and completion-delivery behavior as built-in background workers.
+Custom subagents remain blocking by default. A definition with `background: true` is also registered with the existing `ampi-workers` background surface and can be launched with `start_task` by selecting its `sa__<slug>` agent name and passing `{ task }` in `params`. It then uses the same session-scoped registry, polling, waiting, cancellation, concurrency, and completion-delivery behavior as built-in background workers. At dispatch, `start_task` rechecks the record's project and locked-mode scope and rejects the run when that custom worker is not available.
 
 Background custom workers keep the normal custom-subagent tool intersection and shared deny list. They cannot call `Task`, `start_task`, `task_poll`, `task_wait`, `task_cancel`, `oracle`, or `librarian`, so enabling background execution does not open recursive worker spawning.
 
