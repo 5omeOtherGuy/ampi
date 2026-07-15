@@ -115,12 +115,12 @@ export const MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE = [
 ] as const satisfies readonly MmrPromptFragmentId[];
 
 /**
- * Medium's compact layout frames and plans first, presents the live
- * tool surface next, then closes with implementation, verification, and
- * communication guidance. Its communication fragment owns file-link behavior,
- * and the Medium system prompt has no diagram section.
+ * Low's compact layout frames and plans first, presents the live tool surface
+ * next, then closes with implementation, verification, and communication
+ * guidance. Its communication fragment owns file-link behavior, and the Low
+ * system prompt has no diagram section.
  */
-export const MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE = [
+export const MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE = [
   "identity",
   "autonomy",
   "discovery-discipline",
@@ -139,13 +139,15 @@ export const MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE = [
   "preserved-tail",
 ] as const satisfies readonly MmrPromptFragmentId[];
 
+/** Legacy alias retained for compatibility with the former mode assignment. */
+export const MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE = MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE;
+
 /** Legacy export retained for callers that still use the former family name. */
 export const MMR_DEEP_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE;
 
 /**
- * Legacy Rush sequence retained for public compatibility. Canonical Low uses
- * the full default sequence; no current mode uses this trimmed
- * sequence.
+ * Legacy Rush sequence retained for public compatibility. No current mode uses
+ * this trimmed sequence.
  */
 export const MMR_RUSH_PROMPT_FRAGMENT_SEQUENCE = MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE.filter(
   (fragmentId) => fragmentId !== "diagrams",
@@ -310,8 +312,8 @@ function recipe(
 }
 
 export const MMR_MODE_PROMPT_RECIPES = {
-  low: recipe("low"),
-  medium: recipe("medium", MMR_MEDIUM_PROMPT_FRAGMENT_SEQUENCE),
+  low: recipe("low", MMR_COMPACT_PROMPT_FRAGMENT_SEQUENCE),
+  medium: recipe("medium"),
   high: recipe("high"),
   ultra: recipe("ultra"),
 } satisfies Record<PromptedMmrModeKey, MmrModePromptRecipe>;
