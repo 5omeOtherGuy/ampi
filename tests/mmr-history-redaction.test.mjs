@@ -176,15 +176,16 @@ describe("mmr-history redaction — identity family", () => {
   });
 
   it("uses os.userInfo() by default when no opts.user is provided", async () => {
-    const { redactText, __resetRedactionUsernameCacheForTests } = await importSource(REDACTION_MODULE);
+    const { redactText, REDACTION_USER, __resetRedactionUsernameCacheForTests } = await importSource(REDACTION_MODULE);
     __resetRedactionUsernameCacheForTests();
     const { userInfo } = await import("node:os");
     const realUser = userInfo().username;
     if (!realUser || realUser.length < 2) {
       return; // CI environments may have unusual user info; skip.
     }
-    const out = redactText(`hello ${realUser} world`);
-    assert.ok(!new RegExp(`\\b${realUser}\\b`).test(out), `username must be redacted: ${out}`);
+    // Compare the whole output: a word-boundary search for the username would
+    // also match inside the placeholder when the account is literally "user".
+    assert.equal(redactText(`hello ${realUser} world`), `hello ${REDACTION_USER} world`);
   });
 });
 
