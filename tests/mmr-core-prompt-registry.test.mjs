@@ -85,7 +85,7 @@ describe("mmr-core prompt registry", () => {
   });
 
   it("registers one mode recipe per prompted locked mode", () => {
-    const { MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE, MMR_MODE_PROMPT_RECIPES } = registry;
+    const { MMR_MODE_PROMPT_RECIPES } = registry;
 
     assert.deepEqual(Object.keys(MMR_MODE_PROMPT_RECIPES).sort(), [...PROMPTED_MODES].sort());
     assert.equal("free" in MMR_MODE_PROMPT_RECIPES, false, "free mode must not have a prompt recipe");
