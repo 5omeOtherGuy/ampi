@@ -16,6 +16,7 @@ const CONFIG_THINKING_LEVEL_CHOICES: readonly string[] = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ];
 
 export interface MmrCoreConfigFlowBindings {

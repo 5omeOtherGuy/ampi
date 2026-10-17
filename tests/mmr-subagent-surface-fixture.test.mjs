@@ -175,10 +175,10 @@ function buildLibrarianActiveManifest() {
 }
 
 // Representative built-in `promptGuidelines` mirroring Pi's per-tool strings
-// (copied from tests/fixtures/mmr-core-prompts/base.md `Guidelines:`). At
+// (copied from tests/fixtures/mmr-core-prompts/base.md `<rules>`). At
 // runtime these come from Pi's `getAllTools()` via `buildWorkerToolManifest`;
 // the fixture hand-builds synthetic entries, so without these the rebuilt
-// worker `Guidelines:` block would drop read/edit/write bullets and be
+// worker `<rules>` section would drop read/edit/write bullets and be
 // unrepresentative. Worker-only tools (web_search/read_web_page/finder/
 // task_list) carry short representative bullets the parent prompt lacks.
 function buildTaskActiveManifest() {

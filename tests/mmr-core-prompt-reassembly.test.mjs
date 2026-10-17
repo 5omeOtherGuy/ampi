@@ -121,8 +121,9 @@ describe("assembleActiveSurface() prompt-tail drift hardening", () => {
         assertBefore(first.systemPrompt, collaborationHeading, TOOL_USE_HEADING, `${mode} fresh prompt`);
         assertBefore(first.systemPrompt, RESPONSE_STYLE_HEADING, TOOL_USE_HEADING, `${mode} fresh prompt`);
       }
-      assertBefore(first.systemPrompt, "Current date:", "Current working directory:", `${mode} fresh prompt`);
-      assertBefore(first.systemPrompt, TOOL_USE_HEADING, "Current date:", `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, "\n\n<project_context>\n", "\n\n<skills>\n", `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, "\n\n<skills>\n", "\n\n<cwd>\n", `${mode} fresh prompt`);
+      assertBefore(first.systemPrompt, TOOL_USE_HEADING, "\n\n<project_context>\n", `${mode} fresh prompt`);
 
       const second = assembleActiveSurface({
         state: createState(mode),

@@ -1,13 +1,13 @@
 /**
  * Built-in tool guidance.
  *
- * Pi's auto-emitted `Guidelines:` block is concise; many high-signal
+ * Pi's auto-emitted `<rules>` section is concise; many high-signal
  * "how to use this tool well" rules from comparable agents are missing.
  * ampi supplements that by inserting a `## Built-in tool guidance`
- * block immediately after Pi's `Guidelines:` block, scoped to whichever
- * built-in tools are currently listed in Pi's `Available tools:` block.
+ * block immediately after Pi's `<rules>` section, scoped to whichever
+ * built-in tools are currently listed in Pi's `<tools>` section.
  *
- * Pi's `Available tools:` and `Guidelines:` blocks remain byte-identical;
+ * Pi's `<tools>` and `<rules>` sections remain byte-identical;
  * this module only adds an MMR-owned augmentation block that names every
  * bullet's tool explicitly so the model knows what each bullet steers.
  *
@@ -102,7 +102,7 @@ export function buildBuiltinToolGuidance(
 
 /**
  * Extract Pi-built-in tool names that appear in a Pi-authored
- * `Available tools:` block body. Returns the subset that has curated
+ * `<tools>` section body. Returns the subset that has curated
  * guidance; other names (custom tools registered by other extensions,
  * unrecognized lines) are ignored.
  */
@@ -111,7 +111,7 @@ export function extractActiveBuiltinToolNames(
 ): string[] {
   const known: ReadonlySet<string> = new Set(BUILTIN_TOOL_NAMES);
   const found: string[] = [];
-  // Pi-authored `Available tools:` lines have the shape `- <name>: <desc>`,
+  // Pi-authored `<tools>` lines have the shape `- <name>: <desc>`,
   // and Pi's built-in tool identifiers are lowercase snake_case by
   // convention. The lowercase-only character class is intentional: it
   // mirrors current Pi output and the `known` set below filters out

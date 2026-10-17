@@ -265,7 +265,7 @@ export function resolveMmrSubagentRoute<TModel extends MmrRegisteredModelLike>(
  *    validate the explicit `--model` and `--tools` CLI flags the child
  *    process was invoked with against the deny-aware, registered-tool
  *    intersection;
- *  - prompt assembly to filter `Available tools:` by the same effective
+ *  - prompt assembly to filter `<tools>` by the same effective
  *    worker tool set.
  *
  * Layers on top of the internal {@link resolveMmrSubagentRoute} and

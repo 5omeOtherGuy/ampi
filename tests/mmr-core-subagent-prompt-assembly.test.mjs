@@ -57,14 +57,14 @@ function makeFinderProfile() {
   });
 }
 
-function makeTaskProfile() {
+function makeTaskProfile({ tools } = {}) {
   return Object.freeze({
     name: "Task",
     displayName: "Task",
     modelPreferences: [{ model: "claude-opus-4-8" }],
     thinkingLevel: "high",
     // Task gets every smart-mode active tool except subagent surfaces.
-    tools: Object.freeze(["read", "bash", "grep", "find"]),
+    tools: Object.freeze(tools ?? ["read", "bash", "grep", "find"]),
     promptRoute: "mode-derived",
     baseMode: "medium",
     promptBuilder: "task",
@@ -118,29 +118,33 @@ function makeFinderManifest() {
   ];
 }
 
-// Slice the rebuilt worker `Guidelines:` block out of an assembled prompt and
-// return its bullet texts (between `Guidelines:\n` and the next blank line).
+// Slice the rebuilt worker `<rules>` section out of an assembled prompt and
+// return its bullet texts (between `<rules>\n` and `\n</rules>`).
 function sliceGuidelineBullets(systemPrompt) {
-  const header = "Guidelines:\n";
+  const header = "\n<rules>\n";
   const start = systemPrompt.indexOf(header);
-  assert.notEqual(start, -1, "expected a Guidelines block in the assembled prompt");
+  assert.notEqual(start, -1, "expected a <rules> section in the assembled prompt");
   const bodyStart = start + header.length;
-  const end = systemPrompt.indexOf("\n\n", bodyStart);
-  const body = systemPrompt.slice(bodyStart, end === -1 ? undefined : end);
+  const end = systemPrompt.indexOf("\n</rules>", bodyStart);
+  assert.notEqual(end, -1, "expected the <rules> section to be closed");
+  const body = systemPrompt.slice(bodyStart, end);
+  // Every line of the section body is a bullet; nothing else may leak in.
+  for (const line of body.split("\n")) assert.match(line, /^- \S/, `unexpected <rules> line: ${line}`);
   return [...body.matchAll(/^- (.+)$/gm)].map((m) => m[1]);
 }
 
 function replaceAvailableToolsBlock(basePrompt, toolLines) {
   const replacement = [
-    "Available tools:",
+    "<tools>",
     ...toolLines,
     "",
     "In addition to the tools above, you may have access to other custom tools depending on the project.",
+    "</tools>",
   ].join("\n");
-  return basePrompt.replace(
-    /Available tools:\n[\s\S]*?\n\nIn addition to the tools above, you may have access to other custom tools depending on the project\./,
-    replacement,
-  );
+  const pattern =
+    /<tools>\n[\s\S]*?\n\nIn addition to the tools above, you may have access to other custom tools depending on the project\.\n<\/tools>/;
+  assert.match(basePrompt, pattern, "base prompt must contain Pi's <tools> section");
+  return basePrompt.replace(pattern, replacement);
 }
 
 describe("assembleMmrSubagentSurface() public API", () => {
@@ -361,7 +365,7 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.deepEqual([...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]), ["bash", "read"]);
   });
 
-  it("keeps a blank line between the worker Available tools interstitial and Guidelines", () => {
+  it("keeps a blank line between the worker <tools> section and <rules>", () => {
     registerMmrSubagentPromptBuilder("task", () => "## Task Worker Role\n");
     const result = assembleMmrSubagentSurface({
       profile: makeTaskProfile(),
@@ -373,8 +377,8 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     });
     assert.match(
       result.systemPrompt,
-      /In addition to the tools above[^\n]*\n\nGuidelines:\n/,
-      "worker Available tools block must end with a blank line before Guidelines (matching Pi/parent)",
+      /\n<tools>\n- read: [^\n]*\n\nIn addition to the tools above[^\n]*\n<\/tools>\n\n<rules>\n/,
+      "worker <tools> section must close and end with a blank line before <rules> (matching Pi/parent)",
     );
   });
 
@@ -639,10 +643,10 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     });
     const activeToolsBlock = result.blocks.find((block) => block.kind === "active-tools");
     assert.ok(activeToolsBlock, "mode-derived surfaces must keep an active-tools block");
-    assert.match(activeToolsBlock.text, /Available tools:\n\(none\)\n/);
+    assert.match(activeToolsBlock.text, /^<tools>\n\(none\)\n\nIn addition to the tools above[^\n]*\n<\/tools>\n\n$/);
   });
 
-  it("rebuilds the worker Guidelines block from the worker manifest, dropping parent-only tool guidance", () => {
+  it("rebuilds the worker <rules> section from the worker manifest, dropping parent-only tool guidance", () => {
     registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
     // Parent BASE_PROMPT lists read/bash/edit/write/grep/find guidance, but
     // this worker resolves only `read`. The rebuilt block must contain read's
@@ -669,11 +673,14 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
       "Show file paths clearly when working with files",
     ]);
     // Parent-only guidance must not leak.
-    assert.doesNotMatch(result.systemPrompt.slice(0, result.systemPrompt.indexOf("Pi documentation")), /edits\[\]\.oldText/);
-    assert.ok(!bullets.includes("Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)"));
+    const docsIdx = result.systemPrompt.indexOf("\n<docs>\n");
+    assert.notEqual(docsIdx, -1, "expected Pi's <docs> section in the worker prompt");
+    assert.doesNotMatch(result.systemPrompt.slice(0, docsIdx), /edits\[\]\.oldText/);
+    assert.ok(BASE_PROMPT.includes("- You can inspect PI_* environment variables for current model and session details."));
+    assert.ok(!bullets.includes("You can inspect PI_* environment variables for current model and session details."));
   });
 
-  it("emits the conditional bash-exploration guideline when the worker has bash but no grep/find/ls", () => {
+  it("emits the conditional bash-exploration rule when the worker has bash but no grep/find/ls", () => {
     registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
     const result = assembleMmrSubagentSurface({
       profile: makeTaskProfile(),
@@ -689,7 +696,7 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     assert.equal(bullets[0], "Use bash for file operations like ls, rg, find");
   });
 
-  it("omits the conditional bash-exploration guideline when the worker also has grep/find/ls", () => {
+  it("omits the conditional shell-exploration rule when the worker also has grep/find/ls", () => {
     registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
     const result = assembleMmrSubagentSurface({
       profile: makeTaskProfile(),
@@ -701,6 +708,44 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
       cwd: "/abs/repo",
     });
     const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.ok(!bullets.includes("Use bash for file operations like ls, rg, find"));
+    assert.deepEqual(bullets, ["Be concise in your responses", "Show file paths clearly when working with files"]);
+  });
+
+  it("emits the PowerShell-only exploration rule when the worker has powershell but no bash/grep/find/ls", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile({ tools: ["powershell"] }),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "powershell", owner: "pi", promptGuidelines: [], description: "Run PowerShell commands.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    assert.deepEqual(sliceGuidelineBullets(result.systemPrompt), [
+      "Use PowerShell for file operations like listing, searching, and finding files",
+      "Be concise in your responses",
+      "Show file paths clearly when working with files",
+    ]);
+  });
+
+  it("emits the combined bash-or-PowerShell exploration rule when the worker has both shells but no grep/find/ls", () => {
+    registerMmrSubagentPromptBuilder("task", () => "## Worker Role\n");
+    const result = assembleMmrSubagentSurface({
+      profile: makeTaskProfile({ tools: ["bash", "powershell"] }),
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [
+        { name: "bash", owner: "pi", promptGuidelines: [], description: "Run shell commands.", schema: {} },
+        { name: "powershell", owner: "pi", promptGuidelines: [], description: "Run PowerShell commands.", schema: {} },
+      ],
+      cwd: "/abs/repo",
+    });
+    const bullets = sliceGuidelineBullets(result.systemPrompt);
+    assert.deepEqual(bullets, [
+      "Use bash or PowerShell for file operations like listing, searching, and finding files",
+      "Be concise in your responses",
+      "Show file paths clearly when working with files",
+    ]);
     assert.ok(!bullets.includes("Use bash for file operations like ls, rg, find"));
   });
 
@@ -744,8 +789,8 @@ describe("assembleMmrSubagentSurface() mode-derived route", () => {
     const guidelinesBlock = result.blocks.find((block) => block.kind === "active-guidelines");
     assert.ok(guidelinesBlock, "mode-derived surfaces must keep an active-guidelines block");
     assert.equal(guidelinesBlock.source, "mmr-core");
-    assert.ok(guidelinesBlock.text.startsWith("Guidelines:\n"));
-    assert.ok(guidelinesBlock.text.endsWith("\n\n"));
+    assert.ok(guidelinesBlock.text.startsWith("<rules>\n"));
+    assert.ok(guidelinesBlock.text.endsWith("\n</rules>\n\n"));
     assert.equal(result.systemPrompt, result.blocks.map((block) => block.text).join(""));
   });
 

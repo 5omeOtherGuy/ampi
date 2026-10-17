@@ -145,7 +145,7 @@ export const HISTORY_READER_WORKER_TOOLS: readonly string[] = Object.freeze([
 ]);
 
 function providerHintsForModel(model: string): string[] {
-  if (model.startsWith("gpt-")) return ["openai-codex", "github-copilot", "openai", "azure-openai-responses"];
+  if (model.startsWith("gpt-")) return ["openai-codex", "github-copilot", "openai", "azure"];
   if (model.startsWith("claude-")) return ["claude-subscription", "anthropic"];
   if (model.startsWith("gemini-") || model.startsWith("gemma-")) return ["google", "google-vertex"];
   return [];

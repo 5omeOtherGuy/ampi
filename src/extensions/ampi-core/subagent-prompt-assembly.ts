@@ -180,7 +180,7 @@ export interface AssembleMmrSubagentSurfaceInput {
    * registered-tool intersection). When omitted, the manifest is
    * filtered by `profile.tools` for backwards compatibility, but every
    * caller spawning a worker SHOULD forward `invocation.workerTools`
-   * so the worker prompt's `Available tools:` block describes the
+   * so the worker prompt's `<tools>` section describes the
    * exact tools the worker can call.
    */
   workerTools?: readonly string[];
@@ -203,14 +203,14 @@ function filterManifestToProfile(
 
 /**
  * Collapse a tool snippet/description to the single line Pi uses for its
- * `Available tools:` entries. Mirrors Pi's own snippet normalization
+ * `<tools>` entries. Mirrors Pi's own snippet normalization
  * (`[\r\n]+` and runs of whitespace collapse to a single space, trimmed)
  * so the worker block lists one `- name: text` line per tool instead of
  * splicing a multi-paragraph tool description into the prompt head.
  */
 function toToolSummaryLine(entry: MmrActiveToolManifestEntry): string | undefined {
   // Prefer the registered one-line `promptSnippet` (the exact text Pi shows
-  // in its own `Available tools:` block) and fall back to the full
+  // in its own `<tools>` section) and fall back to the full
   // description so a granted, callable worker tool is never hidden from the
   // worker model. The worker prompt is delivered with replacement semantics,
   // so this block is the only place the worker learns what it can call. An
@@ -225,39 +225,47 @@ function toToolSummaryLine(entry: MmrActiveToolManifestEntry): string | undefine
 }
 
 /**
- * Pi-owned constant `Guidelines:` bullet emitted only when the worker has
- * `bash` but none of `grep`/`find`/`ls` (see Pi's `buildSystemPrompt`).
+ * Pi-owned constant `<rules>` bullets emitted only when the worker has a
+ * shell (`bash` and/or `powershell`) but none of `grep`/`find`/`ls` (see
+ * Pi's `buildRules`). The variant follows which shells are present.
  */
 export const PI_BASH_ONLY_EXPLORATION_GUIDELINE = "Use bash for file operations like ls, rg, find";
+export const PI_POWERSHELL_ONLY_EXPLORATION_GUIDELINE =
+  "Use PowerShell for file operations like listing, searching, and finding files";
+export const PI_BASH_AND_POWERSHELL_EXPLORATION_GUIDELINE =
+  "Use bash or PowerShell for file operations like listing, searching, and finding files";
 
-/** Pi-owned trailing `Guidelines:` bullets Pi always appends, in order. */
+/** Pi-owned trailing `<rules>` bullets Pi always appends, in order. */
 export const PI_ALWAYS_ON_GUIDELINES = [
   "Be concise in your responses",
   "Show file paths clearly when working with files",
 ] as const;
 
 /**
- * Full set of literal `addGuideline("…")` strings Pi emits as constants in
- * `buildSystemPrompt` (the conditional bash-exploration bullet plus the two
+ * Full set of literal `addRule("…")` strings Pi emits as constants in
+ * `buildRules` (the conditional shell-exploration bullets plus the two
  * always-on bullets). Per-tool guideline bullets are not constants — Pi reads
  * them from each tool's `promptGuidelines`, so they flow through the worker
  * manifest, not this list. Shared with the drift-guard test as the single
  * source of truth (see `tests/mmr-core-pi-guidelines-drift.test.mjs`).
  */
 export const PI_CONSTANT_GUIDELINES: readonly string[] = [
+  PI_BASH_AND_POWERSHELL_EXPLORATION_GUIDELINE,
+  PI_POWERSHELL_ONLY_EXPLORATION_GUIDELINE,
   PI_BASH_ONLY_EXPLORATION_GUIDELINE,
   ...PI_ALWAYS_ON_GUIDELINES,
 ];
 
 /**
- * Rebuild Pi's `Guidelines:` block from the worker's own profile-filtered
- * manifest, reproducing Pi's `buildSystemPrompt` composition exactly:
- *   1. the conditional bash-exploration bullet (bash present, no grep/find/ls),
+ * Rebuild Pi's `<rules>` section from the worker's own profile-filtered
+ * manifest, reproducing Pi's `buildRules` composition exactly:
+ *   1. the conditional shell-exploration bullet (bash and/or powershell
+ *      present, no grep/find/ls),
  *   2. each tool's `promptGuidelines` in manifest order (trimmed, non-empty),
  *   3. the two always-on bullets,
- * with global first-occurrence-wins dedup. Returns the full block including the
- * `Guidelines:` header (mirrors how `assembleActiveSurface` slices
- * `guidelinesContent` to include the header). The worker prompt is
+ * with global first-occurrence-wins dedup. Returns the full section including
+ * the `<rules>` tags (mirrors how `assembleActiveSurface` slices
+ * `guidelinesContent` to include them). The worker prompt is
  * replacement-delivered and MMR-owned, so there is no upstream byte-ground-truth
  * to match; per-tool bullet order is the deterministic manifest order.
  */
@@ -273,8 +281,12 @@ function buildWorkerGuidelinesBlock(
     list.push(guideline);
   };
 
-  if (names.has("bash") && !names.has("grep") && !names.has("find") && !names.has("ls")) {
-    add(PI_BASH_ONLY_EXPLORATION_GUIDELINE);
+  const hasBash = names.has("bash");
+  const hasPowerShell = names.has("powershell");
+  if ((hasBash || hasPowerShell) && !names.has("grep") && !names.has("find") && !names.has("ls")) {
+    if (hasBash && hasPowerShell) add(PI_BASH_AND_POWERSHELL_EXPLORATION_GUIDELINE);
+    else if (hasPowerShell) add(PI_POWERSHELL_ONLY_EXPLORATION_GUIDELINE);
+    else add(PI_BASH_ONLY_EXPLORATION_GUIDELINE);
   }
   for (const entry of manifest) {
     for (const guideline of entry.promptGuidelines ?? []) {
@@ -284,7 +296,7 @@ function buildWorkerGuidelinesBlock(
   }
   for (const guideline of PI_ALWAYS_ON_GUIDELINES) add(guideline);
 
-  return `Guidelines:\n${list.map((guideline) => `- ${guideline}`).join("\n")}`;
+  return `<rules>\n${list.map((guideline) => `- ${guideline}`).join("\n")}\n</rules>`;
 }
 
 function renderWorkerActiveToolsBlock(manifest: readonly MmrActiveToolManifestEntry[]): string {
@@ -295,14 +307,14 @@ function renderWorkerActiveToolsBlock(manifest: readonly MmrActiveToolManifestEn
   }
   // Match Pi's `(none)` placeholder when no worker tool produced a line.
   const body = lines.length > 0 ? lines : ["(none)"];
-  // Trailing blank line so the block ends with "\n\n" (matching Pi's parent
-  // prompt), keeping a blank line between the interstitial and the following
-  // `Guidelines:` block.
+  // Trailing blank line so the section ends with "\n\n" (matching Pi's parent
+  // prompt), keeping a blank line before the following `<rules>` section.
   return [
-    "Available tools:",
+    "<tools>",
     ...body,
     "",
     MMR_ADDITIONAL_TOOLS_LINE,
+    "</tools>",
     "",
     "",
   ].join("\n");
@@ -446,8 +458,8 @@ export function assembleMmrSubagentSurface(
     baseSystemPrompt,
     activeToolManifest: filteredManifest,
     // Built-in tool guidance for a worker must follow the worker's own
-    // (profile-filtered) tool set, not the parent's rendered `Available
-    // tools:` block. Otherwise parent-only built-ins (e.g. grep/find) leak
+    // (profile-filtered) tool set, not the parent's rendered `<tools>`
+    // section. Otherwise parent-only built-ins (e.g. grep/find) leak
     // guidance into a worker that cannot call them.
     activeToolNames: filteredManifest.map((entry) => entry.name),
   });
@@ -477,7 +489,7 @@ export function assembleMmrSubagentSurface(
   const activeToolsBlock = blocks.find((block) => block.kind === "active-tools");
   if (activeToolsBlock) {
     activeToolsBlock.text = renderWorkerActiveToolsBlock(filteredManifest);
-    // The block is no longer the literal Pi-authored `Available tools:` text:
+    // The block is no longer the literal Pi-authored `<tools>` text:
     // ampi-core rebuilt it from the subagent-filtered worker manifest so
     // parent-only tools cannot leak into mode-derived worker prompts.
     activeToolsBlock.source = "mmr-core";

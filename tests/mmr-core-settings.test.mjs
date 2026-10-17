@@ -32,7 +32,13 @@ describe("mmr-core settings", () => {
         JSON.stringify({
           mmrCore: {
             defaultMode: "high",
-            modelPreferences: { high: ["openai-codex/gpt-5.5", { model: "claude-opus-4-8", thinkingLevel: "xhigh" }] },
+            modelPreferences: {
+              high: [
+                "openai-codex/gpt-5.5",
+                { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
+                { model: "gpt-5.6-sol", thinkingLevel: "max" },
+              ],
+            },
           },
         }),
       );
@@ -46,6 +52,7 @@ describe("mmr-core settings", () => {
         high: [
           { model: "gpt-5.5", providers: ["openai-codex"] },
           { model: "claude-opus-4-8", thinkingLevel: "xhigh" },
+          { model: "gpt-5.6-sol", thinkingLevel: "max" },
         ],
       });
       assert.equal(loaded.filesRead.length, 2);

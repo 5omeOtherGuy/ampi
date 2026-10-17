@@ -1,7 +1,7 @@
 // Single-render invariant for worker tool guidance (PR #181 follow-up).
 //
 // The model-visible worker policy has exactly one home per statement: each
-// tool contributes its routing bullet to Pi's `Guidelines:` block, the
+// tool contributes its routing bullet to Pi's `<rules>` section, the
 // cross-worker policy renders once in the `## Using workers` block, and the
 // schema description carries only tool-specific mechanics. The post-#181
 // wire capture showed three leaks: the task_cancel sentence rendered

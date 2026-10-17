@@ -70,20 +70,30 @@ async function resetMmrGithubToolSourcePaths() {
 const BASE_PROMPT = [
   "You are an expert coding assistant operating inside pi, a coding agent harness.",
   "",
-  "Available tools:",
+  "<tools>",
   "- grep: Search files",
   "- find: Locate files",
   "- read: Read files",
   "",
-  "Guidelines:",
-  "- Be concise.",
+  "In addition to the tools above, you may have access to other custom tools depending on the project.",
+  "</tools>",
   "",
+  "<rules>",
+  "- Be concise.",
+  "</rules>",
+  "",
+  "<docs>",
   "Pi documentation (read only when relevant):",
   "- core docs",
+  "</docs>",
   "",
-  "Current date: 2026-05-24",
-  "",
+  "<addendum>",
   "Task: search for X.",
+  "</addendum>",
+  "",
+  "<cwd>",
+  "/tmp/repo",
+  "</cwd>",
 ].join("\n");
 
 async function importRuntime() {
@@ -322,6 +332,16 @@ describe("mmr-core subagent activation", () => {
     });
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
+
+    // Control: BASE_PROMPT is a spliceable Pi 1.x layout, so the no-op below
+    // comes from the subagent activation, not from unrecognized anchors.
+    const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
+    const control = assembleActiveSurface({
+      state: { mode: "medium" },
+      baseSystemPrompt: BASE_PROMPT,
+      activeToolManifest: [],
+    });
+    assert.equal(control.passthroughReason, undefined, "BASE_PROMPT must be spliceable outside subagent mode");
 
     const result = await handlers.get("before_agent_start")({
       systemPrompt: BASE_PROMPT,

@@ -21,7 +21,7 @@ The npm package name is `@skippermissions/ampi`; `ampi` is the name you see in c
 
 ## Requirements
 
-Pi must already be installed and authenticated with at least one provider. ampi is a Pi extension, not a standalone CLI; it declares Pi's packages as peer dependencies and needs Node.js 22.19+.
+Pi 1.3 or later (Pi 1.x) must already be installed and authenticated with at least one provider. ampi is a Pi extension, not a standalone CLI; it declares Pi's packages (`@earendil-works/pi-coding-agent`, `pi-agent-core`, `pi-tui`) as `^1.3.0` peer dependencies and needs Node.js 22.19+. Pi 0.x is no longer supported; stay on ampi 0.3.x for it.
 
 ## Install
 
@@ -111,7 +111,7 @@ Alt+R                # toggle the active mode's thinking preset where supported
 ampi routes against whatever providers your Pi install registers. The built-in priority order recognizes ten, grouped so subscriptions win first:
 
 - **Subscription / OAuth:** `claude-subscription`, `openai-codex`, `github-copilot`
-- **API key:** `anthropic`, `openai`, `azure-openai-responses`
+- **API key:** `anthropic`, `openai`, `azure`
 - **Other registered providers:** `google`, `google-vertex`, `openrouter`, `vercel-ai-gateway`
 
 A registered provider outside this list still routes; it just sorts into the last group. Model-ID aliases (for example a bare ID and its date-suffixed publication ID) are resolved so a preference written either way still matches.

@@ -135,7 +135,7 @@ export const ORACLE_PROMPT_SNIPPET =
   "Consult the oracle - an AI advisor that can plan, review, debug, and provide expert technical guidance.";
 
 /**
- * Routing guidelines for Pi's `Guidelines:` block. The full when/how guidance
+ * Routing guidelines for Pi's `<rules>` section. The full when/how guidance
  * and call examples live only in {@link ORACLE_DESCRIPTION} (the schema the
  * model already receives); cross-worker policy renders once in the
  * `## Using workers` block (`ampi-core/worker-tool-guidance.ts`). The `files`

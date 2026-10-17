@@ -17,5 +17,9 @@ describe("mmr-session-fallback thinking levels", () => {
     assert.equal(getMmrSessionFallbackThinkingLevels({ reasoning: true }).includes("xhigh"), false);
     assert.equal(getMmrSessionFallbackThinkingLevels({ reasoning: true, thinkingLevelMap: { xhigh: "xhigh" } }).includes("xhigh"), true);
     assert.equal(getMmrSessionFallbackThinkingLevels({ reasoning: true, thinkingLevelMap: { xhigh: null } }).includes("xhigh"), false);
+    // Pi 1.x's `max` level is offered only when the model maps it explicitly.
+    assert.equal(getMmrSessionFallbackThinkingLevels({ reasoning: true, thinkingLevelMap: { xhigh: "xhigh" } }).includes("max"), false);
+    assert.deepEqual(getMmrSessionFallbackThinkingLevels({ reasoning: true, thinkingLevelMap: { max: "max" } }).slice(-1), ["max"]);
+    assert.equal(getMmrSessionFallbackThinkingLevels({ reasoning: true, thinkingLevelMap: { max: null } }).includes("max"), false);
   });
 });

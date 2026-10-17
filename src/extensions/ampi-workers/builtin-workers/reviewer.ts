@@ -83,7 +83,7 @@ export const REVIEWER_PROMPT_SNIPPET =
   "Run an expert review of a code diff (uncommitted work, branch or staged changes) and return prioritized findings";
 
 /**
- * Single routing guideline for Pi's `Guidelines:` block. The full when/how
+ * Single routing guideline for Pi's `<rules>` section. The full when/how
  * guidance lives only in {@link REVIEWER_DESCRIPTION} (the schema the
  * model already receives); cross-worker policy renders once in the
  * `## Using workers` block (`ampi-core/worker-tool-guidance.ts`).

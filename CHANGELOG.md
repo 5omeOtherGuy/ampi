@@ -6,7 +6,33 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Changed
+
+- Require Pi 1.3 or later: the `@earendil-works/pi-coding-agent`,
+  `pi-agent-core`, and `pi-tui` peer ranges move from `^0.80.3` to `^1.3.0`,
+  and the `typebox` runtime pin moves to `1.3.27` to match Pi. Pi 0.x users
+  should stay on ampi 0.3.x.
+- `ampi-core`: locked-mode prompts now splice Pi 1.x's sectioned system prompt
+  (`<tools>`, `<rules>`, `<docs>`, ...). Without this, every mode silently fell
+  back to Pi's unmodified prompt on Pi 1.x. Mode-derived worker prompts render
+  their tool list and rules in the same sections, including Pi's PowerShell
+  variants of the shell-exploration rule.
+- Accept Pi 1.x's `max` thinking level in model preferences, custom subagent
+  definitions, and the `/ampi-config` pickers. The session-fallback picker
+  offers `max` when the model maps it explicitly and now labels `xhigh` as
+  extra-high reasoning.
+- Model routing: Pi 1.x renamed the Azure provider from
+  `azure-openai-responses` to `azure`; GPT routes and the provider priority now
+  use `azure`.
+
 ### Fixed
+
+- Subagent trails render child `read`, `bash`, `grep`, and other built-in tool
+  calls with Pi's native renderers again; Pi 1.x no longer looks them up by
+  tool name.
+- Tool parameter errors name the rejected extra property again
+  (`must not have additional properties`) instead of TypeBox 1.3's
+  `schema is false`.
 
 - `ampi-core`: assign the compact task-framing system prompt to Low and move
   Medium onto the full prompt shared with High and Ultra. Prompt prose is

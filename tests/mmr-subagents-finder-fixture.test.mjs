@@ -100,8 +100,9 @@ describe("ampi-workers effective surface: medium mode with finder active", () =>
     });
 
     // Structural guarantees independent of exact wording.
-    assert.match(result.systemPrompt, /\nAvailable tools:[\s\S]*\bfinder\b/);
-    assert.match(result.systemPrompt, /\nGuidelines:[\s\S]*\bfinder\b/);
+    assert.equal(result.passthroughReason, undefined, "finder surface must be a real rewrite");
+    assert.match(result.systemPrompt, /\n<tools>\n(?:(?!<\/tools>)[\s\S])*\bfinder\b[\s\S]*?\n<\/tools>\n/);
+    assert.match(result.systemPrompt, /\n<rules>\n(?:(?!<\/rules>)[\s\S])*\bfinder\b[\s\S]*?\n<\/rules>\n/);
     // None of the still-gated subagent worker names should be visible.
     for (const stillGated of ["Task", "oracle", "librarian"]) {
       assert.doesNotMatch(

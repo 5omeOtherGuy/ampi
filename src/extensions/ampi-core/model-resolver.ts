@@ -63,14 +63,14 @@ function getModelAliases(model: string): string[] {
   return [];
 }
 
-const API_PROVIDERS = new Set(["anthropic", "openai", "azure-openai-responses"]);
+const API_PROVIDERS = new Set(["anthropic", "openai", "azure"]);
 const DEFAULT_PROVIDER_PRIORITY = [
   "claude-subscription",
   "openai-codex",
   "github-copilot",
   "anthropic",
   "openai",
-  "azure-openai-responses",
+  "azure",
   "google",
   "google-vertex",
   "openrouter",
@@ -91,7 +91,7 @@ function normalizeModel(value: string): string {
 
 function getDefaultProvidersForModel(model: string): string[] {
   if (model.startsWith("claude-")) return ["claude-subscription", "anthropic"];
-  if (model.startsWith("gpt-")) return ["openai-codex", "github-copilot", "openai", "azure-openai-responses"];
+  if (model.startsWith("gpt-")) return ["openai-codex", "github-copilot", "openai", "azure"];
   if (model.startsWith("gemini-") || model.startsWith("gemma-")) return ["google", "google-vertex"];
   return [];
 }

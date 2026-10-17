@@ -164,7 +164,7 @@ function findPreviousMmrTailEnd(base: string, docsEnd: number): number | undefin
     if (!base.startsWith(previousTail, tailStart)) continue;
     const end = tailStart + previousTail.length;
     // Pi's preserved tail is either empty or starts at a newline boundary
-    // (`\n\n...` normal tail, or `\nCurrent date:` minimal Pi tail).
+    // (`\n\n<section>` after the docs section).
     if (end === base.length || base[end] === "\n") return end;
   }
   return undefined;
@@ -183,7 +183,7 @@ export interface AssembleActiveSurfaceInput {
   /**
    * Built-in tool guidance source. When provided, the `## Built-in tool
    * guidance` block follows these tool names (the resolved callable/active
-   * set) instead of the names parsed from Pi's rendered `Available tools:`
+   * set) instead of the names parsed from Pi's rendered `<tools>`
    * block, so guidance covers a tool the agent can call even when Pi did
    * not give it a one-line snippet (snippet-gated tools are omitted from the
    * rendered block but remain callable). `buildBuiltinToolGuidance` filters
@@ -228,12 +228,12 @@ function isPromptedMode(mode: string): mode is PromptedMmrModeKey {
 /**
  * Build the ordered prompt-block surface for the current MMR mode. The
  * splice surgically replaces Pi's auto-rendered head (identity line through
- * the end of the `Pi documentation` block) with a labeled sequence of
+ * the end of the `<docs>` section) with a labeled sequence of
  * blocks; flattening `blocks[].text` concatenated reproduces the
  * `systemPrompt` string byte-for-byte.
  *
- * Policy: Pi-authored blocks (`Available tools:`, `Guidelines:`,
- * `Pi documentation`) are passed through verbatim. The free mode and any
+ * Policy: Pi-authored sections (`<tools>`, `<rules>`, `<docs>`) are
+ * passed through verbatim. The free mode and any
  * unrecognized base layout fall back to a single passthrough block.
  */
 export function assembleActiveSurface(
@@ -264,14 +264,18 @@ export function assembleActiveSurface(
     return passthroughResult(input, "section-order-invalid");
   }
 
-  const toolsEnd = base.indexOf("\n\n", toolsStart);
-  const guidelinesEnd = base.indexOf("\n\n", guidelinesStart);
-  if (toolsEnd === -1 || guidelinesEnd === -1) return passthroughResult(input, "section-boundary-missing");
-
-  const docsBlankIdx = base.indexOf("\n\n", piDocsStart);
-  const docsDateIdx = base.indexOf(promptBase.dateTailAnchor, piDocsStart);
-  const docsEndCandidates = [docsBlankIdx, docsDateIdx].filter((idx) => idx !== -1);
-  const docsEnd = docsEndCandidates.length === 0 ? base.length : Math.min(...docsEndCandidates);
+  // End each section at its closing tag: rule and docs bodies may contain
+  // blank lines (multi-paragraph guidelines, a `sections.docs` override).
+  const sectionEnd = (start: number, closing: string, limit: number): number => {
+    const idx = base.indexOf(closing, start);
+    return idx === -1 || idx + closing.length > limit ? -1 : idx + closing.length;
+  };
+  const toolsEnd = sectionEnd(toolsStart, promptBase.toolsSectionEnd, guidelinesStart);
+  const guidelinesEnd = sectionEnd(guidelinesStart, promptBase.guidelinesSectionEnd, piDocsStart);
+  const docsEnd = sectionEnd(piDocsStart, promptBase.piDocsSectionEnd, base.length);
+  if (toolsEnd === -1 || guidelinesEnd === -1 || docsEnd === -1) {
+    return passthroughResult(input, "section-boundary-missing");
+  }
 
   // `before_agent_start` handlers are chained. Mode-derived Task workers can
   // receive the parent prompt after ampi-core already assembled it, then call
@@ -284,9 +288,9 @@ export function assembleActiveSurface(
   // exact structural match (see `findPreviousMmrTailEnd`).
   const headEnd = findPreviousMmrTailEnd(base, docsEnd) ?? docsEnd;
 
-  // Preserve Pi's whole tools block — the `Available tools:` list AND Pi's
-  // "In addition to the tools above..." interstitial sentence — byte-for-byte
-  // (up to the `Guidelines:` header). Reconstructing the interstitial from a
+  // Preserve Pi's whole `<tools>` section — the tool list AND Pi's
+  // "In addition to the tools above..." sentence — byte-for-byte
+  // (up to the `<rules>` section). Reconstructing the interstitial from a
   // local constant would silently emit stale text (and bypass drift detection)
   // if Pi ever changes that sentence.
   const toolsBlockText = base.slice(toolsStart, guidelinesStart);

@@ -168,7 +168,7 @@ export function buildUsingWorkersGuidance(
 }
 
 /**
- * Extract worker tool names that appear in a Pi-authored `Available tools:`
+ * Extract worker tool names that appear in a Pi-authored `<tools>`
  * block body. Returns the subset that participates in the
  * `## Using workers` block; other names are ignored. Unlike Pi's built-in
  * tools, worker tool names can be capitalized (`Task`), so the line pattern

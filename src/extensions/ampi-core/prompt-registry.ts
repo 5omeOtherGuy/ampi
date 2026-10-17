@@ -19,7 +19,7 @@ export const MMR_RESPONSE_STYLE_HEADING = "## Response style";
 
 type PromptedMmrModeKey = Exclude<MmrModeKey, "free">;
 
-export type MmrPromptBaseId = "pi-native-default-v1";
+export type MmrPromptBaseId = "pi-native-sections-v1";
 
 export interface MmrPromptBaseDefinition {
   id: MmrPromptBaseId;
@@ -33,7 +33,10 @@ export interface MmrPromptBaseDefinition {
   toolsSectionAnchor: string;
   guidelinesSectionAnchor: string;
   piDocsSectionAnchor: string;
-  dateTailAnchor: string;
+  /** Closing delimiters; section bodies may contain blank lines. */
+  toolsSectionEnd: string;
+  guidelinesSectionEnd: string;
+  piDocsSectionEnd: string;
   /** Human-facing summary for diagnostics/tests; never rendered to the model. */
   summary: string;
 }
@@ -79,15 +82,17 @@ export interface MmrModePromptRecipe extends MmrModeBlockTemplate {
 }
 
 export const MMR_PROMPT_BASES = {
-  "pi-native-default-v1": {
-    id: "pi-native-default-v1",
+  "pi-native-sections-v1": {
+    id: "pi-native-sections-v1",
     identityLine: MMR_IDENTITY_LINE,
-    toolsSectionAnchor: "\n\nAvailable tools:\n",
-    guidelinesSectionAnchor: "\n\nGuidelines:\n",
-    piDocsSectionAnchor: "\n\nPi documentation (",
-    dateTailAnchor: "\nCurrent date:",
+    toolsSectionAnchor: "\n\n<tools>\n",
+    guidelinesSectionAnchor: "\n\n<rules>\n",
+    piDocsSectionAnchor: "\n\n<docs>\n",
+    toolsSectionEnd: "\n</tools>",
+    guidelinesSectionEnd: "\n</rules>",
+    piDocsSectionEnd: "\n</docs>",
     summary:
-      "Pi's native default coding-agent prompt, consumed after Pi renders tools, guidelines, docs, append prompts, context files, skills, date, and cwd.",
+      "Pi 1.x's sectioned default coding-agent prompt (`<tools>`, `<rules>`, `<docs>`, ...), consumed after Pi renders tools, rules, docs, append prompts, context files, skills, and cwd.",
   },
 } satisfies Record<MmrPromptBaseId, MmrPromptBaseDefinition>;
 
@@ -184,7 +189,7 @@ export const MMR_PROMPT_FRAGMENTS = {
     blockKind: "active-tools",
     source: "pi",
     piNative: true,
-    summary: "Pi's native Available tools block, passed through byte-for-byte.",
+    summary: "Pi's native `<tools>` section, passed through byte-for-byte.",
   },
   "active-guidelines": {
     id: "active-guidelines",
@@ -302,7 +307,7 @@ function recipe(
   const template = AUTHORED_MODE_PROMPT_TEMPLATES[mode];
   return {
     mode,
-    basePromptId: "pi-native-default-v1",
+    basePromptId: "pi-native-sections-v1",
     tag: template.tag,
     intro: template.intro,
     postureSections: template.postureSections,

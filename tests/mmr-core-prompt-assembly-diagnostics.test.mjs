@@ -95,7 +95,7 @@ describe("assembleActiveSurface(): passthroughReason", () => {
 
   it("reports section-anchor-missing when a head section is absent", async () => {
     const { assembleActiveSurface, MMR_IDENTITY_LINE } = await importSource(ASSEMBLY_MODULE);
-    // Identity line present, but no Available tools:/Guidelines:/Pi docs sections.
+    // Identity line present, but no <tools>/<rules>/<docs> sections.
     const base = `${MMR_IDENTITY_LINE} You help users.\n\nSomething else entirely.`;
     const result = assembleActiveSurface({
       state: makeState({ mode: "medium" }),
@@ -107,20 +107,26 @@ describe("assembleActiveSurface(): passthroughReason", () => {
 
   it("reports section-order-invalid when head sections are out of order", async () => {
     const { assembleActiveSurface, MMR_IDENTITY_LINE } = await importSource(ASSEMBLY_MODULE);
-    // Guidelines appears before Available tools -> invalid order.
+    // <rules> appears before <tools> -> invalid order.
     const base = [
       `${MMR_IDENTITY_LINE} You help users.`,
       "",
-      "Guidelines:",
+      "<rules>",
       "- be nice",
+      "</rules>",
       "",
-      "Available tools:",
+      "<tools>",
       "- read: x",
+      "</tools>",
       "",
+      "<docs>",
       "Pi documentation (read only):",
       "- docs",
+      "</docs>",
       "",
-      "Current date: 2026-01-01",
+      "<cwd>",
+      "/test/cwd",
+      "</cwd>",
     ].join("\n");
     const result = assembleActiveSurface({
       state: makeState({ mode: "medium" }),

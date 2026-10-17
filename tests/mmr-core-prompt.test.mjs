@@ -216,10 +216,10 @@ describe("mmr-core prompt layer", () => {
     assert.equal(low.includes(diagramSentence), false);
   });
 
-  it("embeds Pi's Available tools list verbatim under the Tool use heading for every mode", async () => {
+  it("embeds Pi's <tools> list verbatim under the Tool use heading for every mode", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const expectedToolsBlock = [
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "- bash: Execute bash commands (ls, grep, find, etc.)",
       "- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
@@ -227,6 +227,9 @@ describe("mmr-core prompt layer", () => {
       "- grep: Search file contents for patterns (respects .gitignore)",
       "- find: Find files by glob pattern (respects .gitignore)",
       "- ls: List directory contents",
+      "",
+      "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
     ].join("\n");
 
     for (const mode of MODES) {
@@ -234,11 +237,12 @@ describe("mmr-core prompt layer", () => {
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
       const toolsIdx = result.indexOf(expectedToolsBlock);
       const toolUseIdx = result.indexOf("## Tool use");
-      const tailIdx = result.indexOf("\n\n# Project Context");
-      assert.notEqual(toolsIdx, -1, `${mode}: Available tools block must appear`);
+      const tailIdx = result.indexOf("\n\n<project_context>\n");
+      assert.notEqual(toolsIdx, -1, `${mode}: <tools> section must appear`);
+      assert.notEqual(tailIdx, -1, `${mode}: Pi tail must appear`);
       assert.equal(toolUseIdx < toolsIdx && toolsIdx < tailIdx, true, `${mode}: tools must be embedded under ## Tool use before the Pi tail`);
-      const lastToolsIdx = result.lastIndexOf("Available tools:");
-      assert.equal(lastToolsIdx < tailIdx, true, `${mode}: Available tools must not appear in the Pi tail`);
+      const lastToolsIdx = result.lastIndexOf("<tools>\n");
+      assert.equal(lastToolsIdx < tailIdx, true, `${mode}: <tools> must not appear in the Pi tail`);
     }
   });
 
@@ -259,36 +263,37 @@ describe("mmr-core prompt layer", () => {
         "- bash: Execute bash commands (ls, grep, find, etc.)",
         ["- bash: Execute bash commands (ls, grep, find, etc.)", ...registeredToolLines].join("\n"),
       )
-      .replace("Guidelines:\n", `Guidelines:\n${registeredGuidelines.join("\n")}\n`);
+      .replace("<rules>\n", `<rules>\n${registeredGuidelines.join("\n")}\n`);
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: baseWithRegisteredTools });
-      const toolsIdx = result.indexOf("Available tools:");
-      const guidelinesIdx = result.indexOf("Guidelines:");
-      const piDocsIdx = result.indexOf("Pi documentation (");
+      const toolsIdx = result.indexOf("<tools>\n");
+      const guidelinesIdx = result.indexOf("<rules>\n");
+      const piDocsIdx = result.indexOf("<docs>\n");
+      assert.notEqual(toolsIdx, -1, `${mode}: <tools> must appear`);
 
       for (const line of registeredToolLines) {
         assert.equal(result.split(line).length - 1, 1, `${mode}: registered tool snippet must appear exactly once: ${line}`);
         const lineIdx = result.indexOf(line);
-        assert.equal(toolsIdx < lineIdx && lineIdx < guidelinesIdx, true, `${mode}: registered tool snippet must stay in Available tools`);
+        assert.equal(toolsIdx < lineIdx && lineIdx < guidelinesIdx, true, `${mode}: registered tool snippet must stay in <tools>`);
       }
       for (const line of registeredGuidelines) {
         assert.equal(result.split(line).length - 1, 1, `${mode}: registered tool guideline must appear exactly once: ${line}`);
         const lineIdx = result.indexOf(line);
-        assert.equal(guidelinesIdx < lineIdx && lineIdx < piDocsIdx, true, `${mode}: registered tool guideline must stay in Guidelines`);
+        assert.equal(guidelinesIdx < lineIdx && lineIdx < piDocsIdx, true, `${mode}: registered tool guideline must stay in <rules>`);
       }
     }
   });
 
-  it("embeds the Pi Guidelines block under the Tool use heading and passes every Pi-authored bullet through verbatim", async () => {
+  it("embeds the Pi <rules> section under the Tool use heading and passes every Pi-authored bullet through verbatim", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     // Phase D policy: never edit Pi-authored blocks. The two bullets that
     // earlier versions stripped now pass through alongside the rest.
     const allBullets = [
       "- Be concise in your responses",
       "- Show file paths clearly when working with files",
-      "- Prefer grep/find/ls tools over bash for file exploration (faster, respects .gitignore)",
+      "- You can inspect PI_* environment variables for current model and session details.",
       "- Use read to examine files instead of cat or sed.",
       "- Use edit for precise changes (edits[].oldText must match exactly)",
       "- Use write only for new files or complete rewrites.",
@@ -297,21 +302,25 @@ describe("mmr-core prompt layer", () => {
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
-      const guidelinesIdx = result.indexOf("Guidelines:");
+      const guidelinesIdx = result.indexOf("<rules>\n");
+      const guidelinesEndIdx = result.indexOf("\n</rules>");
       const toolUseIdx = result.indexOf("## Tool use");
-      const piDocsIdx = result.indexOf("Pi documentation (");
-      assert.notEqual(guidelinesIdx, -1, `${mode}: Guidelines: must appear`);
-      assert.equal(toolUseIdx < guidelinesIdx && guidelinesIdx < piDocsIdx, true, `${mode}: Guidelines must sit under ## Tool use before Pi docs`);
+      const piDocsIdx = result.indexOf("<docs>\n");
+      assert.notEqual(guidelinesIdx, -1, `${mode}: <rules> must appear`);
+      assert.equal(toolUseIdx < guidelinesIdx && guidelinesIdx < piDocsIdx, true, `${mode}: <rules> must sit under ## Tool use before <docs>`);
+      const rulesSlice = result.slice(guidelinesIdx, guidelinesEndIdx);
       for (const bullet of allBullets) {
-        assert.equal(result.includes(bullet), true, `${mode}: Pi-authored bullet must pass through verbatim: ${bullet}`);
+        assert.equal(rulesSlice.includes(bullet), true, `${mode}: Pi-authored bullet must pass through verbatim inside <rules>: ${bullet}`);
       }
     }
   });
 
-  it("preserves the Pi tail (Project Context, skills, date, cwd) verbatim from the boundary onward", async () => {
+  it("preserves the Pi tail (project_context, skills, cwd) verbatim from the boundary onward", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
-    const tailStartIdx = BASE_PROMPT.indexOf("# Project Context");
+    const tailStartIdx = BASE_PROMPT.indexOf("\n\n<project_context>\n");
+    assert.notEqual(tailStartIdx, -1, "base.md must contain a <project_context> section");
     const expectedTail = BASE_PROMPT.slice(tailStartIdx);
+    assert.match(expectedTail, /\n\n<skills>\n[\s\S]*\n\n<cwd>\n\/test\/cwd\n<\/cwd>\n$/);
 
     for (const mode of MODES) {
       const state = createState({ mode });
@@ -320,16 +329,16 @@ describe("mmr-core prompt layer", () => {
     }
   });
 
-  it("does not duplicate the Available tools or Guidelines blocks", async () => {
+  it("does not duplicate the <tools> or <rules> sections", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: BASE_PROMPT });
-      const toolsCount = result.split("Available tools:").length - 1;
-      const guidelinesCount = result.split("Guidelines:").length - 1;
-      assert.equal(toolsCount, 1, `${mode}: Available tools must appear exactly once, got ${toolsCount}`);
-      assert.equal(guidelinesCount, 1, `${mode}: Guidelines must appear exactly once, got ${guidelinesCount}`);
+      for (const tag of ["<tools>\n", "\n</tools>", "<rules>\n", "\n</rules>"]) {
+        const count = result.split(tag).length - 1;
+        assert.equal(count, 1, `${mode}: ${JSON.stringify(tag)} must appear exactly once, got ${count}`);
+      }
     }
   });
 
@@ -394,7 +403,7 @@ describe("mmr-core prompt layer", () => {
 
     const result = await handlers.get("before_agent_start")({
       systemPrompt: BASE_PROMPT,
-      // The selection matches BASE_PROMPT's rendered `Available tools:` block,
+      // The selection matches BASE_PROMPT's rendered `<tools>` section,
       // so built-in guidance is identical to the buildMmrPromptLayer fixture.
       systemPromptOptions: {
         selectedTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
@@ -436,7 +445,7 @@ describe("mmr-core prompt layer", () => {
     runtime.setMmrModeState(createState({ mode: "high", displayName: "Deep", promptRoute: "deep", activeTools: ["read", "grep"] }));
     extension(buildExtensionStub(handlers));
 
-    // Pi rendered `Available tools:` without grep (snippet-gated), but grep is
+    // Pi rendered `<tools>` without grep (snippet-gated), but grep is
     // in the callable selection -> guidance must still cover grep.
     const baseWithoutGrep = BASE_PROMPT.replace(
       "- grep: Search file contents for patterns (respects .gitignore)\n",
@@ -452,21 +461,25 @@ describe("mmr-core prompt layer", () => {
     assert.deepEqual([...block.matchAll(/^([a-z]+):$/gm)].map((m) => m[1]), ["read", "grep"]);
   });
 
-  it("preserves Pi's appendSystemPrompt content inserted between the Pi docs block and the tail", async () => {
+  it("preserves Pi's appendSystemPrompt <addendum> section inserted between the <docs> section and the tail", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
-    const piDocsEnd = BASE_PROMPT.indexOf("# Project Context");
+    // Pi 1.x renders appendSystemPrompt as its own `<addendum>` section right
+    // after `<docs>` and before `<project_context>`.
+    const piDocsEnd = BASE_PROMPT.indexOf("\n\n<project_context>\n");
+    assert.notEqual(piDocsEnd, -1, "base.md must contain a <project_context> section");
     const beforeTail = BASE_PROMPT.slice(0, piDocsEnd);
     const tail = BASE_PROMPT.slice(piDocsEnd);
-    const APPEND_BLOCK = "## EXTRA APPENDED INSTRUCTIONS\n\nDo something extra.\n";
-    const promptWithAppend = `${beforeTail}${APPEND_BLOCK}\n${tail}`;
+    const APPEND_BLOCK = "<addendum>\n## EXTRA APPENDED INSTRUCTIONS\n\nDo something extra.\n</addendum>";
+    const promptWithAppend = `${beforeTail}\n\n${APPEND_BLOCK}${tail}`;
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: promptWithAppend });
-      assert.equal(result.includes(APPEND_BLOCK), true, `${mode}: appendSystemPrompt block must be preserved`);
+      assert.equal(result.includes(APPEND_BLOCK), true, `${mode}: <addendum> section must be preserved`);
+      assert.equal(result.endsWith(`\n\n${APPEND_BLOCK}${tail}`), true, `${mode}: <addendum> plus tail must be preserved verbatim`);
       const responseStyleIdx = result.indexOf("## Response style");
       const appendIdx = result.indexOf(APPEND_BLOCK);
-      const tailIdx = result.indexOf("# Project Context");
+      const tailIdx = result.indexOf("<project_context>\n");
       assert.equal(responseStyleIdx < appendIdx && appendIdx < tailIdx, true, `${mode}: append must sit between mode prompt content and tail`);
     }
   });
@@ -497,61 +510,78 @@ describe("mmr-core prompt layer", () => {
     }
   });
 
-  it("preserves Current date and Current working directory when Pi omits the blank line before them (no append, no context, no skills)", async () => {
+  it("preserves the <cwd> section when it directly follows <docs> (no append, no context, no skills)", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
-    // Pi attaches `\nCurrent date:` directly to the last Pi docs bullet (single \n) when there
-    // is no appendSystemPrompt, no context files, and no skills.
+    // Minimal Pi 1.x prompt: with no appendSystemPrompt, no context files and
+    // no skills, `<cwd>` is the only section after `<docs>`.
+    const docsSection = [
+      "<docs>",
+      "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
+      "- Main documentation: /pi/README.md",
+      "- Additional docs: /pi/docs",
+      "</docs>",
+    ].join("\n");
+    const cwdSection = "<cwd>\n/test/cwd\n</cwd>";
     const minimalBase = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.",
       "",
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "- bash: Execute bash commands (ls, grep, find, etc.)",
       "",
       "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
       "",
-      "Guidelines:",
+      "<rules>",
       "- Be concise in your responses",
       "- Show file paths clearly when working with files",
+      "</rules>",
       "",
-      "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
-      "- Main documentation: /pi/README.md",
-      "- Additional docs: /pi/docs",
-    ].join("\n") + "\nCurrent date: 2026-05-08\nCurrent working directory: /test/cwd";
+      docsSection,
+      "",
+      cwdSection,
+    ].join("\n");
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: minimalBase });
 
-      assert.equal(result.includes("Current date: 2026-05-08"), true, `${mode}: date must be preserved`);
-      assert.equal(result.includes("Current working directory: /test/cwd"), true, `${mode}: cwd must be preserved`);
+      assert.notEqual(result, minimalBase, `${mode}: minimal Pi prompt must still be rewritten`);
+      assert.equal(result.endsWith(`\n\n${cwdSection}`), true, `${mode}: <cwd> section must be preserved verbatim at the end`);
+      assert.equal(result.split("<cwd>\n").length - 1, 1, `${mode}: <cwd> must appear exactly once`);
 
       const responseStyleIdx = result.indexOf("## Response style");
-      const dateIdx = result.indexOf("Current date:");
+      const cwdIdx = result.indexOf("<cwd>\n");
       assert.notEqual(responseStyleIdx, -1, `${mode}: response style heading must appear`);
-      assert.equal(responseStyleIdx < dateIdx, true, `${mode}: Current date must come after mode prompt content`);
+      assert.equal(responseStyleIdx < cwdIdx, true, `${mode}: <cwd> must come after mode prompt content`);
 
-      const piDocsIdx = result.indexOf("Pi documentation (");
+      const piDocsIdx = result.indexOf("<docs>\n");
+      assert.notEqual(piDocsIdx, -1, `${mode}: <docs> section must be embedded`);
+      assert.equal(result.slice(piDocsIdx, piDocsIdx + docsSection.length), docsSection, `${mode}: <docs> must be embedded byte-for-byte`);
       const modePostureStartIdx = result.indexOf("## ", piDocsIdx + 1);
       const piDocsSlice = result.slice(piDocsIdx, modePostureStartIdx);
-      assert.equal(piDocsSlice.includes("Current date:"), false, `${mode}: Current date must not be embedded inside Pi docs`);
-      assert.equal(piDocsSlice.includes("Current working directory:"), false, `${mode}: Current working directory must not be embedded inside Pi docs`);
+      assert.equal(piDocsSlice.includes("<cwd>"), false, `${mode}: <cwd> must not be embedded inside <docs>`);
+      assert.equal(piDocsSlice.includes("/test/cwd"), false, `${mode}: cwd path must not be embedded inside <docs>`);
     }
   });
 
-  it("ignores prepended Available tools / Guidelines / Pi documentation sections that come before Pi's identity line", async () => {
+  it("ignores prepended <tools> / <rules> / <docs> sections that come before Pi's identity line", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
     const PREPENDED = [
       "EARLIER EXTENSION HEADER",
       "",
-      "Available tools:",
+      "<tools>",
       "- fake_tool: fake description",
+      "</tools>",
       "",
-      "Guidelines:",
+      "<rules>",
       "- fake guideline",
+      "</rules>",
       "",
+      "<docs>",
       "Pi documentation (fake):",
       "- fake docs entry",
+      "</docs>",
       "",
       "",
     ].join("\n");
@@ -562,9 +592,10 @@ describe("mmr-core prompt layer", () => {
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: promptWithPrepend });
 
       const identityIdx = result.indexOf(PI_IDENTITY_LINE);
-      const tailIdx = result.indexOf("# Project Context");
+      const tailIdx = result.indexOf("<project_context>\n");
       assert.notEqual(identityIdx, -1, `${mode}: mode prompt content must be present`);
       assert.notEqual(tailIdx, -1, `${mode}: preserved tail must be present`);
+      assert.notEqual(result, promptWithPrepend, `${mode}: prompt must still be rewritten`);
 
       const modePromptContent = result.slice(identityIdx, tailIdx);
       assert.equal(modePromptContent.includes("- fake_tool: fake description"), false, `${mode}: prepended fake tool must not be embedded as Pi tool`);
@@ -575,9 +606,7 @@ describe("mmr-core prompt layer", () => {
 
       // Prepended fake content must still be preserved before the mode prompt.
       const beforeMode = result.slice(0, identityIdx);
-      assert.equal(beforeMode.includes("EARLIER EXTENSION HEADER"), true, `${mode}: prepended header must be preserved`);
-      assert.equal(beforeMode.includes("- fake_tool: fake description"), true, `${mode}: prepended fake tool must be preserved verbatim before mode block`);
-      assert.equal(beforeMode.includes("- fake guideline"), true, `${mode}: prepended fake guideline must be preserved verbatim before mode block`);
+      assert.equal(beforeMode, PREPENDED, `${mode}: prepended sections must be preserved verbatim before mode block`);
     }
   });
 
@@ -586,21 +615,28 @@ describe("mmr-core prompt layer", () => {
     const corrupted = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users.",
       "",
+      "<docs>",
       "Pi documentation (out of order):",
       "- doc bullet",
+      "</docs>",
       "",
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "",
       "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
       "",
-      "Guidelines:",
+      "<rules>",
       "- a guideline",
+      "</rules>",
       "",
-      "# Project Context",
+      "<project_context>",
+      "Project-specific instructions and guidelines:",
+      "</project_context>",
       "",
-      "Current date: 2026-05-08",
-      "Current working directory: /test/cwd",
+      "<cwd>",
+      "/test/cwd",
+      "</cwd>",
     ].join("\n");
 
     for (const mode of MODES) {
@@ -608,100 +644,138 @@ describe("mmr-core prompt layer", () => {
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: corrupted });
       assert.equal(result, corrupted, `${mode}: invalid section order must pass through unchanged`);
     }
+    // Control: the same sections in Pi's real order are rewritten, so the
+    // passthrough above is caused by the order, not by missing anchors.
+    const reordered = corrupted
+      .replace("<docs>\nPi documentation (out of order):\n- doc bullet\n</docs>\n\n", "")
+      .replace("</rules>\n\n", "</rules>\n\n<docs>\nPi documentation (out of order):\n- doc bullet\n</docs>\n\n");
+    assert.notEqual(buildMmrPromptLayer({ state: createState({ mode: "medium" }), baseSystemPrompt: reordered }), reordered);
   });
 
-  it("does not treat 'Pi documentation' inside a guideline bullet as the Pi docs header", async () => {
+  it("does not treat '<docs>' text inside a rule bullet as the start of Pi's <docs> section", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
-    // The Pi guideline body contains the literal substring `Pi documentation`. The parser must
-    // anchor to the line-start `\n\nPi documentation (` instead of the substring.
+    // The Pi rule body contains the literal substrings `<docs>` and
+    // `Pi documentation (`. The parser must anchor to the line-start
+    // `\n\n<docs>\n` section opener instead of the substring.
+    const poisonRule = "- Do not edit the <docs> section or Pi documentation (README, docs/) unless asked";
     const baseWithPoisonGuideline = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users.",
       "",
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "- bash: Execute bash commands (ls, grep, find, etc.)",
       "",
       "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
       "",
-      "Guidelines:",
-      "- Do not edit Pi documentation unless asked",
+      "<rules>",
+      poisonRule,
       "- Be concise in your responses",
       "- Show file paths clearly when working with files",
+      "</rules>",
       "",
+      "<docs>",
       "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
       "- Main documentation: /pi/README.md",
       "- Additional docs: /pi/docs",
+      "</docs>",
       "",
-      "# Project Context",
+      "<project_context>",
+      "Project-specific instructions and guidelines:",
       "",
+      '<project_instructions path="/test/AGENTS.md">',
       "Test project content.",
+      "</project_instructions>",
+      "</project_context>",
       "",
-      "Current date: 2026-05-08",
-      "Current working directory: /test/cwd",
+      "<cwd>",
+      "/test/cwd",
+      "</cwd>",
     ].join("\n");
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: baseWithPoisonGuideline });
+      assert.notEqual(result, baseWithPoisonGuideline, `${mode}: prompt must still be rewritten`);
 
-      const tailIdx = result.indexOf("# Project Context");
-      const realDocsIdx = result.indexOf("Pi documentation (read only when the user asks about pi itself");
+      const tailIdx = result.indexOf("<project_context>\n");
+      const realDocsIdx = result.indexOf("<docs>\nPi documentation (read only when the user asks about pi itself");
       assert.notEqual(tailIdx, -1, `${mode}: preserved tail must appear`);
-      assert.notEqual(realDocsIdx, -1, `${mode}: real Pi docs header must appear`);
-      assert.equal(realDocsIdx < tailIdx, true, `${mode}: real Pi docs header must be embedded inside mode prompt content, not left in tail`);
-      // Tail must not contain a stray Pi docs header.
+      assert.notEqual(realDocsIdx, -1, `${mode}: real Pi <docs> section must appear`);
+      assert.equal(realDocsIdx < tailIdx, true, `${mode}: real Pi <docs> section must be embedded inside mode prompt content, not left in tail`);
+      // Tail must not contain a stray Pi docs section.
       const tailSlice = result.slice(tailIdx);
       assert.equal(tailSlice.includes("Pi documentation (read only"), false, `${mode}: real Pi docs header must not survive in the tail`);
-      // The poisoning guideline must remain inside the mode prompt content (it's a Pi guideline).
-      const modePromptSlice = result.slice(result.indexOf(PI_IDENTITY_LINE), tailIdx);
-      assert.equal(modePromptSlice.includes("- Do not edit Pi documentation unless asked"), true, `${mode}: poisoning guideline must remain in the embedded Guidelines block`);
+      assert.equal(tailSlice.includes("<docs>"), false, `${mode}: no <docs> text may survive in the tail`);
+      // The poisoning rule must remain inside the embedded <rules> section.
+      const rulesSlice = result.slice(result.indexOf("<rules>\n"), result.indexOf("\n</rules>"));
+      assert.equal(rulesSlice.includes(poisonRule), true, `${mode}: poisoning rule must remain in the embedded <rules> section`);
+      assert.equal(result.split(poisonRule).length - 1, 1, `${mode}: poisoning rule must appear exactly once`);
     }
   });
 
-  it("does not treat 'Available tools:' or 'Guidelines:' substrings inside guideline bodies as auto-section headers", async () => {
+  it("does not treat '<tools>' or '<rules>' text inside tool or rule lines as section starts", async () => {
     const { buildMmrPromptLayer } = await importSource("extensions/ampi-core/prompt.ts");
+    const poisonToolLine = "- read: Read file contents (never rewrite the <rules> or <docs> sections)";
+    const poisonRules = [
+      "- Reference the <tools> section when in doubt",
+      "- See <rules> above for Pi-rendered rules",
+    ];
     const baseWithSubstringPoisons = [
       "You are an expert coding assistant operating inside pi, a coding agent harness. You help users.",
       "",
-      "Available tools:",
-      "- read: Read file contents",
+      "<tools>",
+      poisonToolLine,
       "",
       "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
       "",
-      "Guidelines:",
-      "- Reference the Available tools: section when in doubt",
-      "- See Guidelines: above for Pi-rendered rules",
+      "<rules>",
+      ...poisonRules,
       "- Be concise in your responses",
       "- Show file paths clearly when working with files",
+      "</rules>",
       "",
+      "<docs>",
       "Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):",
       "- Main documentation: /pi/README.md",
+      "</docs>",
       "",
-      "# Project Context",
+      "<project_context>",
+      "Project-specific instructions and guidelines:",
       "",
+      '<project_instructions path="/test/AGENTS.md">',
       "Test project content.",
+      "</project_instructions>",
+      "</project_context>",
       "",
-      "Current date: 2026-05-08",
-      "Current working directory: /test/cwd",
+      "<cwd>",
+      "/test/cwd",
+      "</cwd>",
     ].join("\n");
 
     for (const mode of MODES) {
       const state = createState({ mode });
       const result = buildMmrPromptLayer({ state, baseSystemPrompt: baseWithSubstringPoisons });
+      assert.notEqual(result, baseWithSubstringPoisons, `${mode}: prompt must still be rewritten`);
 
-      // Available tools and Guidelines blocks must each appear exactly once (no duplication
-      // from substring matches inside the guideline bodies).
-      const toolsHeaderCount = result.split(/\nAvailable tools:\n/).length - 1;
-      const guidelinesHeaderCount = result.split(/\nGuidelines:\n/).length - 1;
-      assert.equal(toolsHeaderCount, 1, `${mode}: Available tools: header line must appear exactly once`);
-      assert.equal(guidelinesHeaderCount, 1, `${mode}: Guidelines: header line must appear exactly once`);
+      // <tools> and <rules> sections must each appear exactly once (no
+      // duplication from substring matches inside tool or rule bodies).
+      const toolsHeaderCount = result.split(/\n<tools>\n/).length - 1;
+      const guidelinesHeaderCount = result.split(/\n<rules>\n/).length - 1;
+      assert.equal(toolsHeaderCount, 1, `${mode}: <tools> opener line must appear exactly once`);
+      assert.equal(guidelinesHeaderCount, 1, `${mode}: <rules> opener line must appear exactly once`);
 
-      // The poisoning guideline bodies must remain inside the embedded Guidelines block, not be
-      // misinterpreted as new section headers.
-      const tailIdx = result.indexOf("# Project Context");
-      const modePromptSlice = result.slice(result.indexOf(PI_IDENTITY_LINE), tailIdx);
-      assert.equal(modePromptSlice.includes("- Reference the Available tools: section when in doubt"), true, `${mode}: substring-poison guideline must remain in Guidelines block`);
-      assert.equal(modePromptSlice.includes("- See Guidelines: above for Pi-rendered rules"), true, `${mode}: substring-poison guideline must remain in Guidelines block`);
+      // The poisoning bodies must remain inside their embedded sections, not
+      // be misinterpreted as new section openers.
+      const toolsSlice = result.slice(result.indexOf("\n<tools>\n"), result.indexOf("\n</tools>"));
+      assert.equal(toolsSlice.includes(poisonToolLine), true, `${mode}: substring-poison tool line must remain in <tools>`);
+      const rulesSlice = result.slice(result.indexOf("\n<rules>\n"), result.indexOf("\n</rules>"));
+      for (const rule of poisonRules) {
+        assert.equal(rulesSlice.includes(rule), true, `${mode}: substring-poison rule must remain in <rules>: ${rule}`);
+      }
+      const tailIdx = result.indexOf("<project_context>\n");
+      assert.equal(result.slice(tailIdx).includes(poisonToolLine), false, `${mode}: poison tool line must not leak into the tail`);
     }
   });
 

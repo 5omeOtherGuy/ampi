@@ -9,7 +9,7 @@
 //   - flattened blocks[] reproduce the systemPrompt byte-for-byte
 //   - systemPrompt matches the legacy buildMmrPromptLayer output
 //     (consistency: same splice, different surface)
-//   - the Pi Guidelines block is passed through byte-identically (Phase D
+//   - the Pi <rules> section is passed through byte-identically (Phase D
 //     policy: never edit Pi-authored blocks)
 //   - free mode is passthrough: blocks is a single preserved-tail block
 //     and systemPrompt === base
@@ -205,7 +205,7 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       }
     });
 
-    it(`active-guidelines block is byte-identical to the Pi-authored Guidelines block for ${mode}`, () => {
+    it(`active-guidelines block is byte-identical to the Pi-authored <rules> section for ${mode}`, () => {
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
@@ -213,15 +213,17 @@ describe("Phase D: assembleActiveSurface() public API", () => {
       });
       const guidelinesBlock = result.blocks.find((b) => b.kind === "active-guidelines");
       assert.ok(guidelinesBlock, `mode ${mode}: must have an active-guidelines block`);
-      // Extract Pi's Guidelines section from the base prompt.
-      const start = BASE_PROMPT.indexOf("\n\nGuidelines:\n");
-      assert.notEqual(start, -1, "base.md must contain a Guidelines block");
+      // Extract Pi's <rules> section from the base prompt.
+      const start = BASE_PROMPT.indexOf("\n\n<rules>\n");
+      assert.notEqual(start, -1, "base.md must contain a <rules> section");
       const headerStart = start + 2;
-      const headerEnd = BASE_PROMPT.indexOf("\n\n", headerStart);
-      const piGuidelines = BASE_PROMPT.slice(headerStart, headerEnd);
+      const closeTag = "\n</rules>";
+      const closeIdx = BASE_PROMPT.indexOf(closeTag, headerStart);
+      assert.notEqual(closeIdx, -1, "base.md must close its <rules> section");
+      const piGuidelines = BASE_PROMPT.slice(headerStart, closeIdx + closeTag.length);
       assert.ok(
         guidelinesBlock.text.includes(piGuidelines),
-        `mode ${mode}: active-guidelines block must include the full Pi Guidelines block verbatim`,
+        `mode ${mode}: active-guidelines block must include the full Pi <rules> section verbatim`,
       );
       // Phase D drops the filter: previously-stripped bullets must now appear.
       assert.ok(
@@ -349,7 +351,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
   }
 
   it("follows activeToolNames instead of the rendered tools block when provided", () => {
-    // BASE_PROMPT's Available tools block lists all six curated built-ins,
+    // BASE_PROMPT's <tools> section lists all six curated built-ins,
     // but the resolved active set here omits grep/find.
     const result = assembleActiveSurface({
       state: createState("medium"),
@@ -361,7 +363,7 @@ describe("assembleActiveSurface(): built-in guidance source (activeToolNames)", 
   });
 
   it("covers a callable built-in even when it is absent from the rendered tools block", () => {
-    // Strip grep from the rendered Available tools block; selectedTools still
+    // Strip grep from the rendered <tools> section; selectedTools still
     // marks it callable, so guidance must still include it.
     const baseWithoutGrep = BASE_PROMPT.replace(
       "- grep: Search file contents for patterns (respects .gitignore)\n",
@@ -445,8 +447,8 @@ describe("assembleActiveSurface(): preserves Pi's tools interstitial byte-for-by
       !result.systemPrompt.includes("you may have access to other custom tools depending on the project."),
       "the splice must not re-emit the default MMR_ADDITIONAL_TOOLS_LINE when Pi's text differs",
     );
-    // The active-tools block stays Pi-sourced and still ends with a blank line
-    // before the Guidelines block.
-    assert.match(result.systemPrompt, new RegExp(`${sentinel.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\n\\nGuidelines:\\n`));
+    // The active-tools block stays Pi-sourced: the sentence is still followed
+    // by Pi's `</tools>` close tag and a blank line before the <rules> section.
+    assert.match(result.systemPrompt, new RegExp(`${sentinel.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\n</tools>\\n\\n<rules>\\n`));
   });
 });

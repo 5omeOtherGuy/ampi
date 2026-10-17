@@ -107,7 +107,7 @@ export const FINDER_PROMPT_SNIPPET =
   "Intelligently search your codebase for complex, multi-step search tasks based on functionality or concepts rather than exact matches";
 
 /**
- * Single routing guideline for Pi's `Guidelines:` block. The full when/how
+ * Single routing guideline for Pi's `<rules>` section. The full when/how
  * guidance lives only in {@link FINDER_DESCRIPTION} (the schema the model
  * already receives); cross-worker policy renders once in the
  * `## Using workers` block (`ampi-core/worker-tool-guidance.ts`).
