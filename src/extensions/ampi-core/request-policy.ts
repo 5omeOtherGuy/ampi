@@ -459,7 +459,7 @@ function isAnthropicShape(payload: unknown): payload is Record<string, unknown> 
     || hasOwn(payload, "output_config");
 }
 
-/** OpenAI Responses API shape (openai, openai-codex, azure-openai-responses, github-copilot, ...). */
+/** OpenAI Responses API shape (openai, openai-codex, azure, github-copilot, ...). */
 function isOpenAiResponsesShape(payload: unknown): payload is Record<string, unknown> & { input: unknown[] } {
   if (!isRecord(payload)) return false;
   if (typeof payload.model !== "string") return false;

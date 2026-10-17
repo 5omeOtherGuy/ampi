@@ -58,15 +58,18 @@ const EXPECTED_FULL_BLOCK_ORDER = [
   "## Working with the user",
   "## Response style",
   "## Tool use",
-  "Available tools:",
-  "Guidelines:",
+  "<tools>\n",
+  "</tools>",
+  "<rules>\n",
+  "</rules>",
   "## Built-in tool guidance",
-  "Pi documentation (",
+  "<docs>\n",
+  "</docs>",
   "## Tool execution policy",
   "## Diagrams",
-  "# Project Context",
-  "Current date:",
-  "Current working directory:",
+  "<project_context>\n",
+  "<skills>\n",
+  "<cwd>\n",
 ];
 
 const EXPECTED_COMPACT_BLOCK_ORDER = [
@@ -76,19 +79,22 @@ const EXPECTED_COMPACT_BLOCK_ORDER = [
   "## Plan before acting",
   "## Codebase discovery",
   "## Tool use",
-  "Available tools:",
-  "Guidelines:",
+  "<tools>\n",
+  "</tools>",
+  "<rules>\n",
+  "</rules>",
   "## Built-in tool guidance",
-  "Pi documentation (",
+  "<docs>\n",
+  "</docs>",
   "## Tool execution policy",
   "## Executing actions with care",
   "## Implementation style",
   "## Verification",
   "## Communication",
   "## Response style",
-  "# Project Context",
-  "Current date:",
-  "Current working directory:",
+  "<project_context>\n",
+  "<skills>\n",
+  "<cwd>\n",
 ];
 
 
@@ -185,22 +191,24 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       }
     });
 
-    it(`${mode}: Available tools, Guidelines, and Pi docs blocks are byte-identical to base.md`, async () => {
+    it(`${mode}: Pi's <tools>, <rules>, and <docs> sections are byte-identical to base.md`, async () => {
       const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
       const result = assembleActiveSurface({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
         activeToolManifest: [],
       });
-      for (const header of ["Available tools:", "Guidelines:", "Pi documentation ("]) {
-        const baseStart = BASE_PROMPT.indexOf(`\n\n${header}`);
-        assert.notEqual(baseStart, -1, `base.md missing ${header}`);
-        const headerStart = baseStart + 2;
-        const headerEnd = BASE_PROMPT.indexOf("\n\n", headerStart);
-        const body = BASE_PROMPT.slice(headerStart, headerEnd === -1 ? undefined : headerEnd);
+      for (const name of ["tools", "rules", "docs"]) {
+        const baseStart = BASE_PROMPT.indexOf(`\n\n<${name}>\n`);
+        assert.notEqual(baseStart, -1, `base.md missing <${name}>`);
+        const sectionStart = baseStart + 2;
+        const closeTag = `\n</${name}>`;
+        const closeIdx = BASE_PROMPT.indexOf(closeTag, sectionStart);
+        assert.notEqual(closeIdx, -1, `base.md has an unterminated <${name}>`);
+        const body = BASE_PROMPT.slice(sectionStart, closeIdx + closeTag.length);
         assert.ok(
           result.systemPrompt.includes(body),
-          `${mode}: rendered systemPrompt missing verbatim ${header} block`,
+          `${mode}: rendered systemPrompt missing verbatim <${name}> section`,
         );
       }
     });
@@ -237,17 +245,18 @@ describe("Phase F: per-mode structural invariants across the matrix", () => {
       const sp = result.systemPrompt;
       const toolHeadingIdx = sp.indexOf(MMR_TOOL_USE_HEADING);
       const leadInIdx = sp.indexOf(MMR_TOOL_USE_POSTURE_LINE);
-      const availIdx = sp.indexOf("Available tools:");
-      const guidelinesIdx = sp.indexOf("Guidelines:");
-      const docsIdx = sp.indexOf("Pi documentation (");
+      const availIdx = sp.indexOf("<tools>\n");
+      const guidelinesIdx = sp.indexOf("<rules>\n");
+      const docsIdx = sp.indexOf("<docs>\n");
       const sharedToolIdx = sp.indexOf("## Tool execution policy");
       const responseStyleIdx = sp.indexOf("## Response style");
       assert.ok(toolHeadingIdx !== -1 && leadInIdx !== -1, `${mode}: missing tool-use heading or lead-in`);
-      assert.ok(toolHeadingIdx < availIdx, `${mode}: ## Tool use must precede Available tools:`);
-      assert.ok(leadInIdx < availIdx, `${mode}: tool-use lead-in must precede Available tools:`);
-      assert.ok(availIdx < guidelinesIdx, `${mode}: Available tools must precede Guidelines`);
-      assert.ok(guidelinesIdx < docsIdx, `${mode}: Guidelines must precede Pi documentation`);
-      assert.ok(docsIdx < sharedToolIdx, `${mode}: Pi documentation must precede shared tool guidance`);
+      assert.ok(availIdx !== -1 && guidelinesIdx !== -1 && docsIdx !== -1, `${mode}: missing a Pi section`);
+      assert.ok(toolHeadingIdx < availIdx, `${mode}: ## Tool use must precede <tools>`);
+      assert.ok(leadInIdx < availIdx, `${mode}: tool-use lead-in must precede <tools>`);
+      assert.ok(availIdx < guidelinesIdx, `${mode}: <tools> must precede <rules>`);
+      assert.ok(guidelinesIdx < docsIdx, `${mode}: <rules> must precede <docs>`);
+      assert.ok(docsIdx < sharedToolIdx, `${mode}: <docs> must precede shared tool guidance`);
 
       if (mode === "low") {
         const operatingIdx = sp.indexOf("## Operating principles");
@@ -318,13 +327,13 @@ describe("Phase F: active-manifest invariants across the matrix", () => {
           if (entry.promptSnippet) {
             assert.ok(
               result.systemPrompt.includes(`- ${entry.name}: ${entry.promptSnippet}`),
-              `${mode} / ${toolSet}: Available tools must include ${entry.name}'s promptSnippet`,
+              `${mode} / ${toolSet}: <tools> must include ${entry.name}'s promptSnippet`,
             );
           }
           for (const guideline of entry.promptGuidelines) {
             assert.ok(
               result.systemPrompt.includes(`- ${guideline}`),
-              `${mode} / ${toolSet}: Guidelines must include ${entry.name}'s promptGuidelines`,
+              `${mode} / ${toolSet}: <rules> must include ${entry.name}'s promptGuidelines`,
             );
           }
         }

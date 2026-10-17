@@ -8,7 +8,8 @@ const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
   low: "Light reasoning",
   medium: "Moderate reasoning",
   high: "Deep reasoning",
-  xhigh: "Maximum reasoning",
+  xhigh: "Extra-high reasoning",
+  max: "Maximum reasoning",
 };
 
 export interface MmrSessionFallbackSelection<TModel> {

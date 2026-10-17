@@ -74,18 +74,30 @@ function stubTaskInvocation(overrides = {}) {
 const BASE_PARENT_PROMPT = [
   "You are an expert coding assistant operating inside pi, a coding agent harness.",
   "",
-  "Available tools:",
+  "<tools>",
   "- read: Parent read tool.",
   "- bash: Parent shell tool.",
   "- Task: Parent task tool.",
   "",
-  "Guidelines:",
-  "- Parent guideline.",
+  "In addition to the tools above, you may have access to other custom tools depending on the project.",
+  "</tools>",
   "",
+  "<rules>",
+  "- Parent guideline.",
+  "</rules>",
+  "",
+  "<docs>",
   "Pi documentation (read only when needed):",
   "- Parent docs.",
+  "</docs>",
   "",
+  "<addendum>",
   "Tail content.",
+  "</addendum>",
+  "",
+  "<cwd>",
+  "/tmp/repo",
+  "</cwd>",
 ].join("\n");
 
 beforeEach(async () => {
@@ -259,14 +271,17 @@ describe("Task tool", () => {
     await tool.execute("call-1", { prompt: "Do it", description: "Do it" }, undefined, undefined, { cwd: "/tmp/repo" });
     assert.equal(calls.length, 1);
     assert.match(calls[0].systemPrompt, /<mmr_mode name="medium">/);
-    assert.match(calls[0].systemPrompt, /Available tools:\n- read: Read files\.\n- bash: Run shell commands\./);
+    assert.match(calls[0].systemPrompt, /<tools>\n- read: Read files\.\n- bash: Run shell commands\.\n\nIn addition to the tools above[^\n]*\n<\/tools>\n/);
+    assert.doesNotMatch(calls[0].systemPrompt, /Parent read tool|Parent shell tool/);
+    assert.match(calls[0].systemPrompt, /<docs>\nPi documentation \(read only when needed\):\n- Parent docs\.\n<\/docs>/);
+    assert.match(calls[0].systemPrompt, /\n\n<addendum>\nTail content\.\n<\/addendum>\n\n<cwd>\n\/tmp\/repo\n<\/cwd>/);
     assert.doesNotMatch(calls[0].systemPrompt, /- Task: Spawn workers\./);
     assert.match(calls[0].systemPrompt, /## Task Worker Role/);
   });
 
-  it("filters the worker prompt's Available tools block by invocation.workerTools, not parent-active or profile tools", async () => {
+  it("filters the worker prompt's <tools> section by invocation.workerTools, not parent-active or profile tools", async () => {
     // P0.5 (consolidate-subagent-resolvers): the assembled worker prompt's
-    // "Available tools:" block must list only the tools the worker will
+    // `<tools>` section must list only the tools the worker will
     // actually have at the child Pi process. Three sets converge here:
     //   - parent active tools (host may carry extras: Task itself, oracle,
     //     etc.) — not visible to the worker.
@@ -441,7 +456,7 @@ describe("Task tool", () => {
     // Before P1.a the worker prompt was built by filtering `pi.getAllTools()`
     // through `pi.getActiveTools()` first; tools that were registered
     // at the host but not currently active in the parent mode were
-    // omitted from the worker's `Available tools:` block even though
+    // omitted from the worker's `<tools>` section even though
     // `workerTools` (deny-aware ∩ registered) included them. The worker
     // could call them at runtime but its system prompt never described
     // them, producing silent under-advertising. The fix builds the
@@ -1099,7 +1114,7 @@ describe("Task blocking-vs-background guidance", () => {
   it("keeps guidelines to a single routing line and states blocking/background in the description", async () => {
     const { createTaskTool } = await importSource(TASK_MODULE);
     const tool = createTaskTool({ runner: { async run() { return makeWorkerResult(); } } });
-    // The Guidelines block carries exactly one routing line; the
+    // The <rules> section carries exactly one routing line; the
     // blocking-vs-background policy renders once in the `## Using workers`
     // block and in the schema description, never in per-tool guidelines.
     assert.equal(tool.promptGuidelines.length, 1);

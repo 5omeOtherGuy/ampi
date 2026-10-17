@@ -378,7 +378,7 @@ export function buildStartTaskDescription(): string {
 export const START_TASK_DESCRIPTION = buildStartTaskDescription();
 
 /**
- * Per-tool routing guidelines for Pi's `Guidelines:` block. The shared
+ * Per-tool routing guidelines for Pi's `<rules>` section. The shared
  * background-orchestration policy (selection, fan-out, result delivery)
  * renders once in the `## Using workers` block
  * (`ampi-core/worker-tool-guidance.ts`); each tool's full mechanics live in

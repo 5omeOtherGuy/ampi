@@ -11,14 +11,20 @@ const FIXTURE_SYSTEM_PROMPT = [
   "",
   "Use context first; reach for a tool only when it would change your answer.",
   "",
-  "Available tools:",
+  "<tools>",
   "- apply_patch: Apply a Codex-format patch to workspace files",
   "- web_search: Search the public web through the configured backend",
   "",
-  "Guidelines:",
-  "- Prefer apply_patch over hand-editing files when applying multi-hunk diffs.",
+  "In addition to the tools above, you may have access to other custom tools depending on the project.",
+  "</tools>",
   "",
+  "<rules>",
+  "- Prefer apply_patch over hand-editing files when applying multi-hunk diffs.",
+  "</rules>",
+  "",
+  "<docs>",
   "Pi documentation (read only when the user asks about pi itself).",
+  "</docs>",
 ].join("\n");
 
 function applyPatchManifestEntry() {

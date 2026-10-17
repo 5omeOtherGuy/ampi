@@ -14,7 +14,10 @@ export function checkMmrToolParams<TParams extends TSchema>(
   raw: unknown,
 ): Static<TParams> {
   if (Value.Check(schema, raw)) return raw as Static<TParams>;
-  const [first] = [...Value.Errors(schema, raw)];
+  // TypeBox 1.3 reports a rejected extra property as a `boolean` ("schema is
+  // false") error ahead of the `additionalProperties` error; prefer the latter.
+  const errors = [...Value.Errors(schema, raw)];
+  const first = errors.find((error) => error.keyword !== "boolean") ?? errors[0];
   const path = first?.instancePath && first.instancePath.length > 0 ? first.instancePath : "/";
   const message = first?.message ?? "schema check failed";
   throw new MmrToolParamsError(`${toolName}: invalid parameters: ${message} at ${path}`);

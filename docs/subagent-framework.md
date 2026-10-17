@@ -61,7 +61,7 @@ Standalone profiles resolve a registered prompt builder and use that builder's
 output as the entire worker system prompt.
 
 Mode-derived profiles reuse an ampi mode prompt surface, replace the inherited
-`Available tools:` block with one rendered from the filtered worker manifest,
+`<tools>` and `<rules>` sections with ones rendered from the filtered worker manifest,
 and append a worker-role block from the registered prompt builder. Profiles can
 pin a concrete base mode or set `baseMode: "from-parent"`. The latter requires
 callers to pass `parentMode` to `assembleMmrSubagentSurface`; missing

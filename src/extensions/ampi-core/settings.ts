@@ -84,7 +84,7 @@ function readJsonFile(filePath: string): { value?: unknown; warning?: string } {
   }
 }
 
-const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
 /**
  * Runtime check that an unknown value is a valid Pi `ThinkingLevel`. Exported

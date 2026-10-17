@@ -21,7 +21,7 @@ export interface MmrPromptLayerContext {
  * registry-driven consumers.
  *
  * Splice behavior is unchanged with one exception: the Pi-authored
- * `Guidelines:` block now passes through byte-identically. Earlier versions
+ * `<rules>` section now passes through byte-identically. Earlier versions
  * filtered out two unconditional bullets ("Be concise...", "Show file
  * paths..."); the policy is to never edit Pi-authored blocks.
  *

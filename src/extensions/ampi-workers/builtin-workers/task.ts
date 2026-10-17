@@ -106,7 +106,7 @@ export const TASK_WORKER_TOOLS: readonly string[] = Object.freeze(
 export const TASK_PROMPT_SNIPPET = "Perform a bounded task in a subagent worker";
 
 /**
- * Single routing guideline for Pi's `Guidelines:` block. The full when/how
+ * Single routing guideline for Pi's `<rules>` section. The full when/how
  * guidance lives only in {@link TASK_DESCRIPTION} (the schema the model
  * already receives); cross-worker policy renders once in the
  * `## Using workers` block (`ampi-core/worker-tool-guidance.ts`).
@@ -238,7 +238,7 @@ export interface TaskWorkerSystemPromptInput {
    * Effective worker tool set computed by
    * {@link resolveMmrSubagentInvocation}. Forwarded to
    * `assembleMmrSubagentSurface` so the worker prompt's
-   * `Available tools:` block describes exactly the tools the worker
+   * `<tools>` section describes exactly the tools the worker
    * will have at the child Pi process. When omitted, the manifest is
    * filtered by the Task profile's intent allowlist, which is broader
    * than the deny-aware, registered-tool subset.

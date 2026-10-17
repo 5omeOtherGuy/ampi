@@ -284,6 +284,7 @@ export async function runMmrCustomSubagentsConfigFlow(
     "medium",
     "high",
     "xhigh",
+    "max",
     CANCEL,
   ]);
   if (!thinkingChoice || thinkingChoice === CANCEL) return;

@@ -195,7 +195,7 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     const options = isRecord(event.systemPromptOptions) ? event.systemPromptOptions : undefined;
     // Drive built-in tool guidance from the tool selection Pi rendered the
     // prompt from (the full callable/active set) rather than the snippet-gated
-    // names parsed from the rendered `Available tools:` block. Feature-detect
+    // names parsed from the rendered `<tools>` section. Feature-detect
     // it: hosts/paths without `selectedTools` fall back to the block parse.
     const selectedTools = Array.isArray(options?.selectedTools)
       ? options.selectedTools.filter((name): name is string => typeof name === "string")

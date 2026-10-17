@@ -3,6 +3,14 @@ import {
   BashExecutionComponent,
   BranchSummaryMessageComponent,
   CompactionSummaryMessageComponent,
+  createBashToolDefinition,
+  createEditToolDefinition,
+  createFindToolDefinition,
+  createGrepToolDefinition,
+  createLsToolDefinition,
+  createPowerShellToolDefinition,
+  createReadToolDefinition,
+  createWriteToolDefinition,
   CustomMessageComponent,
   getMarkdownTheme,
   SkillInvocationMessageComponent,
@@ -73,8 +81,11 @@ export class WorkerStatusLineComponent implements Component {
   }
 }
 
+/** Anything children can be appended to; pi-tui's `Box` and `Container` are separate classes. */
+export type ChildHost = Pick<Container, "addChild">;
+
 export function addMarkdownBlock(
-  container: Container,
+  container: ChildHost,
   text: string | undefined,
   theme: SubagentTheme,
   options: { color?: string; italic?: boolean; paddingX?: number } = {},
@@ -137,7 +148,7 @@ export function taskPreviewForDisplay(
 }
 
 export function addDiagnostic(
-  container: Container,
+  container: ChildHost,
   message: string | undefined,
   status: RenderStatus,
   theme: SubagentTheme,
@@ -225,6 +236,24 @@ function genericToolComponent(
   return container;
 }
 
+// Pi 1.x's ToolExecutionComponent no longer looks up built-in renderers by
+// tool name; pass the built-in definition so child read/grep/... calls keep
+// Pi's native call and result rendering.
+const BUILTIN_TOOL_DEFINITIONS = new Map<string, (cwd: string) => ConstructorParameters<typeof ToolExecutionComponent>[4]>([
+  ["read", createReadToolDefinition],
+  ["bash", createBashToolDefinition],
+  ["powershell", createPowerShellToolDefinition],
+  ["edit", createEditToolDefinition],
+  ["write", createWriteToolDefinition],
+  ["grep", createGrepToolDefinition],
+  ["find", createFindToolDefinition],
+  ["ls", createLsToolDefinition],
+]);
+
+function builtinToolDefinition(toolName: string, cwd: string) {
+  return BUILTIN_TOOL_DEFINITIONS.get(toolName)?.(cwd);
+}
+
 function renderToolTrailComponent(
   item: Extract<MmrWorkerTrailItem, { type: "tool" }>,
   theme: SubagentTheme,
@@ -248,7 +277,7 @@ function renderToolTrailComponent(
       item.toolCallId,
       isRecord(parsedArgs) ? parsedArgs : undefined,
       { showImages: context?.showImages ?? false },
-      undefined,
+      builtinToolDefinition(item.toolName, context?.cwd ?? process.cwd()),
       NOOP_TUI,
       context?.cwd ?? process.cwd(),
     );
@@ -288,7 +317,7 @@ function renderToolResultTrailComponent(
       item.toolCallId ?? `tool-result-${item.toolName}`,
       undefined,
       { showImages: context?.showImages ?? false },
-      undefined,
+      builtinToolDefinition(item.toolName, context?.cwd ?? process.cwd()),
       NOOP_TUI,
       context?.cwd ?? process.cwd(),
     );

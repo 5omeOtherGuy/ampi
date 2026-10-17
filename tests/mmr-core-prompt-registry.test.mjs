@@ -57,16 +57,18 @@ describe("mmr-core prompt registry", () => {
   it("maps the system prompt into a Pi-native base plus ordered fragments", () => {
     const { MMR_PROMPT_BASES, MMR_PROMPT_FRAGMENTS, MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE } = registry;
 
-    assert.ok(MMR_PROMPT_BASES["pi-native-default-v1"], "Pi-native base prompt must be registered");
-    const piNativeBase = MMR_PROMPT_BASES["pi-native-default-v1"];
+    assert.ok(MMR_PROMPT_BASES["pi-native-sections-v1"], "Pi-native base prompt must be registered");
+    assert.equal("pi-native-default-v1" in MMR_PROMPT_BASES, false, "the Pi 0.x base id must be gone");
+    const piNativeBase = MMR_PROMPT_BASES["pi-native-sections-v1"];
+    assert.equal(piNativeBase.id, "pi-native-sections-v1");
     assert.equal(
       piNativeBase.identityLine,
       "You are an expert coding assistant operating inside pi, a coding agent harness.",
     );
-    assert.equal(piNativeBase.toolsSectionAnchor, "\n\nAvailable tools:\n");
-    assert.equal(piNativeBase.guidelinesSectionAnchor, "\n\nGuidelines:\n");
-    assert.equal(piNativeBase.piDocsSectionAnchor, "\n\nPi documentation (");
-    assert.equal(piNativeBase.dateTailAnchor, "\nCurrent date:");
+    assert.equal(piNativeBase.toolsSectionAnchor, "\n\n<tools>\n");
+    assert.equal(piNativeBase.guidelinesSectionAnchor, "\n\n<rules>\n");
+    assert.equal(piNativeBase.piDocsSectionAnchor, "\n\n<docs>\n");
+    assert.equal("dateTailAnchor" in piNativeBase, false, "Pi 1.x renders no date line; no date anchor");
 
     assert.deepEqual(MMR_DEFAULT_PROMPT_FRAGMENT_SEQUENCE, EXPECTED_FULL_SEQUENCE);
     for (const fragmentId of new Set([...EXPECTED_FULL_SEQUENCE, ...EXPECTED_COMPACT_SEQUENCE])) {
@@ -91,7 +93,7 @@ describe("mmr-core prompt registry", () => {
     for (const mode of PROMPTED_MODES) {
       const recipe = MMR_MODE_PROMPT_RECIPES[mode];
       assert.equal(recipe.mode, mode);
-      assert.equal(recipe.basePromptId, "pi-native-default-v1");
+      assert.equal(recipe.basePromptId, "pi-native-sections-v1");
       const expectedFragments = mode === "low" ? EXPECTED_COMPACT_SEQUENCE : EXPECTED_FULL_SEQUENCE;
       assert.deepEqual(recipe.fragments, expectedFragments, `${mode}: expected fragment sequence`);
       assert.equal(recipe.tag, mode);

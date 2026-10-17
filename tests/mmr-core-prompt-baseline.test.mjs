@@ -69,15 +69,18 @@ const EXPECTED_FULL_BLOCK_ORDER = [
   "## Working with the user",
   "## Response style",
   "## Tool use",
-  "Available tools:",
-  "Guidelines:",
-  "Pi documentation (",
+  "<tools>\n",
+  "</tools>",
+  "<rules>\n",
+  "</rules>",
+  "<docs>\n",
+  "</docs>",
   "## Tool execution policy",
   "## Diagrams",
-  "# Project Context",
+  "<project_context>\n",
+  "<skills>\n",
   "<available_skills>",
-  "Current date:",
-  "Current working directory:",
+  "<cwd>\n",
 ];
 
 const EXPECTED_COMPACT_BLOCK_ORDER = [
@@ -87,19 +90,22 @@ const EXPECTED_COMPACT_BLOCK_ORDER = [
   "## Plan before acting",
   "## Codebase discovery",
   "## Tool use",
-  "Available tools:",
-  "Guidelines:",
-  "Pi documentation (",
+  "<tools>\n",
+  "</tools>",
+  "<rules>\n",
+  "</rules>",
+  "<docs>\n",
+  "</docs>",
   "## Tool execution policy",
   "## Executing actions with care",
   "## Implementation style",
   "## Verification",
   "## Communication",
   "## Response style",
-  "# Project Context",
+  "<project_context>\n",
+  "<skills>\n",
   "<available_skills>",
-  "Current date:",
-  "Current working directory:",
+  "<cwd>\n",
 ];
 
 
@@ -131,30 +137,32 @@ describe("Phase B baseline: buildMmrPromptLayer block ordering", () => {
       }
     });
 
-    it(`renders ${mode} mode with Available tools, Guidelines, and Pi docs byte-identical to Pi-injected text`, () => {
+    it(`renders ${mode} mode with Pi's <tools>, <rules>, and <docs> sections byte-identical to Pi-injected text`, () => {
       const rendered = buildMmrPromptLayer({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,
       });
       // Phase D policy: every Pi-authored auto-section is passed through
-      // byte-for-byte. Each block in the base prompt is delimited by a
-      // blank line; the rendered prompt must include every such delimited
-      // block verbatim.
-      const blocks = ["Available tools:", "Guidelines:", "Pi documentation ("];
-      for (const blockHeader of blocks) {
-        const baseStart = BASE_PROMPT.indexOf(`\n\n${blockHeader}`);
-        assert.notEqual(baseStart, -1, `base.md is missing ${blockHeader}`);
-        const headerStart = baseStart + 2;
-        const headerEnd = BASE_PROMPT.indexOf("\n\n", headerStart);
-        const body = BASE_PROMPT.slice(headerStart, headerEnd === -1 ? undefined : headerEnd);
+      // byte-for-byte. Each section in the base prompt runs from its
+      // `<name>` open tag to its `</name>` close tag; the rendered prompt
+      // must include every such section verbatim.
+      const sections = ["tools", "rules", "docs"];
+      for (const name of sections) {
+        const baseStart = BASE_PROMPT.indexOf(`\n\n<${name}>\n`);
+        assert.notEqual(baseStart, -1, `base.md is missing <${name}>`);
+        const sectionStart = baseStart + 2;
+        const closeTag = `\n</${name}>`;
+        const closeIdx = BASE_PROMPT.indexOf(closeTag, sectionStart);
+        assert.notEqual(closeIdx, -1, `base.md has an unterminated <${name}>`);
+        const body = BASE_PROMPT.slice(sectionStart, closeIdx + closeTag.length);
         assert.ok(
           rendered.includes(body),
-          `mode ${mode}: rendered prompt is missing the verbatim ${blockHeader} block`,
+          `mode ${mode}: rendered prompt is missing the verbatim <${name}> section`,
         );
       }
     });
 
-    it(`renders ${mode} mode with the Pi Guidelines block passed through unfiltered`, () => {
+    it(`renders ${mode} mode with the Pi <rules> section passed through unfiltered`, () => {
       const rendered = buildMmrPromptLayer({
         state: createState(mode),
         baseSystemPrompt: BASE_PROMPT,

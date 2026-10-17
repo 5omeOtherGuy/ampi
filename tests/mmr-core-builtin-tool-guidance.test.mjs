@@ -1,7 +1,7 @@
 // Built-in tool guidance: per-tool augmentation block inserted after Pi's
-// auto-emitted Guidelines: block. The block is mmr-core-authored and active
-// only for built-in tool names that actually appear in Pi's Available tools
-// block — it never injects guidance for inactive or planned tools.
+// auto-emitted `<rules>` section. The block is mmr-core-authored and active
+// only for built-in tool names that actually appear in Pi's `<tools>`
+// section — it never injects guidance for inactive or planned tools.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -144,10 +144,10 @@ describe("built-in tool guidance: module", () => {
     }
   });
 
-  it("extractActiveBuiltinToolNames picks built-in tool names from Pi's Available tools block", async () => {
+  it("extractActiveBuiltinToolNames picks built-in tool names from Pi's <tools> section", async () => {
     const { extractActiveBuiltinToolNames } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = [
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "- bash: Execute bash commands",
       "- edit: Make precise file edits",
@@ -157,6 +157,9 @@ describe("built-in tool guidance: module", () => {
       "- ls: List directory contents",
       "- apply_patch: Apply a Codex-format patch",
       "- task_list: Plan and track work",
+      "",
+      "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
     ].join("\n");
     assert.deepEqual(
       extractActiveBuiltinToolNames(block),
@@ -207,7 +210,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
     }
   });
 
-  it("omits guidance for tools that are not listed in Pi's Available tools block", async () => {
+  it("omits guidance for tools that are not listed in Pi's <tools> section", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const baseWithoutEdit = BASE_PROMPT.replace(
       "- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call\n",
@@ -226,7 +229,7 @@ describe("built-in tool guidance: prompt assembly integration", () => {
 
   it("emits no builtin-tool-guidance block when no covered built-in is active", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
-    // Strip every covered built-in from the Available tools listing.
+    // Strip every covered built-in from the <tools> listing.
     let custom = BASE_PROMPT;
     for (const name of ["read", "bash", "edit", "write", "grep", "find"]) {
       const re = new RegExp(`- ${name}: [^\\n]*\\n`);
@@ -246,20 +249,24 @@ describe("built-in tool guidance: prompt assembly integration", () => {
     assert.equal(/## Built-in tool guidance/.test(result.systemPrompt), false);
   });
 
-  it("Pi-authored Available tools and Guidelines blocks remain byte-identical", async () => {
+  it("Pi-authored <tools> and <rules> sections remain byte-identical", async () => {
     const { assembleActiveSurface } = await importSource("extensions/ampi-core/prompt-assembly.ts");
     const result = assembleActiveSurface({
       state: createState("medium"),
       baseSystemPrompt: BASE_PROMPT,
       activeToolManifest: [],
     });
-    for (const header of ["Available tools:", "Guidelines:"]) {
-      const baseStart = BASE_PROMPT.indexOf(`\n\n${header}`) + 2;
-      const baseEnd = BASE_PROMPT.indexOf("\n\n", baseStart);
-      const piBody = BASE_PROMPT.slice(baseStart, baseEnd);
+    for (const name of ["tools", "rules"]) {
+      const openIdx = BASE_PROMPT.indexOf(`\n\n<${name}>\n`);
+      assert.notEqual(openIdx, -1, `base.md is missing <${name}>`);
+      const baseStart = openIdx + 2;
+      const closeTag = `\n</${name}>`;
+      const closeIdx = BASE_PROMPT.indexOf(closeTag, baseStart);
+      assert.notEqual(closeIdx, -1, `base.md has an unterminated <${name}>`);
+      const piBody = BASE_PROMPT.slice(baseStart, closeIdx + closeTag.length);
       assert.ok(
         result.systemPrompt.includes(piBody),
-        `${header} block must remain byte-identical in the assembled prompt`,
+        `<${name}> section must remain byte-identical in the assembled prompt`,
       );
     }
   });

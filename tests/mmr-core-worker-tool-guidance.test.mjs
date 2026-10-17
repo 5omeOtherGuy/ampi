@@ -4,7 +4,7 @@
 // summarize results) and the blocking-vs-background policy ONCE, instead of
 // repeating them inside every worker tool's Guidelines bullets. The block is
 // mmr-core-authored and active only for worker tool names that actually
-// appear in Pi's Available tools block.
+// appear in Pi's `<tools>` section.
 
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
@@ -88,15 +88,18 @@ describe("buildUsingWorkersGuidance", () => {
 });
 
 describe("extractActiveWorkerToolNames", () => {
-  it("extracts known worker tool names (including capitalized Task) from an Available tools block", async () => {
+  it("extracts known worker tool names (including capitalized Task) from a <tools> section", async () => {
     const { extractActiveWorkerToolNames } = await importSource(MODULE);
     const block = [
-      "Available tools:",
+      "<tools>",
       "- read: Read file contents",
       "- Task: Perform a bounded task in a subagent worker",
       "- finder: Intelligently search your codebase",
       "- task_poll: Poll one background task",
       "- unknown_custom: Something else",
+      "",
+      "In addition to the tools above, you may have access to other custom tools depending on the project.",
+      "</tools>",
     ].join("\n");
     assert.deepEqual(extractActiveWorkerToolNames(block), ["Task", "finder", "task_poll"]);
   });

@@ -15,11 +15,10 @@
 
 ## How the rewrite is scoped
 
-- For each prompted locked-mode turn, `ampi-core` surgically replaces only Pi's auto-rendered head (identity line through the `Pi documentation` block) with the active mode prompt.
+- For each prompted locked-mode turn, `ampi-core` surgically replaces only Pi's auto-rendered head (identity line through the `<docs>` section of Pi 1.x's sectioned prompt) with the active mode prompt.
 - The only ampi-owned XML-style marker is the initial one-line role marker (for example, `<mmr_mode name="medium">...</mmr_mode>`); mode sections use Markdown headings.
-- Pi's auto-rendered `Available tools:` block is embedded verbatim under `## Tool use`.
-- Pi's auto-rendered `Guidelines:` block is embedded under `## Tool use` with the two unconditional Pi bullets (`Be concise in your responses`, `Show file paths clearly when working with files`) stripped because the mode prompt covers them.
-- Everything outside the auto-rendered head is preserved byte-for-byte: content prepended by earlier `before_agent_start` handlers, Pi's `appendSystemPrompt` (`--append-system-prompt` / `APPEND_SYSTEM.md`), `# Project Context` / AGENTS.md, `<available_skills>`, the future subagents block, `Current date:`, `Current working directory:`, and any extension content appended after the tail.
+- Pi's auto-rendered `<tools>`, `<rules>`, and `<docs>` sections are embedded verbatim under `## Tool use`.
+- Everything outside the auto-rendered head is preserved byte-for-byte: content prepended by earlier `before_agent_start` handlers, Pi's `<addendum>` (`--append-system-prompt` / `APPEND_SYSTEM.md`), `<project_context>` (AGENTS.md), `<skills>`, `<cwd>`, extension sections, and any extension content appended after the tail.
 - When the auto head cannot be located (user-supplied `--system-prompt` / `SYSTEM.md`, or unexpected layout), `ampi-core` passes Pi's prompt through unchanged. The same applies in `free` mode.
 
 ## Non-goals
