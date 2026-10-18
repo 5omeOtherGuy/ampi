@@ -109,6 +109,9 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set(["question", "options", "allow
  * covers what the schema cannot say (one line, unique after trimming) and
  * hosts that skip schema validation. Returns the problem as a message.
  */
+/** Line breaks and every other C0 or DEL control character: the dialog prints the text as is, so none may reach the terminal. */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+
 export function validateAskUserChoiceParams(params: unknown): AskUserChoiceInput | string {
   if (typeof params !== "object" || params === null || Array.isArray(params)) return "params must be an object";
   for (const key of Object.keys(params)) {
@@ -116,8 +119,9 @@ export function validateAskUserChoiceParams(params: unknown): AskUserChoiceInput
   }
   const { question, options, allow_other: allowOther = false } = params as Record<string, unknown>;
   if (typeof question !== "string" || question.trim() === "") return "question must be a non-empty string";
-  if (question.length > QUESTION_MAX) return `question must be at most ${QUESTION_MAX} characters (got ${question.length})`;
-  if (/[\r\n]/.test(question)) return "question must be a single line";
+  const questionLength = [...question].length;
+  if (questionLength > QUESTION_MAX) return `question must be at most ${QUESTION_MAX} characters (got ${questionLength})`;
+  if (CONTROL_CHARACTERS.test(question)) return "question must be a single line without control characters";
   if (!Array.isArray(options) || options.length < OPTIONS_MIN || options.length > OPTIONS_MAX) {
     const got = Array.isArray(options) ? ` (got ${options.length})` : "";
     return `options must be an array of ${OPTIONS_MIN} to ${OPTIONS_MAX} strings${got}`;
@@ -126,8 +130,9 @@ export function validateAskUserChoiceParams(params: unknown): AskUserChoiceInput
   const seen = new Map<string, number>();
   for (const [index, option] of options.entries()) {
     if (typeof option !== "string" || option.trim() === "") return `options[${index}] must be a non-empty string`;
-    if (option.length > OPTION_MAX) return `options[${index}] must be at most ${OPTION_MAX} characters (got ${option.length})`;
-    if (/[\r\n]/.test(option)) return `options[${index}] must be a single line`;
+    const optionLength = [...option].length;
+    if (optionLength > OPTION_MAX) return `options[${index}] must be at most ${OPTION_MAX} characters (got ${optionLength})`;
+    if (CONTROL_CHARACTERS.test(option)) return `options[${index}] must be a single line without control characters`;
     const key = option.trim();
     const first = seen.get(key);
     if (first !== undefined) return `options[${index}] repeats options[${first}] ("${key}")`;

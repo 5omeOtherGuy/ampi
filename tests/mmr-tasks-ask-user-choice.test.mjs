@@ -61,6 +61,11 @@ describe("ask_user_choice arguments", () => {
     { name: "a 200-character question", params: { question: "q".repeat(200), options: ["A", "B"] }, schema: true },
     { name: "a 201-character question", params: { question: "q".repeat(201), options: ["A", "B"] }, schema: false, error: /question must be at most 200 characters/ },
     { name: "a two-line question", params: { question: "Which one?\nReally?", options: ["A", "B"] }, schema: true, error: /question must be a single line/ },
+    // The schema counts code points, so the tool must too: 79 letters plus one astral character is 80, not 81.
+    { name: "an 80-character option ending in an astral character", params: { question: QUESTION, options: [`${"o".repeat(79)}\u{1F600}`, "B"] }, schema: true },
+    // The dialog prints the text as is, so terminal escape sequences and other control characters are refused.
+    { name: "a question with an escape sequence", params: { question: "Which?\u001b]0;title\u0007", options: ["A", "B"] }, schema: true, error: /question must be a single line without control characters/ },
+    { name: "an option with a tab", params: { question: QUESTION, options: ["A\tB", "C"] }, schema: true, error: /options\[0\] must be a single line without control characters/ },
     { name: "an unknown field", params: { question: QUESTION, options: ["A", "B"], multi: true }, schema: false, error: /unknown parameter "multi"/ },
   ];
 
