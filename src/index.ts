@@ -115,6 +115,46 @@ export type {
   MmrStateChangedHandler,
 } from "./extensions/ampi-core/runtime.js";
 export { loadMmrCoreSettings } from "./extensions/ampi-core/settings.js";
+// --- ampi-core: command registry & keymap (Stable) ---
+export {
+  MMR_EVENT_COMMANDS_CHANGED,
+  getMmrCommand,
+  getMmrCommands,
+  onMmrCommandsChanged,
+  rankMmrCommands,
+  registerMmrCommand,
+  unregisterMmrCommand,
+} from "./extensions/ampi-core/command-registry.js";
+export type {
+  MmrCommandAvailability,
+  MmrCommandAvailabilityState,
+  MmrCommandDefinition,
+  MmrCommandsChange,
+  MmrCommandsChangedEvent,
+  MmrCommandsChangedListener,
+  MmrRankCommandsOptions,
+  MmrRankedCommand,
+} from "./extensions/ampi-core/command-registry.js";
+export {
+  MMR_DEFAULT_KEYMAP_LEADER,
+  areMmrKeyChordsEqual,
+  formatMmrKeyChord,
+  formatMmrKeymapJsonc,
+  parseMmrKeyChord,
+  readMmrKeymapSettings,
+  resolveMmrKeymap,
+} from "./extensions/ampi-core/keymap.js";
+export type {
+  MmrKeyBindingValue,
+  MmrKeyChord,
+  MmrKeyChordFormatOptions,
+  MmrKeyChordParseResult,
+  MmrKeyCombo,
+  MmrKeymapConflict,
+  MmrKeymapResolveInput,
+  MmrKeymapSettings,
+  MmrResolvedKeymap,
+} from "./extensions/ampi-core/keymap.js";
 // --- ampi-core: prompt assembly & subagent wiring (Internal / prompt-assembly) ---
 export { MMR_PROMPT_LAYER_END, MMR_PROMPT_LAYER_START, buildMmrPromptLayer } from "./extensions/ampi-core/prompt.js";
 export {
@@ -729,11 +769,29 @@ export {
   MMR_BUILTIN_TOOL_GUIDANCE_HEADING as AMPI_BUILTIN_TOOL_GUIDANCE_HEADING,
 } from "./extensions/ampi-core/builtin-tool-guidance.js";
 export {
+  MMR_EVENT_COMMANDS_CHANGED as AMPI_EVENT_COMMANDS_CHANGED,
+  getMmrCommand as getAmpiCommand,
+  getMmrCommands as getAmpiCommands,
+  onMmrCommandsChanged as onAmpiCommandsChanged,
+  rankMmrCommands as rankAmpiCommands,
+  registerMmrCommand as registerAmpiCommand,
+  unregisterMmrCommand as unregisterAmpiCommand,
+} from "./extensions/ampi-core/command-registry.js";
+export {
   getMmrPolicyDiagnostics as getAmpiPolicyDiagnostics,
 } from "./extensions/ampi-core/diagnostics.js";
 export {
   createMmrFeatureGateRegistry as createAmpiFeatureGateRegistry,
 } from "./extensions/ampi-core/feature-gates.js";
+export {
+  MMR_DEFAULT_KEYMAP_LEADER as AMPI_DEFAULT_KEYMAP_LEADER,
+  areMmrKeyChordsEqual as areAmpiKeyChordsEqual,
+  formatMmrKeyChord as formatAmpiKeyChord,
+  formatMmrKeymapJsonc as formatAmpiKeymapJsonc,
+  parseMmrKeyChord as parseAmpiKeyChord,
+  readMmrKeymapSettings as readAmpiKeymapSettings,
+  resolveMmrKeymap as resolveAmpiKeymap,
+} from "./extensions/ampi-core/keymap.js";
 export {
   resolveAndApplyMmrModel as resolveAndApplyAmpiModel,
   selectMmrModelRoute as selectAmpiModelRoute,
@@ -917,6 +975,27 @@ export {
 export {
   MMR_SUBAGENTS_ASYNC_TASK_TOOLS as AMPI_SUBAGENTS_ASYNC_TASK_TOOLS,
 } from "./extensions/ampi-workers/provider.js";
+export type {
+  MmrCommandAvailability as AmpiCommandAvailability,
+  MmrCommandAvailabilityState as AmpiCommandAvailabilityState,
+  MmrCommandDefinition as AmpiCommandDefinition,
+  MmrCommandsChange as AmpiCommandsChange,
+  MmrCommandsChangedEvent as AmpiCommandsChangedEvent,
+  MmrCommandsChangedListener as AmpiCommandsChangedListener,
+  MmrRankCommandsOptions as AmpiRankCommandsOptions,
+  MmrRankedCommand as AmpiRankedCommand,
+} from "./extensions/ampi-core/command-registry.js";
+export type {
+  MmrKeyBindingValue as AmpiKeyBindingValue,
+  MmrKeyChord as AmpiKeyChord,
+  MmrKeyChordFormatOptions as AmpiKeyChordFormatOptions,
+  MmrKeyChordParseResult as AmpiKeyChordParseResult,
+  MmrKeyCombo as AmpiKeyCombo,
+  MmrKeymapConflict as AmpiKeymapConflict,
+  MmrKeymapResolveInput as AmpiKeymapResolveInput,
+  MmrKeymapSettings as AmpiKeymapSettings,
+  MmrResolvedKeymap as AmpiResolvedKeymap,
+} from "./extensions/ampi-core/keymap.js";
 export type {
   MmrModelRegistryLike as AmpiModelRegistryLike,
   MmrModelRouteSelection as AmpiModelRouteSelection,

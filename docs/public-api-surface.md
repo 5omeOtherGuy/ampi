@@ -57,6 +57,10 @@ names.
 - Model resolver and routing: `selectMmrModelRoute`,
   `resolveAndApplyMmrModel`, `resolveMmrModeSelection`, and the runtime
   resolver/state accessors re-exported from `ampi-core/runtime`.
+- Command registry and keymap: `registerMmrCommand`, `rankMmrCommands`,
+  the other `ampi-core/command-registry` accessors, `parseMmrKeyChord`,
+  `resolveMmrKeymap`, `readMmrKeymapSettings`, `formatMmrKeymapJsonc`, and
+  the other `ampi-core/keymap` helpers.
 - Feature gates and settings loaders: `createMmrFeatureGateRegistry`,
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
