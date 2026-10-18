@@ -19,8 +19,11 @@ import {
   setMmrSessionIdentity,
   setMmrSubagentState,
 } from "./runtime.js";
+import { loadMmrCoreSettings } from "./settings.js";
+import { isMmrSkillsDisabledByCli, resolveMmrSkillPaths } from "./skill-paths.js";
 import { applyMmrSubagentProfile } from "./subagent-activation.js";
 import { updateMmrStatus } from "./status.js";
+import { MMR_TOOLS_DISABLE_SETTING, type MmrToolDisableMatcher } from "./tool-disable.js";
 import type { MmrModelPreference, MmrSessionIdentity } from "./types.js";
 import { notifyWarnings, type MmrModeController } from "./mode-controller.js";
 
@@ -32,10 +35,10 @@ function readPreferredStringFlag(pi: ExtensionAPI, preferred: string, legacy: st
 }
 
 /**
- * Register the eight ampi-core lifecycle/event hooks against `pi`, in the exact
+ * Register the nine ampi-core lifecycle/event hooks against `pi`, in the exact
  * order Pi observes: `session_start`, `before_provider_request`,
  * `before_agent_start`, `tool_call`, `model_select`, `input`,
- * `thinking_level_select`, `agent_settled`. Registration order is load-bearing and pinned by the
+ * `thinking_level_select`, `agent_settled`, `resources_discover`. Registration order is load-bearing and pinned by the
  * registration-order characterization test. Hooks read live controller state
  * via `controller.getActivePolicy()` / `controller.isApplyingMmrMode()` (never
  * a value captured at registration time) and forward mode transitions to the
@@ -82,6 +85,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     notifyWarnings,
     setApplyingMmrMode: (value: boolean) => {
       controller.setApplyingMmrMode(value);
+    },
+    setToolDisableMatcher: (matcher: MmrToolDisableMatcher) => {
+      controller.setToolDisableMatcher(matcher);
     },
   };
 
@@ -222,6 +228,17 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("tool_call", async (event) => {
+    // `ampi.tools.disable` holds in every session and mode, and for calls
+    // another tool makes (codemode scripts, tool_search loads), which
+    // setActiveTools cannot remove.
+    const disabledBy = controller.matchDisabledTool(event.toolName);
+    if (disabledBy !== undefined) {
+      return {
+        block: true,
+        reason: `Tool "${event.toolName}" is turned off by the ${MMR_TOOLS_DISABLE_SETTING} setting (entry "${disabledBy}").`,
+      };
+    }
+
     // Subagent workers rely on the profile-resolved tool allowlist applied
     // via pi.setActiveTools; Pi already gates calls against it, so ampi-core
     // does not double-gate from locked-mode state.
@@ -285,6 +302,15 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // message does not wait behind a summary.
     if (getMmrSubagentState() || event.aborted) return;
     controller.getAutoCompactor().maybeCompact(ctx, getMmrModeState()?.mode);
+  });
+
+  pi.on("resources_discover", async (event, ctx) => {
+    // Pi still loads skill paths extensions add when it runs with
+    // `--no-skills`, so ampi checks the flag itself.
+    if (isMmrSkillsDisabledByCli(process.argv)) return;
+    const { settings } = loadMmrCoreSettings(event.cwd);
+    const skillPaths = resolveMmrSkillPaths({ cwd: event.cwd, projectTrusted: ctx.isProjectTrusted(), settings });
+    return skillPaths.length > 0 ? { skillPaths } : undefined;
   });
 
   // A route change published outside a mode apply (a session fallback to

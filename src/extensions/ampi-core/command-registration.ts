@@ -67,6 +67,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
             debug,
             modeHistory: debug ? getMmrModeHistory() : undefined,
             autoCompact: debug ? controller.getAutoCompactor().getStatus(state?.mode) : undefined,
+            disabledBySetting: controller.listDisabledTools(),
           }),
           "info",
         );

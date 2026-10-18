@@ -213,13 +213,19 @@ Minimal settings example:
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`ampiCore`) and nested (`ampi.core`) forms are accepted where supported by the owning extension.
 
+| Setting | Does | Example |
+| --- | --- | --- |
+| `ampi.tools.disable` | Turns tools off in every mode and in workers, and blocks calls to them, nested calls included. Exact names, `*` globs, or `builtin:<name>` for Pi's own built-in tools only; user and project lists combine | `["web_search", "task_*", "builtin:grep"]` |
+| `ampi.skills.path` | Extra skill directories, `:`-separated (`;` on Windows); `~` is home, relative entries resolve against the repository root. A project value counts only when Pi trusts the project | `"~/my-skills:/shared/team-skills"` |
+| `ampi.skills.disableClaudeCodeSkills` | `true` stops loading skills from `.claude/skills` (project, up to the repository root, with project trust) and `~/.claude/skills`, which are read by default | `true` |
+
 ## Tool status words
 
 | Status | Meaning |
 | --- | --- |
 | `active` | Registered and available to the current mode |
 | `gated` | Known but waiting on config or a prerequisite |
-| `disabled` | Explicitly turned off |
+| `disabled` | Explicitly turned off, for example by `ampi.tools.disable` |
 | `deferred` | Reserved for planned capability |
 | `missing` | No extension registered that tool name |
 

@@ -14,6 +14,7 @@ import {
   MMR_SUBAGENT_ACTIVATION_FAILURE_STDERR_PREFIX,
   resolveMmrSubagentInvocation,
 } from "./subagent-resolver.js";
+import { createMmrToolDisableMatcher, type MmrToolDisableMatcher, withoutMmrDisabledTools } from "./tool-disable.js";
 import type { MmrModeKey, MmrModelPreference } from "./types.js";
 import { extractExplicitWorkerCliFlags } from "./worker-cli-flags.js";
 
@@ -31,6 +32,7 @@ export interface MmrSubagentActivationBindings {
   setSettingsWarnings(warnings: string[]): void;
   notifyWarnings(ctx: ExtensionContext, warnings: readonly string[]): void;
   setApplyingMmrMode(value: boolean): void;
+  setToolDisableMatcher(matcher: MmrToolDisableMatcher): void;
 }
 
 /**
@@ -129,6 +131,8 @@ export async function applyMmrSubagentProfile(
   bindings.setSettingsFilesRead([...loadedSettings.filesRead]);
   bindings.setSettingsWarnings([...loadedSettings.warnings]);
   bindings.notifyWarnings(ctx, loadedSettings.warnings);
+  const toolDisableMatcher = createMmrToolDisableMatcher(loadedSettings.settings.toolsDisable);
+  bindings.setToolDisableMatcher(toolDisableMatcher);
 
   // Session-scoped fallback override (issue #9) takes precedence over the
   // on-disk settings override. The parent tool forwards the user-selected
@@ -173,7 +177,8 @@ export async function applyMmrSubagentProfile(
   // profile intent allowlist, so a parent-reduced subset is accepted by
   // construction; the invocationContext marker does NOT loosen
   // deny/tool/model validation.
-  const registeredTools = pi.getAllTools().map((tool) => tool.name);
+  const allTools = pi.getAllTools();
+  const registeredTools = allTools.map((tool) => tool.name);
   const invocation = resolveMmrSubagentInvocation({
     profile,
     registry: ctx.modelRegistry,
@@ -193,7 +198,8 @@ export async function applyMmrSubagentProfile(
 
   validateRequiredOwnedTools(pi, profile, ctx);
 
-  const activeWorkerTools = [...invocation.workerTools];
+  // `ampi.tools.disable` holds in workers too.
+  const activeWorkerTools = withoutMmrDisabledTools(invocation.workerTools, toolDisableMatcher, allTools);
 
   bindings.setApplyingMmrMode(true);
   try {

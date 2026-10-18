@@ -3,6 +3,7 @@ import type { MmrAutoCompactStatus } from "./auto-compact.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { MMR_EDIT_TOOL_FAMILY_TOOLS } from "./modes.js";
+import { MMR_TOOLS_DISABLE_SETTING } from "./tool-disable.js";
 import { formatMmrCompactTokens } from "./token-format.js";
 import {
   MMR_REQUEST_POLICIES,
@@ -69,6 +70,8 @@ export interface FormatMmrStatusOptions {
   modeHistory?: readonly MmrModeEvent[];
   /** Locked-mode auto-compaction state, rendered inside the Debug section. */
   autoCompact?: MmrAutoCompactStatus;
+  /** Registered tools `ampi.tools.disable` turns off, each with the entry that matched. */
+  disabledBySetting?: readonly { tool: string; entry: string }[];
 }
 
 function formatSelectedModel(state: MmrModeState): string {
@@ -487,6 +490,12 @@ function formatEditTools(state: MmrModeState): string | undefined {
   return `Edit tools: ${tools} (${reason})`;
 }
 
+function formatDisabledBySetting(rows: FormatMmrStatusOptions["disabledBySetting"]): string | undefined {
+  if (!rows || rows.length === 0) return undefined;
+  const lines = rows.map((row) => `  - ${row.tool} (disabled) by "${row.entry}"`);
+  return [`Turned off by ${MMR_TOOLS_DISABLE_SETTING}:`, ...lines].join("\n");
+}
+
 function formatFeatureGates(state: MmrModeState): string {
   const decisions = state.resolution.featureGateDecisions;
   if (decisions.length === 0) return "Feature gates: none";
@@ -509,6 +518,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       "Context cap: none",
       `Baseline captured: ${formatBaseline(state)}`,
       `Active tools: ${state.activeTools.join(", ") || "none"}`,
+      formatDisabledBySetting(options.disabledBySetting),
       formatSettingsFilesRead(state),
       formatSettingsWarnings(state),
       `Policy warnings: ${formatPolicyWarnings(state)}`,
@@ -539,6 +549,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     `Deferred tools: ${state.deferredTools.join(", ") || "none"}`,
     `Gated tools: ${state.gatedTools.join(", ") || "none"}`,
     `Disabled tools: ${state.disabledTools.join(", ") || "none"}`,
+    formatDisabledBySetting(options.disabledBySetting),
     formatToolDecisions(state.resolution.toolDecisions),
     formatFeatureGates(state),
     formatSettingsFilesRead(state),

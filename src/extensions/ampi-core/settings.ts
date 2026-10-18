@@ -6,6 +6,7 @@ import { readMmrAutoCompactSetting } from "./auto-compact.js";
 import { readJsonSettingsFile } from "./internal/settings-file.js";
 import { isRecord } from "./internal/json.js";
 import { resolveMmrModeKey } from "./modes.js";
+import { compileMmrToolDisableEntry } from "./tool-disable.js";
 import type { MmrCoreSettings, MmrLockedModeKey, MmrModelPreference } from "./types.js";
 
 /**
@@ -231,17 +232,94 @@ function selectMmrCoreSettingsBlock(
   return legacy.raw ? { raw: legacy.raw, rootKey: legacy.rootKey } : undefined;
 }
 
+type MmrSettingsScope = "user" | "project";
+
+function readSettingsGroup(
+  ampi: Record<string, unknown>,
+  key: string,
+  context: { filePath: string; warnings: string[] },
+): Record<string, unknown> | undefined {
+  if (!(key in ampi)) return undefined;
+  if (isRecord(ampi[key])) return ampi[key];
+  context.warnings.push(`Ignoring ampi.${key} in ${context.filePath}: expected an object.`);
+  return undefined;
+}
+
+/**
+ * Read the keys of the top-level `ampi` block that name the tools and skills
+ * ampi loads: `ampi.tools.disable`, `ampi.skills.path` and
+ * `ampi.skills.disableClaudeCodeSkills`. This is the one place that reads
+ * them. Malformed values are skipped with a warning; a `tools.disable` entry
+ * the glob matcher cannot compile is skipped on its own.
+ */
+function readAmpiToolAndSkillSettings(
+  value: Record<string, unknown>,
+  context: { filePath: string; warnings: string[]; scope: MmrSettingsScope },
+): MmrCoreSettings {
+  const settings: MmrCoreSettings = {};
+  const ampi = value.ampi;
+  if (!isRecord(ampi)) return settings;
+
+  const tools = readSettingsGroup(ampi, "tools", context);
+  if (tools && "disable" in tools) {
+    if (Array.isArray(tools.disable)) {
+      const entries = new Set<string>();
+      for (const [index, entry] of tools.disable.entries()) {
+        const trimmed = typeof entry === "string" ? entry.trim() : "";
+        if (trimmed.length === 0) {
+          context.warnings.push(
+            `Ignoring ampi.tools.disable[${index}] in ${context.filePath}: expected a tool name, a glob, or builtin:<name>.`,
+          );
+          continue;
+        }
+        try {
+          compileMmrToolDisableEntry(trimmed);
+          entries.add(trimmed);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          context.warnings.push(`Ignoring ampi.tools.disable[${index}] in ${context.filePath}: ${message}.`);
+        }
+      }
+      if (entries.size > 0) settings.toolsDisable = [...entries];
+    } else {
+      context.warnings.push(
+        `Ignoring ampi.tools.disable in ${context.filePath}: expected an array of tool names, globs, or builtin:<name> entries.`,
+      );
+    }
+  }
+
+  const skills = readSettingsGroup(ampi, "skills", context);
+  if (skills && "path" in skills) {
+    if (typeof skills.path === "string") {
+      if (skills.path.trim().length > 0) settings.skillsPath = { [context.scope]: skills.path };
+    } else {
+      context.warnings.push(`Ignoring ampi.skills.path in ${context.filePath}: expected a string of directories.`);
+    }
+  }
+  if (skills && "disableClaudeCodeSkills" in skills) {
+    if (typeof skills.disableClaudeCodeSkills === "boolean") {
+      settings.disableClaudeCodeSkills = skills.disableClaudeCodeSkills;
+    } else {
+      context.warnings.push(
+        `Ignoring ampi.skills.disableClaudeCodeSkills in ${context.filePath}: expected true or false.`,
+      );
+    }
+  }
+  return settings;
+}
+
 function extractMmrCoreSettings(
   value: unknown,
-  context: { filePath: string; warnings: string[] },
+  context: { filePath: string; warnings: string[]; scope: MmrSettingsScope },
 ): MmrCoreSettings | undefined {
   if (!isRecord(value)) return undefined;
 
+  const toolAndSkillSettings = readAmpiToolAndSkillSettings(value, context);
   const selected = selectMmrCoreSettingsBlock(value, context);
-  if (!selected) return undefined;
+  if (!selected) return toolAndSkillSettings;
 
   const { raw, rootKey } = selected;
-  const settings: MmrCoreSettings = {};
+  const settings: MmrCoreSettings = { ...toolAndSkillSettings };
   if (typeof raw.defaultMode === "string") settings.defaultMode = resolveMmrModeKey(raw.defaultMode) ?? raw.defaultMode;
   if (typeof raw.mode === "string") settings.defaultMode = resolveMmrModeKey(raw.mode) ?? raw.mode;
 
@@ -330,17 +408,27 @@ function mergeSettings(base: MmrCoreSettings, override: MmrCoreSettings): MmrCor
     }
     merged.lockedModeExtraTools = mergedExtra as MmrCoreSettings["lockedModeExtraTools"];
   }
+  if (base.toolsDisable || override.toolsDisable) {
+    // A union, like lockedModeExtraTools: project entries add to the user's.
+    merged.toolsDisable = [...new Set([...(base.toolsDisable ?? []), ...(override.toolsDisable ?? [])])];
+  }
+  if (base.skillsPath || override.skillsPath) {
+    merged.skillsPath = { ...base.skillsPath, ...override.skillsPath };
+  }
 
   return merged;
 }
 
 export function loadMmrCoreSettings(cwd: string, homeDirectory = homedir()): LoadedMmrCoreSettings {
-  const files = [path.join(homeDirectory, ".pi/agent/settings.json"), path.join(cwd, ".pi/settings.json")];
+  const files: { filePath: string; scope: MmrSettingsScope }[] = [
+    { filePath: path.join(homeDirectory, ".pi/agent/settings.json"), scope: "user" },
+    { filePath: path.join(cwd, ".pi/settings.json"), scope: "project" },
+  ];
   let settings: MmrCoreSettings = {};
   const filesRead: string[] = [];
   const warnings: string[] = [];
 
-  for (const filePath of files) {
+  for (const { filePath, scope } of files) {
     const readResult = readJsonFile(filePath);
     if (readResult.warning) {
       warnings.push(readResult.warning);
@@ -349,7 +437,7 @@ export function loadMmrCoreSettings(cwd: string, homeDirectory = homedir()): Loa
     if (!readResult.value) continue;
 
     filesRead.push(filePath);
-    const extracted = extractMmrCoreSettings(readResult.value, { filePath, warnings });
+    const extracted = extractMmrCoreSettings(readResult.value, { filePath, warnings, scope });
     if (extracted) settings = mergeSettings(settings, extracted);
   }
 

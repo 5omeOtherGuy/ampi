@@ -584,6 +584,19 @@ export interface MmrCoreSettings {
    * `false` lets the mode cycle, picker and palette change it at any time.
    */
   modeLock?: boolean;
+  /**
+   * `ampi.tools.disable`: tool names, `*` globs and `builtin:<name>` entries
+   * for tools to turn off (see `tool-disable.ts`). The user and project lists
+   * are combined.
+   */
+  toolsDisable?: string[];
+  /**
+   * `ampi.skills.path` as each settings file sets it. The project value is
+   * used only when Pi trusts the project (see `skill-paths.ts`).
+   */
+  skillsPath?: { user?: string; project?: string };
+  /** `ampi.skills.disableClaudeCodeSkills`: `true` leaves out the `.claude/skills` folders. */
+  disableClaudeCodeSkills?: boolean;
 }
 
 /**
