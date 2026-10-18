@@ -1,8 +1,9 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
-import { type EditorTheme, matchesKey, type TUI, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
+import { type EditorTheme, getKeybindings, matchesKey, type TUI, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
 import type { MmrThreadStatus } from "../../ampi-core/thread-status.js";
 import { mmrTuiWithEditorMaxLines } from "../pi-compat/editor-height.js";
 import { type MmrShortcutHelp, renderMmrShortcutHelp } from "./help.js";
+import { isMmrThreadMentionKey } from "./mentions.js";
 
 /**
  * The prompt box: Pi's prompt editor inside a rounded frame whose borders
@@ -32,9 +33,9 @@ import { type MmrShortcutHelp, renderMmrShortcutHelp } from "./help.js";
  * Text editing, wrapping, scrolling, autocomplete and Pi's app keys come
  * from Pi's `CustomEditor`. The box adds Alt+Enter for a newline, Esc to
  * clear the prompt (or close the help), Backspace on an empty prompt to
- * take queued messages back, and Enter on an empty prompt to steer with the
- * next queued message. Any key that reaches the box closes the help;
- * one that is not Esc then does what it always does.
+ * take queued messages back, Enter on an empty prompt to steer with the
+ * next queued message, and `@@` to mention a session. Any key that reaches
+ * the box closes the help; one that is not Esc then does what it always does.
  */
 
 /** Truecolor of each mode label. Other modes (`free`, unknown keys) use the border colour. */
@@ -89,6 +90,8 @@ export interface MmrPromptBoxHost {
   steerQueued?(): boolean;
   /** What the shortcuts help lists; read on each render while it is open. */
   help?(): MmrShortcutHelp;
+  /** A second `@` right after an `@` that starts a word: mention a session. True when it took the key. */
+  mentionThread?(): boolean;
 }
 
 type Token = "border" | "dim" | "muted" | "accent" | "error" | "warning";
@@ -231,6 +234,8 @@ export function renderMmrPromptBoxBottomBorder(width: number, slots: MmrPromptBo
   return paint([line("╰"), ...left, line("─".repeat(fill)), ...right, line("╯")], theme, slots.overlay);
 }
 
+const ESCAPE = "\x1b";
+
 /** Marks the bottom border in the lines Pi's editor renders, so the box can find it. */
 const BOTTOM_MARK = "\u0000ampi-prompt-box-bottom";
 
@@ -330,10 +335,20 @@ export class MmrPromptBox extends CustomEditor {
     return super.handleMouse({ ...event, x: event.x - 1, y, width: event.width - 2 });
   }
 
+  private textBeforeCursor(): string {
+    const cursor = this.getCursor();
+    return (this.getLines()[cursor.line] ?? "").slice(0, cursor.col);
+  }
+
   override handleInput(data: string): void {
     if (this.helpOpen) {
       this.helpOpen = false;
       if (matchesKey(data, "escape")) return;
+    }
+    if (this.host.mentionThread && isMmrThreadMentionKey(data, this.textBeforeCursor()) && this.host.mentionThread()) {
+      // The picker covers the prompt; close the list the first `@` opened.
+      if (this.isShowingAutocomplete() && getKeybindings().matches(ESCAPE, "tui.select.cancel")) super.handleInput(ESCAPE);
+      return;
     }
     // Pi queues a follow-up message on Alt+Enter; the box inserts a newline,
     // like Shift+Enter and Ctrl+J.

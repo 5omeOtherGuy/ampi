@@ -37,6 +37,8 @@ Newest-first matches across every local Pi session.
 
 Opens one session by exact id, `@id`, or unique id prefix and asks the in-process `history-reader` subagent to extract content for `goal`. Falls back to deterministic lexical extraction if the worker cannot run. Ambiguous prefixes fail closed and list candidate ids. The optional `model` is validated against authenticated registered routes; an unusable route falls back to lexical rather than silently routing.
 
+The tool description tells the model that a `@<session-id>` in your message, as `ampi-tui`'s `@@` mention inserts it, names a session it can read with this tool. Without `ampi-history` the model sees the reference as plain text and nothing reads it.
+
 `details`: `{ scope, projectRef, sessionId, name?, messageCount, excerptCount, truncated, matchedTerms, excerpts, analysisUsed, analysisFallbackReason?, worker?, warnings? }`.
 
 ## Behavior

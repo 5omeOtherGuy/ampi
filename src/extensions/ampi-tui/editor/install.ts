@@ -5,6 +5,7 @@ import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { mmrEntryCost, readMmrEntryUsage } from "../../ampi-core/session-usage.js";
 import { getMmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { MMR_SHORTCUT_HELP_TMUX_NOTE, type MmrShortcutHelpEntry } from "./help.js";
+import { createMmrMentionProvider, pickMmrThreadMention, readMmrRecentCommits } from "./mentions.js";
 import {
   formatMmrSessionCost,
   MMR_STATUS_WAVE_FRAMES,
@@ -22,7 +23,8 @@ import type { MmrStatusFeed } from "./status-feed.js";
  * stepping while a turn runs), and the working directory with the branch
  * Pi's footer data reports. It also opens and closes the box's shortcuts
  * help; inside tmux the help adds a note when tmux's `extended-keys` option
- * is off, checked once, the first time the help opens.
+ * is off, checked once, the first time the help opens. It also adds the
+ * `@:` commit and `@@` session mentions to the prompt's autocomplete.
  */
 
 export interface MmrPromptBoxInstallOptions {
@@ -34,6 +36,8 @@ export interface MmrPromptBoxInstallOptions {
   readonly tmuxExtendedKeys?: () => Promise<string | undefined>;
   /** Enter on an empty prompt: steer with the next queued message. False when there is none. */
   readonly steerQueued?: () => boolean;
+  /** Opens the Mention Thread picker; resolves with the reference to insert. */
+  readonly pickThread?: (ctx: ExtensionContext) => Promise<string | undefined>;
 }
 
 export interface MmrPromptBoxInstall {
@@ -80,6 +84,7 @@ export function createMmrPromptBoxInstall(
   let waveFrame = 0;
   let waveTimer: unknown;
   let unsubscribeMode: (() => void) | undefined;
+  let mentionOpen = false;
   let tmuxChecked = false;
   let tmuxNote = false;
   let costCache: { length: number; last: unknown; cost: number | undefined } = { length: -1, last: undefined, cost: undefined };
@@ -134,7 +139,44 @@ export function createMmrPromptBoxInstall(
     dequeued: () => feed.refreshQueue(),
     steerQueued: () => options.steerQueued?.() ?? false,
     help: () => ({ entries: options.helpEntries?.() ?? [], note: tmuxNote ? MMR_SHORTCUT_HELP_TMUX_NOTE : undefined }),
+    mentionThread,
   };
+
+  function setOverlayOpen(open: boolean): void {
+    if (overlay === open) return;
+    overlay = open;
+    requestRender();
+  }
+
+  /**
+   * Open the Mention Thread picker for the second `@` the box held back,
+   * dimming the frame while it is open. The `@` already in the prompt starts
+   * the reference, so a pick adds `<session id> ` after it; Esc types the
+   * held-back `@` after all.
+   */
+  function mentionThread(): boolean {
+    const current = ctx;
+    if (!current || mentionOpen) return false;
+    mentionOpen = true;
+    setOverlayOpen(true);
+    const insert = (text: string) => {
+      current.ui.pasteToEditor(text);
+      requestRender();
+    };
+    void (options.pickThread ?? pickMmrThreadMention)(current)
+      .finally(() => {
+        mentionOpen = false;
+        setOverlayOpen(false);
+      })
+      .then(
+        (reference) => insert(reference?.slice(1) ?? "@"),
+        (error: unknown) => {
+          insert("@");
+          current.ui.notify(`Could not read the sessions: ${error instanceof Error ? error.message : String(error)}`, "error");
+        },
+      );
+    return true;
+  }
 
   function checkTmux(): void {
     if (tmuxChecked) return;
@@ -171,6 +213,19 @@ export function createMmrPromptBoxInstall(
         box = new MmrPromptBox(editorTui, theme, keybindings, host);
         return box;
       });
+      // Pi drops autocomplete wrappers when the session goes, so each session adds its own.
+      nextCtx.ui.addAutocompleteProvider((base) =>
+        createMmrMentionProvider(base, {
+          listCommits: () => readMmrRecentCommits(nextCtx.sessionManager.getCwd()),
+          now: Date.now,
+          dim: (text) => nextCtx.ui.theme.fg("dim", text),
+          typeKey: (char) => {
+            box?.handleInput(char);
+            requestRender();
+          },
+          visibleRows: () => box?.getAutocompleteMaxVisible(),
+        }),
+      );
       unsubscribeMode ??= onMmrStateChanged(pi, requestRender);
     },
     stop() {
@@ -207,10 +262,6 @@ export function createMmrPromptBoxInstall(
       const height = box?.renderedHeight();
       return height ? height : undefined;
     },
-    setOverlayOpen(open) {
-      if (overlay === open) return;
-      overlay = open;
-      requestRender();
-    },
+    setOverlayOpen,
   };
 }

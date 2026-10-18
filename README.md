@@ -134,6 +134,10 @@ Home / End           # jump to the start / end of the transcript (empty prompt)
 Ctrl+G               # edit the prompt in your external editor
 Ctrl+R               # prompt history: filter, pick a prompt you sent before, Enter puts it in the prompt
 Ctrl+O               # command palette: filter, pick and run any command
+@                    # mention a file or directory (Pi's completion), with hints for @: and @@
+@:                   # mention a commit: the last 30 commits of the repository, inserted as @:<short sha>
+@@                   # mention a session: the Mention Thread picker inserts @<session id>; with ampi-history
+                     # enabled the model can read it (also "thread mention" in the palette)
 /                    # command palette, when the prompt is empty
 Alt+T                # expand or collapse tool output and thinking together
 Shift+Tab / Tab      # select your previous / next message (empty prompt); Esc clears the selection
