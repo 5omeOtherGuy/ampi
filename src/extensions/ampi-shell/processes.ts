@@ -8,17 +8,24 @@
  * says how much. A command that ended stays listed until its last output
  * was read once.
  *
+ * A command can leave processes behind in its group (`npm run dev &`), so
+ * the registry remembers every group it started until it finds the group
+ * empty, and a session end stops what is left there too.
+ *
  * Windows has no process groups: there a stop reaches only the shell itself.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { constants as osConstants } from "node:os";
 import { StringDecoder } from "node:string_decoder";
+import { setTimeout as delay } from "node:timers/promises";
 
 /** Unread output kept per command; older output is dropped. */
 export const MMR_SHELL_MAX_UNREAD_BYTES = 1024 * 1024;
 /** After a command's shell exits, how long its pipes may stay quiet before it counts as ended. */
 const EXIT_IDLE_MS = 100;
+/** How often a stop checks whether a process group emptied. */
+const GROUP_POLL_MS = 20;
 
 const USE_PROCESS_GROUPS = process.platform !== "win32";
 
@@ -50,6 +57,13 @@ interface Entry extends MmrShellProcess {
   timeoutTimer?: ReturnType<typeof setTimeout>;
 }
 
+/** Output read from a command: the text, starting with the dropped-bytes line when output was dropped. */
+export interface MmrShellOutput {
+  output: string;
+  /** Bytes of older output dropped since the previous read. */
+  droppedBytes: number;
+}
+
 export interface MmrShellSpawnOptions {
   command: string;
   cwd: string;
@@ -70,19 +84,31 @@ export interface MmrShellRegistryOptions {
   now?: () => number;
 }
 
-function signalGroup(entry: Entry, signal: NodeJS.Signals): void {
+/** Signal the process group `pid` leads, or only `child` where there are no groups. */
+function signalGroup(pid: number, child: ChildProcess | undefined, signal: NodeJS.Signals): void {
   if (USE_PROCESS_GROUPS) {
     try {
-      process.kill(-entry.pid, signal);
+      process.kill(-pid, signal);
       return;
     } catch {
       // The group is gone or was never created; try the shell itself.
     }
   }
   try {
-    entry.child.kill(signal);
+    child?.kill(signal);
   } catch {
     // Already ended.
+  }
+}
+
+/** Whether the process group `pid` led still has members. Always false without process groups. */
+function groupAlive(pid: number): boolean {
+  if (!USE_PROCESS_GROUPS) return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -92,6 +118,8 @@ function signalNumber(signal: NodeJS.Signals): number {
 
 export class MmrShellProcessRegistry {
   private readonly entries = new Map<number, Entry>();
+  /** Process groups of the commands started here, kept until found empty. */
+  private readonly groups = new Set<number>();
   private readonly killGraceMs: number;
   private readonly killWaitMs: number;
   private readonly now: () => number;
@@ -148,7 +176,9 @@ export class MmrShellProcessRegistry {
       droppedBytes: 0,
       listeners: new Set(),
     };
+    this.pruneGroups();
     this.entries.set(pid, entry);
+    this.groups.add(pid);
     this.installExitHook();
     this.watch(entry);
     if (options.timeoutMs !== undefined) {
@@ -171,16 +201,15 @@ export class MmrShellProcessRegistry {
    * The output not read yet, marked read. Reading a command that ended
    * removes it from the list.
    */
-  read(pid: number): string {
+  read(pid: number): MmrShellOutput {
     const entry = this.entries.get(pid);
-    if (!entry) return "";
-    const text = this.peek(pid);
+    if (!entry) return { output: "", droppedBytes: 0 };
+    const read = { output: this.peek(pid), droppedBytes: entry.droppedBytes };
     entry.chunks = [];
     entry.unreadBytes = 0;
     entry.droppedBytes = 0;
     if (!entry.running) this.entries.delete(pid);
-    this.releaseExitHookIfIdle();
-    return text;
+    return read;
   }
 
   /**
@@ -214,34 +243,54 @@ export class MmrShellProcessRegistry {
 
   /**
    * Stop a command: SIGTERM to its process group, then SIGKILL after the
-   * grace period if it still runs. Resolves once it ended or the wait for
-   * it ran out. `abort` sends SIGKILL at once.
+   * grace period while the command or anything left in its group still
+   * runs. Resolves once all of it ended or the wait for it ran out. `abort`
+   * sends SIGKILL at once.
    */
   async stop(target: MmrShellProcess, reason: MmrShellStopReason): Promise<MmrShellProcess> {
-    const entry = this.entries.get(target.pid);
-    if (!entry?.running) return target;
-    entry.stoppedBy ??= reason;
-    if (reason === "abort") {
-      signalGroup(entry, "SIGKILL");
-      return this.waitFor(entry, this.killWaitMs);
-    }
-    signalGroup(entry, "SIGTERM");
-    await this.waitFor(entry, this.killGraceMs);
-    if (entry.running) signalGroup(entry, "SIGKILL");
-    return this.waitFor(entry, Math.max(0, this.killWaitMs - this.killGraceMs));
+    await this.stopGroup(target.pid, reason);
+    return target;
   }
 
-  /** Stop every running command and forget them all. */
+  /** Stop every command and every process group started here, and forget them all. */
   async shutdown(): Promise<void> {
-    await Promise.all([...this.entries.values()].filter((entry) => entry.running).map((entry) => this.stop(entry, "shutdown")));
+    await Promise.all([...this.groups].map((pid) => this.stopGroup(pid, "shutdown")));
     this.entries.clear();
-    this.releaseExitHookIfIdle();
+    this.groups.clear();
+    if (this.exitHook) process.removeListener("exit", this.exitHook);
+    this.exitHook = undefined;
   }
 
   /** Forget a command, for a caller that already reported its output. */
   forget(pid: number): void {
     this.entries.delete(pid);
-    this.releaseExitHookIfIdle();
+  }
+
+  private async stopGroup(pid: number, reason: MmrShellStopReason): Promise<void> {
+    const entry = this.entries.get(pid);
+    if (!entry?.running && !(this.groups.has(pid) && groupAlive(pid))) return;
+    if (entry?.running) entry.stoppedBy ??= reason;
+    if (reason === "abort") {
+      signalGroup(pid, entry?.child, "SIGKILL");
+      await this.settle(pid, entry, this.killWaitMs);
+      return;
+    }
+    signalGroup(pid, entry?.child, "SIGTERM");
+    await this.settle(pid, entry, this.killGraceMs);
+    if (entry?.running || groupAlive(pid)) signalGroup(pid, entry?.child, "SIGKILL");
+    await this.settle(pid, entry, Math.max(0, this.killWaitMs - this.killGraceMs));
+  }
+
+  /** Wait up to `ms` for the command to end and its process group to empty. */
+  private async settle(pid: number, entry: Entry | undefined, ms: number): Promise<void> {
+    const deadline = Date.now() + ms;
+    if (entry?.running) await this.waitFor(entry, ms);
+    while (groupAlive(pid) && Date.now() < deadline) await delay(GROUP_POLL_MS);
+  }
+
+  /** Forget the groups that emptied, so a later stop never reaches a reused id. */
+  private pruneGroups(): void {
+    for (const pid of this.groups) if (!this.entries.has(pid) && !groupAlive(pid)) this.groups.delete(pid);
   }
 
   private append(entry: Entry, text: string): void {
@@ -328,14 +377,11 @@ export class MmrShellProcessRegistry {
   private installExitHook(): void {
     if (this.exitHook) return;
     this.exitHook = () => {
-      for (const entry of this.entries.values()) if (entry.running) signalGroup(entry, "SIGKILL");
+      for (const pid of this.groups) {
+        const entry = this.entries.get(pid);
+        if (entry?.running || groupAlive(pid)) signalGroup(pid, entry?.child, "SIGKILL");
+      }
     };
     process.once("exit", this.exitHook);
-  }
-
-  private releaseExitHookIfIdle(): void {
-    if (!this.exitHook || this.runningPids().length > 0) return;
-    process.removeListener("exit", this.exitHook);
-    this.exitHook = undefined;
   }
 }

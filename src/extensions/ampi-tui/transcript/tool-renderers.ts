@@ -261,7 +261,7 @@ function shellOutput(result: ToolResult | undefined): string[] {
       "",
     )
     .replace(/\s+$/, "");
-  return output === "" ? [] : output.split("\n");
+  return output === "" || output === "(no new output)" ? [] : output.split("\n");
 }
 
 function shellHeader(row: Row, activity: Activity, status: ActivityStatus, width: number): string[] {

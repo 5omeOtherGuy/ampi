@@ -206,7 +206,11 @@ describe("ampi-tui activity: tool calls", () => {
     );
     assert.equal(status().kind, "command");
     const kill = (details) => mod.classifyToolCall("shell_command_kill", { pid: 4242 }, { ...options, result: { content: [], details } });
-    assert.equal(titleText(mod, kill({ running: false, exitCode: 137, signal: "SIGKILL", command: "npm run dev" })), "Stopped pid 4242 (SIGKILL)");
+    assert.equal(
+      titleText(mod, kill({ running: false, exitCode: 137, signal: "SIGKILL", stoppedBy: "kill", command: "npm run dev" })),
+      "Stopped pid 4242 (SIGKILL)",
+    );
+    assert.equal(titleText(mod, kill({ running: false, exitCode: 0 })), "Checked pid 4242, finished", "it had already ended");
     assert.equal(kill({ running: false, command: "npm run dev" }).command, "npm run dev");
     assert.equal(titleText(mod, kill({ running: true })), "Stopped pid 4242, still running");
   });

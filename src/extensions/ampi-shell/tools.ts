@@ -13,7 +13,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import type { MmrShellSettings } from "./config.js";
-import type { MmrShellProcess, MmrShellProcessRegistry } from "./processes.js";
+import type { MmrShellOutput, MmrShellProcess, MmrShellProcessRegistry } from "./processes.js";
 
 export const MMR_SHELL_TOOL_NAMES = ["shell_command", "shell_command_status", "shell_command_kill"] as const;
 
@@ -62,7 +62,7 @@ export const SHELL_COMMAND_DESCRIPTION = `Run a shell command that may take long
 
 The command runs in Pi's shell, in a process group of its own, with the same PI_* session variables as bash. If it ends within a short wait (30 seconds unless the user changed it), the result is the tail of its output, plus its exit code when that is not 0. If it is still going, it keeps running in the background and the result gives its pid and what it printed so far; follow it with shell_command_status and end it with shell_command_kill.
 
-Output is cut to the last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB, whichever comes first; when it is cut, the full output is saved to a temp file whose path the result names.`;
+Output is cut to the last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB, whichever comes first; when it is cut, the output is saved to a temp file whose path the result names. Between two reads a command keeps at most its newest 1 MiB of output; the result says how much older output was dropped.`;
 
 export const SHELL_COMMAND_STATUS_DESCRIPTION = `Follow a command that shell_command left running in the background.
 
@@ -139,16 +139,24 @@ function failed(proc: MmrShellProcess): boolean {
   return proc.exitCode !== 0 || proc.signal !== undefined || proc.stoppedBy !== undefined;
 }
 
-/** The tail of `output`; the whole of it goes to a temp file when the tail is shorter. */
-function outputTail(output: string, pid: number): { text: string; details: Record<string, unknown> } {
+/**
+ * The tail of `output`; all of it goes to a temp file when the tail is
+ * shorter. That file holds the whole output unless the registry dropped
+ * older output, which the note then says.
+ */
+function outputTail({ output, droppedBytes }: MmrShellOutput, pid: number): { text: string; details: Record<string, unknown> } {
   const tail = truncateTail(output, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
   if (!tail.truncated) return { text: output, details: {} };
   const fullOutputPath = path.join(tmpdir(), `ampi-shell-${pid}-${randomBytes(4).toString("hex")}.log`);
   writeFileSync(fullOutputPath, output);
   const shown = `last ${tail.outputLines} of ${tail.totalLines} lines (${formatSize(tail.outputBytes)} of ${formatSize(tail.totalBytes)})`;
+  const saved =
+    droppedBytes > 0
+      ? `${droppedBytes} bytes of older output were dropped before that. Kept output: ${fullOutputPath}`
+      : `Full output: ${fullOutputPath}`;
   return {
-    text: `${tail.content}\n\n[Output cut to the ${shown}. Full output: ${fullOutputPath}]`,
-    details: { truncation: tail, fullOutputPath },
+    text: `${tail.content}\n\n[Output cut to the ${shown}. ${saved}]`,
+    details: { truncation: tail, fullOutputPath, ...(droppedBytes > 0 ? { droppedBytes } : {}) },
   };
 }
 

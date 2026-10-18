@@ -65,6 +65,7 @@ async function readUntil(call, pid, expected) {
   return result;
 }
 
+/** Whether `pid` runs; a negative pid asks about its process group. */
 function alive(pid) {
   try {
     process.kill(pid, 0);
@@ -156,17 +157,21 @@ describe("ampi-shell: shell_command", { skip: !unix && "process groups need Linu
   it("kills the process group when the turn is aborted while it waits", async () => {
     const { call } = await load();
     const controller = new AbortController();
+    let pid;
     const running = call(
       "shell_command",
-      { command: `echo ready; read x < "${fifo}"` },
+      { command: `sleep 1000 & echo ready; read x < "${fifo}"` },
       {
         signal: controller.signal,
         onUpdate: (update) => {
+          pid ??= update.details?.pid;
           if (text(update).includes("ready")) controller.abort();
         },
       },
     );
     await assert.rejects(running, /ready\n\nCommand aborted$/);
+    assert.equal(typeof pid, "number");
+    assert.equal(alive(-pid), false, "nothing in the command's process group survives");
   });
 
   it("refuses a start past maxBackground and names the running pids", async () => {
@@ -194,7 +199,10 @@ describe("ampi-shell: shell_command", { skip: !unix && "process groups need Linu
       const marker = `[ampi-shell: ${1_500_000 - 1024 * 1024} bytes of older output were dropped]\n`;
       assert.ok(full.startsWith(marker), full.slice(0, 80));
       assert.equal(full.length, marker.length + 1024 * 1024);
-      assert.ok(text(result).includes(`Full output: ${fullOutputPath}`));
+      assert.ok(
+        text(result).endsWith(`${1_500_000 - 1024 * 1024} bytes of older output were dropped before that. Kept output: ${fullOutputPath}]\n\nCommand exited with code 0`),
+        text(result).slice(-200),
+      );
     } finally {
       unlinkSync(fullOutputPath);
     }
@@ -246,6 +254,21 @@ describe("ampi-shell: shell_command_status and shell_command_kill", { skip: !uni
     await endSession();
     assert.equal(alive(pid), false);
     await assert.rejects(call("shell_command_status", { pid }), /Unknown pid/);
+  });
+
+  it("on session_shutdown, also stops what an ended command left running in its process group", async () => {
+    const { call, shutdown: endSession } = await load();
+    const result = await call("shell_command", { command: "sleep 1000 & echo started" });
+    const { pid } = result.details;
+    assert.equal(text(result), "started\n");
+    assert.equal(result.details.running, false);
+    try {
+      assert.equal(alive(-pid), true, "the backgrounded sleep keeps the group alive");
+      await endSession();
+      assert.equal(alive(-pid), false);
+    } finally {
+      if (alive(-pid)) process.kill(-pid, "SIGKILL");
+    }
   });
 });
 

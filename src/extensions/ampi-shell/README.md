@@ -56,7 +56,7 @@ Settings are sampled once at extension load. Restart Pi after changing them.
 
 - The command runs in Pi's shell (`shellPath` when set), with `shellCommandPrefix` on the line before it, in a new process group.
 - `workdir` is resolved against the session's working directory and must be an existing directory; otherwise the call fails and names the path.
-- The environment is Pi's process environment plus `PI_SESSION_ID`, `PI_SESSION_FILE` (only when the session has a file), `PI_PROVIDER`, `PI_MODEL` and `PI_REASONING_LEVEL`, as for `bash`.
+- The environment is Pi's process environment plus `PI_SESSION_ID`, `PI_SESSION_FILE` (only when the session has a file), `PI_PROVIDER`, `PI_MODEL` and `PI_REASONING_LEVEL`. Those five match what `bash` sets; `PATH` is Pi's own, without the Pi bin directory that `bash` puts in front.
 - `shell_command` waits up to `backgroundAfterMs`, streaming output as it arrives. A command that ended in time returns the tail of its output; a non-zero exit, a timeout or a signal makes the result an error that names it, as `bash` does.
 - A command still running keeps running in the background. The result says so and gives its pid and the output so far; `details` holds `{ pid, running: true, startedAt }`.
 - Aborting the turn while `shell_command` waits kills the command's process group. A command already in the background is not touched by later aborts.
@@ -64,12 +64,12 @@ Settings are sampled once at extension load. Restart Pi after changing them.
 ### Following and stopping
 
 - `shell_command_status` waits up to `timeout_ms` for the command to end, streaming new output while it waits, then returns the output since the last read of that pid (by `shell_command` or `shell_command_status`), whether it still runs, and its exit code once it ended. `timeout_ms: 0` answers at once.
-- `shell_command_kill` sends SIGTERM to the process group, SIGKILL one second later if it still runs, waits up to two seconds for the end, and returns the unread output and final state.
+- `shell_command_kill` sends SIGTERM to the process group, SIGKILL one second later if anything in it still runs, waits up to two seconds for the end, and returns the unread output and final state.
 - `timeout_ms` on `shell_command` is a wall-clock limit for the whole command, enforced in the background too: the process group is stopped the same way, and the next status read reports the timeout.
 
 ### Output and limits
 
-- Results show the last 2000 lines or 50 KB of output. When that cuts output, the full text goes to a temp file (`<tmpdir>/ampi-shell-<pid>-<random>.log`) and the result names it.
+- Results show the last 2000 lines or 50 KB of output. When that cuts output, the output read goes to a temp file (`<tmpdir>/ampi-shell-<pid>-<random>.log`) and the result names it. If older output was dropped (next point), the note says how many bytes and calls the file the kept output.
 - Each command keeps at most 1 MiB of unread output. Older output is dropped, and the next read starts with one line that says how many bytes were dropped.
 - At most `maxBackground` commands run at once; another start fails and lists the running pids.
 - An ended command stays listed until its last output was read once; after that its pid is unknown.
@@ -77,7 +77,7 @@ Settings are sampled once at extension load. Restart Pi after changing them.
 
 ### Session end
 
-On quit, reload, a new, resumed or forked session, every running command's process group gets SIGTERM, then SIGKILL after one second, so nothing it started outlives the session. If Pi exits without that shutdown, a last-resort exit hook sends SIGKILL to the groups still running.
+On quit, reload, a new, resumed or forked session, every process group a command of this session started gets SIGTERM, then SIGKILL after one second, so nothing it started outlives the session. That includes processes a command put in the background itself (`npm run dev &`) after its shell already ended. If Pi exits without that shutdown, a last-resort exit hook sends SIGKILL to the groups that still have processes.
 
 ## Diagnostics and troubleshooting
 

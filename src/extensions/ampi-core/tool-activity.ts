@@ -799,10 +799,11 @@ function grepObject(pattern: string | undefined, where: string | undefined): str
 /**
  * `shell_command_status` and `shell_command_kill`: "Checked pid 4242, still
  * running", "Checked pid 4242, finished (exit code: 1)", "Stopped pid 4242
- * (SIGTERM)". They count as commands in a group's summary.
+ * (SIGTERM)". A kill of a command that had already ended reads as a check.
+ * They count as commands in a group's summary.
  */
 function shellFollowUpActivity(toolName: string, args: Record<string, unknown>, details: Record<string, unknown>): Activity {
-  const kill = toolName === "shell_command_kill";
+  const kill = toolName === "shell_command_kill" && (details.running !== false || details.stoppedBy === "kill");
   const pid = typeof args.pid === "number" ? args.pid : details.pid;
   const ended = details.running === false;
   const exitCode = ended && typeof details.exitCode === "number" ? details.exitCode : undefined;
