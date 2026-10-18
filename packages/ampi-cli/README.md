@@ -96,9 +96,11 @@ The records, in order:
 
 ## Threads
 
-`ampi threads` works with the sessions Pi keeps on disk, together with the metadata ampi's thread index adds to them (archive date, labels). It reads the same session directory as Pi: `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` and the `sessionDir` setting apply.
+`ampi threads` works with the sessions Pi keeps on disk, together with the metadata ampi's thread index adds to them (archive date, labels, color). It reads the same session directory as Pi: `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` and the `sessionDir` setting apply.
 
 ```bash
+id=$(ampi threads new)                         # the id of a new, empty session
+ampi -x --session-id "$id" "summarize the README"
 ampi threads                                   # this directory's sessions, newest first
 ampi threads list --all --archived --limit 10  # every directory, archived sessions included
 ampi threads list --json | jq -r 'select(.messageCount > 10) | .id'
@@ -109,6 +111,7 @@ ampi threads export 019a3c | jq '.entries | length'
 ampi threads rename 019a3c "Parser cleanup"
 ampi threads archive 019a3c                    # unarchive, or archive --unarchive, undoes it
 ampi threads label 019a3c parser release
+ampi threads color 019a3c green                # or #3f2d1d; none removes it
 ampi threads delete 019a3c                     # asks first; --yes skips the question
 ```
 
@@ -121,20 +124,22 @@ ID                                    Title                    Updated  Messages
 
 | Command | What it does |
 | --- | --- |
+| `threads new` (`n`) | Prints the id of a new session in the current directory, a UUID version 7 as Pi makes them, and writes nothing: Pi creates the session file with its first message. Open it with `threads continue <id>`, or send that message with `ampi -x --session-id <id> "message"`. `--json` prints `{"id", "cwd"}`. Sessions stay on this machine, so there is no `--visibility`; passing it is a usage error. |
 | `threads list` (`ls`; also plain `threads`) | The sessions of the current directory, newest activity first: id, title (the session's name, else its first message), time since the last activity and message count. Archived sessions are left out. `--all` lists every directory, `--archived` (or `--include-archived`) adds archived sessions with an `archived` marker, `--limit <n>` stops after n sessions. Titles are cut to the terminal width; redirected output keeps them whole. |
 | `threads list --json` | One JSON object per line: `id`, `title`, `name` (when the session has one), `created` and `updated` (ISO 8601), `messageCount`, `cwd`, `path` (the session file), `parentSessionPath` for a fork, and from the thread index `archived`, `labels`, `color` and `pinned` when set. |
-| `threads continue <id>` (`c`) | Opens the session in the terminal UI through Pi's `--session`, with ampi loaded. Without an id it opens Pi's session picker; `--last` does what `ampi last` does. A session from another directory opens in that directory. |
+| `threads continue <id>` (`c`) | Opens the session in the terminal UI through Pi's `--session`, with ampi loaded. Without an id it opens Pi's session picker; `--last` does what `ampi last` does. A session from another directory opens in that directory. A complete id that no session has, such as one `threads new` printed, starts a new session under that id in the current directory through Pi's `--session-id`, with a note on stderr. |
 | `last` | Opens the most recent session of the current directory that is not archived. Pi's `-c` also counts archived sessions, such as the ones execute mode archives. |
 | `threads markdown <id>` (`md`) | Prints the session as Markdown: front matter (`title`, `sessionId`, `created`, `mode`), then a `## User` or `## Assistant` section per turn, with tool calls and results as fenced blocks. The same layout as ampi-threads' Markdown export. |
 | `threads export <id>` | Prints the session as one JSON object: the fields of `list --json` plus `entries`, every entry of the session file as Pi wrote it (Pi's session format, described in its `docs/session-format.md`), header first. |
 | `threads rename <id> <title>` (`r`) | Sets Pi's session name, as `/name` does, and records the title as typed by you. |
 | `threads archive <id>`, `threads unarchive <id>` | Archives the session in the thread index, or takes it out of the archive. |
 | `threads label <id> <label...>` | Adds labels to the ones the session has: 1 to 32 lowercase letters, digits or hyphens each, at most 20 per session. |
+| `threads color <id> <color>` | Sets the session's color in the thread index: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`, `gray` or an RGB hex color such as `#3f2d1d`, stored in lowercase. `none` removes it. Any other value is a usage error. |
 | `threads delete <id>` | Asks `[y/N]` on stderr and reads the answer from stdin, then deletes the session file and its thread index record. `-y`/`--yes` skips the question. Run from the agent's own shell, it refuses to delete the session it runs in. |
 
 - **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
 - **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error. `ampi threads --help` lists the commands and options.
-- **The thread index.** Archive dates, labels and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive` and `label` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
+- **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
 ## Keymap and settings
 
@@ -183,7 +188,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, and `threads color`).
 
 ## Development
 

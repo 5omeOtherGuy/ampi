@@ -223,7 +223,7 @@ Commands:
 
   help                          Print this help and exit
   version                       Print the ampi-cli, ampi and Pi versions and exit
-  threads [command]             List, open, print, rename, archive, label or delete sessions;
+  threads [command]             Create, list, open, print, change or delete sessions;
                                 ampi threads --help lists the commands
   last                          Open the most recent session of this directory that is not archived
   config keymap                 Print every command id with its keys as JSONC
