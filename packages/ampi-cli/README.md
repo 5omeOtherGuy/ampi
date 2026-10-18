@@ -111,10 +111,10 @@ printf '%s\n' '{"type":"user","message":{"role":"user","content":"list files"}}'
 
 - **Content.** `message.content` is a string or a list of blocks: `{"type": "text", "text"}`, and `{"type": "image", "source": {"type": "base64", "media_type", "data"}}` with an optional `source_path`. `media_type` is `image/png`, `image/jpeg`, `image/gif` or `image/webp`, and it must match the image data. A line carries at most 10 images. Text blocks are joined with newlines. Other fields on the line are ignored; blank lines are skipped.
 - **When messages run.** A message that arrives while no run is in progress starts one. A message that arrives while a run is in progress joins it: with `"steer": true` the agent reads it before its next request to the model, and without it the agent takes it up once it has finished its current work.
-- **Records.** One `init` record first, then the records of each run as with `--stream-json`, with a `result` record each time a run has finished; its `num_turns`, `duration_ms`, `usage` and `result` cover that run only. Messages that joined a run share its result. Images are not echoed in `user` records.
-- **The end.** ampi exits once stdin has ended and the last run has finished. `--title`, `-l`, `--timings` and the archive after execute mode work as with one message.
+- **Records.** One `init` record first, then the records of each run as with `--stream-json`, with a `result` record each time a run has finished; its `num_turns`, `duration_ms`, `usage` and `result` cover that run only, except that the first run's `duration_ms` also counts Pi's startup, as with `--stream-json`. Messages that joined a run share its result. A run the agent starts on its own, for example when a background task finishes, gets its own `result` record. Images are not echoed in `user` records.
+- **The end.** ampi exits once stdin has ended and the last run has finished, including a run the agent started on its own. `--title`, `-l`, `--timings` and the archive after execute mode work as with one message.
 - **Invalid lines.** A line that is not such a message stops reading: the run in progress finishes, then an `error_during_execution` result names the line and the problem (for example `stdin line 2: not valid JSON`).
-- **Exit status.** `0` when every run succeeded; `1` when a run failed or a line was invalid; `2` for a usage error, which prints no records: `--stream-json-input` without `--stream-json` or `--stream-json-thinking`, together with a message argument, with stdin as a terminal, or stdin ending before the first message.
+- **Exit status.** `0` when every run succeeded; `1` when a run failed, a line was invalid or Pi stopped before it had handled every message; `2` for a usage error, which prints no records: `--stream-json-input` without `--stream-json` or `--stream-json-thinking`, together with a message argument, with stdin as a terminal, or stdin ending before the first message.
 - **Extension dialogs.** Nobody can answer a dialog during such a run, so ampi cancels every dialog an extension opens: a confirmation counts as "no".
 
 ## Threads
@@ -232,7 +232,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, and `threads color`, and `threads search` with filters, JSON and its usage errors).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors).
 
 ## Development
 

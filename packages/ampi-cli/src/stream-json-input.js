@@ -121,6 +121,7 @@ export function parseStreamJsonInputLine(line, lineNumber) {
  * @property {() => void} end Stdin reached its end.
  * @property {(record: any) => void} receive One record of Pi's RPC output.
  * @property {0 | 1} exitCode 1 once a run failed or a line was invalid.
+ * @property {boolean} ended The driver ended Pi's input: every message was handled.
  */
 
 /**
@@ -135,7 +136,9 @@ export function parseStreamJsonInputLine(line, lineNumber) {
  * are cancelled at once, because the run has no one to answer them. An invalid
  * line stops reading: once the current run settles, an error result names the
  * line. Pi's input ends when stdin has ended (or a line was invalid), every
- * message was sent and no run is in progress.
+ * message was sent and no run is in progress. Pi also starts runs without a
+ * prompt, for example when a background task finishes; its events show them,
+ * so they get a result too and Pi's input waits for them.
  *
  * @param {import("./stream-json.js").StreamJsonEncoder} encoder
  * @param {StreamJsonInputHost} host
@@ -148,8 +151,8 @@ export function createStreamJsonInputDriver(encoder, host) {
   let prompts = 0;
   /** A prompt was sent and its response has not arrived. */
   let awaitingResponse = false;
-  /** Runs Pi started for a prompt and has not settled. */
-  let activeRuns = 0;
+  /** A run is in progress: from its prompt's response or its agent_start until its agent_settled. */
+  let running = false;
   /** Stdin ended, or an invalid line stopped reading it. */
   let inputDone = false;
   /** @type {string | undefined} */
@@ -180,7 +183,7 @@ export function createStreamJsonInputDriver(encoder, host) {
       });
       return;
     }
-    if (!inputDone || activeRuns > 0) return;
+    if (!inputDone || running) return;
     if (invalidLine !== undefined) finishRun(invalidLine);
     ended = true;
     host.end();
@@ -214,10 +217,10 @@ export function createStreamJsonInputDriver(encoder, host) {
           if (record.success !== true) {
             const error = typeof record.error === "string" ? record.error : "Pi did not accept the message.";
             // A rejected prompt starts no run; a rejected steering message fails the run it was meant for.
-            if (activeRuns > 0) runFailure ??= error;
+            if (running) runFailure ??= error;
             else finishRun(error);
           } else if (record.data?.disposition === "started") {
-            activeRuns++;
+            running = true;
           }
           advance();
           return;
@@ -228,9 +231,10 @@ export function createStreamJsonInputDriver(encoder, host) {
           host.warn(`ampi: extension error (${record.extensionPath}, ${record.event}): ${record.error}`);
           return;
       }
+      if (record?.type === "agent_start") running = true;
       host.write(encoder.push(record));
       if (record?.type === "agent_settled") {
-        activeRuns = Math.max(0, activeRuns - 1);
+        running = false;
         finishRun(runFailure);
         runFailure = undefined;
         advance();
@@ -239,6 +243,10 @@ export function createStreamJsonInputDriver(encoder, host) {
 
     get exitCode() {
       return failed ? 1 : 0;
+    },
+
+    get ended() {
+      return ended;
     },
   };
 }

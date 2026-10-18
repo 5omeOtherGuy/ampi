@@ -169,6 +169,27 @@ describe("ampi stream JSON input: driving Pi's RPC mode", () => {
     assertSchema(records);
   });
 
+  it("waits for a run Pi starts without a prompt before it ends Pi's input", () => {
+    const { driver, records, ended } = drive();
+    driver.line(line(user("first")));
+    driver.receive({ id: "ampi-input-1", type: "response", command: "prompt", success: true, data: { disposition: "started" } });
+    for (const event of answer("one")) driver.receive(event);
+    const [start, turnStart, ...rest] = answer("task done");
+    driver.receive(start);
+    driver.receive(turnStart);
+    driver.end();
+    assert.equal(ended(), 0, "the run Pi started is still in progress");
+    assert.equal(driver.ended, false);
+    for (const event of rest) driver.receive(event);
+    assert.equal(ended(), 1);
+    assert.equal(driver.ended, true);
+    assert.deepEqual(
+      records.filter((record) => record.type === "result").map((record) => record.result),
+      ["one", "task done"],
+    );
+    assert.equal(driver.exitCode, 0);
+  });
+
   it("cancels extension dialogs at once and passes extension errors to stderr", () => {
     const { driver, sent, warnings } = drive();
     for (const method of ["select", "confirm", "input", "editor"]) driver.receive({ type: "extension_ui_request", id: `ui-${method}`, method, title: "Allow?" });
@@ -212,9 +233,15 @@ describe("ampi stream JSON input: driving Pi's RPC mode", () => {
   });
 });
 
-describe("ampi stream JSON input: the command", { concurrency: true }, () => {
+// The timeout fails runs that hang, for example when Pi stops reading its input from
+// process.stdin, well before CI gives up on the job; the commands still running are killed.
+describe("ampi stream JSON input: the command", { concurrency: true, timeout: 300_000 }, () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-stream-json-input-"));
-  after(() => rmSync(dir, { recursive: true, force: true }));
+  const children = new Set();
+  after(() => {
+    for (const child of children) child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  });
   let runs = 0;
 
   /**
@@ -228,6 +255,8 @@ describe("ampi stream JSON input: the command", { concurrency: true }, () => {
     const env = { PATH: process.env.PATH, HOME: path.join(root, "home"), PI_CODING_AGENT_DIR: path.join(root, "agent"), PI_OFFLINE: "1" };
     const argv = [bin, "-e", fauxModel, "--model", "faux/faux-1", "-x", "--stream-json", "--stream-json-input", ...args];
     const child = spawn(process.execPath, argv, { cwd: project, env });
+    children.add(child);
+    child.on("exit", () => children.delete(child));
     let stdout = "";
     let stderr = "";
     let closed = false;

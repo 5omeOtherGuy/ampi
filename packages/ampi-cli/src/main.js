@@ -235,7 +235,13 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
   driver = current;
   for (const line of early) current.line(line);
   if (stdinEnded) current.end();
-  exitWithCodeAfterPiRpc(() => current.exitCode);
+  // Pi can also stop on its own before it reads its input, for example after a question it asked on stdin.
+  const exitCode = () => {
+    if (current.ended) return current.exitCode;
+    process.stderr.write("ampi: Pi stopped before every message from stdin was handled.\n");
+    return 1;
+  };
+  exitWithCodeAfterPiRpc(exitCode);
 
   // RPC output has no session header: the session's id and directory come from the session itself.
   const factory = (/** @type {any} */ api) => {
@@ -249,7 +255,7 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
   } finally {
     output.restore();
   }
-  return current.exitCode;
+  return exitCode();
 }
 
 /**
