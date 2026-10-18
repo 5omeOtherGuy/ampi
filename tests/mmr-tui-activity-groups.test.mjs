@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
+import { ACTIVITY_RUN_CASES } from "./helpers/activity-run-cases.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -233,6 +234,28 @@ describe("ampi-tui activity groups: status", () => {
     store.messageEnd(assistant([bash("b1", "cat src/a.ts")]));
     assert.equal(summaryOf(store, "b1").summary, "Running 1 command");
   });
+});
+
+describe("ampi-tui activity groups: the cases the web GUI shares", () => {
+  for (const { name, messages, runs, labels, images } of ACTIVITY_RUN_CASES) {
+    it(name, async () => {
+      const { ActivityGroupStore } = await load();
+      const original = getCapabilities();
+      try {
+        setCapabilities({ ...original, images: images ? "kitty" : null });
+        const store = new ActivityGroupStore();
+        store.rebuild(messages);
+        const ids = messages.flatMap((message) => (message.role === "assistant" ? message.content.filter((b) => b.type === "toolCall").map((b) => b.id) : []));
+        assert.deepEqual(groupIds(store, ids), runs);
+        assert.deepEqual(
+          runs.map((run) => summaryOf(store, run[0]).summary),
+          labels,
+        );
+      } finally {
+        setCapabilities(original);
+      }
+    });
+  }
 });
 
 describe("ampi-tui activity groups: sessions", () => {

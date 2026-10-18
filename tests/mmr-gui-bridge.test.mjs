@@ -286,10 +286,10 @@ describe("ampi-gui bridge", () => {
 describe("ampi-gui view model", () => {
   it("keeps the assistant's content in order and counts images in user messages", async () => {
     const { buildMmrGuiTranscript } = await loadViewModel();
-    const items = buildMmrGuiTranscript([
+    const { items } = buildMmrGuiTranscript([
       entry("e1", { role: "user", content: [{ type: "text", text: "see" }, { type: "image", data: "", mimeType: "image/png" }], timestamp: 1 }),
       entry("e2", assistant([{ type: "thinking", thinking: "hmm" }, { type: "text", text: "ok" }], 2)),
-      { type: "compaction", id: "e3" },
+      { type: "compaction", id: "e3", summary: "earlier", timestamp: "2026-01-01T00:00:00Z" },
     ]);
     assert.deepEqual(items, [
       { type: "user", id: "u1", timestamp: 1, text: "see", images: 1 },

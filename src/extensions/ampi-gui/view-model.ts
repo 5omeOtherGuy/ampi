@@ -1,10 +1,14 @@
+import { sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
+import { activityRunRecord, groupActivityRuns, standsAlone, toolCallBlocks } from "../ampi-core/activity-runs.js";
 import {
+  type Activity,
   type ActivityStatus,
   activityTitle,
   type ClassifyOptions,
   classifyToolCall,
   resultStatus,
   resultText,
+  summarizeActivities,
   type TitlePart,
 } from "../ampi-core/tool-activity.js";
 
@@ -14,12 +18,16 @@ import {
  * calls), and each tool call labelled with the same activity words as the
  * terminal's tool rows. Text stays Markdown source; the client renders it.
  *
+ * Consecutive tool calls fold into work groups by the rules the terminal's
+ * activity groups use (ampi-core's `activity-runs.ts`), each with the same
+ * summary as the terminal's group row ("Ran 3 commands, read 4 files").
+ *
  * Items are keyed by role and message timestamp, so an item built from a
  * live event and the same message read back from the session file get the
  * same id.
  */
 
-export type MmrGuiToolResult = NonNullable<ClassifyOptions["result"]> & { isError?: boolean };
+export type MmrGuiToolResult = NonNullable<ClassifyOptions["result"]> & { isError?: boolean; timestamp?: number };
 
 export interface MmrGuiTextPart {
   type: "text";
@@ -42,6 +50,27 @@ export interface MmrGuiToolPart {
   /** Text output of a finished call, cut to {@link MMR_GUI_OUTPUT_LIMIT} characters. */
   output?: string;
   outputTruncated?: boolean;
+  /** The full shell command of a `bash` call. */
+  command?: string;
+  /** The change of a file edit that did not fail: lines starting with `+`, `-` or a space. */
+  diff?: string;
+  /** The arguments of a tool without a row of its own words, as indented JSON. */
+  args?: string;
+}
+
+/** A run of consecutive tool calls that the client folds into one line. */
+export interface MmrGuiGroup {
+  /** The id of the group's first call. */
+  id: string;
+  callIds: string[];
+  /** "Ran 3 commands, read 4 files, edited 2 files (+265 -4)", as the terminal's group row says it. */
+  label: string;
+  /** Running while a call runs, cancelled when one was cancelled, otherwise done, also when a call failed. */
+  status: "running" | "done" | "cancelled";
+  /** When the message holding the first call started. */
+  startedAt?: number;
+  /** When the last call ended; absent while a call runs. */
+  endedAt?: number;
 }
 
 export type MmrGuiPart = MmrGuiTextPart | MmrGuiThinkingPart | MmrGuiToolPart;
@@ -99,13 +128,35 @@ export function mmrGuiItemId(message: unknown): string | undefined {
   return `${role === "user" ? "u" : "a"}${timestamp}`;
 }
 
+/** A call's status: from its result, else running while the run may still go on, else cancelled. */
+function callStatus(result: MmrGuiToolResult | undefined, pending: boolean): ActivityStatus {
+  return result ? resultStatus(result.isError === true, result) : pending ? "running" : "cancelled";
+}
+
+function cut(text: string): string {
+  return text.length > MMR_GUI_OUTPUT_LIMIT ? `${text.slice(0, MMR_GUI_OUTPUT_LIMIT)}\n…` : text;
+}
+
+/** The change a file edit made, as `+`/`-`/context lines: Pi's edit diff, a new file's content, a patch's text. */
+function changeText(activity: Activity, args: Record<string, unknown>, result: MmrGuiToolResult | undefined): string | undefined {
+  const details = record(result?.details);
+  if (activity.toolName === "edit" && typeof details.diff === "string") return details.diff;
+  if (activity.toolName === "write" && typeof args.content === "string") {
+    return args.content.replace(/\n$/, "").split("\n").map((line) => `+${line}`).join("\n");
+  }
+  if (activity.toolName === "apply_patch" && typeof args.patchText === "string") return args.patchText;
+  return undefined;
+}
+
+const OWN_WORDS = new Set(["read", "search", "list", "command", "edit", "create", "web-read"]);
+
 /** A tool part for a call, running until a result is given. */
 export function buildMmrGuiToolPart(
   call: { id: string; name: string; arguments?: unknown },
   result: MmrGuiToolResult | undefined,
   options: MmrGuiViewOptions & { pending?: boolean } = {},
 ): MmrGuiToolPart {
-  const status: ActivityStatus = result ? resultStatus(result.isError === true, result) : options.pending ? "running" : "cancelled";
+  const status = callStatus(result, options.pending === true);
   const activity = classifyToolCall(call.name, call.arguments ?? {}, { cwd: options.cwd, home: options.home, result });
   const part: MmrGuiToolPart = { type: "tool", toolCallId: call.id, name: call.name, status, title: activityTitle(activity, status) };
   if (result) {
@@ -117,7 +168,56 @@ export function buildMmrGuiToolPart(
       part.output = output;
     }
   }
+  const args = record(call.arguments);
+  if (call.name === "bash" && activity.command) part.command = cut(activity.command);
+  // A failed or cancelled edit changed nothing; its row shows the error instead.
+  const change = status === "error" || status === "cancelled" ? undefined : changeText(activity, args, result);
+  if (change) part.diff = cut(change);
+  if (!OWN_WORDS.has(activity.kind) && Object.keys(args).length > 0) part.args = cut(JSON.stringify(args, null, 2));
   return part;
+}
+
+/**
+ * The work groups among `messages`, in transcript order: runs of
+ * consecutive calls as the terminal folds them, each labelled by
+ * `summarizeActivities`. Calls that stand alone (subagents, results with
+ * images) belong to no group and keep their own row. `results` maps call
+ * ids to their results; `pending` says whether a call without one may still
+ * run.
+ */
+export function buildMmrGuiGroups(
+  messages: Iterable<unknown>,
+  results: ReadonlyMap<string, MmrGuiToolResult>,
+  options: MmrGuiViewOptions & { pending?: (toolCallId: string) => boolean } = {},
+): MmrGuiGroup[] {
+  const calls = new Map<string, { name: string; args: unknown; startedAt?: number }>();
+  const records = [];
+  for (const message of messages) {
+    const msg = record(message);
+    const run = activityRunRecord(msg);
+    if (!run) continue;
+    records.push(run);
+    const startedAt = typeof msg.timestamp === "number" ? msg.timestamp : undefined;
+    for (const block of msg.role === "assistant" ? toolCallBlocks(msg) : []) calls.set(block.id, { name: block.name, args: block.args, startedAt });
+  }
+  // A browser can show a result's image, so such a call keeps its own row.
+  const alone = (id: string) => standsAlone(calls.get(id)?.name ?? "", results.get(id), true);
+  return groupActivityRuns(records, alone).map((callIds) => {
+    const entries = callIds.map((id) => {
+      const call = calls.get(id) ?? { name: "", args: {} };
+      const result = results.get(id);
+      const activity = classifyToolCall(call.name, call.args ?? {}, { cwd: options.cwd, home: options.home, result });
+      return { activity, status: callStatus(result, options.pending?.(id) === true) };
+    });
+    const statuses = new Set(entries.map((entry) => entry.status));
+    const status = statuses.has("running") ? "running" : statuses.has("cancelled") ? "cancelled" : "done";
+    const group: MmrGuiGroup = { id: callIds[0] as string, callIds, label: summarizeActivities(entries), status };
+    const startedAt = calls.get(group.id)?.startedAt;
+    if (startedAt !== undefined) group.startedAt = startedAt;
+    const ends = callIds.map((id) => results.get(id)?.timestamp).filter((time): time is number => typeof time === "number");
+    if (status !== "running" && ends.length > 0) group.endedAt = Math.max(...ends);
+    return group;
+  });
 }
 
 function userText(content: unknown): { text: string; images: number } {
@@ -178,26 +278,32 @@ export function collectMmrGuiToolResults(messages: Iterable<unknown>): Map<strin
       content: Array.isArray(msg.content) ? msg.content : [],
       details: msg.details,
       isError: msg.isError === true,
+      ...(typeof msg.timestamp === "number" ? { timestamp: msg.timestamp } : {}),
     });
   }
   return results;
 }
 
-/** The messages on a session branch, in order: the `message` entries' payloads. */
+/**
+ * The messages on a session branch, in order, as Pi's context holds them:
+ * the `message` entries' payloads, and the summaries and custom messages
+ * other entries stand for, which end a run of tool calls when shown.
+ */
 export function mmrGuiBranchMessages(entries: readonly unknown[]): unknown[] {
   const messages: unknown[] = [];
   for (const entry of entries) {
     const value = record(entry);
-    if (value.type === "message" && value.message) messages.push(value.message);
+    if (value.type === "message" && !value.message) continue;
+    messages.push(...sessionEntryToContextMessages(value as unknown as Parameters<typeof sessionEntryToContextMessages>[0]));
   }
   return messages;
 }
 
-/** The items for a session branch. */
+/** The items and work groups for a session branch. */
 export function buildMmrGuiTranscript(
   entries: readonly unknown[],
   options: MmrGuiViewOptions & { pending?: (toolCallId: string) => boolean } = {},
-): MmrGuiItem[] {
+): { items: MmrGuiItem[]; groups: MmrGuiGroup[] } {
   const messages = mmrGuiBranchMessages(entries);
   const results = collectMmrGuiToolResults(messages);
   const items: MmrGuiItem[] = [];
@@ -205,7 +311,7 @@ export function buildMmrGuiTranscript(
     const item = buildMmrGuiItem(message, results, options);
     if (item) items.push(item);
   }
-  return items;
+  return { items, groups: buildMmrGuiGroups(messages, results, options) };
 }
 
 /** A title for the session: its name, else the first line of the first prompt. */

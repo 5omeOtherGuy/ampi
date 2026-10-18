@@ -9,9 +9,11 @@ import {
   type MmrThreadStatusReducer,
 } from "../ampi-core/thread-status.js";
 import {
+  buildMmrGuiGroups,
   buildMmrGuiItem,
   buildMmrGuiToolPart,
   collectMmrGuiToolResults,
+  type MmrGuiGroup,
   type MmrGuiItem,
   type MmrGuiToolResult,
   mmrGuiBranchMessages,
@@ -34,6 +36,7 @@ import {
  * | `message_end` (assistant)                  | `item`                                |
  * | `tool_execution_start` / `_end`            | `tool`: the call's row                |
  * | `turn_end`                                 | `turn_end`                            |
+ * | any of the above that changes a work group | `groups`: the changed groups, the removed ids |
  * | any change of the thread status            | `status` (phase, label, queue count)  |
  * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
  * | a change of the prompt queue (ampi-core's seam) | `queue`: the texts, or `null` |
@@ -47,6 +50,11 @@ import {
  * with each delta once. The finished message from `message_end` replaces the
  * copy; when Pi ends a message early (an interrupt) it has a new id, and its
  * `item` event names the streamed one in `replaces`.
+ *
+ * Work groups are computed over the same messages as the snapshot, after
+ * every event that can add a call, end one or split a run, and sent before
+ * the `item` or `tool` event that caused the change, so the client draws a
+ * new call inside its group at once.
  *
  * It keeps the last {@link MMR_GUI_REPLAY_LIMIT} events, so a client that
  * reconnects with the id of the last event it saw gets what it missed. A
@@ -67,7 +75,7 @@ export const MMR_GUI_REPLAY_LIMIT = 1000;
 
 export interface MmrGuiEvent {
   id: number;
-  event: "status" | "item" | "delta" | "tool" | "turn_end" | "session" | "queue";
+  event: "status" | "item" | "delta" | "tool" | "groups" | "turn_end" | "session" | "queue";
   data: unknown;
 }
 
@@ -93,6 +101,8 @@ export interface MmrGuiSnapshot {
   session: MmrGuiSessionInfo;
   status: MmrGuiStatusView;
   items: MmrGuiItem[];
+  /** The work groups of `items`, in transcript order. */
+  groups: MmrGuiGroup[];
   /** The queued messages, or `null` when no extension can read Pi's queue. */
   queue: MmrQueuedPrompts | null;
   /** Id of the last event the snapshot includes. */
@@ -164,6 +174,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   const liveResults = new Map<string, MmrGuiToolResult>();
   /** Streaming assistant messages, by item id: the blocks started so far and their text from the deltas. */
   const streams = new Map<string, { started: number; text: Map<number, string> }>();
+  /** The work groups clients know, as JSON by group id. */
+  let sentGroups = new Map<string, string>();
   let titled = false;
 
   function emit(event: MmrGuiEvent["event"], data: unknown): void {
@@ -218,6 +230,33 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     return buildMmrGuiItem(streamed(message), liveResults, viewOptions());
   }
 
+  /** The saved branch, then the messages of the current run Pi has not written yet; the results of both. */
+  function merged(): { messages: unknown[]; results: Map<string, MmrGuiToolResult> } {
+    const messages = ctx ? mmrGuiBranchMessages(ctx.sessionManager.getBranch()) : [];
+    const saved = new Set(messages.map(mmrGuiItemId));
+    for (const [id, message] of live) if (!saved.has(id)) messages.push(streamed(message));
+    const results = collectMmrGuiToolResults(messages);
+    for (const [id, result] of liveResults) results.set(id, result);
+    return { messages, results };
+  }
+
+  function currentGroups(): MmrGuiGroup[] {
+    const { messages, results } = merged();
+    const busy = reducer.status.busy;
+    return buildMmrGuiGroups(messages, results, { cwd: ctx?.cwd, home, pending: (id) => busy && !results.has(id) });
+  }
+
+  /** Send the work groups that changed since clients last heard of them. */
+  function syncGroups(): void {
+    if (!ctx) return;
+    const groups = currentGroups();
+    const next = new Map(groups.map((group) => [group.id, JSON.stringify(group)]));
+    const changed = groups.filter((group) => sentGroups.get(group.id) !== next.get(group.id));
+    const removed = [...sentGroups.keys()].filter((id) => !next.has(id));
+    sentGroups = next;
+    if (changed.length > 0 || removed.length > 0) emit("groups", { groups: changed, removed });
+  }
+
   function sessionInfo(): MmrGuiSessionInfo {
     if (!ctx) return { id: "", title: "New thread", cwd: "", mode: null, model: null };
     const manager = ctx.sessionManager;
@@ -251,6 +290,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     if (!found || !itemId) return;
     const { pending } = viewOptions();
     const part = buildMmrGuiToolPart(found.call, liveResults.get(toolCallId), { cwd: ctx?.cwd, home, pending: pending(toolCallId) });
+    syncGroups();
     emit("tool", { itemId, part });
   }
 
@@ -259,6 +299,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     const id = mmrGuiItemId(message);
     if (!id) return;
     live.set(id, message);
+    syncGroups();
     const item = buildItem(message);
     if (item) emit("item", replaces ? { ...item, replaces } : item);
   }
@@ -319,9 +360,15 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       if (type === "text_start" || type === "thinking_start") stream.text.set(index, "");
     }
     if ((type === "text_delta" || type === "thinking_delta") && typeof update?.delta === "string") {
-      if (stream && typeof index === "number") stream.text.set(index, (stream.text.get(index) ?? "") + update.delta);
+      if (stream && typeof index === "number") {
+        const before = stream.text.get(index) ?? "";
+        stream.text.set(index, before + update.delta);
+        // The first visible text of a message ends the run of calls before it.
+        if (type === "text_delta" && before.trim() === "" && update.delta.trim() !== "") syncGroups();
+      }
       emit("delta", { itemId: id, part: index, text: update.delta });
     } else if (type.endsWith("_start") || type === "start" || type === "toolcall_end") {
+      syncGroups();
       const item = buildItem(event.message);
       if (item) emit("item", item);
     }
@@ -355,6 +402,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       content: Array.isArray(result.content) ? result.content : [],
       details: result.details,
       isError: event.isError,
+      timestamp: now(),
     });
     apply({ type: "toolEnd", toolCallId: event.toolCallId, outcome: event.isError ? "error" : "success" });
     syncQueue();
@@ -385,6 +433,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     live.clear();
     liveResults.clear();
     streams.clear();
+    // Calls that never got a result now count as cancelled.
+    syncGroups();
   });
   pi.on("input", (event, context) => {
     if (!active(context)) return;
@@ -420,6 +470,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       live.clear();
       liveResults.clear();
       streams.clear();
+      // Clients start from a snapshot, which holds the groups so far.
+      sentGroups = new Map(currentGroups().map((group) => [group.id, JSON.stringify(group)]));
       releaseMode ??= onMmrStateChanged(pi, () => {
         if (ctx) emit("session", sessionInfo());
       });
@@ -448,28 +500,21 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     session: sessionInfo,
     status: () => statusView(reducer.status),
     snapshot() {
-      const options = viewOptions();
+      // Clients that follow the events get any change first, so the snapshot and the events agree.
+      syncGroups();
+      const { messages, results } = merged();
+      const pending = (id: string) => reducer.status.busy && !results.has(id);
       const items: MmrGuiItem[] = [];
       const seen = new Set<string>();
-      if (ctx) {
-        const messages = mmrGuiBranchMessages(ctx.sessionManager.getBranch());
-        const results = collectMmrGuiToolResults(messages);
-        for (const [id, result] of liveResults) results.set(id, result);
-        const pending = (id: string) => reducer.status.busy && !results.has(id);
-        for (const message of messages) {
-          const item = buildMmrGuiItem(message, results, { ...options, pending });
-          if (item && !seen.has(item.id)) {
-            seen.add(item.id);
-            items.push(item);
-          }
+      for (const message of messages) {
+        const item = buildMmrGuiItem(message, results, { cwd: ctx?.cwd, home, pending });
+        if (item && !seen.has(item.id)) {
+          seen.add(item.id);
+          items.push(item);
         }
       }
-      for (const [id, message] of live) {
-        if (seen.has(id)) continue;
-        const item = buildItem(message);
-        if (item) items.push(item);
-      }
-      return { session: sessionInfo(), status: statusView(reducer.status), items, queue: queueView(), lastEventId: nextId - 1 };
+      const groups = buildMmrGuiGroups(messages, results, { cwd: ctx?.cwd, home, pending });
+      return { session: sessionInfo(), status: statusView(reducer.status), items, groups, queue: queueView(), lastEventId: nextId - 1 };
     },
     eventsAfter(id) {
       const last = nextId - 1;
