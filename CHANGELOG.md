@@ -4,6 +4,34 @@ All notable changes to `ampi` will be documented in this file.
 
 From 0.4.0 on, release-please writes this file from the Conventional Commit titles of merged pull requests; earlier sections were written by hand.
 
+## [0.4.0](https://github.com/5omeOtherGuy/ampi/compare/v0.3.1...v0.4.0) (2026-10-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ampi-core:** default shortcuts changed. Alt+R becomes Alt+D (Alt+R no longer does anything); Ctrl+Space becomes Ctrl+S (Ctrl+Space keeps working as a deprecated alias for one more minor release); Alt+T is replaced by /tasks show and /tasks hide, or bind a key with --task-widget-toggle-key <key>. The mode picker stays on Ctrl+Shift+S / Alt+M. Pi lists the Ctrl+S and Alt+D overrides under extension issues at startup; Alt+Delete still deletes the next word.
+* ampi now requires Pi 1.3 or later. Pi 0.x users should stay on ampi 0.3.x.
+
+### Added
+
+* accept Pi 1.x's max thinking level in model preferences, custom subagent definitions and the /ampi-config pickers; the session-fallback picker offers max where the model maps it and labels xhigh as extra-high reasoning ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+* **ampi-core:** add a command registry and keymap model for the coming command palette, key chords and help screen; commands will be rebindable under ampi.keymap in Pi settings (nothing is bound or shown yet) ([#259](https://github.com/5omeOtherGuy/ampi/issues/259)) ([ca343a6](https://github.com/5omeOtherGuy/ampi/commit/ca343a6802579a1083de99ed2233f4c3704ddeec))
+* **ampi-core:** add an Amp-compatible turn status model (createMmrThreadStatusReducer, alias createAmpiThreadStatusReducer) that reports what the upcoming status line will show: Thinking, Streaming, Running Tools, Auto-Compacting, Waiting for Approval, Cancelling or Error, with token counts, the running tool and the steer, dequeue and force-quit hints (nothing displays it yet) ([#260](https://github.com/5omeOtherGuy/ampi/issues/260)) ([a4a9686](https://github.com/5omeOtherGuy/ampi/commit/a4a968605dea496c2bd21b18ba7284a23efe7045))
+* **ampi-core:** default shortcuts move to Amp-compatible keys: Ctrl+S cycles the mode, Alt+D toggles the active mode's thinking level, and the pinned task-list widget has no toggle key by default ([#265](https://github.com/5omeOtherGuy/ampi/issues/265)) ([f91cd4b](https://github.com/5omeOtherGuy/ampi/commit/f91cd4b1977750d07eea5386c585e1fd0ece71c0))
+* **ampi-custom-subagents:** a custom subagent whose frontmatter sets background: true can run in the background through start_task, with the same polling, waiting, cancellation and completion delivery as the built-in workers; subagents stay foreground-only by default ([#240](https://github.com/5omeOtherGuy/ampi/issues/240)) ([75ac214](https://github.com/5omeOtherGuy/ampi/commit/75ac214b043264a49bd81ca82d15c74e0648785a))
+* **ampi-tui:** add a new extension, on by default, that owns ampi's look in interactive terminal sessions; it starts by removing the footer below the editor (set ampiTui.enabled: false or AMPI_TUI_ENABLE=false to bring it back) ([#261](https://github.com/5omeOtherGuy/ampi/issues/261)) ([0e0dc33](https://github.com/5omeOtherGuy/ampi/commit/0e0dc33f0b721289e813825870b7d05c5606aea6))
+* require Pi 1.3 or later (Pi 1.x); the Pi peer ranges move from ^0.80.3 to ^1.3.0 and the typebox pin to 1.3.27 to match Pi ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+
+
+### Fixed
+
+* **ampi-core:** locked-mode prompts splice Pi 1.x's sectioned system prompt; on Pi 1.x every mode had silently fallen back to Pi's unmodified prompt ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+* **ampi-core:** Low now gets the compact task-framing system prompt and Medium the full prompt shared with High and Ultra ([#241](https://github.com/5omeOtherGuy/ampi/issues/241)) ([3415a69](https://github.com/5omeOtherGuy/ampi/commit/3415a690901c9818532edae82429c6e3170de526))
+* keep the pre-push gate out of the real repository ([#268](https://github.com/5omeOtherGuy/ampi/issues/268)) ([0206454](https://github.com/5omeOtherGuy/ampi/commit/02064545baca0c4d4b2c7b3aafd6a08d776dc4d7))
+* route GPT models through Pi 1.x's azure provider, renamed from azure-openai-responses ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+* subagent trails render child read, bash, grep and other built-in tool calls with Pi's native renderers again ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+* tool parameter errors name the rejected extra property again instead of TypeBox 1.3's "schema is false" ([#249](https://github.com/5omeOtherGuy/ampi/issues/249)) ([646b519](https://github.com/5omeOtherGuy/ampi/commit/646b5196fe05dd939c1b06092f8d1625981cd997))
+
 ## 0.3.1 — 2026-07-15
 
 ### Changed
