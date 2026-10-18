@@ -14,6 +14,7 @@ import { analyzeMmrContext, type MmrContextAnalysisInput } from "./context-analy
 import { summarizeMmrThreadCost } from "./cost.js";
 import { createMmrPromptHistoryStore, type MmrPromptHistoryStore } from "./history-store.js";
 import { createMmrThreadIndexStore, type MmrThreadIndexStore, type MmrThreadIndexStoreOptions } from "./index-store.js";
+import { type MmrThreadTitlesOptions, registerMmrThreadTitles } from "./title.js";
 
 export interface MmrThreadsFactoryOverrides {
   loadSettings?: () => MmrThreadsSettings;
@@ -25,6 +26,8 @@ export interface MmrThreadsFactoryOverrides {
   now?: () => string;
   /** Puts text on the clipboard; defaults to Pi's `copyToClipboard`. */
   copyText?: (text: string) => Promise<void>;
+  /** Reads `ampi-core` settings for the title model override; defaults to `loadMmrCoreSettings`. */
+  loadCoreSettings?: MmrThreadTitlesOptions["loadCoreSettings"];
 }
 
 /** Pi's MCP adapter registers its tools from the `builtin:mcp` extension, in `mcp__<server>` namespaces. */
@@ -77,6 +80,7 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       analyzeContext: (current) => analyzeMmrContext(contextInput(pi, current)),
     });
     const unregisterCommands = registerMmrThreadCommands(host);
+    if (settings.titles) registerMmrThreadTitles({ pi, index: store, loadCoreSettings: overrides.loadCoreSettings });
     pi.registerCommand(MMR_THREAD_SLASH_COMMAND, {
       description: "Start, archive or switch sessions (used by the thread commands and the thread picker)",
       handler: createMmrThreadSlashHandler(host),

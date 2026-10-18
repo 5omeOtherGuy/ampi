@@ -1,4 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { MMR_MODES } from "./modes.js";
 import { MMR_SUBAGENT_SHARED_DENY_TOOLS } from "./subagent-tool-policy.js";
 import type { MmrModeKey, MmrModelPreference } from "./types.js";
 
@@ -269,6 +270,27 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     backgroundable: false,
     promptRoute: "standalone",
     promptBuilder: "history-reader",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  title: deepFreeze({
+    name: "title",
+    displayName: "Thread Title",
+    // A one-line session title is the cheapest job ampi asks of a model, so it
+    // runs on the low mode's routes with thinking off.
+    // A copy, so freezing the profile leaves the mode table alone.
+    modelPreferences: MMR_MODES.low.modelPreferences.map((preference) => ({ ...preference })),
+    thinkingLevel: "off",
+    tools: [],
+    maxTurns: 1,
+    // Internal worker run by ampi-threads after a session's first exchange;
+    // never a public background agent.
+    backgroundable: false,
+    promptRoute: "standalone",
+    promptBuilder: "title",
     allowMcp: false,
     allowToolbox: false,
     enforceLockedMode: false,

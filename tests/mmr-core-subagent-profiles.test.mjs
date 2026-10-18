@@ -188,6 +188,24 @@ describe("mmr-core subagent profile registry", () => {
     );
   });
 
+  it("exposes a 'title' profile on the low mode's routes, with thinking off and no tools", async () => {
+    const mod = await importSource(MODULE);
+    const { MMR_MODES } = await importSource("extensions/ampi-core/modes.ts");
+    const profile = mod.getMmrSubagentProfile("title");
+    assert.ok(profile, "title profile must be registered");
+    assert.equal(profile.promptRoute, "standalone");
+    assert.equal(profile.promptBuilder, "title");
+    assert.equal(profile.thinkingLevel, "off");
+    assert.deepEqual([...profile.tools], []);
+    assert.equal(profile.maxTurns, 1);
+    assert.equal(profile.backgroundable, false, "titles are an internal worker, never a background task");
+    assert.deepEqual(
+      profile.modelPreferences.map((preference) => preference.model),
+      MMR_MODES.low.modelPreferences.map((preference) => preference.model),
+    );
+    assert.equal(Object.isFrozen(MMR_MODES.low.modelPreferences), false, "freezing the profile must leave the mode table alone");
+  });
+
   it("returns undefined for an unknown profile name", async () => {
     const { getMmrSubagentProfile } = await importSource(MODULE);
     assert.equal(getMmrSubagentProfile("does-not-exist"), undefined);

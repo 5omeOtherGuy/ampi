@@ -214,11 +214,12 @@ Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled
 
 Thread management on top of Pi sessions, on by default (`ampiThreads.enabled: false` opts out). Keeps the thread index at `<agentDir>/data/ampi/threads/index.json` and the prompt history under `<agentDir>/data/ampi/threads/history/`, and registers the thread commands; owns no tools. Files:
 
-- `index.ts` (entry point: registers the index in `ampi-core/thread-index.ts`, the prompt history in `ampi-core/prompt-history.ts`, the cost and context reports in `ampi-core/thread-reports.ts`, the commands and the `/ampi-thread` route; records typed prompts; auto-archive on quit), `config.ts` (`ampiThreads.enabled`, `ampiThreads.autoArchiveOnQuit`, `ampiThreads.showCosts`), `README.md`.
+- `index.ts` (entry point: registers the index in `ampi-core/thread-index.ts`, the prompt history in `ampi-core/prompt-history.ts`, the cost and context reports in `ampi-core/thread-reports.ts`, the commands and the `/ampi-thread` route; records typed prompts; auto-archive on quit), `config.ts` (`ampiThreads.enabled`, `ampiThreads.autoArchiveOnQuit`, `ampiThreads.showCosts`, `ampiThreads.titles`), `README.md`.
+- `title.ts` (generated session titles: after the first completed reply of an interactive session, one call on `ampi-core`'s `title` subagent profile through the worker host; the answer cleaned to one short line and set with `pi.setSessionName`).
 - `markdown.ts` (a session as Markdown, exported from the package root), `cost.ts` (cost per model from the session's usage and the model prices), `context-analysis.ts` (estimated tokens per context section from the recorded system messages and the conversation); all three pure.
 - `index-store.ts` (the versioned index file: atomic writes, corrupt files moved aside, a per-path in-process queue, label and colour validation).
 - `history-store.ts` (one JSON Lines file of prompts per workspace, each line versioned: consecutive repeats skipped, trimmed to the newest 1000 by an atomic rewrite past 1200 prompts that keeps other versions' lines, all workspaces merged by time).
-- `commands.ts` (`thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, and the `/ampi-thread new|archive|switch <id>|previous|next` handler that calls Pi's `newSession` and `switchSession`).
+- `commands.ts` (`thread.new`, `thread.rename`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, and the `/ampi-thread new|archive|switch <id>|previous|next` handler that calls Pi's `newSession` and `switchSession`).
 - `switch-history.ts` (the per-process back and forward lists of switched sessions, anchored on `globalThis`).
 
 ### `src/extensions/ampi-history/`

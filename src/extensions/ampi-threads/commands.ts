@@ -29,7 +29,7 @@ import {
  */
 
 export interface MmrThreadCommandHost {
-  readonly pi: Pick<ExtensionAPI, "sendUserMessage">;
+  readonly pi: Pick<ExtensionAPI, "sendUserMessage" | "setSessionName">;
   readonly store: MmrThreadIndexStore;
   /** Current time as an ISO 8601 string, recorded as the archive date. */
   readonly now: () => string;
@@ -163,6 +163,19 @@ async function copyMarkdown(host: MmrThreadCommandHost, ctx: ExtensionContext): 
   ctx.ui.notify("Copied the thread as Markdown", "info");
 }
 
+/**
+ * Ask for a new session title. Pi's input starts empty (its terminal dialog
+ * does not show the placeholder), so Escape or an empty answer keeps the
+ * current title; a typed one replaces it and is
+ * recorded as the user's, which generated titles never overwrite.
+ */
+async function renameSession(host: MmrThreadCommandHost, ctx: ExtensionContext): Promise<void> {
+  const name = (await ctx.ui.input("Rename Thread", "Thread title"))?.replace(/\s+/g, " ").trim();
+  if (!name) return;
+  host.pi.setSessionName(name);
+  await host.store.update(ctx.sessionManager.getSessionId(), { titleSource: "user" });
+}
+
 /** Handler of `/ampi-thread new`, `archive`, `switch <session id>`, `previous` and `next`. */
 export function createMmrThreadSlashHandler(host: MmrThreadCommandHost) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
@@ -209,6 +222,13 @@ export function createMmrThreadCommands(host: MmrThreadCommandHost): MmrCommandD
       verb: "new",
       description: "Start a new session, as /new does",
       run: () => sendThreadAction(host, "new"),
+    },
+    {
+      id: "thread.rename",
+      noun: "thread",
+      verb: "rename",
+      description: "Give this session a new title",
+      run: (ctx) => renameSession(host, ctx),
     },
     {
       id: "thread.archive",
