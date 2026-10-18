@@ -189,6 +189,9 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; `--stream-json-thinking` adds thinking blocks |
 | Send several messages to one session | `producer \| ampi -x --stream-json --stream-json-input` | One JSON user message per stdin line, `"steer": true` to redirect the run in progress; a result record after each run |
 | Send piped input with a request | `git diff \| ampi -x "review this"` | The message is the argument, a newline, then stdin; redirected input or output implies `-x` |
+| Get one JSON summary of the run | `ampi -x --stats "..."` | The result, turns, token usage and, when the model reports it, `total_cost_usd` on one line |
+| Print one tool's output | `ampi -x --output-tool bash "run the tests"` | The text of the last finished call to that tool; exit 1 when it failed or never finished |
+| Add MCP servers for one run | `ampi --mcp-config servers.json` | JSON or a file in the `mcpServers` format; a server of the same name in `mcp.json` wins |
 | Keep a script's session unarchived | `ampi -x --no-archive-after-execute "..."` | Sessions created in execute mode are archived in the thread index by default |
 | Name or label the session | `ampi --title "Release check" -l release` | `--title` is Pi's `--name`; labels go to the thread index |
 | Pass a message that looks like an option | `ampi -- -m is a flag` | Everything after `--` goes to Pi as the message |

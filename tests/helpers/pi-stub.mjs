@@ -34,6 +34,8 @@
  *    invoked after `setThinkingLevel`.
  *  - `onSendUserMessage(content, options)` (optional): hook invoked after
  *    `sendUserMessage` is recorded, used to simulate Pi queueing the message.
+ *  - `onRegisterMcpServer(name, config)` (optional): hook invoked before
+ *    `registerMcpServer` is recorded; throw from it to simulate Pi rejecting the config.
  *
  * Returns `{ pi, calls, commands, shortcuts, handlers, tools, flagDefs, emits,
  * toolRenderers, setEventContext }`. `toolRenderers` lists the resolvers passed
@@ -78,6 +80,7 @@ export function createMockPi(options = {}) {
     setThinkingLevel: [],
     appendEntry: [],
     sendUserMessage: [],
+    registerMcpServer: [],
   };
 
   // Per-name flag values. Seeded from `options.flags` (explicit per-test
@@ -146,6 +149,10 @@ export function createMockPi(options = {}) {
     sendUserMessage: (content, opts) => {
       calls.sendUserMessage.push({ content, options: opts });
       options.onSendUserMessage?.(content, opts);
+    },
+    registerMcpServer: (name, config) => {
+      options.onRegisterMcpServer?.(name, config);
+      calls.registerMcpServer.push({ name, config });
     },
     registerCommand: (name, command) => commands.set(name, command),
     // Registered commands as Pi lists them (extension commands only).

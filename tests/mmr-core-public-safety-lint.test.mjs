@@ -200,6 +200,8 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "src/extensions/ampi-core/live-registry.ts",
       "src/extensions/ampi-core/thread-status-events.ts",
       "packages/ampi-cli/src/live-registry.js",
+      "packages/ampi-cli/src/run-output.js",
+      "packages/ampi-cli/src/mcp-config.js",
       "src/extensions/ampi-gui/view-model.ts",
       "src/extensions/ampi-gui/client/index.html",
       "src/extensions/ampi-gui/client/app.js",
