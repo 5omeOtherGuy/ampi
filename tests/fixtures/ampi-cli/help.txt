@@ -15,6 +15,8 @@ Commands:
                                 tool's description and parameters; ampi tools --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
+  app [--open]                  Serve every session on this machine from one local web page:
+                                read any of them, and continue those nothing else has open
 
   Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
   unchanged, without ampi's options; config keymap and config edit are ampi's.
@@ -97,6 +99,10 @@ Run one message and keep only the final result record of the stream JSON:
 Pick up the latest session in this directory:
 
   $ ampi last
+
+Serve every session from one web page and open it in a browser:
+
+  $ ampi app --open
 
 List this directory's sessions, then open one by the start of its id:
 

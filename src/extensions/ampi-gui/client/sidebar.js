@@ -3,6 +3,8 @@
 // pure helpers at the top are exported for tests; mountSidebar wires them
 // to the page.
 
+import { appPath, hostWorking, statusIconLabel } from "./app-mode.js";
+
 /** Thread colours the thread index accepts, in the order ids hash onto them (gray is never hashed). */
 export const THREAD_COLORS = ["blue", "purple", "pink", "red", "orange", "yellow", "green", "cyan", "gray"];
 const HASHED_COLORS = THREAD_COLORS.slice(0, -1);
@@ -143,6 +145,8 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
   let data = { currentId: null, groups: [] };
   let selectedId = null;
   let busy = false;
+  /** In app mode rows link to `/s/<id>` and show where each session runs. */
+  let appMode = false;
   /** Groups the user opened or closed, against their default. */
   const flipped = new Set();
 
@@ -239,7 +243,45 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
     draw();
   });
 
+  /** An app-mode row: its disc is the status icon, labelled with where the session runs, and spins while it works. */
+  function appRowNode(session) {
+    const row = document.createElement("a");
+    row.className = "session-row";
+    row.href = appPath(session.id);
+    row.dataset.id = session.id;
+    row.title = session.title;
+    if (session.id === selectedId) row.setAttribute("aria-current", "page");
+    const host = session.host ?? null;
+    const label = statusIconLabel(host);
+    const disc = document.createElement("span");
+    disc.className = "disc";
+    paintDisc(disc, session.id, session.color);
+    disc.setAttribute("role", "img");
+    disc.setAttribute("aria-label", label);
+    disc.title = label;
+    if (hostWorking(host)) disc.dataset.busy = "true";
+    const title = document.createElement("span");
+    title.className = "session-title";
+    title.textContent = session.title;
+    row.append(disc, title);
+    if (host) {
+      const dot = document.createElement("span");
+      dot.className = "running-dot";
+      dot.dataset.kind = host.kind;
+      dot.setAttribute("aria-hidden", "true");
+      dot.title = label;
+      row.append(dot);
+    }
+    const time = document.createElement("time");
+    time.className = "session-time";
+    time.dateTime = session.modified;
+    time.textContent = relativeTime(session.modified, now());
+    row.append(time);
+    return row;
+  }
+
   function rowNode(session) {
+    if (appMode) return appRowNode(session);
     const row = document.createElement("a");
     row.className = "session-row";
     row.href = session.live ? "#" : `#/s/${encodeURIComponent(session.id)}`;
@@ -324,7 +366,11 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
   function draw() {
     const query = search.value.trim();
     const groups = filterGroups(data.groups, query);
+    // The list is redrawn while it is used (app mode reloads it every few seconds): keep focus on the same row or header.
+    const focused = list.contains(document.activeElement) ? document.activeElement : null;
     list.replaceChildren(...groups.map((group) => groupNode(group, query !== "")));
+    if (focused?.dataset.id) list.querySelector(`a.session-row[data-id="${CSS.escape(focused.dataset.id)}"]`)?.focus();
+    else if (focused?.dataset.group) list.querySelector(`.group-header[data-group="${CSS.escape(focused.dataset.group)}"]`)?.focus();
     empty.textContent = query ? "No sessions match." : "No saved sessions yet.";
     empty.hidden = groups.length > 0;
   }
@@ -352,5 +398,10 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
       draw();
     },
     redraw: draw,
+    /** Switch to `ampi app`'s rows. */
+    useAppMode() {
+      appMode = true;
+      draw();
+    },
   };
 }

@@ -157,7 +157,7 @@ async function until(predicate) {
 }
 
 describe("ampi app: argument routes", () => {
-  it("routes app, app --open and the hidden app --worker, and keeps app out of the help", () => {
+  it("routes app, app --open and the hidden app --worker, and lists only app in the help", () => {
     assert.deepEqual(
       ["app", "app --open", "app --worker"].map((line) => {
         const route = routeAmpiArgv(line.split(" "));
@@ -174,7 +174,8 @@ describe("ampi app: argument routes", () => {
       assert.equal(route.command, "error", line);
       assert.equal(route.error, "ampi app takes only --open.");
     }
-    assert.doesNotMatch(formatAmpiHelp(), /\bapp\b/);
+    assert.match(formatAmpiHelp(), /^ {2}app \[--open\] {2,}Serve every session/m);
+    assert.doesNotMatch(formatAmpiHelp(), /--worker/);
   });
 
   it("runs: a second ampi app finds the first and exits 1", () => {

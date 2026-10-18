@@ -19,9 +19,8 @@ import { parseArgs } from "node:util";
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
- *   ampi, run one of Pi's own commands, serve every session from one page (`app`, not in the help
- *   until its page is usable), run a session for `ampi app` (`app-worker`, internal and not in the
- *   help), or fail.
+ *   ampi, run one of Pi's own commands, serve every session from one page (`app`), run a session
+ *   for `ampi app` (`app-worker`, internal and not in the help), or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
@@ -264,6 +263,8 @@ Commands:
                                 tool's description and parameters; ampi tools --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
+  app [--open]                  Serve every session on this machine from one local web page:
+                                read any of them, and continue those nothing else has open
 
   Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
   unchanged, without ampi's options; config keymap and config edit are ampi's.
@@ -346,6 +347,10 @@ Run one message and keep only the final result record of the stream JSON:
 Pick up the latest session in this directory:
 
   $ ampi last
+
+Serve every session from one web page and open it in a browser:
+
+  $ ampi app --open
 
 List this directory's sessions, then open one by the start of its id:
 

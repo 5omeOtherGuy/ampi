@@ -496,6 +496,32 @@ describe("ampi app hub: forwarding to a worker", () => {
     }
   });
 
+  it("tells the pages' event streams when a worker starts and when it stops", async () => {
+    const recorder = await startRecorder();
+    const ctx = await startHub({ upstream: { "s-rec": recorder } });
+    try {
+      assert.equal((await send(ctx.port, { target: "/api/events", headers: { Host: `127.0.0.1:${ctx.port}` } })).status, 401);
+      const foreign = await send(ctx.port, { target: "/api/events", headers: ctx.headers({ Origin: "http://127.0.0.1:1" }) });
+      assert.equal(foreign.status, 403);
+
+      const stream = await openStream(ctx.port, "/api/events", ctx.headers());
+      assert.equal(stream.status, 200);
+      assert.match(stream.headers["content-type"], /^text\/event-stream/);
+      assert.equal(stream.headers["access-control-allow-origin"], undefined);
+      await stream.next(/retry: 2000/);
+      assert.equal((await ctx.post("/s/s-rec/api/send", { text: "start it" })).status, 200);
+      await stream.next(/event: sessions/);
+      assert.deepEqual(parseEvents(stream.text()), [{ id: undefined, event: "sessions", data: {} }]);
+      ctx.workers[0].exit();
+      await stream.next(/event: sessions[\s\S]*event: sessions/);
+      assert.equal(parseEvents(stream.text()).length, 2);
+      stream.close();
+    } finally {
+      await ctx.close();
+      await recorder.close();
+    }
+  });
+
   it("starts one worker for sends that race", async () => {
     const recorder = await startRecorder();
     let release;

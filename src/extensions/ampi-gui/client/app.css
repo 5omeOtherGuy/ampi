@@ -1088,6 +1088,28 @@ details[open] > summary .chevron {
   display: none;
 }
 
+/* ampi app's home page: a prompt to pick a session, and no composer. */
+.app[data-view="home"] .composer-area,
+.app[data-view="home"] #title-disc,
+.app[data-view="home"] .menu-anchor {
+  display: none;
+}
+
+.app[data-view="home"] .empty {
+  max-width: 24rem;
+  margin: 30vh auto 0;
+  font-size: var(--ampi-text-base);
+}
+
+/* A session that cannot be continued keeps its composer, turned off, with the reason under it. */
+.composer textarea:disabled {
+  cursor: not-allowed;
+}
+
+.app[data-view="imported"] .composer {
+  opacity: 0.6;
+}
+
 .jump {
   position: absolute;
   bottom: calc(100% + var(--ampi-space) * 2);

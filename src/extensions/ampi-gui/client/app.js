@@ -2,7 +2,22 @@
 // stream and draws both, and sends what the composer writes. The sidebar
 // lists the other sessions; opening one shows it read-only. Plain ES
 // module, no framework.
+//
+// The same page serves `ampi app` (app mode, when GET /api/app answers):
+// every session has its own address, `/s/<id>`, and its own routes under
+// `/s/<id>/api/`; a session the app runs is live, the others are read from
+// their files (see app-mode.js).
 
+import {
+  APP_LIST_REFRESH_MS,
+  appPath,
+  bannerFor,
+  createRefresher,
+  historyState,
+  parseAppPath,
+  routeFromHistory,
+  sessionBase,
+} from "./app-mode.js";
 import { mountComposer } from "./composer.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountTitlebar } from "./titlebar.js";
@@ -44,11 +59,19 @@ let liveSession = { id: "", title: "", cwd: "", mode: null };
 let viewing = null;
 /** The last GET /api/sessions answer. */
 let sessionList = { currentId: null, groups: [], actions: { archive: false, markdown: false } };
+/** Whether `ampi app` serves the page. */
+let appMode = false;
+/** Where the shown session's own requests go (`sessionBase`). */
+let base = "/api/";
+/** App mode: the session in the address, or `null` on the home page. */
+let shownId = null;
+/** App mode: how the shown session is offered, `live` or a `bannerFor` access. */
+let access = "live";
 
 /** POST a command as JSON; resolves `{ ok, body }` and never throws. */
-async function post(route, body) {
+async function postTo(url, body) {
   try {
-    const response = await fetch(`/api/${route}`, {
+    const response = await fetch(url, {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -61,8 +84,37 @@ async function post(route, body) {
   }
 }
 
+/** A command about any session (More Actions): always `/api/<route>`. */
+const post = (route, body) => postTo(`/api/${route}`, body);
+
+/**
+ * The composer's commands go to the shown session. In app mode the first
+ * send to a session nothing runs starts it: the status says Starting until
+ * the hub answers, then the page follows the session live.
+ */
+async function composerPost(route, body) {
+  if (!appMode) return postTo(`${base}${route}`, body);
+  const id = shownId;
+  const starting = access === "dormant" && route === "send";
+  if (starting) {
+    setPhaseLabel("Starting");
+    $("status-detail").textContent = "";
+    app.dataset.busy = "true";
+    app.dataset.phase = "sending";
+  }
+  const result = await postTo(`${base}${route}`, body);
+  if (id !== shownId) return result;
+  if (result.ok) {
+    if (starting) openSession(id);
+  } else if (access === "live" && result.body?.state === "elsewhere") handOver(result.body);
+  // The hub's answers carry a state when the session changed hands meanwhile: show it as it is now.
+  else if (result.body?.state) openSession(id, { keepScroll: true });
+  else if (starting) showDormant();
+  return result;
+}
+
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-const composer = mountComposer({ root: $("composer-area"), post, mac });
+const composer = mountComposer({ root: $("composer-area"), post: composerPost, mac });
 const sidebar = mountSidebar({ app, mac });
 
 let toastTimer = 0;
@@ -262,9 +314,9 @@ function setPhaseLabel(text) {
 function drawTitle() {
   const session = viewing ? viewing.session : liveSession;
   const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === session.id);
-  const title = session.title || "New thread";
+  const title = appMode && !shownId ? "ampi app" : session.title || "New thread";
   $("title").textContent = title;
-  document.title = `${title} · ampi`;
+  document.title = appMode && !shownId ? title : `${title} · ampi`;
   const cwd = session.cwd || "";
   $("cwd").textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
   $("cwd-chip").title = cwd;
@@ -341,6 +393,8 @@ function load(snapshot) {
 const handlers = {
   status: (data) => setStatus(data),
   session: (data) => {
+    // `ampi app` hands the session over to another process that opened its file.
+    if (appMode && data.state) return handOver(data);
     setSession(data);
     refreshSessions();
   },
@@ -348,6 +402,8 @@ const handlers = {
     upsertItem(data);
     if (!viewing) drawFolds();
   },
+  // `ampi app` warns when another process opened the session while its agent works.
+  warning: (data) => notify(data.message),
   delta: (data) => {
     const item = items.get(data.itemId);
     const part = item?.parts?.[data.part];
@@ -399,9 +455,10 @@ function flush() {
 
 function connect() {
   source?.close();
-  source = new EventSource(`/api/events?after=${lastEventId}`);
+  const stream = new EventSource(`${base}events?after=${lastEventId}`);
+  source = stream;
   for (const [name, handle] of Object.entries(handlers)) {
-    source.addEventListener(name, (event) => {
+    stream.addEventListener(name, (event) => {
       lastEventId = Number(event.lastEventId) || lastEventId;
       withFollow(() => {
         handle(JSON.parse(event.data));
@@ -410,15 +467,22 @@ function connect() {
     });
   }
   // The server no longer has the events we missed: start over from a snapshot.
-  source.addEventListener("reset", () => {
-    source.close();
-    start();
+  stream.addEventListener("reset", () => {
+    stream.close();
+    if (appMode) openSession(shownId, { keepScroll: true });
+    else start();
   });
-  source.addEventListener("open", () => {
+  stream.addEventListener("open", () => {
     if (lastStatus) setStatus(lastStatus);
     composer.setConnected(true);
   });
-  source.addEventListener("error", () => {
+  stream.addEventListener("error", () => {
+    // In app mode a stream the hub refused (409, 502) is closed for good: the
+    // session is no longer the app's, so show it as it is now.
+    if (appMode && stream.readyState === EventSource.CLOSED) {
+      if (source === stream) openSession(shownId, { keepScroll: true });
+      return;
+    }
     // The browser retries on its own; Pi may have quit or switched sessions.
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Waiting for Pi";
@@ -448,6 +512,7 @@ async function refreshSessions() {
       sessionList = await response.json();
       sidebar.setData(sessionList);
       drawTitle();
+      if (appMode) followHost();
     } catch {
       // The live view keeps working; the next refresh tries again.
     } finally {
@@ -497,16 +562,24 @@ async function showSession(id) {
     location.hash = "";
     return;
   }
-  viewing = view;
-  viewing.transcript = createTranscript();
-  setGroups(viewing.transcript, view.groups ?? []);
-  for (const item of view.items) setItem(viewing.transcript, item);
   app.dataset.view = "readonly";
   composer.setEnabled(false);
   $("readonly-text").textContent = view.row.elsewhere
     ? "Another terminal runs this session: continue it there."
     : "This session is read-only here: open it in the terminal to continue.";
   $("readonly-banner").hidden = false;
+  drawView(view);
+  chat.scrollTop = 0;
+  jump.hidden = atBottom();
+  chat.focus({ preventScroll: true });
+}
+
+/** Draw a session read from its file (`{ session, items, groups }`) in place of the live transcript. */
+function drawView(view) {
+  viewing = view;
+  viewing.transcript = createTranscript();
+  setGroups(viewing.transcript, view.groups ?? []);
+  for (const item of view.items) setItem(viewing.transcript, item);
   transcript.replaceChildren();
   for (const item of view.items) {
     const node = document.createElement("article");
@@ -519,9 +592,6 @@ async function showSession(id) {
   drawFolds();
   drawTitle();
   drawChrome();
-  chat.scrollTop = 0;
-  jump.hidden = atBottom();
-  chat.focus({ preventScroll: true });
 }
 
 function route() {
@@ -530,10 +600,192 @@ function route() {
   else showLive();
 }
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => {
+  if (!appMode) route();
+});
 window.addEventListener("focus", () => refreshSessions());
 // Relative times and other terminals' sessions change while the page is open.
-setInterval(() => refreshSessions(), 60_000);
+const listTimer = setInterval(() => refreshSessions(), 60_000);
+
+// ---------------------------------------------------------------------------
+// App mode: every session at its own address, live when the app runs it
+
+const EMPTY_TEXT = empty.textContent;
+const HOME_TEXT = "Pick a session in the sidebar to read it or carry it on. A session nothing runs starts when you send it a message.";
+
+function closeStream() {
+  source?.close();
+  source = undefined;
+}
+
+/** Offer the shown session as `next` (`live`, `home` or a `bannerFor` access), with that banner. */
+function setAccess(next, banner = {}) {
+  access = next;
+  app.dataset.view = next === "held" || next === "gone" ? "readonly" : next;
+  $("readonly-text").innerHTML = banner.html ?? "";
+  $("readonly-banner").hidden = !banner.html;
+  empty.textContent = next === "home" ? HOME_TEXT : EMPTY_TEXT;
+  composer.setEnabled(next === "live" || next === "dormant");
+  composer.setLocked(banner.reason ?? null);
+  if (next !== "live") {
+    busy = false;
+    composer.setQueue(null);
+    composer.setStatus({ busy: false, phase: "idle" });
+    app.dataset.busy = "false";
+    app.dataset.phase = "idle";
+    $("status-detail").textContent = "";
+  }
+}
+
+/** A session nothing runs: its transcript with the composer on, which starts it. */
+function showDormant() {
+  app.dataset.busy = "false";
+  app.dataset.phase = "idle";
+  setPhaseLabel("Not running");
+  $("status-detail").textContent = "Sending a message starts it";
+  composer.setConnected(true);
+}
+
+/** Show session `id` as the app has it now: live when the app runs it, else from its file. */
+async function openSession(id, { keepScroll = false } = {}) {
+  closeStream();
+  const scroll = chat.scrollTop;
+  shownId = id;
+  base = sessionBase(true, id);
+  let response;
+  let body;
+  try {
+    response = await fetch(`${base}transcript`, { credentials: "same-origin" });
+    body = await response.json().catch(() => undefined);
+  } catch {}
+  // The address may have moved on while the session loaded.
+  if (shownId !== id) return;
+  if (response?.status === 404) {
+    notify("That session is not listed any more.");
+    navigate(null, { replace: true });
+    return;
+  }
+  if (!response) {
+    setPhaseLabel("Disconnected");
+    $("status-detail").textContent = "Could not reach ampi app";
+    return;
+  }
+  const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === id);
+  if (!response.ok || !body) {
+    // The worker that ran it stopped while the page asked (502).
+    drawView({ session: { id, title: row?.title ?? "", cwd: row?.cwd ?? "", mode: null }, items: [], groups: [] });
+    setAccess("gone", bannerFor(body, row?.title));
+  } else if ("state" in body) {
+    const banner = bannerFor(body.state, body.session.title);
+    setAccess(banner.access, banner);
+    drawView(body);
+    if (banner.access === "dormant") showDormant();
+    else setPhaseLabel(banner.access === "imported" ? "Imported" : "Read-only");
+  } else {
+    viewing = null;
+    setAccess("live");
+    withFollow(() => load(body));
+    connect();
+  }
+  chat.scrollTop = keepScroll ? scroll : chat.scrollHeight;
+  jump.hidden = atBottom();
+  if (keepScroll) return;
+  if (access === "live" || access === "dormant") composer.focus();
+  else chat.focus({ preventScroll: true });
+}
+
+/**
+ * The list says the shown session started or stopped running elsewhere
+ * (a start that outlasted the send's wait, a terminal that quit): show it
+ * as it is now.
+ */
+function followHost() {
+  const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === shownId);
+  if (!row) return;
+  if ((access === "dormant" && row.host) || (access === "held" && !row.host)) openSession(shownId, { keepScroll: true });
+}
+
+/** Another process opened the live session: keep what is drawn, where it is, read-only. */
+function handOver(state) {
+  closeStream();
+  viewing = { session: liveSession, items: [...items.values()], groups: [], transcript: live };
+  const banner = bannerFor(state, liveSession.title);
+  setAccess(banner.access, banner);
+  setPhaseLabel("Read-only");
+  drawFolds();
+  drawTitle();
+  drawChrome();
+  refreshSessions();
+}
+
+function showHome() {
+  closeStream();
+  shownId = null;
+  base = sessionBase(true, null);
+  viewing = null;
+  for (const map of Object.values(live)) map.clear();
+  liveSession = { id: "", title: "", cwd: "", mode: null };
+  transcript.replaceChildren();
+  setAccess("home");
+  drawTitle();
+  drawChrome();
+}
+
+function showRoute(id) {
+  if (id) openSession(id);
+  else showHome();
+}
+
+/** Go to a session's address (or the home page) and show it; Back and Forward return. */
+function navigate(id, { replace = false } = {}) {
+  if (replace) history.replaceState(historyState(id), "", appPath(id));
+  else history.pushState(historyState(id), "", appPath(id));
+  showRoute(id);
+}
+
+window.addEventListener("popstate", (event) => {
+  if (appMode) showRoute(routeFromHistory(event.state, location.pathname));
+});
+
+$("session-list").addEventListener("click", (event) => {
+  const row = appMode && event.target.closest?.("a.session-row");
+  // A click with a modifier opens the row's address in a new tab, as for any link.
+  if (!row || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  if (row.dataset.id !== shownId) navigate(row.dataset.id);
+  else if (access === "gone") openSession(shownId);
+});
+
+async function startApp() {
+  appMode = true;
+  clearInterval(listTimer);
+  sidebar.useAppMode();
+  app.querySelector(".banner-link").hidden = true;
+  history.scrollRestoration = "manual";
+  // The list follows the hosts every few seconds while the page is in view, and at once when the hub announces a change.
+  const refresher = createRefresher({
+    run: () => refreshSessions(),
+    everyMs: APP_LIST_REFRESH_MS,
+    visible: () => document.visibilityState === "visible",
+    setTimer: (callback, ms) => setTimeout(callback, ms),
+    clearTimer: (handle) => clearTimeout(handle),
+  });
+  document.addEventListener("visibilitychange", () => refresher.visibilityChanged());
+  refresher.start();
+  new EventSource("/api/events").addEventListener("sessions", () => refreshSessions());
+  refreshSessions();
+  navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true });
+}
+
+/** Whether `ampi app` serves this page: a session server answers 404. */
+async function isApp() {
+  try {
+    const response = await fetch("/api/app", { credentials: "same-origin" });
+    return response.ok && (await response.json()).app === true;
+  } catch {
+    return false;
+  }
+}
 
 async function start() {
   try {
@@ -553,4 +805,5 @@ async function start() {
   }
 }
 
-start();
+if (await isApp()) startApp();
+else start();

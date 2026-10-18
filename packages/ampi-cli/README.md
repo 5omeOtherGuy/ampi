@@ -28,6 +28,7 @@ ampi usage               # cost and tokens of the last 30 days
 ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
 ampi tools list -m high  # the tools a high mode session declares to the model
+ampi app --open          # every session on this machine in one web page
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
@@ -210,6 +211,38 @@ ID                                    Title                    Updated  Messages
 - **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
 - **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, or when the ampi in use is too old for a command, `2` on a usage error, including a search query it cannot use and a malformed time. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
+
+## ampi app
+
+`ampi app` serves every Pi session on this machine from one local web page: read any of them, and carry on those that no other process has open, without a terminal.
+
+```bash
+ampi app          # prints the link to open
+ampi app --open   # prints it and opens it in your browser
+```
+
+It prints `ampi app: http://127.0.0.1:<port>/?t=<token>` and runs until Ctrl+C (or SIGTERM), which stops every session it runs and exits 0. Only one runs per user: a second `ampi app` finds the first one's entry in the live registry and exits 1.
+
+**The page.** The sidebar lists the sessions in Pi's default session directory (`PI_CODING_AGENT_DIR` applies), grouped by project as in a terminal's web GUI ([ampi-gui](../../src/extensions/ampi-gui/README.md#sessions)). Each row's disc says where the session runs, for screen readers too: "Running in a terminal", "Running in ampi -x", "Running in ampi app" or "Not running", followed by "Live" when that process serves a live web view, "Working" while its agent works (the disc spins) and "Error" when its last turn failed. The list follows changes every 5 seconds while the page is in view, and at once when the app starts or stops a session. Every session has its own address, `/s/<session id>`, so Back and Forward move between them and a link opens one directly. `/` asks you to pick a session.
+
+**Opening a session** shows it in one of these ways:
+
+| The session | The page |
+| --- | --- |
+| runs in this app | live, as on a terminal's own GUI: streaming replies, tool calls, the queue, steering, Esc Esc |
+| is open in another process (a terminal, an `ampi -x` run, another app) | read-only, with a banner naming where it runs and its pid; continue it there |
+| runs nowhere | its transcript with the composer on: the first message shows Starting, starts the session in this app and then follows it live |
+| was imported | read-only, with the composer turned off and the reason under it (no session is marked imported yet) |
+
+If another process opens a session while the page shows it live, the page turns read-only in place, keeping your scroll position.
+
+**How sessions run.** The app runs each session in a worker process of its own (`ampi app --worker`, below), started by the first message you send it, with the extensions an interactive `ampi` loads, Pi's MCP servers included. A worker that has been idle for 15 minutes while no page follows it stops; sending again starts a new one. If starting takes longer than 30 seconds, the send answers that the session is still starting and the message is not sent; the page goes live once it has started, and you send again.
+
+**One writer per session file.** Pi does not lock session files, so two processes writing one file can lose messages. The app never starts a worker for a file another live process has open (it checks the live registry just before, and the worker checks again), and it checks the registry every 2 seconds: when a terminal opens a file one of its workers runs, it stops that worker if its agent is idle and the page turns read-only, or warns on the page while the agent works.
+
+**Security.** The page is served on `127.0.0.1` only, on a random port, with the protections of the web GUI ([ampi-gui's security model](../../src/extensions/ampi-gui/README.md#security-model)): the `Host` and `Origin` checks, a per-process token that the link carries once and the server then keeps in an `HttpOnly`, `SameSite=Strict` cookie, no CORS headers, and no files outside its client directory. Each worker has a token of its own, which it receives over its IPC channel; the page reaches workers only through the app. The app's own session is in memory and never saved.
+
+**Limits.** Sessions in a custom session directory (`--session-dir`, `sessionDir`) are not listed. A session a terminal has open stays read-only until that terminal exits. Rename works only for sessions the app runs. Workers have no terminal: an extension that asks a question, such as a tool approval, gets no answer from the page and behaves as in a run without a UI (`ampi -x`). Attachments are not available.
 
 ## Keymap and settings
 
