@@ -107,6 +107,13 @@ export function resultText(result: ClassifyOptions["result"]): string {
     .join("\n");
 }
 
+/** Status of a finished call: an error result whose last line reports an abort counts as cancelled. */
+export function resultStatus(isError: boolean, result: ClassifyOptions["result"]): ActivityStatus {
+  if (!isError) return "done";
+  const last = resultText(result).trim().split("\n").at(-1) ?? "";
+  return /\b(aborted|cancell?ed)\b/i.test(last) ? "cancelled" : "error";
+}
+
 /**
  * Path for display: relative to `cwd` when inside it, `~/…` when inside
  * `home`, otherwise as given. Relative paths resolve against `workdir` first.
