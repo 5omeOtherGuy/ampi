@@ -1,0 +1,42 @@
+╭─ [1m[33mTitle[39m[22m ──────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│ [2mTo change a key, copy its line under "ampi.keymap" in Pi's settings (~/.pi/agent/settings.json,[22m  │
+│ [2mor .pi/settings.json in a project) and edit it: a key string, an array of key strings, or null[22m   │
+│ [2mto unbind. Then run /reload.[22m                                                                     │
+│                                                                                                  │
+│ {                                                                                                │
+│   "leader": "ctrl+x",                                                                            │
+│   "ampi.help": null, [2m// List every key and command with the key it is bound to[22m                   │
+│   "ampi.palette": "ctrl+o", [2m// Open the command palette[22m                                          │
+│   "ampi.quit": "ctrl+c ctrl+c", [2m// Quit[22m                                                          │
+│   "ampi.showVersion": "<leader>v", [2m// Show the ampi and Pi versions[22m                              │
+│   "mode.toggle": ["ctrl+s", "f2"], [2m// Show the mode dial; each further press turns it to the[22m     │
+│                                    [2m// next mode[22m                                                  │
+│   "mode.use.low": null, [2m// Switch to the low mode[22m                                                │
+│   "thread.interrupt": "esc esc", [2m// Stop the running turn[22m                                        │
+│   "thread.scrollToBottom": "end", [2m// Jump to the end of the transcript and follow new output[22m     │
+│   "thread.scrollToTop": "home" [2m// Jump to the start of the transcript[22m                            │
+│ }                                                                                                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰────────────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m[2m · [22m[34m↑↓/j/k[39m [2mscroll[22m ─╯

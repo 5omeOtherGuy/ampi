@@ -1,0 +1,22 @@
+╭─ [1m[33mTitle[39m[22m ──────────────────────────────────────────────────────────────────╮
+│                                                                          │
+│                                                                         [38;5;243m[48;5;236m [49m[39m│
+│  [1mCommand Palette Commands[22m                                               [38;5;243m[48;5;236m [49m[39m│
+│     [2mampi[22m help                [2m—[22m              List every key and command  [38;5;243m[48;5;236m [49m[39m│
+│                                             with the key it is bound to [38;5;243m[48;5;236m [49m[39m│
+│     [2mampi[22m open command        [34mCtrl+O[39m         Open the command palette    [38;5;243m[48;5;236m [49m[39m│
+│     palette                                                             [38;5;243m[48;5;236m [49m[39m│
+│     [2mampi[22m quit                [34mCtrl+C Ctrl+C[39m  Quit                        [38;5;243m[48;5;236m [49m[39m│
+│     [2mampi[22m show version        [34mCtrl+X v[39m       Show the ampi and Pi        [38;5;243m[48;5;236m [49m[39m│
+│                                             versions                    [38;5;243m[48;5;236m [49m[39m│
+│     [2mmode[22m switch              [34mCtrl+S, F2[39m     Show the mode dial; each    [38;5;243m[48;5;236m [49m[39m│
+│                                             further press turns it to   [38;5;243m[48;5;236m [49m[39m│
+│                                             the next mode               [38;5;243m[48;5;236m [49m[39m│
+│     [2mmode[22m use low             [2m—[22m              Switch to the low mode      [38;5;243m[48;5;236m [49m[39m│
+│     [2mthread[22m interrupt         [34mEsc Esc[39m        Stop the running turn       [38;5;243m[48;5;236m▇[49m[39m│
+│     [2mthread[22m scroll to bottom  [34mEnd[39m            Jump to the end of the      [38;5;243m[48;5;236m█[49m[39m│
+│                                             transcript and follow new   [38;5;243m[48;5;236m█[49m[39m│
+│                                             output                      [38;5;243m[48;5;236m█[49m[39m│
+│     [2mthread[22m scroll to top     [34mHome[39m           Jump to the start of the    [38;5;243m[48;5;236m█[49m[39m│
+│                                             transcript                  [38;5;243m[48;5;236m█[49m[39m│
+╰────────────────────────────────────────────── [34mEsc[39m [2mclose[22m[2m · [22m[34m↑↓/j/k[39m [2mscroll[22m ─╯

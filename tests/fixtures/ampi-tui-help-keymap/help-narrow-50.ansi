@@ -1,0 +1,198 @@
+╭─ [1m[33mTitle[39m[22m ────────────────────────────────────╮
+│                                            │
+│  [1mEditor Shortcuts[22m                          │
+│     [34mEnter[39m            Send the prompt;      │
+│                      while a turn runs,    │
+│                      steer it              │
+│     [34mAlt+Enter,       Insert a newline      │
+│     [34mShift+Enter,                           │
+│     [34mCtrl+J[39m                                 │
+│     [34mEsc[39m              Clear the prompt, or  │
+│                      close the shortcuts   │
+│                      help                  │
+│     [34mBackspace[39m        On an empty prompt,   │
+│                      take queued messages  │
+│                      back for editing      │
+│     [34mUp, Down[39m         Move between lines;   │
+│                      on an empty prompt,   │
+│                      step through earlier  │
+│                      prompts               │
+│     [34mLeft, Ctrl+B,    Move the cursor left  │
+│     [34mRight, Ctrl+F[39m    or right              │
+│     [34mAlt+Left,        Move one word left or │
+│     [34mCtrl+Left,       right                 │
+│     [34mAlt+B,                                 │
+│     [34mAlt+Right,                             │
+│     [34mCtrl+Right,                            │
+│     [34mAlt+F[39m                                  │
+│     [34mHome, Ctrl+A[39m     Go to the start of    │
+│                      the line              │
+│     [34mEnd, Ctrl+E[39m      Go to the end of the  │
+│                      line                  │
+│     [34mBackspace[39m        Delete the character  │
+│                      before the cursor     │
+│     [34mDelete, Ctrl+D[39m   Delete the character  │
+│                      under the cursor      │
+│     [34mCtrl+W,          Delete the word       │
+│     [34mAlt+Backspace[39m    before the cursor     │
+│     [34mAlt+Delete[39m       Delete the word after │
+│                      the cursor            │
+│     [34mCtrl+U[39m           Delete to the start   │
+│                      of the line           │
+│     [34mCtrl+K[39m           Delete to the end of  │
+│                      the line              │
+│     [34mCtrl+Y[39m           Paste the text        │
+│                      deleted last          │
+│     [34mCtrl+-[39m           Undo the last edit    │
+│     [34mCtrl+V[39m           Paste an image or     │
+│                      files from the        │
+│                      clipboard             │
+│     [34mTab[39m              Complete a file path  │
+│                      or command            │
+│     [34m@[39m                Mention files         │
+│     [34mAlt+D[39m            Toggle the thinking   │
+│                      preset of the active  │
+│                      mode                  │
+│     [34mCtrl+X[39m           Leader key; a popup   │
+│                      lists the keys that   │
+│                      can follow            │
+│                                            │
+│  [1mScrolling & Navigation[22m                    │
+│     [34mHome[39m             Jump to the start of  │
+│                      the transcript        │
+│     [34mEnd[39m              Jump to the end of    │
+│                      the transcript and    │
+│                      follow new output     │
+│     [34mPgUp, PgDn[39m       Scroll the transcript │
+│                      a page up or down     │
+│     [34mCtrl+Home,       Scroll to the top or  │
+│     [34mCtrl+End[39m         bottom of the         │
+│                      transcript            │
+│     [34mMouse wheel[39m      Scroll the transcript │
+│                                            │
+│  [1mCommand Palette Commands[22m                  │
+│     [2mampi[22m help          List every key and  │
+│     [2m—[22m                  command with the    │
+│                        key it is bound to  │
+│     [2mampi[22m open command  Open the command    │
+│     palette            palette             │
+│     [34mCtrl+O[39m                                 │
+│     [2mampi[22m quit          Quit                │
+│     [34mCtrl+C Ctrl+C[39m                          │
+│     [2mampi[22m show version  Show the ampi and   │
+│     [34mCtrl+X v[39m           Pi versions         │
+│     [2mmode[22m switch        Show the mode dial; │
+│     [34mCtrl+S, F2[39m         each further press  │
+│                        turns it to the     │
+│                        next mode           │
+│     [2mmode[22m use low       Switch to the low   │
+│     [2m—[22m                  mode                │
+│     [2mthread[22m interrupt   Stop the running    │
+│     [34mEsc Esc[39m            turn                │
+│     [2mthread[22m scroll to   Jump to the end of  │
+│     bottom             the transcript and  │
+│     [34mEnd[39m                follow new output   │
+│     [2mthread[22m scroll to   Jump to the start   │
+│     top                of the transcript   │
+│     [34mHome[39m                                   │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+╰──────────────── [34mEsc[39m [2mclose[22m[2m · [22m[34m↑↓/j/k[39m [2mscroll[22m ─╯

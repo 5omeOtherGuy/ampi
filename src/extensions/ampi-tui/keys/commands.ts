@@ -26,6 +26,10 @@ export interface MmrTuiCommandHost {
   openPalette(ctx: ExtensionContext): void;
   /** Open the mode dial, or turn it when it is already open. */
   openModeDial(ctx: ExtensionContext): void;
+  /** Open the Help & Keymap screen. */
+  openHelpKeymap(ctx: ExtensionContext): void;
+  /** Show the keymap in effect as JSONC. */
+  openKeymapJson(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -196,6 +200,22 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       verb: "show version",
       description: "Show the ampi and Pi versions",
       run: (ctx) => ctx.ui.notify(`ampi ${readAmpiVersion() ?? "(unknown version)"} on Pi ${PI_VERSION}`, "info"),
+    },
+    {
+      id: "ampi.help",
+      noun: "ampi",
+      verb: "help",
+      description: "List every key and command with the key it is bound to",
+      keywords: ["keys", "shortcuts"],
+      run: (ctx) => host.openHelpKeymap(ctx),
+    },
+    {
+      id: "ampi.keymapJson",
+      noun: "ampi",
+      verb: "show keymap",
+      description: "Show the keymap in effect as JSONC, to copy into your settings",
+      keywords: ["keys", "json", "config"],
+      run: (ctx) => host.openKeymapJson(ctx),
     },
     {
       id: "thread.toggleDetails",

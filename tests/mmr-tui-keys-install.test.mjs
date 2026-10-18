@@ -127,6 +127,8 @@ describe("ampi-tui key installation", () => {
       "thread.scrollToBottom": "end",
       "prompt.openInEditor": "ctrl+g",
       "ampi.showVersion": undefined,
+      "ampi.help": undefined,
+      "ampi.keymapJson": undefined,
       "thread.toggleDetails": "alt+t",
       "prompt.toggleHelp": "?",
       "ampi.status": undefined,

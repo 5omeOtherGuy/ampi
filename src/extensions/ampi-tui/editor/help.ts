@@ -69,14 +69,27 @@ function mergedLabel(a: string, b: string): string | undefined {
 }
 
 /**
+ * Every key bound to the command `id` in display form (`Ctrl+X v`), joined
+ * with `separator`; empty when the command is unbound.
+ */
+export function displayMmrCommandKeys(
+  keymap: Pick<MmrResolvedKeymap, "bindings" | "leader">,
+  id: string,
+  separator = " or ",
+): string {
+  return (keymap.bindings.get(id) ?? [])
+    .map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: keymap.leader })))
+    .join(separator);
+}
+
+/**
  * The help rows: fixed keys first, then the leader, then each bound command
  * in registration order, and the help's own toggle last. Several keys of one
  * command are joined with `or`, since `/` can itself be a key.
  */
 export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): MmrShortcutHelpEntry[] {
   const keymap = sources.keymap;
-  const keyOf = (id: string, map: NonNullable<typeof keymap>) =>
-    (map.bindings.get(id) ?? []).map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: map.leader }))).join(" or ");
+  const keyOf = (id: string, map: NonNullable<typeof keymap>) => displayMmrCommandKeys(map, id);
   const entries: MmrShortcutHelpEntry[] = [];
   if (sources.modeKeys) {
     // ampi-core's own Ctrl+S yields to the mode dial, so the row shows the dial's key.
