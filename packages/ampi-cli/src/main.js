@@ -3,12 +3,14 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
 import { buildExecuteArgs, createRunExtension, isExecuteRun, readAll } from "./execute.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
 import { capturePiJsonOutput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
+import { runThreadsCommand } from "./threads.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -186,6 +188,52 @@ export async function runAmpi(argv) {
       return 2;
     case "pi-command":
       return runPiCommand(route.piArgs);
+    case "threads":
+      return runThreads(route.threadArgs ?? []);
   }
   return startPi(route);
+}
+
+/**
+ * Ask a yes/no question on stderr and read the answer from stdin; anything
+ * but y or yes, or the end of stdin, is no.
+ *
+ * @param {string} question
+ * @returns {Promise<boolean>}
+ */
+async function confirm(question) {
+  const prompt = createInterface({ input: process.stdin, output: process.stderr });
+  const answer = await new Promise((resolve) => {
+    prompt.once("close", () => resolve(""));
+    prompt.question(question, resolve);
+  });
+  prompt.close();
+  return /^y(?:es)?$/i.test(String(answer).trim());
+}
+
+/**
+ * Run a thread command; the ones that open a session start Pi on it.
+ *
+ * @param {string[]} threadArgs
+ * @returns {Promise<number | undefined>}
+ */
+async function runThreads(threadArgs) {
+  // A reader that stops early (`ampi threads list --json | head -1`) closes the pipe: stop quietly.
+  process.stdout.on("error", (error) => {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
+    process.exit(0);
+  });
+  const pi = await import(PI_PACKAGE_NAME);
+  const result = await runThreadsCommand(threadArgs, {
+    pi,
+    cwd: process.cwd(),
+    env: process.env,
+    now: () => Date.now(),
+    columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+    confirm,
+  });
+  if ("code" in result) return result.code;
+  return startPi(routeAmpiArgv(result.piArgs));
 }

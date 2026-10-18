@@ -4,7 +4,7 @@ The `ampi` command: Pi with the ampi extensions loaded, plus Amp-compatible shor
 
 Status: released. Versioned on its own, next to [`@skippermissions/ampi`](../../README.md) in the same repository; while it is 0.x, a minor release may contain breaking changes.
 
-`ampi` starts the same interactive Pi session as `pi -e npm:@skippermissions/ampi`, with ampi's modes, tools, workers and terminal layout, and runs single prompts from scripts with `ampi -x`. It exists because a Pi package can only add long `--flags`: options such as `-m high` and `-x`, and later commands such as thread listings, need a command of their own. Everything the command does not handle itself goes to Pi unchanged, so Pi's options (`--model`, `-c`, `-r`, `-p`, `-e`) and its own commands (`install`, `list`, `config`, `mcp`, …) keep working.
+`ampi` starts the same interactive Pi session as `pi -e npm:@skippermissions/ampi`, with ampi's modes, tools, workers and terminal layout, and runs single prompts from scripts with `ampi -x`. It exists because a Pi package can only add long `--flags`: options such as `-m high` and `-x`, and commands such as `ampi threads`, need a command of their own. Everything the command does not handle itself goes to Pi unchanged, so Pi's options (`--model`, `-c`, `-r`, `-p`, `-e`) and its own commands (`install`, `list`, `config`, `mcp`, …) keep working.
 
 ## Install
 
@@ -21,7 +21,8 @@ ampi                     # interactive session in your default mode
 ampi -m high             # start in high mode (same as --ampi-mode high)
 ampi "fix the failing test in parser.test.ts"   # start with a first message
 ampi -x "list the npm scripts"                  # run one message and print the answer
-ampi -c                  # continue the most recent session (Pi's -c)
+ampi last                # continue the most recent session that is not archived
+ampi threads             # list this directory's sessions
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
@@ -91,6 +92,48 @@ The records, in order:
 - **Not included.** Subagent output is not streamed, so `parent_tool_use_id` is always `null`. `mcp_servers` is always empty, because Pi does not tell extensions the connection state of its MCP servers. Images in messages and tool results are left out, and Pi has no turn limit, so there is no `error_max_turns` result. Pi's own diagnostics stay on stderr; an error that stops Pi before the session starts is reported there, without records.
 - **Pi's own format.** `ampi -x --mode json` prints Pi's JSON event stream instead, with every streaming update.
 
+## Threads
+
+`ampi threads` works with the sessions Pi keeps on disk, together with the metadata ampi's thread index adds to them (archive date, labels). It reads the same session directory as Pi: `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR` and the `sessionDir` setting apply.
+
+```bash
+ampi threads                                   # this directory's sessions, newest first
+ampi threads list --all --archived --limit 10  # every directory, archived sessions included
+ampi threads list --json | jq -r 'select(.messageCount > 10) | .id'
+ampi threads continue 019a3c                   # open a session in the terminal UI
+ampi last                                      # open the most recent session that is not archived
+ampi threads markdown 019a3c > session.md      # the session as Markdown
+ampi threads export 019a3c | jq '.entries | length'
+ampi threads rename 019a3c "Parser cleanup"
+ampi threads archive 019a3c                    # unarchive, or archive --unarchive, undoes it
+ampi threads label 019a3c parser release
+ampi threads delete 019a3c                     # asks first; --yes skips the question
+```
+
+```text
+ID                                    Title                    Updated  Messages
+────────────────────────────────────  ───────────────────────  ───────  ────────
+019a3c71-5e0b-7c2a-9d41-0b6f2c8e1a10  Parser cleanup           51m ago        12
+019a3a02-77d4-7f19-8b3e-5c1d9e2f4a07  Fix the flaky test in…   2d ago          3
+```
+
+| Command | What it does |
+| --- | --- |
+| `threads list` (`ls`; also plain `threads`) | The sessions of the current directory, newest activity first: id, title (the session's name, else its first message), time since the last activity and message count. Archived sessions are left out. `--all` lists every directory, `--archived` (or `--include-archived`) adds archived sessions with an `archived` marker, `--limit <n>` stops after n sessions. Titles are cut to the terminal width; redirected output keeps them whole. |
+| `threads list --json` | One JSON object per line: `id`, `title`, `name` (when the session has one), `created` and `updated` (ISO 8601), `messageCount`, `cwd`, `path` (the session file), `parentSessionPath` for a fork, and from the thread index `archived`, `labels`, `color` and `pinned` when set. |
+| `threads continue <id>` (`c`) | Opens the session in the terminal UI through Pi's `--session`, with ampi loaded. Without an id it opens Pi's session picker; `--last` does what `ampi last` does. A session from another directory opens in that directory. |
+| `last` | Opens the most recent session of the current directory that is not archived. Pi's `-c` also counts archived sessions, such as the ones execute mode archives. |
+| `threads markdown <id>` (`md`) | Prints the session as Markdown: front matter (`title`, `sessionId`, `created`, `mode`), then a `## User` or `## Assistant` section per turn, with tool calls and results as fenced blocks. The same layout as ampi-threads' Markdown export. |
+| `threads export <id>` | Prints the session as one JSON object: the fields of `list --json` plus `entries`, every entry of the session file as Pi wrote it (Pi's session format, described in its `docs/session-format.md`), header first. |
+| `threads rename <id> <title>` (`r`) | Sets Pi's session name, as `/name` does, and records the title as typed by you. |
+| `threads archive <id>`, `threads unarchive <id>` | Archives the session in the thread index, or takes it out of the archive. |
+| `threads label <id> <label...>` | Adds labels to the ones the session has: 1 to 32 lowercase letters, digits or hyphens each, at most 20 per session. |
+| `threads delete <id>` | Asks `[y/N]` on stderr and reads the answer from stdin, then deletes the session file and its thread index record. `-y`/`--yes` skips the question. Run from the agent's own shell, it refuses to delete the session it runs in. |
+
+- **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
+- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error. `ampi threads --help` lists the commands and options.
+- **The thread index.** Archive dates, labels and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive` and `label` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -114,7 +157,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal).
 
 ## Development
 
