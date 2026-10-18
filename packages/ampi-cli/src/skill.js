@@ -142,7 +142,7 @@ Examples:
  */
 export async function runSkillCommand(argv, host) {
   const outcome = await dispatch(argv, host);
-  if (outcome.message !== undefined) host.err(`ampi: ${outcome.message}\n${outcome.code === 2 ? `${USAGE_HINT}\n` : ""}`);
+  if (outcome.message !== undefined) host.err(`ampi: ${clean(outcome.message)}\n${outcome.code === 2 ? `${USAGE_HINT}\n` : ""}`);
   return outcome.code;
 }
 
@@ -157,6 +157,14 @@ const usage = (message) => ({ code: 2, message });
  * @returns {Outcome}
  */
 const fail = (message) => ({ code: 1, message });
+
+/**
+ * Whether `name` could leave the directory it is joined to: empty, `.`, `..`
+ * or holding a path separator. Pi's own name rules are checked later.
+ *
+ * @param {string} name
+ */
+const isPathLike = (name) => name === "" || name === "." || name === ".." || /[\\/]/.test(name);
 
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
@@ -191,6 +199,7 @@ async function dispatch(argv, host) {
     return usage(spec.args === 0 ? `skill ${command} takes no arguments.` : `skill ${command} needs exactly one argument: ${wanted}.`);
   }
   if (values.global && values.target !== undefined) return usage(`skill ${command} takes --global or --target, not both.`);
+  if (typeof values.name === "string" && isPathLike(values.name)) return usage(`--name "${values.name}" is not a skill name.`);
   switch (command) {
     case "list":
       return list(host, values.json === true);
@@ -234,7 +243,7 @@ export async function readSessionSkills(pi, cwd) {
  */
 async function loadSkills(host) {
   const loaded = await host.readSkills();
-  for (const failure of loaded.failures) host.err(`ampi: ${failure}\n`);
+  for (const failure of loaded.failures) host.err(`ampi: ${clean(failure)}\n`);
   return loaded;
 }
 
@@ -271,11 +280,11 @@ async function list(host, json) {
     const description = clean(skill.description).replace(/\s+/g, " ").trim();
     lines.push("", `  ${clean(skill.name)} (${sourceOf(skill)})`);
     if (description !== "") lines.push(Number.isFinite(host.columns) ? cut(`    ${description}`, Math.max(host.columns, 20)) : `    ${description}`);
-    lines.push(`    ${skill.baseDir}`);
+    lines.push(`    ${clean(skill.baseDir)}`);
   }
   if (sorted.length === 0) lines.push("", "Install one with ampi skill add <source>.");
   host.out(`${lines.join("\n")}\n`);
-  for (const problem of problems) host.err(`ampi: ${problem.path ? `${problem.path}: ` : ""}${problem.message}\n`);
+  for (const problem of problems) host.err(`ampi: ${clean(`${problem.path ? `${problem.path}: ` : ""}${problem.message}`)}\n`);
   return { code: 0 };
 }
 
@@ -303,6 +312,15 @@ export function listSkillFiles(dir) {
 }
 
 /**
+ * Whether Pi loaded the skill from a `.md` file directly in a skills
+ * directory rather than from a directory's `SKILL.md`; its `baseDir` is then
+ * the whole skills directory.
+ *
+ * @param {PiSkill} skill
+ */
+const isSingleFile = (skill) => path.basename(skill.filePath) !== "SKILL.md";
+
+/**
  * @param {SkillHost} host
  * @param {string} name
  * @param {boolean} json
@@ -320,7 +338,7 @@ async function info(host, name, json) {
     // Pi loaded it, so it parsed a moment ago; show the rest without the extra fields.
   }
   const fields = Object.fromEntries(Object.entries(frontmatter).filter(([key]) => !["name", "description", "disable-model-invocation"].includes(key)));
-  const all = listSkillFiles(skill.baseDir);
+  const all = isSingleFile(skill) ? [path.relative(skill.baseDir, skill.filePath)] : listSkillFiles(skill.baseDir);
   const files = all.slice(0, INFO_FILE_LIMIT);
   const moreFiles = all.length - files.length;
   const source = sourceOf(skill);
@@ -342,8 +360,8 @@ async function info(host, name, json) {
   const value = (/** @type {unknown} */ field) => clean(typeof field === "string" ? field : JSON.stringify(field));
   const rows = [
     ["Source", source],
-    ["Directory", skill.baseDir],
-    ["File", skill.filePath],
+    ["Directory", clean(skill.baseDir)],
+    ["File", clean(skill.filePath)],
     ["Model invocation", skill.disableModelInvocation ? `disabled (only /skill:${skill.name} loads it)` : "allowed"],
     ...Object.entries(fields).map(([key, field]) => [clean(key), value(field)]),
   ];
@@ -551,6 +569,24 @@ const isInside = (target, cwd) => {
 };
 
 /**
+ * `file` with the links in the part of it that exists resolved; the rest,
+ * which does not exist yet, is appended as it is.
+ *
+ * @param {string} file An absolute path.
+ * @returns {string}
+ */
+function resolveExisting(file) {
+  /** @type {string[]} */
+  const missing = [];
+  let current = file;
+  while (!existsSync(current) && path.dirname(current) !== current) {
+    missing.unshift(path.basename(current));
+    current = path.dirname(current);
+  }
+  return path.join(realpathSync(current), ...missing);
+}
+
+/**
  * @param {SkillHost} host
  * @param {{ global: boolean, target?: string }} options
  * @returns {string}
@@ -631,6 +667,11 @@ function install(host, root, source, options, boundary) {
   if (twice !== undefined) return fail(`nothing installed; ${source} has two skills named "${twice}".`);
 
   const target = targetOf(host, options);
+  const realTarget = resolveExisting(target);
+  const enclosing = skills.find((skill) => isInside(realTarget, skill.dir));
+  if (enclosing !== undefined) {
+    return fail(`nothing installed; ${target} is inside the skill ${enclosing.dir}, which cannot be copied into itself. Choose another directory with --global or --target.`);
+  }
   for (const skill of skills) {
     const destination = path.join(target, skill.name);
     const existing = lstatOrUndefined(destination);
@@ -693,8 +734,14 @@ export function removalAdvice(skill) {
       return `"${skill.name}" loads from ${skill.baseDir}, through Pi's skills setting or ampi.skills.path. Remove that entry from the settings (ampi config edit), or delete the directory yourself.`;
     case "temporary":
       return `"${skill.name}" is loaded for this run only (${skill.baseDir}), from a --skill argument; there is nothing installed to remove.`;
-    default:
+    default: {
+      if (isSingleFile(skill)) return `"${skill.name}" is the single-file skill ${skill.filePath} (${label}). Delete that file to remove it.`;
+      const dirName = path.basename(skill.baseDir);
+      if (dirName !== skill.name) {
+        return `"${skill.name}" is in the directory ${skill.baseDir} (${label}), whose name differs from the skill's. Remove it with ampi skill remove ${dirName} --target ${parent}.`;
+      }
       return `"${skill.name}" is in ${parent} (${label}). Remove it there with ampi skill remove ${skill.name} --target ${parent}.`;
+    }
   }
 }
 
@@ -705,7 +752,7 @@ export function removalAdvice(skill) {
  * @returns {Promise<Outcome>}
  */
 async function remove(host, name, options) {
-  if (name === "." || name === ".." || name === "" || /[\\/]/.test(name)) return usage(`"${name}" is not a skill name.`);
+  if (isPathLike(name)) return usage(`"${name}" is not a skill name.`);
   const targets =
     options.target !== undefined || options.global
       ? [targetOf(host, options)]

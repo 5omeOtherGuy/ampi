@@ -163,7 +163,7 @@ Pi reads skills from its own locations (`.pi/skills`, `~/.agents/skills`, projec
 
 ### Where a skill comes from
 
-`skill-sources.ts` (`classifyMmrSkillSource`) reads the `sourceInfo` Pi attaches to each skill and its path, and gives every surface that lists skills the same answer: a group (`user`, `project`, `package` with the package's source, `settings`, or `temporary` for `--skill` and `-e`) and an origin (`pi`, `agents` for `~/.agents/skills` and project `.agents/skills`, `claude` for `.claude/skills`). The folders above reach Pi as temporary extension paths, so they are grouped by their path: `~/.claude/skills` is `user`, another `.claude/skills` is `project`, and `ampi.skills.path` entries are `settings`. ampi-tui's Skills dialog shows the groups as headings; the `ampi skill` command prints them as labels (`agents-user`, `package:npm:…`), from a plain-JS copy that a parity test keeps equal.
+`skill-sources.ts` (`classifyMmrSkillSource`) reads the `sourceInfo` Pi attaches to each skill and its path, and gives every surface that lists skills the same answer: a group (`user`, `project`, `package` with the package's source, `settings`, or `temporary` for `--skill` and `-e`) and an origin (`pi`, `agents` for `~/.agents/skills` and project `.agents/skills`, `claude` for `.claude/skills`). The folders above reach Pi as temporary extension paths, so they are grouped by their path: `~/.claude/skills` is `user`, another `.claude/skills` is `project`, and `ampi.skills.path` entries are `settings`. ampi-tui's Skills dialog shows the groups as headings; the `ampi skill` command prints them as labels (`agents-user`, `package:npm:…`), from a plain-JS copy, with a test that runs both over one fixture set.
 
 ### Auto-compaction
 

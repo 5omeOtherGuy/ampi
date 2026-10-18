@@ -176,10 +176,11 @@ describe("ampi skill add and remove: local sources and targets", () => {
   const sources = path.join(dir, "sources");
   const single = path.join(sources, "pdf-tools");
   const multi = path.join(sources, "collection");
-  const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+  const saved = { agentDir: process.env.PI_CODING_AGENT_DIR, home: process.env.HOME };
 
   before(() => {
     process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.HOME = path.join(dir, "home");
     mkdirSync(project, { recursive: true });
     writeSkill(single, "pdf-tools");
     write(path.join(single, "scripts", "extract.sh"), "echo extract\n");
@@ -192,8 +193,13 @@ describe("ampi skill add and remove: local sources and targets", () => {
   });
 
   after(() => {
-    if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-    else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", saved.agentDir],
+      ["HOME", saved.home],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -248,6 +254,34 @@ describe("ampi skill add and remove: local sources and targets", () => {
     const several = await run(["add", multi, "--name", "one"], { cwd: project, agentDir });
     assert.equal(several.code, 2);
     assert.match(several.err, /--name needs a source with one skill; .* has 2/);
+  });
+
+  it("refuses a --name that is a path before touching any file", async () => {
+    const docs = path.join(project, "docs", "SKILL.md");
+    write(docs, "ORIGINAL\n");
+    const before = readdirSync(project).sort();
+    for (const name of ["../../../docs", "../../escaped", "a/b", "..", "."]) {
+      const result = await run(["add", single, "--name", name], { cwd: project, agentDir });
+      assert.equal(result.code, 2, name);
+      assert.match(result.err, /--name ".*" is not a skill name/, name);
+    }
+    assert.equal(readFileSync(docs, "utf8"), "ORIGINAL\n");
+    assert.deepEqual(readdirSync(project).sort(), before);
+    assert.equal(existsSync(path.join(project, ".agents", "escaped")), false);
+    rmSync(path.join(project, "docs"), { recursive: true });
+  });
+
+  it("refuses a target inside the skill it copies, and creates no directory there", async () => {
+    // Developing a skill in its own directory and adding it there: the default target lies inside the source.
+    const own = path.join(dir, "own-skill");
+    writeSkill(own, "own-skill");
+    const result = await run(["add", "."], { cwd: own, agentDir });
+    assert.equal(result.code, 1);
+    assert.match(result.err, /nothing installed; .*\.agents\/skills is inside the skill .*own-skill, which cannot be copied into itself/);
+    assert.deepEqual(readdirSync(own), ["SKILL.md"]);
+    const nested = await run(["add", own, "--target", path.join(own, "vendor")], { cwd: project, agentDir });
+    assert.equal(nested.code, 1);
+    assert.deepEqual(readdirSync(own), ["SKILL.md"]);
   });
 
   it("refuses skills Pi would not load as they are, and installs nothing from that source", async () => {
@@ -312,12 +346,45 @@ describe("ampi skill add and remove: local sources and targets", () => {
     assert.ok(user.err.includes(`"review" is in ${agentsDir} (agents-user). Remove it there with ampi skill remove review --target ${agentsDir}.`), user.err);
     const unknown = await run(["remove", "missing", "--yes"], { cwd: project, agentDir, skills });
     assert.match(unknown.err, /no skill named "missing" in .*, and none loads in this directory/);
+    // A directory named unlike its skill: the advice names the directory, and following it works.
+    const projectSkills = path.join(project, ".agents", "skills");
+    writeSkill(path.join(projectSkills, "foo-dir"), "foo");
+    const renamed = piSkill("foo", info(path.join(projectSkills, "foo-dir", "SKILL.md"), "auto", "project"));
+    const misnamed = await run(["remove", "foo"], { cwd: project, agentDir, skills: [renamed] });
+    assert.equal(misnamed.code, 1);
+    assert.ok(misnamed.err.includes(`Remove it with ampi skill remove foo-dir --target ${projectSkills}.`), misnamed.err);
+    const followed = await run(["remove", "foo-dir", "--target", projectSkills, "--yes"], { cwd: project, agentDir });
+    assert.equal(followed.code, 0, followed.err);
+    assert.equal(existsSync(path.join(projectSkills, "foo-dir")), false);
+    // A .md file directly in a skills directory: Pi's baseDir is the whole directory, so only the file is named.
+    const userSkills = path.join(agentDir, "skills");
+    const notes = removalAdvice(piSkill("notes", info(path.join(userSkills, "notes.md"), "auto", "user"), userSkills));
+    assert.equal(notes, `"notes" is the single-file skill ${path.join(userSkills, "notes.md")} (user). Delete that file to remove it.`);
     assert.match(removalAdvice(piSkill("x", info("/tmp/x/SKILL.md", "cli", "temporary"))), /for this run only/);
     assert.match(removalAdvice(piSkill("y", info("/srv/y/SKILL.md", "local", "user"))), /skills setting or ampi\.skills\.path/);
   });
 });
 
 const gitMissing = spawnSync("git", ["--version"]).error !== undefined;
+
+describe("ampi skill list and info: hand-built skills", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-skill-files-"));
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("lists only the file of a single-file skill, and strips control characters from printed paths", async () => {
+    const skills = path.join(dir, "skills");
+    write(path.join(skills, "notes.md"), skillFile("name: notes", "description: Notes."));
+    writeSkill(path.join(skills, "other"), "other");
+    const notes = piSkill("notes", info(path.join(skills, "notes.md"), "auto", "user"), skills);
+    const result = await run(["info", "notes", "--json"], { cwd: dir, agentDir: dir, skills: [notes] });
+    assert.equal(result.code, 0, result.err);
+    assert.deepEqual(JSON.parse(result.out).files, ["notes.md"]);
+    const escaped = path.join(dir, "evil\u001b[2Jdir");
+    const listed = await run(["list"], { cwd: dir, agentDir: dir, skills: [piSkill("evil", info(path.join(escaped, "SKILL.md"), "auto", "user"))] });
+    assert.ok(listed.out.includes(`    ${path.join(dir, "evil[2Jdir")}\n`), listed.out);
+    assert.doesNotMatch(listed.out, /\u001b/);
+  });
+});
 
 describe("ampi skill add: git sources", { skip: gitMissing ? "git is not installed" : false }, () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-skill-git-"));
