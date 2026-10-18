@@ -11,7 +11,7 @@
 - `ampi-core` — implemented;
 - `ampi-session-fallback` — implemented; interactive session-scoped fallback on subscription quota/rate-limit errors;
 - `ampi-patch` — implemented (`apply_patch`);
-- `ampi-tasks` — implemented (`task_list` plus the pinned task-list widget);
+- `ampi-tasks` — implemented (`task_list` plus the pinned task-list widget, and `ask_user_choice`);
 - `ampi-web` — implemented; opt-in via `AMPI_WEB_ENABLE` (legacy `MMR_WEB_ENABLE` still accepted); `web_search` works no-key out of the box (DuckDuckGo HTML fallback) and prefers SearXNG (user-controlled URL) or Brave (with `BRAVE_API_KEY`) when configured; an opt-in managed SearXNG sidecar can spawn/stop a local instance on demand;
 - `ampi-github` — implemented; opt-in read-only GitHub repository tools used directly and by the `librarian` worker gate;
 - `ampi-subagents` — concrete workers shipped (`finder`, `oracle`, `Task`, `librarian`); owns `Task`/`finder`/`oracle`/`librarian` logical names and the `ampi-subagents` feature gate. Shipped workers use the `ampi-core` subagent execution route (`--ampi-subagent <name>`) so the child Pi process applies a profile-resolved model/thinking/tool allowlist verbatim; `librarian` remains `gated` until the required read-only GitHub tools are registered and source-owned by `ampi-github`; the feature gate reports `enabled` with the active capability list.
@@ -79,7 +79,7 @@ Other extensions own higher-risk or higher-variance capabilities and plug into c
 | `ampi-core` | Mode registry, mode commands/flags, model and thinking resolution, request-policy hook, tool allowlist enforcement, mode prompt rewrite, mode state, session-identity primitive, shared contracts. | Implemented. |
 | `ampi-session-fallback` | Session-scoped quota/rate-limit fallback picker, managed model update, persisted override, retry-message rewrite. | Implemented. |
 | `ampi-patch` | Safe file patching: the `apply_patch` local utility tool and its structured patch engine. | Implemented. |
-| `ampi-tasks` | Session-local todo tracking: the `task_list` tool and its pinned task-list widget. | Implemented. |
+| `ampi-tasks` | Session-local todo tracking: the `task_list` tool and its pinned task-list widget; `ask_user_choice`, a question to the user with a list of answers. | Implemented. |
 | `ampi-web` | `web_search`, `read_web_page`, web/network policy, pluggable SearXNG/Brave/DuckDuckGo backends, custom reader with Readability + Turndown, and the opt-in managed SearXNG sidecar. | Implemented (opt-in). |
 | `ampi-github` | Read-only GitHub repository tools, token/env handling, response bounds, source-owned tool registration for `librarian`. | Implemented (opt-in). |
 | `ampi-subagents` | `Task`, `finder`, `oracle`, `librarian`, worker runner. Non-GitHub repository-provider variants remain deferred. | Implemented with gated `librarian`. |
@@ -176,6 +176,7 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `ls` | Pi (core) | Identity-resolved. |
 | `apply_patch` | `ampi-patch` | Real tool in `ampi-patch`; deferred when the extension is not loaded. Requested by locked modes on `openai`, `openai-codex`, and `azure` routes (or with `ampiCore.editTools: "patch"`). |
 | `task_list` | `ampi-tasks` | Real tool in `ampi-tasks` (session-local todo); kept available in every enforced mode until each mode explicitly adopts a future `Task` subagent replacement. |
+| `ask_user_choice` | `ampi-tasks` | Real tool in `ampi-tasks`; active in `low`/`medium`/`high`/`ultra`, never in a subagent. Fails at once without a UI. |
 | `web_search` | `ampi-web` | Active when network is enabled. Uses SearXNG when configured, Brave when keyed, and DuckDuckGo HTML as a no-key fallback. `WebSearchDetails.backend` reports the concrete path. |
 | `read_web_page` | `ampi-web` | Active when network is enabled; uses the custom in-process reader and needs no provider key. |
 | `Task` | `ampi-subagents` | Active in `low`/`medium`/`high`/`ultra`. Mode-derived bounded worker uses `ampi-core`'s `task-subagent` profile. |
@@ -228,7 +229,7 @@ New local utility tools must follow the multi-surface design pattern: full guida
 
 ### `ampi-tasks`
 
-Owns the session-local `task_list` tool and its pinned task-list widget. State is persisted as `ampi-tasks.todo-state` `CustomEntry` records in the current Pi session log. See [`src/extensions/ampi-tasks/README.md`](../src/extensions/ampi-tasks/README.md).
+Owns the session-local `task_list` tool and its pinned task-list widget, and `ask_user_choice`. State is persisted as `ampi-tasks.todo-state` `CustomEntry` records in the current Pi session log. See [`src/extensions/ampi-tasks/README.md`](../src/extensions/ampi-tasks/README.md).
 
 > The deferred image/artifact inspection and `chart` rendering surfaces remain unbuilt local utilities; diagnostics belong to user-configured MCP/IDE tools rather than a canonical ampi tool. The former combined `ampi-toolbox` extension is now an unregistered, deprecated compatibility shim that only re-exports `ampi-patch` and `ampi-tasks`.
 

@@ -126,7 +126,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     exportSubpath: "./extensions/ampi-tasks",
     exportAliases: ["./extensions/mmr-tasks"],
     autoLoaded: true,
-    tools: ["task_list"],
+    tools: ["task_list", "ask_user_choice"],
     dynamicTools: false,
     featureGates: [],
     riskClass: "local-mutation",

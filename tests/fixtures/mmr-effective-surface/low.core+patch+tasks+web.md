@@ -39,6 +39,7 @@ Use context first; reach for a tool when it would change your answer — never g
 - ls: List directory contents
 - apply_patch: Apply a Codex-format patch to workspace files
 - task_list: Plan and track work as a session-local todo list
+- ask_user_choice: Ask the user to pick one of a few known answers
 - web_search: Search the public web for a research objective
 - read_web_page: Fetch a public http(s) page through ampi-web's custom reader and return Markdown text
 
@@ -67,6 +68,7 @@ In addition to the tools above, you may have access to other custom tools depend
 - Advance subtask status the same way as top-level items: mark each subtask in_progress when you start it and completed when it is done, so the pinned widget shows which child step is currently being worked on.
 - Only mark a task completed when it is fully accomplished. If tests fail, verification is missing, implementation is partial, or required files/dependencies cannot be found, keep the task active or add a blocking follow-up instead.
 - Before sending a final response after using task_list, update task_list first: if the final response completes the active work, submit the full list with that item marked completed; do not leave an item in_progress unless the response is explicitly an interim/status update that says what remains.
+- Use ask_user_choice only when a decision needs the user and the possible answers are known in advance; settle everything else yourself.
 - Use web_search when you need up-to-date or precise documentation. Use read_web_page for fetching full content from a specific URL.
 - Use web_search only for public, non-sensitive research; do not include secrets, API keys, or private data in web_search.objective or web_search.search_queries.
 - Use read_web_page to read the contents of a web page at a given URL. When only the url parameter is set, read_web_page returns the contents as Markdown; when an objective is provided, read_web_page returns excerpts relevant to that objective.
@@ -636,6 +638,70 @@ Parameters:
   },
   "required": [
     "tasks"
+  ],
+  "type": "object"
+}
+```
+
+# ask_user_choice
+
+Owner: ampi-tasks
+
+Prompt snippet: Ask the user to pick one of a few known answers
+
+Prompt guidelines:
+- Use ask_user_choice only when a decision needs the user and the possible answers are known in advance; settle everything else yourself.
+
+Description:
+Ask the user to pick one answer from a short list.
+
+Call this only when the next step depends on a decision that belongs to the
+user and you can name the possible answers in advance (for example which of
+two approaches to take, or which file to change). Do not use it for questions
+you can settle by reading the code or running a command, for open-ended
+questions, or to ask for permission to continue work that was already
+requested.
+
+The user sees the question and the options as a list and picks one. Set
+`allow_other` when none of the options may fit; the user can then type
+their own answer. The result gives the chosen option word for word.
+
+If the user closes the list without choosing, ask in plain text or continue
+with an assumption that you state. In sessions without an interactive user
+the tool fails at once: decide yourself and say what you decided.
+
+Parameters:
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "allow_other": {
+      "default": false,
+      "description": "Add a last row that lets the user type an answer that is not in the list. Default false.",
+      "type": "boolean"
+    },
+    "options": {
+      "description": "Between 2 and 8 distinct answers, in the order the user should see them.",
+      "items": {
+        "description": "One answer, at most 80 characters.",
+        "maxLength": 80,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 8,
+      "minItems": 2,
+      "type": "array"
+    },
+    "question": {
+      "description": "The question, on one line (at most 200 characters). It is the dialog's title.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "question",
+    "options"
   ],
   "type": "object"
 }

@@ -172,7 +172,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-session-fallback` | On | Quota/rate-limit/overload classification and explicit fallback |
 | `ampi-patch` | On | Path-safe `apply_patch` editing |
 | `ampi-shell` | On | Amp-compatible background shell tools: `shell_command` leaves long commands running, `shell_command_status` follows them, `shell_command_kill` stops them (`ampiShell.enabled: false` turns it off) |
-| `ampi-tasks` | On | Session-local `task_list` planning widget |
+| `ampi-tasks` | On | Session-local `task_list` planning widget, and `ask_user_choice` for putting a decision to you as a list of answers |
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, and Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |

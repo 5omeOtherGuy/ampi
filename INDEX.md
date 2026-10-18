@@ -28,7 +28,7 @@ Quick links for navigating the repository.
 The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
 
 - [`src/extensions/ampi-patch/index.ts`](src/extensions/ampi-patch/index.ts) — owns `apply_patch` (context-matched multi-file workspace edits). README pending.
-- [`src/extensions/ampi-tasks/index.ts`](src/extensions/ampi-tasks/index.ts) — owns the session-local `task_list` and pinned widget. README pending.
+- [`src/extensions/ampi-tasks/index.ts`](src/extensions/ampi-tasks/index.ts) — owns the session-local `task_list`, its pinned widget, and `ask_user_choice`. README pending.
 - [`src/extensions/ampi-custom-subagents/index.ts`](src/extensions/ampi-custom-subagents/index.ts) — discovers and registers custom Markdown subagents. README pending.
 
 Deprecated / unregistered:

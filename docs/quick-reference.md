@@ -89,6 +89,7 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 | I need to... | Use | Notes |
 | --- | --- | --- |
 | Track multi-step work | `task_list` | Session-local; rendered in the Pi UI |
+| Let the model ask you to pick an answer | `ask_user_choice` | `question`, `options` (2 to 8), `allow_other?`; fails at once without a UI |
 | Show or hide the pinned list | `/tasks show`, `/tasks hide` | No toggle key by default; `--task-widget-toggle-key <key>` binds one |
 
 ## Optional reach

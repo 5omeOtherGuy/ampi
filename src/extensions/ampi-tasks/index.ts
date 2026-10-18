@@ -10,6 +10,7 @@ import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 registerAmpiOwnedExtensionPath(fileURLToPath(import.meta.url));
 import { registerMmrToolProvider } from "../ampi-core/runtime.js";
 import type { MmrToolProvider, MmrToolRule } from "../ampi-core/types.js";
+import { registerAskUserChoiceTool } from "./ask-user-choice-tool.js";
 import { registerTaskListWiring } from "./task-list-wiring.js";
 
 /**
@@ -25,11 +26,11 @@ import { registerTaskListWiring } from "./task-list-wiring.js";
  * avoids prototype-chain leaks (`constructor`, `toString`, ...) and keeps
  * the literal types tight.
  */
-const TASKS_SHIPPED_TOOL_NAMES = ["task_list"] as const;
+const TASKS_SHIPPED_TOOL_NAMES = ["task_list", "ask_user_choice"] as const;
 type TasksShippedTool = (typeof TASKS_SHIPPED_TOOL_NAMES)[number];
 // Widened deliberately: the Set seed remains typed as TasksShippedTool (so
 // typos in TASKS_SHIPPED_TOOL_NAMES are caught), but provider.resolve
-// accepts an arbitrary string and TS rejects Set<"task_list">.has(string).
+// accepts an arbitrary string and TS rejects Set<TasksShippedTool>.has(string).
 const TASKS_LOGICAL_TOOL_SET: ReadonlySet<string> = new Set<TasksShippedTool>(
   TASKS_SHIPPED_TOOL_NAMES,
 );
@@ -61,14 +62,15 @@ export function registerMmrTasksProviders(registry: { registerProvider(provider:
 export const registerAmpiTasksProviders = registerMmrTasksProviders;
 
 export default function ampiTasksExtension(pi: ExtensionAPI): void {
-  // Task-list wiring marks task_list as ampi-owned before registering its
-  // tool, so the free-mode baseline can drop it.
+  // Both registrations mark their tool as ampi-owned before registering it,
+  // so the free-mode baseline can drop it.
   registerTaskListWiring(pi);
+  registerAskUserChoiceTool(pi);
 
-  // Claim ownership of the task_list tool on ampi-core's tool registry so
-  // /ampi-status credits this extension as owner. Identity resolution against
-  // the live Pi inventory still decides activity; the catalog in ampi-core
-  // covers cache-isolated loads where this provider call cannot reach the
-  // central registry.
+  // Claim ownership of task_list and ask_user_choice on ampi-core's tool
+  // registry so /ampi-status credits this extension as owner. Identity
+  // resolution against the live Pi inventory still decides activity; the
+  // catalog in ampi-core covers cache-isolated loads where this provider call
+  // cannot reach the central registry.
   registerMmrToolProvider(createTasksProvider());
 }

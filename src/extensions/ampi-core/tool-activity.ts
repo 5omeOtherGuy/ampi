@@ -919,6 +919,19 @@ export function classifyToolCall(toolName: string, rawArgs: unknown, options: Cl
       const url = text(args.url) ?? "";
       return { kind: "web-read", toolName, present: "Reading", past: "Read", object: url };
     }
+    case "ask_user_choice": {
+      // The question while the dialog is open; the answer once it closed.
+      const answer = text(details.choice);
+      const detail = answer ? firstLine(answer) : details.dismissed === true ? "no answer" : undefined;
+      return {
+        kind: "tool",
+        toolName,
+        present: "Asking",
+        past: "Asked",
+        object: firstLine(text(args.question) ?? ""),
+        ...(detail ? { detail, detailSeparator: " → " } : {}),
+      };
+    }
     default:
       break;
   }
