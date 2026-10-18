@@ -57,6 +57,12 @@ describe("ampi-tui overlay frame", () => {
     expectFixture("ampi-tui-frame", "narrow-24", lines);
   });
 
+  it("draws a hint without a key as dim text only", () => {
+    const lines = frame.renderMmrFrame({ hints: [HINTS[0], { text: "Showing: all" }], lines: [] }, 32, theme);
+    assert.equal(plain(lines).at(-1), "╰─── Esc close · Showing: all ─╯");
+    assert.ok(lines.at(-1).includes("\x1b[2m · \x1b[22m\x1b[2mShowing: all\x1b[22m"), "no accent key before the text");
+  });
+
   it("draws a plain border without a title or hints", () => {
     assert.deepEqual(plain(frame.renderMmrFrame({ lines: ["x"] }, 10, theme)), [
       "╭────────╮",

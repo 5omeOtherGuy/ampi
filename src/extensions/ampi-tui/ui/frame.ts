@@ -14,7 +14,8 @@ import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi
  *
  * Rounded corners, the title in bold in the theme's `warning` color inside
  * the top border, and optional key hints right-aligned inside the bottom
- * border (key in `accent`, text and the ` · ` separators in `dim`). Content
+ * border (key in `accent`, text and the ` · ` separators in `dim`; a hint
+ * without a key is all text). Content
  * starts after one space and ends one column before the gutter, so a line
  * has {@link mmrFrameInnerWidth} columns. The border itself takes the
  * terminal's default color.
@@ -24,8 +25,8 @@ import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi
 export type MmrFrameTheme = Pick<Theme, "fg" | "bold" | "style" | "colors">;
 
 export interface MmrFrameHint {
-  /** Key in display form, e.g. `Esc`. */
-  readonly key: string;
+  /** Key in display form, e.g. `Esc`; leave it out for a hint that is only text. */
+  readonly key?: string;
   readonly text: string;
 }
 
@@ -67,10 +68,10 @@ function renderHints(hints: readonly MmrFrameHint[], room: number, theme: MmrFra
   // Drop hints from the end until the rest fits.
   for (let count = hints.length; count > 0; count--) {
     const shown = hints.slice(0, count);
-    const plain = shown.map((hint) => `${hint.key} ${hint.text}`).join(HINT_SEPARATOR);
+    const plain = shown.map((hint) => (hint.key ? `${hint.key} ${hint.text}` : hint.text)).join(HINT_SEPARATOR);
     if (visibleWidth(plain) + 2 > room) continue;
     const styled = shown
-      .map((hint) => `${theme.fg("accent", hint.key)} ${theme.fg("dim", hint.text)}`)
+      .map((hint) => `${hint.key ? `${theme.fg("accent", hint.key)} ` : ""}${theme.fg("dim", hint.text)}`)
       .join(theme.fg("dim", HINT_SEPARATOR));
     return ` ${styled} `;
   }

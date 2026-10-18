@@ -10,6 +10,7 @@ import {
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
 import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
+import { getMmrPromptHistory, type MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
@@ -31,6 +32,8 @@ export interface MmrTuiCommandHost {
   openHelpKeymap(ctx: ExtensionContext): void;
   /** Show the keymap in effect as JSONC. */
   openKeymapJson(ctx: ExtensionContext): void;
+  /** Open the prompt history picker. */
+  openPromptHistory(ctx: ExtensionContext, history: MmrPromptHistory): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -51,6 +54,8 @@ const EXTERNAL_EDITOR_ACTION = "app.editor.external";
 const THINKING_TOGGLE_ACTION = "app.thinking.toggle";
 const PROMPT_HAS_TEXT: MmrCommandAvailability = { state: "unavailable", reason: "the prompt has text" };
 const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-core is not loaded" };
+const HISTORY_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-threads is not loaded" };
+const TERMINAL_ONLY: MmrCommandAvailability = { state: "unavailable", reason: "only in Pi's terminal UI" };
 
 /** ampi-core slash commands the ampi rows run; the `pi` category leaves them out. */
 const CORE_SLASH = { status: "ampi-status", changelog: "ampi-changelog", config: "ampi-config", mode: "mode" } as const;
@@ -194,6 +199,23 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
           : { state: "unavailable", reason: "the prompt is not focused" },
       run: () => {
         runMmrEditorAction(host.getTui(), EXTERNAL_EDITOR_ACTION);
+      },
+    },
+    {
+      id: "prompt.history",
+      noun: "prompt",
+      verb: "history",
+      description: "Pick a prompt you sent before and put it into the prompt",
+      defaultKey: "ctrl+r",
+      // ampi-threads records the history and registers it in ampi-core.
+      availability: (ctx) => {
+        if (ctx.mode !== "tui") return TERMINAL_ONLY;
+        return getMmrPromptHistory() ? AVAILABLE : HISTORY_MISSING;
+      },
+      run: (ctx) => {
+        const history = getMmrPromptHistory();
+        if (!history) throw new Error(HISTORY_MISSING.reason);
+        host.openPromptHistory(ctx, history);
       },
     },
     {

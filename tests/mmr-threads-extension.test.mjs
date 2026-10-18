@@ -17,17 +17,20 @@ const quitEvent = { type: "session_shutdown", reason: "quit" };
 let dir;
 let registry;
 let seam;
+let historySeam;
 
 beforeEach(async () => {
   dir = mkdtempSync(path.join(os.tmpdir(), "ampi-threads-ext-"));
   registry = await importSource("extensions/ampi-core/command-registry.ts");
   seam = await importSource("extensions/ampi-core/thread-index.ts");
+  historySeam = await importSource("extensions/ampi-core/prompt-history.ts");
   registry.__resetMmrCommandsForTests();
 });
 
 afterEach(() => {
   registry.__resetMmrCommandsForTests();
   assert.equal(seam.getMmrThreadIndex(), undefined, "each case must release the thread index");
+  assert.equal(historySeam.getMmrPromptHistory(), undefined, "each case must release the prompt history");
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -42,12 +45,24 @@ function writeThreads(threads) {
 async function loadExtension(settings = {}, mock = createMockPi()) {
   const { createMmrThreadsExtension } = await importSource("extensions/ampi-threads/index.ts");
   const { createMmrThreadIndexStore } = await importSource("extensions/ampi-threads/index-store.ts");
+  const { createMmrPromptHistoryStore } = await importSource("extensions/ampi-threads/history-store.ts");
+  let second = 0;
   createMmrThreadsExtension({
     loadSettings: () => ({ enabled: true, autoArchiveOnQuit: false, ...settings }),
     createStore: (options) => createMmrThreadIndexStore({ ...options, baseDir: path.join(dir, "threads") }),
+    createHistoryStore: () =>
+      createMmrPromptHistoryStore({
+        baseDir: path.join(dir, "threads", "history"),
+        now: () => new Date(Date.UTC(2026, 9, 18, 10, 0, second++)).toISOString(),
+      }),
     now: () => ARCHIVED_AT,
   })(mock.pi);
   return mock;
+}
+
+/** Prompts recorded for `cwd`, newest first, read through the registered seam. */
+async function recorded(cwd) {
+  return (await historySeam.getMmrPromptHistory().read(cwd, "workspace")).map((entry) => entry.text);
 }
 
 /** A session context that also carries the command-only `newSession`, recording its calls. */
@@ -87,6 +102,7 @@ describe("ampi-threads extension", () => {
     );
     assert.ok(t.commands.has("ampi-thread"));
     assert.equal(seam.getMmrThreadIndex()?.path, indexFile());
+    assert.equal(historySeam.getMmrPromptHistory()?.dir, path.join(dir, "threads", "history"));
 
     await t.handlers.get("session_shutdown")({ type: "session_shutdown", reason: "new" }, t.ctx);
     assert.deepEqual(registry.getMmrCommands(), []);
@@ -223,6 +239,42 @@ describe("ampi-threads extension", () => {
     assert.deepEqual([...mock.commands.keys()], []);
     assert.deepEqual(registry.getMmrCommands(), []);
     assert.equal(seam.getMmrThreadIndex(), undefined);
+    assert.equal(historySeam.getMmrPromptHistory(), undefined);
+  });
+});
+
+describe("ampi-threads prompt history recording", () => {
+  const input = (text, source = "interactive") => ({ type: "input", text, source });
+
+  it("records the prompts typed into the terminal, per working directory", async () => {
+    const t = await started({}, { cwd: "/work/parser" });
+    try {
+      await t.handlers.get("input")(input("Rename the parser"), t.ctx);
+      await t.handlers.get("input")(input("Now fix the imports"), t.ctx);
+      const other = createMockExtensionContext({ cwd: "/work/website" });
+      await t.handlers.get("input")(input("Deploy the preview"), other.ctx);
+      assert.deepEqual(await recorded("/work/parser"), ["Now fix the imports", "Rename the parser"]);
+      assert.deepEqual(await recorded("/work/website"), ["Deploy the preview"]);
+    } finally {
+      await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
+    }
+  });
+
+  it("leaves out slash commands, prompts from extensions and RPC clients, and runs outside the terminal UI", async () => {
+    const t = await started({}, { cwd: "/work/parser" });
+    try {
+      await t.handlers.get("input")(input("/model"), t.ctx);
+      await t.handlers.get("input")(input("  /review the parser"), t.ctx);
+      await t.handlers.get("input")(input("sent by an extension", "extension"), t.ctx);
+      await t.handlers.get("input")(input("sent over RPC", "rpc"), t.ctx);
+      const print = createMockExtensionContext({ cwd: "/work/parser", hasUI: false });
+      await t.handlers.get("input")(input("a print run"), print.ctx);
+      assert.deepEqual(await recorded("/work/parser"), []);
+      await t.handlers.get("input")(input("typed by you"), t.ctx);
+      assert.deepEqual(await recorded("/work/parser"), ["typed by you"]);
+    } finally {
+      await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
+    }
   });
 });
 
@@ -261,6 +313,41 @@ describe("ampi-threads keys in the ampi-tui dispatcher", () => {
       const popup = context.overlays.at(-1).component.render(48).join("\n");
       assert.doesNotMatch(popup, /Archive/);
       assert.match(popup, /Ctrl\+C {2}Quit/);
+    } finally {
+      keys.stop();
+      await mock.handlers.get("session_shutdown")(quitEvent, context.ctx);
+    }
+  });
+});
+
+describe("ampi-threads prompt history in ampi-tui", () => {
+  it("opens on Ctrl+R with this workspace's prompts, and Enter puts the one picked into the prompt unsent", async () => {
+    const mock = await loadExtension();
+    const context = sessionContext({ cwd: "/work/parser" });
+    await mock.handlers.get("session_start")(startEvent, context.ctx);
+    const { createMmrTuiKeys } = await importSource("extensions/ampi-tui/keys/install.ts");
+    const keys = createMmrTuiKeys(mock.pi, { now: () => 0, setTimer: () => ({}), clearTimer: () => {} });
+    keys.start(context.ctx, () => undefined);
+    try {
+      await mock.handlers.get("input")({ type: "input", text: "Rename the parser", source: "interactive" }, context.ctx);
+      await mock.handlers.get("input")({ type: "input", text: "Now fix the imports", source: "interactive" }, context.ctx);
+      context.state.editorText = "half-typed";
+
+      assert.equal(context.terminalInput.send("\x12"), true, "Ctrl+R is taken");
+      // The picker reads the file before it opens; a later read on the same file queues behind that one.
+      await recorded("/work/parser");
+      await new Promise((resolve) => setImmediate(resolve));
+      const overlay = context.overlays.at(-1);
+      const rows = overlay.component.render(106);
+      assert.equal(rows[0].startsWith("╭─ Prompt History "), true);
+      assert.match(rows[4], /^│ {3}Now fix the imports +│$/);
+      assert.match(rows[5], /^│ {3}Rename the parser +│$/);
+
+      overlay.component.handleInput("\x1b[B");
+      overlay.component.handleInput("\r");
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(context.state.editorText, "Rename the parser");
+      assert.deepEqual(mock.calls.sendUserMessage, [], "nothing is sent");
     } finally {
       keys.stop();
       await mock.handlers.get("session_shutdown")(quitEvent, context.ctx);

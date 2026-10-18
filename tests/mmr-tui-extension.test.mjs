@@ -219,8 +219,8 @@ describe("ampi-tui extension", () => {
       const lines = box.render(80).map(stripTerminalSequences);
       assert.match(lines[1], /^│ Alt\+Enter newline +@ mention files +│$/, "no mode keys without ampi-core");
       assert.match(lines[2], /^│ Ctrl\+X leader key +Ctrl\+O open command palette +│$/);
-      assert.match(lines[5], /^│ Ctrl\+G open in editor +Alt\+T toggle details +│$/);
-      assert.match(lines[6], /^│ \? toggle shortcuts help +│$/);
+      assert.match(lines[5], /^│ Ctrl\+G open in editor +Ctrl\+R history +│$/);
+      assert.match(lines[6], /^│ Alt\+T toggle details +\? toggle shortcuts help +│$/);
       assert.equal(lines[7], `│ ${"─".repeat(76)} │`);
 
       box.handleInput("\x1b");

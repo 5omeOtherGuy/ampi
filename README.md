@@ -119,6 +119,7 @@ Ctrl+C Ctrl+E        # archive this session and quit
 Ctrl+X               # leader key; a popup lists the keys that can follow it
 Home / End           # jump to the start / end of the transcript (empty prompt)
 Ctrl+G               # edit the prompt in your external editor
+Ctrl+R               # prompt history: filter, pick a prompt you sent before, Enter puts it in the prompt
 Ctrl+O               # command palette: filter, pick and run any command
 /                    # command palette, when the prompt is empty
 Alt+T                # expand or collapse tool output and thinking together

@@ -1,0 +1,26 @@
+╭─ [1m[33mPrompt History[39m[22m ─────────────────────────────────────────────────────────╮
+│                                                                          │
+│ > [7m [27m                                                                      │
+│                                                                          │
+│ [48;5;3m  [38;5;0mRename the parser module and update its imports[39m                       [49m[38;5;243m[48;5;236m█[49m[39m│
+│   Why does the parser drop trailing comments?                           [38;5;243m[48;5;236m█[49m[39m│
+│   Move the tokenizer into its own module, keep the public parse funct…  [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 1                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 2                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 3                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 4                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 5                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 6                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 7                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 8                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 9                                                      [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 10                                                     [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 11                                                     [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 12                                                     [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 13                                                     [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 14                                                     [38;5;243m[48;5;236m█[49m[39m│
+│   Earlier prompt 15                                                     [38;5;243m[48;5;236m[7m▃[27m[49m[39m│
+│   Earlier prompt 16                                                     [38;5;243m[48;5;236m [49m[39m│
+│   Earlier prompt 17                                                     [38;5;243m[48;5;236m [49m[39m│
+│   Earlier prompt 18                                                     [38;5;243m[48;5;236m [49m[39m│
+╰──────────────── [34mAlt+W/Ctrl+T[39m [2mtoggle filter[22m[2m · [22m[2mShowing: current workspace[22m ─╯
