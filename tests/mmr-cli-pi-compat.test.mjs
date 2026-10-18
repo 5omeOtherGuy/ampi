@@ -18,6 +18,7 @@ import {
   readPiSettings,
   setPiSessionName,
 } from "../packages/ampi-cli/src/pi-compat.js";
+import { createSessionId } from "../packages/ampi-cli/src/threads.js";
 
 /** @param {string} file @param {unknown} json */
 const writeJson = (file, json) => {
@@ -163,6 +164,23 @@ describe("Pi session calls used by the thread commands", () => {
     assert.equal(renamed.name, "Parser fix");
     const last = JSON.parse(readFileSync(projectFile, "utf8").trim().split("\n").at(-1));
     assert.deepEqual([last.type, last.name], ["session_info", "Parser fix"]);
+  });
+});
+
+describe("Pi's session ids, as threads new and threads continue make them", () => {
+  it("accepts the ids threads new makes under --session-id, refuses ids outside its rules, and makes the same shape itself", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const ids = [createSessionId(0, new Uint8Array(10)), createSessionId(2 ** 48 - 1, new Uint8Array(10).fill(0xff)), createSessionId(Date.now())];
+    for (const id of ids) {
+      assert.equal(pi.parseArgs(["--session-id", id]).sessionId, id);
+      // Pi checks an id it is given against its id rules before it uses it.
+      assert.equal(pi.SessionManager.inMemory("/work/project", { id }).getSessionId(), id);
+    }
+    for (const id of ["-leading", "trailing.", "with space", ""]) {
+      assert.throws(() => pi.SessionManager.inMemory("/work/project", { id }), /Session id must/, JSON.stringify(id));
+    }
+    // threads continue recognises a complete id by this shape, so Pi's own ids must have it too.
+    assert.match(pi.SessionManager.inMemory("/work/project").getSessionId(), /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });
 

@@ -1,9 +1,9 @@
 // ampi's thread index file, read and changed from the `ampi threads`
 // commands, which run outside Pi and so cannot reach the index that
-// ampi-threads registers inside a session. The file format and the label
-// rules are those of src/extensions/ampi-threads/index-store.ts, which this
-// plain JavaScript cannot import; tests/mmr-cli-threads.test.mjs checks that
-// both read each other's files and accept the same labels.
+// ampi-threads registers inside a session. The file format and the label and
+// color rules are those of src/extensions/ampi-threads/index-store.ts, which
+// this plain JavaScript cannot import; tests/mmr-cli-threads.test.mjs checks
+// that both read each other's files and accept the same labels and colors.
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -21,6 +21,7 @@ const INDEX_VERSION = 1;
 const LABELS_MAX = 20;
 const LABEL_MAX_LENGTH = 32;
 const LABEL = /^[a-z0-9-]+$/;
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 /** Session ids ampi-threads refuses as index keys: it sets aside an index that holds one. */
 const UNSAFE_IDS = new Set(["__proto__", "prototype", "constructor"]);
 
@@ -67,6 +68,20 @@ export function validateThreadLabels(labels) {
     throw new ThreadIndexError(`a session takes at most ${LABELS_MAX} labels, not ${unique.length}.`);
   }
   return unique;
+}
+
+/** The color names a session can have besides an RGB hex color. */
+export const THREAD_COLORS = Object.freeze(["blue", "purple", "pink", "red", "orange", "yellow", "green", "cyan", "gray"]);
+
+/**
+ * Whether ampi-threads accepts `value` as a session's color: one of
+ * `THREAD_COLORS` as written, or `#rrggbb` in either case.
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export function isThreadColor(value) {
+  return typeof value === "string" && (THREAD_COLORS.includes(value) || HEX_COLOR.test(value));
 }
 
 /** @param {unknown} value @returns {value is Record<string, any>} */

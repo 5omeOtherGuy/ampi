@@ -1,14 +1,23 @@
 // `ampi threads …` and `ampi last`: Amp-compatible thread commands on Pi's
 // session files. Sessions are listed and renamed through Pi (pi-compat.js);
-// archive dates, labels and the title source live in ampi's thread index
-// (thread-index.js). Opening a session in the terminal UI is left to Pi: the
-// commands that do it return the Pi arguments to start with.
+// archive dates, labels, colors and the title source live in ampi's thread
+// index (thread-index.js). Opening a session in the terminal UI is left to Pi:
+// the commands that do it return the Pi arguments to start with.
+import { randomBytes } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { listPiSessions, piAgentDir, setPiSessionName } from "./pi-compat.js";
 import { formatThreadMarkdown } from "./thread-markdown.js";
-import { readThreadIndex, ThreadIndexError, threadIndexPath, updateThreadRecord, validateThreadLabels } from "./thread-index.js";
+import {
+  isThreadColor,
+  readThreadIndex,
+  THREAD_COLORS,
+  ThreadIndexError,
+  threadIndexPath,
+  updateThreadRecord,
+  validateThreadLabels,
+} from "./thread-index.js";
 
 /**
  * @typedef {import("./thread-index.js").ThreadRecord} ThreadRecord
@@ -37,12 +46,18 @@ const TITLE_MIN = 10;
 /** C0 and C1 control characters: a title is printed to a terminal, so none may start an escape sequence. */
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+/** A complete session id as `threads new` prints it: a UUID in lowercase hex, which Pi's id rules also accept. */
+const COMPLETE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The largest time a UUID version 7 holds: 48 bits of milliseconds. */
+const UUID_TIME_MAX = 2 ** 48 - 1;
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list", l: "list", c: "continue", md: "markdown", r: "rename" };
+const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename" };
 
 /** Options of each thread command; an id and other arguments are positionals. */
 const OPTIONS = /** @type {const} */ ({
+  // --visibility is accepted only to refuse it with a reason.
+  new: { json: { type: "boolean" }, visibility: { type: "string" } },
   list: {
     all: { type: "boolean" },
     archived: { type: "boolean" },
@@ -57,6 +72,7 @@ const OPTIONS = /** @type {const} */ ({
   archive: { unarchive: { type: "boolean" } },
   unarchive: {},
   label: {},
+  color: {},
   delete: { yes: { type: "boolean", short: "y" } },
 });
 
@@ -66,13 +82,15 @@ const OPTIONS = /** @type {const} */ ({
  * @returns {string}
  */
 export function formatThreadsHelp() {
-  return `ampi threads: list, read and change the sessions Pi keeps, with ampi's thread metadata
+  return `ampi threads: create, list, read and change the sessions Pi keeps, with ampi's thread metadata
 
 Usage: ampi threads [command] [options]
        ampi last
 
 Commands:
 
+  new, n                        Print the id of a new, empty session in this directory
+      --json                    Print {"id", "cwd"} as JSON instead
   list, ls                      List this directory's sessions, newest first (the default command)
       --all                     List the sessions of every directory
       --archived                Include archived sessions (--include-archived works too)
@@ -87,6 +105,8 @@ Commands:
       --unarchive               Take it out of the archive instead
   unarchive <id>                Take the session out of the archive
   label <id> <label...>         Add labels: lowercase letters, digits and hyphens
+  color <id> <color>            Set the color: blue, purple, pink, red, orange, yellow, green,
+                                cyan, gray or #rrggbb; none removes it
   delete <id>                   Delete the session file after asking for confirmation
       -y, --yes                 Delete without asking
 
@@ -94,6 +114,11 @@ Commands:
 
 <id> is a session id or its first characters, as the list prints it. A prefix that more
 than one session shares is refused, with the matching ids.
+
+A new session has no file until its first message. Open it with ampi threads continue <id>,
+or send that message with ampi -x --session-id <id> "message". threads continue also starts a
+session in this directory under any complete id no session has yet. Sessions stay on this
+machine, so threads new has no --visibility: sharing one needs a hosted service.
 
 Exit status: 0 on success, 1 when no session or several match the id or a change fails,
 2 on a usage error.
@@ -105,6 +130,8 @@ Examples:
   $ ampi threads continue 019a3c
   $ ampi threads markdown 019a3c > session.md
   $ ampi threads label 019a3c release docs
+  $ ampi threads color 019a3c green
+  $ id=$(ampi threads new) && ampi -x --session-id "$id" "summarize the README"
 `;
 }
 
@@ -144,6 +171,26 @@ export function formatRelativeTime(then, now) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+/**
+ * A new session id in the form Pi gives its sessions, a UUID version 7: the
+ * time in milliseconds in the first 48 bits, so ids sort by creation time,
+ * then the version and variant bits, and random bits for the rest.
+ *
+ * @param {number} time Milliseconds since the epoch.
+ * @param {Uint8Array} [random] 10 random bytes; the version and variant bits overwrite part of them.
+ * @returns {string}
+ */
+export function createSessionId(time, random = randomBytes(10)) {
+  if (!Number.isInteger(time) || time < 0 || time > UUID_TIME_MAX) throw new RangeError(`a session id cannot hold the time ${time}.`);
+  const bytes = Buffer.alloc(16);
+  bytes.writeUIntBE(time, 0, 6);
+  bytes.set(random.subarray(0, 10), 6);
+  bytes[6] = 0x70 | (bytes[6] & 0x0f);
+  bytes[8] = 0x80 | (bytes[8] & 0x3f);
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /** @param {ThreadsHost} host */
 const indexFileOf = (host) => threadIndexPath(piAgentDir(host.pi));
 
@@ -172,7 +219,8 @@ async function listSessions(host, scope) {
  *
  * @param {ThreadsHost} host
  * @param {string} query
- * @returns {Promise<{ session: PiSessionInfo } | { code: number, message: string }>}
+ * @returns {Promise<{ session: PiSessionInfo } | { code: number, message: string, missing?: string }>} `missing`
+ *   is the id when no session matches it.
  */
 async function resolveSession(host, query) {
   const id = query.trim().replace(/^@/, "");
@@ -182,7 +230,7 @@ async function resolveSession(host, query) {
   if (exact) return { session: exact };
   const matches = sessions.filter((session) => session.id.startsWith(id));
   if (matches.length === 1) return { session: matches[0] };
-  if (matches.length === 0) return { code: 1, message: `no session has an id starting with ${id}.` };
+  if (matches.length === 0) return { code: 1, message: `no session has an id starting with ${id}.`, missing: id };
   const candidates = matches.map((session) => `  ${session.id}  ${threadTitle(session)}`).join("\n");
   return { code: 1, message: `${id} matches ${matches.length} sessions; give more of the id:\n${candidates}` };
 }
@@ -356,13 +404,15 @@ async function dispatch(argv, host) {
   }
   const { values, positionals } = parsed;
   switch (sub) {
+    case "new":
+      return create(host, values, positionals);
     case "list":
       return list(host, values, positionals);
     case "continue":
       if (values.last) return positionals.length === 0 ? continueLast(host) : usage("threads continue --last takes no id.");
       if (positionals.length === 0) return { piArgs: ["--resume"] };
       if (positionals.length > 1) return usage("threads continue takes one session id.");
-      return withSession(host, positionals[0], (session) => ({ piArgs: ["--session", session.path] }));
+      return continueSession(host, positionals[0]);
     case "markdown":
     case "export":
       if (positionals.length !== 1) return usage(`threads ${sub} takes one session id.`);
@@ -383,6 +433,8 @@ async function dispatch(argv, host) {
       return archive(host, positionals[0], sub === "archive" && !values.unarchive);
     case "label":
       return label(host, positionals);
+    case "color":
+      return color(host, positionals);
     default: // delete
       if (positionals.length !== 1) return usage("threads delete takes one session id.");
       return remove(host, positionals[0], values.yes === true);
@@ -403,6 +455,42 @@ async function withSession(host, query, action) {
   } catch (error) {
     return { code: 1, message: messageOf(error) };
   }
+}
+
+/**
+ * Print the id of a new session. Nothing is written: Pi creates the session
+ * file with the first message sent under the id.
+ *
+ * @param {ThreadsHost} host
+ * @param {Record<string, string | boolean | undefined>} values
+ * @param {string[]} positionals
+ * @returns {Outcome}
+ */
+function create(host, values, positionals) {
+  if (values.visibility !== undefined) {
+    return usage("threads new has no --visibility: sessions stay on this machine, and sharing one needs a hosted service.");
+  }
+  if (positionals.length > 0) return usage(`threads new takes no arguments, not ${positionals[0]}.`);
+  const id = createSessionId(host.now());
+  host.out(values.json ? `${JSON.stringify({ id, cwd: host.cwd })}\n` : `${id}\n`);
+  return { code: 0 };
+}
+
+/**
+ * Open the session an id or prefix names. A complete id that no session has
+ * starts a new session under it in this directory, through Pi's
+ * `--session-id`.
+ *
+ * @param {ThreadsHost} host
+ * @param {string} query
+ * @returns {Promise<Outcome>}
+ */
+async function continueSession(host, query) {
+  const resolved = await resolveSession(host, query);
+  if ("session" in resolved) return { piArgs: ["--session", resolved.session.path] };
+  if (resolved.missing === undefined || !COMPLETE_ID.test(resolved.missing)) return resolved;
+  host.err(`ampi: no session has the id ${resolved.missing}; a new session starts under it in this directory.\n`);
+  return { piArgs: ["--session-id", resolved.missing] };
 }
 
 /**
@@ -506,6 +594,28 @@ async function label(host, [query, ...labels]) {
     const merged = validateThreadLabels([...(recordOf(readThreadIndex(file), session.id)?.labels ?? []), ...labels]);
     updateThreadRecord(file, session.id, { labels: merged });
     host.out(`Labels of ${session.id}: ${merged.join(", ")}.\n`);
+    return { code: 0 };
+  });
+}
+
+/**
+ * Set or, with `none`, remove a session's color. Names and hex colors are
+ * stored in lowercase.
+ *
+ * @param {ThreadsHost} host
+ * @param {string[]} positionals
+ * @returns {Promise<Outcome>}
+ */
+async function color(host, positionals) {
+  if (positionals.length !== 2) return usage("threads color takes a session id and a color.");
+  const [query, given] = positionals;
+  const value = given.trim().toLowerCase();
+  if (value !== "none" && !isThreadColor(value)) {
+    return usage(`${JSON.stringify(given)} is not a thread color: use ${THREAD_COLORS.join(", ")}, #rrggbb, or none to remove it.`);
+  }
+  return withSession(host, query, (session) => {
+    updateThreadRecord(indexFileOf(host), session.id, { color: value === "none" ? null : value });
+    host.out(`Color of ${session.id}: ${value}.\n`);
     return { code: 0 };
   });
 }

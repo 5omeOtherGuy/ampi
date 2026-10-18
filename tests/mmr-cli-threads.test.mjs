@@ -1,9 +1,10 @@
 // `ampi threads …` and `ampi last` (packages/ampi-cli/src/threads.js): each
 // command against a temporary agent directory whose sessions are written
 // through Pi's SessionManager on a fixed clock, with hand-written expected
-// output; prefix resolution and delete refusals; and the thread index file
-// shared with ampi-threads, read and written from both sides. The last suite
-// spawns the command for the exit codes and the confirmation question.
+// output; new session ids; prefix resolution and delete refusals; and the
+// thread index file shared with ampi-threads, read and written from both
+// sides. The last suite spawns the command for the exit codes and the
+// confirmation question.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -13,8 +14,15 @@ import { after, before, describe, it, mock } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
 import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
 import { formatThreadMarkdown } from "../packages/ampi-cli/src/thread-markdown.js";
-import { readThreadIndex, threadIndexPath, updateThreadRecord, validateThreadLabels } from "../packages/ampi-cli/src/thread-index.js";
-import { formatRelativeTime, formatThreadsHelp, formatThreadTable, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
+import {
+  isThreadColor,
+  readThreadIndex,
+  THREAD_COLORS,
+  threadIndexPath,
+  updateThreadRecord,
+  validateThreadLabels,
+} from "../packages/ampi-cli/src/thread-index.js";
+import { createSessionId, formatRelativeTime, formatThreadsHelp, formatThreadTable, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -144,6 +152,45 @@ describe("ampi threads: routing and help", () => {
       assert.deepEqual(result, { code: 0 }, args.join(" "));
       assert.equal(out, formatThreadsHelp());
     }
+  });
+});
+
+describe("ampi threads: new sessions", () => {
+  // NOW is 1792317600000 ms, 0x01a14e743100.
+  const zeros = new Uint8Array(10);
+  const ones = new Uint8Array(10).fill(0xff);
+  const agentDir = path.join(temporary, "new");
+  before(() => {
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    delete process.env.PI_CODING_AGENT_SESSION_DIR;
+  });
+
+  it("makes a UUID version 7 with the clock's milliseconds first and the version and variant bits set", () => {
+    assert.equal(createSessionId(NOW, zeros), "01a14e74-3100-7000-8000-000000000000");
+    assert.equal(createSessionId(NOW, ones), "01a14e74-3100-7fff-bfff-ffffffffffff");
+    const id = createSessionId(NOW);
+    assert.match(id, /^01a14e74-3100-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    assert.notEqual(createSessionId(NOW), id, "the rest is random");
+    assert.throws(() => createSessionId(2 ** 48), RangeError);
+  });
+
+  it("sorts ids by time, whatever their random bits", () => {
+    const earlier = createSessionId(NOW, ones);
+    const later = createSessionId(NOW + 1, zeros);
+    assert.equal(later, "01a14e74-3101-7000-8000-000000000000");
+    assert.ok(earlier < later);
+  });
+
+  it("prints the id alone, or with this directory for --json, and writes nothing", async () => {
+    const { result, out, err } = await run(["threads", "new"]);
+    assert.deepEqual(result, { code: 0 });
+    assert.equal(err, "");
+    assert.match(out, /^01a14e74-3100-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\n$/);
+    const json = JSON.parse((await run(["threads", "n", "--json"])).out);
+    assert.deepEqual(Object.keys(json), ["id", "cwd"]);
+    assert.equal(json.cwd, DEMO);
+    assert.match(json.id, /^01a14e74-3100-7/);
+    assert.ok(!existsSync(agentDir), "nothing was written to Pi's directory");
   });
 });
 
@@ -348,6 +395,25 @@ describe("ampi threads: reading sessions", () => {
     assert.deepEqual((await run(["threads", "continue", "--last"])).result, last);
   });
 
+  it("starts a new session through Pi's --session-id for a complete id no session has, and only then", async () => {
+    const fresh = "01a14e74-3100-7abc-9def-0123456789ab";
+    for (const query of [fresh, `@${fresh}`]) {
+      const { result, err } = await run(["threads", "continue", query]);
+      assert.deepEqual(result, { piArgs: ["--session-id", fresh] }, query);
+      assert.equal(err, `ampi: no session has the id ${fresh}; a new session starts under it in this directory.\n`);
+    }
+    // An id that is not complete, or not a UUID in lowercase, stays a prefix nothing matches.
+    for (const query of ["01a14e74", "01a14e74-3100-7abc-9def-0123456789a", fresh.toUpperCase(), "release-candidate"]) {
+      const { result, err } = await run(["threads", "c", query]);
+      assert.deepEqual(result, { code: 1 }, query);
+      assert.equal(err, `ampi: no session has an id starting with ${query}.\n`);
+    }
+    // A prefix several sessions share is still refused.
+    const shared = await run(["threads", "continue", "019a0000-aaaa"]);
+    assert.deepEqual(shared.result, { code: 1 });
+    assert.match(shared.err, /^ampi: 019a0000-aaaa matches 2 sessions; give more of the id:\n/);
+  });
+
   it("prints a session as the same Markdown ampi-threads exports", async () => {
     const { result, out } = await run(["threads", "md", "0199a0de"]);
     assert.deepEqual(result, { code: 0 });
@@ -400,6 +466,9 @@ describe("ampi threads: reading sessions", () => {
       [["threads", "continue", A, B], "threads continue takes one session id."],
       [["threads", "rename", A], "threads rename takes a session id and a title."],
       [["threads", "label", A, "Bad_Label"], 'label "Bad_Label" is not allowed: use lowercase letters, digits and hyphens.'],
+      [["threads", "new", "--visibility", "private"], "threads new has no --visibility: sessions stay on this machine, and sharing one needs a hosted service."],
+      [["threads", "new", "draft"], "threads new takes no arguments, not draft."],
+      [["threads", "color", A], "threads color takes a session id and a color."],
       [["last", "now"], "last takes no arguments, not now."],
     ]) {
       const { result, err } = await run(args);
@@ -473,6 +542,62 @@ describe("ampi threads: changing sessions", () => {
     ]) {
       assert.deepEqual(outcome(validateThreadLabels, labels), outcome(validateMmrThreadLabels, labels), JSON.stringify(labels));
     }
+  });
+
+  it("sets a color by name or #rrggbb in lowercase, keeps the other metadata, and removes it with none", async () => {
+    for (const [given, stored] of [
+      ["green", "green"],
+      ["GRAY", "gray"],
+      ["#3F2D1D", "#3f2d1d"],
+      ["#0a0b0c", "#0a0b0c"],
+    ]) {
+      const { result, out } = await run(["threads", "color", "019a0000-aaaa-7000-8000-000000000001", given]);
+      assert.deepEqual(result, { code: 0 }, given);
+      assert.equal(out, `Color of ${A}: ${stored}.\n`);
+      // ampi-threads reads what the command wrote.
+      assert.equal((await store.get(A)).color, stored, given);
+    }
+    const listed = (await run(["threads", "list", "--json"])).out.trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(listed.find((session) => session.id === A).color, "#0a0b0c");
+
+    const { result, out } = await run(["threads", "color", A, "None"]);
+    assert.deepEqual(result, { code: 0 });
+    assert.equal(out, `Color of ${A}: none.\n`);
+    assert.equal((await store.get(A)).color, undefined);
+    assert.ok((await store.get(A)).labels.length > 0, "the labels stay");
+  });
+
+  it("refuses a color ampi-threads does not accept, listing the accepted ones, and changes nothing", async () => {
+    const index = readFileSync(threadIndexPath(agentDir), "utf8");
+    for (const given of ["teal", "#3f2d1", "#3f2d1dff", "3f2d1d", "rgb(1,2,3)", ""]) {
+      const { result, err } = await run(["threads", "color", A, given]);
+      assert.deepEqual(result, { code: 2 }, given);
+      assert.equal(
+        err,
+        `ampi: ${JSON.stringify(given)} is not a thread color: use blue, purple, pink, red, orange, yellow, green, cyan, gray, #rrggbb, or none to remove it.\nRun ampi threads --help for the thread commands.\n`,
+      );
+    }
+    assert.equal(readFileSync(threadIndexPath(agentDir), "utf8"), index);
+  });
+
+  it("accepts the same colors as ampi-threads, and reads the colors it writes", async () => {
+    const { MMR_THREAD_COLORS } = await importSource("extensions/ampi-threads/index-store.ts");
+    assert.deepEqual([...THREAD_COLORS], [...MMR_THREAD_COLORS]);
+    const probe = path.join(temporary, "color-probe");
+    const shared = (await importSource("extensions/ampi-threads/index-store.ts")).createMmrThreadIndexStore({ baseDir: probe });
+    for (const value of [...MMR_THREAD_COLORS, "Blue", "GREEN", "#abcdef", "#ABCDEF", "#AbC123", "#abcde", "#abcdeg", "abcdef", "none", "", " blue", 7, null]) {
+      let storeAccepts = true;
+      await shared.update(B, { color: value }).catch(() => {
+        storeAccepts = false;
+      });
+      // A null color removes it, which the store allows; it is no color to accept.
+      if (value === null) continue;
+      assert.equal(isThreadColor(value), storeAccepts, JSON.stringify(value));
+    }
+    await store.update(B, { color: "#ABCDEF" });
+    assert.equal(readThreadIndex(threadIndexPath(agentDir))[B].color, "#ABCDEF");
+    const listed = (await run(["threads", "list", "--json"])).out.trim().split("\n").map((line) => JSON.parse(line));
+    assert.equal(listed.find((session) => session.id === B).color, "#ABCDEF");
   });
 
   it("writes an index ampi-threads reads, keeps what it does not change, and refuses one from a newer version", async () => {
