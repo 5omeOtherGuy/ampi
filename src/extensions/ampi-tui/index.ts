@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
 import { getMmrCommands } from "../ampi-core/command-registry.js";
@@ -11,12 +11,16 @@ import { buildMmrShortcutHelpEntries } from "./editor/help.js";
 import { createMmrPromptBoxInstall } from "./editor/install.js";
 import { createMmrPromptQueue } from "./editor/queue.js";
 import { createMmrStatusFeed } from "./editor/status-feed.js";
+import { canMmrSetDetailsExpanded, setMmrDetailsExpanded } from "./keys/commands.js";
 import { createMmrTuiKeys } from "./keys/install.js";
 import { createMmrMessageNavigation } from "./transcript/navigation.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
 
 /** Name `ampi-tui` registers under in ampi-core's chrome-owner seam. */
 const MMR_TUI_CHROME_OWNER = "ampi-tui";
+
+/** Session starts that open a transcript; a reload keeps the details as they were. */
+const DETAILS_DEFAULT_REASONS: ReadonlySet<string> = new Set(["startup", "new", "resume", "fork"]);
 
 export interface MmrTuiFactoryOverrides {
   loadSettings?: () => MmrTuiSettings;
@@ -35,6 +39,22 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     let releaseChrome: (() => void) | undefined;
     let tui: TUI | undefined;
     let footerData: ReadonlyFooterDataProvider | undefined;
+    /** The session whose details still wait to be expanded (`ampi.terminal.detailsExpandedByDefault`). */
+    let expandDetailsFor: ExtensionContext | undefined;
+
+    /**
+     * Expand the details once the prompt editor can be reached: showing
+     * thinking runs its thinking toggle, and at session start the editor may
+     * not be mounted or focused yet. Tried at session start and after each
+     * frame until it has run once.
+     */
+    function expandDetailsWhenReady(): void {
+      const ctx = expandDetailsFor;
+      const detailsHost = { getTui: () => tui, pi };
+      if (!ctx || !canMmrSetDetailsExpanded(detailsHost)) return;
+      expandDetailsFor = undefined;
+      setMmrDetailsExpanded(detailsHost, ctx, true);
+    }
     const navigation = createMmrMessageNavigation(pi);
     const look = installMmrTuiLook(pi, settings, navigation.isSelected);
     const feed = createMmrStatusFeed(pi, {
@@ -47,6 +67,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       helpEntries: () =>
         buildMmrShortcutHelpEntries({ keymap: keys.keymap(), commands: getMmrCommands(), modeKeys: getMmrModeState() !== undefined }),
       steerQueued: () => queue.steerNext(),
+      alwaysIncludePaths: settings.alwaysIncludePaths,
     });
     const titleNotify = createMmrTitleNotify(pi, feed, { settings: settings.notifications });
     const queue = createMmrPromptQueue(pi, { feed, getTui: () => tui });
@@ -61,7 +82,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       onEscape: () => navigation.clear(),
     });
 
-    pi.on("session_start", (_event, ctx) => {
+    pi.on("session_start", (event, ctx) => {
       // Only the interactive terminal has chrome to own. Print, JSON and RPC
       // runs, subagent workers included, stay untouched.
       if (ctx.mode !== "tui") return;
@@ -74,7 +95,15 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
         tui = footerTui;
         footerData = data;
         const unsubscribe = data.onBranchChange(() => footerTui.requestRender());
-        return { render: () => [], invalidate() {}, dispose: unsubscribe };
+        return {
+          render: () => {
+            // After the frame, not during it: the thinking toggle rebuilds the transcript.
+            if (expandDetailsFor) queueMicrotask(expandDetailsWhenReady);
+            return [];
+          },
+          invalidate() {},
+          dispose: unsubscribe,
+        };
       });
       // The theme and header go first, so the prompt box draws in the ampi
       // theme from its first frame and the welcome card's key listener sees
@@ -86,9 +115,12 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       keys.start(ctx, () => tui);
       navigation.start(ctx, () => tui);
       titleNotify.start(ctx);
+      expandDetailsFor = settings.detailsExpandedByDefault && DETAILS_DEFAULT_REASONS.has(event.reason) ? ctx : undefined;
+      expandDetailsWhenReady();
     });
 
     pi.on("session_shutdown", (event, ctx) => {
+      expandDetailsFor = undefined;
       navigation.stop();
       keys.stop();
       queue.stop();

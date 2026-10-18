@@ -27,6 +27,29 @@ export interface MmrTuiSettings {
   quietStartup?: boolean;
   /** Notification switches; {@link MMR_TUI_NOTIFICATION_DEFAULTS} when absent. */
   notifications?: MmrTuiNotificationSettings;
+  /** `ampi.terminal.detailsExpandedByDefault`: start sessions with tool output and thinking expanded. Off by default. */
+  detailsExpandedByDefault?: boolean;
+  /** `ampi.fuzzy.alwaysIncludePaths`: globs, relative to the working directory, that `@` file mentions offer even when git ignores them. */
+  alwaysIncludePaths?: readonly string[];
+}
+
+/** The settings `ampi-tui` reads from the top-level `ampi` block, by their names there. */
+type MmrAmpiBlockSettings = Pick<MmrTuiSettings, "detailsExpandedByDefault" | "alwaysIncludePaths">;
+
+/**
+ * `ampi.terminal.detailsExpandedByDefault` and `ampi.fuzzy.alwaysIncludePaths`
+ * as the file sets them, each only when it has the right type. The one place
+ * these names are read.
+ */
+function readAmpiBlock(value: unknown): MmrAmpiBlockSettings {
+  const ampi = isRecord(value) && isRecord(value.ampi) ? value.ampi : undefined;
+  const details = isRecord(ampi?.terminal) ? ampi.terminal.detailsExpandedByDefault : undefined;
+  const paths = isRecord(ampi?.fuzzy) ? ampi.fuzzy.alwaysIncludePaths : undefined;
+  return {
+    detailsExpandedByDefault: typeof details === "boolean" ? details : undefined,
+    alwaysIncludePaths:
+      Array.isArray(paths) && paths.every((entry) => typeof entry === "string") ? (paths as string[]) : undefined,
+  };
 }
 
 /** The `ampiTui` block, or the nested `ampi.tui` one. */
@@ -59,11 +82,13 @@ function readQuietStartup(value: unknown): boolean | undefined {
 
 /**
  * Load `ampi-tui` settings: `ampiTui.enabled` and `ampiTui.notifications`
- * (or nested under `ampi.tui`) and Pi's own `quietStartup` from the global
+ * (or nested under `ampi.tui`), `ampi.terminal.detailsExpandedByDefault`,
+ * `ampi.fuzzy.alwaysIncludePaths` and Pi's own `quietStartup` from the global
  * `~/.pi/agent/settings.json`, then the project `<cwd>/.pi/settings.json`,
  * then `AMPI_TUI_ENABLE` (legacy `MMR_TUI_ENABLE`) for `enabled`. The latest
- * source wins, per key. A settings file that cannot be read is skipped;
- * `ampi-core` already reports it in `/ampi-status`.
+ * source wins, per key; a value of the wrong type is skipped. A settings file
+ * that cannot be read is skipped; `ampi-core` already reports it in
+ * `/ampi-status`.
  */
 export function loadMmrTuiSettings(
   cwd: string,
@@ -74,6 +99,8 @@ export function loadMmrTuiSettings(
   let enabled = true;
   let quietStartup = false;
   let notifications: MmrTuiNotificationSettings = { ...MMR_TUI_NOTIFICATION_DEFAULTS };
+  let detailsExpandedByDefault = false;
+  let alwaysIncludePaths: readonly string[] = [];
 
   for (const filePath of [path.join(homeDirectory, ".pi/agent/settings.json"), path.join(cwd, ".pi/settings.json")]) {
     let value: unknown;
@@ -85,8 +112,11 @@ export function loadMmrTuiSettings(
     enabled = readEnabled(value) ?? enabled;
     quietStartup = readQuietStartup(value) ?? quietStartup;
     notifications = readNotifications(value, notifications);
+    const ampi = readAmpiBlock(value);
+    detailsExpandedByDefault = ampi.detailsExpandedByDefault ?? detailsExpandedByDefault;
+    alwaysIncludePaths = ampi.alwaysIncludePaths ?? alwaysIncludePaths;
   }
 
   enabled = parseBoolEnv(readPreferredEnv(env, "AMPI_TUI_ENABLE", "MMR_TUI_ENABLE")?.value) ?? enabled;
-  return { enabled, quietStartup, notifications };
+  return { enabled, quietStartup, notifications, detailsExpandedByDefault, alwaysIncludePaths };
 }

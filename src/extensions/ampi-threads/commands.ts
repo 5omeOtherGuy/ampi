@@ -45,6 +45,7 @@ const NOTHING_TO_ARCHIVE: MmrCommandAvailability = { state: "hidden" };
 const NO_MESSAGES: MmrCommandAvailability = { state: "unavailable", reason: "this session has no messages yet" };
 const ALREADY_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is already archived" };
 const NOT_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is not archived" };
+const NOT_SAVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is not saved (Pi runs with --no-session)" };
 const NO_SWITCH_REASON: Readonly<Record<MmrThreadSwitchDirection, string>> = {
   previous: "no session to go back to",
   next: "no session to go forward to",
@@ -161,6 +162,24 @@ async function copyMarkdown(host: MmrThreadCommandHost, ctx: ExtensionContext): 
     return;
   }
   ctx.ui.notify("Copied the thread as Markdown", "info");
+}
+
+/** A session with messages that Pi saves to a file can be continued later. */
+function resumeAvailability(ctx: ExtensionContext): MmrCommandAvailability {
+  if (!hasMmrSessionMessages(ctx)) return NO_MESSAGES;
+  return ctx.sessionManager.getSessionFile() === undefined ? NOT_SAVED : AVAILABLE;
+}
+
+/** Copy `ampi threads continue <session id>`, the shell command that continues this session, with a notice either way. */
+async function copyResumeCommand(host: MmrThreadCommandHost, ctx: ExtensionContext): Promise<void> {
+  const command = `ampi threads continue ${ctx.sessionManager.getSessionId()}`;
+  try {
+    await host.copyText(command);
+  } catch (error) {
+    ctx.ui.notify(`Could not copy the resume command: ${error instanceof Error ? error.message : String(error)}`, "error");
+    return;
+  }
+  ctx.ui.notify(`Copied the resume command: ${command}`, "info");
 }
 
 /**
@@ -285,6 +304,16 @@ export function createMmrThreadCommands(host: MmrThreadCommandHost): MmrCommandD
       description: "Copy this session to the clipboard as Markdown",
       availability: (ctx) => (hasMmrSessionMessages(ctx) ? AVAILABLE : NO_MESSAGES),
       run: (ctx) => copyMarkdown(host, ctx),
+    },
+    {
+      // An Amp-compatible id, so keymaps carry over; a Pi session has no URL, so it copies the resume command.
+      id: "thread.copyURL",
+      noun: "thread",
+      verb: "copy resume command",
+      description: "Copy the shell command that continues this session (ampi threads continue <id>)",
+      keywords: ["url", "link", "continue", "resume"],
+      availability: resumeAvailability,
+      run: (ctx) => copyResumeCommand(host, ctx),
     },
   ];
 }

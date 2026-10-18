@@ -1,9 +1,10 @@
 // Mentions in ampi-tui's prompt: the autocomplete rows for `@`, `@:` and `@@`,
-// the commits `@:` reads from git, the Mention Thread picker that `@@` and
-// `thread.mention` open, and the hint read_session gives the model.
+// the commits `@:` reads from git, the git-ignored paths
+// ampi.fuzzy.alwaysIncludePaths adds to `@`, the Mention Thread picker that
+// `@@` and `thread.mention` open, and the hint read_session gives the model.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { devNull, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -304,6 +305,102 @@ describe("ampi-tui mentions: commits", () => {
       git(root, ["commit", "--allow-empty", "-q", "-m", "init demo"]);
       assert.deepEqual(await mentions.readMmrRecentCommits(root, { git: path.join(root, "no-such-git") }), []);
     });
+  });
+});
+
+describe("ampi-tui mentions: ampi.fuzzy.alwaysIncludePaths", () => {
+  let root;
+  beforeEach(() => {
+    // A repository whose dist/ git ignores, so Pi's file search (stubbed by piFiles) never lists it.
+    root = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-include-")));
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const files = {
+      ".gitignore": "dist/\nbig/\n",
+      "README.md": "",
+      "src/main.ts": "",
+      "dist/bundle.js": "",
+      "dist/main": "",
+      "dist/main.js": "",
+      "dist/nested/deep/x.map": "",
+    };
+    for (const [file, text] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), text);
+    }
+    symlinkSync("../src", path.join(root, "dist/link"));
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  function including(patterns, now = () => NOW) {
+    return mentions.createMmrMentionProvider(piFiles(), { ...provider().options, now, alwaysInclude: { cwd: root, patterns } });
+  }
+  const values = async (wrapped, text) => (await suggest(wrapped, text))?.items.map((item) => item.value);
+
+  it("leaves Pi's rows alone while the setting is empty", async () => {
+    const wrapped = including([]);
+    assert.equal(await suggest(wrapped, "@bun"), null);
+    assert.deepEqual(await values(wrapped, "@main"), ["@src/main.ts"]);
+  });
+
+  it("offers matching ignored paths, ranked together with Pi's rows as Pi ranks them", async () => {
+    const wrapped = including(["dist/**"]);
+    assert.deepEqual((await suggest(wrapped, "@bun")).items, [
+      { value: "@dist/bundle.js", label: "bundle.js", description: "dist/bundle.js" },
+    ]);
+    // An exact name first, then names that start with the query, shorter paths first.
+    assert.deepEqual(await values(wrapped, "@main"), ["@dist/main", "@src/main.ts", "@dist/main.js"]);
+    // Directories end in a slash; paths that only contain the query come after names that start with it.
+    assert.deepEqual((await suggest(wrapped, "@nest")).items, [
+      { value: "@dist/nested/", label: "nested/", description: "dist/nested" },
+      { value: "@dist/nested/deep/", label: "deep/", description: "dist/nested/deep" },
+      { value: "@dist/nested/deep/x.map", label: "x.map", description: "dist/nested/deep/x.map" },
+    ]);
+    // A symbolic link is offered as itself and never followed.
+    assert.deepEqual(await values(wrapped, "@link"), ["@dist/link"]);
+    assert.deepEqual(
+      await values(wrapped, "@dist/m"),
+      ["@dist/main", "@dist/main.js", "@dist/nested/deep/x.map"],
+      "a typed directory narrows the paths to those under it",
+    );
+    assert.equal(await suggest(wrapped, "@src/bun"), null);
+  });
+
+  it("matches ** anywhere in a glob, and only what the glob names", async () => {
+    const wrapped = including(["dist/**/*.map"]);
+    assert.deepEqual(await values(wrapped, "@x"), ["@dist/nested/deep/x.map"]);
+    assert.equal(await suggest(wrapped, "@bun"), null);
+  });
+
+  it("adds no row Pi already lists, and never walks into .git", async () => {
+    const wrapped = including(["src/**", "**/*.ts", "**"]);
+    assert.deepEqual(await values(wrapped, "@main.ts"), ["@src/main.ts"]);
+    assert.equal(await suggest(wrapped, "@HEAD"), null);
+  });
+
+  it("ignores globs that leave the working directory or do not parse", async () => {
+    assert.deepEqual(await mentions.walkMmrIncludedPaths(root, ["../**", "/etc/*", "dist/[%]*"]), []);
+  });
+
+  it("stops a walk at its entry cap and keeps to Pi's row count", async () => {
+    const count = mentions.MMR_INCLUDED_PATHS_MAX_ENTRIES + 50;
+    mkdirSync(path.join(root, "big"));
+    for (let index = 0; index < count; index++) writeFileSync(path.join(root, "big", `f${String(index).padStart(4, "0")}.txt`), "");
+    const walked = await mentions.walkMmrIncludedPaths(root, ["big/**"]);
+    assert.equal(walked.length, mentions.MMR_INCLUDED_PATHS_MAX_ENTRIES);
+    assert.ok(walked.some((entry) => entry.path === "big/f0000.txt"));
+    assert.ok(!walked.some((entry) => entry.path === `big/f${count - 1}.txt`), "the walk stopped before the last entry");
+    assert.equal((await values(including(["big/**"]), "@f")).length, mentions.MMR_PI_FILE_ROWS);
+  });
+
+  it("reuses one walk while completions follow each other, and walks again after a pause", async () => {
+    let now = NOW;
+    const wrapped = including(["dist/**"], () => now);
+    assert.equal(await suggest(wrapped, "@fresh"), null);
+    writeFileSync(path.join(root, "dist/fresh.js"), "");
+    now += mentions.MMR_INCLUDED_PATHS_REUSE_MS;
+    assert.equal(await suggest(wrapped, "@fresh"), null, "within the reuse window");
+    now += mentions.MMR_INCLUDED_PATHS_REUSE_MS + 1;
+    assert.deepEqual(await values(wrapped, "@fresh"), ["@dist/fresh.js"]);
   });
 });
 

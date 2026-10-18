@@ -1,4 +1,7 @@
 import { execFile } from "node:child_process";
+import type { Dirent } from "node:fs";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   type AutocompleteItem,
@@ -8,6 +11,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { globToRegExp, matchGlob } from "../../ampi-core/glob.js";
 import { formatMmrRelativeTime, openMmrThreadPicker, type MmrThreadPickerSources } from "../overlays/thread-picker.js";
 
 /**
@@ -18,6 +22,10 @@ import { formatMmrRelativeTime, openMmrThreadPicker, type MmrThreadPickerSources
  *   them, `@: mention a commit` and `@@ mention a thread`, showing only as
  *   many of Pi's rows as leave the hints in view. Picking a hint row types
  *   its second character. Once a name is typed, Pi's rows show alone.
+ *   Pi's file search leaves out what git ignores; paths that match the
+ *   `ampi.fuzzy.alwaysIncludePaths` globs are found by a walk of the
+ *   directories the globs start in, ranked as Pi ranks its rows and merged
+ *   into them, within the number of rows Pi lists.
  * - `@:` lists the last {@link MMR_COMMIT_MENTION_LIMIT} commits of the
  *   working directory's repository as `<short sha> <subject>` with a dim
  *   relative time. Typing after `@:` filters them by sha prefix or subject.
@@ -86,6 +94,161 @@ export function readMmrRecentCommits(cwd: string, options: { git?: string; timeo
   });
 }
 
+/** Entries one walk for `ampi.fuzzy.alwaysIncludePaths` reads at most. */
+export const MMR_INCLUDED_PATHS_MAX_ENTRIES = 5000;
+/** Directory levels one such walk descends at most. */
+export const MMR_INCLUDED_PATHS_MAX_DEPTH = 12;
+/** How long `@` file completions may go without a request before the paths are walked again. */
+export const MMR_INCLUDED_PATHS_REUSE_MS = 3000;
+/** File rows Pi's `@` completion lists at most; the merged rows keep to it. */
+export const MMR_PI_FILE_ROWS = 20;
+
+/** A path an `ampi.fuzzy.alwaysIncludePaths` glob matched, relative to the working directory with `/` separators. */
+export interface MmrIncludedPath {
+  readonly path: string;
+  readonly isDirectory: boolean;
+}
+
+const GLOB_SEGMENT = /[*?[{]/;
+
+/**
+ * Where the walk for `pattern` starts (its leading segments without glob
+ * characters) and how many levels below it the rest of the pattern reaches.
+ * A pattern without glob characters names one path: its parent is read one
+ * level deep. `undefined` for a pattern that leaves the working directory.
+ */
+function walkRoot(pattern: string): { dir: string; depth: number } | undefined {
+  const segments = pattern.split("/");
+  if (pattern === "" || pattern.startsWith("/") || segments.includes("..")) return undefined;
+  let fixed = segments.findIndex((segment) => GLOB_SEGMENT.test(segment));
+  if (fixed === -1) fixed = segments.length - 1;
+  const rest = segments.slice(fixed);
+  const depth = rest.some((segment) => segment.includes("**")) ? MMR_INCLUDED_PATHS_MAX_DEPTH : rest.length;
+  return { dir: segments.slice(0, fixed).join("/"), depth: Math.min(depth, MMR_INCLUDED_PATHS_MAX_DEPTH) };
+}
+
+/**
+ * The paths under `cwd` that match one of `patterns` (globs relative to
+ * `cwd`, as `ampi-core`'s glob matcher reads them). Only the directories the
+ * patterns start in are walked, breadth first and in name order, each walk
+ * reading at most `maxEntries` entries and {@link MMR_INCLUDED_PATHS_MAX_DEPTH}
+ * levels. Symbolic links are listed but never followed, `.git` is skipped,
+ * and patterns that leave `cwd` or do not parse are ignored.
+ */
+export async function walkMmrIncludedPaths(
+  cwd: string,
+  patterns: readonly string[],
+  options: { maxEntries?: number } = {},
+): Promise<MmrIncludedPath[]> {
+  const maxEntries = options.maxEntries ?? MMR_INCLUDED_PATHS_MAX_ENTRIES;
+  const globs: string[] = [];
+  const roots = new Map<string, number>();
+  for (const raw of patterns) {
+    const pattern = raw.trim().replace(/^(?:\.\/)+/, "").replace(/\/+$/, "");
+    const root = walkRoot(pattern);
+    if (!root) continue;
+    try {
+      globToRegExp(pattern);
+    } catch {
+      continue;
+    }
+    globs.push(pattern);
+    roots.set(root.dir, Math.max(roots.get(root.dir) ?? 0, root.depth));
+  }
+  const found = new Map<string, boolean>();
+  for (const [dir, depth] of roots) {
+    let budget = maxEntries;
+    const pending = [{ dir, level: 0 }];
+    for (let next = pending.shift(); next && budget > 0; next = pending.shift()) {
+      let entries: Dirent[];
+      try {
+        entries = await readdir(path.join(cwd, next.dir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      for (const entry of entries) {
+        if (entry.name === ".git") continue;
+        if (budget <= 0) break;
+        budget -= 1;
+        const child = next.dir ? `${next.dir}/${entry.name}` : entry.name;
+        // A directory entry is never a symbolic link, so links are not followed.
+        const isDirectory = entry.isDirectory();
+        if (globs.some((glob) => matchGlob(glob, child))) found.set(child, isDirectory);
+        if (isDirectory && next.level + 1 < depth) pending.push({ dir: child, level: next.level + 1 });
+      }
+    }
+  }
+  return [...found].map(([entryPath, isDirectory]) => ({ path: entryPath, isDirectory }));
+}
+
+/**
+ * Pi's ranking of a file row against what follows the `@`: the name equal to
+ * it, starting with it, containing it, then the path containing it, with a
+ * bonus for directories; 0 for no match.
+ */
+function scoreFileRow(filePath: string, query: string, isDirectory: boolean): number {
+  const name = path.posix.basename(filePath).toLowerCase();
+  const needle = query.toLowerCase();
+  let score = 0;
+  if (name === needle) score = 100;
+  else if (name.startsWith(needle)) score = 80;
+  else if (name.includes(needle)) score = 50;
+  else if (filePath.toLowerCase().includes(needle)) score = 30;
+  return isDirectory && score > 0 ? score + 10 : score;
+}
+
+interface FileRow {
+  readonly item: AutocompleteItem;
+  /** The path relative to the typed directory, with a trailing `/` for a directory, as Pi ranks it. */
+  readonly ranked: string;
+  readonly score: number;
+}
+
+/** Pi's order: higher score, then fewer path segments, then the shorter path, then by name. */
+function compareFileRows(a: FileRow, b: FileRow): number {
+  const depth = (row: FileRow) => row.ranked.split("/").filter(Boolean).length;
+  return b.score - a.score || depth(a) - depth(b) || a.ranked.length - b.ranked.length || a.ranked.localeCompare(b.ranked);
+}
+
+/**
+ * Merge the always-included `paths` into Pi's rows for the `@` token
+ * `token`: those that match what was typed and are not among Pi's rows yet,
+ * ranked together with Pi's rows, at most {@link MMR_PI_FILE_ROWS}. A path
+ * typed with a directory (`@dist/b`) offers only paths in that directory.
+ */
+function mergeIncludedRows(
+  piRows: AutocompleteSuggestions | null,
+  token: string,
+  paths: readonly MmrIncludedPath[],
+): AutocompleteSuggestions | null {
+  const quoted = token.startsWith('@"');
+  const typed = token.slice(quoted ? 2 : 1);
+  const base = typed.slice(0, typed.lastIndexOf("/") + 1);
+  const query = typed.slice(base.length);
+  const row = (item: AutocompleteItem, entryPath: string): FileRow => {
+    const ranked = entryPath.startsWith(base) ? entryPath.slice(base.length) : entryPath;
+    const isDirectory = ranked.endsWith("/");
+    return { item, ranked, score: query ? scoreFileRow(isDirectory ? ranked.slice(0, -1) : ranked, query, isDirectory) : 1 };
+  };
+  // Pi's values are `@<path>` or `@"<path>"`, with a trailing `/` for a directory.
+  const rows = (piRows?.items ?? []).map((item) => row(item, item.value.replace(/^@"?|"$/g, "")));
+  const seen = new Set(rows.map(({ item }) => item.value));
+  for (const entry of paths) {
+    if (!entry.path.startsWith(base) || entry.path.length === base.length) continue;
+    const completion = entry.isDirectory ? `${entry.path}/` : entry.path;
+    const value = quoted || /\s/u.test(completion) ? `@"${completion}"` : `@${completion}`;
+    if (seen.has(value)) continue;
+    const name = path.posix.basename(entry.path);
+    const added = row({ value, label: entry.isDirectory ? `${name}/` : name, description: entry.path }, completion);
+    if (added.score === 0) continue;
+    seen.add(value);
+    rows.push(added);
+  }
+  if (rows.length === (piRows?.items.length ?? 0)) return piRows;
+  return { items: rows.sort(compareFileRows).slice(0, MMR_PI_FILE_ROWS).map(({ item }) => item), prefix: piRows?.prefix ?? token };
+}
+
 /** The `@` token that ends `textBeforeCursor`, and the column it starts at. */
 function mentionToken(textBeforeCursor: string): { token: string; start: number } | undefined {
   const match = /(?:^|\s)[([{<`]*(@\S*)$/u.exec(textBeforeCursor);
@@ -114,6 +277,8 @@ export interface MmrMentionProviderOptions {
   readonly visibleRows?: () => number | undefined;
   /** True while `@` tokens get no rows, such as while the Mention Thread picker is open. */
   readonly suppressed?: () => boolean;
+  /** `ampi.fuzzy.alwaysIncludePaths`: globs relative to `cwd` that `@` file rows include even when git ignores them. */
+  readonly alwaysInclude?: { readonly cwd: string; readonly patterns: readonly string[] };
 }
 
 type MentionItem = AutocompleteItem & { mention: "hint" | "commit" };
@@ -128,6 +293,31 @@ export function createMmrMentionProvider(base: AutocompleteProvider, options: Mm
   // it. A pick, a request for anything but `@:`, or a pause longer than
   // MMR_COMMIT_MENTION_REUSE_MS ends the list, so the next one reads again.
   let commits: { key: string; used: number; list: Promise<readonly MmrCommit[]> } | undefined;
+  // One walk serves the `@` file completions that follow each other while
+  // you type; a pause longer than MMR_INCLUDED_PATHS_REUSE_MS walks again.
+  let included: { used: number; list: Promise<readonly MmrIncludedPath[]> } | undefined;
+
+  function includedPaths(cwd: string, patterns: readonly string[]): Promise<readonly MmrIncludedPath[]> {
+    const now = options.now();
+    if (!included || now - included.used > MMR_INCLUDED_PATHS_REUSE_MS) {
+      included = { used: now, list: walkMmrIncludedPaths(cwd, patterns).catch(() => []) };
+    } else {
+      included.used = now;
+    }
+    return included.list;
+  }
+
+  /** Pi's file rows for `token`, with the always-included paths merged in when the setting lists any. */
+  async function fileRows(
+    token: string,
+    files: () => Promise<AutocompleteSuggestions | null>,
+    signal: AbortSignal | undefined,
+  ): Promise<AutocompleteSuggestions | null> {
+    const piRows = await files();
+    const include = options.alwaysInclude;
+    if (!include || include.patterns.length === 0 || signal?.aborted) return piRows;
+    return mergeIncludedRows(piRows, token, await includedPaths(include.cwd, include.patterns));
+  }
 
   function hintItems(token: string): MentionItem[] {
     return MMR_MENTION_HINTS.filter((hint) => hint.value.startsWith(token)).map((hint) => ({
@@ -192,7 +382,7 @@ export function createMmrMentionProvider(base: AutocompleteProvider, options: Mm
       if (!found?.token.startsWith("@:")) commits = undefined;
       if (!found) return base.getSuggestions(lines, cursorLine, cursorCol, request);
       const result = await mentionSuggestions(found.token, `${cursorLine}\u0000${before.slice(0, found.start)}`, () =>
-        base.getSuggestions(lines, cursorLine, cursorCol, request),
+        fileRows(found.token, () => base.getSuggestions(lines, cursorLine, cursorCol, request), request?.signal),
       );
       // A request that started before the Mention Thread picker opened
       // finishes with no list under it.

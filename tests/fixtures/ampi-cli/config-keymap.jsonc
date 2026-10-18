@@ -16,8 +16,12 @@
   "mode.use.ultra": null, // Switch to the ultra mode
   "plugins.list": null, // List the loaded extensions with the commands and tools each registers
   "plugins.reload": null, // Reload extensions, skills, prompt templates and themes, as /reload does
+  "prompt.clear": null, // Empty the prompt
+  "prompt.copySelection": null, // Copy the transcript text selected with the mouse
   "prompt.dequeue": null, // Take everything that waits to run back into the prompt
   "prompt.history": "ctrl+r", // Pick a prompt you sent before and put it into the prompt
+  "prompt.moveToLineEnd": null, // Move the cursor to the end of its line in the prompt
+  "prompt.moveToLineStart": null, // Move the cursor to the start of its line in the prompt
   "prompt.openInEditor": "ctrl+g", // Edit the prompt in your external editor
   "prompt.openPalette": "/", // Open the command palette when / is typed into an empty prompt
   "prompt.queue": null, // Run the prompt as a follow-up message after the current turn instead of steering it
@@ -28,6 +32,7 @@
   "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
   "thread.archiveAndQuit": "ctrl+c ctrl+e", // Archive and quit
   "thread.copyMarkdown": null, // Copy this session to the clipboard as Markdown
+  "thread.copyURL": null, // Copy the shell command that continues this session (ampi threads continue <id>)
   "thread.editSelectedMessage": "e", // Put the selected message into the prompt and continue the thread from before it, on a new branch
   "thread.interrupt": "esc esc", // Stop the running turn
   "thread.mention": null, // Pick a session and insert a reference to it (@<session id>) at the cursor

@@ -481,11 +481,11 @@ the welcome header, styles user messages and ships the `ampi` theme.
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `createMmrTuiExtension` | function | Factory producing the Pi extension; accepts a `loadSettings` override. |
-| `loadMmrTuiSettings` | function | Reads `ampiTui.enabled`, `ampiTui.notifications` and Pi's `quietStartup` from the settings files, then `AMPI_TUI_ENABLE` for `enabled`. |
+| `loadMmrTuiSettings` | function | Reads `ampiTui.enabled`, `ampiTui.notifications`, `ampi.terminal.detailsExpandedByDefault`, `ampi.fuzzy.alwaysIncludePaths` and Pi's `quietStartup` from the settings files, then `AMPI_TUI_ENABLE` for `enabled`. |
 
 ### Re-exported types
 
-`MmrTuiSettings` (`enabled`, optional `quietStartup`, optional `notifications` with `enabled`, `system` and `sound`), `MmrTuiFactoryOverrides`.
+`MmrTuiSettings` (`enabled`, optional `quietStartup`, optional `notifications` with `enabled`, `system` and `sound`, optional `detailsExpandedByDefault`, optional `alwaysIncludePaths`), `MmrTuiFactoryOverrides`.
 
 ---
 
