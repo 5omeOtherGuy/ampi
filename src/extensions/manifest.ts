@@ -34,6 +34,7 @@ export type MmrExtensionRiskClass =
   | "session-data" // reads local session/history data
   | "subprocess" // spawns child agent processes
   | "terminal-ui" // draws terminal chrome only; no tools, no external side effects
+  | "local-server" // serves a token-protected HTTP endpoint on 127.0.0.1; no outbound requests
   | "diagnostic"; // debug capture / inspection
 
 /**
@@ -231,6 +232,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     dynamicTools: false,
     featureGates: [],
     riskClass: "local-mutation",
+    childRole: "none",
+  },
+  {
+    name: "ampi-gui",
+    entrypoint: "./src/extensions/ampi-gui/index.ts",
+    exportSubpath: "./extensions/ampi-gui",
+    exportAliases: ["./extensions/mmr-gui"],
+    autoLoaded: true,
+    tools: [],
+    dynamicTools: false,
+    featureGates: [],
+    riskClass: "local-server",
     childRole: "none",
   },
   {

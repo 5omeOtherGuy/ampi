@@ -223,6 +223,15 @@ Thread management on top of Pi sessions, on by default (`ampiThreads.enabled: fa
 - `commands.ts` (`thread.new`, `thread.rename`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, and the `/ampi-thread new|archive|switch <id>|previous|next` handler that calls Pi's `newSession` and `switchSession`).
 - `switch-history.ts` (the per-process back and forward lists of switched sessions, anchored on `globalThis`).
 
+### `src/extensions/ampi-gui/`
+
+Local web GUI, off by default (`ampiGui.enabled: true` or `AMPI_GUI_ENABLE=true` opts in), only in interactive terminal sessions. Serves a read-only live view of the running session on `127.0.0.1` and records it in `<agentDir>/data/ampi/live/<pid>.json`; owns no tools.
+
+- `index.ts` (entry point: the gate, the server from `session_start` to `session_shutdown`, the live registry entry, the `Web GUI:` notice and `thread.openInBrowser`), `config.ts` (the `ampiGui.enabled` switch).
+- `server.ts` (`node:http` on a random loopback port: Host, Origin and token checks, the token cookie, `GET /`, `/client/*`, `/api/session`, `/api/transcript`, `/api/events`, reserved POST routes).
+- `bridge.ts` (Pi events to numbered client events through `ampi-core/thread-status.ts`, the replay buffer, the transcript snapshot), `view-model.ts` (session messages to transcript items; tool calls labelled with `ampi-core/tool-activity.ts`), `registry.ts` (the live registry files).
+- `client/` (`index.html`, `app.js`, `markdown.js` (the escaping Markdown renderer), `tokens.css` (design tokens), `app.css`): plain ES modules and CSS, no build step.
+
 ### `src/extensions/ampi-history/`
 
 Opt-in global local Pi session lookup (`AMPI_HISTORY_ENABLE=true`, legacy `MMR_HISTORY_ENABLE` still accepted). Registers `find_session` and `read_session`; `read_session` uses the in-process `history-reader` worker first and falls back to deterministic lexical extraction. Redaction and opaque project references prevent raw session paths from surfacing.

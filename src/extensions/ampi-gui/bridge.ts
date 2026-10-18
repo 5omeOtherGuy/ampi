@@ -1,0 +1,402 @@
+import { homedir } from "node:os";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMmrModeState, onMmrStateChanged } from "../ampi-core/runtime.js";
+import {
+  createMmrThreadStatusReducer,
+  type MmrThreadStatus,
+  type MmrThreadStatusEvent,
+  type MmrThreadStatusReducer,
+} from "../ampi-core/thread-status.js";
+import {
+  buildMmrGuiItem,
+  buildMmrGuiToolPart,
+  collectMmrGuiToolResults,
+  type MmrGuiItem,
+  type MmrGuiToolResult,
+  mmrGuiBranchMessages,
+  mmrGuiItemId,
+  mmrGuiSessionTitle,
+} from "./view-model.js";
+
+/**
+ * Mirrors the running Pi session for the web client.
+ *
+ * The bridge listens to Pi's agent events, feeds them to ampi-core's thread
+ * status reducer the way the terminal's prompt box does, and turns them into
+ * numbered events for the client:
+ *
+ * | Pi event                                   | Client event                          |
+ * | ------------------------------------------ | ------------------------------------- |
+ * | `message_start` (user or assistant)        | `item`: the whole message             |
+ * | `message_update` text or thinking delta    | `delta`: the appended text            |
+ * | `message_update` new block, finished call  | `item`                                |
+ * | `message_end` (assistant)                  | `item`                                |
+ * | `tool_execution_start` / `_end`            | `tool`: the call's row                |
+ * | `turn_end`                                 | `turn_end`                            |
+ * | any change of the thread status            | `status` (phase, label, queue count)  |
+ * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
+ *
+ * It keeps the last {@link MMR_GUI_REPLAY_LIMIT} events, so a client that
+ * reconnects with the id of the last event it saw gets what it missed. A
+ * snapshot (`snapshot()`) joins the saved branch with the messages of the
+ * current run that Pi has not written yet, and names the id of the last
+ * event it includes, so a client can load it and then follow the events
+ * after that id without gaps or repeats.
+ *
+ * The queue count is counted as in the terminal: one more for each input
+ * sent while a turn runs, one less for each user message that starts, and
+ * checked against `hasPendingMessages()` on every agent event.
+ */
+
+export const MMR_GUI_REPLAY_LIMIT = 1000;
+
+export interface MmrGuiEvent {
+  id: number;
+  event: "status" | "item" | "delta" | "tool" | "turn_end" | "session";
+  data: unknown;
+}
+
+export interface MmrGuiStatusView {
+  phase: MmrThreadStatus["phase"];
+  label: string;
+  detail: string;
+  busy: boolean;
+  queued: number;
+}
+
+export interface MmrGuiSessionInfo {
+  id: string;
+  title: string;
+  cwd: string;
+  /** ampi mode key, e.g. `medium`, or `null` outside a locked mode. */
+  mode: string | null;
+  /** `provider/model`, or `null` when none is selected. */
+  model: string | null;
+}
+
+export interface MmrGuiSnapshot {
+  session: MmrGuiSessionInfo;
+  status: MmrGuiStatusView;
+  items: MmrGuiItem[];
+  /** Id of the last event the snapshot includes. */
+  lastEventId: number;
+}
+
+export interface MmrGuiBridge {
+  /** Start mirroring this session. Events before the first `start` are ignored. */
+  start(ctx: ExtensionContext): void;
+  /** Stop mirroring and drop every listener. */
+  stop(): void;
+  readonly lastEventId: number;
+  session(): MmrGuiSessionInfo;
+  status(): MmrGuiStatusView;
+  snapshot(): MmrGuiSnapshot;
+  /** The buffered events after `id`, or `undefined` when some of them are no longer buffered. */
+  eventsAfter(id: number): MmrGuiEvent[] | undefined;
+  /** Call `listener` with every new event. Returns the unsubscribe function. */
+  subscribe(listener: (event: MmrGuiEvent) => void): () => void;
+}
+
+export interface MmrGuiBridgeOptions {
+  now?: () => number;
+  home?: string;
+  replayLimit?: number;
+}
+
+type Content = "text" | "thinking" | "toolCall";
+
+function contentOf(eventType: unknown): Content | undefined {
+  if (typeof eventType !== "string") return undefined;
+  if (eventType.startsWith("thinking_")) return "thinking";
+  if (eventType.startsWith("text_")) return "text";
+  if (eventType.startsWith("toolcall_")) return "toolCall";
+  return undefined;
+}
+
+const BYTES_PER_TOKEN = 4;
+
+function roleOf(message: unknown): unknown {
+  return (message as { role?: unknown } | undefined)?.role;
+}
+
+function statusView(status: MmrThreadStatus): MmrGuiStatusView {
+  return { phase: status.phase, label: status.label, detail: status.detail, busy: status.busy, queued: status.queued };
+}
+
+export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOptions = {}): MmrGuiBridge {
+  const now = options.now ?? Date.now;
+  const home = options.home ?? homedir();
+  const replayLimit = options.replayLimit ?? MMR_GUI_REPLAY_LIMIT;
+  let ctx: ExtensionContext | undefined;
+  let reducer: MmrThreadStatusReducer = createMmrThreadStatusReducer();
+  let queued = 0;
+  let stageBytes = 0;
+  let stage: "thinking" | "streaming" | undefined;
+  let nextId = 1;
+  const buffer: MmrGuiEvent[] = [];
+  const listeners = new Set<(event: MmrGuiEvent) => void>();
+  /** Messages of the current run, by item id, in the order they started. */
+  const live = new Map<string, unknown>();
+  /** Tool results of the current run, by call id. */
+  const liveResults = new Map<string, MmrGuiToolResult>();
+  let titled = false;
+
+  function emit(event: MmrGuiEvent["event"], data: unknown): void {
+    const entry: MmrGuiEvent = { id: nextId++, event, data };
+    buffer.push(entry);
+    if (buffer.length > replayLimit) buffer.splice(0, buffer.length - replayLimit);
+    for (const listener of [...listeners]) {
+      try {
+        listener(entry);
+      } catch {}
+    }
+  }
+
+  function apply(event: MmrThreadStatusEvent): void {
+    const before = reducer.status;
+    const after = reducer.apply({ now: now(), ...event });
+    if (after !== before) emit("status", statusView(after));
+  }
+
+  function setQueued(count: number): void {
+    if (count === queued) return;
+    queued = count;
+    apply({ type: "queue", count });
+  }
+
+  function syncQueue(): void {
+    if (!ctx) return;
+    if (!ctx.hasPendingMessages()) setQueued(0);
+    else if (queued === 0) setQueued(1);
+  }
+
+  function viewOptions() {
+    const busy = reducer.status.busy;
+    return { cwd: ctx?.cwd, home, pending: (id: string) => busy && !liveResults.has(id) };
+  }
+
+  function buildItem(message: unknown): MmrGuiItem | undefined {
+    return buildMmrGuiItem(message, liveResults, viewOptions());
+  }
+
+  function sessionInfo(): MmrGuiSessionInfo {
+    if (!ctx) return { id: "", title: "New thread", cwd: "", mode: null, model: null };
+    const manager = ctx.sessionManager;
+    const firstUser = mmrGuiBranchMessages(manager.getBranch()).find((message) => roleOf(message) === "user");
+    const liveUser = [...live.values()].find((message) => roleOf(message) === "user");
+    const firstItem = buildMmrGuiItem(firstUser ?? liveUser, new Map());
+    const mode = getMmrModeState();
+    return {
+      id: manager.getSessionId(),
+      title: mmrGuiSessionTitle(manager.getSessionName(), firstItem ? [firstItem] : []),
+      cwd: ctx.cwd,
+      mode: mode?.mode ?? null,
+      model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null,
+    };
+  }
+
+  /** The live message holding tool call `id`, and that call. */
+  function findCall(id: string): { message: unknown; call: { id: string; name: string; arguments?: unknown } } | undefined {
+    for (const message of [...live.values()].reverse()) {
+      const content = (message as { content?: unknown }).content;
+      if (!Array.isArray(content)) continue;
+      const call = content.find((block) => block?.type === "toolCall" && block.id === id);
+      if (call) return { message, call };
+    }
+    return undefined;
+  }
+
+  function emitTool(toolCallId: string): void {
+    const found = findCall(toolCallId);
+    const itemId = found && mmrGuiItemId(found.message);
+    if (!found || !itemId) return;
+    const { pending } = viewOptions();
+    const part = buildMmrGuiToolPart(found.call, liveResults.get(toolCallId), { cwd: ctx?.cwd, home, pending: pending(toolCallId) });
+    emit("tool", { itemId, part });
+  }
+
+  function upsert(message: unknown): void {
+    const id = mmrGuiItemId(message);
+    if (!id) return;
+    live.set(id, message);
+    const item = buildItem(message);
+    if (item) emit("item", item);
+  }
+
+  // Events arrive for every run mode; the bridge only acts between start and stop.
+  const active = (context: ExtensionContext): boolean => {
+    if (!ctx) return false;
+    ctx = context;
+    return true;
+  };
+
+  pi.on("turn_start", (_event, context) => {
+    if (!active(context)) return;
+    stage = undefined;
+    stageBytes = 0;
+    apply({ type: "turnStart" });
+    syncQueue();
+  });
+  pi.on("message_start", (event, context) => {
+    if (!active(context)) return;
+    const role = roleOf(event.message);
+    if (role === "assistant") {
+      stage = undefined;
+      stageBytes = 0;
+    }
+    if (role === "user" && queued > 0) setQueued(queued - 1);
+    if (role !== "user" && role !== "assistant") return;
+    upsert(event.message);
+    if (role === "user" && !titled && !ctx?.sessionManager.getSessionName()) {
+      titled = true;
+      emit("session", sessionInfo());
+    }
+  });
+  pi.on("message_update", (event, context) => {
+    if (!active(context)) return;
+    syncQueue();
+    const update = event.assistantMessageEvent as { type?: unknown; delta?: unknown; contentIndex?: unknown } | undefined;
+    const content = contentOf(update?.type);
+    const id = mmrGuiItemId(event.message);
+    if (id) live.set(id, event.message);
+    if (content) {
+      const nextStage = content === "thinking" ? "thinking" : "streaming";
+      if (nextStage !== stage) {
+        stage = nextStage;
+        stageBytes = 0;
+      }
+      if (typeof update?.delta === "string") stageBytes += Buffer.byteLength(update.delta, "utf8");
+      apply({ type: "messageUpdate", content, outputTokens: Math.ceil(stageBytes / BYTES_PER_TOKEN) });
+    }
+    if (!id) return;
+    const type = String(update?.type ?? "");
+    if ((type === "text_delta" || type === "thinking_delta") && typeof update?.delta === "string") {
+      emit("delta", { itemId: id, part: update.contentIndex, text: update.delta });
+    } else if (type.endsWith("_start") || type === "start" || type === "toolcall_end") {
+      const item = buildItem(event.message);
+      if (item) emit("item", item);
+    }
+  });
+  pi.on("message_end", (event, context) => {
+    if (!active(context)) return;
+    if (roleOf(event.message) === "assistant") upsert(event.message);
+  });
+  pi.on("tool_execution_start", (event, context) => {
+    if (!active(context)) return;
+    stage = undefined;
+    stageBytes = 0;
+    apply({ type: "toolStart", toolCallId: event.toolCallId, toolName: event.toolName });
+    syncQueue();
+    emitTool(event.toolCallId);
+  });
+  pi.on("tool_execution_end", (event, context) => {
+    if (!active(context)) return;
+    const result = (event.result ?? {}) as { content?: unknown; details?: unknown };
+    liveResults.set(event.toolCallId, {
+      content: Array.isArray(result.content) ? result.content : [],
+      details: result.details,
+      isError: event.isError,
+    });
+    apply({ type: "toolEnd", toolCallId: event.toolCallId, outcome: event.isError ? "error" : "success" });
+    syncQueue();
+    emitTool(event.toolCallId);
+  });
+  pi.on("session_before_compact", (_event, context) => {
+    if (active(context)) apply({ type: "compactionStart" });
+  });
+  pi.on("session_compact", (_event, context) => {
+    if (active(context)) apply({ type: "compactionEnd" });
+  });
+  pi.on("session_compact_failed", (_event, context) => {
+    if (active(context)) apply({ type: "compactionFailed" });
+  });
+  pi.on("turn_end", (event, context) => {
+    if (!active(context)) return;
+    const message = event.message as { role?: unknown; stopReason?: unknown } | undefined;
+    if (message?.role === "assistant" && message.stopReason === "error") apply({ type: "error" });
+    apply({ type: "turnEnd" });
+    syncQueue();
+    emit("turn_end", { turnIndex: event.turnIndex });
+  });
+  pi.on("agent_settled", (_event, context) => {
+    if (!active(context)) return;
+    apply({ type: "settled" });
+    syncQueue();
+    // Pi has written every message of the run by now.
+    live.clear();
+    liveResults.clear();
+  });
+  pi.on("input", (event, context) => {
+    if (!active(context)) return;
+    if (event.streamingBehavior) setQueued(queued + 1);
+  });
+  pi.on("session_info_changed", (_event, context) => {
+    if (active(context)) emit("session", sessionInfo());
+  });
+  pi.on("model_select", (_event, context) => {
+    if (active(context)) emit("session", sessionInfo());
+  });
+  let releaseMode: (() => void) | undefined;
+
+  return {
+    start(context) {
+      ctx = context;
+      reducer = createMmrThreadStatusReducer();
+      queued = 0;
+      titled = false;
+      live.clear();
+      liveResults.clear();
+      releaseMode ??= onMmrStateChanged(pi, () => {
+        if (ctx) emit("session", sessionInfo());
+      });
+    },
+    stop() {
+      ctx = undefined;
+      listeners.clear();
+      releaseMode?.();
+      releaseMode = undefined;
+    },
+    get lastEventId() {
+      return nextId - 1;
+    },
+    session: sessionInfo,
+    status: () => statusView(reducer.status),
+    snapshot() {
+      const options = viewOptions();
+      const items: MmrGuiItem[] = [];
+      const seen = new Set<string>();
+      if (ctx) {
+        const messages = mmrGuiBranchMessages(ctx.sessionManager.getBranch());
+        const results = collectMmrGuiToolResults(messages);
+        for (const [id, result] of liveResults) results.set(id, result);
+        const pending = (id: string) => reducer.status.busy && !results.has(id);
+        for (const message of messages) {
+          const item = buildMmrGuiItem(message, results, { ...options, pending });
+          if (item && !seen.has(item.id)) {
+            seen.add(item.id);
+            items.push(item);
+          }
+        }
+      }
+      for (const [id, message] of live) {
+        if (seen.has(id)) continue;
+        const item = buildItem(message);
+        if (item) items.push(item);
+      }
+      return { session: sessionInfo(), status: statusView(reducer.status), items, lastEventId: nextId - 1 };
+    },
+    eventsAfter(id) {
+      const last = nextId - 1;
+      if (id === last) return [];
+      // An id this bridge never issued: the client saw another server.
+      if (id > last || id < 0) return undefined;
+      const first = buffer[0]?.id ?? nextId;
+      if (id < first - 1) return undefined;
+      return buffer.filter((event) => event.id > id);
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}

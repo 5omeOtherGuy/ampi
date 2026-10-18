@@ -2,7 +2,7 @@
 
 **Audience.** Developers writing code that imports from `ampi` and wants the stable programmatic surface owned by the non-core extensions.
 
-**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, `ampi-session-fallback`, `ampi-tui`, and `ampi-threads`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
+**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, `ampi-session-fallback`, `ampi-tui`, `ampi-threads`, and `ampi-gui`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
 
 **Related.** Package overview: [`../README.md`](../README.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
@@ -47,6 +47,7 @@ Identical to `ampi-core`:
 | History | `ampi/extensions/ampi-history` | `ampi/extensions/mmr-history` |
 | Terminal UI | `ampi/extensions/ampi-tui` | `ampi/extensions/mmr-tui` |
 | Threads | `ampi/extensions/ampi-threads` | `ampi/extensions/mmr-threads` |
+| Web GUI | `ampi/extensions/ampi-gui` | `ampi/extensions/mmr-gui` |
 | Deprecated toolbox shim | `ampi/extensions/ampi-toolbox` | `ampi/extensions/mmr-toolbox` |
 
 Runtime commands, environment variables, and settings keys are available under
@@ -512,6 +513,27 @@ Other extensions read the index through `ampi-core`'s
 ### Re-exported types
 
 `MmrThreadsSettings` (`enabled`, `autoArchiveOnQuit`, `showCosts`), `MmrThreadsFactoryOverrides`, `MmrThreadMarkdownOptions` (`title`, `sessionId`, `created`, `mode`), and, in the Internal tier, `MmrThreadIndexStore`, `MmrThreadIndexStoreOptions`.
+
+---
+
+## `ampi-gui`
+
+A local web GUI for the running session, off by default:
+`ampiGui.enabled: true` (or `AMPI_GUI_ENABLE=true`) turns it on, and it
+starts only in an interactive terminal session. See
+[`ampi-gui`](../src/extensions/ampi-gui/README.md) for the page, the live
+registry and the security model.
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrGuiExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `registryDir`, `openUrl` and `createToken` overrides. |
+| `loadMmrGuiSettings` | function | Reads `ampiGui.enabled` from the settings files, then `AMPI_GUI_ENABLE`. |
+
+### Re-exported types
+
+`MmrGuiSettings` (`enabled`), `MmrGuiFactoryOverrides`.
 
 ---
 

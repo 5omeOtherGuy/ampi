@@ -45,6 +45,7 @@
       "./src/extensions/ampi-custom-subagents/index.ts",
       "./src/extensions/ampi-tui/index.ts",
       "./src/extensions/ampi-threads/index.ts",
+      "./src/extensions/ampi-gui/index.ts",
       "./src/extensions/ampi-history/index.ts"
     ],
     "themes": [
@@ -64,6 +65,7 @@
     "./extensions/ampi-custom-subagents": "./src/extensions/ampi-custom-subagents/index.ts",
     "./extensions/ampi-tui": "./src/extensions/ampi-tui/index.ts",
     "./extensions/ampi-threads": "./src/extensions/ampi-threads/index.ts",
+    "./extensions/ampi-gui": "./src/extensions/ampi-gui/index.ts",
     "./extensions/ampi-history": "./src/extensions/ampi-history/index.ts",
     "./extensions/mmr-core": "./src/extensions/ampi-core/index.ts",
     "./extensions/mmr-session-fallback": "./src/extensions/ampi-session-fallback/index.ts",
@@ -76,6 +78,7 @@
     "./extensions/mmr-custom-subagents": "./src/extensions/ampi-custom-subagents/index.ts",
     "./extensions/mmr-tui": "./src/extensions/ampi-tui/index.ts",
     "./extensions/mmr-threads": "./src/extensions/ampi-threads/index.ts",
+    "./extensions/mmr-gui": "./src/extensions/ampi-gui/index.ts",
     "./extensions/mmr-history": "./src/extensions/ampi-history/index.ts"
   },
   "scripts": {

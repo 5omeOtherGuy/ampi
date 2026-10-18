@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <title>ampi</title>
+    <link rel="stylesheet" href="/client/tokens.css">
+    <link rel="stylesheet" href="/client/app.css">
+    <script type="module" src="/client/app.js"></script>
+  </head>
+  <body>
+    <div class="app" data-phase="idle">
+      <header class="titlebar">
+        <span class="thread-disc" aria-hidden="true"></span>
+        <h1 class="title" id="title">Loading…</h1>
+        <div class="titlebar-end">
+          <span class="chip" id="cwd-chip" role="group" aria-label="Working directory" hidden>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/></svg>
+            <span id="cwd"></span>
+          </span>
+          <span class="mode" id="mode" hidden></span>
+          <button class="icon-button" id="scheme" type="button" aria-label="Color scheme: system" title="Color scheme: system">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path class="fill" d="M8 2.25a5.75 5.75 0 0 1 0 11.5z"/></svg>
+          </button>
+        </div>
+      </header>
+      <main class="chat" id="chat" tabindex="-1" aria-label="Transcript">
+        <div class="column">
+          <div class="transcript" id="transcript" aria-live="off"></div>
+          <div class="live-dot" id="live-dot" aria-hidden="true" hidden></div>
+          <p class="empty" id="empty" hidden>No messages yet. Prompts you send in the terminal appear here.</p>
+        </div>
+      </main>
+      <button class="jump" id="jump" type="button" aria-label="Jump to bottom" title="Jump to bottom" hidden>
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
+      </button>
+      <footer class="statusbar">
+        <div class="column">
+          <div class="status-card" id="status" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span class="status-label" id="status-label">Connecting</span>
+            <span class="status-detail" id="status-detail"></span>
+            <span class="status-note">Read-only</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

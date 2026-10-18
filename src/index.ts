@@ -798,6 +798,11 @@ export { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
 export type { MmrThreadsSettings } from "./extensions/ampi-threads/config.js";
 export { formatMmrThreadMarkdown } from "./extensions/ampi-threads/markdown.js";
 export type { MmrThreadMarkdownOptions } from "./extensions/ampi-threads/markdown.js";
+// --- ampi-gui (Stable) ---
+export { createAmpiGuiExtension, createMmrGuiExtension } from "./extensions/ampi-gui/index.js";
+export type { MmrGuiFactoryOverrides } from "./extensions/ampi-gui/index.js";
+export { loadMmrGuiSettings } from "./extensions/ampi-gui/config.js";
+export type { MmrGuiSettings } from "./extensions/ampi-gui/config.js";
 // --- ampi-threads: thread index store (Internal / prompt-assembly) ---
 export {
   MmrThreadIndexError,
@@ -1025,6 +1030,9 @@ export {
   formatMmrThreadMarkdown as formatAmpiThreadMarkdown,
 } from "./extensions/ampi-threads/markdown.js";
 export {
+  loadMmrGuiSettings as loadAmpiGuiSettings,
+} from "./extensions/ampi-gui/config.js";
+export {
   MmrThreadIndexError as AmpiThreadIndexError,
   createMmrThreadIndexStore as createAmpiThreadIndexStore,
   resolveDefaultMmrThreadIndexDir as resolveDefaultAmpiThreadIndexDir,
@@ -1247,6 +1255,12 @@ export type {
 export type {
   MmrThreadsFactoryOverrides as AmpiThreadsFactoryOverrides,
 } from "./extensions/ampi-threads/index.js";
+export type {
+  MmrGuiSettings as AmpiGuiSettings,
+} from "./extensions/ampi-gui/config.js";
+export type {
+  MmrGuiFactoryOverrides as AmpiGuiFactoryOverrides,
+} from "./extensions/ampi-gui/index.js";
 export type {
   LoadedMmrWebSettings as LoadedAmpiWebSettings,
   MmrWebSettings as AmpiWebSettings,

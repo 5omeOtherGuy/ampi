@@ -747,12 +747,12 @@ describe("ampi-threads settings", () => {
 });
 
 describe("ampi-threads package wiring", () => {
-  it("auto-loads after ampi-tui and before ampi-history, which stays last", () => {
+  it("auto-loads after ampi-tui and before ampi-gui and ampi-history, which stays last", () => {
     const pkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
     const order = pkg.pi.extensions;
     const threads = order.indexOf("./src/extensions/ampi-threads/index.ts");
     assert.equal(order[threads - 1], "./src/extensions/ampi-tui/index.ts");
-    assert.equal(order[threads + 1], "./src/extensions/ampi-history/index.ts");
+    assert.equal(order[threads + 1], "./src/extensions/ampi-gui/index.ts");
     assert.equal(order.at(-1), "./src/extensions/ampi-history/index.ts");
     assert.equal(pkg.exports["./extensions/ampi-threads"], "./src/extensions/ampi-threads/index.ts");
     assert.equal(pkg.exports["./extensions/mmr-threads"], "./src/extensions/ampi-threads/index.ts");
