@@ -59,14 +59,14 @@ describe("mmr-core before_provider_request hook", () => {
     assert.deepEqual(payload.reasoning, { effort: "low" }, "original payload is not mutated");
   });
 
-  it("emits high effort after Medium's alt+r toggle", async () => {
+  it("emits high effort after Medium's alt+d toggle", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { ctx } = createContext([MEDIUM_MODEL]);
     const { pi, handlers, shortcuts } = createPi({ model: MEDIUM_MODEL });
     extension(pi);
 
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
 
     const payload = { model: "gpt-5.6-sol", input: [], instructions: "system", reasoning: { effort: "low" } };
     const result = await handlers.get("before_provider_request")({ type: "before_provider_request", payload }, ctx);

@@ -17,6 +17,9 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 /mode high         # switch mode
 /ampi-status        # concise locked-mode status
 /ampi-status debug  # model preference candidates, tool resolution, policy details
+Ctrl+S              # cycle low → medium → high → ultra (Ctrl+Space: deprecated alias)
+Ctrl+Shift+S        # mode picker (Alt+M fallback)
+Alt+D               # toggle the active mode's thinking preset (medium, high, ultra)
 ```
 
 Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` inputs normalize to `low`, `medium`, `high`, and `ultra`.
@@ -58,6 +61,7 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 | I need to... | Use | Notes |
 | --- | --- | --- |
 | Track multi-step work | `task_list` | Session-local; rendered in the Pi UI |
+| Show or hide the pinned list | `/tasks show`, `/tasks hide` | No toggle key by default; `--task-widget-toggle-key <key>` binds one |
 
 ## Optional reach
 

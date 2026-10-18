@@ -266,6 +266,31 @@ describe("mmr-tasks /tasks command", () => {
 
     assert.deepEqual(notifications, ["⠋ Planning alpha\n✓ Finish beta\n– Start gamma"]);
   });
+
+  it("binds no widget toggle key by default and reports it as disabled", async () => {
+    const { pi, session } = await loadToolboxLinked();
+    const notifications = [];
+    const ctx = makeCtx(session, {
+      hasUI: true,
+      ui: {
+        notify: (message) => notifications.push(message),
+        setWidget() {},
+        theme: { fg: (_n, v) => v, bold: (v) => v },
+      },
+    });
+
+    assert.equal(pi.flagDefs.get("task-widget-toggle-key")?.default, "");
+    assert.equal(pi.shortcuts.size, 0);
+    await pi.commands.get("tasks").handler("", ctx);
+    assert.deepEqual(notifications, ["Task widget: visible. Toggle: disabled."]);
+  });
+
+  it("binds the key passed through --task-widget-toggle-key", async () => {
+    const { pi } = createMockPi({ flags: { "task-widget-toggle-key": "alt+k" } });
+    (await importSource("extensions/ampi-tasks/index.ts")).default(pi);
+
+    assert.deepEqual([...pi.shortcuts.keys()], ["alt+k"]);
+  });
 });
 
 describe("mmr-tasks task_list — compaction/context recollection", () => {

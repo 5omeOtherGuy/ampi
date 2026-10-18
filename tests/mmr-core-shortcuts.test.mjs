@@ -59,7 +59,7 @@ beforeEach(async () => {
 });
 
 describe("mmr-core mode shortcuts", () => {
-  it("registers picker and cycle shortcuts", async () => {
+  it("registers the Amp-compatible picker, cycle, and thinking keys", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, shortcuts } = createPi();
 
@@ -67,11 +67,29 @@ describe("mmr-core mode shortcuts", () => {
 
     assert.equal(shortcuts.get("ctrl+shift+s")?.description, "Select ampi mode");
     assert.equal(shortcuts.get("alt+m")?.description, "Select ampi mode");
-    assert.equal(shortcuts.get("ctrl+space")?.description, "Cycle ampi mode");
-    assert.match(shortcuts.get("alt+r")?.description ?? "", /Toggle ampi thinking level/);
+    assert.equal(shortcuts.get("ctrl+s")?.description, "Cycle ampi mode");
+    assert.match(shortcuts.get("alt+d")?.description ?? "", /Toggle ampi thinking level/);
   });
 
-  it("toggles the thinking level in place via alt+r without releasing the mode", async () => {
+  it("keeps ctrl+space only as a deprecated cycle alias and frees alt+r", async () => {
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(createState("high"));
+    const { ctx } = createContext();
+    const { pi, shortcuts } = createPi();
+
+    extension(pi);
+
+    assert.equal(shortcuts.has("alt+r"), false);
+    assert.match(shortcuts.get("ctrl+space")?.description ?? "", /deprecated/i);
+    assert.doesNotMatch(shortcuts.get("ctrl+s")?.description ?? "", /deprecated/i);
+
+    // The alias still drives the same cycle: high -> ultra.
+    await shortcuts.get("ctrl+space").handler(ctx);
+    assert.equal(runtime.getMmrModeState()?.mode, "ultra");
+  });
+
+  it("toggles the thinking level in place via alt+d without releasing the mode", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("medium"));
@@ -80,7 +98,7 @@ describe("mmr-core mode shortcuts", () => {
     extension(pi);
 
     // Medium toggles from its default medium effort to high.
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "high");
@@ -91,13 +109,13 @@ describe("mmr-core mode shortcuts", () => {
     assert.equal(notifications.some((n) => /mode activated/i.test(n.message)), false);
 
     // Pressing again toggles back to medium with the same budget.
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.mode, "medium");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "medium");
     assert.equal(runtime.getMmrModeState()?.effectiveMaxOutputTokens, 128000);
   });
 
-  it("cycles ultra's thinking level through xhigh, high, and medium via alt+r", async () => {
+  it("cycles ultra's thinking level through xhigh, high, and medium via alt+d", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("ultra"));
@@ -106,24 +124,24 @@ describe("mmr-core mode shortcuts", () => {
     extension(pi);
 
     // The synthetic state starts at medium, so the cycle wraps to xhigh.
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.mode, "ultra");
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "xhigh");
     assert.deepEqual(calls.setThinkingLevel, ["xhigh"]);
     assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: ultra → xhigh, max out 128k/);
 
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "high");
     assert.deepEqual(calls.setThinkingLevel, ["xhigh", "high"]);
     assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: ultra → high, max out 128k/);
 
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
     assert.equal(runtime.getMmrModeState()?.thinkingLevel, "medium");
     assert.deepEqual(calls.setThinkingLevel, ["xhigh", "high", "medium"]);
     assert.match(notifications.at(-1)?.message ?? "", /MMR thinking: ultra → medium, max out 128k/);
   });
 
-  it("alt+r is a no-op notice in non-toggleable modes", async () => {
+  it("alt+d is a no-op notice in non-toggleable modes", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("low"));
@@ -131,7 +149,7 @@ describe("mmr-core mode shortcuts", () => {
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
-    await shortcuts.get("alt+r").handler(ctx);
+    await shortcuts.get("alt+d").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "low");
     assert.deepEqual(calls.setThinkingLevel, []);
@@ -169,7 +187,7 @@ describe("mmr-core mode shortcuts", () => {
     extension(pi);
 
     // medium -> high; free is not in the rotation.
-    await shortcuts.get("ctrl+space").handler(ctx);
+    await shortcuts.get("ctrl+s").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "high");
     assert.equal(calls.appendEntry.at(-1)?.[1].mode, "high");
@@ -198,7 +216,7 @@ describe("mmr-core mode shortcuts", () => {
     const { pi, calls, shortcuts } = createPi();
     extension(pi);
 
-    await shortcuts.get("ctrl+space").handler(ctx);
+    await shortcuts.get("ctrl+s").handler(ctx);
 
     assert.equal(runtime.getMmrModeState()?.mode, "low");
     assert.equal(calls.setModel.length, 1);

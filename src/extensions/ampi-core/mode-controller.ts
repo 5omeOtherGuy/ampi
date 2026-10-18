@@ -351,7 +351,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     captureBaseline(ctx);
 
     // Toggleable modes carry a runtime thinking-level override flipped by the
-    // ampi-owned alt+r shortcut. Re-derive the effective level on every
+    // ampi-owned alt+d shortcut. Re-derive the effective level on every
     // apply (override or the mode default), force every candidate to it so the
     // active and fallback routes agree with the wire reasoning effort, and use
     // it as the mode thinking level passed to model resolution.

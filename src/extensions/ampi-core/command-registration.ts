@@ -23,11 +23,11 @@ function parseMmrStatusDebugFlag(args: unknown): boolean {
 /**
  * Register the ampi commands (`/mode`, `/ampi-status`, `/ampi-changelog`,
  * `/ampi-config`) plus legacy `/mmr-*` compatibility aliases, followed by the
- * four mode shortcuts (mode-picker pair, `ctrl+space` cycle, `alt+r` thinking
- * toggle). Registration order is load-bearing and verified by the
- * registration-order characterization test; keep commands-before-shortcuts and
- * the picker→cycle→toggle sequence intact. Every handler body delegates to the
- * controller.
+ * mode shortcuts (mode-picker pair, `ctrl+s` cycle with its deprecated
+ * `ctrl+space` alias, `alt+d` thinking toggle). Registration order is
+ * load-bearing and verified by the registration-order characterization test;
+ * keep commands-before-shortcuts and the picker→cycle→toggle sequence intact.
+ * Every handler body delegates to the controller.
  */
 export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeController): void {
   pi.registerCommand("mode", {
@@ -106,19 +106,29 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
     });
   }
 
-  pi.registerShortcut("ctrl+space", {
+  // `ctrl+s` is the Amp-compatible mode key. Pi binds it to non-reserved
+  // picker actions (save model selection, save thinking level, session sort),
+  // so an extension may take it in the main editor; Pi reports the override as
+  // a startup warning.
+  pi.registerShortcut("ctrl+s", {
     description: "Cycle ampi mode",
     handler: async (ctx) => {
       await controller.cycleModeFromShortcut(ctx);
     },
   });
 
-  // `alt+r` (reasoning), not `alt+t`: ampi-toolbox already defaults its
-  // task-list widget toggle to `alt+t`, and Pi's loader resolves duplicate
-  // extension shortcut keys as last-registered-wins, so sharing `alt+t` would
-  // silently shadow one of them. `alt+r` is free across ampi and is not a
-  // Pi default binding.
-  pi.registerShortcut("alt+r", {
+  // Deprecated alias kept for one minor release after the move to `ctrl+s`.
+  pi.registerShortcut("ctrl+space", {
+    description: "Cycle ampi mode (deprecated: use ctrl+s)",
+    handler: async (ctx) => {
+      await controller.cycleModeFromShortcut(ctx);
+    },
+  });
+
+  // `alt+d` is the Amp-compatible reasoning-effort key; `alt+r` stays free for
+  // a future fast-speed toggle. Pi's editor binds `alt+d` to delete-word-forward
+  // (not reserved, and `alt+delete` keeps that action), so the extension wins.
+  pi.registerShortcut("alt+d", {
     description: "Toggle ampi thinking level (medium/high/ultra)",
     handler: async (ctx) => {
       await controller.toggleThinkingFromShortcut(ctx);

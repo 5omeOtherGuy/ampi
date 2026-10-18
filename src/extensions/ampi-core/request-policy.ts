@@ -120,7 +120,7 @@ export const MMR_REQUEST_POLICIES: Record<Exclude<MmrModeKey, "free">, MmrReques
 };
 
 /**
- * Thinking levels that participate in the alt+r in-mode toggle. Restricted to the
+ * Thinking levels that participate in the alt+d in-mode toggle. Restricted to the
  * subset that is valid both as an Anthropic adaptive `output_config.effort`
  * (`low|medium|high|xhigh|max`) and as an OpenAI Responses `reasoning.effort`
  * (`none|minimal|low|medium|high|xhigh`), so the level can drive both wire

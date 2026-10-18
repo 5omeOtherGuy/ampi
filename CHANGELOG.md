@@ -52,6 +52,17 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 - Model routing: Pi 1.x renamed the Azure provider from
   `azure-openai-responses` to `azure`; GPT routes and the provider priority now
   use `azure`.
+- **Breaking:** `ampi-core` / `ampi-tasks`: default shortcuts move to
+  Amp-compatible keys. `Ctrl+S` cycles the mode, `Alt+D` toggles the active
+  mode's thinking level, and the pinned task-list widget has no toggle key by
+  default. Pi lists the `Ctrl+S` and `Alt+D` overrides under extension issues at
+  startup; `Alt+Delete` still deletes the next word. Migration: `Alt+R` →
+  `Alt+D` (`Alt+R` no longer does anything); `Ctrl+Space` → `Ctrl+S`
+  (`Ctrl+Space` keeps working as a deprecated alias for one more minor
+  release); `Alt+T` → `/tasks show` / `/tasks hide`, or bind a key with
+  `--task-widget-toggle-key <key>`. The mode picker stays on `Ctrl+Shift+S` /
+  `Alt+M`. Other keys cannot be rebound yet; keymap settings are planned
+  together with the command palette.
 
 ### Fixed
 

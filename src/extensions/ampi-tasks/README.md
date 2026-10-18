@@ -29,7 +29,7 @@ The extension registers a concrete Pi tool named `task_list` and claims ownershi
 | `task_list` | Tool | Manage a session-local todo list with whole-list replacement |
 | `/tasks` | Command | Inspect/show/hide/list the pinned task-list widget |
 | Pinned widget | Widget | Project the current list above the input editor (`TASK_LIST_WIDGET_ID`) |
-| Toggle shortcut | Shortcut | Show/hide the widget (defaults to `alt+t`) |
+| Toggle shortcut | Shortcut | Show/hide the widget (none by default; opt in with the flag below) |
 
 Result shape: `content[0].text` is a short human-readable summary of the new list plus a capped previous-list summary when one existed; `details` is `{ oldTasks, newTasks, allCompleted }` on success, or `{ error }` with `isError: true` on validation failure.
 
@@ -38,10 +38,10 @@ Result shape: `content[0].text` is a short human-readable summary of the new lis
 One CLI flag controls the widget toggle key; there are no settings keys or secrets.
 
 ```bash
---task-widget-toggle-key alt+t   # empty string disables the shortcut
+--task-widget-toggle-key ctrl+shift+t   # bind a toggle key; the default is none
 ```
 
-The default toggle key is `alt+t` (Pi reserves `ctrl+t`); if `alt+t` is taken the fallback `ctrl+shift+t` is tried. The chosen binding is reported by `/tasks`. The flag is sampled once at extension load; restart Pi after changing it.
+By default no toggle key is bound: `alt+t` is kept free for an upcoming Amp-compatible details toggle, and `/tasks show` / `/tasks hide` drive the widget. When the flag names a key that is already taken, the fallback `ctrl+shift+t` is tried (Pi reserves `ctrl+t`). The chosen binding, or `disabled`, is reported by `/tasks`. The flag is sampled once at extension load; restart Pi after changing it.
 
 ## Behavior
 
@@ -87,7 +87,7 @@ A defense-in-depth validation pass runs inside `execute` so hosts that skip Pi's
 - **`task_list` was rejected.** Validation failures (missing fields, empty `content` / `activeForm`, unknown status, unknown field) return `{ isError: true, details: { error } }` so the model reacts; persistence failures propagate as tool crashes.
 - **Widget did not appear.** The widget appears the first time the model calls `task_list` (or `/tasks show`) in the session — there is no `session_start` hydration. Headless surfaces (`ctx.hasUI === false`) skip the widget entirely.
 - **List did not survive across sessions.** By design: lists are session-scoped. A resumed session reads its own latest `ampi-tasks.todo-state` entry; new and forked sessions start empty.
-- **Toggle shortcut does nothing.** The bound key may be taken or disabled. Run `/tasks` to see the live binding (or `disabled`), or set `--task-widget-toggle-key`.
+- **Toggle shortcut does nothing.** No key is bound by default, and a bound key may be taken. Run `/tasks` to see the live binding (or `disabled`), or set `--task-widget-toggle-key`.
 
 ## Public API
 

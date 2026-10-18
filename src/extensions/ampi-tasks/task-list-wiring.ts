@@ -29,16 +29,15 @@ function parseSlashArgs(raw: unknown): string[] {
 }
 
 /**
- * Default keybinding for the pinned-task-list toggle, plus the runtime
- * fallback chain. Pi reserves `ctrl+t` for `app.thinking.toggle` /
- * `app.tree.filter.noTools` out of the box, so we default to `alt+t`
- * (no Pi built-in uses Alt+letter) and fall back to `ctrl+shift+t` if
- * the user or another extension has already taken `alt+t`. The chosen
- * key is reflected in `/tasks`'s status output so the user can always
- * discover the live binding without digging through settings.
+ * Keybinding for the pinned-task-list toggle, plus the runtime fallback
+ * chain. There is no default key: `alt+t` stays free for the
+ * Amp-compatible details toggle, and `/tasks show|hide` drives the widget without one.
+ * A key passed through the flag falls back to `ctrl+shift+t` if the user
+ * or another extension has already taken it. The chosen key (or
+ * `disabled`) is reflected in `/tasks`'s status output.
  */
 const TASK_WIDGET_TOGGLE_FLAG = "task-widget-toggle-key";
-const TASK_WIDGET_TOGGLE_DEFAULT = "alt+t";
+const TASK_WIDGET_TOGGLE_DEFAULT = "";
 const TASK_WIDGET_TOGGLE_FALLBACKS = ["ctrl+shift+t"] as const;
 const TASK_LIST_VISIBLE_LIMIT = 50;
 const TASK_LIST_CONTEXT_VISIBLE_LIMIT = 12;
@@ -207,17 +206,14 @@ export function registerTaskListWiring(pi: ExtensionAPI): void {
   // the rationale and the future Task-agent reuse plan.
   pi.registerTool(createTodoListTool({ pi, getIsHidden, onAcceptedWrite: markTaskListWritten }));
 
-  // CLI flag for the toggle key. Empty string disables the shortcut
-  // entirely. The default is `alt+t`: Pi reserves `ctrl+t` for
-  // `app.thinking.toggle` / `app.tree.filter.noTools`, and Pi has no
-  // built-in Alt+letter bindings, so `alt+t` is conflict-free out of
-  // the box. If something else has already claimed it, the fallback
-  // chain (`ctrl+shift+t`) takes over.
+  // CLI flag for the toggle key. The default (empty string) binds no
+  // shortcut. When a key is given and something else has already claimed
+  // it, the fallback chain (`ctrl+shift+t`) takes over.
   pi.registerFlag(TASK_WIDGET_TOGGLE_FLAG, {
     type: "string",
     default: TASK_WIDGET_TOGGLE_DEFAULT,
     description:
-      "Keybinding to toggle the pinned task-list widget (empty string disables)",
+      "Keybinding to toggle the pinned task-list widget (default: none; use /tasks show|hide)",
   });
 
   // Resolve the requested key. `getFlag` returns `string | boolean |
