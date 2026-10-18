@@ -175,6 +175,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`; `--mode text`, `json`, `rpc` stay Pi's output format |
 | Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; `--stream-json-thinking` adds thinking blocks |
+| Send several messages to one session | `producer \| ampi -x --stream-json --stream-json-input` | One JSON user message per stdin line, `"steer": true` to redirect the run in progress; a result record after each run |
 | Send piped input with a request | `git diff \| ampi -x "review this"` | The message is the argument, a newline, then stdin; redirected input or output implies `-x` |
 | Keep a script's session unarchived | `ampi -x --no-archive-after-execute "..."` | Sessions created in execute mode are archived in the thread index by default |
 | Name or label the session | `ampi --title "Release check" -l release` | `--title` is Pi's `--name`; labels go to the thread index |

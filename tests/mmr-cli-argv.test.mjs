@@ -92,6 +92,16 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual([thinking.options.streamJson, thinking.options.streamJsonThinking], [true, true]);
   });
 
+  it("reads --stream-json-input together with --stream-json or --stream-json-thinking and keeps it away from Pi", () => {
+    assert.equal(routeAmpiArgv(["-x", "--stream-json"]).options.streamJsonInput, false);
+    for (const flag of ["--stream-json", "--stream-json-thinking"]) {
+      const route = routeAmpiArgv(["-x", "--stream-json-input", flag, "--model", "a/b"]);
+      assert.equal(route.command, "pi", flag);
+      assert.equal(route.options.streamJsonInput, true, flag);
+      assert.deepEqual(route.piArgs, ["--model", "a/b"], flag);
+    }
+  });
+
   it("maps --pi-help to Pi's own --help", () => {
     const route = routeAmpiArgv(["--pi-help"]);
     assert.equal(route.command, "pi");
@@ -141,6 +151,14 @@ describe("ampi argv router: help, version and errors", () => {
     assert.match(route.error, /--settings-file is not supported/);
     assert.match(route.error, /PI_CODING_AGENT_DIR/);
     assert.deepEqual(route.piArgs, []);
+  });
+
+  it("rejects --stream-json-input without stream JSON output", () => {
+    for (const argv of [["-x", "--stream-json-input"], ["--stream-json-input", "-x", "--mode", "json"]]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "error", argv.join(" "));
+      assert.equal(route.error, "--stream-json-input needs --stream-json or --stream-json-thinking.");
+    }
   });
 
   it("rejects ampi options that are missing their value", () => {

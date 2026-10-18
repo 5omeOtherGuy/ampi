@@ -1,7 +1,12 @@
 // Test-only Pi extension: a scripted offline model, `faux/faux-1`. It answers
 // "Echo: <prompt>", or fails when the prompt contains "please fail". For a
 // prompt containing "list files" it first thinks and calls `bash` with `ls`,
-// then answers with the listing. No network, no credentials.
+// then answers with the listing. For "wait on <fifo>" it calls `bash` with
+// `cat <fifo>`, which blocks until something writes the FIFO, then answers
+// "Waited: <output>". A message containing "release <fifo>" writes that FIFO
+// when Pi receives it, before Pi queues the message, so a steering message can
+// end such a wait without any timing. No network, no credentials.
+import { writeFile } from "node:fs";
 import { fauxAssistantMessage, fauxProvider, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
 
 const textOf = (content: any): string =>
@@ -27,8 +32,19 @@ export default function fauxModel(pi: any): void {
         stopReason: "toolUse",
       });
     }
+    const wait = /wait on (\S+)/.exec(prompt);
+    if (wait) {
+      if (last?.role === "toolResult") return fauxAssistantMessage(`Waited: ${textOf(last.content).trim()}`);
+      return fauxAssistantMessage(fauxToolCall("bash", { command: `cat ${wait[1]}` }, { id: "call_wait" }), { stopReason: "toolUse" });
+    }
     return fauxAssistantMessage(`Echo: ${prompt}`);
   };
   faux.setResponses(Array.from({ length: 20 }, () => reply));
   pi.registerProvider(faux.provider);
+
+  pi.on("input", (event: any) => {
+    const release = /release (\S+)/.exec(event.text);
+    // Asynchronous, so Pi queues the message before the waiting command can finish.
+    if (release) writeFile(release[1], "released\n", () => {});
+  });
 }

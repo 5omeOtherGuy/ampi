@@ -3,9 +3,13 @@
 // tests/mmr-cli-pi-compat.test.mjs fails when their shape changes. Pi's piped
 // stdin read is not exported, so the spawn tests in
 // tests/mmr-cli-execute.test.mjs are the probe for hidePipedStdinFromPi, and
-// those in tests/mmr-cli-stream-json.test.mjs for capturePiJsonOutput.
+// those in tests/mmr-cli-stream-json.test.mjs for capturePiJsonOutput. Pi's
+// RPC mode reads process.stdin and exits the process itself, so the spawn
+// tests in tests/mmr-cli-stream-json-input.test.mjs are the probe for
+// feedPiRpcInput, exitWithCodeAfterPiRpc and capturePiJsonOutput in RPC mode.
 import { homedir } from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -133,12 +137,50 @@ export function hidePipedStdinFromPi() {
 }
 
 /**
- * Take Pi's JSON event stream (`--mode json`) off stdout and write what
- * `convert` makes of each event instead. Pi keeps the stdout write function it
- * finds when it starts and sends its JSON lines through it, so this replaces
- * that function before Pi's `main()` runs. A line that is not JSON goes to
- * stderr. The stream JSON spawn tests in tests/mmr-cli-stream-json.test.mjs
- * fail when Pi stops writing through it.
+ * Give Pi's RPC mode (`--mode rpc`) commands from this process instead of
+ * stdin. RPC mode reads its commands from `process.stdin` when it starts and
+ * shuts the session down when that stream ends, so this puts a stream the
+ * caller writes to in its place before Pi's `main()` runs. Read the real stdin
+ * before calling it: afterwards `process.stdin` is the new stream.
+ *
+ * @returns {{ send: (command: Record<string, unknown>) => void, end: () => void }} `send` writes one
+ *   command as a JSON line; `end` ends Pi's input.
+ */
+export function feedPiRpcInput() {
+  const input = new PassThrough();
+  Object.defineProperty(process, "stdin", { value: input, configurable: true, writable: true });
+  return {
+    send: (command) => {
+      input.write(`${JSON.stringify(command)}\n`);
+    },
+    end: () => {
+      input.end();
+    },
+  };
+}
+
+/**
+ * Exit with `exitCode()` when Pi's RPC mode ends the process. Once its input
+ * ends, RPC mode disposes the session and calls `process.exit(0)` itself, so
+ * no code after its `main()` runs; this replaces that 0. Any other exit code
+ * (Pi failing on its own) stays.
+ *
+ * @param {() => number} exitCode
+ */
+export function exitWithCodeAfterPiRpc(exitCode) {
+  process.on("exit", (code) => {
+    if (code === 0) process.exitCode = exitCode();
+  });
+}
+
+/**
+ * Take Pi's JSON event stream (`--mode json`), or the records of its RPC mode
+ * (`--mode rpc`), off stdout and write what `convert` makes of each one
+ * instead. Pi keeps the stdout write function it finds when it starts and
+ * sends its JSON lines through it, so this replaces that function before Pi's
+ * `main()` runs. A line that is not JSON goes to stderr. The stream JSON spawn
+ * tests in tests/mmr-cli-stream-json.test.mjs and
+ * tests/mmr-cli-stream-json-input.test.mjs fail when Pi stops writing through it.
  *
  * @param {(event: any) => string} convert Text to write for one Pi event; may be empty.
  * @returns {{ write: (text: string) => Promise<void>, restore: () => void }} `write` writes to the real
