@@ -67,9 +67,9 @@ function firstMessageIndex(parseArgs, args) {
 
 /**
  * `args` with every argument Pi reads as message text replaced by
- * `<message>`, for the debug log. Attached files (`@file`) and option values
- * stay; an option value that equals a message is kept, as in
- * `firstMessageIndex`.
+ * `<message>` and every `--api-key` value by `<redacted>`, for the debug log.
+ * Attached files (`@file`) and other option values stay; an option value that
+ * equals a message is kept, as in `firstMessageIndex`.
  *
  * @param {PiParseArgs} parseArgs
  * @param {string[]} args
@@ -77,11 +77,27 @@ function firstMessageIndex(parseArgs, args) {
  */
 export function withoutMessages(parseArgs, args) {
   const messages = new Set(parseArgs(args).messages);
-  return args.map((arg, index) => {
+  const shown = args.map((arg, index) => {
     if (!messages.has(arg)) return arg;
     const probe = [...args];
     probe[index] = PROBE;
     return parseArgs(probe).messages.includes(PROBE) ? "<message>" : arg;
+  });
+  return withoutApiKeys(shown);
+}
+
+/**
+ * `args` with the value of every `--api-key` option, as `--api-key <key>` or
+ * `--api-key=<key>`, replaced by `<redacted>`, so a debug log never holds a
+ * credential.
+ *
+ * @param {string[]} args
+ * @returns {string[]}
+ */
+export function withoutApiKeys(args) {
+  return args.map((arg, index) => {
+    if (arg.startsWith("--api-key=")) return "--api-key=<redacted>";
+    return args[index - 1] === "--api-key" ? "<redacted>" : arg;
   });
 }
 

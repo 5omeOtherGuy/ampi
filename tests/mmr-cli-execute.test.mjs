@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { parseArgs } from "@earendil-works/pi-coding-agent";
-import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, withoutMessages } from "../packages/ampi-cli/src/execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, withoutApiKeys, withoutMessages } from "../packages/ampi-cli/src/execute.js";
 import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
@@ -67,9 +67,12 @@ describe("ampi execute mode: the message", () => {
     assert.deepEqual(parseArgs(atSign).fileArgs, ["notes.md"]);
   });
 
-  it("leaves the message text out of Pi's arguments for the debug log, keeping option values and attached files", () => {
+  it("leaves the message text and API keys out of Pi's arguments for the debug log, keeping other option values and attached files", () => {
     assert.deepEqual(withoutMessages(parseArgs, ["--name", "fix", "fix", "@notes.md", "--", "more"]), ["--name", "fix", "<message>", "@notes.md", "--", "<message>"]);
     assert.deepEqual(withoutMessages(parseArgs, ["-e", "./ext.ts", "--model", "a/b"]), ["-e", "./ext.ts", "--model", "a/b"]);
+    const key = ["sk", "test", "4f2a"].join("-");
+    assert.deepEqual(withoutMessages(parseArgs, ["--api-key", key, "--model", "a/b", "hi"]), ["--api-key", "<redacted>", "--model", "a/b", "<message>"]);
+    assert.deepEqual(withoutApiKeys(["install", `--api-key=${key}`, "npm:x", "--api-key", key]), ["install", "--api-key=<redacted>", "npm:x", "--api-key", "<redacted>"]);
   });
 
   it("accepts an attached file alone, and refuses a run without any message", () => {

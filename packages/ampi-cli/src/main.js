@@ -8,7 +8,7 @@ import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
-import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutMessages } from "./execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutApiKeys, withoutMessages } from "./execute.js";
 import { applyColorToEnv, createLogger, readLogSettings } from "./log.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
@@ -58,7 +58,7 @@ function runPiCommand(args, log) {
     log.error(MISSING_PI_BIN);
     return 1;
   }
-  log.debug(`Pi's executable ${bin} with the arguments ${JSON.stringify(args)}`);
+  log.debug(`Pi's executable ${bin} with the arguments ${JSON.stringify(withoutApiKeys(args))}`);
   const result = spawnSync(process.execPath, [bin, ...args], { stdio: "inherit" });
   if (result.error) {
     log.error(`could not run Pi: ${result.error.message}`);

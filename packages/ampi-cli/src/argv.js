@@ -503,8 +503,8 @@ Options:
       Append ampi's diagnostics to this file, one line each, instead of stderr; errors also
       go to stderr. Pi's own output is not affected.
   --color, --no-color
-      Turn colour on (FORCE_COLOR=1) or off (NO_COLOR=1) for Pi and the tools it runs.
-      Without either, they decide for themselves.
+      Set FORCE_COLOR=1 or NO_COLOR=1 for Pi and the tools it runs. Pi's own commands and
+      the terminal UI theme keep their colours; the CLI README has the details.
   -h, --help
       Print this help and exit
   -V, -v, --version
