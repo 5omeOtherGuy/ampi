@@ -84,7 +84,7 @@ describe("ampi theme selection", () => {
   async function start(themeName) {
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const { pi, handlers } = createMockPi();
-    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(pi);
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(pi);
     const ampiTheme = { name: "ampi" };
     const mock = createMockExtensionContext({ hasUI: true, themeName, themes: { ampi: ampiTheme } });
     await handlers.get("session_start")({ type: "session_start", reason: "startup" }, mock.ctx);

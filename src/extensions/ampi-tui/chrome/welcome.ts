@@ -57,7 +57,26 @@ const COMPACT_MARK: Mark = {
   ],
 };
 
-function renderMark(mark: Mark, frame: number, theme: WelcomeTheme): string[] {
+// The large mark scaled up for the full-screen intro, in the same
+// proportions. Dot counts divisible by four keep both rings symmetric.
+const INTRO_MARK: Mark = {
+  rows: 15,
+  columns: 35,
+  rings: [
+    { points: ellipse(15, 35, 32), step: 1, trail: 4, color: "success" },
+    { points: ellipse(7, 17, 16, 4, 9), step: -1, trail: 2, color: "accent" },
+  ],
+};
+
+const MARKS = { intro: INTRO_MARK, large: LARGE_MARK, compact: COMPACT_MARK } as const;
+
+/** Sizes of ampi's mark: `intro` 15x35, `large` 9x21, `compact` 5x13 (rows x columns). */
+export type MmrMarkSize = keyof typeof MARKS;
+
+/** Paints a ring's bright dots in one colour instead of the rings' own theme colours. */
+export type MmrMarkTint = (text: string, head: boolean) => string;
+
+function renderMark(mark: Mark, frame: number, theme: WelcomeTheme, tint?: MmrMarkTint): string[] {
   const cells: string[][] = Array.from({ length: mark.rows }, () => Array<string>(mark.columns).fill(" "));
   for (const ring of mark.rings) {
     const count = ring.points.length;
@@ -67,13 +86,22 @@ function renderMark(mark: Mark, frame: number, theme: WelcomeTheme): string[] {
       const behind = (((ring.step > 0 ? head - index : index - head) % count) + count) % count;
       cells[row][column] =
         behind === 0
-          ? theme.bold(theme.fg(ring.color, "●"))
+          ? tint
+            ? tint("●", true)
+            : theme.bold(theme.fg(ring.color, "●"))
           : behind <= ring.trail
-            ? theme.fg(ring.color, "•")
+            ? tint
+              ? tint("•", false)
+              : theme.fg(ring.color, "•")
             : theme.fg("dim", "·");
     });
   }
   return cells.map((row) => row.join(""));
+}
+
+/** One frame of ampi's mark, every row `columns` cells wide; `tint` paints both rings in one colour. */
+export function renderMmrMark(size: MmrMarkSize, frame: number, theme: WelcomeTheme, tint?: MmrMarkTint): string[] {
+  return renderMark(MARKS[size], frame, theme, tint);
 }
 
 /** The small mark in the frame its animation rests on (5 rows, 13 columns). */

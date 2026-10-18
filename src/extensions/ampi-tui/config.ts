@@ -31,6 +31,8 @@ export interface MmrTuiSettings {
   detailsExpandedByDefault?: boolean;
   /** `ampi.fuzzy.alwaysIncludePaths`: globs, relative to the working directory, that `@` file mentions offer even when git ignores them. */
   alwaysIncludePaths?: readonly string[];
+  /** `ampiTui.intro`: `false` keeps the onboarding intro from opening by itself. On by default. */
+  intro?: boolean;
 }
 
 /** The settings `ampi-tui` reads from the top-level `ampi` block, by their names there. */
@@ -59,9 +61,9 @@ function tuiBlock(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value.ampi) && isRecord(value.ampi.tui) ? value.ampi.tui : undefined;
 }
 
-function readEnabled(value: unknown): boolean | undefined {
+function readSwitch(value: unknown, key: "enabled" | "intro"): boolean | undefined {
   const block = tuiBlock(value);
-  return typeof block?.enabled === "boolean" ? block.enabled : undefined;
+  return typeof block?.[key] === "boolean" ? block[key] : undefined;
 }
 
 /** Each switch the file sets as a boolean; the others keep their earlier value. */
@@ -81,9 +83,10 @@ function readQuietStartup(value: unknown): boolean | undefined {
 }
 
 /**
- * Load `ampi-tui` settings: `ampiTui.enabled` and `ampiTui.notifications`
- * (or nested under `ampi.tui`), `ampi.terminal.detailsExpandedByDefault`,
- * `ampi.fuzzy.alwaysIncludePaths` and Pi's own `quietStartup` from the global
+ * Load `ampi-tui` settings: `ampiTui.enabled`, `ampiTui.intro` and
+ * `ampiTui.notifications` (or nested under `ampi.tui`),
+ * `ampi.terminal.detailsExpandedByDefault`, `ampi.fuzzy.alwaysIncludePaths`
+ * and Pi's own `quietStartup` from the global
  * `~/.pi/agent/settings.json`, then the project `<cwd>/.pi/settings.json`,
  * then `AMPI_TUI_ENABLE` (legacy `MMR_TUI_ENABLE`) for `enabled`. The latest
  * source wins, per key; a value of the wrong type is skipped. A settings file
@@ -98,6 +101,7 @@ export function loadMmrTuiSettings(
   const env = options.env ?? process.env;
   let enabled = true;
   let quietStartup = false;
+  let intro = true;
   let notifications: MmrTuiNotificationSettings = { ...MMR_TUI_NOTIFICATION_DEFAULTS };
   let detailsExpandedByDefault = false;
   let alwaysIncludePaths: readonly string[] = [];
@@ -109,7 +113,8 @@ export function loadMmrTuiSettings(
     } catch {
       continue;
     }
-    enabled = readEnabled(value) ?? enabled;
+    enabled = readSwitch(value, "enabled") ?? enabled;
+    intro = readSwitch(value, "intro") ?? intro;
     quietStartup = readQuietStartup(value) ?? quietStartup;
     notifications = readNotifications(value, notifications);
     const ampi = readAmpiBlock(value);
@@ -118,5 +123,5 @@ export function loadMmrTuiSettings(
   }
 
   enabled = parseBoolEnv(readPreferredEnv(env, "AMPI_TUI_ENABLE", "MMR_TUI_ENABLE")?.value) ?? enabled;
-  return { enabled, quietStartup, notifications, detailsExpandedByDefault, alwaysIncludePaths };
+  return { enabled, quietStartup, notifications, detailsExpandedByDefault, alwaysIncludePaths, intro };
 }

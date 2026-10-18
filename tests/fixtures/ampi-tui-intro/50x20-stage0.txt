@@ -1,0 +1,20 @@
+
+
+
+
+
+               A quick tour of ampi
+
+    Five short pages on getting around ampi in
+                  Pi's terminal.
+        Esc closes the tour at any point.
+
+
+
+
+
+
+
+
+                Space to continue
+

@@ -481,7 +481,7 @@ describe("ampi-tui tool renderer registration", () => {
   it("registers one resolver when enabled and none when disabled", async () => {
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const enabled = createMockPi();
-    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(enabled.pi);
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(enabled.pi);
     assert.equal(enabled.toolRenderers.length, 1);
     const renderers = enabled.toolRenderers[0]("read", () => undefined);
     assert.equal(renderers.renderShell, "self");

@@ -7,6 +7,7 @@
   "ampi.palette": "ctrl+o", // Open the command palette
   "ampi.quit": "ctrl+c ctrl+c", // Quit
   "ampi.showVersion": "ctrl+o", // Show the ampi and Pi versions
+  "ampi.showWelcome": null, // Replay the short tour of ampi that opens on first start
   "ampi.status": null, // Show the current mode, model and tools, as /ampi-status does
   "mcp.authenticate": null, // Open Pi's MCP manager (/mcp) to sign in to a server
   "mcp.info": null, // Show the MCP servers Pi is set up with and the tools each one offers
