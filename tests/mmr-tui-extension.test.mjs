@@ -90,6 +90,21 @@ describe("ampi-tui extension", () => {
     assert.equal(await chromeOwner(), undefined);
   });
 
+  it("keeps the welcome mark on its first frame when NO_ANIMATION is set", async (t) => {
+    process.env.NO_ANIMATION = "1";
+    t.after(() => delete process.env.NO_ANIMATION);
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, headers } = createMockExtensionContext({ hasUI: true });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const header = headers[0](fakeTui(44), ctx.ui.theme);
+      assert.equal(header.animating, false);
+      assert.equal(header.frame, 0);
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
   it("registers once across repeated session starts and releases on one shutdown", async () => {
     const { handlers } = await loadExtension({ enabled: true });
     const { ctx, footers } = createMockExtensionContext({ hasUI: true });

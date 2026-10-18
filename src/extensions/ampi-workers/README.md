@@ -208,7 +208,7 @@ Every worker call is one Amp-compatible line in the transcript: a status glyph, 
 | `Task` | `Running subagent (<profile>)` | `Subagent (<profile>) finished` | `description` |
 | `sa__<name>` | `Running subagent (<name>)` | `Subagent (<name>) finished` | `task` |
 
-- Glyphs: a spinner while the worker runs, `✓` done, `✗` failed, `⊘` cancelled. `(<profile>)` appears when a `Task` call sets `capabilityProfile`. A multi-line request shows its first line and ` …`.
+- Glyphs: a spinner while the worker runs, `✓` done, `✗` failed, `⊘` cancelled. The spinner is ampi-core's braille spinner (`ampi-core/spinner.ts`): it starts on `⠋`, steps every 200 ms and stays on `⠋` with `NO_ANIMATION` set or `ampiTui.animations: false`. `(<profile>)` appears when a `Task` call sets `capabilityProfile`. A multi-line request shows its first line and ` …`.
 - Expanding tool output (Pi's Ctrl+O, or Alt+T with `ampi-tui`) draws, indented under the row: a failure's diagnostic in red (a provider note on a run that still answered in yellow), the full request, wrapped and cut after 5 lines, when the row shows only part of it, the worker's latest 8 trail events in dim text (child tool calls with their glyph and what they acted on, the worker's own text, shell commands), with `… N earlier events` above them, a fallback notice, and, once the worker finished, its answer as Markdown, cut after 20 lines with `… N more lines`, and a dim usage line (turns, tokens, context use, model).
 - The worker's prompt echo and an answer repeated as the last trail event are left out; thinking stays hidden.
 - Rows use theme colours for text only, never a background.

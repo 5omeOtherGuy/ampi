@@ -24,10 +24,9 @@ import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,
 } from "../worker-usage-format.js";
+import { createMmrSpinner, MMR_SPINNER_FIRST_GLYPH, MMR_SPINNER_INTERVAL_MS } from "../../ampi-core/spinner.js";
 import {
   stripAgentPrefix,
-  WORKER_ROW_SPINNER_FRAMES,
-  WORKER_ROW_SPINNER_INTERVAL_MS,
   workerRowColor,
   workerRowGlyph,
   workerRowPhrase,
@@ -51,27 +50,28 @@ export type MmrWidgetGroupResolver = (
   groupId: string,
 ) => MmrAsyncTaskGroupSnapshot | undefined;
 
-/** The worker rows' braille spinner frames (Pi's loader frames). */
-export const PI_LOADER_FRAMES = WORKER_ROW_SPINNER_FRAMES;
+/**
+ * Milliseconds between two redraws of the aboveEditor widget while a row
+ * runs: half a spinner step, so the staged reveal and the elapsed times move
+ * smoothly; the spinner steps on every second tick.
+ */
+export const BOARD_TICK_MS = MMR_SPINNER_INTERVAL_MS / 2;
 
-/** Frame interval matching Pi's native loader cadence. */
-export const PI_LOADER_INTERVAL_MS = WORKER_ROW_SPINNER_INTERVAL_MS;
+// Module-global spinner, stepped by the aboveEditor widget's timer and read by
+// BOTH surfaces. Nested transcript components cannot own a timer (the host
+// renders them with a no-op TUI), so they piggyback the widget's re-render
+// cadence: the widget steps this spinner and re-renders the whole tree, so an
+// inline running card animates in lockstep with the board.
+const loaderSpinner = createMmrSpinner();
 
-// Module-global loader frame, advanced by the aboveEditor widget's animation
-// interval and read by BOTH surfaces. Nested transcript components cannot own a
-// timer (the host renders them with a no-op TUI), so they piggyback the widget's
-// re-render cadence: every widget tick advances this frame and re-renders the
-// whole tree, so an inline running card animates in lockstep with the board.
-let loaderFrameIndex = 0;
-
-/** Advance the shared loader frame. Called once per widget animation tick. */
+/** Step the shared spinner. Called once per spinner step by the widget's timer. */
 export function advanceLoaderFrame(): void {
-  loaderFrameIndex = (loaderFrameIndex + 1) % PI_LOADER_FRAMES.length;
+  loaderSpinner.step();
 }
 
-/** Current shared loader frame glyph. */
+/** Current glyph of the shared spinner. */
 export function currentLoaderFrame(): string {
-  return PI_LOADER_FRAMES[loaderFrameIndex];
+  return loaderSpinner.glyph();
 }
 
 /** Width cap for the group label shown in a group header. */
@@ -141,7 +141,7 @@ export function groupStatusColor(status: MmrAsyncTaskGroupStatus): string {
 
 /**
  * Status glyph for a row. Running/cancelling resolve to `activeFrame` when one
- * is supplied (the live animated frame), else the first loader frame as a
+ * is supplied (the live animated frame), else the spinner's first glyph as a
  * resting glyph. ✓ succeeded, ✗ failed, ⊘ cancelled, as on a worker row.
  */
 export function backgroundStatusGlyph(status: string, activeFrame?: string): string {
@@ -149,7 +149,7 @@ export function backgroundStatusGlyph(status: string, activeFrame?: string): str
   // every other glyph.
   if (status === "ready") return "-";
   if (status === "running" || status === "cancelling") {
-    return activeFrame ?? PI_LOADER_FRAMES[0];
+    return activeFrame ?? MMR_SPINNER_FIRST_GLYPH;
   }
   if (status === "succeeded") return workerRowGlyph("done");
   if (status === "failed") return workerRowGlyph("error");

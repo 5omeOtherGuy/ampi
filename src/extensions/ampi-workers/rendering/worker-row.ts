@@ -15,6 +15,8 @@
  * these renderers (see `ampi-tui/transcript/tool-renderers.ts`).
  */
 
+import { MMR_SPINNER_FIRST_GLYPH } from "../../ampi-core/spinner.js";
+
 export type WorkerRowStatus = "running" | "done" | "error" | "cancelled";
 
 /** Present and past phrases of the built-in workers that read best as a phrase of their own. */
@@ -42,9 +44,6 @@ export function workerRowPhrase(agent: string, running: boolean, variant?: strin
   return running ? `Running subagent${tag}` : `Subagent${tag} finished`;
 }
 
-/** Braille frames of the running glyph (Pi's loader frames), one step per {@link WORKER_ROW_SPINNER_INTERVAL_MS}. */
-export const WORKER_ROW_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-export const WORKER_ROW_SPINNER_INTERVAL_MS = 80;
 /** Trail events an expanded row shows; older ones are counted in "… N earlier events". */
 export const WORKER_ROW_TRAIL_EVENTS = 8;
 /** Answer lines an expanded row shows before "… N more lines". */
@@ -55,8 +54,9 @@ export const WORKER_ROW_PROMPT_LINES = 5;
 const GLYPHS: Record<Exclude<WorkerRowStatus, "running">, string> = { done: "✓", error: "✗", cancelled: "⊘" };
 const COLORS: Record<WorkerRowStatus, "accent" | "success" | "error" | "warning"> = { running: "accent", done: "success", error: "error", cancelled: "warning" };
 
-export function workerRowGlyph(status: WorkerRowStatus, frame = 0): string {
-  return status === "running" ? (WORKER_ROW_SPINNER_FRAMES[frame % WORKER_ROW_SPINNER_FRAMES.length] as string) : GLYPHS[status];
+/** The status glyph; a running row shows `spinner`, the current glyph of its spinner (`ampi-core/spinner.ts`). */
+export function workerRowGlyph(status: WorkerRowStatus, spinner: string = MMR_SPINNER_FIRST_GLYPH): string {
+  return status === "running" ? spinner : GLYPHS[status];
 }
 
 export function workerRowColor(status: WorkerRowStatus): (typeof COLORS)[WorkerRowStatus] {

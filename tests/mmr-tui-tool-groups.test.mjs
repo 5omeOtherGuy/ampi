@@ -202,8 +202,8 @@ describe("ampi-tui grouped tool rows", () => {
       const first = rows.get("r1");
       assert.equal(stripAnsi(first.render(80)[1]), " ⠋ Reading 1 file, ran 1 command, running 1 search ▸");
       finish(store, rows, "r1");
-      mock.timers.tick(80);
-      assert.equal(stripAnsi(first.render(80)[1]), " ⠙ Read 1 file, ran 1 command, running 1 search ▸", "the first call finished, the group still runs");
+      mock.timers.tick(200);
+      assert.equal(stripAnsi(first.render(80)[1]), " ⠛ Read 1 file, ran 1 command, running 1 search ▸", "the first call finished, the group still runs");
       finish(store, rows, "g1");
       assert.equal(stripAnsi(first.render(80)[1]), " ✓ Read 1 file, ran 1 command, ran 1 search ▸");
       mock.timers.tick(800);

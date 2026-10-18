@@ -334,8 +334,11 @@ describe("ampi-tui tool rows", () => {
     try {
       const component = toolRow(resolver, { tool: "bash", args: { command: "sleep 5" } });
       assert.equal(stripAnsi(component.render(80)[1]), " ⠋ Running sleep 5");
-      mock.timers.tick(80);
-      assert.equal(stripAnsi(component.render(80)[1]), " ⠙ Running sleep 5");
+      mock.timers.tick(199);
+      assert.equal(stripAnsi(component.render(80)[1]), " ⠋ Running sleep 5", "one step per 200 ms");
+      mock.timers.tick(1);
+      // ⠋ is dots 1, 2 and 4; dot 5 has exactly those three as neighbours and comes alive: ⠛.
+      assert.equal(stripAnsi(component.render(80)[1]), " ⠛ Running sleep 5");
       component.updateResult({ ...textResult(""), isError: false }, false);
       assert.equal(stripAnsi(component.render(80)[1]), " ✓ Ran sleep 5");
       mock.timers.tick(800);
@@ -343,6 +346,17 @@ describe("ampi-tui tool rows", () => {
     } finally {
       mock.timers.reset();
     }
+  });
+
+  it("keeps the running glyph still and starts no timer when NO_ANIMATION is set", async (t) => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    process.env.NO_ANIMATION = "1";
+    t.after(() => delete process.env.NO_ANIMATION);
+    const startTimer = t.mock.method(globalThis, "setInterval");
+    const component = toolRow(resolver, { tool: "bash", args: { command: "sleep 5" } });
+    assert.equal(stripAnsi(component.render(80)[1]), " ⠋ Running sleep 5");
+    assert.equal(startTimer.mock.callCount(), 0);
   });
 
   it("keeps a resumed call that never finished still", async () => {

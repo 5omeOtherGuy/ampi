@@ -59,17 +59,17 @@ export interface WorkerRowView {
 }
 
 /** `<pad><glyph> <phrase> · <detail> <tail>`, before it is clipped to the width. */
-function fullRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number): string {
-  const glyph = theme.fg(workerRowColor(view.status), workerRowGlyph(view.status, frame));
+function fullRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, spinner: string): string {
+  const glyph = theme.fg(workerRowColor(view.status), workerRowGlyph(view.status, spinner));
   const phrase = theme.fg("toolTitle", workerRowPhrase(view.agent, view.status === "running", view.variant));
   const detail = view.detail ? theme.fg("muted", ` · ${view.detail}`) : "";
   const tail = view.tail ? theme.fg("muted", ` ${view.tail}`) : "";
   return `${pad}${glyph} ${phrase}${detail}${tail}`;
 }
 
-/** `<pad><glyph> <phrase> · <detail> <tail>`, clipped to the width. */
-export function workerRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number, width: number): string {
-  return clip(fullRowLine(view, theme, pad, frame), width);
+/** `<pad><glyph> <phrase> · <detail> <tail>`, clipped to the width; `spinner` is the running glyph. */
+export function workerRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, spinner: string, width: number): string {
+  return clip(fullRowLine(view, theme, pad, spinner), width);
 }
 
 /** Tools whose arguments `formatToolArguments` knows how to show. */
@@ -90,14 +90,14 @@ function toolArgumentsText(item: Extract<MmrWorkerTrailItem, { type: "tool" }>):
 }
 
 /** One plain-text line per trail event worth showing; tool calls lead with their status glyph. */
-function trailEventLine(item: MmrWorkerTrailItem, frame: number): string | undefined {
+function trailEventLine(item: MmrWorkerTrailItem, spinner: string | undefined): string | undefined {
   switch (item.type) {
     case "assistant":
       return workerRowDetail(item.text);
     case "tool": {
       const status: WorkerRowStatus = item.status === "running" ? "running" : item.status === "failed" || item.isError ? "error" : "done";
       const args = compactOneLine(toolArgumentsText(item), 160);
-      return `${workerRowGlyph(status, frame)} ${item.toolName}${args ? ` ${args}` : ""}`;
+      return `${workerRowGlyph(status, spinner)} ${item.toolName}${args ? ` ${args}` : ""}`;
     }
     case "bashExecution": {
       if (!item.command) return undefined;
@@ -128,13 +128,13 @@ function trailEventLine(item: MmrWorkerTrailItem, frame: number): string | undef
 }
 
 /** The latest {@link WORKER_ROW_TRAIL_EVENTS} trail events, after "… N earlier events" when some are left out. */
-export function workerTrailLines(view: Pick<WorkerRowView, "trail" | "workerPrompt" | "output" | "suppressDuplicateFinalOutput">, frame = 0): string[] {
+export function workerTrailLines(view: Pick<WorkerRowView, "trail" | "workerPrompt" | "output" | "suppressDuplicateFinalOutput">, spinner?: string): string[] {
   const duplicate = view.suppressDuplicateFinalOutput ? finalAssistantTrailIndex(view.trail, view.output ?? "") : undefined;
   const lines: string[] = [];
   view.trail.forEach((item, index) => {
     if (index === duplicate) return;
     if (item.type === "user" && isWorkerPromptEcho(item.text, view.workerPrompt)) return;
-    const line = trailEventLine(item, frame);
+    const line = trailEventLine(item, spinner);
     if (line) lines.push(line);
   });
   const hidden = lines.length - WORKER_ROW_TRAIL_EVENTS;
@@ -159,20 +159,20 @@ function sameText(a: string | undefined, b: string | undefined): boolean {
  * a fallback notice, then for a finished worker its answer (Markdown, cut
  * after {@link WORKER_ROW_ANSWER_LINES} source lines) and the usage line.
  */
-export function workerRowBody(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number, width: number): string[] {
+export function workerRowBody(view: WorkerRowView, theme: SubagentTheme, pad: string, spinner: string, width: number): string[] {
   const indent = `${pad}  `;
   const out: string[] = [];
   const dim = (text: string) => clip(`${indent}${theme.fg("dim", text)}`, width);
   if (view.diagnostic) out.push(clip(`${indent}${theme.fg(view.diagnosticColor ?? "error", compactOneLine(view.diagnostic, 400))}`, width));
   const prompt = view.prompt?.trim();
-  const rowClipped = visibleWidth(fullRowLine(view, theme, pad, frame)) > width;
+  const rowClipped = visibleWidth(fullRowLine(view, theme, pad, spinner)) > width;
   if (prompt && (rowClipped || !sameText(prompt, view.detail))) {
     const wrapped = prompt.split(/\r?\n/).flatMap((line) => wrapTextWithAnsi(line, Math.max(1, width - indent.length)));
     const { shown, more } = limited(wrapped, WORKER_ROW_PROMPT_LINES);
     out.push(...shown.map((line) => dim(line)));
     if (more) out.push(clip(`${indent}${theme.fg("muted", more)}`, width));
   }
-  out.push(...workerTrailLines(view, frame).map((line) => dim(line)));
+  out.push(...workerTrailLines(view, spinner).map((line) => dim(line)));
   if (view.fallbackNotice?.trim()) out.push(clip(`${indent}${theme.fg("warning", compactOneLine(view.fallbackNotice, 400))}`, width));
   if (!view.finished) return out;
   const answer = view.output?.trim();

@@ -2,16 +2,17 @@
  * Pi TUI pinned widget for the session-local `task_list` todo list.
  *
  * Extracted from `todo-list-tool.ts` as a focused leaf module. Renders the
- * active list above the input editor, animating `in_progress` rows with Pi's
- * native braille loader cadence. Imports the shared static line/glyph helpers
- * from `todo-list-rendering.ts`; the widget glyphs, spinner frames, and row
+ * active list above the input editor, animating `in_progress` rows with
+ * ampi's spinner (`ampi-core/spinner.ts`). Imports the shared static
+ * line/glyph helpers from `todo-list-rendering.ts`; the widget glyphs and row
  * layout are behavior and must not change.
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { updateAboveEditorDashboardSlot } from "../ampi-core/above-editor-dashboard.js";
+import { isMmrAnimationDisabled } from "../ampi-core/animation.js";
+import { createMmrSpinner, MMR_SPINNER_INTERVAL_MS } from "../ampi-core/spinner.js";
 import {
-  PI_LOADER_FRAMES,
   renderTaskLines,
   statusGlyph,
 } from "./todo-list-rendering.js";
@@ -26,9 +27,6 @@ export const TASK_LIST_WIDGET_ID = "ampi-task-list";
 
 /** Cap the pinned widget so a long backlog does not push the editor off-screen. */
 const TASK_LIST_WIDGET_MAX_ROWS = 12;
-
-/** Frame interval matching Pi's native loader cadence. */
-const PI_LOADER_INTERVAL_MS = 80;
 
 interface WidgetThemeLike {
   fg(name: string, value: string): string;
@@ -113,8 +111,8 @@ function renderTodoWidgetLines(
   };
   // Preserve submission order: the model's ordering is the source of truth
   // for display, and the widget mirrors that. While a row is in_progress the
-  // glyph is the live braille loader frame so it matches Pi's working
-  // indicator; resting frames fall back to the static glyph.
+  // glyph is the widget spinner's current glyph, like every running row in
+  // ampi; resting frames fall back to the static glyph.
   const glyphFor = (status: TodoStatus): string =>
     status === "in_progress" && activeFrame ? activeFrame : statusGlyph(status);
   const taskLines = renderTaskLines(
@@ -193,15 +191,15 @@ export function refreshTodoWidget(
     }));
     const hasActive = hasVisibleInProgress(snapshot, TASK_LIST_WIDGET_MAX_ROWS);
     updateAboveEditorDashboardSlot(ctx, "left", TASK_LIST_WIDGET_ID, (tui, theme) => {
-      // Animate in_progress rows with Pi's loader cadence. The interval only
-      // runs while at least one row is in_progress, so a resting list never
-      // schedules needless re-renders. Pi disposes the previous component on
-      // replacement/clear, which clears this timer.
-      let frame = 0;
+      // Animate in_progress rows with ampi's spinner. The interval only runs
+      // while at least one row is in_progress and animations are on, so a
+      // resting list never schedules needless re-renders. Pi disposes the
+      // previous component on replacement/clear, which clears this timer.
+      const spinner = createMmrSpinner();
       let timer: ReturnType<typeof setInterval> | undefined;
-      if (hasActive && typeof tui?.requestRender === "function") {
+      if (hasActive && typeof tui?.requestRender === "function" && !isMmrAnimationDisabled()) {
         timer = setInterval(() => {
-          frame = (frame + 1) % PI_LOADER_FRAMES.length;
+          spinner.step();
           try {
             tui.requestRender?.();
           } catch {
@@ -212,7 +210,7 @@ export function refreshTodoWidget(
               timer = undefined;
             }
           }
-        }, PI_LOADER_INTERVAL_MS);
+        }, MMR_SPINNER_INTERVAL_MS);
         // Never keep the Node event loop alive solely for the spinner.
         (timer as { unref?: () => void }).unref?.();
       }
@@ -222,7 +220,7 @@ export function refreshTodoWidget(
             renderTodoWidgetLines(
               snapshot,
               theme,
-              hasActive ? PI_LOADER_FRAMES[frame] : undefined,
+              hasActive ? spinner.glyph() : undefined,
             ),
             width,
           ),

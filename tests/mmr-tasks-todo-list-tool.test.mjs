@@ -859,9 +859,9 @@ describe("mmr-tasks task_list — widget render truncates to TUI width", () => {
 });
 
 describe("mmr-tasks task_list — widget animates in_progress rows", () => {
-  // The pinned widget mirrors Pi's native working indicator: in_progress rows
-  // cycle the braille loader frames via a self-owned interval that calls
-  // tui.requestRender(), and dispose() must clear it.
+  // The pinned widget animates in_progress rows with ampi's spinner via a
+  // self-owned interval that calls tui.requestRender(), and dispose() must
+  // clear it.
 
   function makeAnimCtx(session) {
     const widgetCalls = [];
@@ -901,7 +901,7 @@ describe("mmr-tasks task_list — widget animates in_progress rows", () => {
     assert.doesNotMatch(text, /[○◐●]/, "no legacy round glyphs remain");
   });
 
-  it("advances loader frames on a timer and stops on dispose", async (t) => {
+  it("steps the spinner on a timer and stops on dispose", async (t) => {
     t.mock.timers.enable({ apis: ["setInterval"] });
     const { pi, session } = await loadToolboxLinked();
     const tool = getTaskListTool(pi);
@@ -915,15 +915,31 @@ describe("mmr-tasks task_list — widget animates in_progress rows", () => {
     const tui = { requestRender() { renders += 1; } };
     const widget = widgetCalls.at(-1).factory(tui, ctx.ui.theme);
 
-    const frame0 = widget.render(80).join("\n");
-    t.mock.timers.tick(80);
-    assert.equal(renders, 1, "each loader tick must request a re-render");
-    const frame1 = widget.render(80).join("\n");
-    assert.notEqual(frame0, frame1, "the animated glyph must change between frames");
+    assert.equal(widget.render(80).join("\n"), "⠋ Building");
+    t.mock.timers.tick(200);
+    assert.equal(renders, 1, "each spinner step must request a re-render");
+    assert.equal(widget.render(80).join("\n"), "⠛ Building", "the glyph steps once per 200 ms");
 
     widget.dispose();
     t.mock.timers.tick(400);
     assert.equal(renders, 1, "dispose must clear the animation timer");
+  });
+
+  it("keeps the glyph still and starts no timer when NO_ANIMATION is set", async (t) => {
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const { ctx, widgetCalls } = makeAnimCtx(session);
+    await callTaskList(tool, {
+      tasks: [{ content: "Build", activeForm: "Building", status: "in_progress" }],
+    }, ctx);
+
+    process.env.NO_ANIMATION = "1";
+    t.after(() => delete process.env.NO_ANIMATION);
+    const startTimer = t.mock.method(globalThis, "setInterval");
+    const widget = widgetCalls.at(-1).factory({ requestRender() {} }, ctx.ui.theme);
+    assert.equal(widget.render(80).join("\n"), "⠋ Building");
+    assert.equal(startTimer.mock.callCount(), 0);
+    widget.dispose();
   });
 
   it("does not schedule re-renders when no row is in_progress", async (t) => {
@@ -1008,7 +1024,7 @@ describe("mmr-tasks task_list — widget animates in_progress rows", () => {
     await callTaskList(tool, {
       tasks: [{ content: "Build", activeForm: "Building", status: "in_progress" }],
     }, ctx);
-    t.mock.timers.tick(80);
+    t.mock.timers.tick(200);
     assert.equal(renders, 1, "the first widget animates while in_progress");
 
     // Replace with a resting list; Pi disposes the previous component.

@@ -595,6 +595,16 @@ describe("ampi-tui prompt box: installation", () => {
     assert.equal(t.intervals[0].cleared, true);
   });
 
+  it("keeps the wave on its first glyph with no timer when NO_ANIMATION is set", (t) => {
+    process.env.NO_ANIMATION = "1";
+    t.after(() => delete process.env.NO_ANIMATION);
+    const box = install();
+    box.feed.status = status({ type: "turnStart" });
+    box.promptBox.statusChanged();
+    assert.equal(box.intervals.length, 0);
+    assert.equal(plain(box.editor.render(80).at(-1))[2], "∼");
+  });
+
   it("reads the gauge from the session's assistant messages", () => {
     const usage = (total) => ({ type: "message", message: { role: "assistant", usage: { cost: { total } } } });
     const top = (t) => plain(t.editor.render(80)[0]);
