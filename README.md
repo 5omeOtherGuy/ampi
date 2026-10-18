@@ -111,6 +111,8 @@ Esc                  # clear the prompt
 Esc Esc              # stop the running turn (one Esc no longer does)
 Alt+Enter            # new line in the prompt (no longer queues a follow-up)
 Ctrl+C Ctrl+C        # quit; the first Ctrl+C shows what can follow it
+Ctrl+C Ctrl+N        # archive this session and start a new one
+Ctrl+C Ctrl+E        # archive this session and quit
 Ctrl+X               # leader key; a popup lists the keys that can follow it
 Home / End           # jump to the start / end of the transcript (empty prompt)
 Ctrl+G               # edit the prompt in your external editor
@@ -150,6 +152,7 @@ The package ships as a set of Pi extensions; the network and history ones are of
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, and Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |
+| `ampi-threads` | On | Thread index and Amp-compatible archive commands: archive and start a new session, archive and quit, unarchive (`ampiThreads.enabled: false` turns it off) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |

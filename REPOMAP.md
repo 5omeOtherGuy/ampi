@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers ten extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers eleven extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, `ampi-threads`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -34,6 +34,7 @@
   "./src/extensions/ampi-workers/index.ts",
   "./src/extensions/ampi-custom-subagents/index.ts",
   "./src/extensions/ampi-tui/index.ts",
+  "./src/extensions/ampi-threads/index.ts",
   "./src/extensions/ampi-history/index.ts"
 ]
 ```
@@ -58,6 +59,7 @@ src/
     ampi-workers/
     ampi-custom-subagents/
     ampi-tui/
+    ampi-threads/
     ampi-history/
     ampi-toolbox/     # deprecated shim, unregistered
     ampi-debug/       # developer-only capture, unregistered
@@ -92,6 +94,7 @@ Important files:
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
 - `command-registry.ts`, `keymap.ts` — palette command registry with ranking, and the key-string grammar, `ampi.keymap` overrides, and conflict report.
 - `session-catalog.ts` — read-only catalogue of local Pi sessions: listing and opening through Pi's `SessionManager`, the cached per-session evidence index, dedupe and id/prefix resolution.
+- `thread-index.ts` — seam for the thread index (per-session archived, labels, colour, pinned, title source): `ampi-threads` registers its store, other extensions read it through `getMmrThreadIndex`; `filterMmrSessionsByArchived` filters catalogue sessions.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
 - `auto-compact.ts` — locked-mode auto-compaction at a fraction of the context window (`ampiCore.autoCompact`), with its run guard and failure backoff.
@@ -202,6 +205,14 @@ Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled
 - `ui/frame.ts` (the box overlays share: title, key hints, scrollbar), `overlays/palette.ts` (the command palette), `overlays/mode-dial.ts` (the mode dial and mode list).
 - `chrome/look.ts` (installs the pieces below), `chrome/welcome.ts` (welcome header), `chrome/title-notify.ts` (terminal title, OSC 777 notifications, bell and sound), `chrome/quit-summary.ts` (mark, title and working directory printed after an interactive quit), `transcript/messages.ts` (user message drawing, thinking label), `theme/ampi.json` and `theme/select.ts` (the theme and its session selection).
 - `pi-compat/` — the only code that uses Pi runtime surface outside the extension API (focused editor with its actions, submit handler, autocomplete state and rendered height, the editor's height rule, transcript scrolling, the reserved shortcut list, Pi's built-in slash command names, raw input, the user message component); probed by `tests/mmr-tui-pi-compat.test.mjs`.
+
+### `src/extensions/ampi-threads/`
+
+Thread management on top of Pi sessions, on by default (`ampiThreads.enabled: false` opts out). Keeps the thread index at `<agentDir>/data/ampi/threads/index.json` and registers the thread commands; owns no tools. Files:
+
+- `index.ts` (entry point: registers the index in `ampi-core/thread-index.ts`, the commands and the `/ampi-thread` route; auto-archive on quit), `config.ts` (`ampiThreads.enabled`, `ampiThreads.autoArchiveOnQuit`), `README.md`.
+- `index-store.ts` (the versioned index file: atomic writes, corrupt files moved aside, a per-path in-process queue, label and colour validation).
+- `commands.ts` (`thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, and the `/ampi-thread new|archive` handler that calls Pi's `newSession`).
 
 ### `src/extensions/ampi-history/`
 

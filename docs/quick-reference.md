@@ -106,6 +106,8 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Alt+Enter`, `Shift+Enter`, `Ctrl+J` | New line | Alt+Enter no longer queues a follow-up |
 | `Backspace` on an empty prompt | Take queued messages back into the prompt | Only while messages are queued |
 | `Ctrl+C Ctrl+C` | Quit | The first press shows the popup and keeps the prompt |
+| `Ctrl+C Ctrl+N` | Archive this session and start a new one | From `ampi-threads`; only in a session with messages |
+| `Ctrl+C Ctrl+E` | Archive this session and quit | From `ampi-threads`; only in a session with messages |
 | `Ctrl+X` | Leader | Bindings written `<leader>z` mean Ctrl+X, then Z |
 | `Home` / `End` | Jump to the start / end of the transcript | Only with an empty prompt, in Pi's fullscreen mode |
 | `Ctrl+G` | Edit the prompt in your external editor | Pi's action, now a command |
