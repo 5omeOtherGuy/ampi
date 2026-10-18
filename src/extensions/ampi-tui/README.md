@@ -193,7 +193,8 @@ A run of consecutive tool calls is folded into one summary line, with a count pe
 ```
 
 - A run ends where the transcript shows something else between two calls: an assistant message with text, a user message (a steered message too), a summary or a custom message. Thinking, failed calls and a change of kind do not end it, so one run can span several assistant messages.
-- Subagent calls (`oracle`, `librarian`, `finder`, `Task`, `reviewer`, `start_task`) are never grouped: each keeps its own row and splits the run around it.
+- Subagent calls (`oracle`, `librarian`, `finder`, `Task`, `reviewer`, `start_task`) are never grouped: each keeps its own row and splits the run around it. A call whose result shows an image, such as a `read` of a screenshot in a terminal that draws images, does the same once its result arrives, so its row stays above the image.
+- Pi always draws an assistant message's thinking. A collapsed run that spans a message with thinking shows the summary line, then that thinking, with the later calls counted in the summary above it.
 - The summary is in the present tense with a spinner while any call of the run is still running (`⠋ Read 1 file, running 1 command ▸`). Its glyph stays `✓` when a call failed; only that call's row shows the failure. A cancelled call turns the glyph to `⊘` and adds `(N cancelled)`.
 - A run of one call gets a summary line too (`✓ Ran 1 command ▸`).
 - `▸` marks a collapsed run. Expanding tool output (Pi's Ctrl+O) turns it into `▾` and draws every call below the summary, indented by two columns, with the rows and cards described below. Pi puts a blank line between two calls' rows there. Clicking a summary line, in terminals where Pi receives mouse clicks, expands or collapses that run alone.

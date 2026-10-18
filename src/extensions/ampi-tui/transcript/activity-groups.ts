@@ -6,12 +6,14 @@
  * each other. A run of calls ends where the transcript shows something else
  * between them: an assistant message with text (Pi draws a message's text
  * above all of its calls), a user or steered message, a summary or a custom
- * message, and a subagent call, which always stands alone. Thinking, failed
- * calls and a change of kind do not end a run.
+ * message, and a call that stands alone: a subagent call, or a call whose
+ * result shows an image. Thinking, failed calls and a change of kind do not
+ * end a run.
  *
- * The store is fed from Pi's events while a session runs and rebuilt from
- * the session's messages when a session starts or reloads, is compacted or
- * moves to another branch. Rows register their redraw callback, and the
+ * The store is fed from Pi's events while a session runs, checked against
+ * the session's messages when an assistant message starts, and rebuilt from
+ * them when a session starts or reloads, is compacted or moves to another
+ * branch. Rows register their redraw callback, and the
  * store redraws the rows a change affects: the first row of a group, which
  * draws the summary, and rows that moved to another group or position.
  */
@@ -21,6 +23,7 @@ import {
   type ExtensionContext,
   sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
+import { getCapabilities } from "@earendil-works/pi-tui";
 import {
   type ActivityEntry,
   type ActivityStatus,
@@ -84,7 +87,7 @@ interface MessageRecord {
 
 function blocks(message: GroupMessage): Record<string, unknown>[] {
   return Array.isArray(message.content)
-    ? message.content.filter((block): block is Record<string, unknown> => typeof block === "object" && block !== null)
+    ? message.content.filter(isRecord)
     : [];
 }
 
@@ -123,8 +126,19 @@ function interruptedResult(message: GroupMessage): ToolResult | undefined {
   return undefined;
 }
 
+/**
+ * Subagent calls, and calls whose result shows an image: Pi draws the image
+ * below the call's row even when the row draws nothing, so the row keeps its
+ * own title above it.
+ */
 function standsAlone(call: GroupedCall): boolean {
-  return classifyToolCall(call.toolName, {}).kind === "subagent";
+  if (classifyToolCall(call.toolName, {}).kind === "subagent") return true;
+  const content = call.result?.content;
+  return Boolean(getCapabilities().images) && Array.isArray(content) && content.some((block) => isRecord(block) && block.type === "image");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function callStatus(call: GroupedCall): ActivityStatus {
@@ -150,8 +164,28 @@ export class ActivityGroupStore {
 
   /** Replace the store's contents with the messages the transcript shows, in order, and redraw every known row. */
   rebuild(messages: readonly GroupMessage[]): void {
-    this.records = [];
     this.calls.clear();
+    this.load(messages);
+    this.regroup();
+    for (const [id, redraw] of [...this.redraws]) {
+      if (this.calls.has(id)) redraw();
+      else this.redraws.delete(id);
+    }
+  }
+
+  /**
+   * Bring the runs in line with the messages the transcript shows, keeping
+   * what is known about each call, and redraw the rows whose place changed.
+   * Pi adds some messages to the transcript without an event extensions
+   * hear, such as a custom message sent while the agent streams.
+   */
+  resync(messages: readonly GroupMessage[]): void {
+    this.load(messages);
+    this.refresh([], true);
+  }
+
+  private load(messages: readonly GroupMessage[]): void {
+    this.records = [];
     this.current = undefined;
     for (const message of messages) {
       if (message.role === "assistant") {
@@ -165,11 +199,6 @@ export class ActivityGroupStore {
       } else if (drawnOnItsOwn(message)) {
         this.records.push({ boundary: true, callIds: [] });
       }
-    }
-    this.regroup();
-    for (const [id, redraw] of [...this.redraws]) {
-      if (this.calls.has(id)) redraw();
-      else this.redraws.delete(id);
     }
   }
 
@@ -214,8 +243,9 @@ export class ActivityGroupStore {
   toolEnd(id: string, result: ToolResult | undefined, isError: boolean): void {
     const call = this.calls.get(id);
     if (!call) return;
+    const alone = standsAlone(call);
     this.finish(call, result, isError);
-    this.refresh([id], false);
+    this.refresh([id], standsAlone(call) !== alone);
   }
 
   /** The group a call belongs to and its index there; undefined for unknown calls and calls that stand alone. */
@@ -355,23 +385,45 @@ export class ActivityGroupStore {
   }
 }
 
-/** Feed a store from Pi's events and rebuild it from the session whenever the transcript is drawn anew. */
+/**
+ * Feed a store from Pi's events in interactive sessions, the only ones with
+ * a transcript, and rebuild it from the session whenever the transcript is
+ * drawn anew.
+ */
 export function trackActivityGroups(pi: Pick<ExtensionAPI, "on">, store: ActivityGroupStore): void {
+  let interactive = false;
+  const messages = (ctx: ExtensionContext) =>
+    ctx.sessionManager.buildContextEntries().flatMap((entry) => sessionEntryToContextMessages(entry));
   const rebuild = (_event: unknown, ctx: ExtensionContext) => {
-    store.rebuild(ctx.sessionManager.buildContextEntries().flatMap((entry) => sessionEntryToContextMessages(entry)));
+    if (interactive) store.rebuild(messages(ctx));
   };
-  pi.on("session_start", rebuild);
+  pi.on("session_start", (event, ctx) => {
+    interactive = ctx.mode === "tui";
+    rebuild(event, ctx);
+  });
   pi.on("session_tree", rebuild);
   pi.on("session_compact", rebuild);
-  pi.on("session_shutdown", () => store.clear());
-  pi.on("message_start", (event) => store.messageStart(event.message));
-  pi.on("message_update", (event) => store.messageUpdate(event.message));
-  pi.on("message_end", (event) => store.messageEnd(event.message));
+  pi.on("session_shutdown", () => {
+    interactive = false;
+    store.clear();
+  });
+  pi.on("message_start", (event, ctx) => {
+    if (!interactive) return;
+    // Every earlier message is in the session by now, also those Pi drew without an event.
+    if (event.message.role === "assistant") store.resync(messages(ctx));
+    store.messageStart(event.message);
+  });
+  pi.on("message_update", (event) => {
+    if (interactive) store.messageUpdate(event.message);
+  });
+  pi.on("message_end", (event) => {
+    if (interactive) store.messageEnd(event.message);
+  });
   // Calls made by another tool are drawn inside that tool's row.
   pi.on("tool_execution_start", (event) => {
-    if (!event.parentToolCallId) store.toolStart(event.toolCallId, event.toolName, event.args);
+    if (interactive && !event.parentToolCallId) store.toolStart(event.toolCallId, event.toolName, event.args);
   });
   pi.on("tool_execution_end", (event) => {
-    if (!event.parentToolCallId) store.toolEnd(event.toolCallId, event.result, event.isError);
+    if (interactive && !event.parentToolCallId) store.toolEnd(event.toolCallId, event.result, event.isError);
   });
 }

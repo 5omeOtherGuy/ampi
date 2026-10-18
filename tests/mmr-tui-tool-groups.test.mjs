@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { after, describe, it, mock } from "node:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
@@ -37,7 +38,10 @@ const text = (value) => ({ type: "text", text: value });
 const assistant = (content, stopReason = "toolUse") => ({ role: "assistant", content, stopReason });
 const output = (value, details) => ({ content: [{ type: "text", text: value }], details });
 
-const editDiff = [" 1 import { load } from './load.js';", "-2 const retries = 1;", "+2 const retries = 3;", "+3 const delayMs = 250;"].join("\n");
+/** A one-pixel PNG. */
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+
+const editDiff =[" 1 import { load } from './load.js';", "-2 const retries = 1;", "+2 const retries = 3;", "+3 const delayMs = 250;"].join("\n");
 
 const READ = call("r1", "read", { path: `${CWD}/src/retry.ts`, offset: 1, limit: 40 });
 const BASH = call("b1", "bash", { command: "npm test -- --grep retry" });
@@ -237,7 +241,36 @@ describe("ampi-tui grouped tool rows", () => {
 describe("ampi-tui grouped tool rows through the extension", () => {
   /** Pi's tool row for a call, drawn with the resolver the extension registered. */
   function piRow(resolver, block) {
-    return new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false }, { name: block.name, ...resolver(block.name, () => undefined) }, noopTui, CWD);
+    return new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: true }, { name: block.name, ...resolver(block.name, () => undefined) }, noopTui, CWD);
+  }
+
+  /** An interactive session's context whose session holds `messages`, read when a handler asks. */
+  function tuiContext(messages, mode = "tui") {
+    const entries = () => messages.map((message, i) => ({ type: "message", id: `e${i}`, message }));
+    return { mode, sessionManager: { buildContextEntries: entries } };
+  }
+
+  /** Play assistant messages through the extension's handlers and Pi's rows, persisting them as Pi does. */
+  function livePlayer(handlers, resolver, ctx, session) {
+    const rows = [];
+    const play = (blocks, results = RESULTS) => {
+      const message = assistant(blocks);
+      handlers.get("message_start")({ type: "message_start", message: assistant([]) }, ctx);
+      handlers.get("message_update")({ type: "message_update", message }, ctx);
+      for (const block of blocks.filter((b) => b.type === "toolCall")) rows.push(piRow(resolver, block));
+      handlers.get("message_end")({ type: "message_end", message }, ctx);
+      session.push(message);
+      for (const block of blocks.filter((b) => b.type === "toolCall")) {
+        const row = rows.find((r) => r.toolCallId === block.id);
+        handlers.get("tool_execution_start")({ type: "tool_execution_start", toolCallId: block.id, toolName: block.name, args: block.arguments }, ctx);
+        row.markExecutionStarted();
+        const [result, isError = false] = results[block.id];
+        handlers.get("tool_execution_end")({ type: "tool_execution_end", toolCallId: block.id, toolName: block.name, result, isError }, ctx);
+        row.updateResult({ ...result, isError }, false);
+        session.push({ role: "toolResult", toolCallId: block.id, content: result.content, isError });
+      }
+    };
+    return { rows, play };
   }
 
   it("groups a resumed session's calls and leaves the later rows zero-height", async () => {
@@ -250,8 +283,7 @@ describe("ampi-tui grouped tool rows through the extension", () => {
       assistant(blocks),
       ...blocks.map((block) => ({ role: "toolResult", toolCallId: block.id, content: RESULTS[block.id][0].content, isError: false })),
     ];
-    const entries = messages.map((message, i) => ({ type: "message", id: `e${i}`, message }));
-    handlers.get("session_start")({ type: "session_start", reason: "resume" }, { sessionManager: { buildContextEntries: () => entries } });
+    handlers.get("session_start")({ type: "session_start", reason: "resume" }, tuiContext(messages));
     // Pi replays the session after session_start: a row per call, then its result.
     const rows = blocks.map((block) => piRow(toolRenderers[0], block));
     for (const [i, row] of rows.entries()) row.updateResult(messages[2 + i]);
@@ -262,31 +294,63 @@ describe("ampi-tui grouped tool rows through the extension", () => {
     const { installToolRenderers } = await loadRenderers();
     const { pi, handlers, toolRenderers } = createMockPi();
     installToolRenderers(pi, { home: HOME });
-    handlers.get("session_start")({ type: "session_start", reason: "startup" }, { sessionManager: { buildContextEntries: () => [] } });
-    const rows = [];
-    const play = (blocks) => {
-      const message = assistant(blocks);
-      handlers.get("message_start")({ type: "message_start", message: assistant([]) });
-      handlers.get("message_update")({ type: "message_update", message });
-      for (const block of blocks.filter((b) => b.type === "toolCall")) rows.push(piRow(toolRenderers[0], block));
-      handlers.get("message_end")({ type: "message_end", message });
-      for (const block of blocks.filter((b) => b.type === "toolCall")) {
-        const row = rows.find((r) => r.toolCallId === block.id);
-        handlers.get("tool_execution_start")({ type: "tool_execution_start", toolCallId: block.id, toolName: block.name, args: block.arguments });
-        row.markExecutionStarted();
-        const [result, isError = false] = RESULTS[block.id];
-        handlers.get("tool_execution_end")({ type: "tool_execution_end", toolCallId: block.id, toolName: block.name, result, isError });
-        row.updateResult({ ...result, isError }, false);
-      }
-    };
+    const session = [];
+    const ctx = tuiContext(session);
+    handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
+    const { rows, play } = livePlayer(handlers, toolRenderers[0], ctx, session);
     play([READ, BASH]);
     play([GREP]);
     play([text("Now the fix."), EDIT]);
+    // A shown custom message Pi adds after a turn without an extension event.
+    session.push({ role: "custom", customType: "note", display: true, content: "Deploy is frozen." });
+    play([LINT]);
     assert.deepEqual(rows.map((row) => row.render(80).map(stripAnsi)), [
       ["", " ✓ Read 1 file, ran 1 command, ran 1 search ▸"],
       [],
       [],
       ["", " ✓ Edited 1 file (+2 -1) ▸"],
+      ["", " ✓ Ran 1 command ▸"],
     ]);
+  });
+
+  it("gives a call whose image shows its own row above the image", async () => {
+    const { installToolRenderers } = await loadRenderers();
+    const original = getCapabilities();
+    setCapabilities({ ...original, images: "kitty" });
+    try {
+      const { pi, handlers, toolRenderers } = createMockPi();
+      installToolRenderers(pi, { home: HOME });
+      const session = [];
+      const ctx = tuiContext(session);
+      handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
+      const { rows, play } = livePlayer(handlers, toolRenderers[0], ctx, session);
+      const shot = call("r2", "read", { path: `${CWD}/shot.png` });
+      const image = { content: [text("Read image file [image/png]"), { type: "image", data: PNG, mimeType: "image/png" }] };
+      play([BASH, shot, GREP], { ...RESULTS, r2: [image] });
+      const [bash, read, grep] = rows.map((row) => row.render(80).map(stripAnsi));
+      assert.deepEqual(bash, ["", " ✓ Ran 1 command ▸"]);
+      assert.deepEqual(read.slice(0, 3), ["", " ✓ Read shot.png", ""], "the row's title, then Pi's spacer and the image");
+      assert.ok(read.length > 3, "the image follows its row");
+      assert.deepEqual(grep, ["", " ✓ Ran 1 search ▸"]);
+    } finally {
+      setCapabilities(original);
+    }
+  });
+
+  it("leaves sessions without a transcript alone", async () => {
+    const { installToolRenderers } = await loadRenderers();
+    const { pi, handlers, toolRenderers } = createMockPi();
+    installToolRenderers(pi, { home: HOME });
+    let reads = 0;
+    const buildContextEntries = () => {
+      reads++;
+      return [];
+    };
+    const ctx = { mode: "print", sessionManager: { buildContextEntries } };
+    handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
+    const { rows, play } = livePlayer(handlers, toolRenderers[0], ctx, []);
+    play([READ, BASH]);
+    assert.equal(reads, 0, "the session is never read");
+    assert.equal(stripAnsi(rows[1].render(80)[1]), " ✓ Ran npm test -- --grep retry", "each call keeps its own row");
   });
 });

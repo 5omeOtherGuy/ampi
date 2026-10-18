@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
+import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -115,6 +116,40 @@ describe("ampi-tui activity groups: boundaries", () => {
     assert.equal(store.lookup("o1"), undefined);
     assert.deepEqual(groupIds(store, ["r1", "o1", "r2", "m1"]), [["r1"], ["r2", "m1"]]);
     assert.equal(summaryOf(store, "r2").summary, "Read 1 file, ran 1 tool");
+  });
+
+  it("ends a run at a message cut off at the length limit", async () => {
+    const { ActivityGroupStore } = await load();
+    const store = new ActivityGroupStore();
+    turn(store, assistant([read("r1")]));
+    turn(store, assistant([read("r2")], "length"));
+    turn(store, assistant([read("r3")]));
+    assert.deepEqual(groupIds(store, ["r1", "r2", "r3"]), [["r1"], ["r2", "r3"]]);
+  });
+
+  it("lets a call whose result shows an image stand alone, where the terminal shows images", async () => {
+    const { ActivityGroupStore } = await load();
+    const image = { content: [text("Read image file [image/png]"), { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }] };
+    const message = assistant([bash("b1"), read("r1", "shot.png"), grep("g1")]);
+    const original = getCapabilities();
+    try {
+      setCapabilities({ ...original, images: "kitty" });
+      const store = new ActivityGroupStore();
+      stream(store, message);
+      const drawn = new Set();
+      for (const id of ["b1", "r1", "g1"]) store.attach(id, () => drawn.add(id));
+      runAll(store, message, { r1: [image, false] });
+      assert.deepEqual(groupIds(store, ["b1", "r1", "g1"]), [["b1"], ["g1"]]);
+      assert.equal(store.lookup("r1"), undefined);
+      assert.deepEqual([...drawn].sort(), ["b1", "g1", "r1"], "the rows that left the group and its summary redraw");
+
+      setCapabilities({ ...original, images: null });
+      const plain = new ActivityGroupStore();
+      turn(plain, message, { r1: [image, false] });
+      assert.deepEqual(groupIds(plain, ["b1", "r1", "g1"]), [["b1", "r1", "g1"]], "without images the call stays in the run");
+    } finally {
+      setCapabilities(original);
+    }
   });
 
   it("makes a group of one call", async () => {
@@ -235,6 +270,30 @@ describe("ampi-tui activity groups: sessions", () => {
     store.rebuild([assistant([read("r9")])]);
     assert.equal(store.lookup("r3"), undefined);
     assert.equal(store.lookup("r9").index, 0);
+  });
+
+  it("splits a live run at a message the session shows without an event, keeping running calls live", async () => {
+    const { ActivityGroupStore } = await load();
+    const store = new ActivityGroupStore();
+    const first = assistant([read("r1"), bash("b1")]);
+    stream(store, first);
+    store.toolStart("r1", "read", first.content[0].arguments);
+    store.toolEnd("r1", output("text"), false);
+    store.toolStart("b1", "bash", first.content[1].arguments);
+    const session = [user("go"), first, { role: "toolResult", toolCallId: "r1", content: [text("text")], isError: false }];
+    const drawn = [];
+    for (const id of ["r1", "b1"]) store.attach(id, () => drawn.push(id));
+    store.resync(session);
+    assert.deepEqual(drawn, [], "nothing moved, nothing redraws");
+    assert.deepEqual([summaryOf(store, "r1").status, summaryOf(store, "r1").live], ["running", true]);
+
+    store.toolEnd("b1", output("ok"), false);
+    drawn.length = 0;
+    // A shown custom message landed after the turn; the next message starts below it.
+    store.resync([...session, { role: "toolResult", toolCallId: "b1", content: [text("ok")], isError: false }, { role: "custom", display: true, content: "note" }]);
+    assert.deepEqual(drawn, []);
+    turn(store, assistant([grep("g1")]));
+    assert.deepEqual(groupIds(store, ["r1", "b1", "g1"]), [["r1", "b1"], ["g1"]]);
   });
 });
 
