@@ -397,8 +397,6 @@ describe("Pi SDK calls of the session builder (sdk-session.js) and the tools com
   // A stand-in named like ampi, which Pi's settings load, so the builder does not add the real one.
   const standIn = path.join(dir, "stand-in");
   const extensionFile = path.join(dir, "extensions", "stamp.ts");
-  // The MCP server would create this file if it ever started.
-  const started = path.join(dir, "mcp-server-started");
   const probeKey = "__ampi_cli_sdk_probe__";
 
   before(() => {
@@ -423,7 +421,7 @@ describe("Pi SDK calls of the session builder (sdk-session.js) and the tools com
     // Servers default to codemode exposure, which makes the MCP extension activate codemode.
     writeJson(path.join(agentDir, "mcp.json"), {
       mcpServers: {
-        docs: { command: process.execPath, args: ["-e", `require("node:fs").writeFileSync(${JSON.stringify(started)}, "")`] },
+        docs: { command: process.execPath },
         off: { command: process.execPath, enabled: false },
         later: { command: process.execPath },
       },
@@ -455,13 +453,23 @@ describe("Pi SDK calls of the session builder (sdk-session.js) and the tools com
 
   it("builds a session with the mode flag, the built-in extensions and Pi's tool sources, without connecting MCP", async () => {
     const pi = await import("@earendil-works/pi-coding-agent");
+    // Pi with a createMcpExtension that records the options the builder gives the MCP extension.
+    /** @type {any[]} */
+    const mcpOptions = [];
+    const recordingPi = {
+      ...pi,
+      createMcpExtension: (/** @type {any} */ options) => {
+        mcpOptions.push(options);
+        return pi.createMcpExtension(options);
+      },
+    };
     const runtime = await createAmpiSdkSession({
       cwd: project,
       sessionManager: pi.SessionManager.inMemory(project),
       mode: "print",
       connectMcp: false,
       ampiMode: "high",
-      pi,
+      pi: recordingPi,
     });
     try {
       assert.deepEqual(runtime.diagnostics, []);
@@ -482,7 +490,12 @@ describe("Pi SDK calls of the session builder (sdk-session.js) and the tools com
     } finally {
       await runtime.dispose();
     }
-    assert.equal(existsSync(started), false, "the MCP server never started");
+    // Every server the MCP extension tries goes through this transport factory, which refuses at once.
+    assert.equal(mcpOptions.length, 1);
+    const { createTransport } = mcpOptions[0];
+    assert.equal(typeof createTransport, "function");
+    const docs = { name: "docs", config: { command: process.execPath } };
+    assert.throws(() => createTransport(docs, project, undefined), /does not connect MCP servers/);
     assert.equal(existsSync(path.join(agentDir, "sessions")), false, "an in-memory session writes no file");
   });
 });
