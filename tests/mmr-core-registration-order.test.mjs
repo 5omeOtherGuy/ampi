@@ -21,7 +21,7 @@ describe("mmr-core registration order", () => {
 
     assert.deepEqual([...commands.keys()], ["mode", "ampi-status", "mmr-status", "ampi-changelog", "mmr-changelog", "ampi-config", "mmr-config"]);
 
-    assert.deepEqual([...shortcuts.keys()], ["ctrl+shift+s", "alt+m", "ctrl+space", "alt+r"]);
+    assert.deepEqual([...shortcuts.keys()], ["ctrl+shift+s", "alt+m", "ctrl+s", "ctrl+space", "alt+d"]);
 
     assert.deepEqual(
       [...handlers.keys()],
@@ -95,8 +95,9 @@ describe("mmr-core registration order", () => {
       "command:mmr-config",
       "shortcut:ctrl+shift+s",
       "shortcut:alt+m",
+      "shortcut:ctrl+s",
       "shortcut:ctrl+space",
-      "shortcut:alt+r",
+      "shortcut:alt+d",
       "hook:session_start",
       "hook:before_provider_request",
       "hook:before_agent_start",

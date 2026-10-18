@@ -19,7 +19,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `medium`. The selected mode is persisted as an `ampi-core.mode-state` custom session entry on every explicit change. Legacy names normalize at input boundaries: `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+Space` cycles `low → medium → high → ultra` while excluding `free`. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
@@ -30,12 +30,13 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+Space` cycles
 - **Model resolution** is provider-neutral against the live Pi registry. Defaults are Low: GPT-5.6 Terra → GPT-5.5; Medium: GPT-5.6 Sol → Claude Opus 4.8; High: GPT-5.6 Sol → Claude Opus 4.8; Ultra: GPT-5.6 Sol → GPT-5.5. Subscription-backed routes (`claude-subscription`, `openai-codex`, `github-copilot`) sort first; explicit `provider/model` settings force a route.
 - **Prompt bodies**: Medium, High, and Ultra share the full system-prompt body; Low uses the compact body with its own fragment ordering.
 - **Pi baseline thinking** per mode: Low/Medium `medium`; High/Ultra `xhigh`. Request-level thinking is enforced separately by the per-mode request-policy hook.
-- **Thinking-level toggle (`alt+r`)**: Medium cycles `medium ↔ high`; High cycles `xhigh ↔ medium`; Ultra cycles `xhigh → high → medium → xhigh`. Low is intentionally not toggleable. The toggle drives both Pi's thinking level and OpenAI Responses reasoning effort, is session-scoped, and uses a dedicated key because Pi reserves `shift+tab` (`app.thinking.cycle`).
+- **Thinking-level toggle (`alt+d`)**: Medium cycles `medium ↔ high`; High cycles `xhigh ↔ medium`; Ultra cycles `xhigh → high → medium → xhigh`. Low is intentionally not toggleable. The toggle drives both Pi's thinking level and OpenAI Responses reasoning effort, is session-scoped, and uses a dedicated key because Pi reserves `shift+tab` (`app.thinking.cycle`).
 - **Request policy** rewrites only token/reasoning fields on `before_provider_request` (`max_tokens`, `max_output_tokens`, Anthropic `thinking` / `output_config.effort`, OpenAI Responses `reasoning`). Never mutates provider identity, auth, headers, base URLs, messages, system blocks, or tools.
 - **Context profiles**: Medium inherits the former Smart 300k total / 172k max-input / 128k max-output safety profile. Low, High, and Ultra use Pi's registered model window. A declared profile caps the active model's `contextWindow` down via a shallow clone at `setModel`; smaller custom windows remain authoritative, `free` is never capped, and the cap is reasserted if provider registration transiently restores the uncapped model object.
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
 - **Footer**: locked modes draw a two-line footer (cwd, branch, session name; token usage, cost, context use, model and mode); `free` restores Pi's footer. While another extension owns ampi's terminal chrome (`registerMmrChromeOwner`, used by [`ampi-tui`](../ampi-tui/README.md)), core leaves the footer slot to it.
 - **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+r` for the in-mode thinking toggle that does not release.
+- **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+d` for the in-mode thinking toggle that does not release.
 
 ### Tool resolution
 

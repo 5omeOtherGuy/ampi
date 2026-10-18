@@ -102,8 +102,8 @@ Interactive controls:
 /mode                # show current mode
 /mode high           # switch mode
 Ctrl+Shift+S         # mode picker (Alt+M fallback)
-Ctrl+Space           # cycle low → medium → high → ultra
-Alt+R                # toggle the active mode's thinking preset where supported
+Ctrl+S               # cycle low → medium → high → ultra (Ctrl+Space: deprecated alias)
+Alt+D                # toggle the active mode's thinking preset where supported
 ```
 
 ## Providers

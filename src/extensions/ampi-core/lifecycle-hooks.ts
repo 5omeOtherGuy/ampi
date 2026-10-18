@@ -269,7 +269,7 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
 
     // Pi reserves the thinking-cycle key (shift+tab) and an extension cannot
     // override it, so a native thinking change releases the locked mode to Free
-    // (matching native model changes). The MMR-owned alt+r shortcut is the
+    // (matching native model changes). The ampi-owned alt+d shortcut is the
     // in-mode thinking toggle that does not release.
     await controller.switchLockedModeToFreeForNativeControl(ctx, { nativeThinkingLevel: event.level });
   });
