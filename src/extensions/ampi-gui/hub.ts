@@ -109,11 +109,16 @@ export interface MmrGuiHubOptions {
   port?: number;
 }
 
-/** The rows' `host` field, by session file, from the live registry. */
+/**
+ * The rows' `host` field, by session file, from the live registry. Of two
+ * processes with the same file open, the first entry names the host, as
+ * `findMmrLiveOwner` picks the holder, so a page that follows the row's
+ * host sees the process the hub answers with.
+ */
 export function mmrGuiRowHosts(entries: readonly MmrLiveEntry[]): Map<string, MmrGuiRowHost> {
   const hosts = new Map<string, MmrGuiRowHost>();
   for (const entry of entries) {
-    if (entry.sessionPath === null) continue;
+    if (entry.sessionPath === null || hosts.has(entry.sessionPath)) continue;
     hosts.set(entry.sessionPath, { kind: entry.kind, pid: entry.pid, gui: entry.gui !== null, phase: entry.status?.phase ?? null });
   }
   return hosts;

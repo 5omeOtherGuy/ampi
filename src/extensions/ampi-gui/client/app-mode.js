@@ -122,6 +122,19 @@ export function bannerFor(state, title) {
 }
 
 /**
+ * Whether the session list says the shown session changed hands since the
+ * page showed it with `access` and the hub's `state`, so the page shows it
+ * again: a process started a session shown dormant, a holder let go of one
+ * shown held, or the holder's pid or web GUI is not the one shown (a
+ * terminal's entry can name its GUI only after the page read it).
+ */
+export function hostChanged(access, state, host) {
+  if (access === "dormant") return Boolean(host);
+  if (access !== "held") return false;
+  return !host || host.pid !== state?.pid || host.gui !== Boolean(state?.gui);
+}
+
+/**
  * Reload the session list every `everyMs` while `visible()` holds. A hidden
  * page stops; shown again it reloads at once and resumes. Timers are
  * injected so tests can run them.

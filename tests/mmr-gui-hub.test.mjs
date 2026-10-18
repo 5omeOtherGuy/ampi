@@ -355,6 +355,9 @@ describe("ampi app hub: pages and the session list", () => {
       assert.equal(rows["s-held"].elsewhere, true);
       assert.equal(rows["s-c"].host, null);
       assert.equal(rows["s-c"].elsewhere, false);
+      // Two processes with one file: the first entry is the host, as it is the holder the hub answers with.
+      const entry = (pid, kind) => ({ pid, kind, sessionPath: "/s/x.jsonl", gui: null, status: null });
+      assert.equal(hubModule.mmrGuiRowHosts([entry(TERMINAL_PID, "tui"), entry(LATE_PID, "execute")]).get("/s/x.jsonl").pid, TERMINAL_PID);
 
       const view = await send(ctx.port, { target: "/api/sessions/s-c", headers: ctx.headers() });
       assert.equal(view.status, 200);
@@ -799,6 +802,28 @@ describe("ampi app hub: terminal sessions", () => {
         assert.equal((await send(ctx.port, { target: "/s/s-held/api/events", headers: ctx.headers() })).status, 409, label);
       }
       assert.deepEqual(terminal.mock.calls.sendUserMessage, [], "nothing reached the terminal");
+      assert.deepEqual(ctx.starts, []);
+    } finally {
+      await ctx.close();
+      await terminal.stop();
+    }
+  });
+
+  it("keeps a session another ampi app runs read-only although its entry names a GUI with a matching token file", async () => {
+    const ctx = await startHub();
+    const terminal = await startTerminal(ctx, "s-held");
+    const entryFile = path.join(ctx.registryDir, `${process.pid}.json`);
+    try {
+      writeFileSync(entryFile, JSON.stringify({ ...JSON.parse(readFileSync(entryFile, "utf8")), kind: "app-session", ownerPid: LATE_PID }));
+      const transcript = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+      assert.equal(transcript.status, 200);
+      assert.deepEqual(transcript.json().state, { state: "elsewhere", kind: "app-session", pid: process.pid, gui: true });
+      assert.equal(transcript.json().items.length, 2, "read from the file");
+      const sent = await ctx.post("/s/s-held/api/send", { text: "may I?" });
+      assert.equal(sent.status, 409);
+      assert.equal(sent.json().kind, "app-session");
+      assert.equal((await send(ctx.port, { target: "/s/s-held/api/events", headers: ctx.headers() })).status, 409);
+      assert.deepEqual(terminal.mock.calls.sendUserMessage, [], "nothing reached the GUI the entry names");
       assert.deepEqual(ctx.starts, []);
     } finally {
       await ctx.close();

@@ -135,6 +135,10 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       // ampi-core writes this process's live registry entry; the GUI adds its port, and its token for `ampi app`.
       setMmrLiveFields({ gui: { port: server.port, token } });
       if (!hosted) {
+        // Written now, not within the write throttle: an `ampi app` page that
+        // read the entry meanwhile would take this terminal for one without
+        // the web GUI.
+        await flushMmrLiveEntry();
         ctx.ui.notify(`Web GUI: ${url}`, "info");
       } else if (!hostReady) {
         // The host already holds the token; it builds the link itself. The

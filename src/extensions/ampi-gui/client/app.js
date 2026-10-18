@@ -14,6 +14,7 @@ import {
   bannerFor,
   createRefresher,
   historyState,
+  hostChanged,
   parseAppPath,
   routeFromHistory,
   sessionBase,
@@ -67,6 +68,8 @@ let base = "/api/";
 let shownId = null;
 /** App mode: how the shown session is offered, `live` or a `bannerFor` access. */
 let access = "live";
+/** App mode: the hub's state for the session shown held or dormant: who holds it, with its pid and GUI. */
+let shownState = null;
 
 /** POST a command as JSON; resolves `{ ok, body }` and never throws. */
 async function postTo(url, body) {
@@ -676,6 +679,7 @@ async function openSession(id, { keepScroll = false } = {}) {
     drawView({ session: { id, title: row?.title ?? "", cwd: row?.cwd ?? "", mode: null }, items: [], groups: [] });
     setAccess("gone", bannerFor(body, row?.title));
   } else if ("state" in body) {
+    shownState = body.state;
     const banner = bannerFor(body.state, body.session.title);
     setAccess(banner.access, banner);
     drawView(body);
@@ -695,19 +699,20 @@ async function openSession(id, { keepScroll = false } = {}) {
 }
 
 /**
- * The list says the shown session started or stopped running elsewhere
- * (a start that outlasted the send's wait, a terminal that quit): show it
- * as it is now.
+ * The list says the shown session changed hands (a start that outlasted the
+ * send's wait, a terminal that quit or turned its web GUI on): show it as it
+ * is now.
  */
 function followHost() {
   const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === shownId);
   if (!row) return;
-  if ((access === "dormant" && row.host) || (access === "held" && !row.host)) openSession(shownId, { keepScroll: true });
+  if (hostChanged(access, shownState, row.host)) openSession(shownId, { keepScroll: true });
 }
 
 /** Another process opened the live session: keep what is drawn, where it is, read-only. */
 function handOver(state) {
   closeStream();
+  shownState = state;
   viewing = { session: liveSession, items: [...items.values()], groups: [], transcript: live };
   const banner = bannerFor(state, liveSession.title);
   setAccess(banner.access, banner);

@@ -128,8 +128,7 @@ describe("ampi-gui extension", () => {
     assert.equal(token, TOKEN);
     assert.equal(await get(port, `/?t=${TOKEN}`), 303);
 
-    for (const run of live.timers.splice(0)) run();
-    await live.writer.idle();
+    // Read before any throttled write runs: the entry names the GUI once session_start returns.
     const file = path.join(registryDir, `${process.pid}.json`);
     const recorded = JSON.parse(readFileSync(file, "utf8"));
     assert.deepEqual(recorded.gui, { port, tokenHash: createHash("sha256").update(TOKEN).digest("hex") });

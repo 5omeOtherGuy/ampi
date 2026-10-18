@@ -1,7 +1,8 @@
 // The ampi app page's client helpers (ampi-gui/client/app-mode.js): where a
 // session's requests go, page addresses and history entries, the sidebar's
 // status icon labels, the banner for each state the hub answers, escaping,
-// and the session list's refresh timer. The modules load in Node without a
+// when the list makes the page open the shown session again, and the session
+// list's refresh timer. The modules load in Node without a
 // DOM; the page wiring is checked in a browser.
 
 import assert from "node:assert/strict";
@@ -141,6 +142,39 @@ describe("ampi app page: banners", () => {
       "<strong>&#60;b&#62;Tom &#38; Jerry&#39;s&#60;/b&#62;</strong> is open in process 7 (&#60;script&#62;x&#60;/script&#62;). Continue it there; here it is read-only, so the two never write the same file.",
     );
     assert.match(bannerFor({ state: "gone" }, "<i>").html, /<strong>&#60;i&#62;<\/strong>/);
+  });
+});
+
+describe("ampi app page: following the session list", () => {
+  const held = (kind, pid, gui) => ({ state: "elsewhere", kind, pid, gui });
+  const host = (kind, pid, gui) => ({ kind, pid, gui, phase: "idle" });
+
+  it("opens a session shown dormant again once a process runs it", async () => {
+    const { hostChanged } = await appMode();
+    assert.equal(hostChanged("dormant", { state: "not-running" }, null), false);
+    assert.equal(hostChanged("dormant", { state: "not-running" }, host("tui", 4242, false)), true);
+  });
+
+  it("opens a session shown held again when its holder lets go, is another process or turned its web GUI on or off", async () => {
+    const { hostChanged } = await appMode();
+    const shown = held("tui", 4242, false);
+    assert.equal(hostChanged("held", shown, host("tui", 4242, false)), false, "nothing changed");
+    assert.equal(hostChanged("held", shown, null), true, "the terminal quit");
+    // The terminal's entry named it before its GUI: the page saw it without one.
+    assert.equal(hostChanged("held", shown, host("tui", 4242, true)), true, "the GUI came after the entry");
+    assert.equal(hostChanged("held", shown, host("tui", 5151, false)), true, "another process has it now");
+    assert.equal(hostChanged("held", held("tui", 4242, true), host("tui", 4242, false)), true, "the GUI went");
+    assert.equal(hostChanged("held", held("app-session", 4242, true), host("app-session", 4242, true)), false, "another app's worker stays held");
+    // A hand-over names no GUI: a holder with one is opened again once, one without stays.
+    assert.equal(hostChanged("held", held("tui", 4242, undefined), host("tui", 4242, true)), true);
+    assert.equal(hostChanged("held", held("tui", 4242, undefined), host("tui", 4242, false)), false);
+  });
+
+  it("leaves a live, imported, gone or home page alone", async () => {
+    const { hostChanged } = await appMode();
+    for (const access of ["live", "imported", "gone", "home"]) {
+      for (const row of [null, host("tui", 4242, true)]) assert.equal(hostChanged(access, null, row), false, `${access} ${JSON.stringify(row)}`);
+    }
   });
 });
 
