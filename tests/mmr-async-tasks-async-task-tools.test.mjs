@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
+import { holdEventLoopOpen } from "./helpers/event-loop.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const TOOLS_MODULE = "extensions/ampi-workers/background/async-task-tools.ts";
 const REGISTRY_MODULE = "extensions/ampi-workers/background/async-task-registry.ts";
 
 after(cleanupLoadedSource);
+holdEventLoopOpen();
 
 const DEFAULT_TASK_WORKER_TOOLS = Object.freeze(["read", "bash", "edit", "write", "finder"]);
 

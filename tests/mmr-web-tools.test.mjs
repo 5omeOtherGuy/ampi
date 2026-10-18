@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
+import { holdEventLoopOpen } from "./helpers/event-loop.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
+holdEventLoopOpen();
 
 function settings(partial = {}) {
   return {
