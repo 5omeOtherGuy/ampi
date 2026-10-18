@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers nine extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers ten extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -33,6 +33,7 @@
   "./src/extensions/ampi-github/index.ts",
   "./src/extensions/ampi-workers/index.ts",
   "./src/extensions/ampi-custom-subagents/index.ts",
+  "./src/extensions/ampi-tui/index.ts",
   "./src/extensions/ampi-history/index.ts"
 ]
 ```
@@ -56,6 +57,7 @@ src/
     ampi-github/
     ampi-workers/
     ampi-custom-subagents/
+    ampi-tui/
     ampi-history/
     ampi-toolbox/     # deprecated shim, unregistered
     ampi-debug/       # developer-only capture, unregistered
@@ -85,7 +87,8 @@ Important files:
 - `request-policy.ts` — per-mode provider-request and thinking-level policy.
 - `prompt-assembly.ts` — prompt-head rewrite and ampi-authored mode prompts.
 - `subagent-profiles.ts`, `subagent-resolver.ts`, `subagent-prompt-assembly.ts` — worker model/tool/prompt policy for subagents.
-- `status.ts`, `diagnostics.ts` — `/ampi-status` formatting and structured diagnostics.
+- `status.ts`, `diagnostics.ts` — `/ampi-status` formatting, the locked-mode footer, and structured diagnostics.
+- `chrome-owner.ts` — seam that makes the footer yield to an extension drawing its own terminal chrome (`ampi-tui`).
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
 - `command-registry.ts`, `keymap.ts` — palette command registry with ranking, and the key-string grammar, `ampi.keymap` overrides, and conflict report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
@@ -186,6 +189,10 @@ Important files:
 - `custom-config.ts`, `custom-import.ts` — enabled-subagent persistence and legacy-definition import.
 - `config-flow.ts` — interactive `/ampi-config` discovery/enable UI.
 - `provider.ts` — tool-provider and feature-gate-provider factories.
+
+### `src/extensions/ampi-tui/`
+
+Terminal look for interactive sessions, on by default (`ampiTui.enabled: false` opts out). Claims ampi's chrome through `ampi-core/chrome-owner.ts` and removes the footer; print, JSON, RPC and worker runs are untouched. Owns no tools. Files: `index.ts` (entry point), `config.ts` (the `ampiTui.enabled` switch), `README.md`.
 
 ### `src/extensions/ampi-history/`
 

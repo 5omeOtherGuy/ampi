@@ -24,6 +24,8 @@
  *   renderers, legacy convenience constants such as
  *   `ORACLE_DEFAULT_MODEL_PREFERENCES`, and the command registry and keymap
  *   model until the command palette consumes them.
+ *   renderers, the chrome-owner seam, and legacy convenience constants such as
+ *   `ORACLE_DEFAULT_MODEL_PREFERENCES`.
  *
  * - Test seam: exported (or, in a few cases, deliberately NOT re-exported
  *   from this barrel) only for the repo's own tests. Do not depend on these
@@ -261,6 +263,13 @@ export { MMR_PLANNED_TOOL_CATALOG } from "./extensions/ampi-core/planned-catalog
 export { renderMmrPromptDebugFixture, stringifyMmrToolSchema } from "./extensions/ampi-core/prompt-debug-renderer.js";
 export { AMPI_MODE_STATE_ENTRY, MMR_MODE_STATE_ENTRY, findLatestPersistedModeState } from "./extensions/ampi-core/state.js";
 export { createMmrToolRegistry, isMmrToolAllowed, resolveMmrTools as resolveMmrToolNames } from "./extensions/ampi-core/tool-registry.js";
+// --- ampi-core: chrome-owner seam for extensions that draw their own terminal chrome (Internal / prompt-assembly) ---
+export {
+  getAmpiChromeOwner,
+  getMmrChromeOwner,
+  registerAmpiChromeOwner,
+  registerMmrChromeOwner,
+} from "./extensions/ampi-core/chrome-owner.js";
 // --- ampi-session-fallback (Stable) ---
 export { createMmrSessionFallbackExtension } from "./extensions/ampi-session-fallback/index.js";
 export { classifyMmrSessionFallbackError } from "./extensions/ampi-session-fallback/classifier.js";
@@ -749,6 +758,11 @@ export type {
   MmrCustomSubagentDefinition,
   ParseMmrCustomSubagentMarkdownArgs,
 } from "./extensions/ampi-custom-subagents/custom-loader.js";
+// --- ampi-tui (Stable) ---
+export { createAmpiTuiExtension, createMmrTuiExtension } from "./extensions/ampi-tui/index.js";
+export type { MmrTuiFactoryOverrides } from "./extensions/ampi-tui/index.js";
+export { loadMmrTuiSettings } from "./extensions/ampi-tui/config.js";
+export type { MmrTuiSettings } from "./extensions/ampi-tui/config.js";
 
 // ===========================================================================
 // Additive `Ampi*` / `AMPI_*` brand aliases (additive-only; each alias keeps
@@ -947,6 +961,9 @@ export {
   toPersistedMmrSessionFallbackOverride as toPersistedAmpiSessionFallbackOverride,
 } from "./extensions/ampi-session-fallback/state.js";
 export {
+  loadMmrTuiSettings as loadAmpiTuiSettings,
+} from "./extensions/ampi-tui/config.js";
+export {
   loadMmrWebSettings as loadAmpiWebSettings,
 } from "./extensions/ampi-web/config.js";
 export {
@@ -1130,6 +1147,12 @@ export type {
 export type {
   PersistedMmrSessionFallbackOverride as PersistedAmpiSessionFallbackOverride,
 } from "./extensions/ampi-session-fallback/state.js";
+export type {
+  MmrTuiSettings as AmpiTuiSettings,
+} from "./extensions/ampi-tui/config.js";
+export type {
+  MmrTuiFactoryOverrides as AmpiTuiFactoryOverrides,
+} from "./extensions/ampi-tui/index.js";
 export type {
   LoadedMmrWebSettings as LoadedAmpiWebSettings,
   MmrWebSettings as AmpiWebSettings,

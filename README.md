@@ -134,6 +134,7 @@ The package ships as a set of Pi extensions; the network and history ones are of
 | `ampi-tasks` | On | Session-local `task_list` planning widget |
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
+| `ampi-tui` | On | Terminal look for interactive sessions; removes the footer (`ampiTui.enabled: false` restores it) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |

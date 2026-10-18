@@ -33,6 +33,7 @@ export type MmrExtensionRiskClass =
   | "remote-repo" // reads remote repository data
   | "session-data" // reads local session/history data
   | "subprocess" // spawns child agent processes
+  | "terminal-ui" // draws terminal chrome only; no tools, no external side effects
   | "diagnostic"; // debug capture / inspection
 
 /**
@@ -207,6 +208,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     featureGates: ["ampi-custom-subagents", "mmr-custom-subagents"],
     riskClass: "subprocess",
     childRole: "worker-owner",
+  },
+  {
+    name: "ampi-tui",
+    entrypoint: "./src/extensions/ampi-tui/index.ts",
+    exportSubpath: "./extensions/ampi-tui",
+    exportAliases: ["./extensions/mmr-tui"],
+    autoLoaded: true,
+    tools: [],
+    dynamicTools: false,
+    featureGates: [],
+    riskClass: "terminal-ui",
+    childRole: "none",
   },
   {
     name: "ampi-history",

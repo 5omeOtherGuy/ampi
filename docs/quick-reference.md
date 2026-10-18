@@ -114,5 +114,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | Web search is unreliable | Configure `AMPI_WEB_SEARXNG_URL` or `BRAVE_API_KEY` |
 | Mode unexpectedly became `free` | Re-enter `/mode <key>` after native `/model` or `/think` changes |
 | Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/ampi-status debug` |
+| No footer below the editor | `ampi-tui` removes it by default; set `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) and restart Pi to restore it |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

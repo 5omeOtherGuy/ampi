@@ -159,6 +159,7 @@ export function createMockPi(options = {}) {
  *  - `models` (default `[]`): provider/model registrations seen by modelRegistry.
  *  - `authenticated` (default `true`): drives `hasConfiguredAuth`.
  *  - `hasUI` (default `true`): controls `ctx.hasUI` for code that gates on it.
+ *  - `mode` (default `"tui"` with a UI, `"print"` without): Pi's run mode, `ctx.mode`.
  *  - `sessionId`, `sessionName`, `cwd`: identity-shaped fields.
  *  - `model`: the `ctx.model` currently selected by Pi.
  *  - `getContextUsage` (default returns `undefined`): hook for token-usage info.
@@ -187,6 +188,7 @@ export function createMockExtensionContext(options = {}) {
   const ctx = {
     cwd,
     hasUI,
+    mode: options.mode ?? (hasUI ? "tui" : "print"),
     sessionId: options.sessionId,
     sessionName: options.sessionName,
     model: options.model,
