@@ -1,0 +1,9 @@
+                                      •  ●  ·           Welcome to ampi
+                                   •           ·        ctrl+o for commands · ? for shortcuts
+                                 •    ·  ●  •    ·
+                               ·    ·         •    ·    ▍ New in ampi 1.2.0                          dismiss
+                               ·                   ·    ▍ ampi-tui: a welcome screen with ampi's mark and
+                               ·    ·         ·    ·    ▍ the newest changelog item, shown when an
+                                 ·    ·  ·  ·    ·      ▍ interactive session starts, with a summary long …
+                                   ·           ·        ▍ /ampi-changelog lists every change
+                                      ·  ·  ·

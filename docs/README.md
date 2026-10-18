@@ -39,7 +39,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | `ampi-workers` | `mmr-workers` | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets | On (`librarian` gated) |
 | `ampi-custom-subagents` | `mmr-custom-subagents` | Markdown `sa__*` workers | On |
 | `ampi-session-fallback` | `mmr-session-fallback` | Subscription quota/rate-limit/capacity fallback | On |
-| `ampi-tui` | `mmr-tui` | Footer-free terminal layout and Amp-compatible key chords for interactive sessions | On |
+| `ampi-tui` | `mmr-tui` | Footer-free terminal layout, Amp-compatible key chords, welcome header, message styling and `ampi` theme | On |
 | `ampi-web` | `mmr-web` | `web_search`, `read_web_page` | Off |
 | `ampi-history` | `mmr-history` | `find_session`, `read_session` | Off |
 | `ampi-github` | `mmr-github` | Read-only GitHub repository tools | Off |

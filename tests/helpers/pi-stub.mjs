@@ -174,13 +174,17 @@ export function createMockPi(options = {}) {
  *  - `entries` (default `[]`): mutable list returned by `sessionManager.getEntries`.
  *  - `idle` (default `true`): what `isIdle()` returns; change it later through `state.idle`.
  *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`.
+ *  - `themeName` (default `undefined`): `ctx.ui.theme.name`, the active theme.
+ *  - `themes` (default `{}`): theme objects by name, returned by `ctx.ui.getTheme`.
  *
  * Returns the ctx and the recorders it populates:
- *   `{ ctx, notifications, statuses, footers, selectCalls, entries, compactCalls,
- *   terminalInput, overlays, lifecycle, state }`. `terminalInput.send(data)` feeds the
- *   listeners registered with `ui.onTerminalInput` and returns true when one consumed it.
+ *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
+ *   thinkingLabels, selectCalls, entries, compactCalls, terminalInput, overlays,
+ *   lifecycle, state }`. `terminalInput.send(data)` feeds the listeners registered
+ *   with `ui.onTerminalInput` and returns true when one consumed it.
  *   `overlays` records `ui.custom` calls as `{ options, component, theme, closed }`;
  *   `lifecycle` counts `abort()` and `shutdown()` calls.
+ *   `widgets` maps each `setWidget` key to `{ content, options }`.
  *
  * `ctx.ui.select` returns `undefined` by default; assign a custom impl on
  * `ctx.ui.select` if a test needs to drive the picker.
@@ -196,7 +200,12 @@ export function createMockExtensionContext(options = {}) {
   const notifications = [];
   const statuses = [];
   const footers = [];
+  const headers = [];
+  const widgets = new Map();
+  const themeChanges = [];
+  const thinkingLabels = [];
   const selectCalls = [];
+  const themes = options.themes ?? {};
   const compactCalls = [];
   const state = { idle: options.idle ?? true, editorText: options.editorText ?? "" };
   const lifecycle = { abort: 0, shutdown: 0 };
@@ -263,11 +272,20 @@ export function createMockExtensionContext(options = {}) {
         }),
       setStatus: (key, value) => statuses.push({ key, value }),
       setFooter: (factory) => footers.push(factory),
+      setHeader: (factory) => headers.push(factory),
+      setWidget: (key, content, widgetOptions) => widgets.set(key, { content, options: widgetOptions }),
+      setHiddenThinkingLabel: (label) => thinkingLabels.push(label),
+      getTheme: (name) => themes[name],
+      setTheme: (theme) => {
+        themeChanges.push(theme);
+        if (typeof theme === "object") ctx.ui.theme = theme;
+        return { success: true };
+      },
       select: async (title, choices) => {
         selectCalls.push({ title, options: choices });
         return undefined;
       },
-      theme: { fg: (_name, value) => value },
+      theme: { name: options.themeName, fg: (_name, value) => value, bold: (value) => value, italic: (value) => value },
     },
   };
 
@@ -276,6 +294,10 @@ export function createMockExtensionContext(options = {}) {
     notifications,
     statuses,
     footers,
+    headers,
+    widgets,
+    themeChanges,
+    thinkingLabels,
     selectCalls,
     entries,
     compactCalls,
