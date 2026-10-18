@@ -11,12 +11,14 @@ import path from "node:path";
 import { after, afterEach, before, describe, it, mock } from "node:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
 initTheme(undefined, false);
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 const fixtureDir = path.resolve(import.meta.dirname, "fixtures/mmr-tui-tool-rows");
@@ -351,8 +353,7 @@ describe("ampi-tui tool rows", () => {
   it("keeps the running glyph still and starts no timer when NO_ANIMATION is set", async (t) => {
     const { createToolRendererResolver } = await load();
     const resolver = createToolRendererResolver({ home: HOME });
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
     const startTimer = t.mock.method(globalThis, "setInterval");
     const component = toolRow(resolver, { tool: "bash", args: { command: "sleep 5" } });
     assert.equal(stripAnsi(component.render(80)[1]), " ⠋ Running sleep 5");

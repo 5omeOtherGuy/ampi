@@ -68,6 +68,8 @@ interface WidgetUILike {
 }
 export interface WidgetCtxLike {
   hasUI?: boolean;
+  /** Session directory whose `.pi/settings.json` can turn animations off. */
+  cwd?: string;
   /**
    * Pi 0.78+ run mode (`"tui" | "rpc" | "json" | "print"`). Read as an
    * optional string so the toolbox compiles and runs against both the
@@ -197,7 +199,7 @@ export function refreshTodoWidget(
       // previous component on replacement/clear, which clears this timer.
       const spinner = createMmrSpinner();
       let timer: ReturnType<typeof setInterval> | undefined;
-      if (hasActive && typeof tui?.requestRender === "function" && !isMmrAnimationDisabled()) {
+      if (hasActive && typeof tui?.requestRender === "function" && !isMmrAnimationDisabled({ cwd: ctx.cwd })) {
         timer = setInterval(() => {
           spinner.step();
           try {

@@ -18,11 +18,16 @@
 // rewired to register the new tool in place of the old one.
 
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { after, describe, it } from "node:test";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 // Wire the mock so `pi.appendEntry(customType, data)` actually appends a
 // CustomEntry into the same array the ExtensionContext's session manager
@@ -933,8 +938,27 @@ describe("mmr-tasks task_list — widget animates in_progress rows", () => {
       tasks: [{ content: "Build", activeForm: "Building", status: "in_progress" }],
     }, ctx);
 
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
+    const startTimer = t.mock.method(globalThis, "setInterval");
+    const widget = widgetCalls.at(-1).factory({ requestRender() {} }, ctx.ui.theme);
+    assert.equal(widget.render(80).join("\n"), "⠋ Building");
+    assert.equal(startTimer.mock.callCount(), 0);
+    widget.dispose();
+  });
+
+  it("keeps the glyph still when the session's project settings turn animations off", async (t) => {
+    const project = mkdtempSync(path.join(os.tmpdir(), "ampi-todo-project-"));
+    t.after(() => rmSync(project, { recursive: true, force: true }));
+    mkdirSync(path.join(project, ".pi"));
+    writeFileSync(path.join(project, ".pi/settings.json"), JSON.stringify({ ampiTui: { animations: false } }));
+    const { pi, session } = await loadToolboxLinked();
+    const tool = getTaskListTool(pi);
+    const { ctx, widgetCalls } = makeAnimCtx(session);
+    ctx.cwd = project;
+    await callTaskList(tool, {
+      tasks: [{ content: "Build", activeForm: "Building", status: "in_progress" }],
+    }, ctx);
+
     const startTimer = t.mock.method(globalThis, "setInterval");
     const widget = widgetCalls.at(-1).factory({ requestRender() {} }, ctx.ui.theme);
     assert.equal(widget.render(80).join("\n"), "⠋ Building");

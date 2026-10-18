@@ -9,10 +9,12 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 import { stripTerminalSequences, TuiMainScreen, visibleWidth } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const FIXTURE_DIR = path.join(import.meta.dirname, "fixtures/mmr-tui-prompt-box");
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
@@ -596,8 +598,7 @@ describe("ampi-tui prompt box: installation", () => {
   });
 
   it("keeps the wave on its first glyph with no timer when NO_ANIMATION is set", (t) => {
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
     const box = install();
     box.feed.status = status({ type: "turnStart" });
     box.promptBox.statusChanged();

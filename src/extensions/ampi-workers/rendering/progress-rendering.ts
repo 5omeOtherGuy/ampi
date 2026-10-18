@@ -922,6 +922,8 @@ interface WidgetUILike {
 
 interface WidgetCtxLike {
   hasUI?: boolean;
+  /** Session directory whose `.pi/settings.json` can turn animations off. */
+  cwd?: string;
   /** Pi 0.78+ run mode (`"tui" | "rpc" | "json" | "print"`). */
   mode?: string;
   ui?: WidgetUILike;
@@ -1126,7 +1128,7 @@ export function refreshBackgroundTaskWidget(
       // Finished-only rows use a one-shot clear timer so the drop-off window
       // expires even when no active worker remains to drive future widget
       // refreshes.
-      const animate = hasActive && !isMmrAnimationDisabled();
+      const animate = hasActive && !isMmrAnimationDisabled({ cwd: ctx.cwd });
       let timer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | undefined;
       let timerKind: "interval" | "timeout" | undefined;
       if (hasActive && typeof tui?.requestRender === "function") {

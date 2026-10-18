@@ -4,10 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
 import { KeybindingsManager, stripTerminalSequences, TuiMainScreen } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -91,8 +93,7 @@ describe("ampi-tui extension", () => {
   });
 
   it("keeps the welcome mark on its first frame when NO_ANIMATION is set", async (t) => {
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
     const { handlers } = await loadExtension({ enabled: true });
     const { ctx, headers } = createMockExtensionContext({ hasUI: true });
     await handlers.get("session_start")(startEvent, ctx);

@@ -5,11 +5,13 @@ import path from "node:path";
 import { after, describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 initTheme(undefined, false);
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const PROGRESS_RENDERING_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
 
@@ -248,8 +250,7 @@ describe("worker rows", () => {
 
   it("keeps the running glyph still and starts no timer when NO_ANIMATION is set", async (t) => {
     const renderers = await importSource(PROGRESS_RENDERING_MODULE);
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
     const startTimer = t.mock.method(globalThis, "setInterval");
     const row = workerRow(renderers, "finder", { query: "q" }, { result: { content: [], details: {} }, isPartial: true });
     assert.equal(stripAnsi(row.render(80)[1]), " ⠋ Searching codebase · q");

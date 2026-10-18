@@ -11,12 +11,14 @@ import path from "node:path";
 import { after, describe, it, mock } from "node:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
 initTheme(undefined, false);
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 const fixtureDir = path.resolve(import.meta.dirname, "fixtures/mmr-tui-tool-groups");

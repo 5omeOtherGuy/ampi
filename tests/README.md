@@ -56,6 +56,7 @@ Update workflow: rerun the relevant fixture test with `PI_MMR_UPDATE_FIXTURES=1`
 - [`helpers/pi-stub.mjs`](helpers/pi-stub.mjs) — `createMockPi()` and `createMockExtensionContext()` with recorders for every observable side effect (tools, commands, shortcuts, flag definitions, event handlers, emits, ui notify/setStatus/etc.). `createMockPi` is the single source of truth for Pi-host fakes; pass `flags`, `shortcutsThrowOn`, `activeTools`, `allTools`, `onModelSet`, etc. as options rather than re-rolling a per-file stub. Recorders are exposed both on the returned tuple (`{ pi, tools, commands, shortcuts, flagDefs, handlers, ... }`) and as own properties of `pi` (`pi.tools.get(name)`, `pi.flagDefs.get(name)`, ...).
 - [`helpers/apply-patch.mjs`](helpers/apply-patch.mjs) — `makeCtx()` (minimal ExtensionContext slice apply-patch reads from) and `patch()` (Codex-format patch-text builder). The Pi-host fake formerly here (`makeMockPi`) was removed; use `createMockPi()`.
 - [`helpers/footer.mjs`](helpers/footer.mjs) — `expectFooterLine()` matcher for status-bar/footer assertions.
+- [`helpers/animation-env.mjs`](helpers/animation-env.mjs) — `isolateAnimationEnv()` runs a suite that asserts spinners or other animations without `NO_ANIMATION` and with an empty home directory, so a developer's own settings cannot still them; `setNoAnimation(t)` sets `NO_ANIMATION` for one test and restores the earlier value.
 
 ## Coverage map
 

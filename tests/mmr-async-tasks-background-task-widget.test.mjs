@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 const WIDGET_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
@@ -9,6 +10,7 @@ const ABOVE_EDITOR_DASHBOARD_MODULE = "extensions/ampi-core/above-editor-dashboa
 const ABOVE_EDITOR_ORDER_MODULE = "extensions/ampi-core/above-editor-order.ts";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const theme = { fg: (_n, v) => v, bold: (v) => v };
 
@@ -560,8 +562,7 @@ describe("background-task widget", () => {
 
   it("redraws running rows without stepping the spinner when NO_ANIMATION is set", async (t) => {
     t.mock.timers.enable({ apis: ["setInterval"] });
-    process.env.NO_ANIMATION = "1";
-    t.after(() => delete process.env.NO_ANIMATION);
+    setNoAnimation(t);
     const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
     const { ctx, calls } = makeCtx();
     refreshBackgroundTaskWidget(
