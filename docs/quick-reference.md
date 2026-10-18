@@ -80,6 +80,24 @@ export AMPI_GITHUB_TOKEN="ghp_xxx"
 
 Restart Pi after changing gates that register tools.
 
+## Keys
+
+Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key of a chord, a popup above the prompt lists the keys that can follow; it closes after 1.5 seconds or on Esc.
+
+| Key | Does | Notes |
+| --- | --- | --- |
+| `Esc Esc` | Stop the running turn | Two presses within 0.5 s; when nothing runs, Esc is Pi's |
+| `Ctrl+C Ctrl+C` | Quit | The first press shows the popup and keeps the prompt |
+| `Ctrl+X` | Leader | Bindings written `<leader>z` mean Ctrl+X, then Z |
+| `Home` / `End` | Jump to the start / end of the transcript | Only with an empty prompt, in Pi's fullscreen mode |
+| `Ctrl+G` | Edit the prompt in your external editor | Pi's action, now a command |
+
+Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
+
+```json
+{ "ampi": { "keymap": { "leader": "alt+x", "ampi.quit": null } } }
+```
+
 ## Settings
 
 Minimal settings example:
@@ -119,5 +137,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | Mode unexpectedly became `free` | Re-enter `/mode <key>` after native `/model` or `/think` changes |
 | Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/ampi-status debug` |
 | No footer below the editor | `ampi-tui` removes it by default; set `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) and restart Pi to restore it |
+| Ctrl+C no longer clears the prompt | `ampi-tui` uses Ctrl+C Ctrl+C to quit; clear with Ctrl+U, or set `"ampi.quit": null` under `ampi.keymap` to give Ctrl+C back to Pi |
+| One Esc no longer stops a turn | Press Esc twice; or set `"thread.interrupt": null` under `ampi.keymap` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).
