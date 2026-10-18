@@ -13,9 +13,13 @@ import type { MmrPermissionAction, MmrPermissionRule } from "./permissions.js";
  * `env`, `xargs`, `time`, `nice` or `timeout`, and leading `VAR=value`
  * assignments, which the allow patterns never match.
  *
- * Patterns are `/regex/flags` strings matched against the part's text; the
- * `s` flag lets `.` cross a newline inside quotes. Other tools get no default
- * rule: a call no rule matches is allowed.
+ * Patterns are `/regex/flags` strings. The engine matches them against the
+ * part's original text and against its literal words (quotes and escapes
+ * removed), so `find . '-delete'` asks like `find . -delete`, and it asks
+ * instead of allowing a part that writes output into a file or whose words a
+ * variable or brace expansion could change. The `s` flag lets `.` cross a
+ * newline inside quotes. Other tools get no default rule: a call no rule
+ * matches is allowed.
  */
 
 interface ShellRuleGroup {
@@ -28,10 +32,6 @@ const SHELL_RULE_GROUPS: readonly ShellRuleGroup[] = [
     // Exceptions, checked before the allow patterns below.
     action: "ask",
     patterns: [
-      // Output written into a file: `>`, `>>`, `>|`, `&>` or `2>` aimed
-      // anywhere but /dev/null. Duplicating a descriptor (`2>&1`, `>&2`)
-      // writes no file. A `>` inside quotes counts too, which only asks more.
-      "/>(?!>)(?!\\s*(?:&(?:\\d+|-)|/dev/null)(?!\\S))/s",
       // find actions that run programs, delete, or write files.
       "/^find\\s(.*\\s)?-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)(\\s|$)/s",
       // git options that write a file or open files in another program.
@@ -46,6 +46,9 @@ const SHELL_RULE_GROUPS: readonly ShellRuleGroup[] = [
       "/^date\\s(.*\\s)?(-s|--set)(=|\\s|$)/s",
       // Linters and formatters told to change the files they check.
       "/^(biome|eslint|prettier|cargo\\s+clippy)\\s(.*\\s)?--(write|fix|apply|apply-unsafe|unsafe)(=|\\s|$)/s",
+      "/^prettier\\s(.*\\s)?-w(\\s|$)/s",
+      // eslint writing its report to a file.
+      "/^eslint\\s(.*\\s)?(-o|--output-file)(=|\\s|$)/s",
     ],
   },
   {

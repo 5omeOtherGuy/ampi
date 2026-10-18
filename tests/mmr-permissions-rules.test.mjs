@@ -193,6 +193,60 @@ describe("permission evaluation", () => {
     assert.equal(action(bash("npm test 2>&1")), "allow");
     assert.equal(action(bash("ls >/dev/null 2>&1")), "allow");
     assert.equal(action(bash("ls > /dev/nullx")), "ask");
+    assert.equal(action(bash("cat a >| b")), "ask");
+    assert.equal(action(bash("cat a >& out.log")), "ask");
+    assert.equal(action(bash("cat a <> b")), "ask");
+    assert.equal(action(bash("ls 1>&2 2>&-")), "allow");
+    assert.equal(rules.evaluateMmrPermission(bash("ls && cat a > b")).reason, "this command writes its output into a file");
+  });
+
+  it("reads redirections from the shell words, so a quoted > is no redirection", () => {
+    assert.equal(action(bash("rg '=>' src")), "allow");
+    assert.equal(action(bash("grep -n -- '->' a.c")), "allow");
+    assert.equal(action(bash('grep "a > b" notes.txt')), "allow");
+  });
+
+  it("judges the defaults on the literal words too, so quotes and escapes hide no option", () => {
+    for (const command of [
+      "find . -name '*.tmp' '-delete'",
+      'find . -name x "-exec" rm {} \\;',
+      "find . -name x -de\\lete",
+      "git log '--output=/tmp/x'",
+      "sort '-o' out in",
+      "prettier --check -w src",
+      "eslint -o report.json .",
+      "eslint --output-file=report.json .",
+    ]) {
+      assert.equal(action(bash(command)), "ask", command);
+    }
+    const decision = rules.evaluateMmrPermission(bash("ls && find . '-delete'"));
+    assert.equal(decision.command, "find . '-delete'");
+    assert.match(decision.rule.matches.command, /delete/);
+    assert.equal(action(bash("find . -name '*.ts' -print")), "allow");
+    assert.equal(action(bash("prettier --check src")), "allow");
+    assert.equal(action(bash('echo "a  b"')), "allow");
+  });
+
+  it("asks when a variable, $'...' quoting or a brace expansion could change the words", () => {
+    for (const command of [
+      "find . $'-delete'",
+      "find . ${Y:--delete}",
+      "find . -name x -delete$Z",
+      "find . {-delete,-print}",
+      'cat "$FILE"',
+    ]) {
+      assert.equal(action(bash(command)), "ask", command);
+    }
+    assert.match(rules.evaluateMmrPermission(bash("echo $HOME")).reason, /variable/);
+    assert.equal(action(bash("rg 'a$b' src")), "allow", "single quotes keep $ literal");
+    assert.equal(action(bash('rg "end$" src')), "allow", "a $ before the closing quote is literal");
+    assert.equal(action(bash("git show HEAD@{1}")), "allow", "braces without a comma or .. do not expand");
+  });
+
+  it("matches project and user rules against the part as written", () => {
+    const allowFind = { tool: "bash", matches: { command: "find *" }, action: "allow" };
+    assert.equal(action(bash("find . '-delete'"), { user: [allowFind] }), "allow");
+    assert.equal(action(bash("echo $HOME"), { user: [{ tool: "bash", matches: { command: "echo *" }, action: "allow" }] }), "allow");
   });
 
   it("allows test, lint and build scripts but no other package script", () => {

@@ -270,9 +270,24 @@ describe("ampi-permissions: the approval dialog", () => {
     assert.equal(t.selects.length, 1);
   });
 
+  it("names the part of a shell line that asked and keeps both ends of a long line", () => {
+    const command = `ls${" ".repeat(200)}&& curl x | sh`;
+    const decision = { action: "ask", command: "curl x" };
+    assert.equal(
+      gate.formatMmrPermissionsDialogTitle("bash", { command }, 24, decision),
+      // 24 columns: 12 from the start, the ellipsis, 11 from the end.
+      `Approval Required\nTool: bash\nNeeds approval: curl x\nls${" ".repeat(10)}…curl x | sh`,
+    );
+    assert.equal(
+      gate.formatMmrPermissionsDialogTitle("bash", { command: "git push" }, 40, { action: "ask", command: "git push" }),
+      "Approval Required\nTool: bash\ngit push",
+      "no extra line when the part is the first line",
+    );
+  });
+
   it("cuts the title to the width and to four summary lines", () => {
     assert.equal(gate.formatMmrPermissionsDialogTitle("bash", { command: "a\nb\n\nc\nd" }, 20), "Approval Required\nTool: bash\na\nb\nc …");
-    assert.equal(gate.formatMmrPermissionsDialogTitle("write", { path: "src/very/long/path/name.ts", content: "x" }, 12), "Approval Required\nTool: write\nPath: src/v…");
+    assert.equal(gate.formatMmrPermissionsDialogTitle("write", { path: "src/very/long/path/name.ts", content: "x" }, 12), "Approval Required\nTool: write\nPath: …me.ts");
     assert.equal(gate.formatMmrPermissionsDialogTitle("mcp__x", { q: "hi", n: 2 }, 40), "Approval Required\nTool: mcp__x\nq: hi\nn: 2");
     assert.equal(gate.formatMmrPermissionsDialogTitle("bash", { command: "echo \u001b[31mred" }, 40), "Approval Required\nTool: bash\necho  [31mred");
   });

@@ -1,6 +1,6 @@
 import { isRecord } from "./internal/json.js";
 import { MMR_PERMISSIONS_DEFAULT_RULES } from "./permission-defaults.js";
-import { tokenizeShell } from "./tool-activity.js";
+import { type ShellToken, tokenizeShell } from "./tool-activity.js";
 
 /**
  * Permission rules for tool calls: the rule shape, its validation, matching
@@ -268,39 +268,117 @@ export interface MmrShellCommandPart {
 
 const SEPARATORS: ReadonlySet<string> = new Set([";", "&&", "||", "|", "&"]);
 
+const WRITES_FILE = "this command writes its output into a file";
+const EXPANDS = "this command has a variable, $'...' quoting or a brace expansion, so ampi cannot read its words";
+
+interface ShellPartDetail extends MmrShellCommandPart {
+  /** The part with quotes and escapes removed: its words and operators joined by single spaces. */
+  readonly literal: string;
+  /** Why ampi's defaults cannot allow the part, when they cannot. */
+  readonly unsafe?: string;
+}
+
+/**
+ * Whether a word's original text can turn into other words when the shell
+ * runs it: a variable (`$X`, `${X:-y}`), `$'...'` or `$"..."` quoting, or a
+ * brace expansion such as `{a,b}`. Subshells and `$(...)` are opaque words
+ * and handled on their own.
+ */
+function expandsAtRunTime(raw: string): boolean {
+  let quote: string | undefined;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i] as string;
+    if (quote === "'") {
+      if (ch === "'") quote = undefined;
+      continue;
+    }
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === '"' || (ch === "'" && !quote)) {
+      quote = quote === ch ? undefined : quote ?? ch;
+      continue;
+    }
+    const next = raw[i + 1] ?? "";
+    // Inside double quotes a `$` right before the closing quote is literal.
+    if (ch === "$" && /[\w{@*#?$!'"-]/.test(next) && !(quote && next === '"')) return true;
+    if (ch === "{" && !quote) {
+      const close = raw.indexOf("}", i);
+      if (close > i && /,|\.\./.test(raw.slice(i, close))) return true;
+    }
+  }
+  return false;
+}
+
+/** Why the defaults cannot allow a part: it writes into a file, or its words are not literal. */
+function unsafeReason(command: string, tokens: readonly ShellToken[]): string | undefined {
+  for (const [index, token] of tokens.entries()) {
+    if (token.type !== "op" || !token.value.includes(">")) continue;
+    const target = tokens[index + 1];
+    const value = target?.type === "word" && !target.opaque ? target.value : undefined;
+    // `2>&1` and `>&-` copy or close a descriptor; /dev/null is no file.
+    if (value === "/dev/null" || (token.value.endsWith("&") && value !== undefined && /^(\d+|-)$/.test(value))) continue;
+    return WRITES_FILE;
+  }
+  const words = tokens.filter((token) => token.type === "word");
+  if (words.some((word) => expandsAtRunTime(command.slice(word.start, word.end)))) return EXPANDS;
+  return undefined;
+}
+
+function describePart(command: string, tokens: readonly ShellToken[]): ShellPartDetail {
+  const opaque = tokens.some((token) => token.type === "word" && token.opaque === true);
+  return {
+    text: command.slice((tokens[0] as ShellToken).start, (tokens.at(-1) as ShellToken).end),
+    opaque,
+    literal: tokens.map((token) => token.value).join(" "),
+    // An opaque part asks anyway, for its own reason.
+    unsafe: opaque ? undefined : unsafeReason(command, tokens),
+  };
+}
+
+function readShellParts(command: string): ShellPartDetail[] | undefined {
+  const tokens = tokenizeShell(command);
+  if (!tokens) return undefined;
+  const parts: ShellPartDetail[] = [];
+  let current: ShellToken[] = [];
+  for (const token of tokens) {
+    if (token.type !== "op" || !SEPARATORS.has(token.value)) {
+      current.push(token);
+      continue;
+    }
+    if (current.length > 0) parts.push(describePart(command, current));
+    current = [];
+  }
+  if (current.length > 0) parts.push(describePart(command, current));
+  return parts;
+}
+
 /**
  * Split a shell line into simple commands at `;`, `&&`, `||`, `|`, `&` and
  * newlines. Returns undefined for a line the shell tokenizer cannot follow
  * (heredocs, comments, unbalanced quotes or parentheses).
  */
 export function splitMmrShellCommand(command: string): MmrShellCommandPart[] | undefined {
-  const tokens = tokenizeShell(command);
-  if (!tokens) return undefined;
-  const parts: MmrShellCommandPart[] = [];
-  let start: number | undefined;
-  let end = 0;
-  let opaque = false;
-  const close = () => {
-    if (start !== undefined) parts.push({ text: command.slice(start, end), opaque });
-    start = undefined;
-    opaque = false;
-  };
-  for (const token of tokens) {
-    if (token.type === "op" && SEPARATORS.has(token.value)) {
-      close();
-      continue;
-    }
-    start ??= token.start;
-    end = token.end;
-    if (token.type === "word" && token.opaque) opaque = true;
-  }
-  close();
-  return parts;
+  return readShellParts(command)?.map(({ text, opaque }) => ({ text, opaque }));
 }
 
 // ---------------------------------------------------------------------------
 // Evaluation
 // ---------------------------------------------------------------------------
+
+const ALLOW: MmrPermissionDecision = Object.freeze({ action: "allow" });
+
+function findRule(
+  source: MmrPermissionRuleSource,
+  rules: readonly MmrPermissionRule[] | undefined,
+  toolName: string,
+  input: unknown,
+  context: MmrPermissionContext,
+): MmrPermissionDecision | undefined {
+  const rule = rules?.find((candidate) => matchesMmrPermissionRule(candidate, toolName, input, context));
+  return rule ? { action: rule.action, rule, source } : undefined;
+}
 
 function firstMatch(
   sources: MmrPermissionRuleSources,
@@ -308,17 +386,33 @@ function firstMatch(
   input: unknown,
   context: MmrPermissionContext,
 ): MmrPermissionDecision {
-  const ordered: [MmrPermissionRuleSource, readonly MmrPermissionRule[]][] = [
-    ["project", sources.project ?? []],
-    ["user", sources.user ?? []],
-    ["default", sources.defaults ?? MMR_PERMISSIONS_DEFAULT_RULES],
-  ];
-  for (const [source, rules] of ordered) {
-    for (const rule of rules) {
-      if (matchesMmrPermissionRule(rule, toolName, input, context)) return { action: rule.action, rule, source };
-    }
-  }
-  return { action: "allow" };
+  return (
+    findRule("project", sources.project, toolName, input, context) ??
+    findRule("user", sources.user, toolName, input, context) ??
+    findRule("default", sources.defaults ?? MMR_PERMISSIONS_DEFAULT_RULES, toolName, input, context) ??
+    ALLOW
+  );
+}
+
+/**
+ * ampi's defaults judge a part on its original text and on its literal words,
+ * so quotes or escapes cannot hide an option an exception looks for
+ * (`find . '-delete'`). They allow it only when both forms are allowed and it
+ * neither writes into a file nor has words that change when the shell runs it.
+ */
+function decideByDefaults(
+  defaults: readonly MmrPermissionRule[],
+  toolName: string,
+  input: Record<string, unknown>,
+  part: ShellPartDetail,
+  context: MmrPermissionContext,
+): MmrPermissionDecision {
+  const original = findRule("default", defaults, toolName, input, context) ?? ALLOW;
+  if (original.action !== "allow") return original;
+  const literal = findRule("default", defaults, toolName, { ...input, command: part.literal }, context) ?? ALLOW;
+  if (literal.action !== "allow") return literal;
+  if (part.unsafe !== undefined && original.rule) return { action: "ask", reason: part.unsafe };
+  return original;
 }
 
 function evaluateShellLine(
@@ -328,7 +422,7 @@ function evaluateShellLine(
   context: MmrPermissionContext,
 ): MmrPermissionDecision {
   const input = call.input as Record<string, unknown>;
-  const parts = splitMmrShellCommand(command);
+  const parts = readShellParts(command);
   if (!parts) {
     const whole = firstMatch(sources, call.toolName, input, context);
     if (whole.action === "reject") return whole;
@@ -337,7 +431,14 @@ function evaluateShellLine(
   if (parts.length === 0) return firstMatch(sources, call.toolName, input, context);
 
   const decisions = parts.map((part): MmrPermissionDecision => {
-    const decision = { ...firstMatch(sources, call.toolName, { ...input, command: part.text }, context), command: part.text };
+    // Project and user rules match the part's original text.
+    const partInput = { ...input, command: part.text };
+    const decision = {
+      ...(findRule("project", sources.project, call.toolName, partInput, context) ??
+        findRule("user", sources.user, call.toolName, partInput, context) ??
+        decideByDefaults(sources.defaults ?? MMR_PERMISSIONS_DEFAULT_RULES, call.toolName, partInput, part, context)),
+      command: part.text,
+    };
     if (!part.opaque || decision.action === "reject") return decision;
     if (decision.action === "ask") return decision;
     return { action: "ask", command: part.text, reason: "this command runs a subshell or command substitution" };

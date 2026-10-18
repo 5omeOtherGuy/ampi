@@ -34,7 +34,7 @@ The gate applies in every mode, Free included: it is your safety setting, not a 
 | Surface | What it does |
 | --- | --- |
 | `tool_call` gate | Allows, blocks or asks about each tool call |
-| Approval dialog | `Approval Required` with the tool and its command, path or fields; options `Allow Once`, `Reject with feedback`, `Allow All for This Session`, `Allow All for Every Session` |
+| Approval dialog | `Approval Required` with the tool, the part of a shell line that asked, and the command, path or fields (long lines are cut in the middle); options `Allow Once`, `Reject with feedback`, `Allow All for This Session`, `Allow All for Every Session` |
 | Prompt box | Reads `Waiting for Approval` while a dialog is open; the terminal title and notification fire as for any approval (`ampi-tui`) |
 | Web GUI | Shows its approval note while a dialog is open; you answer in the terminal (`ampi-gui`) |
 
@@ -121,7 +121,9 @@ The defaults only cover shell commands. A part is allowed when it starts with:
 - read-only git: `status`, `diff`, `log`, `show`, `rev-parse`, `ls-files`, `grep`, `blame`, `branch` with listing flags only, `remote` and `remote -v`; read-only jj: `status`, `diff`, `log`, `show`, `root`, `file list`;
 - tests, linters, type checks and builds: `npm test` and `npm run test*`, `lint*`, `check*`, `typecheck*` or `build*` (also with `pnpm`, `yarn` and `bun`), `node --test`, `tsc`, `biome check`/`lint`, `eslint`, `prettier --check`, `pytest`, `go test`/`vet`/`build`, `cargo test`/`build`/`check`/`clippy` and `cargo fmt --check`, `make -n`, `mvn test`/`verify`, `gradle test`, `dotnet test`/`build`.
 
-These still ask: a part that writes output into a file (`>`, `>>`, `&>`, `2>` aimed anywhere but `/dev/null`; `2>&1` is fine), `find` with `-exec`, `-execdir`, `-ok`, `-delete` or `-fprint`, git options that write files or start other programs (`--output`, `-O`), `sort -o` and `sort --compress-program`, `tree -o`, `rg --pre`, `file -C`, `date -s`, and linters told to `--fix` or `--write`. Any other package script, `env`, `xargs`, `time`, `nice` and `timeout` wrappers, and leading `VAR=value` assignments ask too. Every other `bash`, `shell_command` and `powershell` call asks. Other tools have no default rule, so they run.
+These still ask: a part that writes output into a file (`>`, `>>`, `&>`, `2>` aimed anywhere but `/dev/null`; `2>&1` is fine), `find` with `-exec`, `-execdir`, `-ok`, `-delete` or `-fprint`, git options that write files or start other programs (`--output`, `-O`), `sort -o` and `sort --compress-program`, `tree -o`, `rg --pre`, `file -C`, `date -s`, linters and formatters told to `--fix` or `--write` (`prettier -w` too), and `eslint -o` or `--output-file`. Any other package script, `env`, `xargs`, `time`, `nice` and `timeout` wrappers, and leading `VAR=value` assignments ask too. Every other `bash`, `shell_command` and `powershell` call asks. Other tools have no default rule, so they run.
+
+The defaults read each part twice: as written, and with its quotes and escapes removed, so `find . '-delete'` and `find . -de\lete` ask like `find . -delete`. A part whose words a variable (`$X`, `${X:-y}`), `$'...'` quoting or a brace expansion such as `{a,b}` could change when the shell runs it asks too, because ampi cannot read what it will run. Your own rules match the part as written.
 
 ### Project settings only tighten
 
@@ -145,7 +147,7 @@ In print and JSON runs nothing can ask, so a call that needs approval is blocked
 - **Nothing ever asks.** `/ampi-status` shows `Permissions: disabled`: set `ampi.permissions`. A project setting counts only when Pi trusts the project.
 - **Every call asks.** `ampi.permissions` is not a list; the session-start warning names the file.
 - **A rule has no effect.** An invalid rule is skipped with a warning at session start that says what is wrong. An earlier rule may match first: project rules, then yours, then the defaults.
-- **A harmless command asks.** It writes to a file, runs a subshell, or is not on the default list. Add an `allow` rule for it.
+- **A harmless command asks.** It writes to a file, runs a subshell, uses a variable or brace expansion, or is not on the default list. Add an `allow` rule for it.
 
 ## Public API
 

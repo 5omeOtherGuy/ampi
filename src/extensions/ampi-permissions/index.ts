@@ -115,11 +115,15 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       load(ctx);
     }
 
-    async function askUser(event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
+    async function askUser(
+      event: ToolCallEvent,
+      decision: MmrPermissionDecision,
+      ctx: ExtensionContext,
+    ): Promise<ToolCallEventResult | undefined> {
       // An earlier answer in the queue may have allowed everything.
       if (allowedWithoutAsking()) return undefined;
       if (ctx.signal?.aborted) return { block: true, reason: MMR_PERMISSIONS_ABORTED_REASON };
-      const title = formatMmrPermissionsDialogTitle(event.toolName, event.input, Math.max(20, columns() - 2));
+      const title = formatMmrPermissionsDialogTitle(event.toolName, event.input, Math.max(20, columns() - 2), decision);
       const choice = await ctx.ui.select(title, [...MMR_PERMISSIONS_DIALOG_OPTIONS], { signal: ctx.signal });
       if (ctx.signal?.aborted) return { block: true, reason: MMR_PERMISSIONS_ABORTED_REASON };
       switch (choice) {
@@ -141,11 +145,11 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       }
     }
 
-    function ask(event: ToolCallEvent, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
+    function ask(event: ToolCallEvent, decision: MmrPermissionDecision, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
       const requestId = event.toolCallId;
       // Waiting in the queue already counts as waiting for approval.
       emitApproval({ phase: "request", requestId });
-      const turn = queue.then(() => askUser(event, ctx));
+      const turn = queue.then(() => askUser(event, decision, ctx));
       queue = turn.catch(() => undefined);
       return turn.finally(() => emitApproval({ phase: "answer", requestId }));
     }
@@ -176,7 +180,7 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       if (decision.action === "reject") return { block: true, reason: formatMmrPermissionsRejectReason(event.toolName, decision) };
       // `delegate` asks until delegate programs are supported.
       if (!ctx.hasUI) return { block: true, reason: formatMmrPermissionsNoUiReason(event.toolName, decision) };
-      return ask(event, ctx);
+      return ask(event, decision, ctx);
     });
   };
 }

@@ -30,7 +30,10 @@ function cut(text: string, width: number): string {
   // Control characters (escape sequences among them) would act on the terminal.
   const chars = Array.from(text.replace(/\p{Cc}/gu, " "));
   if (chars.length <= width) return chars.join("");
-  return `${chars.slice(0, Math.max(0, width - 1)).join("")}…`;
+  // Keep both ends, so the tail of a long command line stays visible.
+  const head = Math.ceil((width - 1) / 2);
+  const tail = Math.max(0, width - 1 - head);
+  return `${chars.slice(0, head).join("")}…${tail > 0 ? chars.slice(-tail).join("") : ""}`;
 }
 
 function fieldText(value: unknown): string {
@@ -46,12 +49,22 @@ function detailLines(input: unknown): string[] {
 }
 
 /**
- * The dialog title: "Approval Required", then the tool name, then the command
+ * The dialog title: "Approval Required", then the tool name, the part of a
+ * shell line that asked (when it is not the first line), then the command
  * (one line per command line), the path, or the input fields, up to four
- * lines in all, each cut to `width` columns.
+ * lines in all, each cut to `width` columns in the middle.
  */
-export function formatMmrPermissionsDialogTitle(toolName: string, input: unknown, width: number): string {
-  const lines = [`Tool: ${toolName}`, ...detailLines(input)];
+export function formatMmrPermissionsDialogTitle(
+  toolName: string,
+  input: unknown,
+  width: number,
+  decision?: MmrPermissionDecision,
+): string {
+  const details = detailLines(input);
+  const part = decision?.command?.trim();
+  const lines = [`Tool: ${toolName}`];
+  if (part && part !== details[0]?.trim()) lines.push(`Needs approval: ${part}`);
+  lines.push(...details);
   const shown = lines.slice(0, SUMMARY_LINES);
   if (lines.length > SUMMARY_LINES) shown[SUMMARY_LINES - 1] = `${shown[SUMMARY_LINES - 1]} …`;
   return [MMR_PERMISSIONS_DIALOG_TITLE, ...shown.map((line) => cut(line, width))].join("\n");
