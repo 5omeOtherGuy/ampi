@@ -7,24 +7,73 @@ on:
     branches: [main]
   workflow_dispatch:
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
+# A new push to a PR cancels that PR's superseded run. Every other run gets
+# its own group, so runs on main are never cancelled or replaced.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
+  # Runs the gate (`npm run gate`) on every supported Node.js line: 22.x is
+  # the engines floor, 24.x the newest tested. The check names stay
+  # "Test (Node <version>)" because branch protection requires
+  # "Test (Node 24.x)".
   test:
-    name: Test (Node 24.x)
-    runs-on: ubuntu-latest
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22.x, 24.x]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gate
+        run: npm run gate
+
+  # The check to require: runs `npm run gate` itself on the newest tested
+  # Node.js line and fails unless the gate also passed on every leg above.
+  # `always()` keeps it from ever ending as skipped, which a required check
+  # would treat as passing.
+  gate:
+    name: gate
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require the gate on every Node.js line
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "gate: npm run gate did not pass on every Node.js line (result: $RESULT)" >&2
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24.x
           cache: npm
@@ -32,14 +81,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Run tests
-        run: npm test
-
-      - name: Typecheck
-        run: npm run check
-
-      - name: Package dry run
-        run: npm run pack:dry-run
+      - name: Gate
+        run: npm run gate

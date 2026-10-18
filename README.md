@@ -170,7 +170,7 @@ Some safety defaults worth knowing: locked modes are fail-closed (no usable mode
 ## Compatibility
 
 - **Pi:** 1.3 or later within 1.x. The Pi packages (`@earendil-works/pi-coding-agent`, `pi-agent-core`, `pi-tui`) are `^1.3.0` peer dependencies. Pi 0.x is not supported; stay on ampi 0.3.x for it.
-- **Node.js:** 22.19 or later (`engines.node`). CI runs on Node.js 24.x.
+- **Node.js:** 22.19 or later (`engines.node`). CI runs the gate on Node.js 22.x and 24.x.
 - **Platforms:** CI runs on Linux. macOS and Windows are not tested.
 - **Last verified:** 2026-10-17, with Pi 1.3.0 and Node.js 24.22.0 (`npm run gate` and loading the package with `pi -e`).
 
