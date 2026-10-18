@@ -470,7 +470,8 @@ running Pi session.
 ## `ampi-tui`
 
 Terminal look for interactive sessions, on by default. It claims ampi's
-chrome through the `ampi-core` chrome-owner seam and removes the footer.
+chrome through the `ampi-core` chrome-owner seam, removes the footer, draws
+the welcome header, styles user messages and ships the `ampi` theme.
 `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) turns it off.
 
 ### Re-exports from the package root
@@ -478,11 +479,11 @@ chrome through the `ampi-core` chrome-owner seam and removes the footer.
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `createMmrTuiExtension` | function | Factory producing the Pi extension; accepts a `loadSettings` override. |
-| `loadMmrTuiSettings` | function | Reads `ampiTui.enabled` from the settings files, then `AMPI_TUI_ENABLE`. |
+| `loadMmrTuiSettings` | function | Reads `ampiTui.enabled` and Pi's `quietStartup` from the settings files, then `AMPI_TUI_ENABLE` for `enabled`. |
 
 ### Re-exported types
 
-`MmrTuiSettings`, `MmrTuiFactoryOverrides`.
+`MmrTuiSettings` (`enabled`, optional `quietStartup`), `MmrTuiFactoryOverrides`.
 
 ---
 

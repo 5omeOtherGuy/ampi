@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
+import { installMmrTuiLook } from "./chrome/look.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
 import { createMmrTuiKeys } from "./keys/install.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
@@ -25,6 +26,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     let releaseChrome: (() => void) | undefined;
     let tui: TUI | undefined;
     const keys = createMmrTuiKeys(pi);
+    const look = installMmrTuiLook(pi, settings);
 
     pi.on("session_start", (_event, ctx) => {
       // Only the interactive terminal has chrome to own. Print, JSON and RPC
@@ -39,6 +41,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
         return { render: () => [], invalidate() {} };
       });
       keys.start(ctx, () => tui);
+      look.start(ctx);
     });
 
     pi.on("session_shutdown", () => {
@@ -47,6 +50,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       // back to ampi-core, which sets it again on the next session start.
       releaseChrome?.();
       releaseChrome = undefined;
+      look.stop();
     });
   };
 }

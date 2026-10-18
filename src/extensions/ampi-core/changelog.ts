@@ -482,7 +482,12 @@ function hasExistingSessionEntries(ctx: ExtensionContext): boolean {
   const sessionManager = ctx.sessionManager as { getEntries?: () => unknown };
   try {
     const entries = sessionManager.getEntries?.();
-    return Array.isArray(entries) && entries.length > 0;
+    // Pi 1.x records the startup model and thinking level as entries before
+    // session_start, so only a message marks a session as already used.
+    return (
+      Array.isArray(entries) &&
+      entries.some((entry) => typeof entry === "object" && entry !== null && (entry as { type?: unknown }).type === "message")
+    );
   } catch {
     return false;
   }
@@ -534,6 +539,34 @@ export function showMmrChangelogCommand(ctx: ExtensionContext, options: { packag
   ctx.ui.notify(`${PACKAGE_NAME} Changelog\n\n${getFullMmrChangelogMarkdown(options.packageRoot)}`, "info");
 }
 
+/**
+ * Shows a new-version changelog notice in the terminal in place of the plain
+ * startup notification. Returns `false` to fall back to the notification.
+ */
+export type MmrChangelogPresenter = (display: MmrChangelogDisplay) => boolean;
+
+// globalThis-anchored like the chrome-owner seam: each extension entrypoint
+// may load its own copy of this module.
+const AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY = "__pi_ampi_changelog_presenter_v1__";
+const presenterStore = globalThis as typeof globalThis & {
+  [AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY]?: MmrChangelogPresenter;
+};
+
+/**
+ * Register the extension that presents the startup changelog notice in
+ * interactive terminal sessions (`ampi-tui` draws it in its welcome header).
+ * The most recent registration wins; the returned function removes exactly
+ * this one. Other run modes keep the notification.
+ */
+export function registerMmrChangelogPresenter(presenter: MmrChangelogPresenter): () => void {
+  presenterStore[AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY] = presenter;
+  return () => {
+    if (presenterStore[AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY] === presenter) {
+      presenterStore[AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY] = undefined;
+    }
+  };
+}
+
 export async function maybeShowMmrChangelogOnSessionStart(
   event: SessionStartLikeEvent,
   ctx: ExtensionContext,
@@ -546,6 +579,8 @@ export async function maybeShowMmrChangelogOnSessionStart(
   }
   const display = evaluateMmrChangelogForDisplay(options);
   if (!display) return;
+  const presenter = presenterStore[AMPI_CHANGELOG_PRESENTER_GLOBAL_KEY];
+  if (ctx.mode === "tui" && presenter?.(display)) return;
   // Use Pi's persistent "warning" notification channel rather than the coalesced
   // "info" status line so the post-update notice remains visible at session start.
   // "error" would be semantically wrong for a release-notes banner.

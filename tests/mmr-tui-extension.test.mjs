@@ -33,11 +33,12 @@ describe("ampi-tui extension", () => {
 
   it("takes the chrome and removes the footer in an interactive terminal session", async () => {
     const { handlers } = await loadExtension({ enabled: true });
-    const { ctx, footers } = createMockExtensionContext({ hasUI: true });
+    const { ctx, footers, headers } = createMockExtensionContext({ hasUI: true });
 
     await handlers.get("session_start")(startEvent, ctx);
 
     assert.equal(await chromeOwner(), "ampi-tui");
+    assert.equal(headers.length, 1, "the welcome header replaces Pi's");
     assert.equal(footers.length, 1);
     const footer = footers[0]();
     assert.deepEqual(footer.render(140), []);
@@ -71,14 +72,16 @@ describe("ampi-tui extension", () => {
   ]) {
     it(`leaves ${label} sessions untouched`, async () => {
       const { handlers } = await loadExtension({ enabled: true });
-      const { ctx, footers, statuses, notifications } = createMockExtensionContext(options);
+      const { ctx, footers, headers, statuses, notifications } = createMockExtensionContext(options);
 
       await handlers.get("session_start")(startEvent, ctx);
 
       assert.equal(footers.length, 0);
+      assert.equal(headers.length, 0);
       assert.equal(statuses.length, 0);
       assert.equal(notifications.length, 0);
       assert.equal(await chromeOwner(), undefined);
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
     });
   }
 });
@@ -100,7 +103,7 @@ describe("ampi-tui settings", () => {
   it("is on by default", async () => {
     const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
     await withDirs(({ home, cwd }) => {
-      assert.deepEqual(loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }), { enabled: true });
+      assert.deepEqual(loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }), { enabled: true, quietStartup: false });
     });
   });
 
@@ -114,6 +117,19 @@ describe("ampi-tui settings", () => {
       assert.equal(load(), true);
       writeProject({ ampiTui: { enabled: "no" } });
       assert.equal(load(), false, "a non-boolean value is ignored, so the global value stands");
+    });
+  });
+
+  it("reads Pi's quietStartup, where only true silences the header and the project file wins", async () => {
+    const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
+    await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
+      const load = () => loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }).quietStartup;
+      writeGlobal({ quietStartup: true });
+      assert.equal(load(), true);
+      writeProject({ quietStartup: "header" });
+      assert.equal(load(), false, "\"header\" keeps Pi's header, so ampi's welcome shows too");
+      writeProject({});
+      assert.equal(load(), true, "a project file without the key keeps the global value");
     });
   });
 

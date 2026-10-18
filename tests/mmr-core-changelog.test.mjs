@@ -338,7 +338,11 @@ describe("mmr-core changelog parsing and update display", () => {
       await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "new" }, withEntries.ctx, { packageRoot, statePath, now: "2026-05-25T00:03:00.000Z" });
       assert.deepEqual(withEntries.notifications, []);
 
-      const fresh = createMockExtensionContext({ models: MODELS });
+      // Pi 1.x records the startup model and thinking level before session_start.
+      const fresh = createMockExtensionContext({
+        models: MODELS,
+        entries: [{ type: "model_change" }, { type: "thinking_level_change" }],
+      });
       await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "new" }, fresh.ctx, { packageRoot, statePath, now: "2026-05-25T00:04:00.000Z" });
       assert.equal(fresh.notifications.length, 1);
       assert.match(fresh.notifications[0].message, /Pending fresh-start update/);
@@ -369,6 +373,53 @@ describe("mmr-core changelog parsing and update display", () => {
       assert.equal(notifications[0].level, "warning");
       assert.match(notifications[0].message, /ampi What's New/);
     } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("hands the notice to a registered presenter in the terminal UI only, and notifies when it declines", async () => {
+    const { maybeShowMmrChangelogOnSessionStart, registerMmrChangelogPresenter } = await importChangelogModule();
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-presenter-"));
+    const presented = [];
+    let accept = true;
+    const release = registerMmrChangelogPresenter((display) => {
+      presented.push(display);
+      return accept;
+    });
+    try {
+      const show = async (options, version) => {
+        const packageRoot = path.join(tempRoot, `pkg-${version}`);
+        writePackage(packageRoot, {
+          version,
+          isPrivate: false,
+          changelog: makeVersionedChangelog([{ version, body: `- Change in ${version}.` }]),
+        });
+        const mock = createMockExtensionContext({ models: MODELS, ...options });
+        await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "startup" }, mock.ctx, {
+          packageRoot,
+          statePath: path.join(tempRoot, `state-${version}.json`),
+          now: "2026-05-25T00:00:00.000Z",
+        });
+        return mock.notifications;
+      };
+
+      assert.deepEqual(await show({}, "1.0.0"), [], "an accepting presenter replaces the notification");
+      assert.equal(presented.length, 1);
+      assert.equal(presented[0].displayVersion, "1.0.0");
+      assert.match(presented[0].markdown, /Change in 1\.0\.0/);
+
+      accept = false;
+      assert.equal((await show({}, "1.1.0")).length, 1, "a declining presenter falls back to the notification");
+
+      assert.equal((await show({ mode: "rpc" }, "1.2.0")).length, 1, "other UI modes keep the notification");
+      assert.equal(presented.length, 2, "the presenter is not asked outside the terminal UI");
+
+      release();
+      release();
+      assert.equal((await show({}, "1.3.0")).length, 1, "after release, the notification is back");
+      assert.equal(presented.length, 2);
+    } finally {
+      release();
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });

@@ -7,6 +7,8 @@ import { readJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
 export interface MmrTuiSettings {
   /** Whether `ampi-tui` takes over ampi's terminal chrome. On by default. */
   enabled: boolean;
+  /** Pi's `quietStartup: true`: the user asked for no startup header, so ampi draws none. */
+  quietStartup?: boolean;
 }
 
 function readEnabled(value: unknown): boolean | undefined {
@@ -19,12 +21,18 @@ function readEnabled(value: unknown): boolean | undefined {
   return typeof block?.enabled === "boolean" ? block.enabled : undefined;
 }
 
+function readQuietStartup(value: unknown): boolean | undefined {
+  if (!isRecord(value) || !("quietStartup" in value)) return undefined;
+  return value.quietStartup === true;
+}
+
 /**
  * Load `ampi-tui` settings: `ampiTui.enabled` (or nested `ampi.tui.enabled`)
- * from the global `~/.pi/agent/settings.json`, then the project
- * `<cwd>/.pi/settings.json`, then `AMPI_TUI_ENABLE` (legacy `MMR_TUI_ENABLE`).
- * The latest source wins. A settings file that cannot be read is skipped;
- * `ampi-core` already reports it in `/ampi-status`.
+ * and Pi's own `quietStartup` from the global `~/.pi/agent/settings.json`,
+ * then the project `<cwd>/.pi/settings.json`, then `AMPI_TUI_ENABLE` (legacy
+ * `MMR_TUI_ENABLE`) for `enabled`. The latest source wins. A settings file
+ * that cannot be read is skipped; `ampi-core` already reports it in
+ * `/ampi-status`.
  */
 export function loadMmrTuiSettings(
   cwd: string,
@@ -33,6 +41,7 @@ export function loadMmrTuiSettings(
   const homeDirectory = options.homeDirectory ?? homedir();
   const env = options.env ?? process.env;
   let enabled = true;
+  let quietStartup = false;
 
   for (const filePath of [path.join(homeDirectory, ".pi/agent/settings.json"), path.join(cwd, ".pi/settings.json")]) {
     let value: unknown;
@@ -42,8 +51,9 @@ export function loadMmrTuiSettings(
       continue;
     }
     enabled = readEnabled(value) ?? enabled;
+    quietStartup = readQuietStartup(value) ?? quietStartup;
   }
 
   enabled = parseBoolEnv(readPreferredEnv(env, "AMPI_TUI_ENABLE", "MMR_TUI_ENABLE")?.value) ?? enabled;
-  return { enabled };
+  return { enabled, quietStartup };
 }

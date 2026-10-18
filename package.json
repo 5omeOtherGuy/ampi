@@ -45,6 +45,9 @@
       "./src/extensions/ampi-custom-subagents/index.ts",
       "./src/extensions/ampi-tui/index.ts",
       "./src/extensions/ampi-history/index.ts"
+    ],
+    "themes": [
+      "./src/extensions/ampi-tui/theme/ampi.json"
     ]
   },
   "exports": {
