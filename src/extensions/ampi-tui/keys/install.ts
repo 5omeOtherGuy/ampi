@@ -255,18 +255,24 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   function openThreadSwitcher(current: ExtensionContext): void {
     if (threadSwitcherOpen) return;
     threadSwitcherOpen = true;
+    const report = (what: string, error: unknown) =>
+      current.ui.notify(`${what}: ${error instanceof Error ? error.message : String(error)}`, "error");
     options.onPaletteOpen?.(true);
     void openMmrThreadPicker(current, "switch")
       .finally(() => {
         threadSwitcherOpen = false;
         options.onPaletteOpen?.(false);
       })
-      .then((row) => {
-        if (!row || row.current) return;
-        pi.sendUserMessage(`/${MMR_THREAD_SLASH_COMMAND} switch ${row.id}`, { expandPromptTemplates: true });
-      })
-      .catch((error: unknown) =>
-        current.ui.notify(`Could not list the sessions: ${error instanceof Error ? error.message : String(error)}`, "error"),
+      .then(
+        (row) => {
+          if (!row || row.current) return;
+          try {
+            pi.sendUserMessage(`/${MMR_THREAD_SLASH_COMMAND} switch ${row.id}`, { expandPromptTemplates: true });
+          } catch (error) {
+            report("Could not switch sessions", error);
+          }
+        },
+        (error: unknown) => report("Could not list the sessions", error),
       );
   }
 

@@ -370,6 +370,17 @@ describe("ampi-threads session switching", () => {
     await mock.handlers.get("session_shutdown")(quitEvent, parser.ctx);
   });
 
+  it("finds a session of another workspace by id", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Parser"]);
+    const { Website } = writeSessions(["Website"], "/work/website").sessions;
+    const parser = switchContext(sessionDir, sessions.Parser);
+    await mock.handlers.get("session_start")(startEvent, parser.ctx);
+    await mock.commands.get("ampi-thread").handler(`switch ${Website.id}`, parser.ctx);
+    assert.deepEqual(parser.switches, [Website.path]);
+    await mock.handlers.get("session_shutdown")(quitEvent, parser.ctx);
+  });
+
   it("does not offer an unsaved session to go back to, and forgets a session file that is gone", async () => {
     const mock = await loadExtension();
     const { sessionDir, sessions } = writeSessions(["Parser", "Imports"]);

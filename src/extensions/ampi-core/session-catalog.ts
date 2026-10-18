@@ -51,7 +51,10 @@ export type MmrSessionScope = "workspace" | "all";
  * List the sessions Pi's own session picker shows, newest activity first:
  * those of the session manager's working directory, or every session for
  * `all`. A custom session directory (`--session-dir`, the `sessionDir`
- * setting) is followed the same way: `all` then lists that directory.
+ * setting) is followed the same way: `all` then lists that directory. A custom
+ * directory placed directly in `<agentDir>/sessions` looks like Pi's default
+ * layout, so `all` lists every directory there; the extension API offers no
+ * check that tells the two apart.
  */
 export function listMmrSessionsInScope(
   sessionManager: { getCwd(): string; getSessionDir(): string },

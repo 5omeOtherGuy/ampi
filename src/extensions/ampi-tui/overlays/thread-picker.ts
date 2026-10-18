@@ -193,7 +193,11 @@ export function lastMmrThreadExchanges(messages: readonly unknown[], exchanges =
   return shown.slice(start);
 }
 
-/** Read the preview of the session stored in `path`, following its current branch. */
+/**
+ * Read the preview of the session stored in `path`, following its current
+ * branch. `SessionManager.open` migrates a file in an older session format
+ * and writes it back, as every Pi load does.
+ */
 export function readMmrThreadPreview(path: string): MmrThreadPreviewMessage[] {
   return lastMmrThreadExchanges(SessionManager.open(path).buildSessionContext().messages);
 }

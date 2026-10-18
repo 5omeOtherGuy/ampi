@@ -7,7 +7,7 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../ampi-core/command-registry.js";
-import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
+import { listMmrSessionsInScope, type MmrSessionScope } from "../ampi-core/session-catalog.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../ampi-core/thread-index.js";
 import type { MmrThreadIndexStore } from "./index-store.js";
 import {
@@ -117,7 +117,9 @@ async function switchToSession(
 }
 
 async function switchById(ctx: ExtensionCommandContext, id: string): Promise<void> {
-  const session = (await listMmrSessionsInScope(ctx.sessionManager, "all")).find((info) => info.id === id);
+  // The picker mostly offers this workspace's sessions, so try those before reading every workspace.
+  const find = async (scope: MmrSessionScope) => (await listMmrSessionsInScope(ctx.sessionManager, scope)).find((info) => info.id === id);
+  const session = (await find("workspace")) ?? (await find("all"));
   if (!session) {
     ctx.ui.notify(`No session has the id ${id}.`, "warning");
     return;

@@ -188,6 +188,26 @@ describe("rankMmrCommands", () => {
     );
   });
 
+  it("ranks the command named by the query, or the shorter label on a tie, before longer ones", async () => {
+    const { rankMmrCommands } = await importSource(REGISTRY_MODULE);
+    const commands = [
+      command("thread.switchToPrevious", { verb: "switch to previous", description: "Go back to the session you switched away from" }),
+      command("thread.switchToNext", { verb: "switch to next", description: "Go forward again after switching to the previous session" }),
+      command("thread.switch", { verb: "switch", description: "Pick another session and switch to it" }),
+    ];
+    for (const query of ["thread switch", "Thread  Switch", "switch", "thread sw"]) {
+      assert.equal(rankMmrCommands(commands, query, { ctx })[0].command.id, "thread.switch", query);
+    }
+    assert.deepEqual(
+      rankMmrCommands(commands, "thread switch to next", { ctx }).map((row) => row.command.id),
+      ["thread.switchToNext"],
+    );
+    assert.deepEqual(
+      rankMmrCommands(commands, "", { ctx }).map((row) => row.command.id),
+      ["thread.switchToPrevious", "thread.switchToNext", "thread.switch"],
+    );
+  });
+
   it("treats every command as available when no ctx is given", async () => {
     const { rankMmrCommands } = await importSource(REGISTRY_MODULE);
     const commands = [
