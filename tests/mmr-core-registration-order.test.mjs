@@ -33,6 +33,7 @@ describe("mmr-core registration order", () => {
         "model_select",
         "input",
         "thinking_level_select",
+        "agent_settled",
       ],
     );
   });
@@ -105,6 +106,7 @@ describe("mmr-core registration order", () => {
       "hook:model_select",
       "hook:input",
       "hook:thinking_level_select",
+      "hook:agent_settled",
     ]);
   });
 });

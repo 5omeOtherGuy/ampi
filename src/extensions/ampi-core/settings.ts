@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { readMmrAutoCompactSetting } from "./auto-compact.js";
 import { readJsonSettingsFile } from "./internal/settings-file.js";
 import { isRecord } from "./internal/json.js";
 import { resolveMmrModeKey } from "./modes.js";
@@ -275,6 +276,15 @@ function extractMmrCoreSettings(
       warnings: context.warnings,
     });
     if (lockedModeExtraTools) settings.lockedModeExtraTools = lockedModeExtraTools;
+  }
+
+  if ("autoCompact" in raw) {
+    const autoCompact = readMmrAutoCompactSetting(raw.autoCompact, {
+      filePath: context.filePath,
+      settingPath: `${rootKey}.autoCompact`,
+      warnings: context.warnings,
+    });
+    if (autoCompact !== undefined) settings.autoCompact = autoCompact;
   }
 
   return settings;

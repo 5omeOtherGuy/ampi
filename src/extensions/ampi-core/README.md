@@ -75,6 +75,23 @@ Locked modes ship a fixed allowlist, so a user's own extension tools, third-part
 
 Project `.pi/settings.json` is a trust boundary: it can re-enable exact tool names in locked modes. See [`../../../docs/extension-compatibility.md`](../../../docs/extension-compatibility.md) for the full stance on user extensions, tools, providers, and MCP.
 
+### Auto-compaction
+
+Locked modes compact the conversation once it fills 90% of the context window. After a run has fully settled (Pi's `agent_settled`, with no retry or queued message left), ampi reads `getContextUsage()` and, at or above the threshold, calls `ctx.compact()` once. The window is the active model's, after the mode's context profile cap, so Medium compacts at 270k of its 300k profile. While it runs, the prompt box status reads `Auto-Compacting`.
+
+```jsonc
+{
+  "ampiCore": {
+    "autoCompact": { "threshold": 0.85 } // fraction of the window, above 0 and at most 1; false turns it off
+  }
+}
+```
+
+- Runs only between runs, never mid-run: `ctx.compact()` aborts an active run first. Pi's own compaction (at `contextWindow - compaction.reserveTokens`) still covers a long run between its turns.
+- One compaction at a time. After a failed or cancelled attempt, ampi waits until the context grows past that attempt's size before trying again.
+- Skipped in `free`, in subagent workers, in one-shot `print` and `json` runs, after an interrupted run, while the token count is unknown (right after a compaction), and when Pi's `compaction.enabled` is `false`.
+- `/ampi-status debug` shows the threshold (or why it is off), the last auto-compaction (time, tokens before and after, window), and any backoff in effect.
+
 ### Free mode and source-aware ownership
 
 Free mode disables all ampi enforcement and restores the baseline captured before the locked mode. Source-aware ownership filtering: each ampi extension records its absolute path via `registerMmrOwnedExtensionPath(...)`, and Free mode only drops a tool when the active registration's `ToolInfo.sourceInfo.path` matches one of those paths. Same-named third-party tools are preserved. When Pi does not surface a source path, Free falls back to the name registry.
@@ -160,7 +177,7 @@ Locked-mode fields (Free uses a strict subset):
 | `Settings files read:` / `Settings warnings:` | Absolute paths that contributed; non-fatal warnings named per file. Runtime-only — not part of `PersistedMmrModeState`. |
 | `Policy warnings:` / `Diagnostics by severity:` | From `getMmrPolicyDiagnostics(state)`. Grouped block sorts by severity; legacy single-line `Policy warnings:` kept for compatibility. |
 | `State version:` / `Applied at:` | Schema version and last successful `applyMode` timestamp. |
-| `Debug:` (with `debug`/`--debug`) | Selected source, rejected sources, and per-`MmrModelCandidateResolution` lines (`registered`, `authenticated`, `subscription`, `attempted`, `applied`/`not-applied`, `thinking=…`, `reason`). |
+| `Debug:` (with `debug`/`--debug`) | Selected source, rejected sources, and per-`MmrModelCandidateResolution` lines (`registered`, `authenticated`, `subscription`, `attempted`, `applied`/`not-applied`, `thinking=…`, `reason`), then `Auto-compaction:` (threshold or why it is off), `Last auto-compaction:`, and any `Auto-compaction backoff:`. |
 
 Common symptoms:
 

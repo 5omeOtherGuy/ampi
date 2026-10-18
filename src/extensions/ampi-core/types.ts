@@ -525,6 +525,13 @@ export interface MmrCoreSettings {
    * non-fatal no-op. `free` is not configurable here.
    */
   lockedModeExtraTools?: Partial<Record<MmrLockedModeKey | "all", string[]>>;
+  /**
+   * Locked-mode auto-compaction. `threshold` is the fraction of the active
+   * context window (above 0, at most 1; default 0.9) at which ampi compacts
+   * once a run has settled. `false` turns it off; Pi's own reserve-based
+   * compaction is unaffected.
+   */
+  autoCompact?: { threshold: number } | false;
 }
 
 /**
