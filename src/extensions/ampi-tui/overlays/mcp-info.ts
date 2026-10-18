@@ -79,6 +79,8 @@ export interface MmrMcpToolInfo {
   readonly name: string;
   readonly description?: string;
   readonly namespace?: { readonly name: string };
+  /** `hidden` for a tool the model cannot reach, such as one of a server that was turned off. */
+  readonly exposure?: string;
 }
 
 export interface MmrMcpSource {
@@ -130,7 +132,24 @@ function exposureOf(config: Record<string, unknown>): string {
   return EXPOSURE_ALIASES[exposure] ?? exposure;
 }
 
-const definesServer = (config: Record<string, unknown>) => config.command !== undefined || config.url !== undefined || config.type !== undefined;
+const HIDDEN_EXPOSURE = "hidden";
+
+/** The exposure a server's config gives one of its tools: its `toolExposure` entry (an exact name, then a `*` pattern), else the server's. */
+function toolExposureOf(config: Record<string, unknown>, tool: string): string {
+  const overrides = Object.entries(isRecord(config.toolExposure) ? config.toolExposure : {});
+  // The tool's name is the one Pi registers, so the configured names are compared written that way.
+  const exact = overrides.find(([pattern]) => !pattern.includes("*") && normalizeMmrMcpName(pattern) === tool);
+  const matches = (pattern: string) =>
+    new RegExp(`^${pattern.split("*").map((part) => normalizeMmrMcpName(part)).join(".*")}$`).test(tool);
+  const match = exact ?? overrides.find(([pattern]) => pattern.includes("*") && matches(pattern));
+  if (typeof match?.[1] !== "string") return exposureOf(config);
+  return EXPOSURE_ALIASES[match[1]] ?? match[1];
+}
+
+/** An entry that only overrides a server defined elsewhere. */
+const isOverride = (config: Record<string, unknown>) => config.command === undefined && config.url === undefined && config.type === undefined;
+/** An entry Pi can connect: it names a command (stdio) or a URL (streamable HTTP). */
+const hasEndpoint = (config: Record<string, unknown>) => typeof config.command === "string" || typeof config.url === "string";
 
 interface Entry {
   readonly name: string;
@@ -141,8 +160,10 @@ interface Entry {
 /**
  * Merge the `mcp.json` files the way Pi does: a project entry replaces the
  * user entry of the same name, and one without `command`, `url` or `type`
- * changes only its `enabled`, `exposure` and `toolExposure`. Entries that are
- * not objects are left out, as Pi skips them.
+ * changes only its `enabled`, `exposure` and `toolExposure`. Entries Pi
+ * skips are left out: those that are not objects, those with neither
+ * `command` nor `url`, and those whose name Pi writes like an earlier,
+ * different name in tool names (`a-b` and `a_b`), where the first one stays.
  */
 function readFiles(files: readonly MmrMcpConfigFile[], errors: { path: string; message: string }[]): Map<string, Entry> {
   const entries = new Map<string, Entry>();
@@ -165,13 +186,16 @@ function readFiles(files: readonly MmrMcpConfigFile[], errors: { path: string; m
     }
     for (const [name, config] of Object.entries(parsed.mcpServers ?? {})) {
       if (!isRecord(config)) continue;
-      const base = entries.get(name);
-      if (file.scope === "project" && !definesServer(config)) {
+      if (file.scope === "project" && isOverride(config)) {
+        const base = entries.get(name);
         if (base && Object.keys(config).every((key) => OVERRIDE_KEYS.has(key))) {
           entries.set(name, { name, config: { ...base.config, ...config }, source: { kind: "project", path: file.path, override: true } });
         }
         continue;
       }
+      if (!hasEndpoint(config)) continue;
+      const key = normalizeMmrMcpName(name);
+      if ([...entries.keys()].some((other) => other !== name && normalizeMmrMcpName(other) === key)) continue;
       entries.set(name, { name, config, source: { kind: file.scope, path: file.path } });
     }
   }
@@ -204,7 +228,10 @@ const firstLine = (text: string | undefined) => (text ?? "").trim().split("\n")[
  * from the extensions' registrations; a file entry wins over a registration
  * whose name differs only in `-` and `_`. Tools named `mcp__<server>__<tool>`
  * (or in the namespace `mcp__<server>`) go to the server whose name, written
- * the way Pi writes tool names, matches.
+ * the way Pi writes tool names, matches. Pi cannot remove a tool, so it
+ * registers the tools of a server that was turned off, or that stopped
+ * offering them, again as `hidden`: those are left out, except on an enabled
+ * server whose own `exposure` or `toolExposure` hides them.
  */
 export function buildMmrMcpInfo(inputs: MmrMcpInputs): MmrMcpInfo {
   const errors: { path: string; message: string }[] = [];
@@ -218,10 +245,14 @@ export function buildMmrMcpInfo(inputs: MmrMcpInputs): MmrMcpInfo {
   }
 
   const byNamespace = new Map(entries.map((entry) => [`${TOOL_PREFIX}${normalizeMmrMcpName(entry.name)}`, entry.name]));
+  const configHides = (server: string, tool: string) => {
+    const entry = entries.find((candidate) => candidate.name === server);
+    return entry !== undefined && entry.config.enabled !== false && toolExposureOf(entry.config, tool) === HIDDEN_EXPOSURE;
+  };
   const tools = new Map<string, MmrMcpTool[]>();
   for (const tool of inputs.tools) {
     const match = matchTool(tool, byNamespace);
-    if (!match) continue;
+    if (!match || (tool.exposure === HIDDEN_EXPOSURE && !configHides(match.server, match.name))) continue;
     const list = tools.get(match.server) ?? [];
     list.push({ name: match.name, description: firstLine(tool.description) });
     tools.set(match.server, list);

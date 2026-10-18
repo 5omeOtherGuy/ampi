@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
@@ -32,7 +32,12 @@ const EXTENSION = `${HOME}/extensions/tracker/index.ts`;
 
 const userFile = (servers) => ({ path: USER_FILE, scope: "user", text: JSON.stringify({ mcpServers: servers }) });
 const projectFile = (servers) => ({ path: PROJECT_FILE, scope: "project", text: JSON.stringify({ mcpServers: servers }) });
-const tool = (name, description, namespace) => ({ name, description, ...(namespace ? { namespace: { name: namespace } } : {}) });
+const tool = (name, description, namespace, exposure) => ({
+  name,
+  description,
+  ...(namespace ? { namespace: { name: namespace } } : {}),
+  ...(exposure ? { exposure } : {}),
+});
 const build = (inputs) => mcp.buildMmrMcpInfo({ files: [], registered: [], tools: [], manageable: true, ...inputs });
 const summary = (info) =>
   info.servers.map((server) => ({
@@ -65,7 +70,7 @@ const SESSION = {
 };
 
 describe("MCP server and tool data", () => {
-  it("merges the user and project files: a project entry replaces the user one, an untrusted project is not read", () => {
+  it("merges the user and project files: a project entry replaces the user one", () => {
     const files = [
       userFile({ docs: { url: "https://docs.example/mcp" }, search: { command: "search-mcp" } }),
       projectFile({ docs: { command: "docs-local", exposure: "hidden" }, lint: { command: "lint-mcp" } }),
@@ -75,11 +80,48 @@ describe("MCP server and tool data", () => {
       { name: "search", enabled: true, exposure: "codemode", source: "user", tools: [] },
       { name: "lint", enabled: true, exposure: "codemode", source: "project", tools: [] },
     ]);
-    // readMmrMcpInfo passes only the user file for an untrusted project.
-    assert.deepEqual(summary(build({ files: files.slice(0, 1) })).map((server) => `${server.name} ${server.source}`), [
-      "docs user",
-      "search user",
-    ]);
+  });
+
+  it("skips entries Pi skips: one without command or url, and a name Pi writes like an earlier one", () => {
+    const info = build({
+      files: [
+        userFile({ "a-b": { command: "ab-mcp" }, a_b: { url: "https://ab.example/mcp" }, broken: { enabled: true } }),
+        projectFile({ typed: { type: "stdio" }, "a-b": { url: "https://ab.example/project" } }),
+      ],
+      tools: [tool("mcp__a_b__run", "Run"), tool("mcp__a_b__stop", "Stop")],
+    });
+    assert.deepEqual(summary(info), [{ name: "a-b", enabled: true, exposure: "codemode", source: "project", tools: ["run", "stop"] }]);
+  });
+
+  it("leaves out the tools Pi hid because their server was turned off or dropped them, not those its config hides", () => {
+    const info = build({
+      files: [
+        userFile({
+          docs: { url: "https://docs.example/mcp" },
+          legacy: { command: "legacy-mcp", enabled: false },
+          quiet: { command: "quiet-mcp", exposure: "hidden" },
+          picky: { command: "picky-mcp", toolExposure: { "internal-*": "hidden" } },
+        }),
+      ],
+      tools: [
+        tool("mcp__docs__search", "Search", undefined, "deferred"),
+        tool("mcp__docs__retired", "No longer offered", undefined, "hidden"),
+        tool("mcp__legacy__run", "Run", undefined, "hidden"),
+        tool("mcp__quiet__peek", "Peek", undefined, "hidden"),
+        tool("mcp__picky__internal_dump", "Dump", undefined, "hidden"),
+        tool("mcp__picky__gone", "Dropped", undefined, "hidden"),
+        tool("mcp__ghost__look", "From a server that was removed", undefined, "hidden"),
+      ],
+    });
+    assert.deepEqual(
+      summary(info).map((server) => [server.name, server.enabled, server.tools]),
+      [
+        ["docs", true, ["search"]],
+        ["legacy", false, []],
+        ["quiet", true, ["peek"]],
+        ["picky", true, ["internal_dump"]],
+      ],
+    );
   });
 
   it("lets a project entry without command or url change only the user server's state and exposure", () => {
@@ -316,10 +358,26 @@ describe("MCP Servers dialog in a session", () => {
     rmSync(agentDir, { recursive: true, force: true });
   });
 
+  it("reads the project's mcp.json only when the project is trusted", () => {
+    const cwd = path.join(agentDir, "project");
+    mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    writeFileSync(path.join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }));
+    writeFileSync(path.join(cwd, ".pi", "mcp.json"), JSON.stringify({ mcpServers: { docs: { enabled: false }, lint: { command: "lint-mcp" } } }));
+    const pi = { getMcpServers: () => [], getAllTools: () => [], getCommands: () => [{ name: "mcp" }] };
+    const read = (trusted) => summary(mcp.readMmrMcpInfo(pi, { cwd, isProjectTrusted: () => trusted }, agentDir));
+    assert.deepEqual(read(false), [{ name: "docs", enabled: true, exposure: "codemode", source: "user", tools: [] }]);
+    assert.deepEqual(read(true), [
+      { name: "docs", enabled: false, exposure: "codemode", source: "project override", tools: [] },
+      { name: "lint", enabled: true, exposure: "codemode", source: "project", tools: [] },
+    ]);
+  });
+
   it("gathers registered servers and tools when it opens, in a box that dims the prompt", async () => {
+    // Under the real home directory, which the dialog writes as ~ whatever HOME is.
+    const extensionPath = path.join(homedir(), "extensions", "tracker", "index.ts");
     const mock = createMockPi({
       allTools: [tool("mcp__tracker__search_issues", "Search issues")],
-      mcpServers: [{ name: "tracker", config: { url: "https://tracker.example/mcp" }, extensionPath: EXTENSION }],
+      mcpServers: [{ name: "tracker", config: { url: "https://tracker.example/mcp" }, extensionPath }],
     });
     mock.pi.events = { emit() {}, on: () => () => {} };
     const dims = [];
@@ -331,7 +389,7 @@ describe("MCP Servers dialog in a session", () => {
     const view = context.overlays.at(-1).component;
     const servers = plain(view.render(76));
     assert.match(servers[0], /^╭─ MCP Servers ─+╮$/);
-    assert.match(servers[4], /^│ tracker {2}connected {2}1 tool {2}codemode {2}\/home\/user\/extensions\/tracker\/ind… │$/);
+    assert.match(servers[4], /^│ tracker {2}connected {2}1 tool {2}codemode {2}~\/extensions\/tracker\/index\.ts +│$/);
     assert.ok(servers.some((line) => line.includes("MCP support is off")), "the stub registers no /mcp");
     view.handleInput("\t");
     assert.match(plain(view.render(76))[5], /^│ {3}search_issues {2}Search issues +│$/);
