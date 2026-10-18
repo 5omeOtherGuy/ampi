@@ -217,4 +217,15 @@ describe("Pi calls used by the config commands", () => {
     assert.equal(piSettingsPath(pi, project, "user"), path.join(agentDir, "settings.json"));
     assert.equal(piSettingsPath(pi, project, "project"), path.join(project, ".pi", "settings.json"));
   });
+
+  it("trusts a project without a stored decision when defaultProjectTrust is always, and a stored no wins", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const other = path.join(dir, "other-project");
+    writeJson(path.join(other, ".pi", "settings.json"), { ampi: { keymap: { "thread.new": "alt+n" } } });
+    writeJson(path.join(agentDir, "settings.json"), { defaultProjectTrust: "always", ampi: { keymap: { "thread.new": "ctrl+t" } } });
+    assert.deepEqual(readPiSettings(pi, other).ampi, { keymap: { "thread.new": "alt+n" } });
+
+    new pi.ProjectTrustStore(agentDir).set(other, false);
+    assert.deepEqual(readPiSettings(pi, other).ampi, { keymap: { "thread.new": "ctrl+t" } });
+  });
 });

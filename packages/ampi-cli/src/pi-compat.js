@@ -182,14 +182,23 @@ export function capturePiJsonOutput(convert) {
 
 /**
  * Pi's settings for `cwd`, with the project's settings read only when Pi would
- * read them: the project has nothing that needs trust, or it is trusted.
+ * read them: the project has nothing that needs trust, its stored trust
+ * decision is yes, or there is none and the user setting
+ * `defaultProjectTrust` is `"always"`. Pi asks first when the setting is
+ * `"ask"`, which counts as not trusted here. An extension can also decide
+ * trust through Pi's `project_trust` event; that needs the extensions loaded,
+ * so it is not followed here.
  *
  * @param {any} pi
  * @param {string} cwd
  */
 function piSettingsManager(pi, cwd) {
   const agentDir = pi.getAgentDir();
-  const projectTrusted = !pi.hasTrustRequiringProjectResources(cwd) || new pi.ProjectTrustStore(agentDir).get(cwd) === true;
+  /** @type {boolean | null} */
+  const decision = new pi.ProjectTrustStore(agentDir).get(cwd);
+  const projectTrusted =
+    !pi.hasTrustRequiringProjectResources(cwd) ||
+    (decision ?? pi.SettingsManager.create(cwd, agentDir, { projectTrusted: false }).getDefaultProjectTrust() === "always");
   return pi.SettingsManager.create(cwd, agentDir, { projectTrusted });
 }
 

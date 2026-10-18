@@ -191,16 +191,34 @@ export async function runAmpi(argv) {
       return runThreads(route.threadArgs ?? []);
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
+      const cwd = process.cwd();
       return runConfigCommand(route.configArgs ?? [], {
         pi,
-        cwd: process.cwd(),
-        ampi: locateAmpiPackage(CLI_ROOT),
+        cwd,
+        locateAmpi: () => locateLoadedAmpi(pi, cwd),
         out: (text) => process.stdout.write(text),
         err: (text) => process.stderr.write(text),
       });
     }
   }
   return startPi(route);
+}
+
+/**
+ * The ampi that `ampi` runs in `cwd`: the one Pi loads from its settings or
+ * extension directories when there is one (as `startPi` decides), else the
+ * CLI's own.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ */
+async function locateLoadedAmpi(pi, cwd) {
+  const { enabled } = await listPiExtensionSources(pi, cwd);
+  for (const entry of enabled) {
+    const found = path.isAbsolute(entry.path) ? readPackageAt(entry.path) : undefined;
+    if (found?.name === AMPI_PACKAGE_NAME) return found;
+  }
+  return locateAmpiPackage(CLI_ROOT);
 }
 
 /**

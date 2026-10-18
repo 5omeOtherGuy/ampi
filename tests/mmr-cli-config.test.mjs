@@ -61,20 +61,34 @@ describe("ampi config", () => {
     mkdirSync(agentDir, { recursive: true });
     mkdirSync(project, { recursive: true });
     copyFileSync(path.join(fixtures, "keymap-settings.json"), path.join(agentDir, "settings.json"));
-    // Records the file it was asked to open and exits with $FAKE_EDITOR_STATUS.
+    // Records the file it was asked to open and whether its directory exists, then exits with
+    // $FAKE_EDITOR_STATUS without saving.
     writeFileSync(
       fakeEditor,
-      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(editorLog)}, JSON.stringify(process.argv.slice(2)));\nprocess.exit(Number(process.env.FAKE_EDITOR_STATUS ?? 0));\n`,
+      `import { existsSync, writeFileSync } from "node:fs";\nimport path from "node:path";\nconst file = process.argv[2];\nwriteFileSync(${JSON.stringify(editorLog)}, JSON.stringify({ file, dirExists: existsSync(path.dirname(file)) }));\nprocess.exit(Number(process.env.FAKE_EDITOR_STATUS ?? 0));\n`,
     );
   });
 
   after(() => rmSync(dir, { recursive: true, force: true }));
 
+  // HOME is the test directory: ampi-tui and ampi-threads read their switches from ~/.pi/agent/settings.json.
   const run = (args, env = {}) =>
     spawnSync(process.execPath, [bin, "config", ...args], {
       cwd: project,
       encoding: "utf8",
-      env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", VISUAL: "", EDITOR: `${process.execPath} ${fakeEditor}`, ...env },
+      env: {
+        ...process.env,
+        HOME: dir,
+        PI_CODING_AGENT_DIR: agentDir,
+        PI_OFFLINE: "1",
+        VISUAL: "",
+        EDITOR: `${process.execPath} ${fakeEditor}`,
+        AMPI_TUI_ENABLE: undefined,
+        MMR_TUI_ENABLE: undefined,
+        AMPI_THREADS_ENABLE: undefined,
+        MMR_THREADS_ENABLE: undefined,
+        ...env,
+      },
     });
 
   it("prints the keymap in effect as JSONC, with the settings' overrides and their problems on stderr", () => {
@@ -108,16 +122,44 @@ describe("ampi config", () => {
     assert.match(result.stderr, /Key "ctrl\+o" is bound to ampi\.palette, ampi\.showVersion/);
   });
 
+  it("leaves out ampi-threads' commands when it is off, and says when ampi-tui is off", () => {
+    const threadsOff = run(["keymap"], { AMPI_THREADS_ENABLE: "0" });
+    assert.equal(threadsOff.status, 0, threadsOff.stderr);
+    const ids = Object.keys(JSON.parse(threadsOff.stdout.replace(/ \/\/ .*$/gm, "")));
+    assert.ok(ids.includes("ampi.help") && ids.includes("thread.switch"), "ampi-tui's commands stay");
+    for (const id of ["thread.new", "thread.archive", "thread.unarchive"]) assert.ok(!ids.includes(id), `${id} is ampi-threads'`);
+    assert.match(threadsOff.stderr, /"thread\.new": no command has that id/);
+
+    const tuiOff = run(["keymap"], { AMPI_TUI_ENABLE: "0" });
+    assert.equal(tuiOff.status, 0, tuiOff.stderr);
+    assert.match(tuiOff.stderr, /^ampi: keymap: ampi-tui is turned off/m);
+  });
+
+  it("takes the keymap from the ampi Pi loads, and says when that ampi is too old", () => {
+    const otherAgentDir = path.join(dir, "agent-with-old-ampi");
+    const oldEntry = path.join(dir, "old-ampi", "src", "index.ts");
+    mkdirSync(path.dirname(oldEntry), { recursive: true });
+    writeFileSync(oldEntry, "");
+    writeFileSync(path.join(dir, "old-ampi", "package.json"), JSON.stringify({ name: "@skippermissions/ampi", version: "0.0.1" }));
+    mkdirSync(otherAgentDir, { recursive: true });
+    writeFileSync(path.join(otherAgentDir, "settings.json"), JSON.stringify({ extensions: [oldEntry] }));
+
+    const result = run(["keymap"], { PI_CODING_AGENT_DIR: otherAgentDir });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /ampi 0\.0\.1 is too old for config keymap; update @skippermissions\/ampi/);
+  });
+
   it("opens the user settings file in $EDITOR, or the project's with --workspace", () => {
     let result = run(["edit"]);
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(readFileSync(editorLog, "utf8")), [path.join(agentDir, "settings.json")]);
+    assert.equal(JSON.parse(readFileSync(editorLog, "utf8")).file, path.join(agentDir, "settings.json"));
 
     const projectSettings = path.join(project, ".pi", "settings.json");
     result = run(["edit", "--workspace"]);
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(readFileSync(editorLog, "utf8")), [projectSettings]);
-    assert.ok(existsSync(path.dirname(projectSettings)), "the directory exists for the editor to save into");
+    assert.deepEqual(JSON.parse(readFileSync(editorLog, "utf8")), { file: projectSettings, dirExists: true });
+    assert.ok(!existsSync(path.dirname(projectSettings)), "the directory the editor left empty is removed");
   });
 
   it("exits 1 when the editor fails and 2 on a usage error", () => {

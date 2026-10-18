@@ -2,6 +2,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { MmrCommandDefinition } from "./extensions/ampi-core/command-registry.js";
 import { formatMmrKeymapJsonc, readMmrKeymapSettings, resolveMmrKeymap } from "./extensions/ampi-core/keymap.js";
 import { createMmrThreadCommands, type MmrThreadCommandHost } from "./extensions/ampi-threads/commands.js";
+import { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
+import { loadMmrTuiSettings } from "./extensions/ampi-tui/config.js";
 import { createMmrPromptQueue } from "./extensions/ampi-tui/editor/queue.js";
 import type { MmrStatusFeed } from "./extensions/ampi-tui/editor/status-feed.js";
 import { createMmrTuiCommands, type MmrTuiCommandHost } from "./extensions/ampi-tui/keys/commands.js";
@@ -22,10 +24,10 @@ const nothing = (): undefined => undefined;
 
 /**
  * Every palette command ampi's extensions register in a terminal session, in
- * the order they register. Commands that other packages register at run time
- * are not included.
+ * the order they register; without ampi-threads' when `threads` is false.
+ * Commands that other packages register at run time are not included.
  */
-export function collectMmrDefaultCommands(): MmrCommandDefinition[] {
+export function collectMmrDefaultCommands(options: { threads?: boolean } = {}): MmrCommandDefinition[] {
   const pi = {
     getCommands: () => [],
     getSettings: () => ({}),
@@ -46,7 +48,8 @@ export function collectMmrDefaultCommands(): MmrCommandDefinition[] {
   const threadHost = { pi, now: () => "" } as unknown as MmrThreadCommandHost;
   const queue = createMmrPromptQueue(pi, { feed: {} as MmrStatusFeed, getTui: nothing });
   const navigation = createMmrMessageNavigation(pi);
-  return [...createMmrThreadCommands(threadHost), ...queue.commands, ...createMmrTuiCommands(tuiHost), ...navigation.commands];
+  const threadCommands = options.threads === false ? [] : createMmrThreadCommands(threadHost);
+  return [...threadCommands, ...queue.commands, ...createMmrTuiCommands(tuiHost), ...navigation.commands];
 }
 
 export interface MmrEffectiveKeymapJsonc {
@@ -57,11 +60,14 @@ export interface MmrEffectiveKeymapJsonc {
 }
 
 /**
- * The keymap in effect for Pi settings `settings` (global and project settings
- * merged), with ampi's default commands.
+ * The keymap in effect in `cwd` for Pi settings `settings` (global and project
+ * settings merged), with the commands of ampi's extensions that are turned on
+ * there. ampi-tui and ampi-threads read their own switches, so these are read
+ * the same way.
  */
-export function formatMmrEffectiveKeymapJsonc(settings: unknown): MmrEffectiveKeymapJsonc {
-  const commands = collectMmrDefaultCommands();
+export function formatMmrEffectiveKeymapJsonc(settings: unknown, cwd: string = process.cwd()): MmrEffectiveKeymapJsonc {
+  const commands = collectMmrDefaultCommands({ threads: loadMmrThreadsSettings(cwd).enabled });
+  const tuiOff = loadMmrTuiSettings(cwd).enabled ? [] : ["ampi-tui is turned off, so none of these keys are bound."];
   const keymapSettings = readMmrKeymapSettings(settings);
   const keymap = resolveMmrKeymap({
     defaults: Object.fromEntries(commands.map((command) => [command.id, command.defaultKey ?? null])),
@@ -70,7 +76,7 @@ export function formatMmrEffectiveKeymapJsonc(settings: unknown): MmrEffectiveKe
   });
   return {
     jsonc: formatMmrKeymapJsonc(commands, keymap),
-    problems: [...keymapSettings.problems, ...keymap.problems, ...keymap.conflicts.map(describeMmrKeymapConflict)],
+    problems: [...tuiOff, ...keymapSettings.problems, ...keymap.problems, ...keymap.conflicts.map(describeMmrKeymapConflict)],
   };
 }
 

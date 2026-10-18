@@ -2,7 +2,7 @@
 // and Pi's settings file in the external editor. Every other `ampi config`
 // command line is Pi's own `config` command (see argv.js).
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, rmdirSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { loadThroughPi, piExternalEditorCommand, piSettingsPath, readPiSettings } from "./pi-compat.js";
@@ -11,11 +11,12 @@ import { loadThroughPi, piExternalEditorCommand, piSettingsPath, readPiSettings 
  * @typedef {object} ConfigHost
  * @property {any} pi The `@earendil-works/pi-coding-agent` module.
  * @property {string} cwd
- * @property {{ root: string, version?: string } | undefined} ampi The ampi package the command loads.
+ * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package the
+ *   keymap comes from: the one Pi loads from its settings, else the CLI's own.
  * @property {(text: string) => void} out Writes to stdout.
  * @property {(text: string) => void} err Writes to stderr.
  *
- * @typedef {(settings: unknown) => { jsonc: string, problems: readonly string[] }} KeymapFormatter
+ * @typedef {(settings: unknown, cwd: string) => { jsonc: string, problems: readonly string[] }} KeymapFormatter
  */
 
 /**
@@ -46,7 +47,8 @@ Commands:
   keymap                        Print the keymap in effect as JSONC: the leader key, then every
                                 command id with its key, keys or null, and what it does
   edit                          Open Pi's settings file in your editor: Pi's externalEditor
-                                setting, else $VISUAL, else $EDITOR
+                                setting, else $VISUAL, else $EDITOR, else nano (notepad on
+                                Windows)
       --global                  The user settings in Pi's configuration directory (the default)
       --workspace               This project's .pi/settings.json
 
@@ -100,10 +102,11 @@ export async function runConfigCommand(argv, host) {
  * @returns {Promise<number>}
  */
 async function printKeymap(host) {
-  const entry = host.ampi === undefined ? undefined : path.join(host.ampi.root, KEYMAP_ENTRY);
-  if (host.ampi === undefined || entry === undefined || !existsSync(entry)) {
-    const which = host.ampi?.version === undefined ? "The ampi package" : `ampi ${host.ampi.version}`;
-    host.err(`ampi: ${which} cannot print its keymap; update @skippermissions/ampi-cli.\n`);
+  const ampi = await host.locateAmpi();
+  const entry = ampi === undefined ? undefined : path.join(ampi.root, KEYMAP_ENTRY);
+  if (entry === undefined || !existsSync(entry)) {
+    const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
+    host.err(`ampi: ${which} is too old for config keymap; update @skippermissions/ampi (or ampi-cli).\n`);
     return 1;
   }
   /** @type {KeymapFormatter | undefined} */
@@ -119,7 +122,7 @@ async function printKeymap(host) {
     host.err("ampi: could not load ampi's keymap: the ampi package did not provide it.\n");
     return 1;
   }
-  const { jsonc, problems } = format(readPiSettings(host.pi, host.cwd));
+  const { jsonc, problems } = format(readPiSettings(host.pi, host.cwd), host.cwd);
   for (const problem of problems) host.err(`ampi: keymap: ${problem}\n`);
   host.out(`${jsonc}\n`);
   return 0;
@@ -128,7 +131,8 @@ async function printKeymap(host) {
 /**
  * Open a settings file in Pi's external editor, as Pi starts it for the
  * prompt: the command split at spaces, with the file as its last argument.
- * The file's directory is created when it is missing, so the editor can save.
+ * The file's directory is created when it is missing, so the editor can save,
+ * and removed again when the editor leaves it empty.
  *
  * @param {ConfigHost} host
  * @param {"user" | "project"} scope
@@ -137,13 +141,14 @@ async function printKeymap(host) {
 async function edit(host, scope) {
   const file = piSettingsPath(host.pi, host.cwd, scope);
   const [editor, ...args] = piExternalEditorCommand(host.pi, host.cwd).split(" ");
-  mkdirSync(path.dirname(file), { recursive: true });
+  const created = mkdirSync(path.dirname(file), { recursive: true });
   /** @type {number | null | Error} */
   const outcome = await new Promise((resolve) => {
     const child = spawn(editor, [...args, file], { stdio: "inherit", shell: process.platform === "win32" });
     child.on("error", resolve);
     child.on("close", resolve);
   });
+  if (created !== undefined && !existsSync(file)) removeEmptyDirectories(path.dirname(file), created);
   if (outcome instanceof Error) {
     host.err(`ampi: could not start the editor ${editor}: ${outcome.message}\n`);
     return 1;
@@ -153,4 +158,21 @@ async function edit(host, scope) {
     return 1;
   }
   return 0;
+}
+
+/**
+ * Remove `dir` and its parents up to `top` while they are empty.
+ *
+ * @param {string} dir
+ * @param {string} top
+ */
+function removeEmptyDirectories(dir, top) {
+  for (let current = dir; ; current = path.dirname(current)) {
+    try {
+      rmdirSync(current);
+    } catch {
+      return;
+    }
+    if (current === top) return;
+  }
 }
