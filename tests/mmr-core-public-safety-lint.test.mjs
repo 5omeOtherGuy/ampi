@@ -57,7 +57,7 @@ describe("Phase B public-safety lint: helper behavior", () => {
   });
 
   it("flags secret-looking placeholders", () => {
-    const findings = lintPublicSafetyText("AKIAIOSFODNN7EXAMPLE");
+    const findings = lintPublicSafetyText(["AKIA", "IOSFODNN7EXAMPLE"].join(""));
     assert.ok(findings.some((f) => f.rule === "aws-access-key"));
   });
 

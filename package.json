@@ -79,6 +79,7 @@
     "test:cov:clean": "rm -rf .test-src",
     "check": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "lint": "biome lint .",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
     "lint:fix": "biome lint --write .",
     "check:unused": "npm run check",
     "check:changelog": "node scripts/check-changelog.mjs",

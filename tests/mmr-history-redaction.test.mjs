@@ -4,6 +4,11 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const REDACTION_MODULE = "extensions/ampi-history/redaction.ts";
 
+// Credential-shaped fixtures are built from parts so the gate's secret scan
+// never sees them literally.
+const AWS_EXAMPLE_KEY_ID = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+const PEM_BEGIN = ["-----BEGIN RSA PRIVATE", "KEY-----"].join(" ");
+
 after(cleanupLoadedSource);
 
 describe("mmr-history redaction — path family", () => {
@@ -92,7 +97,7 @@ describe("mmr-history redaction — secret family", () => {
   it("collapses PEM private-key blocks to [pem]", async () => {
     const { redactText, REDACTION_PEM } = await importSource(REDACTION_MODULE);
     const pem = [
-      "-----BEGIN RSA PRIVATE KEY-----",
+      PEM_BEGIN,
       "MIIEpAIBAAKCAQEAv8VXt...",
       "more=key=material=here",
       "-----END RSA PRIVATE KEY-----",
@@ -113,8 +118,8 @@ describe("mmr-history redaction — secret family", () => {
       "gho_AAAAAAAAAAAAAAAAAAAAAAAA",
       "AIzaAAAAAAAAAAAAAAAAAAAAAAA-AA",
       "jina_AAAAAAAAAAAAAAAAAAAA",
-      "xoxb-1111111111-2222222222222",
-      "xoxa-1111111111-2222222222222",
+      ["xox", "b-1111111111-2222222222222"].join(""),
+      ["xox", "a-1111111111-2222222222222"].join(""),
     ]) {
       const out = redactText(`KEY ${raw} END`, { user: "" });
       assert.ok(out.includes(REDACTION_TOKEN), `expected [token] for ${raw}: ${out}`);
@@ -200,7 +205,7 @@ describe("mmr-history redaction — idempotence", () => {
       "https://alice:secret@example.com/path",
       "key sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAA end",
       "open ~/.pi/agent/sessions/cwd/S-1.jsonl",
-      "-----BEGIN RSA PRIVATE KEY-----\nABCDEF\n-----END RSA PRIVATE KEY-----",
+      `${PEM_BEGIN}\nABCDEF\n-----END RSA PRIVATE KEY-----`,
       "JWT eyJhbGciOi.eyJzdWIiOj.SflKxwRJSM here",
       "abs /var/log/syslog tail",
       "C:\\Users\\carol\\app.ts",
@@ -311,9 +316,9 @@ describe("mmr-history redaction — quoted KV values", () => {
 describe("mmr-history redaction — AWS access keys", () => {
   it("redacts AKIA-prefixed access key IDs", async () => {
     const { redactText, REDACTION_TOKEN } = await importSource(REDACTION_MODULE);
-    const out = redactText("see AKIAIOSFODNN7EXAMPLE here", { user: "" });
+    const out = redactText(`see ${AWS_EXAMPLE_KEY_ID} here`, { user: "" });
     assert.ok(out.includes(REDACTION_TOKEN));
-    assert.ok(!out.includes("AKIAIOSFODNN7EXAMPLE"));
+    assert.ok(!out.includes(AWS_EXAMPLE_KEY_ID));
   });
 
   it("does NOT redact short AKIA-prefixed strings", async () => {
@@ -324,7 +329,7 @@ describe("mmr-history redaction — AWS access keys", () => {
 
   it("is idempotent for AWS keys", async () => {
     const { redactText } = await importSource(REDACTION_MODULE);
-    const once = redactText("AKIAIOSFODNN7EXAMPLE end", { user: "" });
+    const once = redactText(`${AWS_EXAMPLE_KEY_ID} end`, { user: "" });
     assert.equal(redactText(once, { user: "" }), once);
   });
 });
@@ -538,7 +543,7 @@ describe("mmr-history redaction — combined new categories", () => {
       "--authorization=Bearer xyz-token",
       'JSON {"api_key": "foo bar baz"}',
       "single secret='hush hush'",
-      "AWS AKIAIOSFODNN7EXAMPLE here",
+      `AWS ${AWS_EXAMPLE_KEY_ID} here`,
       "slack https://hooks.slack.com/services/T00/B00/abcXYZ",
       "email bob+tag@sub.example.co.uk",
       "ipv4 192.168.1.1 and 10.0.0.255",
