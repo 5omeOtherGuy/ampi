@@ -139,6 +139,33 @@ describe("ampi-tui extension", () => {
     }
   });
 
+  it("prices the gauge as thread show cost does, and hides it when ampiThreads.showCosts is off", async () => {
+    const { handlers } = await loadExtension({ enabled: true });
+    const models = [{ provider: "acme", id: "priced", cost: { input: 3, output: 15, cacheRead: 0, cacheWrite: 0 } }];
+    const { ctx, footers, editors, entries } = createMockExtensionContext({ hasUI: true, models });
+    const seam = await importSource("extensions/ampi-core/thread-reports.ts");
+    await handlers.get("session_start")(startEvent, ctx);
+    let release;
+    try {
+      const tui = fakeTui();
+      footers[0](tui, undefined, fakeFooterData(undefined).data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      const top = () => stripTerminalSequences(box.render(80)[0]);
+      const usage = (input, output, total) => ({ input, output, cacheRead: 0, cacheWrite: 0, cost: { total } });
+      // No recorded cost: 1000 × 3 + 1000 × 15 per million = $0.018. The cache warm entry recorded $0.012.
+      entries.push({ type: "message", message: { role: "assistant", provider: "acme", model: "priced", usage: usage(1000, 1000, 0) } });
+      entries.push({ type: "usage", kind: "cache_warm", provider: "acme", model: "priced", usage: usage(0, 0, 0.012) });
+      assert.match(top(), / \$0\.03 ─/);
+
+      release = seam.registerMmrThreadReports({ showCosts: false, cost: () => undefined, analyzeContext: () => undefined });
+      entries.push({ type: "message", message: { role: "user", content: "next" } });
+      assert.ok(!top().includes("$"), "showCosts: false hides the gauge");
+    } finally {
+      release?.();
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
   it("clears the prompt on the first Esc of a running turn and shows Cancelling on the second", async () => {
     const { handlers } = await loadExtension({ enabled: true });
     const { ctx, footers, editors, terminalInput, state, lifecycle } = createMockExtensionContext({ hasUI: true, idle: false, cwd: "/work/demo" });

@@ -23,6 +23,7 @@ import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { openMmrPromptHistory } from "../overlays/prompt-history.js";
 import { openMmrThreadPicker } from "../overlays/thread-picker.js";
+import { openMmrContextAnalysis, openMmrThreadCost } from "../overlays/thread-reports.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
@@ -148,6 +149,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openKeymapJson,
     openPromptHistory,
     openThreadSwitcher,
+    openThreadCost: (current, reports) => openReport(() => openMmrThreadCost(current, reports.cost(current))),
+    openContextAnalysis: (current, reports) => openReport(() => openMmrContextAnalysis(current, reports.analyzeContext(current))),
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -274,6 +277,23 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
         },
         (error: unknown) => report("Could not list the sessions", error),
       );
+  }
+
+  /**
+   * Open one of ampi-threads' report overlays (Thread Cost, Analyze
+   * Context), dimming the prompt box while it is open. The report is made
+   * when it opens and does not follow the session afterwards.
+   */
+  function openReport(open: () => Promise<void>): void {
+    options.onPaletteOpen?.(true);
+    let opened: Promise<void>;
+    try {
+      opened = open();
+    } catch (error) {
+      options.onPaletteOpen?.(false);
+      throw error;
+    }
+    void opened.finally(() => options.onPaletteOpen?.(false)).catch(() => {});
   }
 
   /**

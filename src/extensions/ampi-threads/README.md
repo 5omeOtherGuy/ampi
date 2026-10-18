@@ -1,6 +1,6 @@
 # ampi-threads
 
-Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source), Amp-compatible commands to start, archive, unarchive and switch sessions, and the prompt history behind Ctrl+R.
+Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source), Amp-compatible commands to start, archive, unarchive and switch sessions, the prompt history behind Ctrl+R, a session's Markdown export, and the reports on what it cost and what fills its context.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../../ROADMAP.md`](../../../ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index; the prompt history; the switch route | none (`ampi-tui` for the keys, palette, prompt history and thread pickers) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R; `thread switch` |
+| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, `thread.copyMarkdown`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index; the prompt history; the switch route; the cost and context reports | none (`ampi-tui` for the keys, palette, prompt history, thread pickers and report overlays) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R; `thread switch`; `thread show cost`; `thread analyze context` |
 
 ## When to use it
 
@@ -16,6 +16,8 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 - You want Pi to archive every session you quit (`ampiThreads.autoArchiveOnQuit`).
 - You want a prompt you sent before, in this workspace or another: Ctrl+R lists them and puts the one you pick back into the prompt.
 - You want to move between sessions without leaving Pi: `thread switch` in the palette picks one with a preview, and `thread switch to previous` / `to next` go back and forth.
+- You want to paste a session somewhere: `thread copy markdown` copies it as Markdown.
+- You want to know what a session cost, or what fills its context window: `thread show cost` and `thread analyze context`.
 - You are building on per-session metadata (thread pickers, labels, colours): read and update it through `getMmrThreadIndex()` in `ampi-core`.
 
 ## Status and enablement
@@ -34,22 +36,25 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | `thread.archiveAndQuit` | Command, `ctrl+c ctrl+e` | Archive this session and quit |
 | `thread.switchToPrevious` | Command, no key | Go back to the session you last switched away from |
 | `thread.switchToNext` | Command, no key | Go forward again after going back |
+| `thread.copyMarkdown` | Command, no key | Copy this session to the clipboard as [Markdown](#markdown-export) |
+| Cost and context reports | Seam | `ampi-core/thread-reports.ts`: the numbers behind `ampi-tui`'s `thread show cost` and `thread analyze context`, and `showCosts` for its cost gauge |
 | `/ampi-thread new`, `archive`, `switch <session id>`, `previous`, `next` | Slash command | The route the session-replacing commands and `ampi-tui`'s Switch Thread picker take; you can type it too |
 | Thread index | File | `<agentDir>/data/ampi/threads/index.json` |
 | Prompt history | Files | `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, read by `ampi-tui`'s `prompt.history` (Ctrl+R) |
 
-The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive`, `thread archive and quit`, `thread switch to previous` and `thread switch to next`. `thread switch`, which opens the picker, comes from `ampi-tui` (see [its README](../ampi-tui/README.md#switch-thread-picker)).
+The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive`, `thread archive and quit`, `thread switch to previous`, `thread switch to next` and `thread copy markdown`. `thread switch`, which opens the picker, and `thread show cost` and `thread analyze context`, which show the reports, come from `ampi-tui` (see [its README](../ampi-tui/README.md#switch-thread-picker)).
 
 ## Configuration
 
-Two switches; neither is a secret.
+Three switches; none is a secret.
 
 ```json
-{ "ampiThreads": { "enabled": true, "autoArchiveOnQuit": true } }
+{ "ampiThreads": { "enabled": true, "autoArchiveOnQuit": true, "showCosts": false } }
 ```
 
 - `enabled` (default `true`): `false` registers nothing.
 - `autoArchiveOnQuit` (default `false`): archive the session whenever you quit Pi from the terminal, whichever way you quit (Ctrl+C Ctrl+C, `/quit`, Ctrl+D).
+- `showCosts` (default `true`): `false` hides the cost gauge in `ampi-tui`'s prompt box and makes `thread show cost` unavailable.
 
 The nested form `{ "ampi": { "threads": { … } } }` is accepted too. Settings are read from `~/.pi/agent/settings.json` and then `<project>/.pi/settings.json`; the project file wins for each key it sets. An environment variable overrides `enabled`:
 
@@ -113,6 +118,67 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 - Recording does not hold up the prompt. If a file cannot be written, a warning says so and the prompt is sent as usual.
 - To forget the history, delete the files; turning `ampi-threads` off stops recording and makes Ctrl+R unavailable.
 
+### Markdown export
+
+`thread copy markdown` copies the session's current branch to the clipboard as Markdown and says "Copied the thread as Markdown". It is unavailable until the session has a message.
+
+````markdown
+---
+title: "Rename the parser module"
+sessionId: "0199a0de-5c1e-7a00-8000-000000000001"
+created: "2026-10-18T10:00:00.000Z"
+mode: "medium"
+---
+
+# Rename the parser module
+
+## User
+
+Rename the parser module to `reader`.
+
+## Assistant
+
+Let me look at the sources first.
+
+**Tool Use:** `bash`
+
+```json
+{
+  "command": "ls src"
+}
+```
+
+**Tool Result:** `call_1`
+
+```
+parser.ts
+```
+````
+
+- Front matter: the title (the session's name, else its first prompt on one line, cut to 80 characters, else "Untitled"), the session id, when the session started and the ampi mode. Values are JSON strings, which YAML reads as quoted strings; an unknown value is left out.
+- A `## User` or `## Assistant` heading starts each change of speaker. A tool call shows its name and arguments as JSON; its result follows in a plain fence, marked "(error)" when the tool failed. Tool results count as the assistant's part, a `!` shell command and its output as yours.
+- Text is copied as it is. Thinking, system prompts, extension messages and compaction summaries are left out; an image reads `(image)`.
+- Only the branch you are on is copied, from the first message to the last.
+- The copy goes through Pi's clipboard helper: the system clipboard where Pi finds a tool for it, and OSC 52 through the terminal over SSH or without a display. When neither works, a notice gives Pi's reason.
+
+`formatMmrThreadMarkdown(entries, options)` makes the same Markdown from a session's entries, header included or not, and is exported from the package root.
+
+### Cost and context
+
+`ampi-tui`'s `thread show cost` and `thread analyze context` show the reports `ampi-threads` computes when the overlay opens. They do not follow the session while open.
+
+Cost:
+
+- Every entry that records model usage counts, as in Pi's own session totals: responses, tool results with usage, `usage` entries such as cache warming, and compaction and branch summaries. Abandoned branches count too, since they were paid for.
+- An entry costs what Pi recorded for it. When the provider recorded no cost, its tokens are priced at the model's prices from Pi's model registry (base rates per million tokens, without long-context tiers). A model with neither is "unknown"; the total counts the rest.
+- `ampi-tui`'s cost gauge sums the same entries the same way, so it shows the same total.
+
+Context:
+
+- The sections are estimates, four characters to a token, as Pi estimates for compaction. They follow what Pi recorded as sent: the system prompt and tool declarations from the session's system messages, and the conversation after the latest compaction. Before the first request the prompt and tools Pi would send now stand in.
+- AGENTS.md files are the `<project_instructions>` blocks Pi writes into the prompt, and loaded skills the entries of its `<available_skills>` list; a mode whose prompt leaves them out counts them under the system prompt. MCP tools are those Pi's MCP adapter registers; every other tool counts as built-in.
+- The share of the window uses the window Pi reports for the model. The count Pi measured at the last response is shown beside the estimates; right after a compaction Pi has none until the next response.
+
 ## Diagnostics and troubleshooting
 
 - **Ctrl+C shows only Quit.** The session has no messages yet, `ampi-threads` is off (`ampiThreads.enabled: false` or `AMPI_THREADS_ENABLE=false`), or the keys were rebound under `ampi.keymap`.
@@ -121,18 +187,22 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 - **Archiving fails with "written by a newer ampi".** Another ampi version on this machine uses a newer index format. Update ampi.
 - **Ctrl+R does nothing.** `ampi-threads` is off, and the picker needs it. The palette lists the command as "history (unavailable)" and, when you select it, gives the reason "ampi-threads is not loaded".
 - **`thread switch to previous` is unavailable after a switch.** You switched with Pi's `/resume`, or from a session without messages: neither is recorded. Switch with `thread switch`.
+- **"Could not copy the thread: Clipboard unavailable…".** Pi found no clipboard tool. Install the one the notice names (`xclip`, `xsel` or `wl-copy` on Linux), or run Pi over SSH, where the copy goes through the terminal.
+- **`thread show cost` reads "unknown".** Neither the provider nor Pi's model registry gives the model a price. Add one to the model's `cost` in Pi's `models.json`.
+- **`thread show cost` is unavailable.** `ampiThreads.showCosts` is `false`, or `ampi-threads` is off.
 - **A prompt is missing from Ctrl+R.** It started with `/`, was sent by an extension, repeated the prompt before it, or was sent in another working directory: press Alt+W to show every workspace.
 
 ## Public API
 
-Stable re-exports from `ampi`: `createMmrThreadsExtension`, `loadMmrThreadsSettings` and the `MmrThreadsSettings` / `MmrThreadsFactoryOverrides` types. The store (`createMmrThreadIndexStore`, `validateMmrThreadLabels`, `resolveDefaultMmrThreadIndexDir`, `MmrThreadIndexError`) is exported in the Internal tier. Each name has its `Ampi*` alias. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md). The read API other extensions use (`getMmrThreadIndex`, `filterMmrSessionsByArchived`) lives in `ampi-core`: [`../../../docs/ampi-core-api.md`](../../../docs/ampi-core-api.md#thread-index).
+Stable re-exports from `ampi`: `createMmrThreadsExtension`, `loadMmrThreadsSettings`, `formatMmrThreadMarkdown` and the `MmrThreadsSettings` / `MmrThreadsFactoryOverrides` / `MmrThreadMarkdownOptions` types. The store (`createMmrThreadIndexStore`, `validateMmrThreadLabels`, `resolveDefaultMmrThreadIndexDir`, `MmrThreadIndexError`) is exported in the Internal tier. Each name has its `Ampi*` alias. Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md). The read API other extensions use (`getMmrThreadIndex`, `filterMmrSessionsByArchived`) lives in `ampi-core`: [`../../../docs/ampi-core-api.md`](../../../docs/ampi-core-api.md#thread-index).
 
 ## Developer notes
 
 - Manifest: risk class `local-mutation` (it writes the thread index under the agent directory), child role `none`. No subagent child keep-set lists it.
-- Layout: `index.ts` (entry point: registers the index, prompt history, commands and slash route at load, records prompts from Pi's `input` event, releases everything at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `history-store.ts` (the prompt history files), `commands.ts` (palette commands and the `/ampi-thread` handler), `switch-history.ts` (the per-process switch history behind previous and next).
+- Layout: `index.ts` (entry point: registers the index, prompt history, commands and slash route at load, records prompts from Pi's `input` event, releases everything at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `history-store.ts` (the prompt history files), `commands.ts` (palette commands and the `/ampi-thread` handler), `switch-history.ts` (the per-process switch history behind previous and next), `markdown.ts` (the Markdown export), `cost.ts` (the cost report) and `context-analysis.ts` (the context report). The last three are pure: no files, no clock.
+- The report overlays live in `ampi-tui`, which may not import this extension: `index.ts` registers the reports in `ampi-core/thread-reports.ts`, and the overlays read them from there. Usage and prices are read through `ampi-core/session-usage.ts`, which `ampi-tui`'s gauge uses too.
 - The prompt history picker lives in `ampi-tui`, which may not import this extension. `ampi-threads` registers its history store in `ampi-core/prompt-history.ts` (`registerMmrPromptHistory`), and the picker reads it from there (`getMmrPromptHistory`). The store queues on the same per-path lock as the index store.
 - Only a command handler gets Pi's `newSession` and `switchSession`. The palette commands that replace the session, and the Switch Thread picker in `ampi-tui`, therefore send `/ampi-thread …` with `pi.sendUserMessage(…, { expandPromptTemplates: true })`, which Pi runs as an extension command at once, even during a turn.
 - Pi loads the extension afresh for every session it switches to, so the switch history lives on `globalThis` rather than in the extension instance. It records only what the route switched, after Pi reports the switch was made.
 - Command availability is checked synchronously, so it reads the store's last known record (`peek`); `session_start` loads the current session's record.
-- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam), `tests/mmr-threads-history-store.test.mjs` (prompt history files, trimming, workspaces, seam) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, the switch route and history against session files written with Pi's `SessionManager`, prompt recording, the Ctrl+C popup, Ctrl+R and the Switch Thread picker through `ampi-tui`, settings, load order).
+- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam), `tests/mmr-threads-history-store.test.mjs` (prompt history files, trimming, workspaces, seam), `tests/mmr-threads-markdown.test.mjs` (the export against the hand-written `tests/fixtures/ampi-threads-markdown/session.md`), `tests/mmr-threads-cost.test.mjs` (cost arithmetic with a fixture price table), `tests/mmr-threads-context-analysis.test.mjs` (sections, system prompt replay, compactions) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, the switch route and history against session files written with Pi's `SessionManager`, prompt recording, the Ctrl+C popup, Ctrl+R, the Switch Thread picker and the report overlays through `ampi-tui`, settings, load order).

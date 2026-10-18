@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
-import { readAssistantUsage } from "../../ampi-core/status.js";
+import { mmrEntryCost, readMmrEntryUsage } from "../../ampi-core/session-usage.js";
+import { getMmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { MMR_SHORTCUT_HELP_TMUX_NOTE, type MmrShortcutHelpEntry } from "./help.js";
 import {
   formatMmrSessionCost,
@@ -16,8 +17,8 @@ import type { MmrStatusFeed } from "./status-feed.js";
 
 /**
  * Installs the prompt box in place of Pi's editor and keeps its borders
- * current: the mode from ampi-core, the cost from the session's assistant
- * messages, the turn status from the status feed (with the wave glyph
+ * current: the mode from ampi-core, the cost from the session's model usage
+ * (hidden when `ampiThreads.showCosts` is off), the turn status from the status feed (with the wave glyph
  * stepping while a turn runs), and the working directory with the branch
  * Pi's footer data reports. It also opens and closes the box's shortcuts
  * help; inside tmux the help adds a note when tmux's `extended-keys` option
@@ -87,15 +88,21 @@ export function createMmrPromptBoxInstall(
     tui?.requestRender();
   }
 
-  /** Total cost of the session's assistant messages; `undefined` while there are none. */
+  /**
+   * What the session's model usage cost so far, counting the entries whose
+   * cost is known, as `thread show cost` does; `undefined` while no entry
+   * records usage.
+   */
   function sessionCost(): number | undefined {
     const entries = ctx?.sessionManager.getEntries() ?? [];
     const last = entries.at(-1);
     if (entries.length !== costCache.length || last !== costCache.last) {
       let cost: number | undefined;
       for (const entry of entries) {
-        const usage = readAssistantUsage(entry);
-        if (usage) cost = (cost ?? 0) + usage.cost;
+        const usage = readMmrEntryUsage(entry);
+        if (!usage) continue;
+        const price = usage.provider && usage.model ? ctx?.modelRegistry.find(usage.provider, usage.model)?.cost : undefined;
+        cost = (cost ?? 0) + (mmrEntryCost(usage, price) ?? 0);
       }
       costCache = { length: entries.length, last, cost };
     }
@@ -104,9 +111,11 @@ export function createMmrPromptBoxInstall(
 
   function slots(): MmrPromptBoxSlots {
     const status = feed.status;
-    const cost = sessionCost();
-    // A fresh session shows no gauge; during its first turn the cost is not known yet.
-    const gauge = cost === undefined && !status.busy ? undefined : formatMmrSessionCost(cost);
+    // ampiThreads.showCosts turns the gauge off; a fresh session shows none,
+    // and during its first turn the cost is not known yet.
+    const showCosts = getMmrThreadReports()?.showCosts ?? true;
+    const cost = showCosts ? sessionCost() : undefined;
+    const gauge = !showCosts || (cost === undefined && !status.busy) ? undefined : formatMmrSessionCost(cost);
     const cwd = ctx ? ctx.sessionManager.getCwd() : undefined;
     const branch = getFooterData()?.getGitBranch();
     return {

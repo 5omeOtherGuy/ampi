@@ -9,6 +9,8 @@ export interface MmrThreadsSettings {
   enabled: boolean;
   /** Archive the session when you quit Pi from the terminal. Off by default. */
   autoArchiveOnQuit: boolean;
+  /** Show costs: the prompt box's gauge and `thread show cost`. On by default. */
+  showCosts: boolean;
 }
 
 function readBlock(value: unknown): Record<string, unknown> | undefined {
@@ -22,8 +24,9 @@ function readBoolean(block: Record<string, unknown> | undefined, key: string): b
 }
 
 /**
- * Load `ampi-threads` settings: `ampiThreads.enabled` and
- * `ampiThreads.autoArchiveOnQuit` (or the nested `ampi.threads.*` form) from
+ * Load `ampi-threads` settings: `ampiThreads.enabled`,
+ * `ampiThreads.autoArchiveOnQuit` and `ampiThreads.showCosts` (or the nested
+ * `ampi.threads.*` form) from
  * the global `~/.pi/agent/settings.json`, then the project
  * `<cwd>/.pi/settings.json`, then `AMPI_THREADS_ENABLE` (legacy
  * `MMR_THREADS_ENABLE`) for `enabled`. The latest source wins. A settings
@@ -38,6 +41,7 @@ export function loadMmrThreadsSettings(
   const env = options.env ?? process.env;
   let enabled = true;
   let autoArchiveOnQuit = false;
+  let showCosts = true;
 
   for (const filePath of [path.join(homeDirectory, ".pi/agent/settings.json"), path.join(cwd, ".pi/settings.json")]) {
     let block: Record<string, unknown> | undefined;
@@ -48,8 +52,9 @@ export function loadMmrThreadsSettings(
     }
     enabled = readBoolean(block, "enabled") ?? enabled;
     autoArchiveOnQuit = readBoolean(block, "autoArchiveOnQuit") ?? autoArchiveOnQuit;
+    showCosts = readBoolean(block, "showCosts") ?? showCosts;
   }
 
   enabled = parseBoolEnv(readPreferredEnv(env, "AMPI_THREADS_ENABLE", "MMR_THREADS_ENABLE")?.value) ?? enabled;
-  return { enabled, autoArchiveOnQuit };
+  return { enabled, autoArchiveOnQuit, showCosts };
 }

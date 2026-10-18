@@ -128,6 +128,8 @@ describe("ampi-tui key installation", () => {
       "prompt.openInEditor": "ctrl+g",
       "prompt.history": "ctrl+r",
       "thread.switch": undefined,
+      "thread.showCost": undefined,
+      "thread.analyzeContext": undefined,
       "ampi.showVersion": undefined,
       "ampi.help": undefined,
       "ampi.keymapJson": undefined,

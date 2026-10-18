@@ -491,8 +491,8 @@ the welcome header, styles user messages and ships the `ampi` theme.
 ## `ampi-threads`
 
 Thread management on top of Pi sessions, on by default: the thread index
-at `<agentDir>/data/ampi/threads/index.json` and the `thread.new`,
-`thread.archive`, `thread.unarchive` and `thread.archiveAndQuit` commands.
+at `<agentDir>/data/ampi/threads/index.json`, the prompt history, the
+`thread.*` commands, the Markdown export and the cost and context reports.
 `ampiThreads.enabled: false` (or `AMPI_THREADS_ENABLE=false`) turns it off.
 Other extensions read the index through `ampi-core`'s
 [thread index seam](./ampi-core-api.md#thread-index).
@@ -501,8 +501,9 @@ Other extensions read the index through `ampi-core`'s
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `createMmrThreadsExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `createStore` and `now` overrides. |
-| `loadMmrThreadsSettings` | function | Reads `ampiThreads.enabled` and `ampiThreads.autoArchiveOnQuit` from the settings files, then `AMPI_THREADS_ENABLE` for `enabled`. |
+| `createMmrThreadsExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `createStore`, `createHistoryStore`, `now` and `copyText` overrides. |
+| `loadMmrThreadsSettings` | function | Reads `ampiThreads.enabled`, `ampiThreads.autoArchiveOnQuit` and `ampiThreads.showCosts` from the settings files, then `AMPI_THREADS_ENABLE` for `enabled`. |
+| `formatMmrThreadMarkdown` | function | `(entries, options?) => string`. A session as Markdown: front matter (`title`, `sessionId`, `created`, `mode`), `# <title>`, then `## User` / `## Assistant` sections with `**Tool Use:**` and `**Tool Result:**` blocks. `entries` are the session's entries in file order, header optional; the branch ending with the last entry is rendered. `options` overrides the front matter values. Pure. See [`ampi-threads`](../src/extensions/ampi-threads/README.md#markdown-export). |
 | `createMmrThreadIndexStore` | function | Internal tier. The index store: `list`, `get`, `update`, `peek` and `path`; accepts `baseDir`, `randomId` and `onWarning`. |
 | `validateMmrThreadLabels` | function | Internal tier. Checks a label list (at most 20 labels of 1 to 32 lowercase letters, digits or hyphens) and drops duplicates. |
 | `resolveDefaultMmrThreadIndexDir` | function | Internal tier. `<agentDir>/data/ampi/threads`. |
@@ -510,7 +511,7 @@ Other extensions read the index through `ampi-core`'s
 
 ### Re-exported types
 
-`MmrThreadsSettings` (`enabled`, `autoArchiveOnQuit`), `MmrThreadsFactoryOverrides`, and, in the Internal tier, `MmrThreadIndexStore`, `MmrThreadIndexStoreOptions`.
+`MmrThreadsSettings` (`enabled`, `autoArchiveOnQuit`, `showCosts`), `MmrThreadsFactoryOverrides`, `MmrThreadMarkdownOptions` (`title`, `sessionId`, `created`, `mode`), and, in the Internal tier, `MmrThreadIndexStore`, `MmrThreadIndexStoreOptions`.
 
 ---
 

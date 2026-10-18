@@ -340,6 +340,8 @@ export interface MmrScrollOverlayOptions {
   readonly onClose: () => void;
   /** Terminal height; the box is two rows shorter. */
   readonly terminalRows?: () => number | undefined;
+  /** Make the box only as tall as its content (at most two rows shorter than the terminal), hinting scroll keys only when it scrolls. */
+  readonly fit?: boolean;
 }
 
 /** A read-only, scrolling text box in the shared frame. */
@@ -387,14 +389,16 @@ export class MmrScrollOverlay implements Component {
     if (this.cache?.width !== inner) this.cache = { width: inner, lines: this.options.content(inner, this.options.theme) };
     const lines = this.cache.lines;
     const rows = this.options.terminalRows?.() ?? DEFAULT_TERMINAL_ROWS;
-    const visible = Math.max(1, rows - 2 - FRAME_ROWS);
+    const room = Math.max(1, rows - 2 - FRAME_ROWS);
+    const visible = this.options.fit ? Math.max(1, Math.min(room, lines.length)) : room;
     // A page keeps the last row of the previous one on screen.
     this.page = Math.max(1, visible - 1);
     this.maxOffset = Math.max(0, lines.length - visible);
     this.offset = Math.min(this.offset, this.maxOffset);
     const body = Array.from({ length: visible }, (_, index) => lines[this.offset + index] ?? "");
     const scrollbar = renderMmrScrollbar({ total: lines.length, visible, offset: this.offset }, this.options.theme);
-    return renderMmrFrame({ title: this.options.title, hints: HINTS, lines: body, gutter: scrollbar }, width, this.options.theme);
+    const hints = this.options.fit && this.maxOffset === 0 ? HINTS.slice(0, 1) : HINTS;
+    return renderMmrFrame({ title: this.options.title, hints, lines: body, gutter: scrollbar }, width, this.options.theme);
   }
 
   private scroll(delta: number): void {
@@ -402,10 +406,23 @@ export class MmrScrollOverlay implements Component {
   }
 }
 
-function openScrollOverlay(ctx: ExtensionContext, title: string, content: MmrScrollOverlayOptions["content"]): Promise<void> {
+/** Open a read-only, scrolling text box, centred and 100 columns wide at most; resolves when it closes. */
+export function openMmrScrollOverlay(
+  ctx: ExtensionContext,
+  title: string,
+  content: MmrScrollOverlayOptions["content"],
+  options: Pick<MmrScrollOverlayOptions, "fit"> = {},
+): Promise<void> {
   return ctx.ui.custom<void>(
     (tui, theme, _keybindings, done) =>
-      new MmrScrollOverlay({ title, content, theme, onClose: () => done(undefined), terminalRows: () => tui?.terminal?.rows }),
+      new MmrScrollOverlay({
+        title,
+        content,
+        theme,
+        onClose: () => done(undefined),
+        terminalRows: () => tui?.terminal?.rows,
+        fit: options.fit,
+      }),
     {
       overlay: true,
       overlayOptions: { width: MMR_HELP_KEYMAP_WIDTH, margin: { left: 2, right: 2, top: 1, bottom: 1 }, anchor: "center" },
@@ -416,7 +433,7 @@ function openScrollOverlay(ctx: ExtensionContext, title: string, content: MmrScr
 /** Open the Help & Keymap screen; resolves when it closes. */
 export function openMmrHelpKeymap(ctx: ExtensionContext, sources: MmrHelpKeymapSources): Promise<void> {
   const sections = buildMmrHelpKeymapSections(sources);
-  return openScrollOverlay(ctx, MMR_HELP_KEYMAP_TITLE, (width, theme) => renderMmrHelpKeymapLines(sections, width, theme));
+  return openMmrScrollOverlay(ctx, MMR_HELP_KEYMAP_TITLE, (width, theme) => renderMmrHelpKeymapLines(sections, width, theme));
 }
 
 /** Open the keymap in effect as JSONC; resolves when it closes. */
@@ -426,5 +443,5 @@ export function openMmrKeymapJson(
   keymap: MmrResolvedKeymap,
 ): Promise<void> {
   const jsonc = formatMmrKeymapJsonc(commands, keymap);
-  return openScrollOverlay(ctx, MMR_KEYMAP_JSON_TITLE, (width, theme) => renderMmrKeymapJsonLines(jsonc, width, theme));
+  return openMmrScrollOverlay(ctx, MMR_KEYMAP_JSON_TITLE, (width, theme) => renderMmrKeymapJsonLines(jsonc, width, theme));
 }

@@ -19,19 +19,27 @@ let dir;
 let registry;
 let seam;
 let historySeam;
+let reportsSeam;
+/** Text the extension put on the clipboard, and an error to fail the next copy with. */
+let copied;
+let copyError;
 
 beforeEach(async () => {
   dir = mkdtempSync(path.join(os.tmpdir(), "ampi-threads-ext-"));
   registry = await importSource("extensions/ampi-core/command-registry.ts");
   seam = await importSource("extensions/ampi-core/thread-index.ts");
   historySeam = await importSource("extensions/ampi-core/prompt-history.ts");
+  reportsSeam = await importSource("extensions/ampi-core/thread-reports.ts");
   registry.__resetMmrCommandsForTests();
+  copied = [];
+  copyError = undefined;
 });
 
 afterEach(() => {
   registry.__resetMmrCommandsForTests();
   assert.equal(seam.getMmrThreadIndex(), undefined, "each case must release the thread index");
   assert.equal(historySeam.getMmrPromptHistory(), undefined, "each case must release the prompt history");
+  assert.equal(reportsSeam.getMmrThreadReports(), undefined, "each case must release the thread reports");
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -49,7 +57,7 @@ async function loadExtension(settings = {}, mock = createMockPi()) {
   const { createMmrPromptHistoryStore } = await importSource("extensions/ampi-threads/history-store.ts");
   let second = 0;
   createMmrThreadsExtension({
-    loadSettings: () => ({ enabled: true, autoArchiveOnQuit: false, ...settings }),
+    loadSettings: () => ({ enabled: true, autoArchiveOnQuit: false, showCosts: true, ...settings }),
     createStore: (options) => createMmrThreadIndexStore({ ...options, baseDir: path.join(dir, "threads") }),
     createHistoryStore: () =>
       createMmrPromptHistoryStore({
@@ -57,6 +65,10 @@ async function loadExtension(settings = {}, mock = createMockPi()) {
         now: () => new Date(Date.UTC(2026, 9, 18, 10, 0, second++)).toISOString(),
       }),
     now: () => ARCHIVED_AT,
+    copyText: async (text) => {
+      if (copyError) throw copyError;
+      copied.push(text);
+    },
   })(mock.pi);
   return mock;
 }
@@ -98,6 +110,7 @@ describe("ampi-threads extension", () => {
       "thread.archiveAndQuit": "ctrl+c ctrl+e",
       "thread.switchToPrevious": undefined,
       "thread.switchToNext": undefined,
+      "thread.copyMarkdown": undefined,
     });
     assert.deepEqual(
       registry.getMmrCommands().map((c) => `${c.noun} ${c.verb}`),
@@ -108,11 +121,13 @@ describe("ampi-threads extension", () => {
         "thread archive and quit",
         "thread switch to previous",
         "thread switch to next",
+        "thread copy markdown",
       ],
     );
     assert.ok(t.commands.has("ampi-thread"));
     assert.equal(seam.getMmrThreadIndex()?.path, indexFile());
     assert.equal(historySeam.getMmrPromptHistory()?.dir, path.join(dir, "threads", "history"));
+    assert.equal(reportsSeam.getMmrThreadReports()?.showCosts, true);
 
     await t.handlers.get("session_shutdown")({ type: "session_shutdown", reason: "new" }, t.ctx);
     assert.deepEqual(registry.getMmrCommands(), []);
@@ -580,6 +595,96 @@ describe("ampi-threads thread switcher in ampi-tui", () => {
   });
 });
 
+describe("ampi-threads Markdown, cost and context", () => {
+  const fixtures = path.join(repoRoot, "tests", "fixtures", "ampi-threads-markdown");
+  const MODEL = { provider: "anthropic", id: "claude-sonnet-4-5", contextWindow: 200000 };
+
+  /** A context in the fixture session: its header, its entries (one abandoned branch), its model. */
+  function fixtureContext() {
+    const [header, ...entries] = readFileSync(path.join(fixtures, "session.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const context = sessionContext({
+      entries,
+      cwd: "/work/demo",
+      model: MODEL,
+      models: [MODEL],
+      getContextUsage: () => ({ tokens: 1505, contextWindow: 200000, percent: 0.75 }),
+    });
+    context.ctx.sessionManager.getHeader = () => header;
+    context.ctx.sessionManager.getBranch = () => entries;
+    context.ctx.getSystemPrompt = () => "You are a coding agent.";
+    return context;
+  }
+
+  it("copies the session as Markdown and says so; a failed copy says why", async () => {
+    const t = await started();
+    try {
+      assert.deepEqual(availability("thread.copyMarkdown", sessionContext({ entries: [] }).ctx), {
+        state: "unavailable",
+        reason: "this session has no messages yet",
+      });
+      const context = fixtureContext();
+      assert.deepEqual(availability("thread.copyMarkdown", context.ctx), { state: "available" });
+      await command("thread.copyMarkdown").run(context.ctx);
+      assert.deepEqual(copied, [readFileSync(path.join(fixtures, "session.md"), "utf8")]);
+      assert.deepEqual(context.notifications, [{ message: "Copied the thread as Markdown", level: "info" }]);
+
+      copyError = new Error("Clipboard unavailable");
+      await command("thread.copyMarkdown").run(context.ctx);
+      assert.deepEqual(context.notifications.at(-1), { message: "Could not copy the thread: Clipboard unavailable", level: "error" });
+      assert.equal(copied.length, 1);
+    } finally {
+      await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
+    }
+  });
+
+  it("shows the session's cost and what fills its context in ampi-tui's overlays", async () => {
+    const mock = await loadExtension();
+    const context = fixtureContext();
+    await mock.handlers.get("session_start")(startEvent, context.ctx);
+    const { createMmrTuiKeys } = await importSource("extensions/ampi-tui/keys/install.ts");
+    const keys = createMmrTuiKeys(mock.pi, { now: () => 0, setTimer: () => ({}), clearTimer: () => {} });
+    keys.start(context.ctx, () => undefined);
+    try {
+      assert.deepEqual(availability("thread.showCost", context.ctx), { state: "available" });
+      command("thread.showCost").run(context.ctx);
+      const cost = context.overlays.at(-1).component.render(100);
+      assert.match(cost[0], /^╭─ Thread Cost ─/);
+      assert.match(cost[2], /^│ Total: \$0\.02 +│$/);
+      assert.match(cost[4], /^│ anthropic\/claude-sonnet-4-5 +\$0\.02 │$/);
+      assert.match(cost[5], /^│ {3}7\.5k in · 135 out +│$/);
+      assert.match(cost.at(-1), / Esc close ─╯$/);
+
+      assert.deepEqual(availability("thread.analyzeContext", context.ctx), { state: "available" });
+      command("thread.analyzeContext").run(context.ctx);
+      const analysis = context.overlays.at(-1).component.render(100).join("\n");
+      assert.match(analysis, /^╭─ Analyze Context ─/);
+      assert.match(analysis, /│ anthropic\/claude-sonnet-4-5 · 200k context window +│/);
+      assert.match(analysis, /│ Compactions: 0 +│/);
+      assert.match(analysis, /│ Pi counted 1\.5k tokens at the last response\. +│/);
+    } finally {
+      keys.stop();
+      await mock.handlers.get("session_shutdown")(quitEvent, context.ctx);
+    }
+  });
+
+  it("turns the cost overlay off with showCosts: false, and tells ampi-tui's gauge", async () => {
+    const t = await started({ showCosts: false });
+    try {
+      assert.equal(reportsSeam.getMmrThreadReports()?.showCosts, false);
+      const { createMmrTuiCommands } = await importSource("extensions/ampi-tui/keys/commands.ts");
+      const commands = createMmrTuiCommands({ getTui: () => undefined, pi: t.pi });
+      const check = (id) => commands.find((candidate) => candidate.id === id).availability(t.ctx);
+      assert.deepEqual(check("thread.showCost"), { state: "unavailable", reason: "costs are turned off (ampiThreads.showCosts)" });
+      assert.deepEqual(check("thread.analyzeContext"), { state: "available" });
+    } finally {
+      await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
+    }
+  });
+});
+
 describe("ampi-threads settings", () => {
   function withDirs(run) {
     const root = mkdtempSync(path.join(os.tmpdir(), "ampi-threads-settings-"));
@@ -597,7 +702,11 @@ describe("ampi-threads settings", () => {
   it("is on, without auto-archive, by default", async () => {
     const { loadMmrThreadsSettings } = await importSource("extensions/ampi-threads/config.ts");
     await withDirs(({ home, cwd }) => {
-      assert.deepEqual(loadMmrThreadsSettings(cwd, { homeDirectory: home, env: {} }), { enabled: true, autoArchiveOnQuit: false });
+      assert.deepEqual(loadMmrThreadsSettings(cwd, { homeDirectory: home, env: {} }), {
+        enabled: true,
+        autoArchiveOnQuit: false,
+        showCosts: true,
+      });
     });
   });
 
@@ -605,12 +714,16 @@ describe("ampi-threads settings", () => {
     const { loadMmrThreadsSettings } = await importSource("extensions/ampi-threads/config.ts");
     await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
       const load = () => loadMmrThreadsSettings(cwd, { homeDirectory: home, env: {} });
-      writeGlobal({ ampiThreads: { enabled: false, autoArchiveOnQuit: true } });
-      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true });
+      writeGlobal({ ampiThreads: { enabled: false, autoArchiveOnQuit: true, showCosts: false } });
+      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true, showCosts: false });
       writeProject({ ampi: { threads: { enabled: true } } });
-      assert.deepEqual(load(), { enabled: true, autoArchiveOnQuit: true }, "a key the project leaves out keeps the global value");
-      writeProject({ ampiThreads: { autoArchiveOnQuit: "yes" } });
-      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true }, "a non-boolean value is ignored");
+      assert.deepEqual(
+        load(),
+        { enabled: true, autoArchiveOnQuit: true, showCosts: false },
+        "a key the project leaves out keeps the global value",
+      );
+      writeProject({ ampiThreads: { autoArchiveOnQuit: "yes", showCosts: true } });
+      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true, showCosts: true }, "a non-boolean value is ignored");
     });
   });
 
