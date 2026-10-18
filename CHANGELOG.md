@@ -6,6 +6,15 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
 
 ## Unreleased
 
+### Added
+
+- `ampi-custom-subagents`: a custom subagent whose frontmatter sets
+  `background: true` can also run in the background through `start_task`, with
+  the same polling, waiting, cancellation, and completion delivery as the
+  built-in background workers. Subagents stay foreground-only by default, and
+  background custom workers cannot spawn further workers
+  ([#240](https://github.com/5omeOtherGuy/ampi/pull/240)).
+
 ### Changed
 
 - Require Pi 1.3 or later: the `@earendil-works/pi-coding-agent`,
@@ -38,6 +47,12 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   Medium onto the full prompt shared with High and Ultra. Prompt prose is
   unchanged; rendered-prompt and effective-surface fixtures cover the corrected
   mapping.
+
+### Documentation
+
+- README: a status line that does not name a version, a configuration
+  example with the current `low`/`medium`/`high`/`ultra` mode keys, and a
+  Compatibility section with the supported Pi and Node.js versions.
 
 ## 0.3.1 — 2026-07-15
 
