@@ -27,6 +27,13 @@
 
  $ npm test -- --grep 'tool rows' (exit code: 1)
    not ok 1 - renders
+=== bash timed out · collapsed ===
+
+ ✗ Ran sleep 3 (timed out after 1s)
+=== bash timed out · expanded ===
+
+ $ sleep 3 (timed out after 1s)
+   waiting
 === bash running · collapsed ===
 
  ⠋ Running npm run build

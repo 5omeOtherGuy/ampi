@@ -120,8 +120,8 @@ Every tool call in the transcript is drawn as one line: a status glyph, a verb a
 ```
 
 - Glyphs: `✓` done, `✗` failed, `⊘` cancelled, and a spinner while the call runs. The verb is in the present tense while it runs (`Reading`, `Running`, `Editing`).
-- Shell commands are named for what they do. A command that only reads a file (`cat`, `head`, `tail`, `sed -n`, `less`) shows as `Read <path>` with the line range when the command names one (`sed -n '1,220p' x.ts` is `Read x.ts L1-220`). A search (`rg`, `grep`, `git grep`) shows as `Grep`, a listing (`ls`, `find`, `fd`) as `Listed`, `sed -i` as `Edited`. Anything else, including pipelines into other programs, redirections into files and command substitutions, is `Ran <command>`. A leading `cd <dir> &&` is followed into that directory.
-- Edits show the diff stat (`+N -M`), failed commands their exit code. Paths are shown relative to the working directory, or with `~` for the home directory.
+- Shell commands are named for what they do. A command that only reads a file (`cat`, `head`, `tail`, `sed -n`, `less`) shows as `Read <path>` with the line range when the command names one (`sed -n '1,220p' x.ts` is `Read x.ts L1-220`). A search (`rg`, `grep`, `git grep`) shows as `Grep`, a listing (`ls`, `find`, `fd`) as `Listed` with its name pattern, `sed -i` as `Edited`. Anything else, including pipelines into other programs, redirections into files and command substitutions, is `Ran <command>`. A leading `cd <dir> &&` is followed into that directory.
+- Edits show the diff stat (`+N -M`), failed commands their exit code, or `(timed out after Ns)` or `(killed)` when they ended without one. A `write` call always shows as `Created`, with every line counted as added, because its result does not say whether the file existed before. Paths are shown relative to the working directory, or with `~` for the home directory.
 - MCP tools show as `Ran <server>/<tool>`, other tools as `Ran <tool>`, each with the first argument that says what the call is about.
 - Expanding tool output (Pi's Ctrl+O, which applies to every row) switches to cards:
   - shell commands: `$ <command>` with the program in bold and flags and strings in syntax colours, `(in <dir>)` when it ran elsewhere, `(exit code: N)` when it failed, then the first 15 lines of output and `… N more lines`;
@@ -129,7 +129,8 @@ Every tool call in the transcript is drawn as one line: a status glyph, a verb a
   - `read`: the linked path and its line range; `grep`, `find` and `ls`: their output;
   - MCP and other tools without renderers of their own: their arguments as `key: value` lines and the result text.
 - Tools that bring their own renderers, such as ampi's subagents and task list, get the one-line row when collapsed and keep their own card when expanded.
-- Rows use theme colours for text only, never a background. The same renderers draw tool calls in Pi's HTML export.
+- Rows use theme colours for text only, never a background.
+- Pi's HTML export draws the tools it does not render itself (such as `grep`, `find`, `apply_patch` and MCP tools) with these renderers. There the row with its final status sits below the tool name, and expanding it shows the card.
 
 ### Planned
 

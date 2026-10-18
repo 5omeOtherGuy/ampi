@@ -58,6 +58,8 @@ export interface Activity {
   workdir?: string;
   diff?: DiffStat;
   exitCode?: number;
+  /** Why a command ended without an exit code: "timed out after 30s" or "killed". */
+  ended?: string;
   /** MCP server name for `mcp__<server>__<tool>` tools. */
   server?: string;
 }
@@ -236,8 +238,9 @@ export function tokenizeShell(input: string): ShellToken[] | undefined {
       let value = "";
       let opaque = false;
       while (j < input.length && input[j] !== '"') {
-        if (input[j] === "\\" && j + 1 < input.length) {
-          value += input[j + 1];
+        // Inside double quotes a backslash escapes only $ ` " \ and a newline.
+        if (input[j] === "\\" && j + 1 < input.length && '$`"\\\n'.includes(input[j + 1] as string)) {
+          if (input[j + 1] !== "\n") value += input[j + 1];
           j += 2;
           continue;
         }
@@ -711,12 +714,17 @@ function shellActivity(args: Record<string, unknown>, options: ClassifyOptions):
       : path.join(options.cwd, leadingCd.dir)
     : undefined;
   const shell = classifyShellCommand(command);
-  const exitCode = /(?:^|\n)Command exited with code (\d+)\s*$/.exec(resultText(options.result))?.[1];
+  const output = resultText(options.result);
+  const exitCode = /(?:^|\n)Command exited with code (\d+)\s*$/.exec(output)?.[1];
+  const timeout = /(?:^|\n)Command timed out after (\d+) seconds\s*$/.exec(output)?.[1];
+  const killed = /(?:^|\n)Command terminated without an exit code\s*$/.test(output);
+  const ended = timeout !== undefined ? `timed out after ${timeout}s` : killed ? "killed" : undefined;
   const base = {
     toolName: "bash",
     command: raw,
     ...(workdir ? { workdir } : {}),
     ...(exitCode !== undefined ? { exitCode: Number(exitCode) } : {}),
+    ...(ended ? { ended } : {}),
   };
   const show = (p: string) => displayPath(p, { cwd: options.cwd, home: options.home, workdir });
   switch (shell.kind) {
@@ -739,7 +747,14 @@ function shellActivity(args: Record<string, unknown>, options: ClassifyOptions):
         object: grepObject(shell.pattern, shell.path ? show(shell.path) : undefined),
       };
     case "list":
-      return { ...base, kind: "list", present: "Listing", past: "Listed", object: show(shell.path ?? ".") };
+      return {
+        ...base,
+        kind: "list",
+        present: "Listing",
+        past: "Listed",
+        object: show(shell.path ?? "."),
+        ...(shell.pattern ? { detail: shell.pattern, detailSeparator: " " } : {}),
+      };
     case "edit":
       return { ...base, kind: "edit", present: "Editing", past: "Edited", object: show(shell.path ?? ""), path: shell.path };
     default:
@@ -949,6 +964,7 @@ export function activityTitle(activity: Activity, status: ActivityStatus): Title
   if (activity.exitCode !== undefined && activity.exitCode !== 0) {
     parts.push({ text: " (exit code: ", role: "muted" }, { text: String(activity.exitCode), role: "error" }, { text: ")", role: "muted" });
   }
+  if (activity.ended) parts.push({ text: ` (${activity.ended})`, role: "muted" });
   return parts;
 }
 
@@ -985,7 +1001,8 @@ function categoryOf(kind: ActivityKind): string {
  * edited 2 files (+265 -4)". Clauses follow the order in which their kind
  * first appears; a clause uses its present verb while any of its calls
  * runs. Files changed by several calls count once, and the diff stat leaves
- * out failed calls. Cancelled calls are counted in parentheses.
+ * out failed and cancelled calls, as their rows do. Cancelled calls are
+ * counted in parentheses.
  */
 export function summarizeActivities(entries: readonly ActivityEntry[]): string {
   const groups = new Map<string, ActivityEntry[]>();
@@ -1014,7 +1031,7 @@ export function summarizeActivities(entries: readonly ActivityEntry[]): string {
         const touched = activity.paths ?? (activity.path ? [activity.path] : []);
         if (touched.length === 0) unnamed++;
         for (const p of touched) paths.add(p);
-        if (status !== "error" && activity.diff) {
+        if (status !== "error" && status !== "cancelled" && activity.diff) {
           diff.added += activity.diff.added;
           diff.removed += activity.diff.removed;
         }

@@ -75,25 +75,46 @@ interface RowState {
   frame: number;
   timer?: ReturnType<typeof setInterval>;
   result?: ToolResult;
+  /**
+   * The row is drawn once and never redrawn, as in Pi's HTML export: its call
+   * is first rendered with execution already started, before its result.
+   * A live row is always rendered first while its arguments arrive.
+   */
+  snapshot?: boolean;
 }
 
 const EMPTY: Component = { render: () => [], invalidate() {} };
 
-/** A component that builds its lines at render time, so it always sees the row's latest result. */
+/**
+ * A component that builds its lines on the first render and keeps them for
+ * that width. Lines are built at render time because Pi runs the result
+ * renderer after the call renderer in the same pass, so the call row sees
+ * the latest result. Every change to a row (a new result, a spinner frame,
+ * the expand toggle, a theme change) makes Pi ask for new components, so
+ * the kept lines never go stale.
+ */
 class LazyLines implements Component {
   private readonly build: (width: number) => string[];
+  private width?: number;
+  private lines: string[] = [];
   constructor(build: (width: number) => string[]) {
     this.build = build;
   }
   render(width: number): string[] {
-    return this.build(width);
+    if (width !== this.width) {
+      this.lines = this.build(width);
+      this.width = width;
+    }
+    return this.lines;
   }
-  invalidate(): void {}
+  invalidate(): void {
+    this.width = undefined;
+  }
 }
 
 function rowState(context: RenderContext): RowState {
   const state = context.state as { ampiRow?: RowState };
-  state.ampiRow ??= { frame: 0 };
+  state.ampiRow ??= { frame: 0, ...(context.executionStarted ? { snapshot: true } : {}) };
   return state.ampiRow;
 }
 
@@ -237,6 +258,7 @@ function shellHeader(row: Row, activity: Activity, status: ActivityStatus, width
   if (activity.exitCode !== undefined && activity.exitCode !== 0) {
     suffix += theme.italic(` (exit code: ${theme.fg("error", String(activity.exitCode))})`);
   }
+  if (activity.ended) suffix += theme.fg("muted", theme.italic(` (${activity.ended})`));
   if (status === "cancelled") suffix += theme.fg("warning", " (cancelled)");
   const indent = `${pad}  `;
   const lines: string[] = [];
@@ -452,7 +474,10 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
     const fallback = own ? undefined : next();
     const renderCall: CallRenderer = (args, theme, context) => {
       const state = rowState(context);
-      syncSpinner(state, context, context.isPartial);
+      // A snapshot's call comes before its result, so its status is unknown here:
+      // the result side draws its title instead.
+      if (state.snapshot) return EMPTY;
+      syncSpinner(state, context, context.executionStarted && context.isPartial);
       if (context.expanded && fallback?.renderCall) return fallback.renderCall(args, theme, context);
       const row: Row = { toolName, args, context, theme, state, home };
       return new LazyLines((width) => renderHeader(row, width));
@@ -460,10 +485,12 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
     const renderResult: ResultRenderer = (result, renderOptions, theme, context) => {
       const state = rowState(context);
       state.result = result;
-      if (!renderOptions.expanded) return EMPTY;
-      if (fallback?.renderResult) return fallback.renderResult(result, renderOptions, theme, context);
+      syncSpinner(state, context, !state.snapshot && context.executionStarted && renderOptions.isPartial);
       const row: Row = { toolName, args: context.args, context, theme, state, home };
-      return new LazyLines((width) => renderBody(row, width));
+      const header = (width: number) => (state.snapshot ? renderHeader(row, width) : []);
+      if (!renderOptions.expanded) return state.snapshot ? new LazyLines(header) : EMPTY;
+      if (fallback?.renderResult) return fallback.renderResult(result, renderOptions, theme, context);
+      return new LazyLines((width) => [...header(width), ...renderBody(row, width)]);
     };
     return { renderShell: "self", renderCall, renderResult };
   };

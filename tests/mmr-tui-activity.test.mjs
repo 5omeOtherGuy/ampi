@@ -51,6 +51,12 @@ describe("ampi-tui activity: shell tokenizer", () => {
     assert.deepEqual(words(tokenizeShell("ls a2 >> log")), ["ls", "a2", "<>>>", "log"]);
   });
 
+  it("keeps a backslash inside double quotes unless it escapes a shell character", async () => {
+    const { tokenizeShell } = await load();
+    assert.deepEqual(words(tokenizeShell(String.raw`grep -n "\bretries\b" "foo\.bar"`)), ["grep", "-n", String.raw`\bretries\b`, String.raw`foo\.bar`]);
+    assert.deepEqual(words(tokenizeShell(String.raw`echo "a\"b\$c\\d" e\.f`)), ["echo", String.raw`a"b$c\d`, "e.f"]);
+  });
+
   it("gives up on heredocs, comments and unbalanced quotes", async () => {
     const { tokenizeShell } = await load();
     assert.equal(tokenizeShell("cat <<EOF\nhi\nEOF"), undefined);
@@ -145,6 +151,16 @@ describe("ampi-tui activity: tool calls", () => {
     const missing = bash("ls missing-dir", { content: [{ type: "text", text: "ls: no such file\n\nCommand exited with code 2" }] });
     assert.equal(titleText(mod, missing, "error"), "Listed missing-dir (exit code: 2)");
     assert.equal(titleText(mod, bash("printf 'a\\nb'\nmake")), "Ran printf 'a\\nb' …");
+    assert.equal(titleText(mod, bash(String.raw`grep -n "\bretries\b" src/app.ts`)), String.raw`Grep src/app.ts "\bretries\b"`);
+    assert.equal(titleText(mod, bash("find src -name '*.ts'")), "Listed src *.ts");
+  });
+
+  it("says why a command ended without an exit code", async () => {
+    const mod = await load();
+    const bash = (text) => mod.classifyToolCall("bash", { command: "sleep 3" }, { ...options, result: { content: [{ type: "text", text }] } });
+    assert.equal(titleText(mod, bash("partial\n\nCommand timed out after 1 seconds"), "error"), "Ran sleep 3 (timed out after 1s)");
+    assert.equal(titleText(mod, bash("Command terminated without an exit code"), "error"), "Ran sleep 3 (killed)");
+    assert.equal(bash("Command timed out after 1 seconds").exitCode, undefined);
   });
 
   it("follows a leading cd into the directory it names", async () => {
@@ -268,6 +284,7 @@ describe("ampi-tui activity: summaries", () => {
     const { summarizeActivities } = await load();
     assert.equal(summarizeActivities([entry(edit("a.ts", 1, 1)), entry(edit("a.ts", 2, 0))]), "Edited 1 file (+3 -1)");
     assert.equal(summarizeActivities([entry(edit("a.ts", 5, 0), "error"), entry(edit("b.ts", 1, 0))]), "Edited 2 files (+1)");
+    assert.equal(summarizeActivities([entry(edit("a.ts", 5, 0), "cancelled"), entry(edit("b.ts", 1, 0))]), "Edited 2 files (+1, 1 cancelled)");
   });
 
   it("says created or changed for new and mixed files", async () => {

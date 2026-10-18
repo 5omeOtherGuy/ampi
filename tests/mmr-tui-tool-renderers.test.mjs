@@ -37,6 +37,9 @@ function stripAnsi(text) {
 
 const noopTui = { requestRender() {} };
 
+const same = (text) => text;
+const plainTheme = { fg: (_color, text) => text, bold: same, italic: same, underline: same, strikethrough: same };
+
 function textResult(text, details) {
   return { content: [{ type: "text", text }], details };
 }
@@ -76,14 +79,14 @@ const editDiff = [
 const patchFiles = [
   {
     type: "update",
-    path: `${CWD}/src/config.ts`,
+    path: "src/config.ts",
     additions: 1,
     deletions: 1,
     diff: "--- a/src/config.ts\n+++ b/src/config.ts\n@@ -10,3 +10,3 @@\n const a = 1;\n-const b = 2;\n+const b = 20;\n const c = 3;\n",
   },
   {
     type: "add",
-    path: `${CWD}/src/new-file.ts`,
+    path: "src/new-file.ts",
     additions: 2,
     deletions: 0,
     diff: "--- /dev/null\n+++ b/src/new-file.ts\n@@ -0,0 +1,2 @@\n+export const created = true;\n+export default created;\n",
@@ -104,6 +107,13 @@ const CASES = [
     tool: "bash",
     args: { command: "npm test -- --grep 'tool rows'" },
     result: textResult("not ok 1 - renders\n\nCommand exited with code 1"),
+    isError: true,
+  },
+  {
+    name: "bash timed out",
+    tool: "bash",
+    args: { command: "sleep 3", timeout: 1 },
+    result: textResult("waiting\n\nCommand timed out after 1 seconds"),
     isError: true,
   },
   { name: "bash running", tool: "bash", args: { command: "npm run build" } },
@@ -220,6 +230,7 @@ describe("ampi-tui tool rows", () => {
     assert.deepEqual(row(byName["bash error"]), ["", " ✗ Ran npm test -- --grep 'tool rows' (exit code: 1)"]);
     assert.deepEqual(row(byName["grep cancelled"]), ["", ' ⊘ Grep "foo"']);
     assert.deepEqual(row(byName["bash running"]), ["", " ⠋ Running npm run build"]);
+    assert.deepEqual(row(byName["bash timed out"]), ["", " ✗ Ran sleep 3 (timed out after 1s)"]);
     assert.deepEqual(row(byName["edit with diff"]), ["", " ✓ Edited src/retry.ts +2 -1"]);
   });
 
@@ -244,7 +255,10 @@ describe("ampi-tui tool rows", () => {
     };
     const draw = (tool, args, { result, isError = false, isPartial = false, expanded = false } = {}) => {
       const renderers = resolver(tool, () => undefined);
-      const context = { args, toolCallId: "c1", invalidate() {}, state: {}, cwd: CWD, executionStarted: true, argsComplete: true, isPartial, expanded, showImages: false, isError, outputPad: 1 };
+      const context = { args, toolCallId: "c1", invalidate() {}, state: {}, cwd: CWD, executionStarted: false, argsComplete: true, isPartial, expanded, showImages: false, isError, outputPad: 1 };
+      // Like Pi, draw the row once before execution starts, so it is live.
+      renderers.renderCall(args, theme, context);
+      context.executionStarted = true;
       const call = renderers.renderCall(args, theme, context);
       const body = result ? renderers.renderResult(result, { expanded, isPartial }, theme, context) : undefined;
       context.invalidate = () => {};
@@ -292,6 +306,80 @@ describe("ampi-tui tool rows", () => {
     } finally {
       mock.timers.reset();
     }
+  });
+
+  it("keeps a resumed call that never finished still", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    mock.timers.enable({ apis: ["setInterval"] });
+    try {
+      // A resumed session draws the call without starting its execution, and no result follows.
+      const renderers = resolver("bash", () => undefined);
+      const component = new ToolExecutionComponent("bash", "orphan", { command: "sleep 30" }, { showImages: false }, { name: "bash", ...renderers }, noopTui, CWD);
+      const before = component.render(80).map(stripAnsi);
+      mock.timers.tick(240);
+      assert.deepEqual(component.render(80).map(stripAnsi), before);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it("draws a call rendered once, as in an HTML export, with its final status and no timer", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    mock.timers.enable({ apis: ["setInterval"] });
+    try {
+      const renderers = resolver("grep", () => undefined);
+      const args = { pattern: "retries", path: "src" };
+      let invalidations = 0;
+      const state = {};
+      const context = (expanded, isPartial, isError) => ({
+        args,
+        toolCallId: "export-1",
+        invalidate: () => invalidations++,
+        state,
+        cwd: CWD,
+        executionStarted: true,
+        argsComplete: true,
+        isPartial,
+        expanded,
+        showImages: false,
+        isError,
+        outputPad: 1,
+      });
+      // The export draws the call before it knows the result, then the result collapsed and expanded.
+      const call = renderers.renderCall(args, plainTheme, context(false, true, false)).render(100);
+      const result = textResult("src/retry.ts:2:const retries = 3;");
+      const collapsed = renderers.renderResult(result, { expanded: false, isPartial: false }, plainTheme, context(false, false, false));
+      const expanded = renderers.renderResult(result, { expanded: true, isPartial: false }, plainTheme, context(true, false, false));
+      assert.deepEqual(call, []);
+      assert.deepEqual(collapsed.render(100).map(stripAnsi), [' ✓ Grep src "retries"']);
+      assert.deepEqual(expanded.render(100).map(stripAnsi), [' ✓ Grep src "retries"', "   src/retry.ts:2:const retries = 3;"]);
+      mock.timers.tick(800);
+      assert.equal(invalidations, 0);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+
+  it("builds a row's lines once per width", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    const renderers = resolver("bash", () => undefined);
+    const context = { args: { command: "ls" }, toolCallId: "c1", invalidate() {}, state: {}, cwd: CWD, executionStarted: false, argsComplete: true, isPartial: false, expanded: true, showImages: false, isError: false, outputPad: 1 };
+    const header = renderers.renderCall(context.args, plainTheme, context);
+    const lines = header.render(140);
+    assert.equal(header.render(140), lines, "same width reuses the built lines");
+    assert.notEqual(header.render(80), lines, "a new width builds them again");
+  });
+
+  it("relies on Pi drawing a new row before its execution starts", () => {
+    // Rows first drawn with execution already started are treated as never redrawn (HTML export).
+    const seen = [];
+    const probe = { name: "probe", renderCall: (_args, _theme, context) => (seen.push(context.executionStarted), { render: () => [], invalidate() {} }) };
+    const component = new ToolExecutionComponent("probe", "p1", {}, { showImages: false }, probe, noopTui, CWD);
+    component.markExecutionStarted();
+    assert.deepEqual(seen, [false, true]);
   });
 
   it("keeps a tool's own card when expanded and draws only the one-line row when collapsed", async () => {
