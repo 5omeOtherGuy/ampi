@@ -1,19 +1,27 @@
-import type { SessionInfo, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { SessionInfo } from "@earendil-works/pi-coding-agent";
+import {
+  createMmrSessionIndex,
+  dedupeMmrSessionsById,
+  type MmrSessionIndex as SessionIndex,
+  type MmrSessionMetadata as SessionMetadata,
+  type MmrSessionSource,
+} from "../ampi-core/session-catalog.js";
 import { createGitIdentityResolver, matchesRepoToken, type GitIdentityResolver, type RepoIdentity } from "./git-identity.js";
 import { includesCaseInsensitive, parseSessionQuery, type SessionQuery } from "./query.js";
 import { maybeRedact, projectRefFromCwd } from "./redaction.js";
-import { createSessionIndex, type SessionIndex, type SessionIndexDeps, type SessionMetadata } from "./session-index.js";
 
-export interface SessionCatalogDeps {
-  /**
-   * Enumerate every local Pi session across all project cwds. The
-   * legacy current-project enumeration is gone: the catalog now reads
-   * every encoded-cwd directory under `~/.pi/agent/sessions/`. Tests
-   * may still supply a parameterless function that returns a curated
-   * fixture list.
-   */
-  listSessions(): Promise<SessionInfo[]>;
-  openSession(path: string): SessionManager;
+// Listing, dedupe and id resolution live in the core session catalogue;
+// `ampi-history` keeps exporting the resolver under its own names.
+export { resolveMmrSessionById as resolveSessionById } from "../ampi-core/session-catalog.js";
+export type { MmrResolvedSession as ResolvedSession } from "../ampi-core/session-catalog.js";
+
+/**
+ * Where the catalog reads sessions from. `listSessions` enumerates every
+ * local Pi session across all project cwds (every encoded-cwd directory
+ * under `~/.pi/agent/sessions/`); tests may supply a parameterless function
+ * that returns a curated fixture list.
+ */
+export interface SessionCatalogDeps extends MmrSessionSource {
   gitIdentity?: GitIdentityResolver;
 }
 
@@ -48,12 +56,6 @@ export interface SessionSearchResult {
   offset: number;
   /** True when another page exists after this result page. */
   hasMore: boolean;
-}
-
-export interface ResolvedSession {
-  info: SessionInfo;
-  ambiguous: boolean;
-  candidateIds: string[];
 }
 
 function sessionSearchText(info: SessionInfo): string {
@@ -178,44 +180,11 @@ function buildMatch(info: SessionInfo, query: SessionQuery, matchedTerms: string
   };
 }
 
-/**
- * Dedupe by session id, keeping the newest mtime. A renamed encoded-cwd
- * directory or a moved session file can leave two physical paths for
- * the same logical session; only one should reach the result list.
- *
- * Tie-break order when two records share the same id is fully
- * deterministic across reordered fixture inputs and reshuffled
- * filesystem reads:
- *   1. higher `modified.getTime()` wins
- *   2. higher `created.getTime()` wins
- *   3. lower `path` (lexical ascending) wins
- *   4. lower `id` (lexical ascending) wins
- */
-function preferDedupCandidate(a: SessionInfo, b: SessionInfo): SessionInfo {
-  const dm = b.modified.getTime() - a.modified.getTime();
-  if (dm !== 0) return dm > 0 ? b : a;
-  const dc = b.created.getTime() - a.created.getTime();
-  if (dc !== 0) return dc > 0 ? b : a;
-  const dp = a.path.localeCompare(b.path);
-  if (dp !== 0) return dp < 0 ? a : b;
-  return a.id.localeCompare(b.id) <= 0 ? a : b;
-}
-
-function dedupeById(sessions: readonly SessionInfo[]): SessionInfo[] {
-  const byId = new Map<string, SessionInfo>();
-  for (const session of sessions) {
-    const existing = byId.get(session.id);
-    byId.set(session.id, existing ? preferDedupCandidate(existing, session) : session);
-  }
-  return [...byId.values()];
-}
-
 function defaultIndexFromCatalogDeps(deps: Pick<SessionCatalogDeps, "listSessions" | "openSession">): SessionIndex {
-  const indexDeps: SessionIndexDeps = {
+  return createMmrSessionIndex({
     listSessions: deps.listSessions,
     openSession: deps.openSession,
-  };
-  return createSessionIndex(indexDeps);
+  });
 }
 
 function promoteToNonApplicable(
@@ -290,7 +259,7 @@ export async function searchSessionsWithDiagnostics(
   const effectiveIndex: SessionIndex | undefined =
     index ?? (deps.openSession ? defaultIndexFromCatalogDeps(deps as SessionCatalogDeps) : undefined);
   const rawSessions = effectiveIndex ? await effectiveIndex.list() : await deps.listSessions();
-  const sessions = dedupeById(rawSessions);
+  const sessions = dedupeMmrSessionsById(rawSessions);
 
   const lexical = sessions
     .map((info) => ({ info, matchedTerms: matchesLexical(info, query) }))
@@ -408,26 +377,4 @@ export async function searchSessionsWithDiagnostics(
     .map(({ info, matchedTerms }) => buildMatch(info, query, matchedTerms, redactionEnabled));
 
   return { matches, queryDiagnostics: diagnostics, totalCount, offset: requestedOffset, hasMore: requestedOffset + matches.length < totalCount };
-}
-
-export async function resolveSessionById(
-  deps: Pick<SessionCatalogDeps, "listSessions">,
-  sessionId: string,
-  sessionIndex?: SessionIndex,
-): Promise<ResolvedSession | undefined> {
-  const id = sessionId.trim().replace(/^@/, "");
-  if (!id) return undefined;
-  // Prefer the shared `SessionIndex` so its TTL cache is honoured. Fall
-  // back to the raw `deps.listSessions()` for test/dependency-free paths.
-  const raw = sessionIndex ? await sessionIndex.list() : await deps.listSessions();
-  const sessions = dedupeById(raw);
-  const exact = sessions.find((session) => session.id === id);
-  if (exact) return { info: exact, ambiguous: false, candidateIds: [exact.id] };
-  const matches = sessions.filter((session) => session.id.startsWith(id));
-  if (matches.length === 0) return undefined;
-  return {
-    info: matches[0]!,
-    ambiguous: matches.length > 1,
-    candidateIds: matches.map((session) => session.id),
-  };
 }

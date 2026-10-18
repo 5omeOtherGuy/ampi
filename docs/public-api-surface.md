@@ -88,6 +88,9 @@ names.
   `resolveMmrKeymap`, `readMmrKeymapSettings`, `formatMmrKeymapJsonc`, and
   the other `ampi-core/keymap` helpers. They stay in this tier until the
   command palette consumes them, so their shape can still change.
+- Session catalogue: `createMmrPiSessionSource`, `createMmrSessionIndex`,
+  `dedupeMmrSessionsById`, `resolveMmrSessionById` and their types. They
+  stay in this tier until the thread switcher consumes them.
 
 ### Test seam
 

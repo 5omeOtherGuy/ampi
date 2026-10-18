@@ -1,7 +1,8 @@
 import type { AgentToolResult, ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { SessionManager, type SessionInfo, type SessionManager as SessionManagerType } from "@earendil-works/pi-coding-agent";
+import type { SessionInfo, SessionManager as SessionManagerType } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
+import { createMmrPiSessionSource, createMmrSessionIndex, type MmrSessionIndex as SessionIndex } from "../ampi-core/session-catalog.js";
 import type { LoadedMmrCoreSettings } from "../ampi-core/settings.js";
 import { checkMmrToolParams } from "../ampi-core/tool-params.js";
 import type { MmrSubagentRunner } from "../ampi-core/worker-contract.js";
@@ -22,7 +23,6 @@ import {
   type SessionCatalogDeps,
   type SessionSearchMatch,
 } from "./session-catalog.js";
-import { createSessionIndex, type SessionIndex } from "./session-index.js";
 import {
   renderMmrHistoryCall,
   renderMmrHistoryResult,
@@ -256,12 +256,11 @@ function formatFindSessionResults(
 }
 
 export function createDefaultMmrHistoryToolDeps(getSettings: () => MmrHistorySettings): MmrHistoryToolDeps {
-  const listSessions = (): Promise<SessionInfo[]> => SessionManager.listAll();
-  const openSession = (path: string): SessionManagerType => SessionManager.open(path);
+  const { listSessions, openSession } = createMmrPiSessionSource();
   // Single shared index so the built-in TTL cache actually engages
   // across repeated calls; without this, every tool invocation built
   // a fresh index and the cache never survived past one call.
-  const sessionIndex = createSessionIndex({ listSessions, openSession });
+  const sessionIndex = createMmrSessionIndex({ listSessions, openSession });
   return {
     getSettings,
     listSessions,

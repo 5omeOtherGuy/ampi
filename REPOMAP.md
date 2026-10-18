@@ -91,6 +91,7 @@ Important files:
 - `chrome-owner.ts` — seam that makes the footer yield to an extension drawing its own terminal chrome (`ampi-tui`).
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
 - `command-registry.ts`, `keymap.ts` — palette command registry with ranking, and the key-string grammar, `ampi.keymap` overrides, and conflict report.
+- `session-catalog.ts` — read-only catalogue of local Pi sessions: listing and opening through Pi's `SessionManager`, the cached per-session evidence index, dedupe and id/prefix resolution.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
 - `internal/` — low-level env, JSON, and settings-file utilities.
@@ -208,7 +209,8 @@ Opt-in global local Pi session lookup (`AMPI_HISTORY_ENABLE=true`, legacy `MMR_H
 Important files:
 
 - `index.ts`, `tools.ts` — extension entry point and Pi tool definitions.
-- `session-catalog.ts`, `session-index.ts`, `query.ts` — session listing/search, evidence index, and query parsing/diagnostics.
+- `session-catalog.ts`, `query.ts` — session search with redaction, `repo:`/`file:`/metadata filters and diagnostics, and query parsing. Listing, the evidence index and id resolution come from `ampi-core/session-catalog.ts`.
+- `session-index.ts` — the history names (`createSessionIndex`, `SessionIndex`, …) for the core session index.
 - `read-session.ts`, `analysis-worker.ts` — lexical extraction and optional `history-reader` worker analysis.
 - `prompts.ts` — `history-reader` worker prompts.
 - `redaction.ts` — deterministic sanitizer.

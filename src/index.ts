@@ -270,6 +270,21 @@ export {
   registerAmpiChromeOwner,
   registerMmrChromeOwner,
 } from "./extensions/ampi-core/chrome-owner.js";
+// --- ampi-core: read-only catalogue of local Pi sessions (Internal / prompt-assembly) ---
+export {
+  createMmrPiSessionSource,
+  createMmrSessionIndex,
+  dedupeMmrSessionsById,
+  resolveMmrSessionById,
+} from "./extensions/ampi-core/session-catalog.js";
+export type {
+  MmrResolvedSession,
+  MmrSessionIndex,
+  MmrSessionIndexDeps,
+  MmrSessionIndexOptions,
+  MmrSessionMetadata,
+  MmrSessionSource,
+} from "./extensions/ampi-core/session-catalog.js";
 // --- ampi-session-fallback (Stable) ---
 export { createMmrSessionFallbackExtension } from "./extensions/ampi-session-fallback/index.js";
 export { classifyMmrSessionFallbackError } from "./extensions/ampi-session-fallback/classifier.js";
@@ -868,6 +883,12 @@ export {
   loadMmrCoreSettings as loadAmpiCoreSettings,
 } from "./extensions/ampi-core/settings.js";
 export {
+  createMmrPiSessionSource as createAmpiPiSessionSource,
+  createMmrSessionIndex as createAmpiSessionIndex,
+  dedupeMmrSessionsById as dedupeAmpiSessionsById,
+  resolveMmrSessionById as resolveAmpiSessionById,
+} from "./extensions/ampi-core/session-catalog.js";
+export {
   expandMmrModelPreferencesToStrings as expandAmpiModelPreferencesToStrings,
   getMmrSubagentProfile as getAmpiSubagentProfile,
   listMmrSubagentProfiles as listAmpiSubagentProfiles,
@@ -1039,6 +1060,14 @@ export type {
   MmrStateChangedHandler as AmpiStateChangedHandler,
   MmrSubagentState as AmpiSubagentState,
 } from "./extensions/ampi-core/runtime.js";
+export type {
+  MmrResolvedSession as AmpiResolvedSession,
+  MmrSessionIndex as AmpiSessionIndex,
+  MmrSessionIndexDeps as AmpiSessionIndexDeps,
+  MmrSessionIndexOptions as AmpiSessionIndexOptions,
+  MmrSessionMetadata as AmpiSessionMetadata,
+  MmrSessionSource as AmpiSessionSource,
+} from "./extensions/ampi-core/session-catalog.js";
 export type {
   MmrSubagentBaseMode as AmpiSubagentBaseMode,
   MmrSubagentPartialOutputPolicy as AmpiSubagentPartialOutputPolicy,
