@@ -12,6 +12,8 @@ import { parseArgs } from "node:util";
  * @property {boolean} execute `-x`/`--execute`: run one prompt and print the final assistant message.
  * @property {boolean} timings `--timings`: report durations on stderr (execute mode).
  * @property {boolean} archive Archive the session after execute mode; `--no-archive-after-execute` turns it off.
+ * @property {boolean} streamJson `--stream-json`: print stream JSON records instead of the final message (execute mode).
+ * @property {boolean} streamJsonThinking `--stream-json-thinking`: `--stream-json` with thinking blocks.
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
@@ -34,6 +36,8 @@ const OPTIONS = /** @type {const} */ ({
   execute: { type: "boolean", short: "x" },
   timings: { type: "boolean" },
   "no-archive-after-execute": { type: "boolean" },
+  "stream-json": { type: "boolean" },
+  "stream-json-thinking": { type: "boolean" },
   "settings-file": { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
@@ -83,7 +87,7 @@ const SETTINGS_FILE_ERROR =
 export function routeAmpiArgv(argv) {
   const args = [...argv];
   /** @type {AmpiOptions} */
-  const options = { labels: [], execute: false, timings: false, archive: true };
+  const options = { labels: [], execute: false, timings: false, archive: true, streamJson: false, streamJsonThinking: false };
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options };
@@ -179,6 +183,13 @@ export function routeAmpiArgv(argv) {
       case "no-archive-after-execute":
         options.archive = false;
         break;
+      case "stream-json":
+        options.streamJson = true;
+        break;
+      case "stream-json-thinking":
+        options.streamJson = true;
+        options.streamJsonThinking = true;
+        break;
     }
   }
 
@@ -215,6 +226,11 @@ Options:
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.
       Implied when stdin or stdout is not a terminal.
+  --stream-json
+      In execute mode, print stream JSON (one JSON record per line, compatible with Claude
+      Code's stream-json output) instead of the final message
+  --stream-json-thinking
+      --stream-json with the model's thinking blocks included
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute
@@ -265,6 +281,10 @@ Run one message and print the answer:
 Send a diff with a request, and save the answer:
 
   $ git diff | ampi -x "review this change" > review.md
+
+Run one message and keep only the final result record of the stream JSON:
+
+  $ ampi -x "list files" --stream-json | jq -c 'select(.type == "result")'
 
 Pick up the latest session in this directory:
 

@@ -256,13 +256,14 @@ packages/
     src/argv.js      # argument router and help text (pure)
     src/packages.js  # package lookup and the guard against loading ampi twice
     src/execute.js   # execute mode (-x): message from argument and stdin, thread options extension
+    src/stream-json.js # --stream-json: Pi's JSON events to stream JSON records (pure encoder)
     src/pi-compat.js # the undocumented Pi behaviour the command relies on, in one place
     src/main.js      # prints help or versions, or starts Pi through its exported main()
 ```
 
 ### `packages/ampi-cli/`
 
-`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
+`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam; with `--stream-json` it runs Pi's JSON mode and prints stream JSON records made from its events instead. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
 
 ## Documentation tree
 

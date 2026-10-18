@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
 import { buildExecuteArgs, createRunExtension, isExecuteRun, readAll } from "./execute.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
-import { hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
+import { capturePiJsonOutput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
+import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -80,6 +81,14 @@ async function startPi({ piArgs, options }) {
     process.stderr.write("ampi: --timings and --no-archive-after-execute need execute mode (-x).\n");
     return 2;
   }
+  if (options.streamJson && !execute) {
+    process.stderr.write("ampi: --stream-json needs execute mode (-x).\n");
+    return 2;
+  }
+  if (options.streamJson && parsed.mode !== undefined) {
+    process.stderr.write(`ampi: --stream-json replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
+    return 2;
+  }
   const cwd = process.cwd();
   const decision = decideAmpiLoad({
     piArgs: args,
@@ -118,8 +127,43 @@ async function startPi({ piArgs, options }) {
     archive: execute && options.archive,
     timings: execute && options.timings,
   });
-  await pi.main(args, { extensionFactories: [{ name: "ampi-cli", factory: runExtension, hidden: true }] });
-  return undefined;
+  const extensionFactories = [{ name: "ampi-cli", factory: runExtension, hidden: true }];
+  if (!options.streamJson) {
+    await pi.main(args, { extensionFactories });
+    return undefined;
+  }
+  return runStreamJson(pi, args, extensionFactories, options.streamJsonThinking);
+}
+
+/**
+ * Run Pi's JSON mode and print stream JSON records in place of its events.
+ *
+ * @param {any} pi The `@earendil-works/pi-coding-agent` module.
+ * @param {string[]} args Pi's arguments for an execute run.
+ * @param {{ name: string, factory: (pi: any) => void, hidden: boolean }[]} extensionFactories
+ * @param {boolean} thinking
+ * @returns {Promise<number>}
+ */
+async function runStreamJson(pi, args, extensionFactories, thinking) {
+  /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
+  let runtime;
+  const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
+  /** @param {import("./stream-json.js").StreamJsonRecord[]} records */
+  const lines = (records) => records.map((record) => `${JSON.stringify(record)}\n`).join("");
+  const output = capturePiJsonOutput((event) => lines(encoder.push(event)));
+  try {
+    const factory = (/** @type {any} */ api) => {
+      runtime = api;
+    };
+    await pi.main(["--mode", "json", ...args], { extensionFactories: [...extensionFactories, { name: "ampi-cli-stream-json", factory, hidden: true }] });
+  } finally {
+    output.restore();
+  }
+  // Pi's JSON mode sets a failing exit code only when the run threw; the error is then on stderr.
+  const failed = process.exitCode !== undefined && process.exitCode !== 0;
+  const { records, exitCode } = encoder.finish(failed ? "Pi stopped with an error; see stderr." : undefined);
+  await output.write(lines(records));
+  return failed ? Number(process.exitCode) : exitCode;
 }
 
 /**
