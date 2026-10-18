@@ -22,6 +22,7 @@ const WIDTHS = [80, 140];
 const { createMmrPromptQueue, renderMmrQueueBox, MMR_QUEUE_WIDGET_ID } = await importSource("extensions/ampi-tui/editor/queue.ts");
 const { createMmrStatusFeed } = await importSource("extensions/ampi-tui/editor/status-feed.ts");
 const { getMmrCommand, rankMmrCommands } = await importSource("extensions/ampi-core/command-registry.ts");
+const { getMmrPromptQueue, removeMmrQueuedPrompt } = await importSource("extensions/ampi-core/prompt-queue.ts");
 
 /** Theme tokens as distinct 256-colour codes, so fixtures show which token styled what. */
 const TOKEN_CODES = { accent: 6, dim: 242, muted: 246 };
@@ -65,6 +66,13 @@ function setup({ idle = false, text = "", watch = true } = {}) {
     steerNext() {
       if (pending.blocked !== undefined || pending.followUp.length === 0) return false;
       pending.steering.push(pending.followUp.shift());
+      reportQueue();
+      return true;
+    },
+    remove(kind, index, text) {
+      const list = pending[kind];
+      if (list[index] !== text) return false;
+      list.splice(index, 1);
       reportQueue();
       return true;
     },
@@ -285,6 +293,27 @@ describe("ampi-tui queue commands: queue, dequeue, steer", () => {
     assert.match(rows[3], /│ queued: {3}second later +│/);
     assert.match(rows[4], /│ {11}third later +│/);
     assert.equal(t.feed.status.queued, 4);
+  });
+
+  it("publishes the queue through ampi-core's seam, takes one message back through the watch, and releases the seam on stop", () => {
+    const t = setup();
+    assert.deepEqual(getMmrPromptQueue(), { steering: [], followUp: [] });
+    t.mock.pi.sendUserMessage("steer now", { deliverAs: "steer" });
+    t.mock.pi.sendUserMessage("same", { deliverAs: "followUp" });
+    t.mock.pi.sendUserMessage("other", { deliverAs: "followUp" });
+    assert.deepEqual(getMmrPromptQueue(), { steering: ["steer now"], followUp: ["same", "other"] });
+    assert.equal(removeMmrQueuedPrompt("followUp", 0, "other"), false, "a stale index changes nothing");
+    assert.equal(removeMmrQueuedPrompt("followUp", 1, "other"), true);
+    assert.deepEqual(getMmrPromptQueue(), { steering: ["steer now"], followUp: ["same"] });
+    assert.equal(t.feed.status.queued, 2);
+    t.queue.stop();
+    assert.equal(getMmrPromptQueue(), undefined);
+    assert.equal(removeMmrQueuedPrompt("followUp", 0, "same"), false);
+  });
+
+  it("does not own the seam where ampi cannot read Pi's queue", () => {
+    setup({ watch: false });
+    assert.equal(getMmrPromptQueue(), undefined);
   });
 
   it("steers on Enter only while a follow-up waits and the turn can take it", () => {

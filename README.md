@@ -176,18 +176,18 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, and Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |
 | `ampi-threads` | On | Thread index and Amp-compatible archive commands: archive and start a new session, archive and quit, unarchive (`ampiThreads.enabled: false` turns it off) |
-| `ampi-gui` | Off | Opt-in local web GUI: a read-only live view of the running session in your browser (see [Web GUI](#web-gui)) |
+| `ampi-gui` | Off | Opt-in local web GUI: a live view of the running session in your browser, with a composer that steers, queues and interrupts (see [Web GUI](#web-gui)) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |
 
 ### Web GUI
 
-`ampi-gui` shows the running session in a browser: the transcript with rendered Markdown, one line per tool call that expands to its output, and the agent's status as it works. It is read-only for now; you keep typing in the terminal.
+`ampi-gui` shows the running session in a browser: the transcript with rendered Markdown, one line per tool call that expands to its output, and the agent's status as it works. Its composer writes to the same session as the terminal: Enter sends, or steers a running turn; Ctrl+Enter (⌘+Enter) queues a message for after the turn; Esc Esc interrupts. Queued messages show as bubbles you can delete, edit or send now to steer. Tool approvals stay in the terminal.
 
 Turn it on with `AMPI_GUI_ENABLE=true` or `{ "ampiGui": { "enabled": true } }` in a settings file. In an interactive session Pi then prints `Web GUI: http://127.0.0.1:<port>/?t=<token>`; open that link, or run `thread open in browser` from the command palette.
 
-The server listens on `127.0.0.1` only, on a random port, and checks every request: the `Host` must name the server, a foreign `Origin` is refused, and the per-session token from the link (kept afterwards in an `HttpOnly`, `SameSite=Strict` cookie) is required. It sets no CORS headers, serves only its own page files, and records the running session in `<agentDir>/data/ampi/live/<pid>.json` with a hash of the token, never the token. On a machine shared with other users, open the printed link yourself: `thread open in browser` hands it to the system's URL opener on the command line, where other users may be able to read it. Details: [`ampi-gui`](src/extensions/ampi-gui/README.md#security-model).
+The server listens on `127.0.0.1` only, on a random port, and checks every request: the `Host` must name the server, a foreign `Origin` is refused, and the per-session token from the link (kept afterwards in an `HttpOnly`, `SameSite=Strict` cookie) is required. Commands are same-origin JSON POSTs, refused without the cookie or with another `Origin`, and go through the terminal's Pi session; the page never writes the session file itself. It sets no CORS headers, serves only its own page files, and records the running session in `<agentDir>/data/ampi/live/<pid>.json` with a hash of the token, never the token. On a machine shared with other users, open the printed link yourself: `thread open in browser` hands it to the system's URL opener on the command line, where other users may be able to read it. Details: [`ampi-gui`](src/extensions/ampi-gui/README.md#security-model).
 
 ## Configuration
 

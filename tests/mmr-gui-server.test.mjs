@@ -1,6 +1,7 @@
 // ampi-gui HTTP server: Host, Origin and token checks, the static file
-// policy, the JSON endpoints and the event stream with reconnect replay.
-// Everything runs against a real server on 127.0.0.1 with a random port.
+// policy, the JSON endpoints, the composer's command endpoints and the event
+// stream with reconnect replay. Everything runs against a real server on
+// 127.0.0.1 with a random port; Pi is the test stub.
 
 import assert from "node:assert/strict";
 import { request } from "node:http";
@@ -17,6 +18,10 @@ const TOKEN = ["test", "token", "for", "the", "gui"].join("-");
 let server;
 let fire;
 let port;
+let mock;
+let context;
+let registry;
+let promptQueue;
 
 function send(options) {
   const { method = "GET", path: target = "/", headers = {}, body } = options;
@@ -76,13 +81,18 @@ function parseEvents(text) {
 before(async () => {
   const { startMmrGuiServer } = await importSource("extensions/ampi-gui/server.ts");
   const { createMmrGuiBridge } = await importSource("extensions/ampi-gui/bridge.ts");
-  const { pi, handlers } = createMockPi();
-  const { ctx } = createMockExtensionContext({ cwd: "/work/app", sessionId: "s-1", sessionName: "Server test" });
-  const bridge = createMmrGuiBridge(pi, { replayLimit: 4 });
+  const { createMmrGuiCommands } = await importSource("extensions/ampi-gui/commands.ts");
+  registry = await importSource("extensions/ampi-core/command-registry.ts");
+  promptQueue = await importSource("extensions/ampi-core/prompt-queue.ts");
+  mock = createMockPi();
+  context = createMockExtensionContext({ cwd: "/work/app", sessionId: "s-1", sessionName: "Server test" });
+  const { ctx } = context;
+  const bridge = createMmrGuiBridge(mock.pi, { replayLimit: 4 });
   bridge.start(ctx);
-  fire = (name) => handlers.get(name)({ type: name, name }, ctx);
+  fire = (name, event = { name }) => mock.handlers.get(name)({ type: name, ...event }, ctx);
   server = await startMmrGuiServer({
     bridge,
+    commands: createMmrGuiCommands(mock.pi, bridge),
     token: TOKEN,
     clientDir: path.join(getPreparedSourceRoot(), "extensions/ampi-gui/client"),
   });
@@ -196,16 +206,152 @@ describe("ampi-gui server: API", () => {
     assert.equal(typeof transcript.lastEventId, "number");
   });
 
-  it("reserves POST endpoints: same-origin JSON only, and not implemented yet", async () => {
-    const origin = { Origin: `http://127.0.0.1:${port}` };
-    const json = { "Content-Type": "application/json" };
-    const body = JSON.stringify({ text: "hi" });
-    assert.equal((await send({ method: "POST", path: "/api/commands", headers: { ...cookie(), ...json }, body })).status, 403, "no Origin");
-    assert.equal((await send({ method: "POST", path: "/api/commands", headers: { ...cookie(), ...origin, "Content-Type": "text/plain" }, body })).status, 415);
-    assert.equal((await send({ method: "POST", path: "/api/commands", headers: { ...origin, ...json }, body })).status, 401, "no token");
-    const res = await send({ method: "POST", path: "/api/commands", headers: { ...cookie(), ...origin, ...json }, body });
-    assert.equal(res.status, 501);
-    assert.equal((await send({ method: "PUT", path: "/api/commands", headers: cookie() })).status, 405);
+});
+
+const ORIGIN = () => ({ Origin: `http://127.0.0.1:${port}` });
+const JSON_TYPE = { "Content-Type": "application/json" };
+
+/** POST `body` to `/api/<route>` with the cookie and the server's own Origin unless `headers` says otherwise. */
+async function command(route, body = {}, headers = {}) {
+  const res = await send({ method: "POST", path: `/api/${route}`, headers: { ...cookie(), ...ORIGIN(), ...JSON_TYPE, ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+  let json;
+  try {
+    json = JSON.parse(res.body);
+  } catch {}
+  return { status: res.status, json };
+}
+
+/** Make the stub session busy (a turn runs) or idle. */
+function setBusy(busy) {
+  context.state.idle = !busy;
+  if (busy) fire("turn_start", {});
+  else fire("agent_settled", {});
+}
+
+describe("ampi-gui server: command requests (CSRF policy)", () => {
+  it("refuses a POST without the cookie, without an Origin or with a foreign Origin (403)", async () => {
+    const body = { text: "hi" };
+    assert.equal((await command("send", body, { Cookie: "" })).status, 403, "no cookie");
+    assert.equal((await command("send", body, { Cookie: `ampi_gui_${port}=wrong` })).status, 403, "wrong token");
+    assert.equal((await command("send", body, { Origin: "http://attacker.example" })).status, 403, "foreign Origin");
+    assert.equal((await command("send", body, { Origin: `http://127.0.0.1:${port + 1}` })).status, 403, "another local port");
+    const noOrigin = await send({ method: "POST", path: "/api/send", headers: { ...cookie(), ...JSON_TYPE }, body: JSON.stringify(body) });
+    assert.equal(noOrigin.status, 403, "no Origin");
+    assert.deepEqual(mock.calls.sendUserMessage, [], "nothing reached Pi");
+  });
+
+  it("takes only JSON on known routes", async () => {
+    assert.equal((await command("send", { text: "hi" }, { "Content-Type": "text/plain" })).status, 415);
+    assert.equal((await command("send", "not json")).status, 400);
+    assert.equal((await command("send", JSON.stringify({ text: "x".repeat(600 * 1024) }))).status, 400, "a body past the limit");
+    for (const route of ["commands", "constructor", "__proto__", "send/x"]) assert.equal((await command(route)).status, 404, route);
+    assert.equal((await send({ path: "/api/send", headers: cookie() })).status, 404, "commands are POST only");
+    assert.equal((await send({ method: "PUT", path: "/api/send", headers: cookie() })).status, 405);
+    assert.deepEqual(mock.calls.sendUserMessage, []);
+  });
+});
+
+describe("ampi-gui server: composer commands", () => {
+  it("sends a prompt while idle, and steers or queues while a turn runs", async () => {
+    mock.calls.sendUserMessage.length = 0;
+    const idle = await command("send", { text: "  review the parser  " });
+    assert.equal(idle.status, 200);
+    assert.equal(idle.json.delivered, "prompt");
+    setBusy(true);
+    assert.equal((await command("send", { text: "also the lexer" })).json.delivered, "steer", "steer is the default while busy");
+    assert.equal((await command("send", { text: "then the docs", deliverAs: "followUp" })).json.delivered, "followUp");
+    setBusy(false);
+    assert.deepEqual(mock.calls.sendUserMessage, [
+      { content: "review the parser", options: { deliverAs: "steer", expandPromptTemplates: true } },
+      { content: "also the lexer", options: { deliverAs: "steer", expandPromptTemplates: true } },
+      { content: "then the docs", options: { deliverAs: "followUp", expandPromptTemplates: true } },
+    ]);
+  });
+
+  it("refuses an empty message, an unknown delivery and a send while Pi compacts", async () => {
+    mock.calls.sendUserMessage.length = 0;
+    assert.equal((await command("send", { text: "   " })).status, 400);
+    assert.equal((await command("send", {})).status, 400);
+    assert.equal((await command("send", { text: "hi", deliverAs: "nextTurn" })).status, 400);
+    fire("session_before_compact", {});
+    const compacting = await command("send", { text: "hi" });
+    assert.equal(compacting.status, 409);
+    assert.match(compacting.json.error, /compacting/);
+    fire("session_compact", {});
+    assert.deepEqual(mock.calls.sendUserMessage, []);
+  });
+
+  it("takes one queued message back through ampi-core's prompt queue", async () => {
+    assert.equal((await command("dequeue", { kind: "followUp", index: 0, text: "later" })).status, 409, "no owner of the queue");
+    const removed = [];
+    const owner = promptQueue.registerMmrPromptQueue({
+      remove: (kind, index, text) => {
+        removed.push([kind, index, text]);
+        return text === "later";
+      },
+    });
+    try {
+      owner.update({ steering: [], followUp: ["later"] });
+      const transcript = JSON.parse((await send({ path: "/api/transcript", headers: cookie() })).body);
+      assert.deepEqual(transcript.queue, { steering: [], followUp: ["later"] });
+      const ok = await command("dequeue", { kind: "followUp", index: 0, text: "later" });
+      assert.equal(ok.status, 200);
+      assert.equal(ok.json.text, "later");
+      assert.equal((await command("dequeue", { kind: "followUp", index: 0, text: "gone" })).status, 409);
+      assert.equal((await command("dequeue", { kind: "other", index: 0, text: "later" })).status, 400);
+      assert.equal((await command("dequeue", { kind: "followUp", index: -1, text: "later" })).status, 400);
+      assert.deepEqual(removed, [
+        ["followUp", 0, "later"],
+        ["followUp", 0, "gone"],
+      ]);
+    } finally {
+      owner.release();
+    }
+  });
+
+  it("steers the next queued message through the terminal's command, with its reason when it cannot", async () => {
+    assert.equal((await command("steer-next")).status, 409, "without the command");
+    let reason = "no message is queued";
+    let runs = 0;
+    registry.registerMmrCommand({
+      id: "prompt.steerQueuedMessage",
+      noun: "prompt",
+      verb: "steer queued message",
+      description: "test",
+      availability: () => (reason ? { state: "unavailable", reason } : { state: "available" }),
+      run: () => {
+        runs += 1;
+      },
+    });
+    try {
+      const refused = await command("steer-next");
+      assert.equal(refused.status, 409);
+      assert.equal(refused.json.error, "no message is queued");
+      reason = undefined;
+      assert.equal((await command("steer-next")).status, 200);
+      assert.equal(runs, 1);
+    } finally {
+      registry.unregisterMmrCommand("prompt.steerQueuedMessage");
+    }
+  });
+
+  it("interrupts a running turn, through the terminal's command when there is one", async () => {
+    const before = context.lifecycle.abort;
+    assert.equal((await command("interrupt")).status, 409, "nothing is running");
+    setBusy(true);
+    assert.equal((await command("interrupt")).status, 200);
+    assert.equal(context.lifecycle.abort, before + 1, "ctx.abort() without ampi-tui");
+    assert.equal(JSON.parse((await send({ path: "/api/session", headers: cookie() })).body).status.phase, "cancelling");
+    let runs = 0;
+    registry.registerMmrCommand({ id: "thread.interrupt", noun: "thread", verb: "interrupt", description: "test", run: () => (runs += 1) });
+    try {
+      assert.equal((await command("interrupt")).status, 200);
+      assert.equal(runs, 1);
+      assert.equal(context.lifecycle.abort, before + 1, "the command aborts, not the server");
+    } finally {
+      registry.unregisterMmrCommand("thread.interrupt");
+      setBusy(false);
+    }
   });
 });
 
@@ -249,8 +395,10 @@ describe("ampi-gui server: event stream", () => {
     const { startMmrGuiServer } = await importSource("extensions/ampi-gui/server.ts");
     const { createMmrGuiBridge } = await importSource("extensions/ampi-gui/bridge.ts");
     const { pi } = createMockPi();
+    const bridge = createMmrGuiBridge(pi);
     const second = await startMmrGuiServer({
-      bridge: createMmrGuiBridge(pi),
+      bridge,
+      commands: {},
       token: TOKEN,
       clientDir: path.join(getPreparedSourceRoot(), "extensions/ampi-gui/client"),
     });

@@ -221,6 +221,7 @@ While a turn runs, a message can wait for it in two ways: Enter steers the turn 
 - **Take them back.** Backspace on an empty prompt, `prompt dequeue`, or Pi's own Alt+Up puts every waiting message, steering ones included, back into the prompt, above any text already there. This is Pi's own action: it also drops the messages other extensions queued for the turn.
 - The prompt box's hint reads `Enter to steer, Backspace to dequeue` while anything waits, and the queue count it uses follows Pi's queue.
 - Not while Pi compacts the conversation: Pi refuses new messages then, so queueing and steering a queued message are unavailable until it finishes.
+- The web GUI (`ampi-gui`) shows the same queue: `ampi-tui` publishes it through ampi-core's prompt-queue seam, and a message deleted or edited there leaves this box too.
 - Pi's own list of queued messages above the editor is not drawn while the box is there. When a Pi release changes how its queue is reached, the box and `prompt steer queued message` are left out and Pi's list returns; queueing, Backspace and `prompt dequeue` keep working.
 
 ### Keys
