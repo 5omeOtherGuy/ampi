@@ -3,9 +3,16 @@ dist/
 coverage/
 .test-src/
 *.tgz
-.env
-.env.*
+.env*
+!.env.example
 .DS_Store
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
+# Local agent scratch
+.amp/in/
 .pi/npm/
 .pi/git/
 .pi/agent/
