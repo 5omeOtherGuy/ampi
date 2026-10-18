@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { onMmrApproval } from "../../ampi-core/runtime.js";
 import {
   createMmrThreadStatusReducer,
   type MmrThreadStatus,
@@ -21,6 +22,7 @@ import { onMmrThreadStatusEvents } from "../../ampi-core/thread-status-events.js
  * | `input` while a turn runs        | one more queued message                    |
  * | `message_start` (user)           | one queued message delivered               |
  * | Pi's queue changed (`followQueue`) | the queue's length                       |
+ * | `mmr-core:approval` request / answer | `approvalRequest` / `approvalAnswer`    |
  *
  * Pi's extension API reports only whether messages are queued, not how
  * many. Where ampi can read Pi's queue (`pi-compat/queue.ts`), it hands the
@@ -107,6 +109,9 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
   pi.on("input", (event, context) => {
     track(context);
     if (event.streamingBehavior && !exact) setQueued(queued + 1);
+  });
+  onMmrApproval(pi, (event) => {
+    apply({ type: event.phase === "request" ? "approvalRequest" : "approvalAnswer", requestId: event.requestId });
   });
 
   return {

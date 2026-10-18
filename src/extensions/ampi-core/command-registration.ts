@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runMmrConfigFlow } from "./config-flow.js";
 import { formatMmrModeList, MMR_MODE_KEYS, resolveMmrModeKey } from "./modes.js";
-import { getMmrModeHistory, getMmrModeState, isMmrModeLocked } from "./runtime.js";
+import { getMmrModeHistory, getMmrModeState, isMmrModeLocked, resolveMmrFeatureGates } from "./runtime.js";
 import { showMmrChangelogCommand } from "./changelog.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { formatMmrStatus } from "./status.js";
@@ -68,6 +68,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
             modeHistory: debug ? getMmrModeHistory() : undefined,
             autoCompact: debug ? controller.getAutoCompactor().getStatus(state?.mode) : undefined,
             disabledBySetting: controller.listDisabledTools(),
+            permissions: resolveMmrFeatureGates(["ampi-permissions"])[0],
           }),
           "info",
         );

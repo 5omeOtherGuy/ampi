@@ -586,6 +586,39 @@ Transitions:
 - The force-quit hint expires once an event's `now` (or a `tick`) reaches
   the `expiresAt` given with `quitPressed`.
 
+Approval requests reach status displays over the event bus:
+`MMR_EVENT_APPROVAL` (`"mmr-core:approval"`) carries
+`{ phase: "request" | "answer", requestId }`, and `onMmrApproval(pi, handler)`
+subscribes with a checked copy. Map `request` to `approvalRequest` and
+`answer` to `approvalAnswer`.
+
+## Tool permissions
+
+```ts
+import { evaluateMmrPermission, formatMmrPermissionRule } from "@skippermissions/ampi";
+
+const decision = evaluateMmrPermission(
+  { toolName: "bash", input: { command: "git status && npm test" } },
+  { user: [{ tool: "bash", matches: { command: "git push*" }, action: "ask" }] },
+);
+// decision.action === "allow"
+```
+
+The pure rule engine behind `ampi-permissions`. A rule is
+`{ tool, matches?, action, context?, to?, message? }` (`MmrPermissionRule`);
+`validateMmrPermissionRule` lists what is wrong with one and
+`parseMmrPermissionRules` splits a settings list into valid rules and
+per-index problems. `evaluateMmrPermission(call, { project, user, defaults })`
+returns the first matching rule's decision in that order, `defaults`
+standing for `MMR_PERMISSIONS_DEFAULT_RULES` unless given, and `allow` when
+nothing matches. For `bash` and `shell_command` (`MMR_PERMISSIONS_SHELL_TOOLS`)
+it judges each simple command of the line, split by `splitMmrShellCommand`.
+`formatMmrPermissionRule` writes a rule as one line
+(`ask bash --command 'git push*'`). `setMmrPermissionsSessionAllowAll` and
+`isMmrPermissionsSessionAllowAll` hold the session-wide "allow all" answer
+on a process global. Matching rules and the defaults are described in the
+[`ampi-permissions` README](../src/extensions/ampi-permissions/README.md).
+
 ## Session catalogue
 
 ```ts

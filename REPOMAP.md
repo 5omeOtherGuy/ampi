@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers twelve extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-shell`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, `ampi-threads`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers fourteen extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-shell`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-permissions`, `ampi-tui`, `ampi-threads`, `ampi-gui`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -35,8 +35,10 @@
   "./src/extensions/ampi-github/index.ts",
   "./src/extensions/ampi-workers/index.ts",
   "./src/extensions/ampi-custom-subagents/index.ts",
+  "./src/extensions/ampi-permissions/index.ts",
   "./src/extensions/ampi-tui/index.ts",
   "./src/extensions/ampi-threads/index.ts",
+  "./src/extensions/ampi-gui/index.ts",
   "./src/extensions/ampi-history/index.ts"
 ]
 ```
@@ -61,8 +63,10 @@ src/
     ampi-github/
     ampi-workers/
     ampi-custom-subagents/
+    ampi-permissions/
     ampi-tui/
     ampi-threads/
+    ampi-gui/
     ampi-history/
     ampi-toolbox/     # deprecated shim, unregistered
     ampi-debug/       # developer-only capture, unregistered
@@ -117,12 +121,13 @@ Important files:
 - `prompt-history.ts` — seam for prompt history: `ampi-threads` registers its store, `ampi-tui`'s picker reads it through `getMmrPromptHistory`, per workspace or across all of them.
 - `thread-reports.ts` — seam for the cost and context reports and the Markdown export: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge and `ampi-gui`'s Copy as Markdown read them through `getMmrThreadReports`. It also holds `summarizeMmrThreadCost` (cost per model from a session's usage and the model prices), which `ampi-threads` and the `ampi` command share.
 - `tool-activity.ts` — pure classification of tool calls into activities (verb, object, diff stat, exit code) and the one-phrase summary of a run of them, shared by `ampi-tui`'s tool rows and `ampi-gui`'s transcript.
+- `permissions.ts`, `permission-defaults.ts` — the pure permission rule engine (validation, glob and `/regex/` matching, shell lines split into simple commands, project-user-default order, the rule text form), ampi's default rules, the session-wide "allow all" override, used by `ampi-permissions`.
 - `activity-runs.ts` — pure rules for where a run of consecutive tool calls ends (text, user and summary messages, subagent and image calls), shared by `ampi-tui`'s activity groups and `ampi-gui`'s work groups.
 - `spinner.ts`, `animation.ts` — the running glyph every running row draws (a braille cellular automaton stepped every 200 ms), and `isMmrAnimationDisabled` (`NO_ANIMATION`, `ampiTui.animations: false`), which stills it and the other animations.
 - `skill-sources.ts` — pure classification of where Pi found a skill (user, project, package, settings, temporary; Pi's or an `.agents` directory) from its `sourceInfo`, for every surface that lists skills.
 - `session-usage.ts` — the usage each session entry records and what it cost (recorded, or priced from the model), shared by `ampi-tui`'s cost gauge and `ampi-threads`' cost report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
-- `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
+- `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton; `runtime.ts` also holds the `mmr-core:*` event names, the tool-approval event among them.
 - `auto-compact.ts` — locked-mode auto-compaction at a fraction of the context window (`ampiCore.autoCompact`), with its run guard and failure backoff.
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
@@ -242,6 +247,12 @@ Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled
 - `ui/frame.ts` (the box overlays share: title, key hints, scrollbar), `overlays/palette.ts` (the command palette), `overlays/mode-dial.ts` (the mode dial and mode list), `overlays/help-keymap.ts` (the Help & Keymap screen and the keymap as JSONC), `overlays/prompt-history.ts` (the prompt history picker on Ctrl+R, fed through `ampi-core/prompt-history.ts`), `overlays/thread-picker.ts` (the Switch Thread picker with its session preview, and the Mention Thread variant that `@@` and `thread.mention` open; switches through `/ampi-thread switch`), `overlays/thread-reports.ts` (the Thread Cost and Analyze Context overlays, fed through `ampi-core/thread-reports.ts`), `overlays/outline.ts` (the outline of the last response: its headings read from the session, the box above the prompt and the controller `keys/install.ts` keeps current), `overlays/info.ts` (the Skills, Extensions and Version dialogs, built from Pi's commands, tools and last skill list, with skills grouped through `ampi-core/skill-sources.ts`).
 - `chrome/look.ts` (installs the pieces below), `chrome/welcome.ts` (welcome header), `chrome/title-notify.ts` (terminal title, OSC 777 notifications, bell and sound), `chrome/quit-summary.ts` (mark, title and working directory printed after an interactive quit), `transcript/messages.ts` (user message drawing, thinking label), `theme/ampi.json` and `theme/select.ts` (the theme and its session selection).
 - `pi-compat/` — the only code that uses Pi runtime surface outside the extension API (focused editor with its actions, cursor line moves, submit handler, autocomplete state and rendered height, the editor's height rule, transcript scrolling, the fullscreen mouse selection in `selection.ts`, the reserved shortcut list, Pi's built-in slash command names, raw input, the user message component, the message queue, overlay placement read on every frame); probed by `tests/mmr-tui-pi-compat.test.mjs`.
+
+### `src/extensions/ampi-permissions/`
+
+Approval for risky tool calls, off until `ampi.permissions` (or `ampi.dangerouslyAllowAll: false`) is set in the user's or a trusted project's settings. A `tool_call` gate evaluates the rules with `ampi-core/permissions.ts` in every mode and asks through Pi's select dialog; owns no tools.
+
+- `index.ts` (entry point: settings at `session_start`, the feature-gate provider, the gate, the one-at-a-time dialog queue, the `mmr-core:approval` events, the "every session" settings write), `config.ts` (reads the user and trusted project settings; projects only tighten), `gate.ts` (dialog words and block reasons), `README.md`.
 
 ### `src/extensions/ampi-threads/`
 

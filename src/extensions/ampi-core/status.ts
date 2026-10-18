@@ -15,6 +15,7 @@ import {
   type MmrToggleThinkingLevel,
 } from "./request-policy.js";
 import type {
+  MmrFeatureGateDecision,
   MmrModeEvent,
   MmrModelCandidateResolution,
   MmrModeState,
@@ -72,6 +73,13 @@ export interface FormatMmrStatusOptions {
   autoCompact?: MmrAutoCompactStatus;
   /** Registered tools `ampi.tools.disable` turns off, each with the entry that matched. */
   disabledBySetting?: readonly { tool: string; entry: string }[];
+  /** The `ampi-permissions` gate decision; shown in every mode, Free included, because the gate applies there too. */
+  permissions?: MmrFeatureGateDecision;
+}
+
+function formatPermissions(decision: MmrFeatureGateDecision | undefined): string | undefined {
+  if (!decision) return undefined;
+  return `Permissions: ${decision.status} via ${decision.source} (${decision.reason})`;
 }
 
 function formatSelectedModel(state: MmrModeState): string {
@@ -504,7 +512,7 @@ function formatFeatureGates(state: MmrModeState): string {
 }
 
 export function formatMmrStatus(state: MmrModeState | undefined, options: FormatMmrStatusOptions = {}): string {
-  if (!state) return "MMR mode has not been resolved yet.";
+  if (!state) return joinLines(["MMR mode has not been resolved yet.", formatPermissions(options.permissions)]);
 
   if (state.mode === "free") {
     return joinLines([
@@ -519,6 +527,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       `Baseline captured: ${formatBaseline(state)}`,
       `Active tools: ${state.activeTools.join(", ") || "none"}`,
       formatDisabledBySetting(options.disabledBySetting),
+      formatPermissions(options.permissions),
       formatSettingsFilesRead(state),
       formatSettingsWarnings(state),
       `Policy warnings: ${formatPolicyWarnings(state)}`,
@@ -552,6 +561,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     formatDisabledBySetting(options.disabledBySetting),
     formatToolDecisions(state.resolution.toolDecisions),
     formatFeatureGates(state),
+    formatPermissions(options.permissions),
     formatSettingsFilesRead(state),
     formatSettingsWarnings(state),
     `Policy warnings: ${formatPolicyWarnings(state)}`,

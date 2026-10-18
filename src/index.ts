@@ -165,6 +165,34 @@ export type {
   MmrThreadStatusEvent,
   MmrThreadStatusReducer,
 } from "./extensions/ampi-core/thread-status.js";
+export { MMR_EVENT_APPROVAL, onMmrApproval } from "./extensions/ampi-core/runtime.js";
+export type { MmrApprovalEvent } from "./extensions/ampi-core/runtime.js";
+// --- ampi-core: tool permission rules (Stable) ---
+export {
+  MMR_PERMISSIONS_SHELL_TOOLS,
+  evaluateMmrPermission,
+  formatMmrPermissionRule,
+  isMmrPermissionsSessionAllowAll,
+  matchesMmrPermissionRule,
+  parseMmrPermissionRules,
+  setMmrPermissionsSessionAllowAll,
+  splitMmrShellCommand,
+  validateMmrPermissionRule,
+} from "./extensions/ampi-core/permissions.js";
+export { MMR_PERMISSIONS_DEFAULT_RULES } from "./extensions/ampi-core/permission-defaults.js";
+export type {
+  EvaluateMmrPermissionOptions,
+  MmrPermissionAction,
+  MmrPermissionCall,
+  MmrPermissionContext,
+  MmrPermissionDecision,
+  MmrPermissionPattern,
+  MmrPermissionRule,
+  MmrPermissionRuleProblem,
+  MmrPermissionRuleSource,
+  MmrPermissionRuleSources,
+  MmrShellCommandPart,
+} from "./extensions/ampi-core/permissions.js";
 // --- ampi-core: prompt assembly & subagent wiring (Internal / prompt-assembly) ---
 export { MMR_PROMPT_LAYER_END, MMR_PROMPT_LAYER_START, buildMmrPromptLayer } from "./extensions/ampi-core/prompt.js";
 export {
@@ -808,6 +836,12 @@ export { createAmpiShellExtension, createMmrShellExtension } from "./extensions/
 export type { MmrShellFactoryOverrides } from "./extensions/ampi-shell/index.js";
 export { loadMmrShellSettings } from "./extensions/ampi-shell/config.js";
 export type { MmrShellSettings } from "./extensions/ampi-shell/config.js";
+// --- ampi-permissions (Stable) ---
+export { createAmpiPermissionsExtension, createMmrPermissionsExtension } from "./extensions/ampi-permissions/index.js";
+export type { MmrPermissionsFactoryOverrides } from "./extensions/ampi-permissions/index.js";
+export { loadMmrPermissionsSettings } from "./extensions/ampi-permissions/config.js";
+export type { LoadMmrPermissionsSettingsOptions, MmrPermissionsSettings } from "./extensions/ampi-permissions/config.js";
+export { formatMmrPermissionsNoUiReason } from "./extensions/ampi-permissions/gate.js";
 // --- ampi-threads: thread index store (Internal / prompt-assembly) ---
 export {
   MmrThreadIndexError,
@@ -971,6 +1005,24 @@ export {
   createMmrThreadStatusReducer as createAmpiThreadStatusReducer,
 } from "./extensions/ampi-core/thread-status.js";
 export {
+  MMR_EVENT_APPROVAL as AMPI_EVENT_APPROVAL,
+  onMmrApproval as onAmpiApproval,
+} from "./extensions/ampi-core/runtime.js";
+export {
+  MMR_PERMISSIONS_SHELL_TOOLS as AMPI_PERMISSIONS_SHELL_TOOLS,
+  evaluateMmrPermission as evaluateAmpiPermission,
+  formatMmrPermissionRule as formatAmpiPermissionRule,
+  isMmrPermissionsSessionAllowAll as isAmpiPermissionsSessionAllowAll,
+  matchesMmrPermissionRule as matchesAmpiPermissionRule,
+  parseMmrPermissionRules as parseAmpiPermissionRules,
+  setMmrPermissionsSessionAllowAll as setAmpiPermissionsSessionAllowAll,
+  splitMmrShellCommand as splitAmpiShellCommand,
+  validateMmrPermissionRule as validateAmpiPermissionRule,
+} from "./extensions/ampi-core/permissions.js";
+export {
+  MMR_PERMISSIONS_DEFAULT_RULES as AMPI_PERMISSIONS_DEFAULT_RULES,
+} from "./extensions/ampi-core/permission-defaults.js";
+export {
   createMmrToolRegistry as createAmpiToolRegistry,
   isMmrToolAllowed as isAmpiToolAllowed,
   resolveMmrTools as resolveAmpiToolNames,
@@ -1040,6 +1092,12 @@ export {
 export {
   loadMmrShellSettings as loadAmpiShellSettings,
 } from "./extensions/ampi-shell/config.js";
+export {
+  loadMmrPermissionsSettings as loadAmpiPermissionsSettings,
+} from "./extensions/ampi-permissions/config.js";
+export {
+  formatMmrPermissionsNoUiReason as formatAmpiPermissionsNoUiReason,
+} from "./extensions/ampi-permissions/gate.js";
 export {
   MmrThreadIndexError as AmpiThreadIndexError,
   createMmrThreadIndexStore as createAmpiThreadIndexStore,
@@ -1179,6 +1237,22 @@ export type {
   MmrThreadStatusReducer as AmpiThreadStatusReducer,
 } from "./extensions/ampi-core/thread-status.js";
 export type {
+  MmrApprovalEvent as AmpiApprovalEvent,
+} from "./extensions/ampi-core/runtime.js";
+export type {
+  EvaluateMmrPermissionOptions as EvaluateAmpiPermissionOptions,
+  MmrPermissionAction as AmpiPermissionAction,
+  MmrPermissionCall as AmpiPermissionCall,
+  MmrPermissionContext as AmpiPermissionContext,
+  MmrPermissionDecision as AmpiPermissionDecision,
+  MmrPermissionPattern as AmpiPermissionPattern,
+  MmrPermissionRule as AmpiPermissionRule,
+  MmrPermissionRuleProblem as AmpiPermissionRuleProblem,
+  MmrPermissionRuleSource as AmpiPermissionRuleSource,
+  MmrPermissionRuleSources as AmpiPermissionRuleSources,
+  MmrShellCommandPart as AmpiShellCommandPart,
+} from "./extensions/ampi-core/permissions.js";
+export type {
   MmrActiveToolManifestEntry as AmpiActiveToolManifestEntry,
   MmrCoreSettings as AmpiCoreSettings,
   MmrFeatureGateDecision as AmpiFeatureGateDecision,
@@ -1275,6 +1349,13 @@ export type {
 export type {
   MmrShellFactoryOverrides as AmpiShellFactoryOverrides,
 } from "./extensions/ampi-shell/index.js";
+export type {
+  LoadMmrPermissionsSettingsOptions as LoadAmpiPermissionsSettingsOptions,
+  MmrPermissionsSettings as AmpiPermissionsSettings,
+} from "./extensions/ampi-permissions/config.js";
+export type {
+  MmrPermissionsFactoryOverrides as AmpiPermissionsFactoryOverrides,
+} from "./extensions/ampi-permissions/index.js";
 export type {
   LoadedMmrWebSettings as LoadedAmpiWebSettings,
   MmrWebSettings as AmpiWebSettings,

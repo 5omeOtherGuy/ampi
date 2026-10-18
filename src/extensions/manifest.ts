@@ -223,6 +223,20 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "worker-owner",
   },
   {
+    // Blocks tool calls by rule; writes the user settings file only when the
+    // user picks "Allow All for Every Session".
+    name: "ampi-permissions",
+    entrypoint: "./src/extensions/ampi-permissions/index.ts",
+    exportSubpath: "./extensions/ampi-permissions",
+    exportAliases: ["./extensions/mmr-permissions"],
+    autoLoaded: true,
+    tools: [],
+    dynamicTools: false,
+    featureGates: ["ampi-permissions", "mmr-permissions"],
+    riskClass: "passive",
+    childRole: "worker-dep",
+  },
+  {
     name: "ampi-tui",
     entrypoint: "./src/extensions/ampi-tui/index.ts",
     exportSubpath: "./extensions/ampi-tui",
