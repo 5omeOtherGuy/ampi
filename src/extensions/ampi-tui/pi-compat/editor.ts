@@ -4,7 +4,9 @@ import type { TUI } from "@earendil-works/pi-tui";
  * Pi's prompt editor and its app actions. The editor is a `CustomEditor`
  * that keeps its action handlers (`app.editor.external` and the like) in an
  * `actionHandlers` map; `TUI.getFocusedComponent()` tells whether it has
- * focus. Neither is part of Pi's extension API.
+ * focus. The editor also reports whether its autocomplete list is open and
+ * records how many text rows its last render drew. None of this is part of
+ * Pi's extension API.
  */
 
 interface FocusAwareTui {
@@ -13,6 +15,9 @@ interface FocusAwareTui {
 
 interface ActionEditor {
   actionHandlers: Map<string, () => void>;
+  isShowingAutocomplete?: () => boolean;
+  renderedVisibleLineCount?: unknown;
+  renderedAutocompleteHeight?: unknown;
 }
 
 function focusedEditor(tui: TUI | undefined): ActionEditor | undefined {
@@ -44,4 +49,23 @@ export function runMmrEditorAction(tui: TUI | undefined, action: string): boolea
   if (typeof handler !== "function") return false;
   handler();
   return true;
+}
+
+/** Whether the focused editor's autocomplete list is open. In Pi, Esc then closes the list and does nothing else. */
+export function isMmrEditorShowingAutocomplete(tui: TUI | undefined): boolean {
+  const editor = focusedEditor(tui);
+  return typeof editor?.isShowingAutocomplete === "function" ? editor.isShowingAutocomplete() === true : false;
+}
+
+/**
+ * Rows the focused editor drew in its last render: the wrapped text rows it
+ * shows, its two borders, and an open autocomplete list. `undefined` when the
+ * editor is not reachable or does not record its height.
+ */
+export function getMmrEditorRenderedHeight(tui: TUI | undefined): number | undefined {
+  const editor = focusedEditor(tui);
+  const rows = editor?.renderedVisibleLineCount;
+  if (typeof rows !== "number") return undefined;
+  const autocomplete = typeof editor?.renderedAutocompleteHeight === "number" ? editor.renderedAutocompleteHeight : 0;
+  return rows + 2 + autocomplete;
 }

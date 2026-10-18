@@ -90,9 +90,10 @@ describe("ampi-tui key decoder", () => {
     assert.equal(keys("\x1b[107;9u"), "meta+k");
   });
 
-  it("ignores key releases but keeps repeats", () => {
-    assert.equal(keys("\x1b[99;5:3u"), undefined);
-    assert.equal(keys("\x1b[1;1:3H"), undefined);
+  it("decodes a key release to no keys, apart from input that is not a key, and keeps repeats", () => {
+    assert.deepEqual(decode("\x1b[99;5:3u"), []);
+    assert.deepEqual(decode("\x1b[1;1:3H"), []);
+    assert.deepEqual(decode("\x1b[27;1:3u"), [], "the release that follows a raw Esc press");
     assert.equal(keys("\x1b[99;5:2u"), "ctrl+c");
     assert.equal(keys("\x1b[99;5:1u"), "ctrl+c");
   });

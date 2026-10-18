@@ -196,7 +196,7 @@ Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled
 
 - `index.ts` (entry point), `config.ts` (the `ampiTui.enabled` switch), `README.md`.
 - `keys/decode.ts` (terminal input to keymap combos), `keys/dispatcher.ts` (pure chord state machine: leader, prefixes, Esc Esc, deadlines), `keys/hint-popup.ts` (the "then" popup), `keys/commands.ts` (`thread.interrupt`, `ampi.quit`, `thread.scrollToTop`/`Bottom`, `prompt.openInEditor`, `ampi.showVersion`), `keys/install.ts` (keymap resolution from the command registry and `ampi.keymap`, shortcut versus raw-input routing, popup overlay).
-- `pi-compat/` — the only code that uses Pi runtime surface outside the extension API (focused editor and its actions, transcript scrolling, the reserved shortcut list, raw input); probed by `tests/mmr-tui-pi-compat.test.mjs`.
+- `pi-compat/` — the only code that uses Pi runtime surface outside the extension API (focused editor with its actions, autocomplete state and rendered height, transcript scrolling, the reserved shortcut list, raw input); probed by `tests/mmr-tui-pi-compat.test.mjs`.
 
 ### `src/extensions/ampi-history/`
 

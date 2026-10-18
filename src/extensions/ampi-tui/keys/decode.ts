@@ -197,14 +197,15 @@ function decodeOne(data: string): Decoded {
 
 /**
  * Decode one chunk of terminal input. Returns the key combos it holds (two
- * for a merged double Escape, otherwise one), or `undefined` when the chunk
- * is not a key ampi understands: pasted or multi-character text, unknown
- * sequences, and key-release reports.
+ * for a merged double Escape, otherwise one), an empty list for a key-release
+ * report (kitty keyboard protocol), which is a key event but no key press, or
+ * `undefined` when the chunk is not a key ampi understands: pasted or
+ * multi-character text and unknown sequences.
  */
 export function decodeMmrTerminalKeys(data: string): MmrKeyCombo[] | undefined {
   if (data === `${ESC}${ESC}`) return [combo("esc"), combo("esc")];
   const direct = decodeOne(data);
-  if (direct === "release") return undefined;
+  if (direct === "release") return [];
   if (direct) return [direct];
   // Alt+key: ESC followed by the key's own bytes (`\x1bx`, `\x1b\r`, `\x1b\x1b[A`).
   if (data.startsWith(ESC) && data.length > 1) {

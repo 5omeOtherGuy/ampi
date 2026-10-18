@@ -95,7 +95,7 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
 
 ```json
-{ "ampi": { "keymap": { "leader": "ctrl+t", "ampi.quit": null } } }
+{ "ampi": { "keymap": { "leader": "alt+x", "ampi.quit": null } } }
 ```
 
 ## Settings

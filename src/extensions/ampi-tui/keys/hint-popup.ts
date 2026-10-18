@@ -11,9 +11,9 @@ import type { MmrKeyHintRow } from "./dispatcher.js";
  * ╰───────────────────╯
  * ```
  *
- * It is as wide as its content, capped at the terminal width, and drawn by
- * the host as a non-capturing overlay at the bottom right, just above the
- * prompt.
+ * It is 48 columns wide, or the terminal width when that is smaller, and is
+ * drawn by the host as a non-capturing overlay at the bottom right, just
+ * above the prompt. Rows that do not fit end in an ellipsis.
  */
 
 export interface MmrHintPopupTheme {
@@ -36,18 +36,8 @@ function emptyLine(prefix: string): string {
   return `Nothing is bound to ${prefix} yet`;
 }
 
-/** Popup width in columns for `content`, before capping to the terminal. */
-export function measureMmrHintPopup(content: MmrHintPopupContent): number {
-  const keyWidth = Math.max(0, ...content.rows.map((row) => visibleWidth(row.key)));
-  const bodyWidths =
-    content.rows.length === 0
-      ? [visibleWidth(emptyLine(content.prefix))]
-      : content.rows.map((row) => keyWidth + KEY_GAP + visibleWidth(row.description));
-  const titleWidth = visibleWidth(` ${content.prefix} then `) + 1;
-  const inner = Math.max(titleWidth, visibleWidth(`${CANCEL_KEY} ${CANCEL_LABEL}`), ...bodyWidths);
-  // One space of padding on each side, plus the two border columns.
-  return inner + 4;
-}
+/** Popup width in columns. Pi narrows it to fit a smaller terminal. */
+export const MMR_HINT_POPUP_WIDTH = 48;
 
 /** Render the popup into exactly `width` columns (minimum 12). */
 export function renderMmrHintPopup(content: MmrHintPopupContent, width: number, theme: MmrHintPopupTheme = plainTheme): string[] {

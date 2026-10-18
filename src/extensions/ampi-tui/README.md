@@ -56,7 +56,7 @@ The setting is read once when the extension loads. Restart Pi or run `/reload` a
 Rebind or unbind any command under `ampi.keymap` in Pi's settings. Each entry maps a command id to a key string, an array of key strings, or `null`; `leader` changes the leader key.
 
 ```json
-{ "ampi": { "keymap": { "leader": "ctrl+t", "ampi.showVersion": "<leader>v", "thread.scrollToTop": null } } }
+{ "ampi": { "keymap": { "leader": "alt+x", "ampi.showVersion": "<leader>v", "thread.scrollToTop": null } } }
 ```
 
 Key strings follow `ampi-core`'s keymap grammar ([`docs/ampi-core-api.md`](../../../docs/ampi-core-api.md#keymap)): combos such as `ctrl+c`, chords separated by spaces such as `ctrl+c ctrl+c`, and `<leader>` at the start of a chord. Overrides are read at each session start; run `/reload` after editing them. Unknown command ids, keys that do not parse, two commands on one key, and a key that is also the start of a longer chord are reported once as a warning.
@@ -77,7 +77,7 @@ Key strings follow `ampi-core`'s keymap grammar ([`docs/ampi-core-api.md`](../..
 
 **Leader.** Ctrl+X is the leader key: bindings written as `<leader>z` mean Ctrl+X, then Z. The popup appears after Ctrl+X even when nothing is bound after it yet, and says so. `ampi.keymap.leader` moves the leader to another key.
 
-**Esc Esc.** While a turn runs, one Esc does nothing visible and two Escapes within half a second stop the turn. When nothing is running, Esc is left to Pi.
+**Esc Esc.** While a turn runs, one Esc does nothing visible and two Escapes within half a second stop the turn. While the prompt's autocomplete list is open, Esc closes the list and counts toward nothing. When nothing is running, Esc is left to Pi.
 
 **Ctrl+C.** The first Ctrl+C keeps the prompt as it is and shows the "Ctrl+C then" popup; a second Ctrl+C quits. A running turn is stopped first, then Pi exits the way its own double Ctrl+C does.
 
@@ -98,6 +98,7 @@ Key strings follow `ampi-core`'s keymap grammar ([`docs/ampi-core-api.md`](../..
 Everything else keeps Pi's binding, including Ctrl+O (tool output), Ctrl+D (quit on an empty prompt) and Ctrl+Home / Ctrl+End (transcript scrolling).
 
 - Clearing the prompt: Ctrl+C no longer clears it, and Esc does not clear it yet. Use Ctrl+U (delete to the line start) or select and delete.
+- Pi's own key hints still describe Pi's keys: the hint line under the startup header ("escape interrupt", "ctrl+c/ctrl+d clear/exit") and the "escape to interrupt" note while a turn runs.
 - When nothing is running, Pi's double Esc on an empty prompt opens the session tree. Set Pi's `doubleEscapeAction` to `"none"` to turn that off.
 - To keep a Pi key, unbind the ampi command that takes it: `"ampi.quit": null` gives Ctrl+C back to Pi, `"thread.interrupt": null` brings back the single-Esc interrupt. Copying with Ctrl+X needs the leader moved elsewhere, or Pi's `app.message.copy` bound to another key in Pi's `keybindings.json`.
 
@@ -126,5 +127,5 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 - Manifest: risk class `terminal-ui`, child role `none`. No subagent child keep-set lists it, and child workers never run in the terminal UI.
 - `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi.
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
-- `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor and its action handlers, transcript scrolling, the reserved shortcut list. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
+- `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, transcript scrolling, the reserved shortcut list. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
 - Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order), `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner).

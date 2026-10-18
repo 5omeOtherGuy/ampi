@@ -13,10 +13,20 @@ before(async () => {
   registry = await importSource("extensions/ampi-core/command-registry.ts");
 });
 
-/** A TUI handle whose focused component is Pi's editor (it has an action map), with scroll calls recorded. */
+/**
+ * A TUI handle whose focused component is Pi's editor (it has an action map),
+ * with scroll calls recorded. Set `editor.autocomplete` to open its
+ * autocomplete list.
+ */
 function fakeTui({ scrollable = true } = {}) {
   const calls = [];
-  const editor = { actionHandlers: new Map([["app.editor.external", () => calls.push("external editor")]]) };
+  const editor = {
+    actionHandlers: new Map([["app.editor.external", () => calls.push("external editor")]]),
+    autocomplete: false,
+    isShowingAutocomplete() {
+      return this.autocomplete;
+    },
+  };
   const tui = {
     focused: editor,
     getFocusedComponent() {
@@ -104,6 +114,7 @@ describe("ampi-tui key installation", () => {
     assert.equal(placement.nonCapturing, true);
     assert.equal(placement.anchor, "bottom-right");
     assert.equal(placement.offsetY, -3, "just above an empty prompt and its two borders");
+    assert.equal(placement.width, 48);
     const lines = overlay.component.render(placement.width);
     assert.match(lines[0], /^╭─ Ctrl\+X then ─+╮$/);
     assert.match(lines[1], /Nothing is bound to Ctrl\+X yet/);
@@ -114,6 +125,15 @@ describe("ampi-tui key installation", () => {
     t.advance(1);
     assert.equal(overlay.closed, true);
     assert.equal(t.send("v"), false, "after the timeout keys are typed normally");
+  });
+
+  it("places the popup above the prompt's rendered rows, so a wrapped line is not covered", () => {
+    const t = setup({ editorText: "x".repeat(300) });
+    t.handle.editor.renderedVisibleLineCount = 4;
+    t.send("\x18");
+    assert.equal(t.overlays[0].options.overlayOptions().offsetY, -6, "four wrapped rows plus two borders");
+    t.handle.editor.renderedAutocompleteHeight = 5;
+    assert.equal(t.overlays[0].options.overlayOptions().offsetY, -11, "an open autocomplete list pushes the prompt up");
   });
 
   it("swallows the first Ctrl+C, offers Quit, and quits on the second", () => {
@@ -148,6 +168,46 @@ describe("ampi-tui key installation", () => {
     assert.equal(t.send("\x1b"), false, "idle: Esc goes to Pi");
     assert.equal(t.send("\x1b\x1b"), false);
     assert.equal(t.lifecycle.abort, 2);
+  });
+
+  it("ignores kitty key releases between the keys of a chord", () => {
+    const quit = setup();
+    const ctrlC = "\x1b[99;5u";
+    const ctrlCRelease = "\x1b[99;5:3u";
+    assert.deepEqual([ctrlC, ctrlCRelease, ctrlC, ctrlCRelease].map(quit.send), [true, false, true, false]);
+    assert.equal(quit.lifecycle.shutdown, 1);
+    assert.equal(quit.overlays.length, 1, "the release does not close the popup or reopen it");
+    quit.keys.stop();
+
+    const busy = setup({ idle: false });
+    const escRelease = "\x1b[27;1:3u";
+    for (const data of ["\x1b[27u", escRelease, "\x1b[27u", escRelease]) busy.send(data);
+    assert.equal(busy.lifecycle.abort, 1);
+    for (const data of ["\x1b", escRelease, "\x1b", escRelease]) busy.send(data);
+    assert.equal(busy.lifecycle.abort, 2, "a raw Esc press followed by a CSI-u release");
+    busy.keys.stop();
+
+    const leader = setup({ settings: { ampi: { keymap: { "ampi.showVersion": "<leader>v" } } } });
+    for (const data of ["\x1b[120;5u", "\x1b[120;5:3u", "\x1b[118u", "\x1b[118;1:3u"]) leader.send(data);
+    assert.match(leader.notifications.at(-1).message, /^ampi \S+ on Pi/);
+  });
+
+  it("lets Esc close the prompt's autocomplete list without interrupting", () => {
+    const t = setup({ idle: false });
+    t.handle.editor.autocomplete = true;
+    assert.equal(t.send("\x1b"), false);
+    assert.equal(t.send("\x1b"), false);
+    assert.equal(t.send("\x1b\x1b"), false);
+    assert.equal(t.lifecycle.abort, 0);
+
+    t.send("\x03");
+    assert.equal(t.send("\x1b"), false, "Esc closes the list, not the Ctrl+C popup alone");
+    assert.equal(t.overlays[0].closed, true, "and the pending chord is cancelled");
+
+    t.handle.editor.autocomplete = false;
+    t.send("\x1b");
+    t.send("\x1b");
+    assert.equal(t.lifecycle.abort, 1, "with the list closed, Esc Esc interrupts again");
   });
 
   it("leaves Esc to a selector or dialog that has focus", () => {
@@ -195,16 +255,16 @@ describe("ampi-tui key installation", () => {
     assert.deepEqual([...t.shortcuts.keys()], []);
     t.send("\x18");
     const lines = t.overlays[0].component.render(t.overlays[0].options.overlayOptions().width);
-    assert.match(lines[1], /│ v {2}Show the ampi and Pi versions │/);
+    assert.match(lines[1], /│ v {2}Show the ampi and Pi versions +│/);
     assert.equal(t.send("v"), true);
     assert.match(t.notifications.at(-1).message, /^ampi /);
   });
 
   it("follows a changed leader", () => {
-    const t = setup({ settings: { ampi: { keymap: { leader: "ctrl+t" } } } });
+    const t = setup({ settings: { ampi: { keymap: { leader: "alt+x" } } } });
     assert.equal(t.send("\x18"), false, "Ctrl+X is Pi's again");
-    assert.equal(t.send("\x14"), true);
-    assert.match(t.overlays[0].component.render(40)[0], /Ctrl\+T then/);
+    assert.equal(t.send("\x1bx"), true);
+    assert.match(t.overlays[0].component.render(40)[0], /Alt\+X then/);
   });
 
   it("warns about keymap problems and conflicts once", () => {

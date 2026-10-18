@@ -8,7 +8,7 @@ import {
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
-import { isMmrEditorFocused } from "../pi-compat/editor.js";
+import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import { registerMmrTuiCommands } from "./commands.js";
@@ -20,7 +20,7 @@ import {
   type MmrKeyDispatcher,
   type MmrKeyHint,
 } from "./dispatcher.js";
-import { measureMmrHintPopup, renderMmrHintPopup } from "./hint-popup.js";
+import { MMR_HINT_POPUP_WIDTH, renderMmrHintPopup } from "./hint-popup.js";
 
 /**
  * Wires the key dispatcher into Pi.
@@ -131,7 +131,6 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     closeHint();
     if (!ctx) return;
     const content = { prefix: next.prefix, rows: next.rows };
-    const width = measureMmrHintPopup(content);
     let done: ((result: undefined) => void) | undefined;
     let closed = false;
     hint = {
@@ -152,9 +151,11 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
           overlay: true,
           overlayOptions: () => ({
             anchor: "bottom-right",
-            width,
-            // Sit on the row above the prompt: its text lines plus two borders.
-            offsetY: -(ui.getEditorText().split("\n").length + 2),
+            // Pi narrows an overlay to the terminal width; the popup truncates its rows.
+            width: MMR_HINT_POPUP_WIDTH,
+            // Sit on the row above the prompt box. Without a rendered height,
+            // count its text lines plus two borders.
+            offsetY: -(getMmrEditorRenderedHeight(getTui()) ?? ui.getEditorText().split("\n").length + 2),
             nonCapturing: true,
           }),
         },
@@ -232,9 +233,19 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     const active = dispatcher;
     if (!active) return false;
     const combos = decodeMmrTerminalKeys(data);
+    // A key release (kitty keyboard protocol) is no key press: it must not
+    // cancel a pending chord.
+    if (combos?.length === 0) return false;
     const raw = active.rawKeys();
     if (!active.isPending() && !combos?.some((combo) => raw.has(formatMmrKeyCombo(combo)))) return false;
-    const context = { editorFocused: isMmrEditorFocused(getTui()) };
+    const tui = getTui();
+    // As in Pi, Esc first closes the prompt's autocomplete list; it neither
+    // completes nor starts a chord.
+    if (combos?.some((combo) => formatMmrKeyCombo(combo) === "esc") && isMmrEditorShowingAutocomplete(tui)) {
+      active.cancel();
+      return false;
+    }
+    const context = { editorFocused: isMmrEditorFocused(tui) };
     if (!combos) return active.handle(undefined, context);
     let consumed = false;
     for (const combo of combos) consumed = active.handle(combo, context) || consumed;
