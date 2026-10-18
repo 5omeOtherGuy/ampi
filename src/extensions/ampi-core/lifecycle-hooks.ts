@@ -122,11 +122,16 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     await controller.reassertActiveModelInvariants(ctx);
     // The speed belongs to the session branch: its newest `ampi-speed` entry,
     // or for a session without one `--ampi-fast`, then `ampi.speed`.
+    // Fast speed raises the price, so a project's `ampi.speed` counts only
+    // once Pi trusts the project; until then only the user's file applies.
+    // Pi always provides isProjectTrusted; a host without it counts as trusted.
+    const projectTrusted = typeof ctx.isProjectTrusted === "function" ? ctx.isProjectTrusted() : true;
+    const loadedSettings = loadMmrCoreSettings(ctx.cwd).settings;
     const speed = resolveMmrSessionSpeed({
       // Some hosts' session managers have no branch view; they get the setting.
       entries: ctx.sessionManager.getBranch?.() ?? [],
       flag: pi.getFlag(MMR_FAST_FLAG) === true,
-      setting: loadMmrCoreSettings(ctx.cwd).settings.speed,
+      setting: projectTrusted ? loadedSettings.speed : loadedSettings.speedByScope?.user,
     });
     changeMmrSpeed(pi, speed, ctx.model);
   });

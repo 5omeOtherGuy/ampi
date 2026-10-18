@@ -65,7 +65,7 @@ function globalSettings(settings) {
   writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify(settings));
 }
 
-async function startSession({ model = SOL, entries = [], cwd = project(), flags = {}, mode } = {}) {
+async function startSession({ model = SOL, entries = [], cwd = project(), flags = {}, mode, projectTrusted } = {}) {
   const extension = (await importSource("extensions/ampi-core/index.ts")).default;
   const mock = createMockPi({
     activeTools: ["read", "bash", "grep"],
@@ -74,7 +74,7 @@ async function startSession({ model = SOL, entries = [], cwd = project(), flags 
     initialModel: model,
     flags: { ...(mode ? { "ampi-mode": mode } : {}), ...flags },
   });
-  const context = createMockExtensionContext({ models: [SOL, GPT_55, CODEX_SOL, OPUS], model, entries, cwd });
+  const context = createMockExtensionContext({ models: [SOL, GPT_55, CODEX_SOL, OPUS], model, entries, cwd, projectTrusted });
   extension(mock.pi);
   await mock.handlers.get("session_start")({ type: "session_start", reason: "new" }, context.ctx);
   const request = (payload) => mock.handlers.get("before_provider_request")({ type: "before_provider_request", payload }, context.ctx);
@@ -169,9 +169,24 @@ describe("fast speed per session", () => {
     assert.equal(speed.getMmrSpeed(), "standard");
 
     const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
+    const scoped = loadMmrCoreSettings(project({ ampi: { speed: "fast" } }), home);
+    assert.deepEqual(scoped.settings.speedByScope, { user: "fast", project: "fast" });
+
     const loaded = loadMmrCoreSettings(project({ ampi: { speed: "turbo" } }), home);
     assert.equal(loaded.settings.speed, "fast", "an invalid project value leaves the global one");
     assert.match(loaded.warnings.join("\n"), /Ignoring ampi\.speed .*expected "standard" or "fast"/);
+  });
+
+  it("holds the project's ampi.speed back until Pi trusts the project", async () => {
+    globalSettings({ ampi: { speed: "standard" } });
+    await startSession({ cwd: project({ ampi: { speed: "fast" } }), projectTrusted: false });
+    assert.equal(speed.getMmrSpeed(), "standard", "an untrusted project cannot raise the price");
+    await startSession({ cwd: project({ ampi: { speed: "fast" } }), projectTrusted: true });
+    assert.equal(speed.getMmrSpeed(), "fast");
+
+    globalSettings({ ampi: { speed: "fast" } });
+    await startSession({ cwd: project({ ampi: { speed: "standard" } }), projectTrusted: false });
+    assert.equal(speed.getMmrSpeed(), "fast", "the user's own file still applies");
   });
 });
 

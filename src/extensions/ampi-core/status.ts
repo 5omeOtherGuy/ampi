@@ -76,13 +76,13 @@ export interface FormatMmrStatusOptions {
   disabledBySetting?: readonly { tool: string; entry: string }[];
   /** The `ampi-permissions` gate decision; shown in every mode, Free included, because the gate applies there too. */
   permissions?: MmrFeatureGateDecision;
+  /** The session's speed and the model it applies to; adds a `Speed:` line. */
+  speed?: { speed: MmrSpeed; provider?: string; model?: string };
 }
 
 function formatPermissions(decision: MmrFeatureGateDecision | undefined): string | undefined {
   if (!decision) return undefined;
   return `Permissions: ${decision.status} via ${decision.source} (${decision.reason})`;
-  /** The session's speed and the model it applies to; adds a `Speed:` line. */
-  speed?: { speed: MmrSpeed; provider?: string; model?: string };
 }
 
 function formatSpeed(speed: FormatMmrStatusOptions["speed"]): string | undefined {

@@ -239,7 +239,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | --- | --- | --- |
 | `ampi.tools.disable` | Turns tools off in every mode and in workers, and blocks calls to them, nested calls included. Exact names, `*` globs, or `builtin:<name>` for Pi's own built-in tools only; user and project lists combine | `["web_search", "task_*", "builtin:grep"]` |
 | `ampi.skills.path` | Extra skill directories, `:`-separated (`;` on Windows); `~` is home, relative entries resolve against the repository root. A project value counts only when Pi trusts the project | `"~/my-skills:/shared/team-skills"` |
-| `ampi.speed` | The speed a new session starts at: `"standard"` (default) or `"fast"`, priority serving at a higher price for OpenAI and OpenAI Codex models. A session keeps the speed you last chose in it | `"fast"` |
+| `ampi.speed` | The speed a new session starts at: `"standard"` (default) or `"fast"`, priority serving at a higher price for OpenAI and OpenAI Codex models. A session keeps the speed you last chose in it. A project file's value applies only once Pi trusts the project | `"fast"` |
 | `ampi.skills.disableClaudeCodeSkills` | `true` stops loading skills from `.claude/skills` (project, up to the repository root, with project trust) and `~/.claude/skills`, which are read by default | `true` |
 | `ampi.terminal.detailsExpandedByDefault` | `true` starts sessions with tool output expanded and thinking shown; Alt+T still toggles them. Showing thinking saves `hideThinkingBlock: false` to your user settings | `true` |
 | `ampi.fuzzy.alwaysIncludePaths` | Globs relative to the working directory whose paths `@` file mentions offer even when git ignores them | `["dist/**"]` |

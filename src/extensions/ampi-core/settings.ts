@@ -307,7 +307,10 @@ function readAmpiToolAndSkillSettings(
     }
   }
   if ("speed" in ampi) {
-    if (ampi.speed === "standard" || ampi.speed === "fast") settings.speed = ampi.speed;
+    if (ampi.speed === "standard" || ampi.speed === "fast") {
+      settings.speed = ampi.speed;
+      settings.speedByScope = { [context.scope]: ampi.speed };
+    }
     else context.warnings.push(`Ignoring ampi.speed in ${context.filePath}: expected "standard" or "fast".`);
   }
   return settings;
@@ -419,6 +422,9 @@ function mergeSettings(base: MmrCoreSettings, override: MmrCoreSettings): MmrCor
   }
   if (base.skillsPath || override.skillsPath) {
     merged.skillsPath = { ...base.skillsPath, ...override.skillsPath };
+  }
+  if (base.speedByScope || override.speedByScope) {
+    merged.speedByScope = { ...base.speedByScope, ...override.speedByScope };
   }
 
   return merged;
