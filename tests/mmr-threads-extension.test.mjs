@@ -105,6 +105,7 @@ describe("ampi-threads extension", () => {
     const keys = Object.fromEntries(registry.getMmrCommands().map((c) => [c.id, c.defaultKey]));
     assert.deepEqual(keys, {
       "thread.new": undefined,
+      "thread.rename": undefined,
       "thread.archive": "ctrl+c ctrl+n",
       "thread.unarchive": undefined,
       "thread.archiveAndQuit": "ctrl+c ctrl+e",
@@ -116,6 +117,7 @@ describe("ampi-threads extension", () => {
       registry.getMmrCommands().map((c) => `${c.noun} ${c.verb}`),
       [
         "thread new",
+        "thread rename",
         "thread archive and new",
         "thread unarchive",
         "thread archive and quit",
@@ -706,6 +708,7 @@ describe("ampi-threads settings", () => {
         enabled: true,
         autoArchiveOnQuit: false,
         showCosts: true,
+        titles: true,
       });
     });
   });
@@ -714,16 +717,20 @@ describe("ampi-threads settings", () => {
     const { loadMmrThreadsSettings } = await importSource("extensions/ampi-threads/config.ts");
     await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
       const load = () => loadMmrThreadsSettings(cwd, { homeDirectory: home, env: {} });
-      writeGlobal({ ampiThreads: { enabled: false, autoArchiveOnQuit: true, showCosts: false } });
-      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true, showCosts: false });
+      writeGlobal({ ampiThreads: { enabled: false, autoArchiveOnQuit: true, showCosts: false, titles: false } });
+      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true, showCosts: false, titles: false });
       writeProject({ ampi: { threads: { enabled: true } } });
       assert.deepEqual(
         load(),
-        { enabled: true, autoArchiveOnQuit: true, showCosts: false },
+        { enabled: true, autoArchiveOnQuit: true, showCosts: false, titles: false },
         "a key the project leaves out keeps the global value",
       );
-      writeProject({ ampiThreads: { autoArchiveOnQuit: "yes", showCosts: true } });
-      assert.deepEqual(load(), { enabled: false, autoArchiveOnQuit: true, showCosts: true }, "a non-boolean value is ignored");
+      writeProject({ ampiThreads: { autoArchiveOnQuit: "yes", showCosts: true, titles: true } });
+      assert.deepEqual(
+        load(),
+        { enabled: false, autoArchiveOnQuit: true, showCosts: true, titles: true },
+        "a non-boolean value is ignored",
+      );
     });
   });
 
