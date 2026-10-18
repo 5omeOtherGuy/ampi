@@ -34,7 +34,6 @@ const DEFAULT_TOOL_CATALOG: Record<string, { owner: string }> = {
   apply_patch: { owner: "ampi-patch" },
   // ampi-tasks
   task_list: { owner: "ampi-tasks" },
-  chart: { owner: "ampi-tasks" },
   // ampi-toolbox-mcp
   read_mcp_resource: { owner: "ampi-toolbox-mcp" },
   // ampi-web
@@ -53,9 +52,6 @@ const DEFAULT_TOOL_CATALOG: Record<string, { owner: string }> = {
   // ampi-history
   find_session: { owner: "ampi-history" },
   read_session: { owner: "ampi-history" },
-  handoff: { owner: "ampi-history" },
-  // ampi-skills
-  skill: { owner: "ampi-skills" },
 };
 
 export interface MmrToolRegistry {

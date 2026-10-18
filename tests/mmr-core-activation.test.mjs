@@ -235,7 +235,7 @@ describe("mmr-core mode activation", () => {
     assert.match(activation.message, /oracle: deferred until ampi-workers ships/);
     assert.match(activation.message, /finder: deferred until ampi-workers ships/);
     assert.match(activation.message, /web_search: deferred until ampi-web ships/);
-    assert.match(activation.message, /chart: deferred until ampi-tasks ships/);
+    assert.match(activation.message, /apply_patch: deferred until ampi-patch ships/);
     assert.match(activation.message, /reviewer: deferred until ampi-workers ships/);
   });
 });

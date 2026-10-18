@@ -114,9 +114,11 @@ import type { MmrToolProvider, MmrToolResolution, MmrToolRule } from "@skippermi
   status provider. Provider order is latest-wins. A provider claims
   ownership for the exact tool names it owns and reports `active`,
   `gated`, `disabled`, or `deferred`.
-- `resolveMmrTools(modeKey, availableTools)` — synchronously resolve
+- `resolveMmrTools(modeKey, availableTools, editToolFamily?)` — synchronously resolve
   the active/missing/deferred/gated/disabled tool lists for a mode
-  against a Pi-tool inventory.
+  against a Pi-tool inventory. `editToolFamily` (`"patch"` or `"edit"`)
+  adds `apply_patch` or `edit` after `write`; without it the list has no
+  file-editing tool, because locked modes pick it from the route's provider.
 - `isToolAllowed(toolName)` — quick check against the current state's
   `activeTools`.
 

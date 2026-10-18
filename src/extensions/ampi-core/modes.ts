@@ -1,4 +1,10 @@
-import type { MmrModeDefinition, MmrModeKey } from "./types.js";
+import type {
+  MmrEditToolFamily,
+  MmrEditToolFamilyDecision,
+  MmrEditToolsSetting,
+  MmrModeDefinition,
+  MmrModeKey,
+} from "./types.js";
 import { MMR_REQUEST_POLICIES, formatMmrPolicyContext, formatMmrPolicyThinking } from "./request-policy.js";
 
 export const DEFAULT_MMR_MODE: MmrModeKey = "medium";
@@ -33,12 +39,10 @@ export const MMR_SMART_TOOL_NAMES = [
   "read",
   "bash",
   "write",
-  "edit",
   "web_search",
   "read_web_page",
   "read_session",
   "find_session",
-  "skill",
   "oracle",
   "librarian",
   "Task",
@@ -49,7 +53,6 @@ export const MMR_SMART_TOOL_NAMES = [
   "task_list",
   "finder",
   "reviewer",
-  "handoff",
   "read_mcp_resource",
 ] satisfies string[];
 
@@ -60,16 +63,12 @@ export const MMR_RUSH_TOOL_NAMES = [
   "finder",
   "bash",
   "write",
-  "edit",
   "web_search",
   "read_web_page",
   "read_mcp_resource",
-  "chart",
   "read_session",
   "find_session",
-  "skill",
   "oracle",
-  "handoff",
   "librarian",
   "Task",
   "start_task",
@@ -93,16 +92,15 @@ export const MMR_RUSH_TOOL_NAMES = [
  *
  * Tool lists name concrete Pi tools directly. ampi-core resolves each name
  * by identity against the active Pi tool inventory and reports unavailable
- * extension-owned tools as deferred via the exact-name status catalog.
+ * extension-owned tools as deferred via the exact-name status catalog. They
+ * leave out the file-editing tool, which follows the route's provider
+ * (see `getMmrModeToolNames`).
  */
 export const MMR_DEEP_TOOL_NAMES = [
   "bash",
-  "apply_patch",
   "write",
   "web_search",
   "read_web_page",
-  "chart",
-  "skill",
   "read_session",
   "find_session",
   "librarian",
@@ -115,7 +113,6 @@ export const MMR_DEEP_TOOL_NAMES = [
   "finder",
   "reviewer",
   "task_list",
-  "handoff",
 ] satisfies string[];
 
 export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
@@ -186,6 +183,31 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     promptRoute: "default",
   },
 };
+
+/** Providers whose routes edit files with `apply_patch`; every other provider uses Pi's `edit`. */
+const MMR_PATCH_FAMILY_PROVIDERS: ReadonlySet<string> = new Set(["openai", "openai-codex", "azure"]);
+
+/** File-editing tools each family adds right after `write` in a locked mode's allowlist. */
+export const MMR_EDIT_TOOL_FAMILY_TOOLS: Readonly<Record<MmrEditToolFamily, readonly string[]>> = {
+  patch: ["apply_patch"],
+  edit: ["edit"],
+};
+
+/** Pick the edit tool family for a route: a forced `ampiCore.editTools` value wins, `auto` follows the provider. */
+export function resolveMmrEditToolFamily(provider: string, setting: MmrEditToolsSetting = "auto"): MmrEditToolFamilyDecision {
+  if (setting !== "auto") return { family: setting, source: "setting", provider };
+  return { family: MMR_PATCH_FAMILY_PROVIDERS.has(provider) ? "patch" : "edit", source: "provider", provider };
+}
+
+/**
+ * A mode's tool allowlist. With a family, that family's editing tools follow
+ * `write`; without one, the list has no file-editing tool.
+ */
+export function getMmrModeToolNames(key: MmrModeKey, family?: MmrEditToolFamily): string[] {
+  const tools = MMR_MODES[key].tools;
+  if (!family) return [...tools];
+  return tools.flatMap((name) => (name === "write" ? [name, ...MMR_EDIT_TOOL_FAMILY_TOOLS[family]] : [name]));
+}
 
 export function isMmrModeKey(value: string): value is MmrModeKey {
   return (MMR_MODE_KEYS as readonly string[]).includes(value);

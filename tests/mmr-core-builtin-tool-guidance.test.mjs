@@ -82,6 +82,17 @@ describe("built-in tool guidance: module", () => {
     assert.equal(block.includes("edit_file"), false, "non-Pi-native tool name edit_file must not appear");
   });
 
+  it("points write's existing-file advice at whichever editing tool is active", async () => {
+    const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
+    assert.match(buildBuiltinToolGuidance(["edit", "write"]), /For existing files, prefer `edit` instead/);
+    const patch = buildBuiltinToolGuidance(["apply_patch", "write"]);
+    assert.match(patch, /For existing files, prefer `apply_patch` instead/);
+    assert.equal(patch.includes("`edit`"), false, "no advice to use an inactive edit tool");
+    const neither = buildBuiltinToolGuidance(["write"]);
+    assert.match(neither, /Use this tool to create a new file/);
+    assert.equal(neither.includes("For existing files"), false);
+  });
+
   it("steers edit recovery away from identical retries", async () => {
     const { buildBuiltinToolGuidance } = await importSource("extensions/ampi-core/builtin-tool-guidance.ts");
     const block = buildBuiltinToolGuidance(["bash", "edit", "write"]);

@@ -53,6 +53,21 @@ export interface MmrModelPreference {
   thinkingLevel?: ThinkingLevel;
 }
 
+/** File-editing tools a locked mode adds beside `write`: `apply_patch` (`patch`) or Pi's `edit` (`edit`). */
+export type MmrEditToolFamily = "patch" | "edit";
+
+/** `ampiCore.editTools`: follow the route's provider (`auto`) or always use one family. */
+export type MmrEditToolsSetting = "auto" | MmrEditToolFamily;
+
+/** The edit tool family a locked mode resolved, and why. */
+export interface MmrEditToolFamilyDecision {
+  family: MmrEditToolFamily;
+  /** `setting` when `ampiCore.editTools` forced the family; `provider` when the route's provider chose it. */
+  source: "setting" | "provider";
+  /** Provider of the route the family was resolved for. */
+  provider: string;
+}
+
 export interface MmrModeDefinition {
   key: MmrModeKey;
   displayName: string;
@@ -61,7 +76,10 @@ export interface MmrModeDefinition {
   modelPreferences: MmrModelPreference[];
   /** Default thinking level for model preferences without their own override. */
   thinkingLevel?: ThinkingLevel;
-  /** Concrete Pi tool names this mode requests. Resolved by identity against the active Pi tool inventory. */
+  /**
+   * Concrete Pi tool names this mode requests. Resolved by identity against the active Pi tool inventory.
+   * Locked modes leave out the file-editing tool: it follows the route's provider (see `getMmrModeToolNames`).
+   */
   tools: string[];
   promptRoute: MmrPromptRoute;
   featureGates?: string[];
@@ -285,6 +303,8 @@ export interface MmrModeState {
   baselineCaptured?: boolean;
   baselineModel?: string;
   promptRoute: MmrPromptRoute;
+  /** Runtime-only edit tool family behind `activeTools` and why it was chosen; absent in `free`. Not persisted. */
+  editTools?: MmrEditToolFamilyDecision;
   requestedTools: string[];
   activeTools: string[];
   missingTools: string[];
@@ -532,6 +552,13 @@ export interface MmrCoreSettings {
    * compaction is unaffected.
    */
   autoCompact?: { threshold: number } | false;
+  /**
+   * Which file-editing tools locked modes activate. `auto` (the default) gives
+   * OpenAI-family routes `apply_patch` and every other route Pi's `edit`;
+   * `patch` or `edit` forces one family for every route. `write` stays active
+   * either way.
+   */
+  editTools?: MmrEditToolsSetting;
 }
 
 /**

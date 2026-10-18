@@ -21,11 +21,6 @@ import { registerTaskListWiring } from "./task-list-wiring.js";
  * `ampi-tasks` for them even when extension entrypoints load with isolated
  * module caches and the provider call cannot reach ampi-core's registry.
  *
- * Other catalog entries owned by ampi-tasks (for example `chart`) are
- * intentionally omitted from this set: those tools have not shipped yet, so
- * the provider does not claim them and they stay `deferred` against the
- * catalog owner.
- *
  * Tracking the supported names as a `Set<string>` instead of a plain object
  * avoids prototype-chain leaks (`constructor`, `toString`, ...) and keeps
  * the literal types tight.

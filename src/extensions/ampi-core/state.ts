@@ -2,6 +2,7 @@ import { resolveMmrFeatureGates } from "./feature-gates.js";
 import { resolveMmrModeKey } from "./modes.js";
 import { isThinkingLevel } from "./settings.js";
 import type {
+  MmrEditToolFamilyDecision,
   MmrFeatureGateDecision,
   MmrModeDefinition,
   MmrModeResolution,
@@ -41,6 +42,8 @@ export function createMmrModeState(args: {
   source: MmrModeSelectionSource;
   modelResolution: MmrModelResolution;
   tools: MmrToolResolution;
+  /** Runtime-only edit tool family behind `tools`; not persisted. */
+  editTools?: MmrEditToolFamilyDecision;
   /**
    * Pre-resolved feature-gate decisions. When omitted, ampi-core falls back to
    * the built-in reserved/unknown resolver via `resolveMmrFeatureGates`. Pass
@@ -107,6 +110,7 @@ export function createMmrModeState(args: {
     baselineCaptured: args.baselineCaptured,
     baselineModel: args.baselineModel,
     promptRoute: args.mode.promptRoute,
+    ...(args.editTools ? { editTools: { ...args.editTools } } : {}),
     requestedTools: [...args.tools.requestedTools],
     activeTools: [...args.tools.activeTools],
     missingTools: [...args.tools.missingTools],

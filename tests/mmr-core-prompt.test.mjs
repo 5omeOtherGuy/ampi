@@ -84,6 +84,7 @@ function buildExtensionStub(handlers) {
     registerCommand: () => {},
     registerShortcut: () => {},
     on: (name, handler) => handlers.set(name, handler),
+    events: { emit: () => {}, on: () => () => {} },
   };
 }
 
