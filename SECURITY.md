@@ -2,11 +2,13 @@
 
 ## Supported versions
 
-`ampi` is currently pre-1.0. Security fixes target the default branch and the next published package version.
+Security fixes go into the latest minor release of `@skippermissions/ampi`. Older lines do not get fixes; upgrade to the latest release.
 
 ## Reporting a vulnerability
 
-Please report suspected vulnerabilities privately through GitHub Security Advisories for this repository. If that is not available, open a minimal issue that says a private security report is needed and do not include exploit details, credentials, tokens, logs, or private session data.
+Report suspected vulnerabilities privately through GitHub's [private vulnerability reporting](https://github.com/5omeOtherGuy/ampi/security/advisories/new) for this repository. Do not open a public issue with exploit details, credentials, tokens, logs, or private session data.
+
+We acknowledge a report within 7 days.
 
 Helpful report details:
 
@@ -15,6 +17,6 @@ Helpful report details:
 - reproduction steps using non-secret sample data
 - affected version, commit, or installation source
 
-## Handling expectations
+## Handling
 
-Security reports are prioritized over routine feature work. Fixes should include deterministic tests when practical and should avoid publishing sensitive reproduction data.
+Fixes are prepared in a private security advisory: we fix the issue, release a patched version, publish the advisory, and credit the reporter unless they prefer otherwise. Fixes include deterministic tests where practical and avoid publishing sensitive reproduction data.
