@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "One record of ampi's stream JSON output (ampi -x --stream-json)",
+  "oneOf": [
+    { "$ref": "#/$defs/init" },
+    { "$ref": "#/$defs/user" },
+    { "$ref": "#/$defs/assistant" },
+    { "$ref": "#/$defs/resultSuccess" },
+    { "$ref": "#/$defs/resultError" },
+    { "$ref": "#/$defs/systemError" }
+  ],
+  "$defs": {
+    "parentToolUseId": { "type": ["string", "null"] },
+    "usage": {
+      "type": "object",
+      "required": ["input_tokens", "output_tokens"],
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "cache_creation_input_tokens": { "type": "integer", "minimum": 0 },
+        "cache_read_input_tokens": { "type": "integer", "minimum": 0 },
+        "cache_creation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ephemeral_5m_input_tokens": { "type": "integer", "minimum": 0 },
+            "ephemeral_1h_input_tokens": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "max_tokens": { "type": "integer", "minimum": 0 },
+        "service_tier": { "enum": ["standard", "enterprise"] }
+      }
+    },
+    "textBlock": {
+      "type": "object",
+      "required": ["type", "text"],
+      "additionalProperties": false,
+      "properties": { "type": { "const": "text" }, "text": { "type": "string" } }
+    },
+    "toolResultBlock": {
+      "type": "object",
+      "required": ["type", "tool_use_id", "content", "is_error"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "tool_result" },
+        "tool_use_id": { "type": "string" },
+        "content": { "type": "string" },
+        "is_error": { "type": "boolean" }
+      }
+    },
+    "toolUseBlock": {
+      "type": "object",
+      "required": ["type", "id", "name", "input"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "tool_use" },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "input": { "type": "object" }
+      }
+    },
+    "thinkingBlock": {
+      "type": "object",
+      "required": ["type", "thinking"],
+      "additionalProperties": false,
+      "properties": { "type": { "const": "thinking" }, "thinking": { "type": "string" } }
+    },
+    "redactedThinkingBlock": {
+      "type": "object",
+      "required": ["type", "data"],
+      "additionalProperties": false,
+      "properties": { "type": { "const": "redacted_thinking" }, "data": { "type": "string" } }
+    },
+    "init": {
+      "type": "object",
+      "required": ["type", "subtype", "cwd", "session_id", "tools", "mcp_servers"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "system" },
+        "subtype": { "const": "init" },
+        "cwd": { "type": "string" },
+        "session_id": { "type": "string" },
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "mcp_servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "status"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "status": {
+                "enum": ["awaiting-approval", "authenticating", "connecting", "reconnecting", "connected", "denied", "failed", "blocked-by-registry"]
+              }
+            }
+          }
+        },
+        "agent_mode": { "type": "string" }
+      }
+    },
+    "user": {
+      "type": "object",
+      "required": ["type", "message", "parent_tool_use_id", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "user" },
+        "message": {
+          "type": "object",
+          "required": ["role", "content"],
+          "additionalProperties": false,
+          "properties": {
+            "role": { "const": "user" },
+            "content": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "oneOf": [{ "$ref": "#/$defs/textBlock" }, { "$ref": "#/$defs/toolResultBlock" }] }
+            }
+          }
+        },
+        "parent_tool_use_id": { "$ref": "#/$defs/parentToolUseId" },
+        "session_id": { "type": "string" }
+      }
+    },
+    "assistant": {
+      "type": "object",
+      "required": ["type", "message", "parent_tool_use_id", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "assistant" },
+        "message": {
+          "type": "object",
+          "required": ["type", "role", "content", "stop_reason"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "message" },
+            "role": { "const": "assistant" },
+            "content": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "oneOf": [
+                  { "$ref": "#/$defs/textBlock" },
+                  { "$ref": "#/$defs/toolUseBlock" },
+                  { "$ref": "#/$defs/thinkingBlock" },
+                  { "$ref": "#/$defs/redactedThinkingBlock" }
+                ]
+              }
+            },
+            "stop_reason": { "enum": ["end_turn", "max_tokens", "stop_sequence", "tool_use", "pause_turn", "refusal", null] },
+            "usage": { "$ref": "#/$defs/usage" }
+          }
+        },
+        "parent_tool_use_id": { "$ref": "#/$defs/parentToolUseId" },
+        "session_id": { "type": "string" }
+      }
+    },
+    "resultSuccess": {
+      "type": "object",
+      "required": ["type", "subtype", "is_error", "duration_ms", "num_turns", "result", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "result" },
+        "subtype": { "const": "success" },
+        "is_error": { "const": false },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "duration_api_ms": { "type": "integer", "minimum": 0 },
+        "num_turns": { "type": "integer", "minimum": 0 },
+        "result": { "type": "string" },
+        "session_id": { "type": "string" },
+        "usage": { "$ref": "#/$defs/usage" },
+        "permission_denials": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "resultError": {
+      "type": "object",
+      "required": ["type", "subtype", "is_error", "duration_ms", "num_turns", "error", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "result" },
+        "subtype": { "enum": ["error_during_execution", "error_max_turns"] },
+        "is_error": { "const": true },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "duration_api_ms": { "type": "integer", "minimum": 0 },
+        "num_turns": { "type": "integer", "minimum": 0 },
+        "error": { "type": "string" },
+        "session_id": { "type": "string" },
+        "usage": { "$ref": "#/$defs/usage" },
+        "permission_denials": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "systemError": {
+      "type": "object",
+      "required": ["type", "subtype", "error", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "const": "system" },
+        "subtype": { "enum": ["error_during_execution", "error_max_turns"] },
+        "error": { "type": "string" },
+        "session_id": { "type": "string" }
+      }
+    }
+  }
+}

@@ -81,6 +81,17 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("reads --stream-json and --stream-json-thinking, which implies it, and keeps them away from Pi", () => {
+    const plain = routeAmpiArgv(["-x", "go"]).options;
+    assert.deepEqual([plain.streamJson, plain.streamJsonThinking], [false, false]);
+    const stream = routeAmpiArgv(["-x", "go", "--stream-json"]);
+    assert.deepEqual(stream.piArgs, ["go"]);
+    assert.deepEqual([stream.options.streamJson, stream.options.streamJsonThinking], [true, false]);
+    const thinking = routeAmpiArgv(["-x", "--stream-json-thinking", "go"]);
+    assert.deepEqual(thinking.piArgs, ["go"]);
+    assert.deepEqual([thinking.options.streamJson, thinking.options.streamJsonThinking], [true, true]);
+  });
+
   it("maps --pi-help to Pi's own --help", () => {
     const route = routeAmpiArgv(["--pi-help"]);
     assert.equal(route.command, "pi");

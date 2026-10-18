@@ -19,6 +19,11 @@ Options:
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.
       Implied when stdin or stdout is not a terminal.
+  --stream-json
+      In execute mode, print stream JSON (one JSON record per line, compatible with Claude
+      Code's stream-json output) instead of the final message
+  --stream-json-thinking
+      --stream-json with the model's thinking blocks included
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute
@@ -69,6 +74,10 @@ Run one message and print the answer:
 Send a diff with a request, and save the answer:
 
   $ git diff | ampi -x "review this change" > review.md
+
+Run one message and keep only the final result record of the stream JSON:
+
+  $ ampi -x "list files" --stream-json | jq -c 'select(.type == "result")'
 
 Pick up the latest session in this directory:
 
