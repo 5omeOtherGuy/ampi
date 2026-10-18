@@ -50,7 +50,7 @@ describe("session query keys", () => {
     assert.deepEqual(alias.appliedFilterTokens, ["updated_before:2026-10-01"]);
   });
 
-  it("counts relative dates back from now, so a time on each side of the bound falls on that side", async () => {
+  it("counts relative dates back from now, and today and yesterday from midnight UTC", async () => {
     const { parseSessionQuery } = await importSource(MODULE);
     const bound = (text) => parseSessionQuery(text, NOW).modifiedAfter.getTime();
     assert.equal(bound("after:7d"), NOW.getTime() - 7 * DAY);
@@ -60,10 +60,6 @@ describe("session query keys", () => {
     // today and yesterday start at midnight UTC, not 24 hours back.
     assert.equal(new Date(bound("after:today")).toISOString(), "2026-10-18T00:00:00.000Z");
     assert.equal(new Date(bound("after:yesterday")).toISOString(), "2026-10-17T00:00:00.000Z");
-    const sevenDays = bound("after:7d");
-    const justInside = new Date("2026-10-11T10:00:01.000Z").getTime();
-    const justOutside = new Date("2026-10-11T09:59:59.000Z").getTime();
-    assert.ok(justInside >= sevenDays && justOutside < sevenDays);
     assert.deepEqual(parseSessionQuery("after:soon", NOW).invalidFilters, ["after:soon"]);
   });
 
@@ -74,6 +70,32 @@ describe("session query keys", () => {
     // find_session reports both kinds as unsupported.
     assert.deepEqual(parsed.unsupportedFilters, ["commit:abc123", "pr:42", "author:me", "visibility:private"]);
     assert.deepEqual(parsed.terms, []);
+  });
+
+  it("keeps a quoted phrase as text even when it starts like a key", async () => {
+    const { parseSessionQuery, tokenizeSessionQuery } = await importSource(MODULE);
+    const parsed = parseSessionQuery(`"note: the parser" 'https://example.com/a b' note:x`, NOW);
+    assert.deepEqual(parsed.terms, ["note: the parser", "https://example.com/a b"]);
+    assert.deepEqual(parsed.unsupportedFilters, ["note:x"]);
+    assert.deepEqual(tokenizeSessionQuery(`"note: the parser" cwd:a`), ["note: the parser", "cwd:a"]);
+  });
+
+  it("reads a word ending in a colon as text, and a key without a value as invalid", async () => {
+    const { parseSessionQuery } = await importSource(MODULE);
+    const parsed = parseSessionQuery("TypeError: archived: Label: commit:", NOW);
+    assert.deepEqual(parsed.terms, ["TypeError:"]);
+    assert.deepEqual(parsed.invalidFilters, ["archived:", "Label:", "commit:"]);
+    assert.equal(parsed.archived, undefined);
+    assert.deepEqual(parsed.unsupportedFilters, []);
+  });
+
+  it("resolves a parent path to the listed session's id, else to the id in Pi's file name", async () => {
+    const { resolveParentSessionId } = await importSource(MODULE);
+    const listed = new Map([["/agent/sessions/x/2026-10-17T09-00-00-000Z_019a.jsonl", "019a-listed"]]);
+    assert.equal(resolveParentSessionId("/agent/sessions/x/2026-10-17T09-00-00-000Z_019a.jsonl", listed), "019a-listed");
+    assert.equal(resolveParentSessionId("/moved/sessions/x/2026-10-17T09-00-00-000Z_019a-0b.jsonl", listed), "019a-0b");
+    assert.equal(resolveParentSessionId("/moved/sessions/x/notes.jsonl", listed), undefined);
+    assert.equal(resolveParentSessionId(undefined, listed), undefined);
   });
 
   it("keeps the names ampi-history exports", async () => {

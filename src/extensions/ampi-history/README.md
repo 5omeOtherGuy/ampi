@@ -47,7 +47,7 @@ The tool description tells the model that a `@<session-id>` in your message, as 
 
 `find_session` accepts:
 
-- bare keywords / quoted phrases;
+- bare keywords / quoted phrases (a quoted phrase is always text, even when it contains a colon, as in `"Error: ENOENT"`; so is a word ending in a colon that is not a key, such as `TypeError:`, while a key with no value, such as `archived:`, is reported `invalid`);
 - `id:<prefix>`, `name:<text>`, `parent:<id-or-prefix>` (sessions forked from that session);
 - date filters: `after:` / `since:` / `before:` / `until:` / `updated_before:` (modified time), plus `modified_after:`, `modified_before:`, `created_after:`, `created_before:`. Values accept `YYYY-MM-DD`, `7d`, `2w`, `today`, `yesterday`, `week`, and `month`;
 - `file:<partial-path>` — per-session match against that session's own cwd-relative structured tool-call evidence (`read`, `edit`, `write`, `apply_patch`). Bash output, prose, and `grep`/`find` search-directory args are never inspected;

@@ -6,7 +6,7 @@ import {
   type MmrSessionMetadata as SessionMetadata,
   type MmrSessionSource,
 } from "../ampi-core/session-catalog.js";
-import { matchesMmrThreadIndexFilters } from "../ampi-core/session-query.js";
+import { matchesMmrThreadIndexFilters, resolveParentSessionId } from "../ampi-core/session-query.js";
 import { getMmrThreadIndex, type MmrThreadRecord } from "../ampi-core/thread-index.js";
 import { createGitIdentityResolver, matchesRepoToken, type GitIdentityResolver, type RepoIdentity } from "./git-identity.js";
 import { includesCaseInsensitive, parseSessionQuery, type SessionQuery } from "./query.js";
@@ -79,7 +79,7 @@ function matchesLexical(info: SessionInfo, query: SessionQuery, idsByPath: Reado
   if (query.id && !includesCaseInsensitive(info.id, query.id)) return undefined;
   if (query.name && !includesCaseInsensitive(info.name ?? "", query.name)) return undefined;
   if (query.parent) {
-    const parentId = info.parentSessionPath ? idsByPath.get(info.parentSessionPath) : undefined;
+    const parentId = resolveParentSessionId(info.parentSessionPath, idsByPath);
     if (!parentId?.toLowerCase().startsWith(query.parent.toLowerCase())) return undefined;
   }
   if (query.modifiedAfter && info.modified < query.modifiedAfter) return undefined;

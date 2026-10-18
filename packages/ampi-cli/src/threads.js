@@ -565,7 +565,7 @@ async function list(host, values, positionals) {
  */
 function describeSearchProblem({ filter, kind }) {
   const key = filter.slice(0, filter.indexOf(":") + 1);
-  if (kind === "unknown") return `${key} is not a search key (in ${filter}).`;
+  if (kind === "unknown") return `${key} is not a search key (in ${filter}); to search for that text, quote it: '"${filter}"'.`;
   if (kind === "hosted") return `${key} needs data that a hosted service keeps; it is not available for local sessions (in ${filter}).`;
   if (kind === "invalid") {
     const expected = /^(?:pinned|archived):/i.test(key)
@@ -575,9 +575,10 @@ function describeSearchProblem({ filter, kind }) {
         : /^(?:after|since|before|until|(?:modified|updated|created)_(?:after|before)):/i.test(key)
           ? "a date: YYYY-MM-DD, today, yesterday, week, month, or a count of days or weeks such as 7d or 2w"
           : undefined;
-    return `${filter} has a value search cannot read${expected === undefined ? "" : `; ${key} takes ${expected}`}.`;
+    return `${filter} ${filter.endsWith(":") ? "has no value" : "has a value search cannot read"}${expected === undefined ? "" : `; ${key} takes ${expected}`}.`;
   }
   if (/^(?:pinned|archived):/i.test(key)) return `${filter} is ignored: the thread index cannot be read.`;
+  if (/^projectRef:/i.test(key)) return `${filter} is ignored: projectRef: refers to find_session results; use cwd: or project:.`;
   return `${filter} is ignored: it applies to find_session only; search sorts by the latest update and takes --limit.`;
 }
 

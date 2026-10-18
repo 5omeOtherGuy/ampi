@@ -76,7 +76,7 @@ before(() => {
   try {
     const parentFile = session(demo, PARENT, "2026-10-17T09:00:00.000Z", [
       user("Rename the parser module", "2026-10-17T09:00:00.000Z"),
-      assistant("Renamed the module.", "2026-10-17T09:05:00.000Z"),
+      assistant("Renamed the module. Note: the parser keeps its old exports.", "2026-10-17T09:05:00.000Z"),
     ]);
     session(
       demo,
@@ -149,6 +149,14 @@ describe("ampi threads search: matching", () => {
   it("matches a quoted phrase only where its words stand together", async () => {
     assert.deepEqual(await ids('"release notes"'), [NOTES]);
     assert.deepEqual(await ids("release notes"), [NOTES, PORT]);
+  });
+
+  it("searches a quoted phrase with a colon as text, and a word ending in a colon too", async () => {
+    assert.deepEqual(await ids('"note: the parser"'), [PARENT]);
+    // As the shell passes `ampi threads search "note: the parser"`: three words.
+    assert.deepEqual(await ids("note: the parser"), [PARENT]);
+    assert.deepEqual(await ids('"the parser keeps"'), [PARENT]);
+    assert.deepEqual(await ids("TypeError:"), []);
   });
 
   it("takes id: as an id or its first characters, not any part of it", async () => {
@@ -261,7 +269,12 @@ describe("ampi threads search: errors", () => {
     assert.match(err, /Run ampi threads --help/);
   };
 
-  it("refuses an unknown key and names it", () => usageError(["parser", "visibility:private"], /^ampi: visibility: is not a search key \(in visibility:private\)\./));
+  it("refuses an unknown key, names it and says how to search for the text", async () => {
+    await usageError(["parser", "visibility:private"], /^ampi: visibility: is not a search key \(in visibility:private\);/);
+    await usageError(["https://example.com"], /^ampi: https: is not a search key \(in https:\/\/example\.com\); to search for that text, quote it: '"https:\/\/example\.com"'\./);
+  });
+
+  it("refuses a key without a value", () => usageError(["archived:"], /^ampi: archived: has no value; archived: takes true or false\./));
 
   it("refuses commit:, pr: and author: as needing hosted data", async () => {
     await usageError(["commit:abc123"], /^ampi: commit: needs data that a hosted service keeps; it is not available for local sessions/);
@@ -271,6 +284,24 @@ describe("ampi threads search: errors", () => {
   it("refuses a value it cannot read", async () => {
     await usageError(["after:soon"], /^ampi: after:soon has a value search cannot read; after: takes a date/);
     await usageError(["pinned:maybe"], /pinned: takes true or false/);
+  });
+
+  it("ignores offset: and sort: with any value, and projectRef:, with a note", async () => {
+    const { result, out, err } = await run(["threads", "search", "--json", "parser", "offset:abc", "sort:created", "projectRef:abc"]);
+    assert.deepEqual(result, { code: 0 });
+    assert.deepEqual(
+      out.trimEnd().split("\n").map((line) => JSON.parse(line).id),
+      [CHILD, PARENT],
+    );
+    assert.equal(
+      err,
+      [
+        "ampi: offset:abc is ignored: it applies to find_session only; search sorts by the latest update and takes --limit.",
+        "ampi: sort:created is ignored: it applies to find_session only; search sorts by the latest update and takes --limit.",
+        "ampi: projectRef:abc is ignored: projectRef: refers to find_session results; use cwd: or project:.",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("refuses an empty query and a bad limit", async () => {

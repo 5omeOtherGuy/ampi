@@ -1,6 +1,6 @@
 import { type ExtensionAPI, type SessionInfo, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createMmrSessionIndex } from "./extensions/ampi-core/session-catalog.js";
-import { includesCaseInsensitive, matchesMmrThreadIndexFilters, parseSessionQuery } from "./extensions/ampi-core/session-query.js";
+import { includesCaseInsensitive, matchesMmrThreadIndexFilters, parseSessionQuery, resolveParentSessionId } from "./extensions/ampi-core/session-query.js";
 import type { MmrThreadRecord } from "./extensions/ampi-core/thread-index.js";
 import { createGitIdentityResolver, matchesRepoToken } from "./extensions/ampi-history/git-identity.js";
 
@@ -47,7 +47,7 @@ export interface MmrThreadSearchResult {
   readonly problems: readonly MmrThreadSearchProblem[];
 }
 
-/** Parser keys that only make sense for `find_session` results. */
+/** Parser keys that only make sense for `find_session` results; search ignores them, readable or not. */
 const FIND_SESSION_ONLY = /^(?:offset|sort):/i;
 
 /**
@@ -65,7 +65,7 @@ export async function searchMmrThreads(input: MmrThreadSearchInput): Promise<Mmr
   const query = parseSessionQuery(input.query, input.now);
   const problems: MmrThreadSearchProblem[] = [
     ...query.unsupportedFilters.map((filter) => ({ filter, kind: query.hostedFilters.includes(filter) ? "hosted" : "unknown" }) as const),
-    ...query.invalidFilters.map((filter) => ({ filter, kind: "invalid" }) as const),
+    ...query.invalidFilters.map((filter) => ({ filter, kind: FIND_SESSION_ONLY.test(filter) ? "unavailable" : "invalid" }) as const),
     ...query.appliedFilterTokens.filter((token) => FIND_SESSION_ONLY.test(token)).map((filter) => ({ filter, kind: "unavailable" }) as const),
     ...query.projectRefTokens.map((filter) => ({ filter, kind: "unavailable" }) as const),
   ];
@@ -85,7 +85,7 @@ export async function searchMmrThreads(input: MmrThreadSearchInput): Promise<Mmr
 
   const matchOne = async (session: SessionInfo): Promise<MmrThreadSearchMatch | undefined> => {
     if (query.id && !startsWith(session.id, query.id)) return undefined;
-    if (query.parent && !startsWith(session.parentSessionPath && idsByPath.get(session.parentSessionPath), query.parent)) return undefined;
+    if (query.parent && !startsWith(resolveParentSessionId(session.parentSessionPath, idsByPath), query.parent)) return undefined;
     if (query.name && !includesCaseInsensitive(session.name ?? "", query.name)) return undefined;
     if (query.modifiedAfter && session.modified < query.modifiedAfter) return undefined;
     if (query.modifiedBefore && session.modified > query.modifiedBefore) return undefined;

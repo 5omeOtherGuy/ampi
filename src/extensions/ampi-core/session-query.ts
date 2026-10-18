@@ -78,6 +78,13 @@ const FILTER_RE = /^([a-zA-Z_][\w-]*):(.*)$/;
 const SUPPORTED_HAS_FILTERS = new Set(["tools", "errors"]);
 /** Keys of the search language whose data only a hosted service has. */
 const HOSTED_FILTER_KEYS = new Set(["commit", "pr", "author"]);
+/** Every key `parseSessionQuery` reads, so a key without a value can be told from ordinary text such as `Error:`. */
+const FILTER_KEYS = new Set([
+  "id", "name", "parent", "pinned", "archived",
+  "after", "since", "modified_after", "before", "until", "modified_before", "updated_before", "created_after", "created_before",
+  "file", "repo", "project", "cwd", "projectref", "project-ref", "provider", "model", "tool", "label", "has", "offset", "sort",
+  ...HOSTED_FILTER_KEYS,
+]);
 
 function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -118,14 +125,20 @@ function parseBoolean(value: string): boolean | undefined {
   return undefined;
 }
 
-export function tokenizeSessionQuery(query: string): string[] {
-  const tokens: string[] = [];
+/** Split a query into words and quoted phrases, remembering which were quoted. */
+function tokenize(query: string): { text: string; quoted: boolean }[] {
+  const tokens: { text: string; quoted: boolean }[] = [];
   const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
   for (const match of query.matchAll(re)) {
-    const token = match[1] ?? match[2] ?? match[3];
-    if (token) tokens.push(token);
+    const quoted = match[1] ?? match[2];
+    const text = quoted ?? match[3];
+    if (text) tokens.push({ text, quoted: quoted !== undefined });
   }
   return tokens;
+}
+
+export function tokenizeSessionQuery(query: string): string[] {
+  return tokenize(query).map((token) => token.text);
 }
 
 function pushDateFilter(
@@ -179,15 +192,21 @@ export function parseSessionQuery(query: string, now = new Date()): SessionQuery
     invalidFilters: [],
     appliedFilterTokens: [],
   };
-  for (const token of tokenizeSessionQuery(query)) {
-    const filter = FILTER_RE.exec(token);
+  for (const { text: token, quoted } of tokenize(query)) {
+    // A quoted phrase is always text, even when it starts like a filter ("Error: ENOENT").
+    const filter = quoted ? null : FILTER_RE.exec(token);
     if (!filter) {
       parsed.terms.push(token);
       continue;
     }
     const key = filter[1]!.toLowerCase();
     const value = filter[2]!.trim();
-    if (!value) continue;
+    if (!value) {
+      // `archived:` alone is a filter missing its value; `TypeError:` is text.
+      if (FILTER_KEYS.has(key)) parsed.invalidFilters.push(token);
+      else parsed.terms.push(token);
+      continue;
+    }
     if (key === "id") {
       parsed.id = value;
       parsed.appliedFilterTokens.push(`id:${value}`);
@@ -259,6 +278,17 @@ export function parseSessionQuery(query: string, now = new Date()): SessionQuery
     }
   }
   return parsed;
+}
+
+/**
+ * The id of the session a `parentSession` header path names: the id of the
+ * listed session stored at that path, otherwise the id in Pi's
+ * `<time>_<id>.jsonl` file name, so children still resolve after the agent
+ * directory moves or is reached through another spelling of its path.
+ */
+export function resolveParentSessionId(parentPath: string | undefined, idsByPath: ReadonlyMap<string, string>): string | undefined {
+  if (!parentPath) return undefined;
+  return idsByPath.get(parentPath) ?? /_([^_/\\]+)\.jsonl$/.exec(parentPath)?.[1];
 }
 
 export function includesCaseInsensitive(haystack: string, needle: string): boolean {
