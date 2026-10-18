@@ -14,7 +14,7 @@ import {
   type GithubRepoSummary,
 } from "./client.js";
 import type { MmrGithubSettings } from "./config.js";
-import { matchGlob } from "./glob.js";
+import { matchGlob } from "../ampi-core/glob.js";
 import {
   clamp,
   directoryListingResult,

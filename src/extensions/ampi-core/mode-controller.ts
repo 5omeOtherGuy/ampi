@@ -14,7 +14,7 @@ import {
 } from "./modes.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
 import { resolveAndApplyMmrModel } from "./model-resolver.js";
-import { shouldDropToolForFreeMode } from "./owned-tools.js";
+import { shouldDropToolForFreeMode, type ToolInfoLike } from "./owned-tools.js";
 import {
   MMR_REQUEST_POLICIES,
   applyMmrThinkingLevelToPolicy,
@@ -44,6 +44,14 @@ import {
 import { excludeReservedSubagentNames, mergeToolResolutions, relabelExtraOwners, selectExtraToolNames } from "./extra-tools.js";
 import { resolveMmrTools as resolveMmrToolNames } from "./tool-registry.js";
 import { loadMmrCoreSettings } from "./settings.js";
+import {
+  applyMmrToolDisable,
+  createMmrToolDisableMatcher,
+  listMmrDisabledTools,
+  matchMmrDisabledTool,
+  withoutMmrDisabledTools,
+  type MmrToolDisableMatcher,
+} from "./tool-disable.js";
 import { AMPI_MODE_STATE_ENTRY, createMmrModeState, findLatestPersistedModeState, toPersistedModeState } from "./state.js";
 import { updateMmrStatus } from "./status.js";
 import type {
@@ -154,6 +162,12 @@ export interface MmrModeController {
   setApplyingMmrMode(value: boolean): void;
   /** Locked-mode auto-compaction; its setting is loaded with the other ampi-core settings. */
   getAutoCompactor(): MmrAutoCompactor;
+  /** Replace the `ampi.tools.disable` matcher; subagent activation loads its own settings. */
+  setToolDisableMatcher(matcher: MmrToolDisableMatcher): void;
+  /** The `ampi.tools.disable` entry that turns off the tool named `name`, if any. */
+  matchDisabledTool(name: string): string | undefined;
+  /** Every registered tool `ampi.tools.disable` turns off, with the entry that matched. */
+  listDisabledTools(): { tool: string; entry: string }[];
 }
 
 export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
@@ -173,6 +187,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let configuredSubagentModelPreferences: Record<string, MmrModelPreference[]> = {};
   let configuredLockedModeExtraTools: MmrCoreSettings["lockedModeExtraTools"] = {};
   let configuredEditTools: MmrEditToolsSetting = "auto";
+  // `ampi.tools.disable`, compiled once per settings load.
+  let toolDisableMatcher = createMmrToolDisableMatcher();
   // Workspace of the last locked-mode apply; scopes provider extras when the
   // edit tool family is refreshed outside an apply.
   let lockedModeCwd: string | undefined;
@@ -288,12 +304,15 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }, rejectedSources);
   }
 
+  // The mode's tools plus the settings and provider extras, less the tools
+  // `ampi.tools.disable` turns off.
   function resolveLockedModeTools(
     modeKey: MmrLockedModeKey,
     editTools: MmrEditToolFamilyDecision,
-    availableTools: readonly string[],
+    allTools: readonly ToolInfoLike[],
     cwd: string,
   ): ReturnType<typeof resolveMmrTools> {
+    const availableTools = allTools.map((tool) => tool.name);
     const baseToolNames = getMmrModeToolNames(modeKey, editTools.family);
     const baseResolution = resolveMmrTools(modeKey, availableTools, editTools.family);
     const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
@@ -310,9 +329,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       seenExtra.add(name);
       extraToolNames.push(name);
     }
-    return extraToolNames.length > 0
+    const resolution = extraToolNames.length > 0
       ? mergeToolResolutions(baseResolution, relabelExtraOwners(resolveMmrToolNames(extraToolNames, availableTools)))
       : baseResolution;
+    return applyMmrToolDisable(resolution, toolDisableMatcher, allTools);
   }
 
   function notifyFreeMode(ctx: ExtensionContext, state: MmrModeState, options: ApplyModeOptions): void {
@@ -379,9 +399,16 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     // When Pi cannot tell us the source, we fall back to the name-only
     // registry so Free mode still removes the tools we know about. See
     // `shouldDropToolForFreeMode` for the full matrix.
+    //
+    // `ampi.tools.disable` still applies: it is the user's own choice, not
+    // part of ampi's mode policy.
     const allTools = pi.getAllTools();
     const baselineTools = baseline ? [...baseline.activeTools] : pi.getActiveTools();
-    const activeTools = baselineTools.filter((name) => !shouldDropToolForFreeMode(name, allTools));
+    const activeTools = withoutMmrDisabledTools(
+      baselineTools.filter((name) => !shouldDropToolForFreeMode(name, allTools)),
+      toolDisableMatcher,
+      allTools,
+    );
 
     applyingMmrMode = true;
     try {
@@ -453,13 +480,15 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       : configuredPreferences;
     const previousState = getMmrModeState();
 
-    const availableTools = pi.getAllTools().map((tool) => tool.name);
+    const allTools = pi.getAllTools();
     // Base resolution drives the fail-closed activation check: only the mode's
     // own allowlist may satisfy (or fail) activation. User extras are merged
     // afterward so a typo'd or missing extra can never abort, nor mask a mode
     // that resolved zero of its own tools. The check runs before a route is
-    // chosen, so it leaves out the provider-dependent file-editing tool.
-    const baseResolution = resolveMmrTools(mode.key, availableTools);
+    // chosen, so it leaves out the provider-dependent file-editing tool. It
+    // also runs before `ampi.tools.disable` applies, so turning tools off
+    // never aborts a mode switch.
+    const baseResolution = resolveMmrTools(mode.key, allTools.map((tool) => tool.name));
     if (mode.tools.length > 0 && baseResolution.activeTools.length === 0) {
       if (options.notify) ctx.ui.notify(formatZeroToolActivationFailure(mode, baseResolution, previousState), "error");
       updateMmrStatus(ctx, previousState);
@@ -496,7 +525,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // settings extras so a custom subagent can only ever enter a mode through
       // this scope-aware provider.
       const editTools = resolveMmrEditToolFamily(modelResolution.selectedProvider ?? "", configuredEditTools);
-      const toolResolution = resolveLockedModeTools(mode.key as MmrLockedModeKey, editTools, availableTools, ctx.cwd);
+      const toolResolution = resolveLockedModeTools(mode.key as MmrLockedModeKey, editTools, allTools, ctx.cwd);
       lockedModeCwd = ctx.cwd;
       pi.setActiveTools(toolResolution.activeTools);
 
@@ -586,6 +615,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     configuredLockedModeExtraTools = loadedSettings.settings.lockedModeExtraTools ?? {};
     autoCompactor.setSetting(loadedSettings.settings.autoCompact);
     configuredEditTools = loadedSettings.settings.editTools ?? "auto";
+    toolDisableMatcher = createMmrToolDisableMatcher(loadedSettings.settings.toolsDisable);
     settingsFilesRead = [...loadedSettings.filesRead];
     settingsWarnings = [...loadedSettings.warnings];
     notifyWarnings(ctx, loadedSettings.warnings);
@@ -704,12 +734,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
     if (editTools.family === state.editTools.family && editTools.provider === state.editTools.provider) return;
 
-    const tools = resolveLockedModeTools(
-      state.mode,
-      editTools,
-      pi.getAllTools().map((tool) => tool.name),
-      lockedModeCwd,
-    );
+    const tools = resolveLockedModeTools(state.mode, editTools, pi.getAllTools(), lockedModeCwd);
     pi.setActiveTools(tools.activeTools);
     setMmrModeState({
       ...state,
@@ -855,5 +880,11 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       applyingMmrMode = value;
     },
     getAutoCompactor: () => autoCompactor,
+    setToolDisableMatcher: (matcher) => {
+      toolDisableMatcher = matcher;
+    },
+    matchDisabledTool: (name) =>
+      toolDisableMatcher.entries.length === 0 ? undefined : matchMmrDisabledTool(toolDisableMatcher, name, pi.getAllTools()),
+    listDisabledTools: () => listMmrDisabledTools(toolDisableMatcher, pi.getAllTools()),
   };
 }

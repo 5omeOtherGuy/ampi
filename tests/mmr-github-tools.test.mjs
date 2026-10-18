@@ -5,7 +5,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 const TOOLS_MODULE = "extensions/ampi-github/tools.ts";
-const GLOB_MODULE = "extensions/ampi-github/glob.ts";
+const GLOB_MODULE = "extensions/ampi-core/glob.ts";
 
 function settings(partial = {}) {
   return { enabled: true, token: undefined, apiBaseUrl: "https://api.github.test", requestTimeoutMs: 1000, maxResultBytes: 200000, ...partial };

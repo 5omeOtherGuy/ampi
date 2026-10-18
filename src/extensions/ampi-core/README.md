@@ -47,7 +47,7 @@ Exact-name resolution against Pi's live tool inventory through the tool-provider
 | --- | --- |
 | `active` | Registered and reachable in this mode. |
 | `gated` | Owner is loaded but a prerequisite is unmet (`librarian` waits on source-owned `ampi-github` tools). |
-| `disabled` | Owner is loaded but turned off or has no active capability. |
+| `disabled` | Owner is loaded but turned off or has no active capability, or `ampi.tools.disable` turns the tool off. |
 | `deferred` | Recognized name reserved in the status catalog; concrete tool not shipped. |
 | `missing` | No extension claimed the name; Pi has not registered it. |
 
@@ -96,6 +96,52 @@ Locked modes ship a fixed allowlist, so a user's own extension tools, third-part
 - Parent session only — extras never apply to subagent workers, which keep their profile allowlists.
 
 Project `.pi/settings.json` is a trust boundary: it can re-enable exact tool names in locked modes. See [`../../../docs/extension-compatibility.md`](../../../docs/extension-compatibility.md) for the full stance on user extensions, tools, providers, and MCP.
+
+### Turning tools off
+
+`ampi.tools.disable`, in the top-level `ampi` block of Pi's settings files, lists tools to turn off:
+
+```jsonc
+{
+  "ampi": {
+    "tools": {
+      "disable": ["web_search", "task_*", "mcp__github__*", "builtin:grep"]
+    }
+  }
+}
+```
+
+- An entry is an exact tool name, a glob where `*` matches any run of characters, or `builtin:<name or glob>`.
+- A `builtin:` entry matches only Pi's own built-in tools (`read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`), recognized by the source Pi records for them. An extension tool that replaces a built-in under the same name stays on, and so do the tools of Pi's built-in extensions: MCP tools, `codemode` and `tool_search`. Use a plain name or glob for those.
+- The user and project lists are combined. An entry that is not a non-empty string, or a glob the matcher does not support, is skipped with a settings warning.
+- ampi-core leaves disabled tools out of every tool set it applies: locked modes (including the settings and provider extras), `free`, and subagent workers. A mode whose every tool is disabled still activates.
+- A `tool_call` gate blocks calls to disabled tools in every mode, including calls another tool makes (a `codemode` script, a tool `tool_search` loaded), which removing a tool from the active set does not stop. The model is told which setting entry turned the tool off.
+- `/ampi-status` lists each registered tool the setting turns off with the entry that matched, and a mode tool it turns off shows as `disabled`, never as `missing` or `deferred`.
+
+### Skills from Claude Code folders
+
+Pi reads skills from its own locations (`.pi/skills`, `~/.agents/skills`, project `.agents/skills`, and the `skills` setting). ampi-core adds, through Pi's `resources_discover` event:
+
+1. `.claude/skills` in the working directory and in each parent up to the repository root (the nearest directory with `.git`), nearest first. Outside a repository only the working directory counts. These are project files, so they load only when Pi trusts the project, as Pi does for project `.agents/skills`.
+2. `~/.claude/skills`.
+3. The directories in `ampi.skills.path`, in order.
+
+```jsonc
+{
+  "ampi": {
+    "skills": {
+      "path": "~/my-skills:/shared/team-skills:tools/skills", // ";" separates entries on Windows
+      "disableClaudeCodeSkills": false                         // true leaves out both .claude/skills folders
+    }
+  }
+}
+```
+
+- `ampi.skills.path` is one string of directories separated by `:` (`;` on Windows). `~` is the home directory; a relative entry resolves against the repository root, or the working directory outside a repository. A project value replaces the user value, and is used only when Pi trusts the project; otherwise the user value applies.
+- Only directories that exist are added, each once. Pi finds `SKILL.md` files in them recursively.
+- Precedence: Pi loads the folders ampi adds after its own locations and keeps the first skill of each name, with a collision warning. So Pi's own locations win over all of these, a project `.claude/skills` skill wins over a `~/.claude/skills` skill of the same name, and both win over `ampi.skills.path`.
+- Pi asks about project trust only when it finds resources it protects itself (such as `.pi/settings.json` or `.agents/skills`). In a folder that has a `.claude/skills` directory and none of those, Pi treats the project as trusted, so its `.claude/skills` loads without a prompt.
+- When Pi runs with `--no-skills`, ampi adds nothing either; subagent workers that bring their own prompt run that way.
 
 ### Auto-compaction
 

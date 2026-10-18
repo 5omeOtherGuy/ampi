@@ -204,6 +204,8 @@ export function createMockPi(options = {}) {
  *  - `themeName` (default `undefined`): `ctx.ui.theme.name`, the active theme.
  *  - `themes` (default `{}`): theme objects by name, returned by `ctx.ui.getTheme`.
  *  - `toolsExpanded` (default `false`): what `ui.getToolsExpanded()` returns; `ui.setToolsExpanded` updates `state.toolsExpanded`.
+ *  - `projectTrusted` (default `true`, Pi's answer for a folder with nothing to trust): what
+ *   `isProjectTrusted()` returns; change it later through `state.projectTrusted`.
  *
  * Returns the ctx and the recorders it populates:
  *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
@@ -244,6 +246,7 @@ export function createMockExtensionContext(options = {}) {
     editorText: options.editorText ?? "",
     toolsExpanded: options.toolsExpanded ?? false,
     pendingMessages: false,
+    projectTrusted: options.projectTrusted ?? true,
   };
   const lifecycle = { abort: 0, shutdown: 0 };
   const inputListeners = new Set();
@@ -293,6 +296,7 @@ export function createMockExtensionContext(options = {}) {
         model.provider.endsWith("subscription") || model.provider.endsWith("codex"),
     },
     getContextUsage,
+    isProjectTrusted: () => state.projectTrusted,
     isIdle: () => state.idle,
     hasPendingMessages: () => state.pendingMessages,
     abort: () => {
