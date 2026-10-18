@@ -4,7 +4,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
 
-const load = () => importSource("extensions/ampi-tui/transcript/activity.ts");
+const load = () => importSource("extensions/ampi-core/tool-activity.ts");
 
 const CWD = "/home/user/proj";
 const HOME = "/home/user";

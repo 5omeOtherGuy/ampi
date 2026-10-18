@@ -98,6 +98,7 @@ Important files:
 - `thread-index.ts` — seam for the thread index (per-session archived, labels, colour, pinned, title source): `ampi-threads` registers its store, other extensions read it through `getMmrThreadIndex`; `filterMmrSessionsByArchived` filters catalogue sessions.
 - `prompt-history.ts` — seam for prompt history: `ampi-threads` registers its store, `ampi-tui`'s picker reads it through `getMmrPromptHistory`, per workspace or across all of them.
 - `thread-reports.ts` — seam for the cost and context reports: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge read them through `getMmrThreadReports`.
+- `tool-activity.ts` — pure classification of tool calls into activities (verb, object, diff stat, exit code) and the one-phrase summary of a run of them, shared by `ampi-tui`'s tool rows and `ampi-gui`'s transcript.
 - `session-usage.ts` — the usage each session entry records and what it cost (recorded, or priced from the model), shared by `ampi-tui`'s cost gauge and `ampi-threads`' cost report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
