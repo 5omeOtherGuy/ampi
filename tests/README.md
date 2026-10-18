@@ -40,6 +40,7 @@ Two import patterns coexist intentionally — see the helper header for details:
 - [`fixtures/mmr-core-prompts/`](fixtures/mmr-core-prompts) — prompt assembly baselines.
 - [`fixtures/mmr-effective-surface/`](fixtures/mmr-effective-surface) — one fixture per user-facing mode × extension combination (e.g. `medium.core-only.md`, `medium.core+subagents.md`).
 - [`fixtures/mmr-subagent-surface/`](fixtures/mmr-subagent-surface) — one fixture per shipped subagent surface (`finder.md`, `oracle.md`, `task.md`, `librarian-local-mvp.md`), capturing the assembled subagent system prompt + profile-filtered active tool manifest.
+- [`fixtures/mmr-tui-tool-rows/`](fixtures/mmr-tui-tool-rows) — transcript tool rows at 80 and 140 columns, collapsed and expanded, as plain text.
 
 Update workflow: rerun the relevant fixture test with `PI_MMR_UPDATE_FIXTURES=1` to regenerate snapshots, review the diff before committing. Without that env var, fixture drift fails the test with the offending file path.
 
