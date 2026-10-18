@@ -1,4 +1,4 @@
-import { type ClientRequest, request as httpRequest, type IncomingMessage } from "node:http";
+import { type ClientRequest, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import type { MmrGuiHubSession, MmrGuiHubStartRequest } from "../ampi-core/gui-host.js";
 import { findMmrLiveOwner, type MmrLiveEntry, type MmrLiveKind, type MmrLiveRegistryOptions } from "../ampi-core/live-registry.js";
 import type { MmrGuiCommands } from "./commands.js";
@@ -29,6 +29,7 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | --- | --- |
  * | `GET /`, `GET /s/<id>` | the page |
  * | `GET /api/app` | `{ app: true }`; a session server answers 404, which is how the page tells the two apart |
+ * | `GET /api/events` | an event stream with `sessions` (no `id`, data `{}`) each time a worker starts or stops, so the page reads the list again |
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
  * | `POST /api/markdown`, `/api/archive` | as on a session server, for any session |
  * | `POST /api/rename` | forwarded to the worker that runs the session; 409 for any other |
@@ -67,6 +68,8 @@ export const MMR_GUI_HUB_CHECK_MS = 2_000;
 export const MMR_GUI_HUB_IDLE_MS = 15 * 60_000;
 /** How long a send waits for a worker to start before it answers 504. */
 export const MMR_GUI_HUB_START_TIMEOUT_MS = 30_000;
+/** Interval of the keep-alive comments on the pages' event streams. */
+const MMR_GUI_HUB_HEARTBEAT_MS = 25_000;
 
 /** Request headers the hub passes to a worker; everything else is set by the hub or dropped. */
 const FORWARDED_HEADERS = ["content-type", "accept", "last-event-id"] as const;
@@ -167,15 +170,39 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
   const registry = options.registry ?? {};
   const workers = new Map<string, HubWorker>();
   const starting = new Map<string, Promise<HubWorker>>();
+  /** The pages' `GET /api/events` streams. */
+  const pages = new Set<ServerResponse>();
+
+  /** Tell every page that a session started or stopped here, so it reads the list again. */
+  function announce(): void {
+    for (const res of pages) res.write(formatMmrGuiEvent({ event: "sessions", data: {} }));
+  }
+
+  function serveHubEvents({ req, res, track }: MmrGuiRequest): void {
+    res.writeHead(200, { ...MMR_GUI_SECURITY_HEADERS, "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive" });
+    res.write("retry: 2000\n\n");
+    pages.add(res);
+    track(res);
+    const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), MMR_GUI_HUB_HEARTBEAT_MS);
+    heartbeat.unref();
+    const done = () => {
+      clearInterval(heartbeat);
+      pages.delete(res);
+    };
+    req.on("close", done);
+    res.on("close", done);
+  }
 
   /** The live entry of another process that has `file` open; this hub's own workers are found by `workers`. */
   const ownerOf = (file: string, exceptPid: number) => findMmrLiveOwner(file, { ...registry, exceptPid });
 
   /** Stop routing to a worker and end its event streams; the caller decides whether to stop the process. */
   function retire(worker: HubWorker): void {
-    if (workers.get(worker.id) === worker) workers.delete(worker.id);
+    const routed = workers.get(worker.id) === worker;
+    if (routed) workers.delete(worker.id);
     for (const stream of worker.streams) stream.end();
     worker.streams.clear();
+    if (routed) announce();
   }
 
   function inject(worker: HubWorker, event: string, data: Record<string, unknown>): void {
@@ -201,6 +228,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     });
     session.onExit(() => retire(worker));
     workers.set(id, worker);
+    announce();
     return worker;
   }
 
@@ -405,6 +433,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     }
     if (method === "POST") return hubCommand(request);
     if (rawPath === "/api/app") return sendJson(res, 200, { app: true });
+    if (rawPath === "/api/events") return serveHubEvents(request);
     if (rawPath === "/api/sessions") return sendJson(res, 200, await sessions.list());
     if (rawPath.startsWith("/api/sessions/")) {
       const view = await viewMmrGuiSession(sessions, rawPath.slice("/api/sessions/".length));

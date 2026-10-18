@@ -52,8 +52,11 @@ pi install git:github.com/5omeOtherGuy/ampi
 npm i -g @skippermissions/ampi-cli
 ampi -m high          # same session as: pi -e npm:@skippermissions/ampi --ampi-mode high
 git diff | ampi -x "review this change"   # one run, only the final answer on stdout
+ampi app --open       # every session on this machine in one local web page
 ampi --help
 ```
+
+`ampi app` serves every session from one browser page: sessions that no other process has open continue there without a terminal, the others open read-only ([details](packages/ampi-cli/README.md#ampi-app)).
 
 If Pi already loads ampi, as an installed package, from its `extensions` setting or from an extension directory, the command uses that copy instead of loading ampi twice.
 

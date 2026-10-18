@@ -110,6 +110,8 @@ export function mountComposer({ root, post, mac = false, now }) {
   let connected = false;
   /** False while the page shows another session read-only. */
   let enabled = true;
+  /** Why the composer is off for the session shown, or `null` when it is on. */
+  let locked = null;
   /** Sends run one after another, in the order they were typed. */
   let sends = Promise.resolve();
 
@@ -123,7 +125,8 @@ export function mountComposer({ root, post, mac = false, now }) {
     submit.dataset.mode = state.mode;
     submit.setAttribute("aria-label", state.label);
     submit.title = state.label;
-    submit.disabled = state.disabled;
+    submit.disabled = state.disabled || locked !== null;
+    field.disabled = locked !== null;
     field.placeholder = placeholderFor(busy, mac);
   }
 
@@ -141,7 +144,7 @@ export function mountComposer({ root, post, mac = false, now }) {
 
   function sendTyped(queue) {
     const body = sendBody(field.value, queue);
-    if (!body || !connected) return;
+    if (!body || !connected || locked !== null) return;
     field.value = "";
     grow();
     refresh();
@@ -264,6 +267,12 @@ export function mountComposer({ root, post, mac = false, now }) {
     setEnabled(value) {
       enabled = value;
       chord.reset();
+    },
+    /** Turn the composer off with a reason shown under it (`ampi app`, a session that cannot be continued), or on again with `null`. */
+    setLocked(reason) {
+      locked = reason;
+      showNotice(reason ?? "");
+      refresh();
     },
     focus() {
       field.focus({ preventScroll: true });
