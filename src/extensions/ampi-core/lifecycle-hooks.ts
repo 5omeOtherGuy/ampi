@@ -31,10 +31,10 @@ function readPreferredStringFlag(pi: ExtensionAPI, preferred: string, legacy: st
 }
 
 /**
- * Register the seven ampi-core lifecycle/event hooks against `pi`, in the exact
+ * Register the eight ampi-core lifecycle/event hooks against `pi`, in the exact
  * order Pi observes: `session_start`, `before_provider_request`,
  * `before_agent_start`, `tool_call`, `model_select`, `input`,
- * `thinking_level_select`. Registration order is load-bearing and pinned by the
+ * `thinking_level_select`, `agent_settled`. Registration order is load-bearing and pinned by the
  * registration-order characterization test. Hooks read live controller state
  * via `controller.getActivePolicy()` / `controller.isApplyingMmrMode()` (never
  * a value captured at registration time) and forward mode transitions to the
@@ -272,5 +272,14 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // (matching native model changes). The ampi-owned alt+d shortcut is the
     // in-mode thinking toggle that does not release.
     await controller.switchLockedModeToFreeForNativeControl(ctx, { nativeThinkingLevel: event.level });
+  });
+
+  pi.on("agent_settled", async (event, ctx) => {
+    // Locked-mode auto-compaction runs only here, once nothing else will run:
+    // `ctx.compact()` aborts an active run first. Subagent workers keep Pi's
+    // own compaction, and an interrupted run is left alone so the user's next
+    // message does not wait behind a summary.
+    if (getMmrSubagentState() || event.aborted) return;
+    controller.getAutoCompactor().maybeCompact(ctx, getMmrModeState()?.mode);
   });
 }

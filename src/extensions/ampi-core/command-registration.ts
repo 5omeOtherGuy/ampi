@@ -56,7 +56,15 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
       description: "Show current ampi locked-mode status. Pass 'debug' or '--debug' for model/tool resolution detail.",
       handler: async (args, ctx) => {
         const debug = parseMmrStatusDebugFlag(args);
-        ctx.ui.notify(formatMmrStatus(getMmrModeState(), { debug, modeHistory: debug ? getMmrModeHistory() : undefined }), "info");
+        const state = getMmrModeState();
+        ctx.ui.notify(
+          formatMmrStatus(state, {
+            debug,
+            modeHistory: debug ? getMmrModeHistory() : undefined,
+            autoCompact: debug ? controller.getAutoCompactor().getStatus(state?.mode) : undefined,
+          }),
+          "info",
+        );
       },
     });
   };

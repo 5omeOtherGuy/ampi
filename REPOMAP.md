@@ -94,6 +94,7 @@ Important files:
 - `session-catalog.ts` — read-only catalogue of local Pi sessions: listing and opening through Pi's `SessionManager`, the cached per-session evidence index, dedupe and id/prefix resolution.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
+- `auto-compact.ts` — locked-mode auto-compaction at a fraction of the context window (`ampiCore.autoCompact`), with its run guard and failure backoff.
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
 

@@ -1,5 +1,6 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createMmrAutoCompactor, type MmrAutoCompactor } from "./auto-compact.js";
 import { withMmrModeContextCap } from "./context-cap.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { DEFAULT_MMR_MODE, getMmrMode, isMmrModeKey, MMR_HOTKEY_MODE_KEYS } from "./modes.js";
@@ -110,6 +111,8 @@ export interface MmrModeController {
   setSettingsFilesRead(files: string[]): void;
   setSettingsWarnings(warnings: string[]): void;
   setApplyingMmrMode(value: boolean): void;
+  /** Locked-mode auto-compaction; its setting is loaded with the other ampi-core settings. */
+  getAutoCompactor(): MmrAutoCompactor;
 }
 
 export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
@@ -130,6 +133,9 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let configuredLockedModeExtraTools: MmrCoreSettings["lockedModeExtraTools"] = {};
   let settingsFilesRead: string[] = [];
   let settingsWarnings: string[] = [];
+  const autoCompactor = createMmrAutoCompactor({
+    isPiCompactionDisabled: () => pi.getSettings().compaction?.enabled === false,
+  });
   let baseline: MmrBaseline | undefined;
   let activePolicy: MmrRequestPolicy | undefined;
   let applyingMmrMode = false;
@@ -498,6 +504,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     configuredModelPreferences = loadedSettings.settings.modelPreferences ?? {};
     configuredSubagentModelPreferences = loadedSettings.settings.subagentModelPreferences ?? {};
     configuredLockedModeExtraTools = loadedSettings.settings.lockedModeExtraTools ?? {};
+    autoCompactor.setSetting(loadedSettings.settings.autoCompact);
     settingsFilesRead = [...loadedSettings.filesRead];
     settingsWarnings = [...loadedSettings.warnings];
     notifyWarnings(ctx, loadedSettings.warnings);
@@ -719,5 +726,6 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     setApplyingMmrMode: (value) => {
       applyingMmrMode = value;
     },
+    getAutoCompactor: () => autoCompactor,
   };
 }

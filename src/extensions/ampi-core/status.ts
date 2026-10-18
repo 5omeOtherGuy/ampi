@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { MmrAutoCompactStatus } from "./auto-compact.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { formatMmrCompactTokens } from "./token-format.js";
@@ -65,6 +66,8 @@ export interface FormatMmrStatusOptions {
    * explicit applies and provider-failure fallbacks, not automatic routing.
    */
   modeHistory?: readonly MmrModeEvent[];
+  /** Locked-mode auto-compaction state, rendered inside the Debug section. */
+  autoCompact?: MmrAutoCompactStatus;
 }
 
 function formatSelectedModel(state: MmrModeState): string {
@@ -416,7 +419,29 @@ function formatDebugSection(state: MmrModeState, options: FormatMmrStatusOptions
   }
   const history = formatModeHistory(options.modeHistory);
   if (history) lines.push(history);
+  if (options.autoCompact) lines.push(...formatAutoCompact(options.autoCompact));
   return lines.join("\n");
+}
+
+function formatAutoCompact(status: MmrAutoCompactStatus): string[] {
+  const lines = [
+    status.threshold === undefined
+      ? `  Auto-compaction: off (${status.offReason ?? "disabled"})`
+      : `  Auto-compaction: at ${Number((status.threshold * 100).toFixed(1))}% of the context window`,
+  ];
+  if (status.running) lines.push("  Auto-compaction running: yes");
+  const last = status.last;
+  lines.push(
+    last
+      ? `  Last auto-compaction: ${last.at}, ${formatMmrCompactTokens(last.tokensBefore)} -> ${last.tokensAfter === undefined ? "unknown" : formatMmrCompactTokens(last.tokensAfter)} of ${formatMmrCompactTokens(last.contextWindow)} tokens`
+      : "  Last auto-compaction: none",
+  );
+  if (status.failure) {
+    lines.push(
+      `  Auto-compaction backoff: attempt at ${formatMmrCompactTokens(status.failure.tokens)} tokens failed or was cancelled (${status.failure.message}); next try once the context grows past it`,
+    );
+  }
+  return lines;
 }
 
 function joinLines(lines: ReadonlyArray<string | undefined>): string {
