@@ -51,9 +51,9 @@ export const MMR_MODE_DIAL_RING = ["low", "medium", "high", "ultra"] as const sa
 export const MMR_MODE_DIAL_DESCRIPTIONS: Readonly<Record<MmrModeKey, string>> = {
   low: "Quick, focused work on small, clear changes",
   medium: "Balanced default for everyday coding",
-  high: "Demanding work, with extra reasoning before acting",
+  high: "Demanding work, with extra reasoning",
   ultra: "Maximum effort for the hardest problems",
-  free: "Stock Pi: your own model and tools, no ampi routing",
+  free: "Stock Pi: your own model, no ampi routing",
 };
 
 const DIAL_HINTS: readonly MmrFrameHint[] = [
@@ -317,8 +317,8 @@ function formatRoute(provider: string, model: string, thinking: string | undefin
  * modes are resolved from their model preferences, with project and user
  * overrides, against Pi's model registry, the way ampi-core would resolve
  * them on a switch. The oracle line follows the oracle subagent profile and
- * its overrides. `free` names Pi's own model. Settings are read once per
- * reader and only when first needed.
+ * its overrides. `free` names Pi's own model and no oracle, since it drops
+ * ampi's tools. Settings are read once per reader and only when first needed.
  */
 export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "model" | "modelRegistry">): (mode: MmrModeKey) => MmrModeRoutes {
   let settings: MmrCoreSettings | undefined;
@@ -359,5 +359,5 @@ export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "mo
     return select("oracle", preferences, profile.thinkingLevel);
   }
 
-  return (mode) => ({ agent: agent(mode), oracle: oracle() });
+  return (mode) => ({ agent: agent(mode), oracle: mode === "free" ? undefined : oracle() });
 }

@@ -208,13 +208,14 @@ Ctrl+S opens the mode dial at the right edge, just above the prompt box: 58 colu
 ```
 
 - The bar fills up to the mode, in its colour: one dot for `low`, a third for `medium`, two thirds for `high`, all of it for `ultra`. Under it, the current mode's name is bold in that colour. In `free` the bar shows one dot in the default colour and no name is highlighted.
-- `Agent:` names the provider, model and thinking level the mode runs; `Oracle:` the ones the oracle subagent uses. They come from ampi-core's model routing, with your `ampiCore` model overrides, and read "not available" when no registered, signed-in model matches. In `free`, `Agent:` names Pi's current model.
+- `Agent:` names the provider, model and thinking level the mode runs; `Oracle:` the ones the oracle subagent uses. They come from ampi-core's model routing, with your `ampiCore` model overrides, and read "not available" when no registered, signed-in model matches. In `free`, `Agent:` names Pi's current model and `Oracle:` reads "not available", because `free` drops ampi's tools.
 - The first Ctrl+S only shows the dial. Each further Ctrl+S, or →, turns it to the next mode: `medium` → `high` → `ultra` → `low` → `medium`. ← turns it back. From `free`, either direction goes to `medium`.
-- Each turn switches the mode at once through `/mode`, so it is saved with the session, the prompt box's label changes with it, and ampi-core reports the switch in the transcript as `/mode` does.
+- Each turn switches the mode through `/mode`, so it is saved with the session, the prompt box's label changes with it, and ampi-core reports the switch in the transcript as `/mode` does. Switches run one at a time: turns made while one is still under way are combined, and the dial's latest mode is applied once it has finished, even if the dial has closed by then.
 - Tab shows the list of modes instead, `free` last, the current one marked `‣`. ↑/↓ choose a mode and switch to it at once; Tab goes back to the dial.
 - Esc closes the dial. It also closes by itself 2 seconds after the last key.
 - The dial takes every key while it is open; other keys do nothing.
 - Without ampi-core's `/mode` command, Ctrl+S is left to Pi.
+- While `ampi-tui` is on, ampi-core's own Ctrl+S and Ctrl+Space cycle keys do nothing, so if you unbind or move `mode.toggle` under `ampi.keymap`, Ctrl+S no longer changes the mode.
 
 ### What changes compared with Pi's defaults
 

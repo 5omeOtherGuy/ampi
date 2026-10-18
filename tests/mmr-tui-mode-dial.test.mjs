@@ -293,6 +293,6 @@ describe("ampi-tui mode route reader", () => {
     assert.deepEqual(read("medium"), { agent: "openai-codex/gpt-5.6-sol · high", oracle: "faux/faux-1 · high" });
     assert.deepEqual(read("high"), { agent: "faux/faux-1 · xhigh", oracle: "faux/faux-1 · high" }, "settings override the mode's models");
     assert.equal(read("low").agent, undefined, "no low model is registered");
-    assert.equal(read("free").agent, "faux/faux-1", "free names Pi's own model");
+    assert.deepEqual(read("free"), { agent: "faux/faux-1", oracle: undefined }, "free names Pi's own model and has no oracle");
   });
 });

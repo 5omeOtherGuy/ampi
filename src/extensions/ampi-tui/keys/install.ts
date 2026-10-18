@@ -14,6 +14,8 @@ import {
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
+import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
+import type { MmrModeKey } from "../../ampi-core/types.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
@@ -52,6 +54,12 @@ import { MMR_HINT_POPUP_WIDTH, renderMmrHintPopup } from "./hint-popup.js";
  *   keys Pi reserves, and keys that must reach the editor when their command
  *   is unavailable (Home and End while the prompt has text).
  */
+
+/**
+ * A dial switch that ampi-core never reports (the mode's model or tools are
+ * missing, say) holds the next one back this long at most.
+ */
+const MODE_SWITCH_TIMEOUT_MS = 3000;
 
 export interface MmrTuiKeysOptions {
   readonly now?: () => number;
@@ -118,6 +126,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let resolved: MmrResolvedKeymap | undefined;
   let quitPending = false;
   let modeDial: MmrModeDial | undefined;
+  /** The mode the dial last chose, and the dial's switches, one after another. */
+  let dialMode: MmrModeKey | undefined;
+  let dialSwitches: Promise<void> = Promise.resolve();
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -199,8 +210,10 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       return;
     }
     void openMmrModeDial(current, {
-      // The same path as typing /mode: applied, persisted and reported by ampi-core.
-      apply: (mode) => pi.sendUserMessage(`/mode ${mode}`, { expandPromptTemplates: true }),
+      apply: (mode) => {
+        dialMode = mode;
+        dialSwitches = dialSwitches.then(switchToDialMode).catch(() => {});
+      },
       setTimer,
       clearTimer,
       offsetY: abovePrompt,
@@ -208,6 +221,37 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
         modeDial = dial;
       },
     }).catch(() => {});
+  }
+
+  /**
+   * Switch to the mode the dial points at now, unless it is already active,
+   * through the same path as typing /mode (applied, persisted and reported by
+   * ampi-core), and resolve once ampi-core has finished. Switches never
+   * overlap: ampi-core tells its own model changes from native ones by a flag
+   * that one switch would clear while another is still changing the model,
+   * which drops the mode to free. Turns made meanwhile collapse into the
+   * latest one.
+   */
+  function switchToDialMode(): Promise<void> {
+    const mode = dialMode;
+    if (mode === undefined || mode === getMmrModeState()?.mode) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        unsubscribe();
+        clearTimer(timeout);
+        // ampi-core reports the switch a little before it clears that flag;
+        // let it finish before the next switch starts.
+        setTimer(resolve, 0);
+      };
+      // Pi's sendUserMessage does not wait for the command, so the state
+      // change ampi-core reports marks the end of the switch.
+      const unsubscribe = onMmrStateChanged(pi, settle);
+      const timeout = setTimer(settle, MODE_SWITCH_TIMEOUT_MS);
+      pi.sendUserMessage(`/mode ${mode}`, { expandPromptTemplates: true });
+    });
   }
 
   function reportUnavailable(id: string): void {
@@ -380,6 +424,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       closeHint();
       modeDial?.close();
       modeDial = undefined;
+      // Switches still waiting belong to this session; drop them.
+      dialMode = undefined;
       unsubscribeInput?.();
       unsubscribeInput = undefined;
       unsubscribeCommands?.();
