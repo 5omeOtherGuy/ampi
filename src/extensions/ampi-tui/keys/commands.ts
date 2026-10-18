@@ -44,6 +44,8 @@ export interface MmrTuiCommandHost {
   openThreadCost(ctx: ExtensionContext, reports: MmrThreadReports): void;
   /** Open the Analyze Context overlay. */
   openContextAnalysis(ctx: ExtensionContext, reports: MmrThreadReports): void;
+  /** Open the outline of the last response, or close it when it is open. */
+  toggleOutline(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -287,6 +289,15 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       description: "Show what fills the context window: prompt, tools, AGENTS.md files, skills and messages",
       availability: (ctx) => reportAvailability(ctx),
       run: (ctx) => host.openContextAnalysis(ctx, requireReports()),
+    },
+    {
+      id: "thread.toggleOutline",
+      noun: "thread",
+      verb: "toggle outline",
+      description: "Show or hide the headings of the last response, next to the prompt",
+      keywords: ["outline", "headings", "contents"],
+      availability: (ctx) => (ctx.mode === "tui" ? AVAILABLE : TERMINAL_ONLY),
+      run: (ctx) => host.toggleOutline(ctx),
     },
     {
       id: "ampi.showVersion",

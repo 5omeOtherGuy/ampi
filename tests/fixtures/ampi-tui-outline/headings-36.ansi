@@ -1,0 +1,7 @@
+╭─ [1m[36mOutline[39m[22m ────────────────────────╮
+│ [36m[2m↑  Explain how the cache works …[22m[39m │
+│ [1mCache layout[22m                     │
+│   Keys                           │
+│   Eviction                       │
+│     Least recently used          │
+╰──────────────────────────────────╯

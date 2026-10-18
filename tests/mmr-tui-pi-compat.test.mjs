@@ -23,9 +23,11 @@ let messages;
 let keymap;
 let slashCommands;
 let queueCompat;
+let overlayCompat;
 
 before(async () => {
   queueCompat = await importSource("extensions/ampi-tui/pi-compat/queue.ts");
+  overlayCompat = await importSource("extensions/ampi-tui/pi-compat/overlay.ts");
   slashCommands = await importSource("extensions/ampi-tui/pi-compat/slash-commands.ts");
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
   editorHeight = await importSource("extensions/ampi-tui/pi-compat/editor-height.ts");
@@ -238,6 +240,21 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.equal(revealed, true);
     assert.deepEqual(seen, ["one", "two", "three"], "the scroll view draws the transcript the TUI holds");
     assert.equal(scrollCompat.revealMmrTranscriptRows(new TuiMainScreen(stubTerminal()), () => ({ start: 0, end: 0 })), false);
+  });
+
+  it("overlay: Pi reads an overlay's offsetY again on every frame", () => {
+    for (const TuiClass of [TuiMainScreen, TuiAltScreen]) {
+      const tui = new TuiClass(stubTerminal());
+      let offset = -3;
+      const options = overlayCompat.withMmrLiveOffsetY({ anchor: "bottom-right", width: 10, nonCapturing: true }, () => offset);
+      const handle = tui.showOverlay({ render: () => ["a", "b"], invalidate() {} }, options);
+      tui.compositeOverlays([], 80, 24);
+      assert.deepEqual(handle.getBounds(), { row: 19, col: 70, width: 10, height: 2 }, TuiClass.name);
+      offset = -6;
+      tui.compositeOverlays([], 80, 24);
+      assert.equal(handle.getBounds().row, 16, `${TuiClass.name} moved the overlay with the new offset`);
+      handle.hide();
+    }
   });
 
   it("reserved keys: the reserved action list matches Pi's", () => {

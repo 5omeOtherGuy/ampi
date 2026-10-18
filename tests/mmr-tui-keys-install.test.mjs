@@ -131,6 +131,7 @@ describe("ampi-tui key installation", () => {
       "thread.mention": undefined,
       "thread.showCost": undefined,
       "thread.analyzeContext": undefined,
+      "thread.toggleOutline": undefined,
       "ampi.showVersion": undefined,
       "ampi.help": undefined,
       "ampi.keymapJson": undefined,

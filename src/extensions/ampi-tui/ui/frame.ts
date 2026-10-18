@@ -1,4 +1,4 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 /**
@@ -12,8 +12,9 @@ import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi
  * ╰────────── Esc close · ↑↓ move ─╯
  * ```
  *
- * Rounded corners, the title in bold in the theme's `warning` color inside
- * the top border, and optional key hints right-aligned inside the bottom
+ * Rounded corners, the title in bold inside the top border (in the theme's
+ * `warning` color unless the content names another), and optional key
+ * hints right-aligned inside the bottom
  * border (key in `accent`, text and the ` · ` separators in `dim`; a hint
  * without a key is all text). Content
  * starts after one space and ends one column before the gutter, so a line
@@ -32,6 +33,8 @@ export interface MmrFrameHint {
 
 export interface MmrFrameContent {
   readonly title?: string;
+  /** Theme color of the title. Defaults to `warning`. */
+  readonly titleColor?: ThemeColor;
   readonly hints?: readonly MmrFrameHint[];
   /** Content lines; each is cut or padded to the inner width. */
   readonly lines: readonly string[];
@@ -87,7 +90,7 @@ export function renderMmrFrame(content: MmrFrameContent, width: number, theme: M
   let top = "─".repeat(total - 3);
   if (content.title) {
     const title = fitMmrText(content.title, total - 5);
-    top = ` ${theme.bold(theme.fg("warning", title))} ${"─".repeat(Math.max(0, total - 5 - visibleWidth(title)))}`;
+    top = ` ${theme.bold(theme.fg(content.titleColor ?? "warning", title))} ${"─".repeat(Math.max(0, total - 5 - visibleWidth(title)))}`;
   }
 
   // `╰` + dashes + hints + `─╯`.
