@@ -17,6 +17,7 @@
 | [`package-lock.json`](package-lock.json) | Locked dependency graph. |
 | [`tsconfig.json`](tsconfig.json) | TypeScript strict-mode configuration. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor workflow. |
+| [`AGENTS.md`](AGENTS.md) | Coding-agent profile, landing workflow, and repository rules. |
 
 ## Package registration
 
