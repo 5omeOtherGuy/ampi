@@ -9,39 +9,17 @@
  * glyph language and result text are behavior and must not change.
  */
 
+import { MMR_SPINNER_FIRST_GLYPH } from "../ampi-core/spinner.js";
 import type { TaskListItem, TaskListSubtask, TodoStatus } from "./todo-list.js";
 
-/**
- * Pi's native streaming loader frames (see `@earendil-works/pi-tui` `Loader`).
- * Mirrored here so the pinned task-list widget animates `in_progress` rows
- * with the same braille spinner the rest of Pi uses, instead of a static
- * glyph. Public-safe constant; pi-tui does not export its frame array. Shared
- * with `todo-list-widget.ts` (animation) and the static `statusGlyph` below
- * (resting `in_progress` frame), so it lives in this lower module to keep the
- * import graph acyclic.
- */
-export const PI_LOADER_FRAMES = [
-  "⠋",
-  "⠙",
-  "⠹",
-  "⠸",
-  "⠼",
-  "⠴",
-  "⠦",
-  "⠧",
-  "⠇",
-  "⠏",
-] as const;
-
-// Static, Pi-native status glyphs. `in_progress` resolves to the first loader
-// frame for non-animated surfaces (model-visible tool result text and the
-// resting widget frame); the live widget overrides it with the current
-// braille frame. Aligns the task list with Pi's working indicator instead of
-// the previous checkbox-like round glyphs.
+// Static status glyphs. `in_progress` resolves to the spinner's first glyph
+// (`ampi-core/spinner.ts`) for non-animated surfaces (model-visible tool
+// result text and the resting widget frame); the live widget overrides it
+// with its spinner's current glyph, as every running row in ampi does.
 function widgetStatusGlyph(status: TodoStatus): string {
   switch (status) {
     case "in_progress":
-      return PI_LOADER_FRAMES[0];
+      return MMR_SPINNER_FIRST_GLYPH;
     case "pending":
       return "–";
     case "completed":

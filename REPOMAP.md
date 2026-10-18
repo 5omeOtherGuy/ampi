@@ -107,6 +107,7 @@ Important files:
 - `thread-reports.ts` — seam for the cost and context reports and the Markdown export: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge and `ampi-gui`'s Copy as Markdown read them through `getMmrThreadReports`.
 - `tool-activity.ts` — pure classification of tool calls into activities (verb, object, diff stat, exit code) and the one-phrase summary of a run of them, shared by `ampi-tui`'s tool rows and `ampi-gui`'s transcript.
 - `activity-runs.ts` — pure rules for where a run of consecutive tool calls ends (text, user and summary messages, subagent and image calls), shared by `ampi-tui`'s activity groups and `ampi-gui`'s work groups.
+- `spinner.ts`, `animation.ts` — the running glyph every running row draws (a braille cellular automaton stepped every 200 ms), and `isMmrAnimationDisabled` (`NO_ANIMATION`, `ampiTui.animations: false`), which stills it and the other animations.
 - `session-usage.ts` — the usage each session entry records and what it cost (recorded, or priced from the model), shared by `ampi-tui`'s cost gauge and `ampi-threads`' cost report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
@@ -159,7 +160,7 @@ Important files:
 
 - `index.ts` — Pi extension entry point and provider registration.
 - `todo-list-tool.ts` — `task_list` tool definition, whole-list validation, and verification nudges.
-- `todo-list-widget.ts` — pinned `aboveEditor` widget (`ampi-task-list`) with Pi-native progress spinners.
+- `todo-list-widget.ts` — pinned `aboveEditor` widget (`ampi-task-list`) with ampi's spinner on in-progress rows.
 - `task-list-wiring.ts` — `/tasks` slash command, shortcuts, and compaction hooks.
 
 ### `src/extensions/ampi-web/`

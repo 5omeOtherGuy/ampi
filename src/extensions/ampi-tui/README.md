@@ -112,6 +112,14 @@ Notifications have three switches, shown here with their defaults. Each one can 
 
 The settings are read once when the extension loads. Restart Pi or run `/reload` after changing them.
 
+Animations can be turned off for a still terminal, with the setting or with the environment variable `NO_ANIMATION` set to any non-empty value:
+
+```json
+{ "ampiTui": { "animations": false } }
+```
+
+Spinners on running tool rows, worker rows and the task list then stay on their first glyph, the prompt box's wave glyph stays on `∼`, and the welcome mark does not play. Unlike the other settings, this one is read each time a row, a widget or a session starts, so it applies to the next one without a restart.
+
 ### Keymap
 
 Rebind or unbind any command under `ampi.keymap` in Pi's settings. Each entry maps a command id to a key string, an array of key strings, or `null`; `leader` changes the leader key.
@@ -586,6 +594,7 @@ Each call's own row is one line: a status glyph, a verb and what the call acted 
 ```
 
 - Glyphs: `✓` done, `✗` failed, `⊘` cancelled, and a spinner while the call runs. The verb is in the present tense while it runs (`Reading`, `Running`, `Editing`).
+- The spinner is a single braille character whose eight dots play a tiny game of life, one generation every 200 ms, and start over from a random pattern whenever they would die out or stop changing. It always starts on `⠋` and keeps the running colour; worker rows and the task list use the same spinner. With animations off (see [Configuration](#configuration)) it stays on `⠋`.
 - Shell commands are named for what they do. A command that only reads a file (`cat`, `head`, `tail`, `sed -n`, `less`) shows as `Read <path>` with the line range when the command names one (`sed -n '1,220p' x.ts` is `Read x.ts L1-220`). A search (`rg`, `grep`, `git grep`) shows as `Grep`, a listing (`ls`, `find`, `fd`) as `Listed` with its name pattern, `sed -i` as `Edited`. Anything else, including pipelines into other programs, redirections into files and command substitutions, is `Ran <command>`. A leading `cd <dir> &&` is followed into that directory.
 - Edits show the diff stat (`+N -M`), failed commands their exit code, or `(timed out after Ns)` or `(killed)` when they ended without one. A `write` call always shows as `Created`, with every line counted as added, because its result does not say whether the file existed before. Paths are shown relative to the working directory, or with `~` for the home directory.
 - MCP tools show as `Ran <server>/<tool>`, other tools as `Ran <tool>`, each with the first argument that says what the call is about.

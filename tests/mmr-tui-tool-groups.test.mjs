@@ -11,12 +11,14 @@ import path from "node:path";
 import { after, describe, it, mock } from "node:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockPi } from "./helpers/pi-stub.mjs";
 
 initTheme(undefined, false);
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
 const fixtureDir = path.resolve(import.meta.dirname, "fixtures/mmr-tui-tool-groups");
@@ -202,8 +204,8 @@ describe("ampi-tui grouped tool rows", () => {
       const first = rows.get("r1");
       assert.equal(stripAnsi(first.render(80)[1]), " ⠋ Reading 1 file, ran 1 command, running 1 search ▸");
       finish(store, rows, "r1");
-      mock.timers.tick(80);
-      assert.equal(stripAnsi(first.render(80)[1]), " ⠙ Read 1 file, ran 1 command, running 1 search ▸", "the first call finished, the group still runs");
+      mock.timers.tick(200);
+      assert.equal(stripAnsi(first.render(80)[1]), " ⠛ Read 1 file, ran 1 command, running 1 search ▸", "the first call finished, the group still runs");
       finish(store, rows, "g1");
       assert.equal(stripAnsi(first.render(80)[1]), " ✓ Read 1 file, ran 1 command, ran 1 search ▸");
       mock.timers.tick(800);

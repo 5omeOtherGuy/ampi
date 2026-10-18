@@ -176,6 +176,12 @@ Ownership: `ampi-core` owns the framework, registry, and contract. Concrete prom
 
 The assembled surface drives [`tests/fixtures/mmr-subagent-surface/`](../../../tests/fixtures/mmr-subagent-surface) so drift is caught at PR time.
 
+### Spinner and animations
+
+[`spinner.ts`](spinner.ts) is the running glyph every ampi extension draws: one braille character whose eight dots run a tiny cellular automaton. `createMmrSpinner()` returns `glyph()` and `step()`; callers own the timer and step every `MMR_SPINNER_INTERVAL_MS` (200 ms). A fresh spinner shows `⠋`, and the pattern starts over from a random one whenever it would die out, stop changing or loop, so the glyph changes on every step and is never blank.
+
+[`animation.ts`](animation.ts) holds `isMmrAnimationDisabled()`: true when the environment variable `NO_ANIMATION` is set to a non-empty value, or `ampiTui.animations` is `false` in `~/.pi/agent/settings.json` or, overriding it, `<project>/.pi/settings.json`. `ampi-tui`, `ampi-workers` and `ampi-tasks` ask it when a running row, a widget or a session starts; when it is true, spinners stay on `⠋` and start no timer, and other animations rest on their first frame.
+
 ## Diagnostics and troubleshooting
 
 `/ampi-status` renders the resolved `MmrModeState`. Pass `debug` or `--debug` to append a `Debug:` section with the selected source, rejected source candidates, and per-candidate resolution detail.

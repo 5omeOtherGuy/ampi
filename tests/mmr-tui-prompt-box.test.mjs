@@ -9,10 +9,12 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 import { stripTerminalSequences, TuiMainScreen, visibleWidth } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const FIXTURE_DIR = path.join(import.meta.dirname, "fixtures/mmr-tui-prompt-box");
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";
@@ -593,6 +595,15 @@ describe("ampi-tui prompt box: installation", () => {
     t.feed.status = status();
     t.promptBox.statusChanged();
     assert.equal(t.intervals[0].cleared, true);
+  });
+
+  it("keeps the wave on its first glyph with no timer when NO_ANIMATION is set", (t) => {
+    setNoAnimation(t);
+    const box = install();
+    box.feed.status = status({ type: "turnStart" });
+    box.promptBox.statusChanged();
+    assert.equal(box.intervals.length, 0);
+    assert.equal(plain(box.editor.render(80).at(-1))[2], "∼");
   });
 
   it("reads the gauge from the session's assistant messages", () => {

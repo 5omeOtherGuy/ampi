@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 const WIDGET_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
@@ -9,8 +10,14 @@ const ABOVE_EDITOR_DASHBOARD_MODULE = "extensions/ampi-core/above-editor-dashboa
 const ABOVE_EDITOR_ORDER_MODULE = "extensions/ampi-core/above-editor-order.ts";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const theme = { fg: (_n, v) => v, bold: (v) => v };
+
+/** The braille spinner glyphs a widget draws, in order. */
+function spinnerGlyphs(widget) {
+  return widget.render(80).join("\n").match(/[⠀-⣿]/g) ?? [];
+}
 
 function makeEntry(overrides = {}) {
   return {
@@ -541,13 +548,33 @@ describe("background-task widget", () => {
     );
     let renders = 0;
     const widget = calls.at(-1).value({ requestRender() { renders += 1; } }, theme);
-    const frame0 = widget.render(80).join("\n");
-    t.mock.timers.tick(80);
-    const frame1 = widget.render(80).join("\n");
-    assert.equal(renders, 1, "an active row schedules a re-render");
-    assert.notEqual(frame0, frame1, "the loader glyph advances between frames");
+    const frame0 = spinnerGlyphs(widget);
+    t.mock.timers.tick(100);
+    assert.equal(renders, 1, "the board redraws every 100 ms while a row runs");
+    assert.deepEqual(spinnerGlyphs(widget), frame0, "the spinner steps every second redraw");
+    t.mock.timers.tick(100);
+    assert.equal(renders, 2);
+    assert.notDeepEqual(spinnerGlyphs(widget), frame0, "the spinner glyph changes once per 200 ms");
     widget.dispose();
-    t.mock.timers.tick(80);
-    assert.equal(renders, 1, "dispose clears the animation timer");
+    t.mock.timers.tick(200);
+    assert.equal(renders, 2, "dispose clears the animation timer");
+  });
+
+  it("redraws running rows without stepping the spinner when NO_ANIMATION is set", async (t) => {
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    setNoAnimation(t);
+    const { refreshBackgroundTaskWidget } = await importSource(WIDGET_MODULE);
+    const { ctx, calls } = makeCtx();
+    refreshBackgroundTaskWidget(
+      ctx,
+      makeBoard({ counts: { active: 1, stalled: 0, finished: 0 }, active: [makeEntry()] }),
+    );
+    let renders = 0;
+    const widget = calls.at(-1).value({ requestRender() { renders += 1; } }, theme);
+    assert.deepEqual(spinnerGlyphs(widget), ["⠋"]);
+    t.mock.timers.tick(1_000);
+    assert.equal(renders, 10, "the board keeps its clock for the staged reveal and elapsed times");
+    assert.deepEqual(spinnerGlyphs(widget), ["⠋"], "the glyph stays still");
+    widget.dispose();
   });
 });

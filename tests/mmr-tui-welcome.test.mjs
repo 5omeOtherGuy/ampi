@@ -10,10 +10,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const fixtureDir = path.join(import.meta.dirname, "fixtures/ampi-tui-welcome");
 const UPDATE_FIXTURES = process.env.PI_MMR_UPDATE_FIXTURES === "1";

@@ -205,6 +205,8 @@ Minimal settings example:
 
 `ampiTui.notifications`: `enabled` turns notifications off entirely, `system` the desktop notification (or bell), `sound` a `paplay` sound from the freedesktop theme.
 
+`ampiTui.animations: false` keeps the terminal still: spinners stay on their first glyph, the prompt box's wave glyph stays put and the welcome mark does not play. The environment variable `NO_ANIMATION`, set to any non-empty value, does the same.
+
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `ampiShell.enabled` | `true` | Load `ampi-shell` (`AMPI_SHELL_ENABLE=0` also turns it off) |
@@ -240,6 +242,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | Ctrl+O no longer expands tool output | `ampi-tui` puts the command palette there; Alt+T expands tool output and thinking together |
 | `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette; a command that takes arguments is put into the prompt for you to finish and send. Or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
 | No notification when a turn finishes | Check `ampiTui.notifications`; inside tmux, or in a terminal without OSC 777 notifications, set `AMPI_FORCE_BEL=1` for a bell |
+| You want no moving glyphs | Set `NO_ANIMATION=1` in the environment, or `ampiTui.animations: false` in a settings file |
 | Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; use `prompt queue message` in the palette, or bind `prompt.queue` under `ampi.keymap` |
 | Shift+Tab no longer cycles the thinking level | On an empty prompt it selects your previous message; type something first, or set `"thread.selectPreviousMessage": null` under `ampi.keymap` |
 

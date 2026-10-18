@@ -46,6 +46,8 @@ import {
   type TitleRole,
   tokenizeShell,
 } from "../../ampi-core/tool-activity.js";
+import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
+import { createMmrSpinner, MMR_SPINNER_INTERVAL_MS, type MmrSpinner } from "../../ampi-core/spinner.js";
 import { ActivityGroupStore, type GroupAggregate, trackActivityGroups } from "./activity-groups.js";
 
 type CallRenderer = NonNullable<ToolRenderers["renderCall"]>;
@@ -54,9 +56,6 @@ type RenderTheme = Parameters<CallRenderer>[1];
 type RenderContext = Parameters<CallRenderer>[2];
 type ToolResult = Parameters<ResultRenderer>[0];
 
-/** Braille frames of the running glyph, one step per tick. */
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-const SPINNER_INTERVAL_MS = 80;
 /** Output lines an expanded card shows before "… N more lines". */
 export const CARD_OUTPUT_LINES = 15;
 /** Diff lines an expanded edit card shows before "… N more lines". */
@@ -99,8 +98,11 @@ const ROLE_COLOR: Record<TitleRole, ThemeColor> = {
 };
 
 interface RowState {
-  frame: number;
+  /** The running glyph, stepped by `timer`. */
+  spinner: MmrSpinner;
   timer?: ReturnType<typeof setInterval>;
+  /** Asked once, when the row first runs: false keeps the glyph still and starts no timer. */
+  animate?: boolean;
   result?: ToolResult;
   /**
    * The row is drawn once and never redrawn, as in Pi's HTML export: its call
@@ -141,17 +143,17 @@ class LazyLines implements Component {
 
 function rowState(context: RenderContext): RowState {
   const state = context.state as { ampiRow?: RowState };
-  state.ampiRow ??= { frame: 0, ...(context.executionStarted ? { snapshot: true } : {}) };
+  state.ampiRow ??= { spinner: createMmrSpinner(), ...(context.executionStarted ? { snapshot: true } : {}) };
   return state.ampiRow;
 }
 
 /** Keep the running glyph moving while the call runs; stop the timer once it finished. */
-function syncSpinner(state: RowState, context: RenderContext, running: boolean): void {
-  if (running && !state.timer) {
+function syncSpinner(state: RowState, context: RenderContext, running: boolean, home: string): void {
+  if (running && !state.timer && (state.animate ??= !isMmrAnimationDisabled({ cwd: context.cwd, homeDirectory: home }))) {
     state.timer = setInterval(() => {
-      state.frame = (state.frame + 1) % SPINNER_FRAMES.length;
+      state.spinner.step();
       context.invalidate();
-    }, SPINNER_INTERVAL_MS);
+    }, MMR_SPINNER_INTERVAL_MS);
     state.timer.unref?.();
   } else if (!running && state.timer) {
     clearInterval(state.timer);
@@ -181,9 +183,8 @@ function styleParts(parts: readonly TitlePart[], theme: RenderTheme): string {
   return parts.map((part) => theme.fg(ROLE_COLOR[part.role], part.text)).join("");
 }
 
-function glyph(status: ActivityStatus, frame: number, theme: RenderTheme): string {
-  const symbol = status === "running" ? SPINNER_FRAMES[frame % SPINNER_FRAMES.length] : STATUS_GLYPH[status];
-  return theme.fg(STATUS_COLOR[status], symbol as string);
+function glyph(status: ActivityStatus, state: RowState, theme: RenderTheme): string {
+  return theme.fg(STATUS_COLOR[status], status === "running" ? state.spinner.glyph() : STATUS_GLYPH[status]);
 }
 
 /** Underlined path with an OSC 8 `file://` link when the terminal supports links. */
@@ -271,7 +272,7 @@ function shellHeader(row: Row, activity: Activity, status: ActivityStatus, width
   const command = (activity.workdir ? splitLeadingCd(raw)?.rest : undefined) ?? raw;
   const failed = status === "error";
   const prompt =
-    status === "running" ? glyph("running", state.frame, theme) : theme.bold(theme.fg(failed ? "error" : status === "cancelled" ? "warning" : "success", "$"));
+    status === "running" ? glyph("running", state, theme) : theme.bold(theme.fg(failed ? "error" : status === "cancelled" ? "warning" : "success", "$"));
   let body = highlightShell(command.trim(), theme);
   if (status === "cancelled") body = theme.strikethrough(body);
   let suffix = "";
@@ -424,7 +425,7 @@ function titleLine(row: Row, activity: Activity, status: ActivityStatus, width: 
     const link = linkedPath(activity.object, activity.path, row, theme, activity.detail);
     title = `${styleParts(verb ? [verb] : [], theme)} ${link}${styleParts(parts, theme)}`;
   }
-  return clip(`${pad}${glyph(status, state.frame, theme)} ${title}`, width);
+  return clip(`${pad}${glyph(status, state, theme)} ${title}`, width);
 }
 
 /** Header lines of a row: the one-line title, or the `$ command` line of an expanded shell card. */
@@ -524,7 +525,7 @@ function summaryLine(
   theme: RenderTheme,
   width: number,
 ): string {
-  const lead = `${" ".repeat(context.outputPad)}${glyph(aggregate.status, state.frame, theme)} `;
+  const lead = `${" ".repeat(context.outputPad)}${glyph(aggregate.status, state, theme)} `;
   // Cut the phrase rather than the arrow.
   const phrase = truncateToWidth(aggregate.summary, Math.max(1, width - visibleWidth(lead) - 2), "…");
   const styled = phrase
@@ -563,7 +564,7 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
       if (state.snapshot) return EMPTY;
       const place = groupPlace(groups, context, state);
       if (place) {
-        syncSpinner(state, context, groupSpinner(place, context));
+        syncSpinner(state, context, groupSpinner(place, context), home);
         const { aggregate } = place;
         const summary = (width: number) => (aggregate ? [summaryLine(aggregate, place.expanded, context, state, theme, width)] : []);
         if (!place.expanded) return aggregate ? new LazyLines(summary) : EMPTY;
@@ -575,7 +576,7 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
         const row: Row = { toolName, args, context: child, theme, state, home };
         return new LazyLines((width) => [...summary(width), ...renderHeader(row, width)]);
       }
-      syncSpinner(state, context, context.executionStarted && context.isPartial);
+      syncSpinner(state, context, context.executionStarted && context.isPartial, home);
       if (context.expanded && fallback?.renderCall) return fallback.renderCall(args, theme, context);
       const row: Row = { toolName, args, context, theme, state, home };
       return new LazyLines((width) => renderHeader(row, width));
@@ -585,14 +586,14 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
       state.result = result;
       const place = groupPlace(groups, context, state);
       if (place) {
-        syncSpinner(state, context, groupSpinner(place, context));
+        syncSpinner(state, context, groupSpinner(place, context), home);
         if (!place.expanded) return EMPTY;
         const child = groupChild(context);
         if (fallback?.renderResult) return fallback.renderResult(result, { ...renderOptions, expanded: true }, theme, child);
         const row: Row = { toolName, args: context.args, context: child, theme, state, home };
         return new LazyLines((width) => renderBody(row, width));
       }
-      syncSpinner(state, context, !state.snapshot && context.executionStarted && renderOptions.isPartial);
+      syncSpinner(state, context, !state.snapshot && context.executionStarted && renderOptions.isPartial, home);
       const row: Row = { toolName, args: context.args, context, theme, state, home };
       const header = (width: number) => (state.snapshot ? renderHeader(row, width) : []);
       if (!renderOptions.expanded) return state.snapshot ? new LazyLines(header) : EMPTY;

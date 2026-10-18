@@ -24,18 +24,20 @@ import {
   startTaskDisplayFromArgs,
   workerPromptFromArgs,
 } from "./tool-argument-display.js";
-import { workerRowColor, workerRowGlyph, WORKER_ROW_SPINNER_FRAMES, WORKER_ROW_SPINNER_INTERVAL_MS } from "./worker-row.js";
+import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
+import { createMmrSpinner, MMR_SPINNER_FIRST_GLYPH, MMR_SPINNER_INTERVAL_MS, type MmrSpinner } from "../../ampi-core/spinner.js";
+import { workerRowColor, workerRowGlyph } from "./worker-row.js";
 import { workerRowBody, workerRowLine } from "./worker-row-lines.js";
 import { getMmrBackgroundCardExtras } from "../background/background-dispatch.js";
 import {
   advanceLoaderFrame,
+  BOARD_TICK_MS,
   backgroundStatusGlyph,
   compareRows,
   currentLoaderFrame,
   groupMembersFromBoard,
   isTerminalRowStatus,
   makeSafeFg,
-  PI_LOADER_INTERVAL_MS,
   renderRowLine,
   renderWidgetSection,
   revealedRows,
@@ -414,8 +416,11 @@ class WorkerRowComponent implements Component {
 }
 
 interface RowSpinner {
-  frame: number;
+  /** The running glyph, stepped by `timer`. */
+  spinner: MmrSpinner;
   timer?: ReturnType<typeof setInterval>;
+  /** Asked once, when the row first runs: false keeps the glyph still and starts no timer. */
+  animate?: boolean;
   /**
    * The row was first drawn with its execution already started, as Pi's
    * HTML export draws every call once before its result; live Pi always
@@ -427,19 +432,24 @@ interface RowSpinner {
 
 function rowSpinner(context: RenderContextLike | undefined): RowSpinner {
   const state = renderState(context);
-  if (!state) return { frame: 0, snapshot: false };
-  state[ROW_SPINNER_STATE_KEY] ??= { frame: 0, snapshot: context?.executionStarted === true } satisfies RowSpinner;
+  if (!state) return { spinner: createMmrSpinner(), snapshot: false };
+  state[ROW_SPINNER_STATE_KEY] ??= { spinner: createMmrSpinner(), snapshot: context?.executionStarted === true } satisfies RowSpinner;
   return state[ROW_SPINNER_STATE_KEY] as RowSpinner;
 }
 
 /** Keep the running glyph moving while the worker runs; stop once it finished. */
 function syncSpinner(spinner: RowSpinner, context: RenderContextLike | undefined, running: boolean): void {
   const invalidate = context?.invalidate;
-  if (running && !spinner.timer && typeof invalidate === "function") {
+  if (
+    running &&
+    !spinner.timer &&
+    typeof invalidate === "function" &&
+    (spinner.animate ??= !isMmrAnimationDisabled({ cwd: context?.cwd }))
+  ) {
     spinner.timer = setInterval(() => {
-      spinner.frame = (spinner.frame + 1) % WORKER_ROW_SPINNER_FRAMES.length;
+      spinner.spinner.step();
       invalidate();
-    }, WORKER_ROW_SPINNER_INTERVAL_MS);
+    }, MMR_SPINNER_INTERVAL_MS);
     spinner.timer.unref?.();
   } else if (!running && spinner.timer) {
     clearInterval(spinner.timer);
@@ -680,10 +690,10 @@ export function renderWorkerRow(
   const spinner = rowSpinner(context);
   syncSpinner(spinner, context, final.status === "running" && !spinner.snapshot);
   const pad = rowPad(context);
-  const frame = spinner.frame;
+  const glyph = spinner.spinner.glyph();
   return new WorkerRowComponent((width) => [
-    workerRowLine(final, theme, pad, frame, width),
-    ...(expanded ? workerRowBody(final, theme, pad, frame, width) : []),
+    workerRowLine(final, theme, pad, glyph, width),
+    ...(expanded ? workerRowBody(final, theme, pad, glyph, width) : []),
   ]);
 }
 
@@ -714,8 +724,8 @@ export function renderMmrSubagentCall(
   syncSpinner(spinner, context, context?.executionStarted === true);
   const pad = rowPad(context);
   const component = new WorkerRowComponent((width) => [
-    workerRowLine(final, theme, pad, spinner.frame, width),
-    ...(context?.expanded === true ? workerRowBody(final, theme, pad, spinner.frame, width) : []),
+    workerRowLine(final, theme, pad, spinner.spinner.glyph(), width),
+    ...(context?.expanded === true ? workerRowBody(final, theme, pad, spinner.spinner.glyph(), width) : []),
   ]);
   rememberCallComponent(context, component);
   return component;
@@ -912,6 +922,8 @@ interface WidgetUILike {
 
 interface WidgetCtxLike {
   hasUI?: boolean;
+  /** Session directory whose `.pi/settings.json` can turn animations off. */
+  cwd?: string;
   /** Pi 0.78+ run mode (`"tui" | "rpc" | "json" | "print"`). */
   mode?: string;
   ui?: WidgetUILike;
@@ -1109,17 +1121,22 @@ export function refreshBackgroundTaskWidget(
     const hasActive = board.active.length > 0 || board.stalled.length > 0;
     const clearDelayMs = hasActive ? undefined : finishedOnlyClearDelayMs(board);
     updateAboveEditorDashboardSlot(ctx, "right", BACKGROUND_TASK_WIDGET_ID, (tui, theme) => {
-      // Animate running rows with Pi's loader cadence by advancing the shared
-      // loader frame (read by the inline card too) and re-rendering the whole
-      // tree. Finished-only rows use a one-shot clear timer so the drop-off
-      // window expires even when no active worker remains to drive future
-      // widget refreshes.
+      // While rows run, re-render the whole tree every board tick (the staged
+      // reveal and the elapsed times move on it) and step the shared spinner
+      // (read by the inline card too) every second tick, unless animations
+      // are off; then running rows show the spinner's first glyph.
+      // Finished-only rows use a one-shot clear timer so the drop-off window
+      // expires even when no active worker remains to drive future widget
+      // refreshes.
+      const animate = hasActive && !isMmrAnimationDisabled({ cwd: ctx.cwd });
       let timer: ReturnType<typeof setInterval> | ReturnType<typeof setTimeout> | undefined;
       let timerKind: "interval" | "timeout" | undefined;
       if (hasActive && typeof tui?.requestRender === "function") {
+        let ticks = 0;
         timerKind = "interval";
         timer = setInterval(() => {
-          advanceLoaderFrame();
+          ticks += 1;
+          if (animate && ticks % 2 === 0) advanceLoaderFrame();
           try {
             tui.requestRender?.();
           } catch {
@@ -1129,7 +1146,7 @@ export function refreshBackgroundTaskWidget(
               timerKind = undefined;
             }
           }
-        }, PI_LOADER_INTERVAL_MS);
+        }, BOARD_TICK_MS);
         (timer as { unref?: () => void }).unref?.();
       } else if (clearDelayMs !== undefined) {
         timerKind = "timeout";
@@ -1148,7 +1165,7 @@ export function refreshBackgroundTaskWidget(
             renderWidgetLines(
               revealSections(sections, Date.now()),
               theme,
-              hasActive ? currentLoaderFrame() : undefined,
+              hasActive ? (animate ? currentLoaderFrame() : MMR_SPINNER_FIRST_GLYPH) : undefined,
               Math.max(WIDGET_MAX_ROWS, getAboveEditorDashboardSlotRowBudget("right") ?? 0),
             ),
             width,

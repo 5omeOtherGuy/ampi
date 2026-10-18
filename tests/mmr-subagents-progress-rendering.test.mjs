@@ -5,11 +5,13 @@ import path from "node:path";
 import { after, describe, it, mock } from "node:test";
 import { pathToFileURL } from "node:url";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
 
 initTheme(undefined, false);
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const PROGRESS_RENDERING_MODULE = "extensions/ampi-workers/rendering/progress-rendering.ts";
 
@@ -233,8 +235,10 @@ describe("worker rows", () => {
     try {
       const row = workerRow(renderers, "finder", { query: "q" }, { result: { content: [], details: {} }, isPartial: true });
       assert.equal(stripAnsi(row.render(80)[1]), " ⠋ Searching codebase · q");
-      mock.timers.tick(80);
-      assert.equal(stripAnsi(row.render(80)[1]), " ⠙ Searching codebase · q");
+      mock.timers.tick(199);
+      assert.equal(stripAnsi(row.render(80)[1]), " ⠋ Searching codebase · q", "one step per 200 ms");
+      mock.timers.tick(1);
+      assert.equal(stripAnsi(row.render(80)[1]), " ⠛ Searching codebase · q");
       row.updateResult(ok("answer"), false);
       assert.equal(stripAnsi(row.render(80)[1]), " ✓ Searched codebase · q");
       mock.timers.tick(800);
@@ -242,6 +246,15 @@ describe("worker rows", () => {
     } finally {
       mock.timers.reset();
     }
+  });
+
+  it("keeps the running glyph still and starts no timer when NO_ANIMATION is set", async (t) => {
+    const renderers = await importSource(PROGRESS_RENDERING_MODULE);
+    setNoAnimation(t);
+    const startTimer = t.mock.method(globalThis, "setInterval");
+    const row = workerRow(renderers, "finder", { query: "q" }, { result: { content: [], details: {} }, isPartial: true });
+    assert.equal(stripAnsi(row.render(80)[1]), " ⠋ Searching codebase · q");
+    assert.equal(startTimer.mock.callCount(), 0);
   });
 
   it("draws the call's row until a result arrives, then only the result's row", async () => {
@@ -1230,7 +1243,7 @@ describe("renderAsyncTaskCompletionMessage", () => {
 });
 
 describe("inline background card animation", () => {
-  const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Searching codebase/;
+  const SPINNER = /[⠁-⣿] Searching codebase/;
 
   function singleBoard(rowOverrides = {}) {
     const row = {

@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
 import { registerMmrChangelogPresenter } from "../../ampi-core/changelog.js";
 import type { MmrTuiSettings } from "../config.js";
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
@@ -60,11 +61,13 @@ export function installMmrTuiLook(
       // Pi records the startup model and thinking level before session_start;
       // only a message means the session is already under way.
       const fresh = !ctx.sessionManager.getEntries().some((entry) => entry.type === "message");
+      // With animations off the mark rests on its first frame.
+      const animate = fresh && !isMmrAnimationDisabled({ cwd: ctx.cwd });
       ctx.ui.setHeader((tui, theme) => {
         header = new MmrWelcomeHeader({
           theme,
           card,
-          animate: fresh,
+          animate,
           rows: () => tui.terminal.rows,
           requestRender: () => tui.requestRender(),
         });

@@ -4,10 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
 import { KeybindingsManager, stripTerminalSequences, TuiMainScreen } from "@earendil-works/pi-tui";
+import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+isolateAnimationEnv();
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -88,6 +90,20 @@ describe("ampi-tui extension", () => {
 
     await handlers.get("session_shutdown")(shutdownEvent, ctx);
     assert.equal(await chromeOwner(), undefined);
+  });
+
+  it("keeps the welcome mark on its first frame when NO_ANIMATION is set", async (t) => {
+    setNoAnimation(t);
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, headers } = createMockExtensionContext({ hasUI: true });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const header = headers[0](fakeTui(44), ctx.ui.theme);
+      assert.equal(header.animating, false);
+      assert.equal(header.frame, 0);
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
   });
 
   it("registers once across repeated session starts and releases on one shutdown", async () => {

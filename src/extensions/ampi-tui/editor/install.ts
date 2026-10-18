@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { mmrEntryCost, readMmrEntryUsage } from "../../ampi-core/session-usage.js";
 import { getMmrThreadReports } from "../../ampi-core/thread-reports.js";
@@ -83,6 +84,8 @@ export function createMmrPromptBoxInstall(
   let overlay = false;
   let waveFrame = 0;
   let waveTimer: unknown;
+  /** Whether the wave steps; asked at each session start. */
+  let animate = true;
   let unsubscribeMode: (() => void) | undefined;
   let mentionOpen = false;
   let tmuxChecked = false;
@@ -206,6 +209,7 @@ export function createMmrPromptBoxInstall(
     start(nextCtx, nextGetFooterData) {
       ctx = nextCtx;
       getFooterData = nextGetFooterData;
+      animate = !isMmrAnimationDisabled({ cwd: nextCtx.cwd });
       // The box shows the turn status itself; Pi's working row would repeat it.
       nextCtx.ui.setWorkingVisible(false);
       nextCtx.ui.setEditorComponent((editorTui, theme, keybindings) => {
@@ -238,7 +242,8 @@ export function createMmrPromptBoxInstall(
       ctx = undefined;
     },
     statusChanged() {
-      if (feed.status.busy && waveTimer === undefined) {
+      // With animations off the wave rests on its first glyph.
+      if (feed.status.busy && waveTimer === undefined && animate) {
         waveTimer = startInterval(() => {
           waveFrame = (waveFrame + 1) % MMR_STATUS_WAVE_FRAMES.length;
           requestRender();
