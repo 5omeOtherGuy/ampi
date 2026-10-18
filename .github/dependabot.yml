@@ -1,9 +1,9 @@
-# Dependabot keeps dependencies up to date by opening pull requests when new
-# versions are released. Free for all repositories. Docs:
+# Dependabot version updates: weekly, minor and patch grouped into one PR per
+# ecosystem, majors as separate PRs, and a cooldown before adopting a new
+# release. Docs:
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
-  # Update npm dependencies (dependencies / devDependencies / peerDependencies in package.json).
   - package-ecosystem: npm
     directory: "/"
     schedule:
@@ -11,15 +11,19 @@ updates:
       day: monday
       time: "06:00"
       timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
     open-pull-requests-limit: 5
     labels:
       - dependencies
-      - npm
     commit-message:
-      prefix: deps
+      prefix: build
+      prefix-development: build
       include: scope
-    # Keep Pi package updates together so ampi follows one Pi dependency set.
     groups:
+      # The Pi packages move together, majors included: a new Pi major needs
+      # code changes in the same PR.
       pi-agent-stack:
         patterns:
           - "@earendil-works/pi-*"
@@ -28,10 +32,10 @@ updates:
           - minor
           - patch
     ignore:
-      # Runtime schema dependency: keep in sync with @earendil-works/pi-coding-agent.
+      # Pinned to the exact version @earendil-works/pi-coding-agent uses; it
+      # moves with the Pi packages, not on its own.
       - dependency-name: "typebox"
 
-  # Update versions of GitHub Actions used in workflows (uses: actions/...@vN).
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -39,10 +43,17 @@ updates:
       day: monday
       time: "06:00"
       timezone: "Europe/Berlin"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
     open-pull-requests-limit: 5
     labels:
       - dependencies
-      - github-actions
     commit-message:
       prefix: ci
       include: scope
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - minor
+          - patch
