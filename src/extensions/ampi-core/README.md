@@ -232,7 +232,7 @@ The assembled surface drives [`tests/fixtures/mmr-subagent-surface/`](../../../t
 Pi does not lock session files: two processes that write one session file can each overwrite the other's messages. So ampi-core records every running session that has a file in a live registry, where other processes on the machine (`ampi-gui`'s sidebar, and the `ampi` command through its own reader) find which sessions run and which process writes a given session file.
 
 - **Where.** One file per process, `<agentDir>/data/ampi/live/<pid>.json` (`<agentDir>` is `~/.pi/agent` unless `PI_CODING_AGENT_DIR` says otherwise). The directory is created owner-only (`0700`), each file is owner-only (`0600`) and written to a temporary file that is then renamed over it, so a reader never sees half an entry.
-- **Who writes.** ampi-core, and only for its own process, from `session_start` to `session_shutdown`: an interactive terminal session (`kind` `tui`), a print, JSON or RPC run (`execute`), with or without `ampi-gui`, `ampi-threads` or `ampi-tui`, and a session `ampi app` hosts in a worker process (`app-session`, with the app's pid as `ownerPid`; the worker says so through the GUI host record, [`gui-host.ts`](gui-host.ts)). A session without a file writes nothing: `--no-session`, which every subagent worker runs with, and in-memory sessions. `/new`, `/resume` and `/fork` end one session and start the next, so the entry is rewritten for the new session file.
+- **Who writes.** ampi-core, and only for its own process, from `session_start` to `session_shutdown`: an interactive terminal session (`kind` `tui`), a print, JSON or RPC run (`execute`), with or without `ampi-gui`, `ampi-threads` or `ampi-tui`, a session `ampi app` hosts in a worker process (`app-session`, with the app's pid as `ownerPid`; the worker says so through the GUI host record, [`gui-host.ts`](gui-host.ts)), and `ampi app` itself (`app`, with `sessionPath` `null`: its own session is in memory, and the entry is how a second `ampi app` finds it; it says so through a GUI host record with role `hub`). Any other session without a file writes nothing: `--no-session`, which every subagent worker runs with, and in-memory sessions. `/new`, `/resume` and `/fork` end one session and start the next, so the entry is rewritten for the new session file.
 - **What it holds.** Paths, pids, a title and a hash of the GUI's access token, never the token:
 
   | Field | Value |
@@ -241,7 +241,7 @@ Pi does not lock session files: two processes that write one session file can ea
   | `pid` | The process |
   | `procStart` | The process start time from `/proc/<pid>/stat` (clock ticks after boot); `null` off Linux |
   | `kind` | `tui`, `execute`, `app` (a multi-session host) or `app-session` (a session such a host serves) |
-  | `sessionId`, `sessionPath` | Pi's session id and session file |
+  | `sessionId`, `sessionPath` | Pi's session id and session file; `sessionPath` is `null` only for `app` |
   | `cwd` | The session's working directory |
   | `title` | Pi's session name, else a title `ampi-threads` generated; `null` without either |
   | `mode` | The ampi mode key (`low`, `medium`, `high`, `ultra`, `free`); `null` when none applies |

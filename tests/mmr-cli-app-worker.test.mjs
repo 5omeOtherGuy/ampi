@@ -292,7 +292,7 @@ describe("ampi app --worker executable", () => {
   it("is not in the help and is routed only as `app --worker`", () => {
     assert.equal(formatAmpiHelp().includes("--worker"), false);
     assert.equal(routeAmpiArgv(["app", "--worker"]).command, "app-worker");
-    assert.equal(routeAmpiArgv(["app", "--worker", "hello"]).command, "pi");
+    assert.equal(routeAmpiArgv(["app", "--worker", "hello"]).command, "error");
   });
 
   it("refuses to run without an IPC channel", () => {

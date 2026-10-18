@@ -323,6 +323,8 @@ export async function runAmpi(argv) {
         err: (text) => process.stderr.write(text),
       });
     }
+    case "app":
+      return runAppProcess(route.open === true);
     case "app-worker":
       return runAppWorkerProcess();
     case "config": {
@@ -338,6 +340,34 @@ export async function runAmpi(argv) {
     }
   }
   return startPi(route);
+}
+
+/**
+ * Serve every session from one page until SIGINT or SIGTERM, then exit: the
+ * session's timers would otherwise keep the process alive.
+ *
+ * @param {boolean} open
+ * @returns {Promise<number>}
+ */
+async function runAppProcess(open) {
+  const [pi, { runApp }] = await Promise.all([import(PI_PACKAGE_NAME), import("./app.js")]);
+  // The process setup Pi's own executable does, so tools see they run under an agent.
+  process.title = "ampi";
+  process.env.PI_CODING_AGENT = "true";
+  process.env.AI_AGENT = "pi";
+  const stopped = new Promise((resolve) => {
+    process.once("SIGINT", resolve);
+    process.once("SIGTERM", resolve);
+  });
+  const code = await runApp({
+    pi,
+    open,
+    cwd: process.cwd(),
+    out: (text) => process.stdout.write(text),
+    err: (text) => process.stderr.write(text),
+    stopped,
+  });
+  process.exit(code);
 }
 
 /**

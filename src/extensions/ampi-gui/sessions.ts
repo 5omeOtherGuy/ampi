@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { type FileEntry, migrateSessionEntries, parseSessionEntries, type SessionInfo } from "@earendil-works/pi-coding-agent";
+import type { MmrLiveKind } from "../ampi-core/live-registry.js";
 import { dedupeMmrSessionsById, type MmrSessionSource } from "../ampi-core/session-catalog.js";
 import { findLatestPersistedModeState } from "../ampi-core/state.js";
 import { getMmrThreadIndex, type MmrThreadIndex, type MmrThreadRecord } from "../ampi-core/thread-index.js";
@@ -53,6 +54,18 @@ export interface MmrGuiSessionRow {
   live: boolean;
   /** Another running Pi serves the session. */
   elsewhere: boolean;
+  /** Only in `ampi app`'s list: the live process that has the session open, or `null` when none has. */
+  host?: MmrGuiRowHost | null;
+}
+
+/** A live process that has a session open, from its live registry entry. */
+export interface MmrGuiRowHost {
+  kind: MmrLiveKind;
+  pid: number;
+  /** Whether it serves a web GUI. */
+  gui: boolean;
+  /** Its thread status phase, or `null` when its entry has none. */
+  phase: string | null;
 }
 
 export interface MmrGuiSessionGroup {
@@ -87,6 +100,8 @@ export interface MmrGuiGroupInput {
   current?: Pick<MmrGuiSessionInfo, "id" | "title" | "cwd">;
   /** Session files that other running Pi processes serve. */
   elsewhere?: ReadonlySet<string>;
+  /** With it, every row gets `host`: the process this map names for its file (by resolved path), or `null`. */
+  hosts?: ReadonlyMap<string, MmrGuiRowHost>;
   now: number;
   home?: string;
 }
@@ -111,6 +126,7 @@ function byActivity(a: MmrGuiSessionRow, b: MmrGuiSessionRow): number {
 export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup[] {
   const { current, threads, now } = input;
   const elsewhere = new Set([...(input.elsewhere ?? [])].map((file) => path.resolve(file)));
+  const hosts = input.hosts && new Map([...input.hosts].map(([file, host]) => [path.resolve(file), host]));
   const rows: MmrGuiSessionRow[] = [];
   for (const info of dedupeMmrSessionsById(input.sessions)) {
     const record = Object.hasOwn(threads, info.id) ? threads[info.id] : undefined;
@@ -126,6 +142,7 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
       archived: record?.archived !== undefined,
       live,
       elsewhere: !live && elsewhere.has(path.resolve(info.path)),
+      ...(hosts ? { host: hosts.get(path.resolve(info.path)) ?? null } : {}),
     });
   }
   // Pi saves a session only once it has a message; until then it is listed from the running process.
@@ -203,6 +220,8 @@ export interface MmrGuiSessionsOptions {
   current: () => MmrGuiSessionInfo | undefined;
   /** Session files other running Pi processes serve. */
   elsewhere?: () => Promise<readonly string[]>;
+  /** The live processes by the session file they have open; with it, every row gets `host`. */
+  hosts?: () => Promise<ReadonlyMap<string, MmrGuiRowHost>>;
   threadIndex?: () => MmrThreadIndex | undefined;
   readText?: (file: string) => Promise<string>;
   now?: () => number;
@@ -243,8 +262,13 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
   }
 
   async function groups(): Promise<MmrGuiSessionGroup[]> {
-    const [sessions, records, elsewhere] = await Promise.all([catalogue(), threads(), options.elsewhere?.().catch(() => []) ?? []]);
-    return groupMmrGuiSessions({ sessions, threads: records, current: options.current(), elsewhere: new Set(elsewhere), now: now(), home });
+    const [sessions, records, elsewhere, hosts] = await Promise.all([
+      catalogue(),
+      threads(),
+      options.elsewhere?.().catch(() => []) ?? [],
+      options.hosts?.().catch(() => new Map<string, MmrGuiRowHost>()),
+    ]);
+    return groupMmrGuiSessions({ sessions, threads: records, current: options.current(), elsewhere: new Set(elsewhere), hosts, now: now(), home });
   }
 
   const sessions: MmrGuiSessions = {
