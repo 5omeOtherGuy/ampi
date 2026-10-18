@@ -123,6 +123,15 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(edit.configArgs, ["edit", "--workspace"]);
     assert.deepEqual(edit.piArgs, []);
   });
+
+  it("routes tools and its alias tool with the rest of the command line, -m included", () => {
+    for (const group of ["tools", "tool"]) {
+      const route = routeAmpiArgv([group, "list", "-m", "high", "--json"]);
+      assert.equal(route.command, "tools", group);
+      assert.deepEqual(route.toolsArgs, ["list", "-m", "high", "--json"]);
+      assert.deepEqual(route.piArgs, []);
+    }
+  });
 });
 
 describe("ampi argv router: help, version and errors", () => {

@@ -311,6 +311,18 @@ export async function runAmpi(argv) {
       return runPiCommand(route.piArgs);
     case "threads":
       return runThreads(route.threadArgs ?? []);
+    case "tools": {
+      // A listing never installs packages or refreshes model catalogues.
+      process.env.PI_OFFLINE = "1";
+      const [pi, { readSessionTools, runToolsCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./tools.js")]);
+      const cwd = process.cwd();
+      return runToolsCommand(route.toolsArgs ?? [], {
+        readTools: (mode) => readSessionTools(pi, cwd, mode),
+        columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
     case "app-worker":
       return runAppWorkerProcess();
     case "config": {

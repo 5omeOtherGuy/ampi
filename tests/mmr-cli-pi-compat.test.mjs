@@ -3,7 +3,7 @@
 // them; when a Pi upgrade changes their shape, this test fails here instead of
 // every `ampi` start failing or loading ampi twice.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -12,16 +12,19 @@ import {
   createPiModelLookup,
   createPiSessionServices,
   listPiExtensionSources,
+  listPiMcpServers,
   listPiSessions,
   loadThroughPi,
   piAgentDir,
   piExternalEditorCommand,
   piSettingsManager,
   piSettingsPath,
+  piToolOrigin,
   readPiSessionEntries,
   readPiSettings,
   setPiSessionName,
 } from "../packages/ampi-cli/src/pi-compat.js";
+import { createAmpiSdkSession } from "../packages/ampi-cli/src/sdk-session.js";
 import { createSessionId } from "../packages/ampi-cli/src/threads.js";
 
 /** @param {string} file @param {unknown} json */
@@ -383,5 +386,103 @@ describe("Pi calls used by SDK sessions", () => {
     assert.match(errors[0], /probe extension failed/);
     // The services use the settings piSettingsManager reads, project trust included.
     assert.equal(services.settingsManager.isProjectTrusted(), piSettingsManager(pi, project).isProjectTrusted());
+  });
+});
+
+describe("Pi SDK calls of the session builder (sdk-session.js) and the tools command", () => {
+  const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, offline: process.env.PI_OFFLINE };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-sdk-"));
+  const agentDir = path.join(dir, "agent");
+  const project = path.join(dir, "project");
+  // A stand-in named like ampi, which Pi's settings load, so the builder does not add the real one.
+  const standIn = path.join(dir, "stand-in");
+  const extensionFile = path.join(dir, "extensions", "stamp.ts");
+  // The MCP server would create this file if it ever started.
+  const started = path.join(dir, "mcp-server-started");
+  const probeKey = "__ampi_cli_sdk_probe__";
+
+  before(() => {
+    writeJson(path.join(standIn, "package.json"), { name: "@skippermissions/ampi", version: "0.0.0", pi: { extensions: ["./index.ts"] } });
+    writeFileSync(
+      path.join(standIn, "index.ts"),
+      [
+        "export default function (pi: any): void {",
+        '  pi.registerFlag("ampi-mode", { type: "string", description: "mode" });',
+        '  pi.registerTool({ name: "echo", label: "Echo", description: "Echo.", parameters: { type: "object", properties: {} }, execute: async () => ({ content: [], details: {} }) });',
+        `  pi.on("session_start", (_event: any, ctx: any) => { (globalThis as any)[${JSON.stringify(probeKey)}] = { flag: pi.getFlag("ampi-mode"), mode: ctx.mode }; });`,
+        "}",
+        "",
+      ].join("\n"),
+    );
+    mkdirSync(path.dirname(extensionFile), { recursive: true });
+    writeFileSync(
+      extensionFile,
+      'export default function (pi: any): void { pi.registerTool({ name: "stamp", label: "Stamp", description: "Stamp.", parameters: { type: "object", properties: {} }, execute: async () => ({ content: [], details: {} }) }); }\n',
+    );
+    writeJson(path.join(agentDir, "settings.json"), { packages: [standIn], extensions: [extensionFile] });
+    // Servers default to codemode exposure, which makes the MCP extension activate codemode.
+    writeJson(path.join(agentDir, "mcp.json"), {
+      mcpServers: {
+        docs: { command: process.execPath, args: ["-e", `require("node:fs").writeFileSync(${JSON.stringify(started)}, "")`] },
+        off: { command: process.execPath, enabled: false },
+        later: { command: process.execPath },
+      },
+    });
+    // A project server and an override that turns a user server off, read once the project is trusted.
+    writeJson(path.join(project, ".pi", "mcp.json"), { mcpServers: { local: { url: "http://127.0.0.1:9/mcp" }, later: { enabled: false } } });
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.PI_OFFLINE = "1";
+  });
+
+  after(() => {
+    delete (/** @type {any} */ (globalThis))[probeKey];
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", savedEnv.agentDir],
+      ["PI_OFFLINE", savedEnv.offline],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads the MCP servers Pi would connect, the project's only once it is trusted", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    assert.deepEqual(listPiMcpServers(pi, project), ["docs", "later"]);
+    new pi.ProjectTrustStore(agentDir).set(project, true);
+    assert.deepEqual(listPiMcpServers(pi, project), ["docs", "local"]);
+  });
+
+  it("builds a session with the mode flag, the built-in extensions and Pi's tool sources, without connecting MCP", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const runtime = await createAmpiSdkSession({
+      cwd: project,
+      sessionManager: pi.SessionManager.inMemory(project),
+      mode: "print",
+      connectMcp: false,
+      ampiMode: "high",
+      pi,
+    });
+    try {
+      assert.deepEqual(runtime.diagnostics, []);
+      assert.deepEqual((/** @type {any} */ (globalThis))[probeKey], { flag: "high", mode: "print" });
+      const { session } = runtime;
+      /** @type {Map<string, any>} */
+      const tools = new Map(session.getAllTools().map((/** @type {any} */ info) => [info.name, info]));
+      assert.deepEqual(piToolOrigin(tools.get("read")), { builtin: "read" });
+      assert.deepEqual(piToolOrigin(tools.get("codemode")), { builtin: "codemode" });
+      assert.deepEqual(piToolOrigin(tools.get("tool_search")), { builtin: "tool-search" });
+      assert.deepEqual(piToolOrigin(tools.get("stamp")), { file: extensionFile });
+      assert.deepEqual(piToolOrigin(tools.get("echo")), { file: path.join(standIn, "index.ts"), packageRoot: standIn, packageSource: standIn });
+      assert.equal(typeof tools.get("read").parameters.properties.path, "object");
+      // The MCP extension read its configuration (codemode is active for the docs server) but connected nothing.
+      const active = session.getActiveToolNames();
+      assert.ok(active.includes("codemode") && active.includes("read") && active.includes("stamp"), active.join(" "));
+      assert.deepEqual([...tools.keys()].filter((name) => name.startsWith("mcp__")), []);
+    } finally {
+      await runtime.dispose();
+    }
+    assert.equal(existsSync(started), false, "the MCP server never started");
+    assert.equal(existsSync(path.join(agentDir, "sessions")), false, "an in-memory session writes no file");
   });
 });

@@ -192,6 +192,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | See what fills a session's context | `ampi threads context 019a3c` | JSON: tokens and share of the window per section, total, free space, compactions, tool counts |
 | See what a session cost | `ampi threads usage 019a3c` | Total in the gauge's format; `--details` adds tokens and cost per model and tool calls; `--start`, `--end` (ISO 8601), `--json` |
 | See what all sessions cost | `ampi usage` | Every directory, the last 30 days by default; `--details` adds the per-model table and the ten most expensive sessions; `--start`, `--end`, `--json`. Local totals only: no account or credits |
+| List the tools a mode declares to the model | `ampi tools list -m high` | Grouped by source: built-in, ampi, `extension:<name>`, mcp; `tools show <tool>` prints its description and parameters; `--json`; MCP servers are not connected, so their tools are not listed |
 | Rename, archive, label, color or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `color <id> <color>` (a name, `#rrggbb` or `none`), `delete` (asks first; `--yes` skips) |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |

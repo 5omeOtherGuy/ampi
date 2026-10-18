@@ -302,22 +302,25 @@ export function piSettingsManager(pi, cwd) {
 
 /**
  * Services for an SDK session in `cwd`: Pi's settings as piSettingsManager
- * reads them, and a resource loader that also loads `extensionPaths` and
- * `extensionFactories`. Pi's SDK documentation covers neither the
- * `resourceLoaderOptions` of createAgentSessionServices nor the loader's
+ * reads them, a resource loader that also loads `extensionPaths` and
+ * `extensionFactories`, and `flagValues` as the values of extension flags
+ * (as `--<name> <value>` sets them on Pi's command line). Pi's SDK
+ * documentation covers neither the `resourceLoaderOptions` and
+ * `extensionFlagValues` of createAgentSessionServices nor the loader's
  * `getExtensions().errors`, so the returned diagnostics carry each extension
  * that failed to load as an error next to Pi's own diagnostics.
  *
  * @param {any} pi
- * @param {{ cwd: string, agentDir: string, extensionPaths: string[], extensionFactories: unknown[] }} options
+ * @param {{ cwd: string, agentDir: string, extensionPaths: string[], extensionFactories: unknown[], flagValues?: Map<string, string> }} options
  * @returns {Promise<{ services: any, diagnostics: { type: string, message: string }[] }>} Pi's
  *   `AgentSessionServices` and the diagnostics.
  */
-export async function createPiSessionServices(pi, { cwd, agentDir, extensionPaths, extensionFactories }) {
+export async function createPiSessionServices(pi, { cwd, agentDir, extensionPaths, extensionFactories, flagValues }) {
   const services = await pi.createAgentSessionServices({
     cwd,
     agentDir,
     settingsManager: piSettingsManager(pi, cwd),
+    extensionFlagValues: flagValues,
     resourceLoaderOptions: { additionalExtensionPaths: extensionPaths, extensionFactories },
   });
   /** @type {{ path: string, error: string }[]} */
@@ -392,4 +395,66 @@ export async function loadThroughPi(pi, file, channel) {
   const result = await pi.discoverAndLoadExtensions([file], here, here, events);
   if (result.errors.length > 0) throw new Error(result.errors[0].error);
   return received;
+}
+
+/**
+ * @typedef {{ builtin: string } | { file: string, packageRoot?: string, packageSource?: string }} PiToolOrigin
+ *   Where a tool comes from: a Pi built-in by name (`read`, or `mcp` for the built-in MCP extension),
+ *   or the extension file that registered it, with its package's root and settings source when it
+ *   came from a package.
+ */
+
+/**
+ * Where Pi says a tool comes from, read from its `ToolInfo.sourceInfo`: Pi's
+ * own tools and built-in extensions have the path `builtin:<name>`, inline
+ * extensions `<inline:name>`, and extension files their absolute path.
+ *
+ * @param {{ sourceInfo?: { path: string, source: string, origin: string, baseDir?: string } }} info
+ * @returns {PiToolOrigin}
+ */
+export function piToolOrigin(info) {
+  const source = info.sourceInfo;
+  if (source === undefined) return { file: "" };
+  if (source.path.startsWith("builtin:")) return { builtin: source.path.slice("builtin:".length) };
+  const synthetic = /^<[^:>]+:([^>]*)>$/.exec(source.path);
+  if (synthetic) return { file: synthetic[1] };
+  return source.origin === "package"
+    ? { file: source.path, packageRoot: source.baseDir, packageSource: source.source }
+    : { file: source.path };
+}
+
+/**
+ * The names of the MCP servers Pi's MCP extension would connect in `cwd`:
+ * the enabled servers of `mcp.json` in Pi's configuration directory and, when
+ * the project is trusted, of the project's `.pi/mcp.json` (Pi's docs/mcp.md).
+ * A project entry with neither `command`, `url` nor `type` only overrides
+ * settings such as `enabled` of the user server with that name.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {string[]}
+ */
+export function listPiMcpServers(pi, cwd) {
+  /** @type {Map<string, Record<string, unknown>>} */
+  const servers = new Map();
+  const files = [path.join(pi.getAgentDir(), "mcp.json")];
+  if (piSettingsManager(pi, cwd).isProjectTrusted()) files.push(path.join(cwd, pi.CONFIG_DIR_NAME, "mcp.json"));
+  for (const [index, file] of files.entries()) {
+    /** @type {unknown} */
+    let parsed;
+    try {
+      parsed = JSON.parse(readFileSync(file, "utf8")).mcpServers;
+    } catch {
+      continue;
+    }
+    if (parsed === null || typeof parsed !== "object") continue;
+    for (const [name, value] of Object.entries(parsed)) {
+      if (value === null || typeof value !== "object") continue;
+      const override = index > 0 && !("command" in value || "url" in value || "type" in value);
+      const base = servers.get(name);
+      if (override && base === undefined) continue;
+      servers.set(name, override ? { ...base, ...value } : value);
+    }
+  }
+  return [...servers].filter(([, config]) => config.enabled !== false).map(([name]) => name);
 }

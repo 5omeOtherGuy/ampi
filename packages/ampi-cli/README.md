@@ -26,6 +26,7 @@ ampi threads             # list this directory's sessions
 ampi usage               # cost and tokens of the last 30 days
 ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
+ampi tools list -m high  # the tools a high mode session declares to the model
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
@@ -232,6 +233,22 @@ The output is valid JSON once the `//` comments are removed. Copy the entries yo
 
 Exit status: `0` on success, `1` when the keymap cannot be loaded or the editor exits with an error, `2` on a usage error. Every other `ampi config` command line, such as `ampi config` alone, runs Pi's own `config` command.
 
+## Tools
+
+`ampi tools list` prints the tools a new session in the current directory declares to the model, grouped by where they come from: `built-in` (Pi's own tools), `ampi`, `extension:<name>` (another package by its package name, or an extension file by its file name) and `mcp`. Each row holds the tool's name and the first sentence of its description, cut to the terminal width. `ampi tools show <tool>` prints one tool's full description, then a line per top-level parameter with its type and whether it is required. `ampi tool` is the same command group, and `ls` is short for `list`.
+
+```bash
+ampi tools list                       # in the mode a new session starts in
+ampi tools list --mode low --json     # [{ name, source, description }], sorted by name
+ampi tools show shell_command --json  # { name, description, source, inputSchema }
+```
+
+`--mode` (`-m`) takes `low`, `medium`, `high`, `ultra`, `free` or a legacy alias. Without it the command uses the mode a new session starts in: `ampiCore.defaultMode`, else `medium`.
+
+The command loads what `ampi` loads in the directory (Pi's configured packages and extensions, ampi unless Pi already loads it, and Pi's built-in codemode, tool_search and MCP extensions) and starts a session in memory, where ampi applies the mode as it does when a session starts. It writes no session file, calls no model, installs no missing packages (it runs as if `PI_OFFLINE=1` were set) and does not connect MCP servers: when servers are configured, a closing note says their tools are not listed, and `ampi mcp list` shows the servers. A locked mode starts only when one of its models has credentials, as in a session; otherwise the command says so.
+
+Exit status: `0` on success, `1` when the mode does not start or the tool is not active in it (the message suggests up to three close names), `2` on a usage error such as an unknown mode.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -255,7 +272,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`).
 
 ## Development
 
