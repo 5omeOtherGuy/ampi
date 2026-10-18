@@ -274,6 +274,24 @@ describe("worker rows", () => {
     assert.ok(expanded.some((line) => line.includes("All green.")));
   });
 
+  it("shows a one-line request in full below the row when the row cuts it off", async () => {
+    const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
+    const task = "Review the retry plan in main.ts together with the backoff policy and the circuit breaker, compare them, and list every risk you see with one concrete fix for each risk";
+    const render = (expanded, width) => renderMmrSubagentResult("oracle", ok("Looks fine.", { trail: [] }), { expanded, isPartial: false }, fakeTheme, makeContext({ task }))
+      .render(width)
+      .map((line) => stripAnsi(line).trimEnd());
+    const collapsed = render(false, 80);
+    assert.equal(collapsed.length, 1);
+    assert.ok(collapsed[0].endsWith("…"), collapsed[0]);
+    const expanded = render(true, 80);
+    const body = expanded.slice(1).join(" ").replace(/\s+/g, " ");
+    assert.ok(body.includes("with one concrete fix for each risk"), expanded.join("\n"));
+    assert.ok(expanded.every((line) => visibleTextWidth(line) <= 80), expanded.join("\n"));
+    // Wide enough to show the whole request on the row: nothing is repeated below it.
+    const wide = render(true, 240);
+    assert.equal(countOccurrences(wide.join("\n"), "concrete fix for each risk"), 1, wide.join("\n"));
+  });
+
   it("keeps the latest trail events, counts the earlier ones and skips the prompt echo and the repeated answer", async () => {
     const { renderMmrSubagentResult } = await importSource(PROGRESS_RENDERING_MODULE);
     const trail = [

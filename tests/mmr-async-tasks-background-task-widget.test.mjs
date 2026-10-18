@@ -246,9 +246,11 @@ describe("background-task widget", () => {
     assert.match(text, /▸ Diff recent deploys · group_aaa111/);
     assert.match(text, /running/);
     assert.match(text, /1\/2/);
-    // Capability profile is a row chip; the group id is NOT repeated per row.
-    assert.match(text, /read-only/);
-    assert.match(text, /read-write/);
+    // The capability profile is in the phrase, as on the transcript row, and
+    // not repeated as a chip; the group id is NOT repeated per row.
+    assert.match(text, /Running subagent \(read-only\) · Explore order services/);
+    assert.match(text, /Subagent \(read-write\) finished · Diff recent deploys/);
+    assert.equal((text.match(/read-only/g) ?? []).length, 1);
     const rowLines = lines.filter((l) => /^ {2}\S/.test(l) && /Explore order services|Diff recent deploys/.test(l));
     assert.equal(rowLines.length, 2, "both grouped rows render");
     for (const l of rowLines) assert.match(l, /^ {2}\S/, "group members are indented under the header");

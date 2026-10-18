@@ -5,7 +5,7 @@
  */
 
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
-import { Markdown, truncateToWidth } from "@earendil-works/pi-tui";
+import { Markdown, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import { compactOneLine, formatWorkerStatusLine, type SubagentTheme } from "./subagent-render-format.js";
 import { isRecord } from "../../ampi-core/internal/json.js";
@@ -36,7 +36,7 @@ export interface WorkerRowView {
   detail?: string;
   /** Muted tail after the detail, such as `(partial)`. */
   tail?: string;
-  /** Full prompt, shown dim when expanded and different from the detail. */
+  /** Full prompt, shown dim when expanded and the row does not show all of it. */
   prompt?: string;
   trail: readonly MmrWorkerTrailItem[];
   /** Prompt the worker received, so its echo in the trail is skipped. */
@@ -58,13 +58,18 @@ export interface WorkerRowView {
   fallbackNotice?: string;
 }
 
-/** `<pad><glyph> <phrase> · <detail> <tail>`, clipped to the width. */
-export function workerRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number, width: number): string {
+/** `<pad><glyph> <phrase> · <detail> <tail>`, before it is clipped to the width. */
+function fullRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number): string {
   const glyph = theme.fg(workerRowColor(view.status), workerRowGlyph(view.status, frame));
   const phrase = theme.fg("toolTitle", workerRowPhrase(view.agent, view.status === "running", view.variant));
   const detail = view.detail ? theme.fg("muted", ` · ${view.detail}`) : "";
   const tail = view.tail ? theme.fg("muted", ` ${view.tail}`) : "";
-  return clip(`${pad}${glyph} ${phrase}${detail}${tail}`, width);
+  return `${pad}${glyph} ${phrase}${detail}${tail}`;
+}
+
+/** `<pad><glyph> <phrase> · <detail> <tail>`, clipped to the width. */
+export function workerRowLine(view: WorkerRowView, theme: SubagentTheme, pad: string, frame: number, width: number): string {
+  return clip(fullRowLine(view, theme, pad, frame), width);
 }
 
 /** Tools whose arguments `formatToolArguments` knows how to show. */
@@ -149,7 +154,8 @@ function sameText(a: string | undefined, b: string | undefined): boolean {
 
 /**
  * Lines below an expanded row, indented under its phrase: the diagnostic,
- * the full prompt when the row's detail is only its first line, the trail,
+ * the full prompt (wrapped, cut after {@link WORKER_ROW_PROMPT_LINES} lines)
+ * when the row shows only part of it, the trail,
  * a fallback notice, then for a finished worker its answer (Markdown, cut
  * after {@link WORKER_ROW_ANSWER_LINES} source lines) and the usage line.
  */
@@ -159,8 +165,10 @@ export function workerRowBody(view: WorkerRowView, theme: SubagentTheme, pad: st
   const dim = (text: string) => clip(`${indent}${theme.fg("dim", text)}`, width);
   if (view.diagnostic) out.push(clip(`${indent}${theme.fg(view.diagnosticColor ?? "error", compactOneLine(view.diagnostic, 400))}`, width));
   const prompt = view.prompt?.trim();
-  if (prompt && !sameText(prompt, view.detail)) {
-    const { shown, more } = limited(prompt.split(/\r?\n/), WORKER_ROW_PROMPT_LINES);
+  const rowClipped = visibleWidth(fullRowLine(view, theme, pad, frame)) > width;
+  if (prompt && (rowClipped || !sameText(prompt, view.detail))) {
+    const wrapped = prompt.split(/\r?\n/).flatMap((line) => wrapTextWithAnsi(line, Math.max(1, width - indent.length)));
+    const { shown, more } = limited(wrapped, WORKER_ROW_PROMPT_LINES);
     out.push(...shown.map((line) => dim(line)));
     if (more) out.push(clip(`${indent}${theme.fg("muted", more)}`, width));
   }

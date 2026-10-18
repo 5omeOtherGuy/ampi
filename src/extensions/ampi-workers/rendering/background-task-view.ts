@@ -209,7 +209,7 @@ function formatContextUsage(row: WidgetRow): string | undefined {
 
 /**
  * Row metadata chips. `"full"` is the board's rich set (elapsed, model,
- * profile, latest tool, turns, tools, ctx%); `"minimal"` keeps just elapsed +
+ * latest tool, turns, tools, ctx%); `"minimal"` keeps just elapsed +
  * model so the inline card stays GROK-compact; `"none"` omits them.
  */
 export type RowMetadataLevel = "full" | "minimal" | "none";
@@ -238,9 +238,8 @@ function widgetMetadataParts(row: WidgetRow, level: RowMetadataLevel): string[] 
   const model = stripMmrWorkerModelProvider(row.resolvedModel);
   if (model) parts.push(model);
   if (level === "minimal") return parts;
-  // Capability profile (e.g. `read-only` / `read-write`) shown verbatim as the
-  // worker's lane. The group id is NOT a row chip — it labels the section header.
-  if (row.capabilityProfile) parts.push(row.capabilityProfile);
+  // The capability profile is in the row's phrase (`Running subagent (read-only)`)
+  // and the group id labels the section header, so neither is a chip.
   if (row.latestToolName) {
     const suffix = row.latestToolStatus === "running" ? "…" : "";
     parts.push(`${row.latestToolName}${suffix}`);
@@ -466,7 +465,7 @@ export function renderRowLine(
   const taskId = options.showTaskId === true && row.taskId
     ? ` ${safeFg("accent", row.taskId)}`
     : "";
-  const phrase = safeFg("toolTitle", workerRowPhrase(row.agent, !isTerminalRowStatus(row.status)));
+  const phrase = safeFg("toolTitle", workerRowPhrase(row.agent, !isTerminalRowStatus(row.status), row.capabilityProfile));
   const description = stripAgentPrefix(row.description, row.agent);
   const desc = description
     ? safeFg("muted", ` · ${compactOneLine(description, 60)}`)
