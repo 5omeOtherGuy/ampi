@@ -132,37 +132,53 @@ const DEFAULT_HOST = {
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
 
+/** @param {any} ctx */
+const hasMessages = (ctx) => ctx.sessionManager.getEntries().some((/** @type {any} */ entry) => entry.type === "message");
+
 /**
- * The inline Pi extension that applies the command's thread options. Labels
- * and the title source go to the first session at its start; the archive and
- * the timings happen when the run ends. Without ampi-threads (the thread index
- * is not registered) labels are reported as not stored and nothing is archived.
+ * The inline Pi extension that applies the command's thread options. Pi calls
+ * an extension factory again for every runtime of the process (after /new,
+ * /resume, /fork and /reload), so what spans the whole run lives outside the
+ * factory. Labels and the title source go to the session Pi starts with. When
+ * the run quits, the session it ends in is archived if this run created it
+ * (it started without messages, or came from /new or /fork), so a session
+ * continued with -c, -r or --session stays where it was; then the timings are
+ * written. Without ampi-threads (the thread index is not registered) labels are
+ * reported as not stored and nothing is archived.
+ *
+ * The archive follows ampi-threads' own (`hasMmrSessionMessages` and
+ * `archiveMmrSession` in src/extensions/ampi-threads/commands.ts, which this
+ * plain JavaScript cannot import): only sessions with messages, and an earlier
+ * archive date is kept.
  *
  * @param {RunExtensionOptions} options
  * @param {RunExtensionHost} [host]
  * @returns {(pi: any) => void}
  */
 export function createRunExtension(options, host = DEFAULT_HOST) {
+  /** Sessions this run created. */
+  const created = new Set();
+  /** @type {number | undefined} */
+  let turnStart;
+  /** @type {number | undefined} */
+  let turnEnd;
+
   return (pi) => {
     /** @type {{ get(id: string): Promise<any>, update(id: string, patch: object): Promise<any> } | undefined} */
     let index;
-    let started = false;
-    /** @type {number | undefined} */
-    let turnStart;
-    /** @type {number | undefined} */
-    let turnEnd;
 
-    pi.on("session_start", async (/** @type {unknown} */ _event, /** @type {any} */ ctx) => {
-      if (started) return;
-      started = true;
+    pi.on("session_start", async (/** @type {{ reason: string }} */ event, /** @type {any} */ ctx) => {
       // Kept for the end of the run: ampi-threads unregisters it at shutdown.
       index = /** @type {any} */ (globalThis)[THREAD_INDEX_GLOBAL_KEY]?.at(-1);
-      if (options.labels.length === 0 && !options.titled) return;
+      const sessionId = ctx.sessionManager.getSessionId();
+      if (event.reason === "new" || event.reason === "fork" || (event.reason === "startup" && !hasMessages(ctx))) {
+        created.add(sessionId);
+      }
+      if (event.reason !== "startup" || (options.labels.length === 0 && !options.titled)) return;
       if (index === undefined) {
         if (options.labels.length > 0) host.warn("ampi: the thread index is off (ampi-threads is not loaded); the labels were not stored.");
         return;
       }
-      const sessionId = ctx.sessionManager.getSessionId();
       try {
         const record = await index.get(sessionId);
         /** @type {Record<string, unknown>} */
@@ -184,12 +200,12 @@ export function createRunExtension(options, host = DEFAULT_HOST) {
       });
     }
 
-    pi.on("session_shutdown", async (/** @type {unknown} */ _event, /** @type {any} */ ctx) => {
-      if (options.archive && index !== undefined) {
-        const sessionId = ctx.sessionManager.getSessionId();
-        const hasMessages = ctx.sessionManager.getEntries().some((/** @type {any} */ entry) => entry.type === "message");
+    pi.on("session_shutdown", async (/** @type {{ reason: string }} */ event, /** @type {any} */ ctx) => {
+      if (event.reason !== "quit") return;
+      const sessionId = ctx.sessionManager.getSessionId();
+      if (options.archive && index !== undefined && created.has(sessionId) && hasMessages(ctx)) {
         try {
-          if (hasMessages && (await index.get(sessionId))?.archived === undefined) {
+          if ((await index.get(sessionId))?.archived === undefined) {
             await index.update(sessionId, { archived: host.timestamp() });
           }
         } catch (error) {

@@ -1,6 +1,8 @@
 // Pi surface the `ampi` command uses besides `main()`. Pi exports these
 // classes but does not document them, so every call stays in this module and
-// tests/mmr-cli-pi-compat.test.mjs fails when their shape changes.
+// tests/mmr-cli-pi-compat.test.mjs fails when their shape changes. Pi's piped
+// stdin read is not exported, so the spawn tests in
+// tests/mmr-cli-execute.test.mjs are the probe for hidePipedStdinFromPi.
 
 /**
  * @typedef {object} PiExtensionSources

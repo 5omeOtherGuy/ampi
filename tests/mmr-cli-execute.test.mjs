@@ -104,36 +104,62 @@ describe("ampi execute mode: thread options", () => {
     warn: (text) => warnings.push(text),
   });
 
-  it("adds the labels to the session's existing ones and marks the title as the user's", async () => {
-    const { index, release } = await registerIndex({ s1: { labels: ["old", "docs"] } });
-    try {
+  /**
+   * One run of the command: Pi calls the extension factory again for every
+   * runtime (after /new, /resume, /fork and /reload), as it does in a process.
+   */
+  const runOf = (options, runHost) => {
+    const factory = createRunExtension(options, runHost);
+    return () => {
       const { pi, handlers } = fakePi();
+      factory(pi);
+      return handlers;
+    };
+  };
+  const start = (handlers, reason, session) => handlers.get("session_start")({ type: "session_start", reason }, session);
+  const shutdown = (handlers, reason, session) => handlers.get("session_shutdown")({ type: "session_shutdown", reason }, session);
+
+  it("adds the labels to the starting session's existing ones and marks the title as the user's", async () => {
+    const { index, release } = await registerIndex({ s1: { labels: ["old", "docs"] }, s3: { labels: ["kept"] } });
+    try {
       const warnings = [];
-      createRunExtension({ labels: ["docs", "release"], titled: true, archive: false, timings: false }, host(warnings))(pi);
-      await handlers.get("session_start")({}, ctx("s1"));
-      // A later session in the same run (for example after /new) is left alone.
-      await handlers.get("session_start")({}, ctx("s2"));
-      await handlers.get("session_shutdown")({}, ctx("s2"));
+      const runtime = runOf({ labels: ["docs", "release"], titled: true, archive: false, timings: false }, host(warnings));
+      const first = runtime();
+      await start(first, "startup", ctx("s1"));
+      await shutdown(first, "reload", ctx("s1"));
+      const reloaded = runtime();
+      await start(reloaded, "reload", ctx("s1"));
+      await shutdown(reloaded, "new", ctx("s1"));
+      // Later sessions in the same process, after /new and /resume, are left alone.
+      const fresh = runtime();
+      await start(fresh, "new", ctx("s2", []));
+      await shutdown(fresh, "resume", ctx("s2"));
+      const resumed = runtime();
+      await start(resumed, "resume", ctx("s3"));
+      await shutdown(resumed, "quit", ctx("s3"));
       assert.deepEqual(index.threads.get("s1"), { labels: ["old", "docs", "release"], titleSource: "user" });
       assert.equal(index.threads.has("s2"), false);
+      assert.deepEqual(index.threads.get("s3"), { labels: ["kept"] });
       assert.deepEqual(warnings, []);
     } finally {
       release();
     }
   });
 
-  it("archives the session at the end of the run, keeping an earlier archive date", async () => {
+  it("archives a session the run created when it quits, keeping an earlier archive date", async () => {
     const { index, release } = await registerIndex({ old: { archived: "2026-01-01T00:00:00.000Z" } });
     try {
       const runs = ["s1", "old", "empty"].map((id) => {
-        const { pi, handlers } = fakePi();
-        createRunExtension({ labels: [], titled: false, archive: true, timings: false }, host([]))(pi);
-        return { handlers, session: ctx(id, id === "empty" ? [] : [{ type: "message" }]) };
+        const handlers = runOf({ labels: [], titled: false, archive: true, timings: false }, host([]))();
+        // A new session has no messages at its start; the run adds them.
+        const entries = [];
+        return { handlers, session: ctx(id, entries), entries: id === "empty" ? [] : [{ type: "message" }] };
       });
-      for (const { handlers, session } of runs) await handlers.get("session_start")({}, session);
+      for (const { handlers, session } of runs) await start(handlers, "startup", session);
+      for (const run of runs) run.session.sessionManager.getEntries = () => run.entries;
       // ampi-threads unregisters the index at shutdown, before this extension's handler runs.
       release();
-      for (const { handlers, session } of runs) await handlers.get("session_shutdown")({}, session);
+      for (const { handlers, session } of runs) await shutdown(handlers, "quit", session);
       assert.deepEqual(index.threads.get("s1"), { archived: "2026-10-18T10:00:00.000Z" });
       assert.deepEqual(index.threads.get("old"), { archived: "2026-01-01T00:00:00.000Z" });
       assert.equal(index.threads.has("empty"), false);
@@ -142,24 +168,50 @@ describe("ampi execute mode: thread options", () => {
     }
   });
 
+  it("leaves a continued session unarchived, and archives only the session the run quits in", async () => {
+    const { index, release } = await registerIndex({ chat: { labels: ["mine"] } });
+    try {
+      const options = { labels: [], titled: false, archive: true, timings: false };
+      // `-c -x`: the session already had messages when the run started.
+      const continued = runOf(options, host([]))();
+      await start(continued, "startup", ctx("chat"));
+      await shutdown(continued, "quit", ctx("chat"));
+      // A new session that the run then leaves for another one it creates.
+      const runtime = runOf(options, host([]));
+      const first = runtime();
+      await start(first, "startup", ctx("a", []));
+      await shutdown(first, "new", ctx("a"));
+      const second = runtime();
+      await start(second, "new", ctx("b", []));
+      await shutdown(second, "quit", ctx("b"));
+      assert.deepEqual(index.threads.get("chat"), { labels: ["mine"] });
+      assert.equal(index.threads.has("a"), false);
+      assert.deepEqual(index.threads.get("b"), { archived: "2026-10-18T10:00:00.000Z" });
+    } finally {
+      release();
+    }
+  });
+
   it("reports labels it cannot store when ampi-threads is not loaded", async () => {
-    const { pi, handlers } = fakePi();
     const warnings = [];
-    createRunExtension({ labels: ["docs"], titled: false, archive: true, timings: false }, host(warnings))(pi);
-    await handlers.get("session_start")({}, ctx("s1"));
-    await handlers.get("session_shutdown")({}, ctx("s1"));
+    const handlers = runOf({ labels: ["docs"], titled: false, archive: true, timings: false }, host(warnings))();
+    await start(handlers, "startup", ctx("s1", []));
+    await shutdown(handlers, "quit", ctx("s1"));
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /^ampi: the thread index is off .*labels were not stored/);
   });
 
-  it("reports startup, turn and total durations from the command's start", async () => {
-    const { pi, handlers } = fakePi();
+  it("reports startup, turn and total durations from the command's start, once when the run quits", async () => {
     const warnings = [];
-    createRunExtension({ labels: [], titled: false, archive: false, timings: true }, host(warnings, [800.4, 1250, 1300]))(pi);
-    await handlers.get("session_start")({}, ctx("s1"));
-    handlers.get("agent_start")();
-    handlers.get("agent_end")();
-    await handlers.get("session_shutdown")({}, ctx("s1"));
+    const runtime = runOf({ labels: [], titled: false, archive: false, timings: true }, host(warnings, [800.4, 1250, 1300]));
+    const first = runtime();
+    await start(first, "startup", ctx("s1"));
+    first.get("agent_start")();
+    first.get("agent_end")();
+    await shutdown(first, "reload", ctx("s1"));
+    const reloaded = runtime();
+    await start(reloaded, "reload", ctx("s1"));
+    await shutdown(reloaded, "quit", ctx("s1"));
     assert.deepEqual(warnings, ["ampi: timings: startup 800 ms, turn 450 ms, total 1300 ms"]);
   });
 });
@@ -175,9 +227,9 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
    *
    * @param {string[]} args
    * @param {string} input
+   * @param {string} [root] The directories of an earlier run, to continue its session.
    */
-  const runAmpi = (args, input) => {
-    const root = path.join(dir, String(++runs));
+  const runAmpi = (args, input, root = path.join(dir, String(++runs))) => {
     const agentDir = path.join(root, "agent");
     for (const sub of ["home", "agent", "project"]) mkdirSync(path.join(root, sub), { recursive: true });
     const env = { PATH: process.env.PATH, HOME: path.join(root, "home"), PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" };
@@ -191,7 +243,7 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
     child.stdout.on("data", (chunk) => (stdout += chunk));
     child.stderr.on("data", (chunk) => (stderr += chunk));
     const index = () => JSON.parse(readFileSync(path.join(agentDir, "data", "ampi", "threads", "index.json"), "utf8")).threads;
-    return new Promise((resolve) => child.on("close", (status) => resolve({ status, stdout, stderr, index })));
+    return new Promise((resolve) => child.on("close", (status) => resolve({ root, status, stdout, stderr, index })));
   };
 
   it("prints only the final message for the argument and stdin, and archives the labelled session", async () => {
@@ -206,12 +258,26 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
     assert.match(threads[0].archived, /^\d{4}-\d\d-\d\dT/);
   });
 
-  it("runs execute mode without -x when the output is piped, and keeps the session unarchived on request", async () => {
+  // Output piped with input from a terminal needs a terminal for stdin, which a
+  // spawn cannot give; "when it runs" above covers that case.
+  it("runs execute mode without -x when input and output are piped, and keeps the session unarchived on request", async () => {
     const result = await runAmpi(["--no-archive-after-execute", "--timings"], "only stdin\n");
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, "Echo: only stdin\n");
     assert.match(result.stderr, /^ampi: timings: startup \d+ ms, turn \d+ ms, total \d+ ms\n$/);
     assert.throws(() => result.index(), { code: "ENOENT" });
+  });
+
+  it("answers in a continued session without archiving it", async () => {
+    const first = await runAmpi(["-x", "--no-archive-after-execute", "-l", "chat", "first question"], "");
+    assert.equal(first.status, 0, first.stderr);
+    const result = await runAmpi(["-c", "-x", "one more question"], "", first.root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "Echo: one more question\n");
+    const threads = Object.values(result.index());
+    assert.equal(threads.length, 1);
+    assert.deepEqual(threads[0].labels, ["chat"]);
+    assert.equal(threads[0].archived, undefined);
   });
 
   it("exits 1 with the error on stderr when the agent fails", async () => {
@@ -226,5 +292,12 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
     assert.equal(result.status, 2);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, `ampi: ${EXECUTE_NO_MESSAGE_ERROR}\n`);
+  });
+
+  it("exits 2 for -x with RPC mode, which needs stdin for itself", async () => {
+    const result = await runAmpi(["-x", "--mode", "rpc", "hi"], "");
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "ampi: -x cannot be combined with --mode rpc.\n");
   });
 });

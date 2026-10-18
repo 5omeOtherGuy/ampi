@@ -64,9 +64,15 @@ function runPiCommand(args) {
 async function startPi({ piArgs, options }) {
   const pi = await import(PI_PACKAGE_NAME);
   let args = [...piArgs];
+  const parsed = pi.parseArgs(args);
+  // RPC mode talks JSON over stdin, which execute mode reads for the message.
+  if (options.execute && parsed.mode === "rpc") {
+    process.stderr.write("ampi: -x cannot be combined with --mode rpc.\n");
+    return 2;
+  }
   const execute = isExecuteRun({
     explicit: options.execute,
-    parsed: pi.parseArgs(args),
+    parsed,
     stdinIsTTY: process.stdin.isTTY === true,
     stdoutIsTTY: process.stdout.isTTY === true,
   });
