@@ -150,6 +150,47 @@ describe("mmr-core thread status", () => {
     assert.deepEqual(statuses.slice(2), [cancelling, cancelling, IDLE, IDLE]);
   });
 
+  it("stays idle after an abort during tools until the cancelled run settles", () => {
+    // Pi runs one more aborted turn after an aborted tool batch before it settles.
+    const statuses = run([
+      { type: "turnStart" },
+      { type: "messageUpdate", content: "toolCall" },
+      { type: "toolStart", toolCallId: "a", toolName: "bash" },
+      { type: "abort" },
+      { type: "toolEnd", toolCallId: "a", outcome: "error" },
+      { type: "turnEnd" },
+      { type: "turnStart" },
+      { type: "turnEnd" },
+      { type: "settled" },
+      { type: "turnStart" },
+    ]);
+    const cancelling = expected({ phase: "cancelling", label: "Cancelling", busy: true });
+    assert.deepEqual(statuses.slice(3), [
+      cancelling,
+      cancelling,
+      IDLE,
+      IDLE,
+      IDLE,
+      IDLE,
+      expected({ phase: "sending", label: "Sending", hint: STEER, busy: true }),
+    ]);
+  });
+
+  it("goes idle when a compaction started while idle fails after an abort", () => {
+    const statuses = run([
+      { type: "compactionStart" },
+      { type: "abort" },
+      { type: "compactionFailed" },
+      { type: "tick", now: 99_999 },
+    ]);
+    assert.deepEqual(statuses, [
+      expected({ phase: "compacting", label: "Auto-Compacting", hint: STEER, busy: true }),
+      expected({ phase: "compacting", label: "Auto-Compacting", hint: STEER, busy: true }),
+      IDLE,
+      IDLE,
+    ]);
+  });
+
   it("ignores an abort while idle", () => {
     const reducer = createMmrThreadStatusReducer();
     const before = reducer.status;

@@ -565,9 +565,13 @@ identity:
   started first.
 - `attention` is true while waiting for approval and after an error.
 
+Transitions:
+
 - Compaction shows over the current phase and the interrupted phase
   returns when it finishes or fails.
-- An abort shows `Cancelling` until the turn ends, then the thread is idle.
+- An abort shows `Cancelling` until the turn ends, then the thread stays
+  idle until `settled`, even if Pi starts one more aborted turn first. An
+  abort during a compaction outside a turn ends when the compaction does.
 - A failed tool does not change the phase; an `error` event does, and it
   stays until the next `turnStart`.
 - The force-quit hint expires once an event's `now` (or a `tick`) reaches

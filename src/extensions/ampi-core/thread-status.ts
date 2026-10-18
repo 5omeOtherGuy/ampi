@@ -32,16 +32,20 @@
  * | Event               | Effect                                                         |
  * | ------------------- | -------------------------------------------------------------- |
  * | `turnStart`         | clears error and cancellation; model activity becomes sending   |
+ * |                     | (ignored while an aborted run winds down, see `turnEnd`)       |
  * | `messageUpdate`     | thinking or streaming; records the output-token count if given |
  * | `toolStart`         | adds the tool; activity drops back to sending for the next call |
  * | `toolEnd`           | removes that tool, whatever its outcome; unknown ids are ignored |
  * | `compactionStart`   | sets compacting                                                |
- * | `compactionEnd`     | clears compacting (also on `compactionFailed`)                 |
+ * | `compactionEnd`     | clears compacting (also on `compactionFailed`); with no turn   |
+ * |                     | open it also clears cancellation                               |
  * | `approvalRequest`   | adds a pending approval                                        |
  * | `approvalAnswer`    | removes that approval                                          |
  * | `abort`             | sets cancelling, only while busy                               |
  * | `turnEnd`           | clears tools and approvals; after an abort the thread goes idle |
- * | `settled`           | everything idle except a sticky error and the queue count      |
+ * |                     | and stays idle until `settled`                                 |
+ * | `settled`           | everything idle except a sticky error and the queue count;     |
+ * |                     | ends an aborted run                                            |
  * | `error`             | sets error and stops all activity until the next `turnStart`   |
  * | `queue`             | replaces the queued-message count; survives every phase        |
  * | `quitPressed`       | shows the force-quit hint until `expiresAt`                    |
@@ -53,6 +57,12 @@
  * `agent_settled`, even for an aborted or failed response; between turns of
  * one run the next provider request is about to go out, so a normal
  * `turnEnd` leaves the thread `sending` until the next turn or `settled`.
+ * After an abort during tools, Pi's loop still runs one more (aborted) turn
+ * before `agent_end`, so the reducer ignores `turnStart`, `messageUpdate`
+ * and `toolStart` from the end of the aborted turn until `agent_settled`,
+ * which Pi emits at the end of every run. A manual compaction runs outside
+ * any run and is never followed by `agent_settled`, so its end clears an
+ * abort requested during it.
  */
 
 import { formatMmrCompactTokens } from "./token-format.js";
@@ -154,6 +164,8 @@ interface ThreadState {
   approvals: readonly string[];
   compacting: boolean;
   cancelling: boolean;
+  /** An aborted turn ended; the run is winding down until `settled`. */
+  runAborted: boolean;
   error: boolean;
   queued: number;
   quitHintUntil: number | undefined;
@@ -187,6 +199,7 @@ const INITIAL_STATE: ThreadState = {
   approvals: [],
   compacting: false,
   cancelling: false,
+  runAborted: false,
   error: false,
   queued: 0,
   quitHintUntil: undefined,
@@ -206,6 +219,9 @@ function isBusy(state: ThreadState): boolean {
 }
 
 function transition(state: ThreadState, event: MmrThreadStatusEvent): ThreadState {
+  if (state.runAborted && (event.type === "turnStart" || event.type === "messageUpdate" || event.type === "toolStart")) {
+    return state;
+  }
   switch (event.type) {
     case "turnStart":
       return { ...state, activity: "sending", outputTokens: undefined, cancelling: false, error: false };
@@ -228,8 +244,10 @@ function transition(state: ThreadState, event: MmrThreadStatusEvent): ThreadStat
     case "compactionStart":
       return { ...state, compacting: true };
     case "compactionEnd":
-    case "compactionFailed":
-      return { ...state, compacting: false };
+    case "compactionFailed": {
+      const turnOpen = state.activity !== "idle" || state.tools.length > 0;
+      return { ...state, compacting: false, cancelling: state.cancelling && turnOpen };
+    }
     case "approvalRequest":
       if (state.approvals.includes(event.requestId)) return state;
       return { ...state, approvals: [...state.approvals, event.requestId] };
@@ -237,15 +255,18 @@ function transition(state: ThreadState, event: MmrThreadStatusEvent): ThreadStat
       return { ...state, approvals: state.approvals.filter((id) => id !== event.requestId) };
     case "abort":
       return isBusy(state) ? { ...state, cancelling: true } : state;
-    case "turnEnd":
+    case "turnEnd": {
+      const runAborted = state.runAborted || state.cancelling;
       return {
         ...state,
-        activity: state.cancelling || state.error ? "idle" : "sending",
+        activity: runAborted || state.error ? "idle" : "sending",
         outputTokens: undefined,
         tools: [],
         approvals: [],
         cancelling: false,
+        runAborted,
       };
+    }
     case "settled":
       return { ...INITIAL_STATE, error: state.error, queued: state.queued, quitHintUntil: state.quitHintUntil };
     case "error":

@@ -14,9 +14,8 @@
  *   a breaking change — it requires a semver-major bump and a `CHANGELOG.md`
  *   migration note. Covers mode keys/definitions, the model resolver,
  *   routing, feature gates, settings loaders, the thread status model,
- *   the `createMmr*Extension`
- *   factories, the public tool `create*`/`register*` functions, and the
- *   public type surface.
+ *   the `createMmr*Extension` factories, the public tool
+ *   `create*`/`register*` functions, and the public type surface.
  *
  * - Internal / prompt-assembly: exported for cross-extension wiring and
  *   advanced embedders. Not part of the stability promise and may change
