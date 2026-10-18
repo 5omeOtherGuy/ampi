@@ -23,6 +23,7 @@ ampi "fix the failing test in parser.test.ts"   # start with a first message
 ampi -x "list the npm scripts"                  # run one message and print the answer
 ampi last                # continue the most recent session that is not archived
 ampi threads             # list this directory's sessions
+ampi usage               # cost and tokens of the last 30 days
 ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
@@ -132,6 +133,9 @@ ampi threads continue 019a3c                   # open a session in the terminal 
 ampi last                                      # open the most recent session that is not archived
 ampi threads markdown 019a3c > session.md      # the session as Markdown
 ampi threads export 019a3c | jq '.entries | length'
+ampi threads context 019a3c                    # what fills the context window, as JSON
+ampi threads usage 019a3c --details            # what the session cost, per model, and its tool calls
+ampi usage --details                           # cost and tokens of every session of the last 30 days
 ampi threads rename 019a3c "Parser cleanup"
 ampi threads archive 019a3c                    # unarchive, or archive --unarchive, undoes it
 ampi threads label 019a3c parser release
@@ -156,6 +160,9 @@ ID                                    Title                    Updated  Messages
 | `last` | Opens the most recent session of the current directory that is not archived. Pi's `-c` also counts archived sessions, such as the ones execute mode archives. |
 | `threads markdown <id>` (`md`) | Prints the session as Markdown: front matter (`title`, `sessionId`, `created`, `mode`), then a `## User` or `## Assistant` section per turn, with tool calls and results as fenced blocks. The same layout as ampi-threads' Markdown export. |
 | `threads export <id>` | Prints the session as one JSON object: the fields of `list --json` plus `entries`, every entry of the session file as Pi wrote it (Pi's session format, described in its `docs/session-format.md`), header first. |
+| `threads context <id>` (`analyze-context`) | Prints what fills the session's context window as JSON, section by section, as the `thread analyze context` overlay shows it. The fields are below. |
+| `threads usage <id>` | Prints the session's title and its total cost, in the format of the prompt box's cost gauge, with a note when some models have no price. `--details` adds a table of input, output, cache read and cache write tokens and the cost per model ("unknown" without a price), and the number of tool calls per tool. `--start <time>` and `--end <time>` count only the entries from `--start` on and before `--end`. `--json` prints the fields below. |
+| `usage` | Prints the cost and tokens of every session on this machine, in every directory, from `--start` up to, not including, `--end`: by default the 30 days up to now (without `--start`, the 30 days before `--end`). The text gives the range, the total cost, the number of sessions with usage in the range and the token totals; `--details` adds the per-model table and the ten most expensive sessions with their id, title, cost and directory. `--json` prints the fields below. |
 | `threads rename <id> <title>` (`r`) | Sets Pi's session name, as `/name` does, and records the title as typed by you. |
 | `threads archive <id>`, `threads unarchive <id>` | Archives the session in the thread index, or takes it out of the archive. |
 | `threads label <id> <label...>` | Adds labels to the ones the session has: 1 to 32 lowercase letters, digits or hyphens each, at most 20 per session. |
@@ -181,8 +188,24 @@ ID                                    Title                    Updated  Messages
   | `has:tools`, `has:errors` | it called a tool, or something in it failed |
 
   Dates are `YYYY-MM-DD` or relative: `today` and `yesterday` (from midnight UTC), `week`, `month` (30 days), or a number of days or weeks such as `7d` or `2w`.
+- **Context.** `threads context` reads the branch Pi would open, ending at the session's last entry, and estimates tokens at four characters to a token from the system prompt and tool declarations Pi recorded in the session and the messages it would send now. Its JSON fields:
+
+  | Field | Value |
+  | --- | --- |
+  | `threadID` | The session id. |
+  | `scope` | Always `"current-context"`. |
+  | `model` | `provider/model` that answers next, as Pi resumes the session: from the last response or model change on the branch; `null` when there is none. |
+  | `modelDisplayName`, `maxContextTokens` | The model's name and context window from Pi's model catalogue and `models.json`; `null` for a model they do not list, such as one only an extension registers. |
+  | `sections` | `{id, name, tokens, percentage}` in this order: `system-prompt`, `builtin-tools`, `agents-files` (the AGENTS.md files in the prompt), `mcp-tools` (tools named `mcp__…`), `loaded-skills`, `compaction-summary`, `messages`. `percentage` is the share of the window with one decimal, `null` when the window is unknown. |
+  | `totalTokens` | The sum of the sections. |
+  | `freeSpace` | The window less the total, never below 0; `null` when the window is unknown. |
+  | `compactionCount` | Compactions on the branch. |
+  | `toolCounts` | `{builtin, mcp, total}`: the tools declared to the model. |
+  | `measuredTokens` | Present when a response after the latest compaction or context edit recorded its usage: the tokens the provider counted then, plus estimates for the messages after it, as Pi counts the context it shows. After a context edit Pi shows an estimate of the whole context instead, which this field leaves out. |
+  | `systemPromptRecorded` | `false` when the branch holds no recorded system prompt yet (Pi records it with the first request); the prompt and tool sections are then 0, and a note goes to stderr. |
+- **Costs.** An entry costs what the provider reported and Pi recorded, else its tokens at the model's list price from Pi's model catalogue or `models.json`, as the prompt box's gauge counts them. A model with neither is "unknown" and left out of the totals, and a total is unknown only when every model is. ampi keeps no account and no credits, so there are no balances or plan limits to show. The catalogue is read offline: prices that only a refreshed catalogue has are not used, and nothing authenticates or calls a model. Sessions labelled `imported` in the thread index count as unknown, never as free. `threads usage --json` prints `threadID`, `title`, `start` and `end` (ISO 8601, or `null` without the option), `cost` (dollars, `null` when unknown), `unknownCostModels`, `models` (`{model, cost, inputTokens, outputTokens, cacheReadInputTokens, cacheCreationInputTokens}`, `cost` `null` when unknown; compaction and branch summaries appear as `session summaries`) and `toolCalls` (`{name: count}`). `usage --json` prints `start`, `end`, `cost`, `unknownCostModels`, `sessionCount`, the four token totals, `models` in the same form and `sessions`: every session with usage in the range, the most expensive first, as `{threadID, title, cwd, cost}`. Like search, the context and cost reports come from the ampi that Pi loads; an ampi too old to have them is reported with status `1`. Times are ISO 8601 dates or times, such as `2026-10-01` (midnight UTC) or `2026-10-01T09:30:00Z`; a time without `Z` or an offset, such as `2026-10-01T09:30`, is local time. A malformed time, a date the calendar does not have (`2026-02-30`) or a `--start` after `--end` is a usage error.
 - **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
-- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error, including a search query it cannot use. `ampi threads --help` lists the commands and options.
+- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, or when the ampi in use is too old for a command, `2` on a usage error, including a search query it cannot use and a malformed time. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
 ## Keymap and settings
@@ -232,7 +255,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session).
 
 ## Development
 

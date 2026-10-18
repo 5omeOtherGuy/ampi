@@ -9,6 +9,8 @@ Commands:
   threads [command]             Create, list, open, print, change or delete sessions;
                                 ampi threads --help lists the commands
   last                          Open the most recent session of this directory that is not archived
+  usage                         Print the cost and tokens of every session of the last 30 days;
+                                ampi threads --help lists its options
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
 

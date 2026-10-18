@@ -20,7 +20,7 @@ import { parseArgs } from "node:util";
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
  *   ampi, run one of Pi's own commands, or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
- * @property {string[]} [threadArgs] The command line from `threads` or `last` on, when `command` is `"threads"`.
+ * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
@@ -105,7 +105,7 @@ export function routeAmpiArgv(argv) {
   };
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
-  if (args[0] === "threads" || args[0] === "last") return { command: "threads", piArgs: [], options, threadArgs: args };
+  if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], options, threadArgs: args };
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
     return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
@@ -240,6 +240,8 @@ Commands:
   threads [command]             Create, list, open, print, change or delete sessions;
                                 ampi threads --help lists the commands
   last                          Open the most recent session of this directory that is not archived
+  usage                         Print the cost and tokens of every session of the last 30 days;
+                                ampi threads --help lists its options
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
 

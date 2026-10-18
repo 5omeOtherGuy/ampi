@@ -1,7 +1,7 @@
 import { copyToClipboard, type ExtensionAPI, type ExtensionContext, type ToolInfo } from "@earendil-works/pi-coding-agent";
 import { registerMmrPromptHistory } from "../ampi-core/prompt-history.js";
 import { MMR_THREAD_SLASH_COMMAND, registerMmrThreadIndex } from "../ampi-core/thread-index.js";
-import { registerMmrThreadReports } from "../ampi-core/thread-reports.js";
+import { registerMmrThreadReports, summarizeMmrThreadCost } from "../ampi-core/thread-reports.js";
 import {
   archiveMmrSession,
   createMmrThreadSlashHandler,
@@ -11,7 +11,6 @@ import {
 } from "./commands.js";
 import { loadMmrThreadsSettings, type MmrThreadsSettings } from "./config.js";
 import { analyzeMmrContext, type MmrContextAnalysisInput } from "./context-analysis.js";
-import { summarizeMmrThreadCost } from "./cost.js";
 import { createMmrPromptHistoryStore, type MmrPromptHistoryStore } from "./history-store.js";
 import { createMmrThreadIndexStore, type MmrThreadIndexStore, type MmrThreadIndexStoreOptions } from "./index-store.js";
 import { formatMmrThreadMarkdown } from "./markdown.js";
