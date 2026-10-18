@@ -5,6 +5,7 @@ import { getMmrModeHistory, getMmrModeState, isMmrModeLocked, resolveMmrFeatureG
 import { showMmrChangelogCommand } from "./changelog.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { formatMmrStatus } from "./status.js";
+import { explainMmrFastUnavailable, getMmrSpeed, registerMmrToggleFastCommand, toggleMmrFastSpeed } from "./speed.js";
 import type { MmrModeController } from "./mode-controller.js";
 
 const MMR_MODE_PICKER_SHORTCUTS = ["ctrl+shift+s", "alt+m"] as const;
@@ -25,7 +26,9 @@ function parseMmrStatusDebugFlag(args: unknown): boolean {
  * Register the ampi commands (`/mode`, `/ampi-status`, `/ampi-changelog`,
  * `/ampi-config`) plus legacy `/mmr-*` compatibility aliases, followed by the
  * mode shortcuts (mode-picker pair, `ctrl+s` cycle with its deprecated
- * `ctrl+space` alias, `alt+d` thinking toggle). Registration order is
+ * `ctrl+space` alias, `alt+d` thinking toggle) and the `alt+r` fast-speed
+ * toggle, which also goes into the command registry as `speed.toggleFast`.
+ * Registration order is
  * load-bearing and verified by the registration-order characterization test;
  * keep commands-before-shortcuts and the picker→cycle→toggle sequence intact.
  * Every handler body delegates to the controller.
@@ -69,6 +72,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
             autoCompact: debug ? controller.getAutoCompactor().getStatus(state?.mode) : undefined,
             disabledBySetting: controller.listDisabledTools(),
             permissions: resolveMmrFeatureGates(["ampi-permissions"])[0],
+            speed: { speed: getMmrSpeed(), provider: ctx.model?.provider, model: ctx.model?.id },
           }),
           "info",
         );
@@ -145,13 +149,30 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
     },
   });
 
-  // `alt+d` is the Amp-compatible reasoning-effort key; `alt+r` stays free for
-  // a future fast-speed toggle. Pi's editor binds `alt+d` to delete-word-forward
-  // (not reserved, and `alt+delete` keeps that action), so the extension wins.
+  // `alt+d` is the Amp-compatible reasoning-effort key. Pi's editor binds
+  // `alt+d` to delete-word-forward (not reserved, and `alt+delete` keeps that
+  // action), so the extension wins.
   pi.registerShortcut("alt+d", {
     description: "Toggle ampi thinking level (medium/high/ultra)",
     handler: async (ctx) => {
       await controller.toggleThinkingFromShortcut(ctx);
+    },
+  });
+
+  // `alt+r` is the Amp-compatible fast-speed key; Pi leaves it unbound. A
+  // chrome owner binds `speed.toggleFast` through the command registry (and
+  // may move it under `ampi.keymap`), so this shortcut never toggles while one
+  // is registered. `ampi-tui` passes a single key on to Pi while its command
+  // is unavailable; the shortcut then says why.
+  registerMmrToggleFastCommand(pi, undefined);
+  pi.registerShortcut("alt+r", {
+    description: "Toggle ampi fast speed",
+    handler: async (ctx) => {
+      if (getMmrChromeOwner() !== undefined) {
+        explainMmrFastUnavailable(ctx);
+        return;
+      }
+      toggleMmrFastSpeed(pi, ctx);
     },
   });
 }

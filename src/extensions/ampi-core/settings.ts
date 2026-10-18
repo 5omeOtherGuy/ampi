@@ -247,10 +247,11 @@ function readSettingsGroup(
 
 /**
  * Read the keys of the top-level `ampi` block that name the tools and skills
- * ampi loads: `ampi.tools.disable`, `ampi.skills.path` and
- * `ampi.skills.disableClaudeCodeSkills`. This is the one place that reads
- * them. Malformed values are skipped with a warning; a `tools.disable` entry
- * the glob matcher cannot compile is skipped on its own.
+ * ampi loads, `ampi.tools.disable`, `ampi.skills.path` and
+ * `ampi.skills.disableClaudeCodeSkills`, and the starting speed `ampi.speed`.
+ * This is the one place that reads them. Malformed values are skipped with a
+ * warning; a `tools.disable` entry the glob matcher cannot compile is skipped
+ * on its own.
  */
 function readAmpiToolAndSkillSettings(
   value: Record<string, unknown>,
@@ -304,6 +305,10 @@ function readAmpiToolAndSkillSettings(
         `Ignoring ampi.skills.disableClaudeCodeSkills in ${context.filePath}: expected true or false.`,
       );
     }
+  }
+  if ("speed" in ampi) {
+    if (ampi.speed === "standard" || ampi.speed === "fast") settings.speed = ampi.speed;
+    else context.warnings.push(`Ignoring ampi.speed in ${context.filePath}: expected "standard" or "fast".`);
   }
   return settings;
 }

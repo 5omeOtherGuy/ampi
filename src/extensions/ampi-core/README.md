@@ -21,7 +21,7 @@ Active by default. Mode resolution: `--ampi-mode` flag → restored session stat
 
 Mode lock: once the session has a user message (counted from the session entries at session start, and on the first `input` event), the mode is fixed. The cycle and picker shortcuts, and `ampi-tui`'s mode dial, then refuse with "the mode is fixed once a session has messages; start a new session to change it", `ampi-tui` hides the palette's `mode.use.*` rows, and `MmrModeState.modeLock` reads `{ enabled: true, locked: true, reason }` (`isMmrModeLocked()` for short). `/mode <key>` is the explicit override and says so when it changes a locked session's mode; native Pi model or thinking changes still release to `free`; the `Alt+D` thinking toggle and a session-fallback route keep the mode and are unaffected. `ampiCore.modeLock: false` turns the lock off.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level. While an extension owns ampi's terminal chrome, as `ampi-tui` does by default, both cycle keys do nothing in ampi-core: `ampi-tui` takes `Ctrl+S` for its mode dial. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level; `Alt+R` toggles [fast speed](#fast-speed). While an extension owns ampi's terminal chrome, as `ampi-tui` does by default, both cycle keys do nothing in ampi-core and its `Alt+R` only says why fast speed is unavailable: `ampi-tui` takes `Ctrl+S` for its mode dial and binds `Alt+R` through the command registry. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
@@ -33,11 +33,29 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `lo
 - **Prompt bodies**: Medium, High, and Ultra share the full system-prompt body; Low uses the compact body with its own fragment ordering.
 - **Pi baseline thinking** per mode: Low/Medium `medium`; High/Ultra `xhigh`. Request-level thinking is enforced separately by the per-mode request-policy hook.
 - **Thinking-level toggle (`alt+d`)**: Medium cycles `medium ↔ high`; High cycles `xhigh ↔ medium`; Ultra cycles `xhigh → high → medium → xhigh`. Low is intentionally not toggleable. The toggle drives both Pi's thinking level and OpenAI Responses reasoning effort, is session-scoped, and uses a dedicated key because Pi reserves `shift+tab` (`app.thinking.cycle`).
-- **Request policy** rewrites only token/reasoning fields on `before_provider_request` (`max_tokens`, `max_output_tokens`, Anthropic `thinking` / `output_config.effort`, OpenAI Responses `reasoning`). Never mutates provider identity, auth, headers, base URLs, messages, system blocks, or tools.
+- **Request policy** rewrites only token/reasoning fields on `before_provider_request` (`max_tokens`, `max_output_tokens`, Anthropic `thinking` / `output_config.effort`, OpenAI Responses `reasoning`), plus `service_tier` at [fast speed](#fast-speed). Never mutates provider identity, auth, headers, base URLs, messages, system blocks, or tools.
 - **Context profiles**: Medium inherits the former Smart 300k total / 172k max-input / 128k max-output safety profile. Low, High, and Ultra use Pi's registered model window. A declared profile caps the active model's `contextWindow` down via a shallow clone at `setModel`; smaller custom windows remain authoritative, `free` is never capped, and the cap is reasserted if provider registration transiently restores the uncapped model object.
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
 - **Footer**: locked modes draw a two-line footer (cwd, branch, session name; token usage, cost, context use, model and mode); `free` restores Pi's footer. While another extension owns ampi's terminal chrome (`registerMmrChromeOwner`, used by [`ampi-tui`](../ampi-tui/README.md)), core leaves the footer slot to it.
 - **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+d` for the in-mode thinking toggle that does not release.
+
+### Fast speed
+
+Fast speed asks the provider for priority serving: replies come sooner and cost more. `Alt+R`, or `speed use fast` in `ampi-tui`'s command palette (`speed.toggleFast`), turns it on; the same key, or `speed disable fast`, turns it off. A notice names the new speed, the mode and the price.
+
+- **Providers.** `openai` and `openai-codex`: ampi adds `service_tier: "priority"` to OpenAI Responses requests (the Codex variant included), after the mode's request policy, in every mode including `free` and under a session fallback route. The price is about 2x the standard rate, 2.5x for `gpt-5.5`, as Pi prices that tier in its cost reports. Every other provider has no priority tier ampi can request: there the command and key say so and change nothing. Standard speed never writes `service_tier`, so a tier configured for the provider stays as it is.
+- **Per session.** Each change is stored as an `ampi-speed` custom session entry (not sent to the model), so resuming or forking a session restores the speed of its branch. A session without such an entry starts at the `ampi.speed` setting (`"standard"`, the default, or `"fast"`; the project's `.pi/settings.json` wins over `~/.pi/agent/settings.json`), or at fast speed when Pi starts with `--ampi-fast` (`ampi --fast`).
+- **Turning it off** always works while fast is on, also after a switch to a provider without a priority tier, where fast speed has no effect meanwhile.
+- **Subagent workers** run at standard speed; the parent session's speed does not carry over.
+- **Where it shows.** `ampi-tui`'s prompt box puts `↯` before the mode name while fast speed is in effect for the current model; `/ampi-status` has a `Speed:` line: `standard`, `fast (priority tier, about 2x the price)` or `fast (not available for <provider>)`.
+
+```jsonc
+{
+  "ampi": {
+    "speed": "fast" // start new sessions at fast speed
+  }
+}
+```
 
 ### Tool resolution
 

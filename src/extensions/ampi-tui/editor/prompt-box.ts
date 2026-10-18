@@ -1,5 +1,6 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import { type EditorTheme, getKeybindings, matchesKey, type TUI, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
+import { MMR_FAST_MARKER } from "../../ampi-core/speed.js";
 import type { MmrThreadStatus } from "../../ampi-core/thread-status.js";
 import { mmrTuiWithEditorMaxLines } from "../pi-compat/editor-height.js";
 import { type MmrShortcutHelp, renderMmrShortcutHelp } from "./help.js";
@@ -18,7 +19,7 @@ import { isMmrThreadMentionKey } from "./mentions.js";
  * ```
  *
  * - Top border, right: the session cost so far (dim) and the active ampi
- *   mode in its colour.
+ *   mode in its colour, with `↯` in front while fast speed is in effect.
  * - Bottom border, left: the turn status (a wave glyph while busy, the
  *   label, a detail such as a token count or tool name, then a key hint).
  * - Bottom border, right: the working directory and git branch (dim). When
@@ -68,6 +69,8 @@ export function formatMmrSessionCost(cost: number | undefined): string {
 export interface MmrPromptBoxSlots {
   /** Active ampi mode key; no label when undefined. */
   mode?: string;
+  /** Fast speed is in effect for the current model: the mode label starts with the fast marker. */
+  fast?: boolean;
   /** Formatted cost gauge; hidden when undefined. */
   gauge?: string;
   status: MmrThreadStatus;
@@ -176,9 +179,10 @@ function line(text: string): Segment {
   return { text, token: "border" };
 }
 
-function modeSegment(mode: string): Segment {
+function modeSegment(mode: string, fast: boolean): Segment {
   const rgb = MMR_MODE_LABEL_COLORS[mode];
-  return rgb ? { text: mode, rgb } : { text: mode, token: "border" };
+  const text = fast ? `${MMR_FAST_MARKER}${mode}` : mode;
+  return rgb ? { text, rgb } : { text, token: "border" };
 }
 
 /** `╭───── $0.02 ─ medium ─╮`. The gauge goes first when the border is too narrow, then the mode. */
@@ -186,7 +190,7 @@ export function renderMmrPromptBoxTopBorder(width: number, slots: MmrPromptBoxSl
   if (width < 2) return paint([line("─".repeat(Math.max(0, width)))], theme, slots.overlay);
   const room = width - 3; // corners and at least one line cell
   const gauge: Segment[] = slots.gauge ? [line(" "), { text: slots.gauge, token: "dim" }, line(" ─")] : [];
-  const mode: Segment[] = slots.mode ? [line(" "), modeSegment(slots.mode), line(" ─")] : [];
+  const mode: Segment[] = slots.mode ? [line(" "), modeSegment(slots.mode, slots.fast === true), line(" ─")] : [];
   let right = [...gauge, ...mode];
   if (widthOf(right) > room) right = mode;
   if (widthOf(right) > room) right = [];

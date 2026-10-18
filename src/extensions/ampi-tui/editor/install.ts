@@ -4,6 +4,7 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { mmrEntryCost, readMmrEntryUsage } from "../../ampi-core/session-usage.js";
+import { isMmrFastInEffect } from "../../ampi-core/speed.js";
 import { getMmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { MMR_SHORTCUT_HELP_TMUX_NOTE, type MmrShortcutHelpEntry } from "./help.js";
 import { createMmrMentionProvider, pickMmrThreadMention, readMmrRecentCommits } from "./mentions.js";
@@ -19,7 +20,7 @@ import type { MmrStatusFeed } from "./status-feed.js";
 
 /**
  * Installs the prompt box in place of Pi's editor and keeps its borders
- * current: the mode from ampi-core, the cost from the session's model usage
+ * current: the mode and fast speed from ampi-core, the cost from the session's model usage
  * (hidden when `ampiThreads.showCosts` is off), the turn status from the status feed (with the wave glyph
  * stepping while a turn runs), and the working directory with the branch
  * Pi's footer data reports. It also opens and closes the box's shortcuts
@@ -130,6 +131,7 @@ export function createMmrPromptBoxInstall(
     const branch = getFooterData()?.getGitBranch();
     return {
       mode: getMmrModeState()?.mode,
+      fast: isMmrFastInEffect(ctx?.model),
       gauge,
       status,
       waveFrame,

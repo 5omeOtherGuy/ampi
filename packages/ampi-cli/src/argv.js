@@ -7,6 +7,7 @@ import { parseArgs } from "node:util";
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
+ * @property {boolean} fast `--fast`: start the session at fast speed, forwarded as `--ampi-fast`.
  * @property {string} [title] `--title`, forwarded as Pi's `--name`.
  * @property {string[]} labels `-l`/`--label` values, stored in the thread index once the session starts.
  * @property {boolean} execute `-x`/`--execute`: run one prompt and print the final assistant message.
@@ -39,6 +40,7 @@ const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
 
 const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
+  fast: { type: "boolean" },
   title: { type: "string" },
   label: { type: "string", short: "l", multiple: true },
   execute: { type: "boolean", short: "x" },
@@ -98,6 +100,7 @@ export function routeAmpiArgv(argv) {
   /** @type {AmpiOptions} */
   const options = {
     labels: [],
+    fast: false,
     execute: false,
     timings: false,
     archive: true,
@@ -187,6 +190,10 @@ export function routeAmpiArgv(argv) {
           piArgs.push("--ampi-mode", value);
         }
         break;
+      case "fast":
+        if (!options.fast) piArgs.push("--ampi-fast");
+        options.fast = true;
+        break;
       case "title":
         if (value === undefined) {
           error ??= "--title needs a value.";
@@ -260,6 +267,9 @@ Options:
   -m, --mode <mode>
       Start in an ampi mode: low, medium, high, ultra or free (rush, smart, deep and fable are
       accepted as aliases). --mode text, json and rpc keep Pi's meaning (output format).
+  --fast
+      Start the session at fast speed: the provider serves requests with priority, at a higher
+      price (OpenAI and OpenAI Codex models only). Alt+R turns it on or off in a session.
   -x, --execute
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.

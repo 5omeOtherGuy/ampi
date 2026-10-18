@@ -19,6 +19,7 @@ The package brings its own Pi (`@earendil-works/pi-coding-agent`) and ampi (`@sk
 ```bash
 ampi                     # interactive session in your default mode
 ampi -m high             # start in high mode (same as --ampi-mode high)
+ampi --fast              # start at fast speed (same as --ampi-fast)
 ampi "fix the failing test in parser.test.ts"   # start with a first message
 ampi -x "list the npm scripts"                  # run one message and print the answer
 ampi last                # continue the most recent session that is not archived
@@ -36,6 +37,7 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 | ampi option | What it does |
 | --- | --- |
 | `-m`, `--mode <mode>` | Start in an ampi mode: `low`, `medium`, `high`, `ultra` or `free`, or a legacy alias. `--mode text`, `json` and `rpc` keep Pi's meaning (output format). |
+| `--fast` | Start the session at fast speed: priority serving from the provider at a higher price, for OpenAI and OpenAI Codex models. Works in execute mode too; Alt+R turns it on or off in a session. The same as Pi's `--ampi-fast`. |
 | `-x`, `--execute` | Run one message without the terminal UI and print only the final assistant message. See [Execute mode](#execute-mode). |
 | `--stream-json` | In execute mode, print the run as JSON records, one per line, instead of the final message. See [Stream JSON](#stream-json). |
 | `--stream-json-thinking` | `--stream-json` with the model's thinking blocks. |

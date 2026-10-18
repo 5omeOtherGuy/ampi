@@ -22,12 +22,14 @@ const keymapFields = (command) => ({ id: command.id, description: command.descri
 const byId = (a, b) => a.id.localeCompare(b.id);
 
 describe("ampi's default commands", () => {
-  it("are the commands ampi-tui and ampi-threads register in a terminal session", async () => {
+  it("are the commands ampi-core, ampi-tui and ampi-threads register in a terminal session", async () => {
     const registry = await importSource("extensions/ampi-core/command-registry.ts");
     const { collectMmrDefaultCommands } = await importSource("config-keymap.ts");
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const { createMmrThreadsExtension } = await importSource("extensions/ampi-threads/index.ts");
+    const core = (await importSource("extensions/ampi-core/index.ts")).default;
     registry.__resetMmrCommandsForTests();
+    core(createMockPi().pi);
     const threads = createMockPi();
     const tui = createMockPi();
     const store = { get: async () => undefined };

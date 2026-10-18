@@ -393,8 +393,9 @@ import type { MmrEventBusHost, MmrStateChangedHandler } from "@skippermissions/a
 The `ampi-core` extension emits `MMR_EVENT_STATE_CHANGED`
 (`"mmr-core:state-changed"`) on `pi.events` whenever the active ampi
 mode state is replaced (mode switch, free-mode opt-out, native control
-fallback). The payload is a deep-cloned `MmrModeState` snapshot, or
-`undefined` when state was cleared.
+fallback), and again with the unchanged mode state when the session's fast
+speed is turned on or off. The payload is a deep-cloned `MmrModeState`
+snapshot, or `undefined` when state was cleared.
 
 Pi's event bus fans the **same** payload object out to every subscriber
 for a given emission. That means raw `pi.events.on(...)` handlers share
