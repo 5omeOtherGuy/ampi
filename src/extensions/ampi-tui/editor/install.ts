@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { readAssistantUsage } from "../../ampi-core/status.js";
+import { MMR_SHORTCUT_HELP_TMUX_NOTE, type MmrShortcutHelpEntry } from "./help.js";
 import {
   formatMmrSessionCost,
   MMR_STATUS_WAVE_FRAMES,
@@ -17,12 +19,18 @@ import type { MmrStatusFeed } from "./status-feed.js";
  * current: the mode from ampi-core, the cost from the session's assistant
  * messages, the turn status from the status feed (with the wave glyph
  * stepping while a turn runs), and the working directory with the branch
- * Pi's footer data reports.
+ * Pi's footer data reports. It also opens and closes the box's shortcuts
+ * help; inside tmux the help adds a note when tmux's `extended-keys` option
+ * is off, checked once, the first time the help opens.
  */
 
 export interface MmrPromptBoxInstallOptions {
   readonly setInterval?: (callback: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
+  /** Rows of the shortcuts help, read each time it is drawn. */
+  readonly helpEntries?: () => readonly MmrShortcutHelpEntry[];
+  /** tmux's `extended-keys` value, or `undefined` outside tmux or when it cannot be read. */
+  readonly tmuxExtendedKeys?: () => Promise<string | undefined>;
 }
 
 export interface MmrPromptBoxInstall {
@@ -31,12 +39,24 @@ export interface MmrPromptBoxInstall {
   stop(): void;
   /** The status feed changed: redraw, and step the wave glyph while busy. */
   statusChanged(): void;
-  /** Clear the prompt text (the first Esc of Esc Esc while a turn runs). */
+  /** Clear the prompt text and close the help (the first Esc of Esc Esc while a turn runs). */
   clearPrompt(): void;
+  /** Open the shortcuts help, or close it when open. */
+  toggleHelp(): void;
   /** Rows the box drew last, or `undefined` before its first render. */
   renderedHeight(): number | undefined;
   /** Draw the frame dim while an overlay covers the prompt. */
   setOverlayOpen(open: boolean): void;
+}
+
+/** Ask the tmux server this session runs in for its `extended-keys` option. */
+function readTmuxExtendedKeys(): Promise<string | undefined> {
+  if (!process.env.TMUX) return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    execFile("tmux", ["show", "-gv", "extended-keys"], { timeout: 2000 }, (error, stdout) => {
+      resolve(error ? undefined : stdout.trim());
+    });
+  });
 }
 
 export function createMmrPromptBoxInstall(
@@ -55,6 +75,8 @@ export function createMmrPromptBoxInstall(
   let waveFrame = 0;
   let waveTimer: unknown;
   let unsubscribeMode: (() => void) | undefined;
+  let tmuxChecked = false;
+  let tmuxNote = false;
   let costCache: { length: number; last: unknown; cost: number | undefined } = { length: -1, last: undefined, cost: undefined };
 
   function requestRender(): void {
@@ -97,7 +119,20 @@ export function createMmrPromptBoxInstall(
     slots,
     theme: () => ctx?.ui.theme ?? { fg: (_token: string, text: string) => text },
     dequeued: () => feed.refreshQueue(),
+    help: () => ({ entries: options.helpEntries?.() ?? [], note: tmuxNote ? MMR_SHORTCUT_HELP_TMUX_NOTE : undefined }),
   };
+
+  function checkTmux(): void {
+    if (tmuxChecked) return;
+    tmuxChecked = true;
+    (options.tmuxExtendedKeys ?? readTmuxExtendedKeys)().then(
+      (value) => {
+        tmuxNote = value !== undefined && value !== "on" && value !== "always";
+        if (tmuxNote) requestRender();
+      },
+      () => {},
+    );
+  }
 
   function stopWave(): void {
     if (waveTimer !== undefined) stopInterval(waveTimer);
@@ -138,7 +173,17 @@ export function createMmrPromptBoxInstall(
       requestRender();
     },
     clearPrompt() {
+      if (box?.isHelpOpen()) {
+        box.setHelpOpen(false);
+        requestRender();
+      }
       if (ctx && ctx.ui.getEditorText().length > 0) ctx.ui.setEditorText("");
+    },
+    toggleHelp() {
+      if (!box) return;
+      box.setHelpOpen(!box.isHelpOpen());
+      if (box.isHelpOpen()) checkTmux();
+      requestRender();
     },
     renderedHeight() {
       const height = box?.renderedHeight();

@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; Alt+T details toggle | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
+| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; Alt+T details toggle; shortcuts help on `?` | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 
 ## When to use it
 
@@ -40,6 +40,7 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | `ampi.palette` | Command, `ctrl+o` | Open the command palette |
 | `prompt.openPalette` | Command, `/` | Open the command palette when the prompt is empty |
 | `thread.toggleDetails` | Command, `alt+t` | Expand or collapse tool output and thinking together |
+| `prompt.toggleHelp` | Command, `?` on an empty prompt | Show or hide the shortcuts help inside the prompt box |
 | `ampi.status`, `ampi.changelog`, `ampi.config` | Commands, no key | Run `/ampi-status`, `/ampi-changelog` and `/ampi-config` (need `ampi-core`) |
 | `mode.use.low` … `mode.use.free` | Commands, no key | Switch to that mode, as `/mode <key>` does (need `ampi-core`) |
 | "then" popup | Overlay | Lists the keys that can follow Ctrl+X, Ctrl+C or any other chord prefix |
@@ -108,6 +109,33 @@ The prompt sits in a rounded box across the full width of the terminal, at the b
 - **Shell commands.** While the prompt starts with `!`, the frame takes Pi's shell-command colour, as Pi's editor border does.
 - **Overlays.** While the command palette is open, the frame is drawn dim. Pi's own dialogs and selectors leave it as it is.
 
+### Shortcuts help
+
+Type `?` into an empty prompt to list the main keys inside the prompt box, above the text, with a rule under them (here in a 44-row terminal):
+
+```text
+╭───────────────────────────────────────────────────────────────────── medium ─╮
+│ Ctrl+S switch modes             Alt+D toggle thinking                        │
+│ Alt+Enter newline               @ mention files                              │
+│ Ctrl+X leader key               Ctrl+O open command palette                  │
+│ / open command palette          Esc Esc interrupt                            │
+│ Ctrl+C Ctrl+C quit              Home/End scroll to top/bottom                │
+│ Ctrl+G open in editor           Alt+T toggle details                         │
+│ ? toggle shortcuts help                                                      │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰────────────────────────────────────────────────────────── /work/repo (main) ─╯
+```
+
+- **What it lists.** ampi-core's mode keys (when ampi-core is loaded), the newline key, Pi's `@` file mention, the leader, then every command that has a key, in the order the commands were registered, with the key in effect: a binding moved under `ampi.keymap` shows its new key, an unbound command is left out. Two commands of one kind whose names differ only in the last word share a row (`Home/End scroll to top/bottom`).
+- **Layout.** Two columns, the second starting 34 columns from the box's left edge, when every entry fits; otherwise one column, with entries cut to the width.
+- **Inside tmux.** When tmux's `extended-keys` option is off, a dim line under the rows says that Shift+Enter needs it and that Alt+Enter works without it. ampi asks tmux once, the first time the help opens.
+- **Height.** The box grows by the help. When that would pass a third of the terminal height, the text area shrinks to one row, then the tmux line goes, then rows from the end; the rule always stays.
+- **Closing.** `?` again or Esc closes it. Any other key that reaches the prompt closes it and then does what it always does, so typing a character closes the help and inserts the character. Text that arrives from elsewhere (the external editor, queued messages taken back) closes it too. While a turn runs, the first Esc of Esc Esc closes it along with clearing the prompt.
+- With text in the prompt, `?` is an ordinary character.
+
 The model, token totals and context use that Pi's footer showed are not on screen; `/ampi-status` reports the mode and model.
 
 **Keys in the prompt box.**
@@ -116,7 +144,8 @@ The model, token totals and context use that Pi's footer showed are not on scree
 | --- | --- |
 | Enter | Sends the prompt; while a turn runs, Pi delivers it to steer the turn |
 | Alt+Enter, Shift+Enter, Ctrl+J | Insert a newline (Alt+Enter is Pi's follow-up key; the box takes it over) |
-| Esc | Clears the prompt when it has text. On an empty prompt with nothing running, Esc does what it does in Pi |
+| Esc | Closes the shortcuts help when it is open; otherwise clears the prompt when it has text. On an empty prompt with nothing running, Esc does what it does in Pi |
+| `?` on an empty prompt | Shows or hides the shortcuts help |
 | Backspace on an empty prompt | Takes queued messages back into the prompt (Pi's `app.message.dequeue`) |
 
 Everything else, including Ctrl+A and Ctrl+E for the line start and end, is Pi's editor behaviour.
@@ -175,6 +204,7 @@ Ctrl+O, or `/` typed into an empty prompt, opens the palette in the middle of th
 | Ctrl+O | Expands or collapses tool output | Opens the command palette |
 | `/` on an empty prompt | Types `/` and opens slash-command completion | Opens the command palette |
 | Alt+T | Nothing | Expands or collapses tool output and thinking together |
+| `?` on an empty prompt | Types `?` | Shows or hides the shortcuts help |
 
 Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctrl+D (quit on an empty prompt) and Ctrl+Home / Ctrl+End (transcript scrolling).
 
@@ -280,12 +310,12 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 
 - Manifest: risk class `terminal-ui`, child role `none`. No subagent child keep-set lists it, and child workers never run in the terminal UI.
 - Layout: `index.ts` (entry point), `config.ts` (settings), `chrome/look.ts` (installs the welcome header, message styling and theme), `chrome/welcome.ts` (header component, mark and card), `editor/` (the prompt box), `transcript/messages.ts` (user message drawing, thinking label), `transcript/activity.ts` and `transcript/tool-renderers.ts` (tool rows), `theme/` (`ampi.json` and its session selection), `keys/`, `ui/`, `overlays/`, `pi-compat/`.
-- `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass) and its border slots; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start and feeds it the mode, cost, status, wave glyph and branch.
-- `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi, opens the palette and tells the prompt box about the first Esc, the pending quit and the open palette.
+- `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass), its border slots and the open shortcuts help; `editor/help.ts` builds the help rows from the effective keymap and the command registry and lays them out; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start, feeds it the mode, cost, status, wave glyph and branch, toggles the help and runs the one-time tmux check.
+- `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi, opens the palette and tells the prompt box about the first Esc, the pending quit, the open palette and the help toggle.
 - `ui/frame.ts` draws the box overlays share (rounded border, title in the top border, key hints in the bottom border, scrollbar column); `overlays/palette.ts` is the command palette.
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
 - Tool rows: `transcript/activity.ts` classifies a call (pure, no Pi imports) and `summarizeActivities` folds a run of calls into one phrase; `transcript/activity-groups.ts` keeps the runs, fed by Pi's message and tool events and rebuilt from the session's context entries, because a renderer sees only its own call; `transcript/tool-renderers.ts` draws rows and cards through one `pi.registerToolRenderer` resolver. The first call of a run draws the summary, and the others render no lines, which Pi draws with no height and no spacer. Tests: `tests/mmr-tui-activity.test.mjs`, `tests/mmr-tui-activity-groups.test.mjs`, `tests/mmr-tui-tool-renderers.test.mjs` and `tests/mmr-tui-tool-groups.test.mjs`, whose 80- and 140-column fixtures in `tests/fixtures/mmr-tui-tool-rows/` and `tests/fixtures/mmr-tui-tool-groups/` are refreshed with `PI_MMR_UPDATE_FIXTURES=1`.
 - `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands, the editor's height rule (`editor-height.ts`), transcript scrolling, the reserved shortcut list, raw input, and the user message component. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
 - `pi-compat/messages.ts` patches `UserMessageComponent.prototype.rebuild`. It is installed when the extension loads, because Pi rebuilds the chat on `/reload` before `session_start`, and removed at `session_shutdown`. `probeMmrUserMessageComponent` names any change in the class shape.
 - The theme is applied as a `Theme` object, never by name: `ctx.ui.setTheme("ampi")` would write the user's settings. An empty widget below the editor re-applies it when Pi returns to `system`, using the component `invalidate()` call Pi makes on every theme change.
-- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection) and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.
+- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys, the shortcuts help), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection) and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.

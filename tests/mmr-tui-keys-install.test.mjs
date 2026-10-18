@@ -109,6 +109,7 @@ describe("ampi-tui key installation", () => {
       "prompt.openInEditor": "ctrl+g",
       "ampi.showVersion": undefined,
       "thread.toggleDetails": "alt+t",
+      "prompt.toggleHelp": "?",
       "ampi.status": undefined,
       "ampi.changelog": undefined,
       "ampi.config": undefined,
@@ -289,6 +290,22 @@ describe("ampi-tui key installation", () => {
     t.state.editorText = "abc";
     assert.equal(t.send("\x1b[1~"), false, "Home moves the cursor in text");
     assert.deepEqual(t.handle.calls, ["top", "bottom"]);
+  });
+
+  it("toggles the shortcuts help on ? only while the prompt is empty, and exposes the keymap it resolved", () => {
+    let toggles = 0;
+    const t = setup({ hooks: { onToggleHelp: () => (toggles += 1) } });
+    assert.equal(t.send("?"), true);
+    assert.equal(t.send("\x1b[47:63;2u"), true, "kitty's shifted form of ? counts too");
+    assert.equal(toggles, 2);
+    t.state.editorText = "why";
+    assert.equal(t.send("?"), false, "with text, ? is typed");
+    assert.equal(toggles, 2);
+    assert.deepEqual(t.keys.keymap().bindings.get("prompt.toggleHelp"), [
+      { leader: false, combos: [{ key: "?", ctrl: false, alt: false, shift: false, meta: false }] },
+    ]);
+    t.keys.stop();
+    assert.equal(t.keys.keymap(), undefined);
   });
 
   it("leaves Home and End alone when Pi's renderer cannot scroll", () => {

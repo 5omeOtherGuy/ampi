@@ -25,6 +25,9 @@ const SIZES = [
 const box = await importSource("extensions/ampi-tui/editor/prompt-box.ts");
 const { createMmrThreadStatusReducer } = await importSource("extensions/ampi-core/thread-status.ts");
 const { createMmrPromptBoxInstall } = await importSource("extensions/ampi-tui/editor/install.ts");
+const help = await importSource("extensions/ampi-tui/editor/help.ts");
+const { createMmrTuiCommands } = await importSource("extensions/ampi-tui/keys/commands.ts");
+const { resolveMmrKeymap } = await importSource("extensions/ampi-core/keymap.ts");
 // Pi's app keybindings (Esc as app.interrupt and so on) are not exported from the package entry.
 const piDist = path.dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
 const { KeybindingsManager: PiKeybindings } = await import(pathToFileURL(path.join(piDist, "core/keybindings.js")).href);
@@ -50,13 +53,22 @@ function status(...events) {
   return reducer.status;
 }
 
-function makeBox({ rows = 24, text = "", slots = {}, onDequeued } = {}) {
+/** The help's rows as a session with ampi-core and the default keymap lists them. */
+function defaultHelpEntries() {
+  const commands = createMmrTuiCommands({ getTui: () => undefined });
+  const keymap = resolveMmrKeymap({ defaults: Object.fromEntries(commands.map((command) => [command.id, command.defaultKey ?? null])) });
+  return help.buildMmrShortcutHelpEntries({ keymap, commands, modeKeys: true });
+}
+
+/** `shortcuts`: open the shortcuts help with this content. */
+function makeBox({ rows = 24, text = "", slots = {}, onDequeued, shortcuts } = {}) {
   const terminal = new Proxy({ columns: 140, rows }, { get: (target, name) => (name in target ? target[name] : () => {}) });
   const tui = new TuiMainScreen(terminal);
   const current = { mode: "medium", status: status(), waveFrame: 0, location: "/work/demo (main)", overlay: false, ...slots };
-  const host = { slots: () => current, theme: () => theme, dequeued: onDequeued };
+  const host = { slots: () => current, theme: () => theme, dequeued: onDequeued, help: shortcuts ? () => shortcuts : undefined };
   const editor = new box.MmrPromptBox(tui, editorTheme, new PiKeybindings({}), host);
   editor.setText(text);
+  if (shortcuts) editor.setHelpOpen(true);
   return { editor, slots: current, terminal };
 }
 
@@ -356,6 +368,133 @@ describe("ampi-tui prompt box: keys", () => {
   });
 });
 
+describe("ampi-tui prompt box: shortcuts help", () => {
+  const note = help.MMR_SHORTCUT_HELP_TMUX_NOTE;
+  const rule = (width) => `│ ${"─".repeat(width - 4)} │`;
+
+  it("lists the fixed keys, the leader and every bound command with its effective key", () => {
+    const rows = (entries) => entries.map(({ key, label }) => `${key} ${label}`);
+    assert.deepEqual(rows(defaultHelpEntries()), [
+      "Ctrl+S switch modes",
+      "Alt+D toggle thinking",
+      "Alt+Enter newline",
+      "@ mention files",
+      "Ctrl+X leader key",
+      "Ctrl+O open command palette",
+      "/ open command palette",
+      "Esc Esc interrupt",
+      "Ctrl+C Ctrl+C quit",
+      "Home/End scroll to top/bottom",
+      "Ctrl+G open in editor",
+      "Alt+T toggle details",
+      "? toggle shortcuts help",
+    ]);
+
+    const commands = createMmrTuiCommands({ getTui: () => undefined });
+    const keymap = resolveMmrKeymap({
+      defaults: Object.fromEntries(commands.map((command) => [command.id, command.defaultKey ?? null])),
+      overrides: { "ampi.showVersion": "<leader>v", "thread.scrollToTop": null, "prompt.toggleHelp": ["?", "f1"] },
+      leader: "alt+x",
+    });
+    assert.deepEqual(rows(help.buildMmrShortcutHelpEntries({ keymap, commands, modeKeys: false })), [
+      "Alt+Enter newline",
+      "@ mention files",
+      "Alt+X leader key",
+      "Ctrl+O open command palette",
+      "/ open command palette",
+      "Esc Esc interrupt",
+      "Ctrl+C Ctrl+C quit",
+      "End scroll to bottom",
+      "Ctrl+G open in editor",
+      "Alt+X v show version",
+      "Alt+T toggle details",
+      "?/F1 toggle shortcuts help",
+    ]);
+    assert.deepEqual(rows(help.buildMmrShortcutHelpEntries({ commands, modeKeys: false })), ["Alt+Enter newline", "@ mention files"]);
+  });
+
+  it("render fixture: two columns at 80 and 140, one column at 50, the rule inside the frame", () => {
+    const shortcuts = { entries: defaultHelpEntries(), note };
+    const renders = [
+      [80, 24],
+      [80, 44],
+      [140, 44],
+      [50, 24],
+    ].map(([width, rows]) => ({ width, rows, lines: makeBox({ rows, shortcuts }).editor.render(width) }));
+    for (const { width, rows, lines } of renders) {
+      const text = lines.map(plain);
+      for (const line of lines) assert.equal(visibleWidth(line), width, `${width}x${rows} row fills its width: ${plain(line)}`);
+      assert.ok(text.includes(rule(width)), `${width}x${rows}: a rule across the text area, inside the side borders`);
+      assert.equal(text[1].slice(0, 9), "│ Ctrl+S ", "the help starts right under the top border");
+    }
+    const [small, tall, wide, narrow] = renders.map(({ lines }) => lines.map(plain));
+    for (const lines of [small, tall, wide]) {
+      // Column 34 of the box: the frame, one column of padding, then 32 columns of the first entry.
+      assert.equal(lines[1].indexOf("Alt+D toggle thinking"), 34);
+    }
+    for (const lines of [tall, wide]) {
+      assert.match(lines[7], /^│ \? toggle shortcuts help +│$/);
+      assert.equal(lines[8], `│ ${note.padEnd(lines[8].length - 4)} │`, "the note, whole and inside the frame");
+      assert.equal(lines[9], rule(lines[9].length));
+    }
+    // 80x24 has room for six rows: the note goes, then rows from the end.
+    assert.equal(small[6].indexOf("Alt+T toggle details"), 34);
+    assert.equal(small[7], rule(80));
+    assert.ok(!small.some((line) => line.includes("extended-keys")));
+    assert.match(narrow[1], /^│ Ctrl\+S switch modes +│$/, "one entry per row when two columns do not fit");
+    assert.match(narrow[2], /^│ Alt\+D toggle thinking +│$/);
+    assertFixture("help", renders);
+  });
+
+  it("grows the box by the help and keeps within a third of the terminal height", () => {
+    const shortcuts = { entries: defaultHelpEntries(), note };
+    // 44 rows: 7 rows, the note and the rule over the 3 text rows, all within 14.
+    const tall = makeBox({ rows: 44, shortcuts }).editor;
+    assert.equal(tall.render(140).length, 1 + 9 + 3 + 1);
+    assert.equal(tall.renderedHeight(), 14);
+    // 24 rows: at most 8 rows inside the frame, so the text area shrinks to one row.
+    assert.equal(makeBox({ rows: 24, shortcuts }).editor.render(80).length, 1 + 7 + 1 + 1);
+    // One column at 50 needs 14 rows: the note goes, then rows from the end, and the rule stays.
+    const narrow = makeBox({ rows: 24, shortcuts }).editor.render(50).map(plain);
+    assert.equal(narrow.length, 10);
+    assert.match(narrow[6], /^│ Ctrl\+O open command palette +│$/);
+    assert.equal(narrow[7], rule(50));
+    assert.ok(!narrow.some((line) => line.includes("extended-keys")));
+    // Without the note the rule follows the rows directly.
+    const plainHelp = makeBox({ rows: 44, shortcuts: { entries: defaultHelpEntries() } }).editor.render(140).map(plain);
+    assert.equal(plainHelp[8], rule(140));
+
+
+  });
+
+  it("closes on Esc without clearing anything or reaching Pi", () => {
+    const { editor } = makeBox({ shortcuts: { entries: defaultHelpEntries() } });
+    let piEscapes = 0;
+    editor.onEscape = () => {
+      piEscapes += 1;
+    };
+    editor.handleInput("\x1b");
+    assert.equal(editor.isHelpOpen(), false);
+    assert.equal(piEscapes, 0);
+    assert.equal(editor.render(80).length, 5, "back to the empty box");
+  });
+
+  it("closes on any other key, which then does what it always does", () => {
+    const { editor } = makeBox({ shortcuts: { entries: defaultHelpEntries() } });
+    editor.handleInput("x");
+    assert.equal(editor.isHelpOpen(), false);
+    assert.equal(editor.getText(), "x");
+    assert.equal(plain(editor.render(80)[1]).slice(0, 4), "│ x ");
+  });
+
+  it("closes when text arrives from elsewhere", () => {
+    const { editor } = makeBox({ shortcuts: { entries: defaultHelpEntries() } });
+    editor.setText("from the external editor");
+    assert.equal(plain(editor.render(80)[1]).slice(0, 8), "│ from t");
+    assert.equal(editor.isHelpOpen(), false);
+  });
+});
+
 describe("ampi-tui prompt box: installation", () => {
   function install({ busy = false, entries = [] } = {}) {
     const intervals = [];
@@ -425,6 +564,49 @@ describe("ampi-tui prompt box: installation", () => {
     assert.ok(t.editor.render(80)[0].startsWith("\x1b[2m"));
     t.promptBox.setOverlayOpen(false);
     assert.ok(!t.editor.render(80)[0].startsWith("\x1b[2m"));
+  });
+
+  it("toggles the help with its rows and checks tmux once, adding the note when extended keys are off", async () => {
+    for (const [value, noted] of [
+      ["off", true],
+      ["on", false],
+      ["always", false],
+      [undefined, false],
+    ]) {
+      let checks = 0;
+      const { pi } = createMockPi();
+      const context = createMockExtensionContext({ cwd: "/work/demo" });
+      context.ctx.ui.theme = theme;
+      const promptBox = createMmrPromptBoxInstall(pi, { status: status(), refreshQueue() {} }, {
+        helpEntries: () => [{ key: "?", label: "toggle shortcuts help" }],
+        tmuxExtendedKeys: async () => {
+          checks += 1;
+          return value;
+        },
+      });
+      promptBox.start(context.ctx, () => undefined);
+      const terminal = new Proxy({ columns: 80, rows: 24 }, { get: (target, name) => (name in target ? target[name] : () => {}) });
+      const tui = new TuiMainScreen(terminal);
+      tui.requestRender = () => {};
+      const editor = context.editors[0](tui, editorTheme, new PiKeybindings({}));
+      assert.equal(checks, 0, "nothing runs before the help opens");
+
+      promptBox.toggleHelp();
+      await new Promise((resolve) => setImmediate(resolve));
+      let lines = editor.render(80).map(plain);
+      assert.match(lines[1], /^│ \? toggle shortcuts help +│$/, String(value));
+      assert.equal(lines.some((line) => line.includes("extended-keys")), noted, String(value));
+      promptBox.toggleHelp();
+      assert.equal(editor.render(80).length, 5, "a second toggle closes it");
+      promptBox.toggleHelp();
+      assert.equal(checks, 1, "tmux is asked once");
+
+      context.state.editorText = "draft";
+      promptBox.clearPrompt();
+      lines = editor.render(80).map(plain);
+      assert.equal(lines.length, 5, "the first Esc of Esc Esc closes the help too");
+      promptBox.stop();
+    }
   });
 
   it("hides Pi's working row and clears the prompt on request", () => {

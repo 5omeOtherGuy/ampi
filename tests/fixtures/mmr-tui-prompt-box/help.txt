@@ -1,0 +1,109 @@
+# help
+
+## 80x24
+╭───────────────────────────────────────────────────────────────────── medium ─╮
+│ Ctrl+S switch modes             Alt+D toggle thinking                        │
+│ Alt+Enter newline               @ mention files                              │
+│ Ctrl+X leader key               Ctrl+O open command palette                  │
+│ / open command palette          Esc Esc interrupt                            │
+│ Ctrl+C Ctrl+C quit              Home/End scroll to top/bottom                │
+│ Ctrl+G open in editor           Alt+T toggle details                         │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│                                                                              │
+╰────────────────────────────────────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭───────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+S\u001b[39m \u001b[38;5;242mswitch modes\u001b[39m             \u001b[38;5;6mAlt+D\u001b[39m \u001b[38;5;242mtoggle thinking\u001b[39m                        \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mAlt+Enter\u001b[39m \u001b[38;5;242mnewline\u001b[39m               \u001b[38;5;6m@\u001b[39m \u001b[38;5;242mmention files\u001b[39m                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+X\u001b[39m \u001b[38;5;242mleader key\u001b[39m               \u001b[38;5;6mCtrl+O\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m                  \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m/\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m          \u001b[38;5;6mEsc Esc\u001b[39m \u001b[38;5;242minterrupt\u001b[39m                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+C Ctrl+C\u001b[39m \u001b[38;5;242mquit\u001b[39m              \u001b[38;5;6mHome/End\u001b[39m \u001b[38;5;242mscroll to top/bottom\u001b[39m                \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+G\u001b[39m \u001b[38;5;242mopen in editor\u001b[39m           \u001b[38;5;6mAlt+T\u001b[39m \u001b[38;5;242mtoggle details\u001b[39m                         \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;244m────────────────────────────────────────────────────────────────────────────\u001b[39m \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                                                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰────────────────────────────────────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"
+
+## 80x44
+╭───────────────────────────────────────────────────────────────────── medium ─╮
+│ Ctrl+S switch modes             Alt+D toggle thinking                        │
+│ Alt+Enter newline               @ mention files                              │
+│ Ctrl+X leader key               Ctrl+O open command palette                  │
+│ / open command palette          Esc Esc interrupt                            │
+│ Ctrl+C Ctrl+C quit              Home/End scroll to top/bottom                │
+│ Ctrl+G open in editor           Alt+T toggle details                         │
+│ ? toggle shortcuts help                                                      │
+│ Shift+Enter needs tmux's extended-keys option; Alt+Enter works without it.   │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰────────────────────────────────────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭───────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+S\u001b[39m \u001b[38;5;242mswitch modes\u001b[39m             \u001b[38;5;6mAlt+D\u001b[39m \u001b[38;5;242mtoggle thinking\u001b[39m                        \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mAlt+Enter\u001b[39m \u001b[38;5;242mnewline\u001b[39m               \u001b[38;5;6m@\u001b[39m \u001b[38;5;242mmention files\u001b[39m                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+X\u001b[39m \u001b[38;5;242mleader key\u001b[39m               \u001b[38;5;6mCtrl+O\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m                  \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m/\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m          \u001b[38;5;6mEsc Esc\u001b[39m \u001b[38;5;242minterrupt\u001b[39m                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+C Ctrl+C\u001b[39m \u001b[38;5;242mquit\u001b[39m              \u001b[38;5;6mHome/End\u001b[39m \u001b[38;5;242mscroll to top/bottom\u001b[39m                \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+G\u001b[39m \u001b[38;5;242mopen in editor\u001b[39m           \u001b[38;5;6mAlt+T\u001b[39m \u001b[38;5;242mtoggle details\u001b[39m                         \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m?\u001b[39m \u001b[38;5;242mtoggle shortcuts help\u001b[39m                                                      \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;242mShift+Enter needs tmux's extended-keys option; Alt+Enter works without it.\u001b[39m   \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;244m────────────────────────────────────────────────────────────────────────────\u001b[39m \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                                                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m                                                                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m                                                                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰────────────────────────────────────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"
+
+## 140x44
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── medium ─╮
+│ Ctrl+S switch modes             Alt+D toggle thinking                                                                                    │
+│ Alt+Enter newline               @ mention files                                                                                          │
+│ Ctrl+X leader key               Ctrl+O open command palette                                                                              │
+│ / open command palette          Esc Esc interrupt                                                                                        │
+│ Ctrl+C Ctrl+C quit              Home/End scroll to top/bottom                                                                            │
+│ Ctrl+G open in editor           Alt+T toggle details                                                                                     │
+│ ? toggle shortcuts help                                                                                                                  │
+│ Shift+Enter needs tmux's extended-keys option; Alt+Enter works without it.                                                               │
+│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+│                                                                                                                                          │
+│                                                                                                                                          │
+│                                                                                                                                          │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+S\u001b[39m \u001b[38;5;242mswitch modes\u001b[39m             \u001b[38;5;6mAlt+D\u001b[39m \u001b[38;5;242mtoggle thinking\u001b[39m                                                                                    \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mAlt+Enter\u001b[39m \u001b[38;5;242mnewline\u001b[39m               \u001b[38;5;6m@\u001b[39m \u001b[38;5;242mmention files\u001b[39m                                                                                          \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+X\u001b[39m \u001b[38;5;242mleader key\u001b[39m               \u001b[38;5;6mCtrl+O\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m                                                                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m/\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m          \u001b[38;5;6mEsc Esc\u001b[39m \u001b[38;5;242minterrupt\u001b[39m                                                                                        \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+C Ctrl+C\u001b[39m \u001b[38;5;242mquit\u001b[39m              \u001b[38;5;6mHome/End\u001b[39m \u001b[38;5;242mscroll to top/bottom\u001b[39m                                                                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+G\u001b[39m \u001b[38;5;242mopen in editor\u001b[39m           \u001b[38;5;6mAlt+T\u001b[39m \u001b[38;5;242mtoggle details\u001b[39m                                                                                     \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m?\u001b[39m \u001b[38;5;242mtoggle shortcuts help\u001b[39m                                                                                                                  \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;242mShift+Enter needs tmux's extended-keys option; Alt+Enter works without it.\u001b[39m                                                               \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;244m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[39m \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                                                                                                                        \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m                                                                                                                                          \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m                                                                                                                                          \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"
+
+## 50x24
+╭─────────────────────────────────────── medium ─╮
+│ Ctrl+S switch modes                            │
+│ Alt+D toggle thinking                          │
+│ Alt+Enter newline                              │
+│ @ mention files                                │
+│ Ctrl+X leader key                              │
+│ Ctrl+O open command palette                    │
+│ ────────────────────────────────────────────── │
+│                                                │
+╰──────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭─────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+S\u001b[39m \u001b[38;5;242mswitch modes\u001b[39m                            \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mAlt+D\u001b[39m \u001b[38;5;242mtoggle thinking\u001b[39m                          \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mAlt+Enter\u001b[39m \u001b[38;5;242mnewline\u001b[39m                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6m@\u001b[39m \u001b[38;5;242mmention files\u001b[39m                                \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+X\u001b[39m \u001b[38;5;242mleader key\u001b[39m                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;6mCtrl+O\u001b[39m \u001b[38;5;242mopen command palette\u001b[39m                    \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b[38;5;244m──────────────────────────────────────────────\u001b[39m \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m \u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                              \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰──────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"

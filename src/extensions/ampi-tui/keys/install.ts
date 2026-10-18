@@ -67,12 +67,16 @@ export interface MmrTuiKeysOptions {
   readonly onInterrupt?: () => void;
   /** The command palette opened (`true`) or closed (`false`); the prompt box dims its frame meanwhile. */
   readonly onPaletteOpen?: (open: boolean) => void;
+  /** The `prompt.toggleHelp` command ran. */
+  readonly onToggleHelp?: () => void;
 }
 
 export interface MmrTuiKeys {
   /** Install for a TUI session. Safe to call again on the next session start. */
   start(ctx: ExtensionContext, getTui: () => TUI | undefined): void;
   stop(): void;
+  /** The keymap in effect, once started. */
+  keymap(): MmrResolvedKeymap | undefined;
 }
 
 function describeConflict(conflict: MmrKeymapConflict): string {
@@ -109,7 +113,13 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let hintTimer: unknown;
   let resolved: MmrResolvedKeymap | undefined;
   let quitPending = false;
-  const host: MmrTuiCommandHost = { getTui: () => getTui(), pi, openPalette, onInterrupt: options.onInterrupt };
+  const host: MmrTuiCommandHost = {
+    getTui: () => getTui(),
+    pi,
+    openPalette,
+    onInterrupt: options.onInterrupt,
+    toggleHelp: options.onToggleHelp,
+  };
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -343,7 +353,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       unregisterCommands?.();
       unregisterCommands = undefined;
       dispatcher = undefined;
+      resolved = undefined;
       ctx = undefined;
     },
+    keymap: () => resolved,
   };
 }

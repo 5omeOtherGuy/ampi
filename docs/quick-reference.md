@@ -98,6 +98,9 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Ctrl+O` | Open the command palette | Type to filter, ↑/↓ to move, Enter to run, Esc to close; Pi's slash commands are listed under `pi` |
 | `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
+| `?` | Show or hide the shortcuts help | Only on an empty prompt; Esc or any other key closes it |
+
+The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
 

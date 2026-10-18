@@ -109,9 +109,9 @@ function buildTable(keymap: Pick<MmrResolvedKeymap, "byChord" | "leader">): Tabl
 }
 
 /**
- * Display form of a canonical chord, for hint rows and the command palette's
- * key column. A plain character stays as typed (`v`, not
- * `V`, which would read as Shift+V); everything else uses the keymap's
+ * Display form of a canonical chord, for hint rows, the command palette's
+ * key column and the shortcuts help. A plain character stays as typed (`v`,
+ * not `V`, which would read as Shift+V); everything else uses the keymap's
  * display form (`Ctrl+C`, `Shift+Z`, `Esc`).
  */
 export function displayMmrKeyChord(canonical: string): string {
