@@ -424,6 +424,77 @@ export function piToolOrigin(info) {
 }
 
 /**
+ * Whether Pi trusts the project in `cwd`, decided as piSettingsManager does.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {boolean}
+ */
+export function isPiProjectTrusted(pi, cwd) {
+  return piSettingsManager(pi, cwd).isProjectTrusted();
+}
+
+/**
+ * @typedef {object} PiSkill The parts of Pi's `Skill` the skill commands read.
+ * @property {string} name
+ * @property {string} description
+ * @property {string} filePath The skill's `SKILL.md` (or Markdown file).
+ * @property {string} baseDir The skill's directory.
+ * @property {import("./skill-sources.js").PiSkillSourceInfo} sourceInfo
+ * @property {boolean} disableModelInvocation
+ *
+ * @typedef {{ path: string, message: string }} PiSkillProblem A skill file Pi did not load as it is,
+ *   and why: a name collision, invalid frontmatter, a missing description.
+ */
+
+/**
+ * The skills a session loaded (its resource loader's, after extensions added
+ * their folders) and the problems Pi reported while loading them. A name
+ * collision is reported on the skill that lost, naming the one Pi kept.
+ *
+ * @param {any} session Pi's `AgentSession`.
+ * @returns {{ skills: PiSkill[], problems: PiSkillProblem[] }}
+ */
+export function readPiSessionSkills(session) {
+  /** @type {{ skills: PiSkill[], diagnostics: { message: string, path?: string, collision?: { name: string, winnerPath: string, loserPath: string } }[] }} */
+  const { skills, diagnostics } = session.resourceLoader.getSkills();
+  const problems = diagnostics.map(({ message, path: file, collision }) =>
+    collision
+      ? { path: collision.loserPath, message: `another skill named "${collision.name}" is loaded from ${collision.winnerPath}` }
+      : { path: file ?? "", message },
+  );
+  return { skills, problems };
+}
+
+/**
+ * The frontmatter of a `SKILL.md` text, parsed as Pi parses it. Throws when
+ * the YAML is malformed.
+ *
+ * @param {any} pi
+ * @param {string} text
+ * @returns {Record<string, unknown>}
+ */
+export function parsePiFrontmatter(pi, text) {
+  return pi.parseFrontmatter(text).frontmatter;
+}
+
+/**
+ * Check a skill directory (one holding `SKILL.md`) with Pi's own loader: the
+ * name Pi would load it under, if it loads it at all, and every warning Pi
+ * raises about it (a missing description, a name outside Pi's rules, YAML it
+ * cannot parse).
+ *
+ * @param {any} pi
+ * @param {string} dir
+ * @returns {{ name: string | undefined, problems: string[] }}
+ */
+export function checkPiSkillDir(pi, dir) {
+  /** @type {{ skills: PiSkill[], diagnostics: { message: string }[] }} */
+  const { skills, diagnostics } = pi.loadSkillsFromDir({ dir, source: "path" });
+  return { name: skills[0]?.name, problems: diagnostics.map((diagnostic) => diagnostic.message) };
+}
+
+/**
  * The names of the MCP servers Pi's MCP extension would connect in `cwd`:
  * the enabled servers of `mcp.json` in Pi's configuration directory and, when
  * the project is trusted, of the project's `.pi/mcp.json` (Pi's docs/mcp.md).

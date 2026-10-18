@@ -13,6 +13,8 @@ Commands:
                                 ampi threads --help lists its options
   tools list|show [--mode <m>]  Print the tools a session declares to the model in a mode, or one
                                 tool's description and parameters; ampi tools --help has more
+  skill list|info|add|remove    List the skills Pi loads, show one, install skills from a directory
+                                or git repository, or remove one; ampi skill --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
   app [--open]                  Serve every session on this machine from one local web page:

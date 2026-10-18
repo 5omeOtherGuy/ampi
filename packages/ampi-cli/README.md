@@ -29,6 +29,8 @@ ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
 ampi tools list -m high  # the tools a high mode session declares to the model
 ampi app --open          # every session on this machine in one web page
+ampi skill list          # the skills Pi loads in this directory
+ampi skill add ./skills  # install skills into this project's .agents/skills
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
@@ -323,6 +325,47 @@ The command loads what `ampi` loads in the directory (Pi's configured packages a
 
 Exit status: `0` on success, `1` when the mode does not start or the tool is not active in it (the message suggests up to three close names), `2` on a usage error such as an unknown mode.
 
+## Skills
+
+`ampi skill list` prints the skills a session in the current directory loads: a count line, then each skill's name with its source, its description cut to the terminal width, and its directory. Problems Pi reports while loading skills, such as two skills with one name (Pi keeps the first it finds) or a `SKILL.md` without a description, go to stderr. `ampi skill info <name>` prints one skill's source, directory, `SKILL.md` path, whether the model may load it on its own (`disable-model-invocation`), its other frontmatter fields, and its files (the first 50, then a count of the rest). `ampi skills` is the same command group; `ls` is short for `list` and `rm` for `remove`.
+
+```bash
+ampi skill list --json        # { skills: [{ name, description, baseDir, path, source }], errors: [{ path, message }] }
+ampi skill info pdf-tools --json
+```
+
+The source is where the skill comes from:
+
+| Source | Where |
+| --- | --- |
+| `user`, `project` | Pi's skills directories: `skills` in Pi's configuration directory, and the project's `.pi/skills` |
+| `agents-user`, `agents-project` | `~/.agents/skills`, and `.agents/skills` in the project and its parents up to the repository root |
+| `claude-user`, `claude-project` | Claude Code's `~/.claude/skills` and the project's `.claude/skills`, which ampi adds |
+| `package:<source>` | A Pi package, named by its source in Pi's settings (`npm:…`, `git:…` or a path) |
+| `settings` | A path in Pi's `skills` setting or in `ampi.skills.path` |
+| `temporary` | A `--skill` argument, or a package given with `-e` |
+
+The listing comes from a session started in memory with what `ampi` loads, so it follows Pi's settings and its project trust: a project's skills are listed only once Pi trusts the project. The session writes no file and calls no model.
+
+`ampi skill add <source>` copies skills into a skills directory. The source is a local directory, a git URL (`https://`, `ssh://`, `file://` or `user@host:path`, with `//<path>` after the repository to take only that directory), or `owner/repo[/path]` for a GitHub repository. A directory with a `SKILL.md` is one skill; otherwise every directory directly in the source, or in its `skills/` directory, that holds a `SKILL.md` is one.
+
+```bash
+ampi skill add ./pdf-tools                         # into ./.agents/skills
+ampi skill add acme/skills --global                # every skill of github.com/acme/skills, into Pi's skills directory
+ampi skill add acme/skills/review --target ~/team-skills
+ampi skill add https://example.com/team/skills.git//lint --name team-lint
+```
+
+- The default target is the project's `.agents/skills`; `--global` uses `skills` in Pi's configuration directory, and `--target <dir>` any directory (Pi loads it only when it is one of its skill locations or in the `skills` setting).
+- Every skill must have a `name` and a `description` in its frontmatter, within Pi's rules (lowercase letters, digits and single hyphens, at most 64 characters), and no link to a file outside it. If one skill fails, nothing is installed and each reason is printed.
+- A skill already installed under the same name is kept unless `--overwrite` is given, and a directory without a `SKILL.md` is never replaced. `--name` installs a source's only skill under another name and changes the `name` in its `SKILL.md`.
+- Git sources are cloned with `--depth 1` into a temporary directory, which is removed whether the command succeeds or fails. `.git` is not copied, and nothing from a source is run.
+- Each installed skill gets a line; running sessions load new skills after `/reload`. When the project's skills are installed in a project Pi does not trust yet, a note says that Pi loads them once you trust it.
+
+`ampi skill remove <name>` deletes `<target>/<name>` when it is a directory with a `SKILL.md`, after asking (`--yes` skips the question; without a terminal to ask in, the command refuses unless `--yes` is given). Without `--target` or `--global` it looks in the project's `.agents/skills`, then in Pi's skills directory. A skill that loads from anywhere else is not removed: the message names where it comes from and how to remove it there, such as `ampi remove <package>` for a Pi package, the settings entry for a settings path, or the `--target` to pass for `~/.agents/skills`.
+
+Exit status: `0` on success, `1` when a skill is unknown, a source is invalid, a change is refused or a removal is declined, `2` on a usage error. Skill repositories hosted by a service are not offered.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -346,7 +389,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands).
 
 ## Development
 

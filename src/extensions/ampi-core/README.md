@@ -161,6 +161,10 @@ Pi reads skills from its own locations (`.pi/skills`, `~/.agents/skills`, projec
 - Pi asks about project trust only when it finds resources it protects itself (such as `.pi/settings.json` or `.agents/skills`). In a folder that has a `.claude/skills` directory and none of those, Pi treats the project as trusted, so its `.claude/skills` loads without a prompt.
 - When Pi runs with `--no-skills`, ampi adds nothing either; subagent workers that bring their own prompt run that way.
 
+### Where a skill comes from
+
+`skill-sources.ts` (`classifyMmrSkillSource`) reads the `sourceInfo` Pi attaches to each skill and its path, and gives every surface that lists skills the same answer: a group (`user`, `project`, `package` with the package's source, `settings`, or `temporary` for `--skill` and `-e`) and an origin (`pi`, `agents` for `~/.agents/skills` and project `.agents/skills`, `claude` for `.claude/skills`). The folders above reach Pi as temporary extension paths, so they are grouped by their path: `~/.claude/skills` is `user`, another `.claude/skills` is `project`, and `ampi.skills.path` entries are `settings`. ampi-tui's Skills dialog shows the groups as headings; the `ampi skill` command prints them as labels (`agents-user`, `package:npm:…`), from a plain-JS copy that a parity test keeps equal.
+
 ### Auto-compaction
 
 Locked modes compact the conversation once it fills 90% of the context window. After a run has fully settled (Pi's `agent_settled`, with no retry or queued message left), ampi reads `getContextUsage()` and, at or above the threshold, calls `ctx.compact()` once. The window is the active model's, after the mode's context profile cap, so Medium compacts at 270k of its 300k profile. While it runs, the prompt box status reads `Auto-Compacting`.

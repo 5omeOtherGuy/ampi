@@ -9,18 +9,22 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
 import {
+  checkPiSkillDir,
   createPiModelLookup,
   createPiSessionServices,
+  isPiProjectTrusted,
   listPiExtensionSources,
   listPiMcpServers,
   listPiSessions,
   loadThroughPi,
+  parsePiFrontmatter,
   piAgentDir,
   piExternalEditorCommand,
   piSettingsManager,
   piSettingsPath,
   piToolOrigin,
   readPiSessionEntries,
+  readPiSessionSkills,
   readPiSettings,
   setPiSessionName,
 } from "../packages/ampi-cli/src/pi-compat.js";
@@ -497,5 +501,86 @@ describe("Pi SDK calls of the session builder (sdk-session.js) and the tools com
     const docs = { name: "docs", config: { command: process.execPath } };
     assert.throws(() => createTransport(docs, project, undefined), /does not connect MCP servers/);
     assert.equal(existsSync(path.join(agentDir, "sessions")), false, "an in-memory session writes no file");
+  });
+});
+
+describe("Pi calls used by the skill commands", () => {
+  const saved = { agentDir: process.env.PI_CODING_AGENT_DIR, home: process.env.HOME, offline: process.env.PI_OFFLINE };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-skills-"));
+  const agentDir = path.join(dir, "agent");
+  const home = path.join(dir, "home");
+  const project = path.join(dir, "project");
+  const standIn = path.join(dir, "stand-in");
+  /** @param {string} file @param {string} text */
+  const writeFileSyncDeep = (file, text) => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  };
+  /** @param {string} file @param {string} name @param {string} [description] */
+  const skill = (file, name, description) =>
+    writeFileSyncDeep(file, `---\nname: ${name}\n${description === undefined ? "" : `description: ${description}\n`}---\nBody\n`);
+
+  before(() => {
+    writeJson(path.join(standIn, "package.json"), { name: "@skippermissions/ampi", version: "0.0.0", pi: { extensions: ["./index.ts"] } });
+    writeFileSyncDeep(path.join(standIn, "index.ts"), "export default function (): void {}\n");
+    writeJson(path.join(agentDir, "settings.json"), { packages: [standIn] });
+    skill(path.join(agentDir, "skills", "pdf-tools", "SKILL.md"), "pdf-tools", "Read PDFs.");
+    skill(path.join(home, ".agents", "skills", "pdf-copy", "SKILL.md"), "pdf-tools", "Read PDFs again.");
+    skill(path.join(project, ".agents", "skills", "triage", "SKILL.md"), "triage", "Sort issues.");
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.HOME = home;
+    process.env.PI_OFFLINE = "1";
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", saved.agentDir],
+      ["HOME", saved.home],
+      ["PI_OFFLINE", saved.offline],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads a session's skills with their source info, and reports a name collision on the skill that lost", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const runtime = await createAmpiSdkSession({ cwd: project, sessionManager: pi.SessionManager.inMemory(project), mode: "print", connectMcp: false, pi });
+    try {
+      const { skills, problems } = readPiSessionSkills(runtime.session);
+      // The project's .agents/skills needs trust, which this project does not have.
+      assert.deepEqual(
+        skills.map((entry) => [entry.name, entry.description, entry.filePath, entry.baseDir, entry.disableModelInvocation, entry.sourceInfo.source, entry.sourceInfo.scope, entry.sourceInfo.origin]),
+        [["pdf-tools", "Read PDFs.", path.join(agentDir, "skills", "pdf-tools", "SKILL.md"), path.join(agentDir, "skills", "pdf-tools"), false, "auto", "user", "top-level"]],
+      );
+      assert.deepEqual(problems, [
+        {
+          path: path.join(home, ".agents", "skills", "pdf-copy", "SKILL.md"),
+          message: `another skill named "pdf-tools" is loaded from ${path.join(agentDir, "skills", "pdf-tools", "SKILL.md")}`,
+        },
+      ]);
+    } finally {
+      await runtime.dispose();
+    }
+    assert.equal(isPiProjectTrusted(pi, project), false);
+    new pi.ProjectTrustStore(agentDir).set(project, true);
+    assert.equal(isPiProjectTrusted(pi, project), true);
+  });
+
+  it("checks a skill directory and parses frontmatter with Pi's rules", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    assert.deepEqual(checkPiSkillDir(pi, path.join(agentDir, "skills", "pdf-tools")), { name: "pdf-tools", problems: [] });
+    skill(path.join(dir, "bad", "SKILL.md"), "Bad--Name");
+    const bad = checkPiSkillDir(pi, path.join(dir, "bad"));
+    assert.equal(bad.name, undefined);
+    assert.deepEqual(bad.problems.sort(), [
+      "description is required",
+      "name contains invalid characters (must be lowercase a-z, 0-9, hyphens only)",
+      "name must not contain consecutive hyphens",
+    ]);
+    assert.deepEqual(parsePiFrontmatter(pi, "---\nname: a\nmetadata:\n  team: x\n---\nBody\n"), { name: "a", metadata: { team: "x" } });
+    assert.deepEqual(parsePiFrontmatter(pi, "No frontmatter\n"), {});
+    assert.throws(() => parsePiFrontmatter(pi, "---\nname: [unclosed\n---\n"));
   });
 });
