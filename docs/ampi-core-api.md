@@ -413,6 +413,93 @@ onMmrStateChanged(pi, (state) => {
 The event bus is a notification channel only; it does not support
 request/response. For queries, use the read APIs above.
 
+## Command registry
+
+```ts
+import { getMmrCommands, onMmrCommandsChanged, rankMmrCommands, registerMmrCommand } from "@skippermissions/ampi";
+import type { MmrCommandDefinition, MmrRankedCommand } from "@skippermissions/ampi";
+```
+
+Palette commands are named actions, separate from Pi slash commands. The
+registry is process-global, so every extension sees the same list. This
+API and the keymap below are in the Internal tier (see
+[`public-api-surface.md`](./public-api-surface.md)) until the command
+palette consumes them.
+
+- `registerMmrCommand({ id, noun, verb, description, defaultKey?, keywords?, availability?, run })`
+  — add a command, or replace the one with the same `id` (it keeps its
+  position). `id` is dotted lowerCamel (`thread.new`,
+  `prompt.openInEditor`); the palette label is `noun verb`. `defaultKey`
+  is a chord or an array of chords in the keymap grammar below.
+  `availability(ctx)` returns `{ state: "available" | "unavailable" | "hidden", reason? }`
+  and defaults to available. Throws on an invalid id, an empty noun,
+  verb or description, or an unparsable `defaultKey`.
+- `unregisterMmrCommand(id)` — remove a command; returns `false` when
+  the id was not registered.
+- `getMmrCommands()` / `getMmrCommand(id)` — read commands in
+  registration order.
+- `onMmrCommandsChanged(listener)` — called with `{ change, id }`, where
+  `change` is `"registered"`, `"replaced"` or `"unregistered"`. Returns an
+  unsubscribe function. This is an in-process callback, not a Pi event-bus
+  topic. A listener that throws does not stop the change or the other
+  listeners.
+- `rankMmrCommands(commands, query, { ctx }?)` — pure palette ranking.
+  Every query word must fuzzy-match the label, id, description or a
+  keyword. Available rows come first (best match, then registration
+  order), unavailable rows follow with their `reason`, and hidden rows are
+  dropped. An empty query keeps registration order. `availability` runs
+  only when `ctx` is given; without it every command counts as available.
+  An `availability` check that throws counts as unavailable.
+
+## Keymap
+
+```ts
+import { formatMmrKeyChord, parseMmrKeyChord, readMmrKeymapSettings, resolveMmrKeymap } from "@skippermissions/ampi";
+import type { MmrKeyChord, MmrResolvedKeymap } from "@skippermissions/ampi";
+```
+
+Key strings: a chord is one or more combos separated by spaces
+(`ctrl+c ctrl+n`, `esc esc`); a combo is modifiers plus one key joined by
+`+`, case-insensitive. Modifiers are `ctrl`, `alt`, `shift`, `meta`, with
+the aliases `option` (alt), `cmd` / `command` (meta) and `mod`, which
+always means `ctrl`. Keys are `esc`, `enter`, `space`, `tab`,
+`backspace`, `delete`, the arrows, `home`, `end`, `pageup`, `pagedown`,
+`f1`–`f12` (plus the aliases `escape`, `return`, `pgup`, `pgdn`) or a
+single character. A lone uppercase letter means shift plus that letter;
+next to a modifier, case is ignored, so `alt+Z` means `alt+z`, not
+`alt+shift+z`. `<leader>` (default `ctrl+x`) may start a chord:
+`<leader>z`.
+
+- `parseMmrKeyChord(text)` — returns `{ leader, combos }` or `{ error }`;
+  never throws.
+- `formatMmrKeyChord(chord, { style?, leader? })` — canonical form
+  (`ctrl+c ctrl+n`, `<leader>z`) or `style: "display"` (`Ctrl+C Ctrl+N`).
+  Passing `leader` expands `<leader>`.
+- `areMmrKeyChordsEqual(a, b, leader?)` — compare chords, after leader
+  expansion when `leader` is given.
+- `readMmrKeymapSettings(settings, filePath?)` — read `ampi.keymap` from
+  a parsed Pi settings object; returns `{ leader?, overrides, problems }`.
+  Problems name `filePath` when it is given.
+- `resolveMmrKeymap({ defaults, overrides?, leader? })` — merge defaults
+  (every known command id, `null` when unbound) with overrides. A string
+  replaces the defaults, an array replaces them with every listed chord,
+  `null` or `[]` unbinds. Unknown ids and unparsable chords land in
+  `problems`. An override whose chords all fail to parse keeps the
+  default, so `"thread.new": ""` does not unbind; use `null`. Returns `bindings` (id → chords), `byChord` (expanded chord
+  → first id), and `conflicts`: `duplicate` when several ids share a
+  chord, `prefix` when one chord starts another (`ctrl+c` and
+  `ctrl+c ctrl+n`).
+- `formatMmrKeymapJsonc(commands, keymap)` — JSONC listing with `leader`
+  first, then one line per command id in sorted order with its chord,
+  array or `null` and the description as a `//` comment.
+- `MMR_DEFAULT_KEYMAP_LEADER` — `"ctrl+x"`.
+
+Settings shape:
+
+```json
+{ "ampi": { "keymap": { "leader": "ctrl+x", "thread.new": "ctrl+t", "mode.toggle": ["ctrl+s", "alt+m"], "thread.interrupt": null } } }
+```
+
 ## Persisted state
 
 ```ts

@@ -86,6 +86,7 @@ Important files:
 - `subagent-profiles.ts`, `subagent-resolver.ts`, `subagent-prompt-assembly.ts` — worker model/tool/prompt policy for subagents.
 - `status.ts`, `diagnostics.ts` — `/ampi-status` formatting and structured diagnostics.
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
+- `command-registry.ts`, `keymap.ts` — palette command registry with ranking, and the key-string grammar, `ampi.keymap` overrides, and conflict report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
 - `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton.
 - `internal/` — low-level env, JSON, and settings-file utilities.

@@ -14,6 +14,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   built-in background workers. Subagents stay foreground-only by default, and
   background custom workers cannot spawn further workers
   ([#240](https://github.com/5omeOtherGuy/ampi/pull/240)).
+- `ampi-core`: a command registry and keymap model that the coming
+  command palette, key chords, and help screen build on. Extensions
+  register named commands (`thread.new`, `mode.toggle`, ...) with default
+  keys, and users will be able to rebind them under `ampi.keymap` in Pi
+  settings: a key string or an array of key strings per command id, `null` to
+  unbind, and a `leader` entry (default `ctrl+x`). Nothing is bound or shown
+  yet.
 
 ### Changed
 
