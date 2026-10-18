@@ -10,25 +10,33 @@ import { withMmrThreadsFileLock } from "./index-store.js";
 /**
  * Prompt history on disk: one JSON Lines file per workspace under Pi's agent
  * directory, `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`,
- * one `{ "ts": "<ISO 8601>", "text": "<prompt>" }` line per prompt, oldest
- * first. The workspace key is a hash of the working directory, so file names
- * carry no paths.
+ * one `{ "v": 1, "ts": "<ISO 8601>", "text": "<prompt>" }` line per prompt,
+ * oldest first. The workspace key is a hash of the working directory, so
+ * file names carry no paths.
  *
+ * - Each line carries its format version, `v`. Reading uses only lines of
+ *   {@link MMR_PROMPT_HISTORY_VERSION}; a JSON object with any other `v`
+ *   (or none) was written by another ampi version and is left as it is.
  * - A prompt identical to the last one in the file is not added again.
  * - A file keeps at most {@link MMR_PROMPT_HISTORY_MAX} prompts. It grows
  *   past that by appending until it holds {@link MMR_PROMPT_HISTORY_REWRITE_AT}
- *   lines; the next prompt rewrites it with the newest prompts only, through
- *   a temp file renamed over it.
- * - A line that is not a valid entry is skipped when reading and dropped when
- *   the file is rewritten.
+ *   prompts; the next prompt rewrites it, through a temp file renamed over
+ *   it, with the newest prompts and every line of another version, in their
+ *   order.
+ * - A line that cannot be read (cut off by a crash, or a version 1 line
+ *   without a valid time or text) is skipped when reading and dropped when
+ *   the file is rewritten. This is the one place the store discards data it
+ *   did not write in the same call; such a line holds no prompt it could show.
  * - Operations on one file run one at a time within the process. Across Pi
  *   processes appends interleave safely; a rewrite racing an append from
  *   another process can lose that one prompt.
  */
 
+/** The `v` on every line this version writes, and the only one it reads. */
+export const MMR_PROMPT_HISTORY_VERSION = 1;
 /** Prompts a file keeps, and the most one read returns per workspace. */
 export const MMR_PROMPT_HISTORY_MAX = 1000;
-/** Lines a file may reach before the next prompt rewrites it down to {@link MMR_PROMPT_HISTORY_MAX}. */
+/** Prompts a file may reach before the next prompt rewrites it down to {@link MMR_PROMPT_HISTORY_MAX}. */
 export const MMR_PROMPT_HISTORY_REWRITE_AT = 1200;
 const FILE_SUFFIX = ".jsonl";
 
@@ -42,29 +50,37 @@ export function mmrPromptHistoryKey(cwd: string): string {
   return createHash("sha256").update(path.resolve(cwd)).digest("hex").slice(0, 32);
 }
 
-function parseLine(line: string): MmrPromptHistoryEntry | undefined {
+/** A line of this version's prompt, another version's line (kept as it is), or an unreadable one. */
+type Line =
+  | { readonly kind: "entry"; readonly raw: string; readonly entry: MmrPromptHistoryEntry }
+  | { readonly kind: "other"; readonly raw: string }
+  | { readonly kind: "damaged" };
+
+function parseLine(raw: string): Line {
   let value: unknown;
   try {
-    value = JSON.parse(line);
+    value = JSON.parse(raw);
   } catch {
-    return undefined;
+    return { kind: "damaged" };
   }
-  if (!isRecord(value) || typeof value.ts !== "string" || Number.isNaN(Date.parse(value.ts))) return undefined;
-  if (typeof value.text !== "string" || value.text.trim().length === 0) return undefined;
-  return { ts: value.ts, text: value.text };
+  if (!isRecord(value)) return { kind: "damaged" };
+  if (value.v !== MMR_PROMPT_HISTORY_VERSION) return { kind: "other", raw };
+  if (typeof value.ts !== "string" || Number.isNaN(Date.parse(value.ts))) return { kind: "damaged" };
+  if (typeof value.text !== "string" || value.text.trim().length === 0) return { kind: "damaged" };
+  return { kind: "entry", raw, entry: { ts: value.ts, text: value.text } };
 }
 
 function formatLine(entry: MmrPromptHistoryEntry): string {
-  return `${JSON.stringify({ ts: entry.ts, text: entry.text })}\n`;
+  return JSON.stringify({ v: MMR_PROMPT_HISTORY_VERSION, ts: entry.ts, text: entry.text });
 }
 
 interface FileContents {
   /** The raw text, or "" for a missing file. */
   readonly raw: string;
-  /** Valid entries, oldest first. */
+  /** The non-empty lines, in file order. */
+  readonly lines: readonly Line[];
+  /** This version's prompts, oldest first. */
   readonly entries: MmrPromptHistoryEntry[];
-  /** Non-empty lines, valid or not. */
-  readonly lines: number;
 }
 
 async function readHistoryFile(filePath: string): Promise<FileContents> {
@@ -72,18 +88,35 @@ async function readHistoryFile(filePath: string): Promise<FileContents> {
   try {
     raw = await readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { raw: "", entries: [], lines: 0 };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { raw: "", lines: [], entries: [] };
     throw error;
   }
-  const entries: MmrPromptHistoryEntry[] = [];
-  let lines = 0;
-  for (const line of raw.split("\n")) {
-    if (line.trim().length === 0) continue;
-    lines += 1;
-    const entry = parseLine(line);
-    if (entry) entries.push(entry);
+  const lines = raw
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map(parseLine);
+  const entries = lines.flatMap((line) => (line.kind === "entry" ? [line.entry] : []));
+  return { raw, lines, entries };
+}
+
+/**
+ * The file after adding `entry` to a full one: the newest
+ * {@link MMR_PROMPT_HISTORY_MAX} prompts and every other version's line, in
+ * file order; unreadable lines are dropped.
+ */
+function rewrittenFile(current: FileContents, entry: MmrPromptHistoryEntry): string {
+  let toDrop = current.entries.length + 1 - MMR_PROMPT_HISTORY_MAX;
+  const kept: string[] = [];
+  for (const line of current.lines) {
+    if (line.kind === "damaged") continue;
+    if (line.kind === "entry" && toDrop > 0) {
+      toDrop -= 1;
+      continue;
+    }
+    kept.push(line.raw);
   }
-  return { raw, entries, lines };
+  kept.push(formatLine(entry));
+  return `${kept.join("\n")}\n`;
 }
 
 /** The newest `MMR_PROMPT_HISTORY_MAX` entries, newest first. */
@@ -144,15 +177,14 @@ export function createMmrPromptHistoryStore(options: MmrPromptHistoryStoreOption
         const current = await readHistoryFile(filePath);
         if (current.entries.at(-1)?.text === text) return false;
         const entry: MmrPromptHistoryEntry = { ts: now(), text };
-        if (current.lines + 1 > MMR_PROMPT_HISTORY_REWRITE_AT) {
-          const kept = [...current.entries, entry].slice(-MMR_PROMPT_HISTORY_MAX);
-          writeFileAtomic(filePath, kept.map(formatLine).join(""));
+        if (current.entries.length + 1 > MMR_PROMPT_HISTORY_REWRITE_AT) {
+          writeFileAtomic(filePath, rewrittenFile(current, entry));
           return true;
         }
         await mkdir(dir, { recursive: true });
         // A crash may have left the last line without its newline; start a fresh line.
         const separator = current.raw.length > 0 && !current.raw.endsWith("\n") ? "\n" : "";
-        await appendFile(filePath, `${separator}${formatLine(entry)}`, { encoding: "utf8", mode: 0o600 });
+        await appendFile(filePath, `${separator}${formatLine(entry)}\n`, { encoding: "utf8", mode: 0o600 });
         return true;
       });
     },

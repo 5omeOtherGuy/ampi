@@ -132,12 +132,13 @@ describe("ampi-tui prompt history rendering", () => {
     assert.match(plain(lines)[2], /^│ > PARSER +│$/);
     assert.ok(!plain(lines).some((row) => row.includes("Earlier prompt")));
     expectFixture("ampi-tui-prompt-history", "filtered-140", lines);
+    expectFixture("ampi-tui-prompt-history", "filtered-80", p.render(80));
 
     p.type("zzz");
     assert.match(plain(p.render(80))[4], /^│ +No prompt contains "PARSERzzz" +│$/);
   });
 
-  it("names the scope in the bottom border after a toggle, and drops the scope text before the key hint when narrow", async () => {
+  it("names the scope in the bottom border after a toggle, and drops the key hint before the scope when narrow", async () => {
     const p = open();
     p.component.handleInput(KEY.altW);
     await p.finishLoad();
@@ -146,7 +147,12 @@ describe("ampi-tui prompt history rendering", () => {
     assert.match(plain(at140)[4], /^│ {3}Deploy the website preview +│$/);
     expectFixture("ampi-tui-prompt-history", "all-workspaces-140", at140);
     expectFixture("ampi-tui-prompt-history", "all-workspaces-80", p.render(80));
-    assert.equal(plain(p.component.render(40)).at(-1), `╰${"─".repeat(9)} Alt+W/Ctrl+T toggle filter ─╯`);
+    assert.equal(plain(p.component.render(40)).at(-1), `╰${"─".repeat(12)} Showing: all workspaces ─╯`);
+    p.component.handleInput(KEY.ctrlT);
+    // "Alt+W/Ctrl+T toggle filter · Showing: current workspace" is 55 columns;
+    // with a space each side and the four border columns, 61 is the narrowest box for both.
+    assert.equal(plain(p.component.render(61)).at(-1), "╰─ Alt+W/Ctrl+T toggle filter · Showing: current workspace ─╯");
+    assert.equal(plain(p.component.render(60)).at(-1), `╰${"─".repeat(29)} Showing: current workspace ─╯`);
   });
 
   it("says when no workspace has history", async () => {

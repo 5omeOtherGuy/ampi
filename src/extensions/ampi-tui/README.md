@@ -281,7 +281,7 @@ Pick "ampi help" in the command palette to list every key in one place. It opens
 
 ### Prompt history
 
-Ctrl+R opens the prompts you sent in this working directory, newest first, in a box in the middle of the screen: 110 columns wide, or the terminal width less four on a narrower terminal. `ampi-threads` records the prompts (see [its README](../ampi-threads/README.md#prompt-history)); without it the command is unavailable.
+Ctrl+R opens the prompts you sent in this working directory, newest first, in a box in the middle of the screen: 110 columns wide, or the terminal width less four on a narrower terminal. `ampi-threads` records the prompts (see [its README](../ampi-threads/README.md#prompt-history)); without it the command is unavailable and Ctrl+R does nothing. Pressing Ctrl+R again while the box is open or still loading does nothing either.
 
 ```text
 ╭─ Prompt History ───────────────────────────────────────────────╮
@@ -296,7 +296,7 @@ Ctrl+R opens the prompts you sent in this working directory, newest first, in a 
 - One prompt per row, line breaks shown as spaces; a long prompt is cut with an ellipsis. The list shows 21 rows, fewer on a short terminal, with a scrollbar when there are more. With nothing to show, a dim line says so.
 - Typing filters the list to the prompts that contain the text, ignoring case. ↑/↓ or Ctrl+P/Ctrl+N move the selection.
 - Enter closes the box and puts the whole prompt into the prompt box, replacing its text, without sending it. Esc closes the box and leaves the prompt as it was.
-- Alt+W or Ctrl+T switches between this workspace's prompts and those of every workspace, merged by time; the bottom border names the one shown. The filter stays.
+- Alt+W or Ctrl+T switches between this workspace's prompts and those of every workspace, merged by time; the bottom border names the one shown. The filter stays. When the box is too narrow for the key hint as well, the border keeps the scope.
 - Ctrl+P and Ctrl+N in the prompt itself are unchanged.
 
 ### Mode dial

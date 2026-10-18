@@ -91,9 +91,9 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 
 - Recorded: what you type and send in the interactive terminal, also while a turn runs. Not recorded: slash commands and prompt templates (text starting with `/`), prompts sent by extensions or RPC clients, and print or JSON runs.
 - A prompt identical to the one before it in the same workspace is recorded once.
-- One file per working directory, `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, where the key is the first 32 hex digits of the SHA-256 of the absolute path, so file names carry no paths. Each line is one prompt, oldest first: `{ "ts": "2026-10-18T10:00:00.000Z", "text": "Rename the parser module" }`. The files are readable only by you.
-- A workspace keeps its newest 1000 prompts. The file grows by appending until it holds 1200 lines; the next prompt rewrites it with the newest 1000, through a temp file renamed over it.
-- A line that is not a valid entry is skipped when reading and dropped when the file is rewritten.
+- One file per working directory, `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, where the key is the first 32 hex digits of the SHA-256 of the absolute path, so file names carry no paths. Each line is one prompt, oldest first: `{ "v": 1, "ts": "2026-10-18T10:00:00.000Z", "text": "Rename the parser module" }`, where `v` is the line's format version. The files are readable only by you.
+- A workspace keeps its newest 1000 prompts. The file grows by appending until it holds 1200 prompts; the next prompt rewrites it with the newest 1000, through a temp file renamed over it.
+- Only lines of version 1 are read. A line of another version, written by a different ampi version using the same agent directory, is skipped when reading and kept as it is when the file is rewritten. A line that cannot be read at all, such as one cut off by a crash, is skipped and dropped at the next rewrite.
 - "All workspaces" reads every history file and merges the prompts by time.
 - Within one Pi process, operations on a file run one at a time. Several Pi processes can append to one file safely; a rewrite racing an append from another process can lose that one prompt.
 - Recording does not hold up the prompt. If a file cannot be written, a warning says so and the prompt is sent as usual.
@@ -105,7 +105,7 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 - **"thread archive and new is not available: this session is already archived".** The session was archived before; run `thread unarchive` from the palette to take it out.
 - **A warning says the thread index could not be read.** The file was not a valid index. It was moved to the `.corrupt` name in the warning; inspect it by hand and copy back any entries you need.
 - **Archiving fails with "written by a newer ampi".** Another ampi version on this machine uses a newer index format. Update ampi.
-- **"prompt history is not available: ampi-threads is not loaded".** `ampi-threads` is off; Ctrl+R needs it.
+- **Ctrl+R does nothing.** `ampi-threads` is off, and the picker needs it. The palette lists the command as "history (unavailable)" and, when you select it, gives the reason "ampi-threads is not loaded".
 - **A prompt is missing from Ctrl+R.** It started with `/`, was sent by an extension, repeated the prompt before it, or was sent in another working directory: press Alt+W to show every workspace.
 
 ## Public API

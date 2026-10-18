@@ -46,7 +46,7 @@ function writeLines(file, lines, { trailingNewline = true } = {}) {
   writeFileSync(file, `${lines.join("\n")}${trailingNewline ? "\n" : ""}`);
 }
 
-const line = (second, text) => JSON.stringify({ ts: at(second), text });
+const line = (second, text) => JSON.stringify({ v: 1, ts: at(second), text });
 
 describe("prompt history store", () => {
   it("appends one line per prompt to the workspace's file and reads them newest first", async () => {
@@ -55,8 +55,8 @@ describe("prompt history store", () => {
     assert.equal(await store.append(WORKSPACE, "Now fix\nthe imports"), true);
     assert.equal(store.pathFor(WORKSPACE), fileFor(WORKSPACE));
     assert.deepEqual(fileLines(fileFor(WORKSPACE)).map((text) => JSON.parse(text)), [
-      { ts: at(0), text: "Rename the parser" },
-      { ts: at(1), text: "Now fix\nthe imports" },
+      { v: 1, ts: at(0), text: "Rename the parser" },
+      { v: 1, ts: at(1), text: "Now fix\nthe imports" },
     ]);
     assert.deepEqual(await store.read(WORKSPACE, "workspace"), [
       { ts: at(1), text: "Now fix\nthe imports" },
@@ -107,15 +107,17 @@ describe("prompt history store", () => {
     assert.equal(existsSync(historyDir()), false, "reading creates nothing");
   });
 
-  it("skips lines that are not entries, and starts a fresh line after a cut-off one", async () => {
+  it("skips lines that are not version 1 entries, and starts a fresh line after a cut-off one", async () => {
     writeLines(
       fileFor(WORKSPACE),
       [
         line(0, "kept first"),
         "not json",
-        JSON.stringify({ ts: "yesterday-ish", text: "bad date" }),
-        JSON.stringify({ ts: at(1), text: 42 }),
-        JSON.stringify({ ts: at(2), text: "   " }),
+        JSON.stringify({ v: 1, ts: "yesterday-ish", text: "bad date" }),
+        JSON.stringify({ v: 1, ts: at(1), text: 42 }),
+        JSON.stringify({ v: 1, ts: at(2), text: "   " }),
+        JSON.stringify({ v: 2, ts: at(2), text: "from a later format" }),
+        JSON.stringify({ ts: at(2), text: "without a version" }),
         "[1, 2]",
         line(3, "kept last"),
         '{"ts":"2026-10-18T10:00:04.000Z","te',
@@ -127,37 +129,46 @@ describe("prompt history store", () => {
     assert.equal(await store.append(WORKSPACE, "after the cut"), true);
     const lines = fileLines(fileFor(WORKSPACE));
     assert.equal(lines.at(-2), '{"ts":"2026-10-18T10:00:04.000Z","te', "the cut-off line is left as it was");
-    assert.deepEqual(JSON.parse(lines.at(-1)), { ts: at(0), text: "after the cut" });
+    assert.deepEqual(JSON.parse(lines.at(-1)), { v: 1, ts: at(0), text: "after the cut" });
     assert.deepEqual(texts(await store.read(WORKSPACE, "workspace")), ["after the cut", "kept last", "kept first"]);
   });
 
-  it("returns the newest 1000 prompts and rewrites the file to them once it would pass 1200 lines", async () => {
+  it("returns the newest 1000 prompts and rewrites the file once it would pass 1200, keeping other versions' lines", async () => {
     const { MMR_PROMPT_HISTORY_MAX, MMR_PROMPT_HISTORY_REWRITE_AT } = await loadStore();
     assert.equal(MMR_PROMPT_HISTORY_MAX, 1000);
     assert.equal(MMR_PROMPT_HISTORY_REWRITE_AT, 1200);
-    // 1199 lines: 1198 prompts and one line that is not an entry.
-    const lines = Array.from({ length: 1198 }, (_, index) => line(index, `p${index}`));
-    lines.splice(600, 0, "not json");
+    // 1199 prompts, a cut-off line and two lines a later format wrote.
+    const later = JSON.stringify({ v: 2, at: 1, prompt: { text: "a later format" } });
+    const laterNewer = JSON.stringify({ v: 3, text: "newer still" });
+    const lines = Array.from({ length: 1199 }, (_, index) => line(index, `p${index}`));
+    lines.splice(900, 0, laterNewer);
+    lines.splice(600, 0, '{"v":1,"ts":"2026');
+    lines.splice(100, 0, later);
     writeLines(fileFor(WORKSPACE), lines);
     const { createMmrPromptHistoryStore } = await loadStore();
     const store = createMmrPromptHistoryStore({ baseDir: historyDir(), now: () => at(5000) });
 
     const before = await store.read(WORKSPACE, "workspace");
     assert.equal(before.length, 1000);
-    assert.deepEqual([before[0].text, before.at(-1).text], ["p1197", "p198"]);
+    assert.deepEqual([before[0].text, before.at(-1).text], ["p1198", "p199"]);
 
-    // The 1200th line is appended.
+    // The 1200th prompt is appended.
     await store.append(WORKSPACE, "fills the file");
-    assert.equal(fileLines(fileFor(WORKSPACE)).length, 1200);
+    assert.equal(fileLines(fileFor(WORKSPACE)).length, 1203);
     assert.equal(JSON.parse(fileLines(fileFor(WORKSPACE))[0]).text, "p0");
 
-    // The next prompt rewrites the file: the newest 1000 entries, the bad line dropped.
+    // The next prompt rewrites the file: the newest 1000 prompts and the other
+    // versions' lines where they were; the cut-off line is dropped.
     await store.append(WORKSPACE, "past the limit");
     const rewritten = fileLines(fileFor(WORKSPACE));
-    assert.equal(rewritten.length, 1000);
-    assert.equal(JSON.parse(rewritten[0]).text, "p200");
+    assert.equal(rewritten.length, 1002);
+    assert.equal(rewritten[0], later, "another version's line stays though the prompts around it went");
+    assert.equal(JSON.parse(rewritten[1]).text, "p201", "p0 to p200 went");
+    assert.equal(JSON.parse(rewritten[699]).text, "p899");
+    assert.equal(rewritten[700], laterNewer, "between p899 and p900, as before");
+    assert.equal(JSON.parse(rewritten[701]).text, "p900");
     assert.equal(JSON.parse(rewritten.at(-1)).text, "past the limit");
-    assert.ok(!rewritten.includes("not json"));
+    assert.ok(!rewritten.some((text) => text.startsWith('{"v":1,"ts":"2026"')), "the cut-off line is gone");
     assert.deepEqual(readdirSync(historyDir()), [path.basename(fileFor(WORKSPACE))], "no temp file is left behind");
     assert.deepEqual(texts(await store.read(WORKSPACE, "workspace")).slice(0, 2), ["past the limit", "fills the file"]);
   });

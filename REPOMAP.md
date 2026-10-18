@@ -213,7 +213,7 @@ Thread management on top of Pi sessions, on by default (`ampiThreads.enabled: fa
 
 - `index.ts` (entry point: registers the index in `ampi-core/thread-index.ts`, the prompt history in `ampi-core/prompt-history.ts`, the commands and the `/ampi-thread` route; records typed prompts; auto-archive on quit), `config.ts` (`ampiThreads.enabled`, `ampiThreads.autoArchiveOnQuit`), `README.md`.
 - `index-store.ts` (the versioned index file: atomic writes, corrupt files moved aside, a per-path in-process queue, label and colour validation).
-- `history-store.ts` (one JSON Lines file of prompts per workspace: consecutive repeats skipped, trimmed to the newest 1000 by an atomic rewrite past 1200 lines, all workspaces merged by time).
+- `history-store.ts` (one JSON Lines file of prompts per workspace, each line versioned: consecutive repeats skipped, trimmed to the newest 1000 by an atomic rewrite past 1200 prompts that keeps other versions' lines, all workspaces merged by time).
 - `commands.ts` (`thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, and the `/ampi-thread new|archive` handler that calls Pi's `newSession`).
 
 ### `src/extensions/ampi-history/`

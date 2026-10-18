@@ -26,7 +26,8 @@ import { fitMmrText, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFrame, ren
  *   case. ↑/↓ or Ctrl+P/Ctrl+N move without wrapping, Enter closes the
  *   picker and hands back the selected prompt, Esc closes it.
  * - Alt+W or Ctrl+T switches between this workspace's prompts and those of
- *   every workspace; the bottom border names the one shown.
+ *   every workspace; the bottom border names the one shown, and keeps that
+ *   name over the key hint when the box is narrow.
  */
 
 export const MMR_PROMPT_HISTORY_TITLE = "Prompt History";
@@ -165,10 +166,15 @@ export class MmrPromptHistoryPicker implements Component, Focusable {
     }
 
     const scrollbar = renderMmrScrollbar({ total: this.rows.length, visible, offset: this.offset }, this.options.theme);
+    // The frame drops hints from the end when they do not fit; the scope
+    // matters more than the key hint, so a narrow box shows only the scope.
+    // Both fit when their text and a space each side leave the corners free.
+    const scope = { text: `Showing: ${SCOPE_LABEL[this.scope]}` };
+    const both = visibleWidth(`${TOGGLE_HINT.key} ${TOGGLE_HINT.text} · ${scope.text}`) + 2 <= width - 4;
     return renderMmrFrame(
       {
         title: MMR_PROMPT_HISTORY_TITLE,
-        hints: [TOGGLE_HINT, { text: `Showing: ${SCOPE_LABEL[this.scope]}` }],
+        hints: both ? [TOGGLE_HINT, scope] : [scope],
         lines: [this.input.render(inner)[0] ?? "", "", ...slots],
         gutter: scrollbar ? [" ", " ", ...scrollbar] : undefined,
       },

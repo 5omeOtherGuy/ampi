@@ -792,3 +792,43 @@ describe("ampi-tui command palette and details toggle", () => {
     assert.deepEqual(t.handle.calls, ["thinking toggle", "thinking toggle"]);
   });
 });
+
+describe("ampi-tui prompt history key", () => {
+  let seam;
+  let release;
+  beforeEach(async () => {
+    registry.__resetMmrCommandsForTests();
+    seam = await importSource("extensions/ampi-core/prompt-history.ts");
+  });
+  afterEach(() => {
+    release?.();
+    registry.__resetMmrCommandsForTests();
+  });
+
+  it("opens one picker for a quick second Ctrl+R, and the next one after it closes", async () => {
+    const reads = [];
+    release = seam.registerMmrPromptHistory({
+      read: () =>
+        new Promise((resolve) => {
+          reads.push(() => resolve([{ ts: "2026-10-18T10:00:00.000Z", text: "only prompt" }]));
+        }),
+    });
+    const open = [];
+    const t = setup({ hooks: { onPaletteOpen: (value) => open.push(value) } });
+    assert.equal(t.send("\x12"), true);
+    assert.equal(t.send("\x12"), true, "the second press is taken, while the first read is still running");
+    assert.equal(reads.length, 1, "only one read");
+    reads[0]();
+    await settle();
+    assert.equal(t.overlays.length, 1);
+    assert.deepEqual(open, [true], "the prompt box stays dimmed");
+
+    t.overlays[0].component.handleInput("\x1b");
+    await settle();
+    assert.deepEqual(open, [true, false]);
+    t.send("\x12");
+    reads[1]();
+    await settle();
+    assert.equal(t.overlays.length, 2, "a new picker opens once the first has closed");
+  });
+});

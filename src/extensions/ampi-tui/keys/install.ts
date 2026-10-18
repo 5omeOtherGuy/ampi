@@ -133,6 +133,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   /** The mode the dial last chose, and the dial's switches, one after another. */
   let dialMode: MmrModeKey | undefined;
   let dialSwitches: Promise<void> = Promise.resolve();
+  let promptHistoryOpen = false;
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -214,13 +215,22 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     void openMmrKeymapJson(current, getMmrCommands(), resolved).catch(() => {});
   }
 
-  /** Open the prompt history picker; the prompt picked replaces the prompt's text, unsent. */
+  /**
+   * Open the prompt history picker; the prompt picked replaces the prompt's
+   * text, unsent. Ignored while a picker is loading or open: the editor keeps
+   * focus until the first read finishes, so a quick second Ctrl+R lands here.
+   */
   function openPromptHistory(current: ExtensionContext, history: MmrPromptHistory): void {
+    if (promptHistoryOpen) return;
+    promptHistoryOpen = true;
     const report = (error: unknown) =>
       current.ui.notify(`Could not read the prompt history: ${error instanceof Error ? error.message : String(error)}`, "error");
     options.onPaletteOpen?.(true);
     void openMmrPromptHistory(current, history)
-      .finally(() => options.onPaletteOpen?.(false))
+      .finally(() => {
+        promptHistoryOpen = false;
+        options.onPaletteOpen?.(false);
+      })
       .then((text) => {
         if (text === undefined) return;
         current.ui.setEditorText(text);
