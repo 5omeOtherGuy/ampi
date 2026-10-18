@@ -1,0 +1,218 @@
+// `ampi app --worker`: one session for `ampi app`, in a process of its own.
+// ampi keeps per-process state on globalThis (mode state, the command
+// registry, the prompt queue), so one process never runs two ampi sessions;
+// `ampi app` starts one worker per session it serves. The worker runs the
+// session through Pi's SDK in RPC mode, and ampi-gui serves its web GUI on a
+// loopback port with the token `ampi app` chose.
+//
+// The protocol uses only the Node IPC channel, never arguments or
+// environment variables, which other processes and the session's own child
+// processes can read.
+//
+// parent → worker
+//   { type: "start", token, session: { path } | { cwd } }  open a saved session, or start one in cwd
+//   { type: "stop" }                                        dispose the session and exit 0
+// worker → parent
+//   { type: "ready", pid, port, sessionId, sessionPath }    the GUI listens on 127.0.0.1:<port>
+//   { type: "activity", state: "busy" | "idle" }            the agent started, or settled
+//   { type: "error", code, message, holder? }              then the worker exits
+//
+// Error codes: `held` (another live process has the file open; `holder` names its kind and pid; exit
+// 3, the file is not opened), `bad-start`, `missing`, `no-ampi`, `ampi-too-old`, `no-gui` and `failed`
+// (exit 1). The worker also stops when the channel closes.
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { findLiveOwner, liveRegistryDir } from "./live-registry.js";
+import { piAgentDir } from "./pi-compat.js";
+import { createAmpiSdkSession, locateSessionAmpi } from "./sdk-session.js";
+
+/**
+ * The global ampi-core reads the GUI host from (see
+ * `src/extensions/ampi-core/gui-host.ts`). ampi ships TypeScript that only
+ * Pi's loader can import, so the command writes the record directly.
+ */
+export const AMPI_GUI_HOST_GLOBAL_KEY = "__pi_ampi_gui_host_v1__";
+
+/** The first ampi release with the GUI host seam. */
+export const HOSTED_SESSIONS_MIN_AMPI_VERSION = "0.4.0";
+
+/** The seam's file inside the ampi package; an older ampi lacks it. */
+const GUI_HOST_SEAM = path.join("src", "extensions", "ampi-core", "gui-host.ts");
+
+/**
+ * Tell ampi's extensions in this process that it hosts the session for
+ * `ampi app`. Must run before the session is created.
+ *
+ * @param {{ token: string, ownerPid: number, ready: (info: { port: number }) => void }} host
+ */
+export function registerAmpiGuiHost({ token, ownerPid, ready }) {
+  /** @type {Record<string, unknown>} */ (globalThis)[AMPI_GUI_HOST_GLOBAL_KEY] = { role: "session", token, ownerPid, ready };
+}
+
+/**
+ * @typedef {object} WorkerChannel The IPC channel; `process` in a forked worker.
+ * @property {boolean} connected
+ * @property {(message: unknown, callback: (error: Error | null) => void) => unknown} send
+ * @property {(event: string, listener: (...args: any[]) => void) => unknown} on
+ * @property {(event: string, listener: (...args: any[]) => void) => unknown} off
+ *
+ * @typedef {object} AppWorkerOptions
+ * @property {WorkerChannel} channel
+ * @property {any} pi The `@earendil-works/pi-coding-agent` module.
+ * @property {typeof createAmpiSdkSession} [createSession]
+ * @property {typeof locateSessionAmpi} [locateAmpi]
+ * @property {string} [registryDir] The live registry; defaults to Pi's agent directory's.
+ * @property {number} [pid]
+ * @property {number} [ownerPid] The `ampi app` process; defaults to the parent.
+ * @property {(dir: string) => void} [chdir]
+ */
+
+/** @param {unknown} value @returns {value is Record<string, any>} */
+const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The target of a start message, or undefined when it is malformed.
+ *
+ * @param {Record<string, any>} message
+ * @returns {{ token: string, path?: string, cwd?: string } | undefined}
+ */
+function parseStart(message) {
+  const { token, session } = message;
+  if (typeof token !== "string" || token === "" || !isObject(session)) return undefined;
+  const hasPath = typeof session.path === "string" && session.path !== "";
+  const hasCwd = typeof session.cwd === "string" && session.cwd !== "";
+  if (hasPath === hasCwd) return undefined;
+  return hasPath ? { token, path: path.resolve(session.path) } : { token, cwd: path.resolve(session.cwd) };
+}
+
+/**
+ * Run the worker protocol until the session stops.
+ *
+ * @param {AppWorkerOptions} options
+ * @returns {Promise<number>} The exit code.
+ */
+export async function runAppWorker(options) {
+  const { channel, pi } = options;
+  const createSession = options.createSession ?? createAmpiSdkSession;
+  const locateAmpi = options.locateAmpi ?? locateSessionAmpi;
+  const registryDir = options.registryDir ?? liveRegistryDir(piAgentDir(pi));
+  const pid = options.pid ?? process.pid;
+  const ownerPid = options.ownerPid ?? process.ppid;
+  const chdir = options.chdir ?? ((/** @type {string} */ dir) => process.chdir(dir));
+
+  /** @type {(message: Record<string, any> | undefined) => void} */
+  let resolveStart = () => {};
+  /** @type {Promise<Record<string, any> | undefined>} */
+  const started = new Promise((resolve) => {
+    resolveStart = resolve;
+  });
+  let stopRequested = false;
+  /** @type {() => void} */
+  let resolveStop = () => {};
+  /** @type {Promise<void>} */
+  const stopped = new Promise((resolve) => {
+    resolveStop = resolve;
+  });
+  const stop = () => {
+    stopRequested = true;
+    resolveStart(undefined);
+    resolveStop();
+  };
+  /** @param {unknown} message */
+  const onMessage = (message) => {
+    if (!isObject(message)) return;
+    if (message.type === "start") resolveStart(message);
+    else if (message.type === "stop") stop();
+  };
+  channel.on("message", onMessage);
+  channel.on("disconnect", stop);
+
+  /** @param {Record<string, unknown>} message @returns {Promise<void>} */
+  const post = (message) =>
+    new Promise((resolve) => {
+      if (!channel.connected) return resolve();
+      try {
+        channel.send(message, () => resolve());
+      } catch {
+        resolve();
+      }
+    });
+  /** @param {string} code @param {string} message @param {Record<string, unknown>} [extra] */
+  const fail = async (code, message, extra = {}) => {
+    await post({ type: "error", code, message, ...extra });
+    return code === "held" ? 3 : 1;
+  };
+
+  /** @type {any} */
+  let runtime;
+  try {
+    const message = await started;
+    if (message === undefined) return 0;
+    const start = parseStart(message);
+    if (start === undefined) return await fail("bad-start", "The start message needs a token and either session.path or session.cwd.");
+
+    /** @type {any} */
+    let sessionManager;
+    if (start.path !== undefined) {
+      // Pi does not lock session files: never open one another live process writes.
+      const holder = findLiveOwner(start.path, { dir: registryDir, exceptPid: pid });
+      if (holder) {
+        return await fail("held", `Process ${holder.pid} (${holder.kind}) has this session open; continue it there.`, {
+          holder: { kind: holder.kind, pid: holder.pid },
+        });
+      }
+      if (!existsSync(start.path)) return await fail("missing", `No session file at ${start.path}.`);
+      sessionManager = pi.SessionManager.open(start.path);
+    } else {
+      sessionManager = pi.SessionManager.create(start.cwd);
+    }
+    /** @type {string} */
+    const cwd = sessionManager.getCwd();
+
+    const located = await locateAmpi(pi, cwd);
+    if (located.ampi === undefined) return await fail("no-ampi", "Cannot find the ampi package this session would load.");
+    if (!existsSync(path.join(located.ampi.root, GUI_HOST_SEAM))) {
+      return await fail(
+        "ampi-too-old",
+        `ampi app needs @skippermissions/ampi ${HOSTED_SESSIONS_MIN_AMPI_VERSION} or later; ${located.ampi.root} has ${located.ampi.version ?? "an unknown version"}.`,
+      );
+    }
+
+    /** @type {number | undefined} */
+    let port;
+    registerAmpiGuiHost({
+      token: start.token,
+      ownerPid,
+      ready: (info) => {
+        port = info.port;
+      },
+    });
+    // ampi's extensions read settings relative to the working directory.
+    chdir(cwd);
+    try {
+      runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: undefined, connectMcp: true, pi });
+    } catch (error) {
+      return await fail("failed", `Could not start the session: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (port === undefined) {
+      /** @type {string[]} */
+      const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);
+      return await fail("no-gui", ["ampi-gui did not start a server for this session.", ...errors].join(" "));
+    }
+    if (stopRequested) return 0;
+
+    const session = runtime.session;
+    const unsubscribe = session.subscribe((/** @type {any} */ event) => {
+      if (event.type === "agent_start") void post({ type: "activity", state: "busy" });
+      else if (event.type === "agent_settled") void post({ type: "activity", state: "idle" });
+    });
+    await post({ type: "ready", pid, port, sessionId: session.sessionId, sessionPath: session.sessionFile ?? null });
+    await stopped;
+    unsubscribe();
+    return 0;
+  } finally {
+    channel.off("message", onMessage);
+    channel.off("disconnect", stop);
+    if (runtime !== undefined) await runtime.dispose();
+  }
+}

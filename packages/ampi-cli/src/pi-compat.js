@@ -284,12 +284,13 @@ export function capturePiJsonOutput(convert) {
  * `defaultProjectTrust` is `"always"`. Pi asks first when the setting is
  * `"ask"`, which counts as not trusted here. An extension can also decide
  * trust through Pi's `project_trust` event; that needs the extensions loaded,
- * so it is not followed here.
+ * so it is not followed here. sdk-session.js hands it to sessions it creates.
  *
  * @param {any} pi
  * @param {string} cwd
+ * @returns {any} Pi's `SettingsManager`.
  */
-function piSettingsManager(pi, cwd) {
+export function piSettingsManager(pi, cwd) {
   const agentDir = pi.getAgentDir();
   /** @type {boolean | null} */
   const decision = new pi.ProjectTrustStore(agentDir).get(cwd);

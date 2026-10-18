@@ -15,6 +15,7 @@ import {
   loadThroughPi,
   piAgentDir,
   piExternalEditorCommand,
+  piSettingsManager,
   piSettingsPath,
   readPiSessionEntries,
   readPiSettings,
@@ -314,5 +315,20 @@ describe("Pi calls used by the config commands", () => {
 
     new pi.ProjectTrustStore(agentDir).set(other, false);
     assert.deepEqual(readPiSettings(pi, other).ampi, { keymap: { "thread.new": "ctrl+t" } });
+  });
+
+  it("hands SDK sessions a SettingsManager that carries the project trust it read", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    // The previous test stored "no" for this project.
+    const untrusted = path.join(dir, "other-project");
+    const trusted = path.join(dir, "trusted-project");
+    writeJson(path.join(trusted, ".pi", "settings.json"), { ampi: { keymap: { "thread.new": "alt+t" } } });
+    new pi.ProjectTrustStore(agentDir).set(trusted, true);
+    const kept = piSettingsManager(pi, untrusted);
+    assert.ok(kept instanceof pi.SettingsManager);
+    assert.equal(kept.isProjectTrusted(), false);
+    const read = piSettingsManager(pi, trusted);
+    assert.equal(read.isProjectTrusted(), true);
+    assert.deepEqual(read.getSettings().ampi, { keymap: { "thread.new": "alt+t" } });
   });
 });

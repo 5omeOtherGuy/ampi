@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
+import { getMmrGuiHost } from "../ampi-core/gui-host.js";
 import { readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
@@ -43,8 +44,9 @@ export function openMmrGuiUrl(url: string, env: NodeJS.ProcessEnv = process.env,
 
 export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
   return function ampiGuiExtension(pi: ExtensionAPI): void {
+    // A session `ampi app` hosts has a GUI whatever the settings say: the user started the app for it.
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrGuiSettings(process.cwd());
-    if (!settings.enabled) return;
+    if (!settings.enabled && getMmrGuiHost()?.role !== "session") return;
 
     const bridge = createMmrGuiBridge(pi);
     const sessions = createMmrGuiSessions({
@@ -66,16 +68,20 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
     const commands = createMmrGuiCommands(pi, bridge, sessions);
     const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     let server: MmrGuiServer | undefined;
+    let hostReady = false;
 
     function warn(ctx: ExtensionContext, what: string, error: unknown): void {
       ctx.ui.notify(`ampi-gui: ${what}: ${error instanceof Error ? error.message : String(error)}`, "warning");
     }
 
     pi.on("session_start", async (_event, ctx) => {
-      // Only an interactive terminal session gets a GUI. Print, JSON and RPC
-      // runs, subagent workers included, never open a port.
-      if (ctx.mode !== "tui" || server) return;
-      const token = overrides.createToken ? overrides.createToken() : randomBytes(32).toString("base64url");
+      // Only an interactive session gets a GUI: one in the terminal, or one
+      // `ampi app` hosts, which Pi runs in RPC mode. Other print, JSON and
+      // RPC runs, subagent workers included, never open a port.
+      const host = getMmrGuiHost();
+      const hosted = host?.role === "session" && ctx.mode === "rpc";
+      if ((ctx.mode !== "tui" && !hosted) || server) return;
+      const token = hosted ? host.token : overrides.createToken ? overrides.createToken() : randomBytes(32).toString("base64url");
       bridge.start(ctx);
       try {
         server = await startMmrGuiServer({ bridge, commands, sessions, token, clientDir: CLIENT_DIR });
@@ -98,7 +104,13 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       });
       // ampi-core writes this process's live registry entry; the GUI adds its port.
       setMmrLiveFields({ gui: { port: server.port, tokenHash: hashMmrGuiToken(token) } });
-      ctx.ui.notify(`Web GUI: ${url}`, "info");
+      if (!hosted) {
+        ctx.ui.notify(`Web GUI: ${url}`, "info");
+      } else if (!hostReady) {
+        // The host already holds the token; it builds the link itself.
+        hostReady = true;
+        host.ready({ port: server.port });
+      }
     });
 
     pi.on("session_shutdown", async () => {

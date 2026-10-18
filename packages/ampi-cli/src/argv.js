@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "config" | "pi" | "pi-command" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "config" | "pi" | "pi-command" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -18,7 +18,8 @@ import { parseArgs } from "node:util";
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
- *   ampi, run one of Pi's own commands, or fail.
+ *   ampi, run one of Pi's own commands, run a session for `ampi app` (`app-worker`, internal and
+ *   not in the help), or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
@@ -106,6 +107,8 @@ export function routeAmpiArgv(argv) {
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
   if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], options, threadArgs: args };
+  // Started only by `ampi app`, which talks to it over the IPC channel.
+  if (args.length === 2 && args[0] === "app" && args[1] === "--worker") return { command: "app-worker", piArgs: [], options };
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
     return { command: "config", piArgs: [], options, configArgs: args.slice(1) };

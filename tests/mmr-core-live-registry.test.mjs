@@ -418,8 +418,8 @@ describe("ampi-core live registry writer", () => {
   it("decides the kind in one place", async () => {
     const { resolveMmrLiveKind } = await load();
     const withFile = (mode) => createMockExtensionContext({ mode, sessionFile: "/sessions/a.jsonl" }).ctx;
-    assert.equal(resolveMmrLiveKind(withFile("tui")), "tui");
-    assert.equal(resolveMmrLiveKind(withFile("rpc")), "execute");
+    assert.deepEqual(resolveMmrLiveKind(withFile("tui")), { kind: "tui" });
+    assert.deepEqual(resolveMmrLiveKind(withFile("rpc")), { kind: "execute" });
     assert.equal(resolveMmrLiveKind(createMockExtensionContext({ mode: "tui" }).ctx), undefined);
   });
 });
