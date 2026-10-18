@@ -5,11 +5,12 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 ## Profile
 
 - Purpose: Pi Agent extension package (`@skippermissions/ampi` on npm) with locked modes, model routing, tools and workers.
-- Stage: released (repository standard 2026-10-17)
+- Stage: released (repository standard 2026-10-18)
 - Gate: `npm run gate` (CI job `gate`)
 - Landing: PR, squash-merged on a green gate; agents land: yes
 - Release: release-please PR; agents release: no
 - Outside issues and PRs: agents triage; outside PRs merge: owner approves
+- Sensitive paths: `src/extensions/ampi-github/config.ts`, `src/extensions/ampi-github/client.ts`, `src/extensions/ampi-web/config.ts`, `src/extensions/ampi-web/config-writer.ts` (credential handling); `src/extensions/ampi-web/url-policy.ts`, `src/extensions/ampi-history/redaction.ts` (outbound URL policy, redaction); `src/index.ts`, `package.json` (public API, `exports`, `pi.extensions`, `files`, install scripts); `.agents/`, `.githooks/`, `scripts/` (setup, hooks, gate); `.github/`, `release-please-config.json`, `.release-please-manifest.json`, `.npmignore` (CI, release, packaging); `AGENTS.md`, `CONTRIBUTING.md` (agent and contributor policy)
 - Deliberate deviations from the standard:
   - No live tests at all, not even opt-in: the suite is deterministic and never calls a provider or network API.
   - Public text (docs, comments, test names, fixtures, prompts, tool descriptions) is written in `ampi` terms and names no local-only paths, private notes or non-public provenance.
@@ -42,8 +43,8 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
    ```
    `npm run preflight` reports whether the primary checkout is behind `origin/main`.
 2. Branch `<type>/<slug>` (`<type>/<issue>-<slug>` with an issue). Commit subjects and the PR title follow Conventional Commits 1.0.
-3. Run `npm run gate` before pushing. The PR body says what changed, why, how it was verified, and `Fixes #n` when it resolves an issue.
-4. Changes to public interfaces, security-sensitive code, CI or release configuration get an independent review (another agent or the owner) before merge; record the verdict in the PR.
+3. Run `npm run gate` before pushing. The PR body follows `.github/pull_request_template.md`: the intent, the changed behavior, the repository constraints it touches, the evidence it works, whether a sensitive path changed, and `Fixes #n` when it resolves an issue.
+4. Changes to the profile's sensitive paths, and any other change to public interfaces, security-sensitive code, credential handling, install or setup, CI or release configuration, or agent policy files (including docs that change rules), get an independent review (another agent or the owner) before merge. The reviewer reads the diff, records the verdict on the PR against the reviewed head commit, and a later push needs a new review.
 5. Merge once the latest `gate` run on the head commit concluded `success` (skipped, cancelled or missing is not green): `gh pr merge <number> --squash --delete-branch --match-head-commit <sha>`. There is no ruleset yet, so do not use `--auto`.
 6. Afterwards: `npm run sync:primary` in the primary checkout, then `npm run cleanup:worktree -- ../ampi-<slug>`.
 
