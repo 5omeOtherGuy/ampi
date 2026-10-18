@@ -16,7 +16,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -98,6 +98,12 @@ const REPO_FILES = {
   "packages/x/handler.ts": "export const handler = 1;\n",
   "packages/y/old.ts": "export const old = 1;\n",
 };
+
+/** A repository whose only commit is its root commit, so `HEAD^!` has no parent to read. */
+function makeRootOnly() {
+  const root = makeGitRepo({ "a.txt": "a\n" });
+  return { kind: "git", root };
+}
 
 // The vendored check must exist on disk but stay untracked and ignored.
 function makeChecksRepo() {
@@ -238,6 +244,24 @@ describe("review check selection", () => {
     await assert.rejects(plan(root, { scope: "../elsewhere" }), /check_scope "\.\.\/elsewhere" is outside the repository/);
   });
 
+  it("check_scope compares real paths, so a cwd reached through a symlink still resolves inside the repository", async () => {
+    const root = makeChecksRepo();
+    write(root, "packages/x/handler.ts", "export const handler = 2;\n");
+    const linkParent = mkdtempSync(path.join(tmpdir(), "ampi-review-checks-link-"));
+    tempDirs.push(linkParent);
+    const link = path.join(linkParent, "repo");
+    symlinkSync(root, link, "dir");
+    assert.deepEqual(names(await plan(path.join(link, "packages"), { scope: "x" })), ["packages/x:input"]);
+    assert.deepEqual(names(await plan(link, { scope: "packages" })), ["packages/x:input"]);
+  });
+
+  it("check_scope accepts a directory whose name starts with two dots", async () => {
+    const root = makeChecksRepo();
+    write(root, "..config/.agents/checks/dots.md", "Dotted directory rule.\n");
+    write(root, "..config/settings.ts", "export const s = 1;\n");
+    assert.deepEqual(names(await plan(root, { scope: "..config" })), ["..config:dots"]);
+  });
+
   it("check_filter keeps the named checks, and an unknown name lists the available ones", async () => {
     const root = makeChecksRepo();
     write(root, "packages/x/handler.ts", "export const handler = 2;\n");
@@ -282,6 +306,16 @@ describe("changed-file resolution", () => {
     const files = ["docs/guide.md", "packages/x/handler.ts"];
     assert.deepEqual(resolveAmpiReviewChangedFiles(`${first}..HEAD`, repository, env), { kind: "revision", revision: `${first}..HEAD`, files });
     assert.deepEqual(resolveAmpiReviewChangedFiles("HEAD~1", repository, env), { kind: "revision", revision: "HEAD~1", files });
+    // Naming the commit itself with a clean tree reads that commit (`<rev>^!`), not the empty working-tree diff.
+    const second = git(root, "rev-parse", "HEAD").trim();
+    assert.deepEqual(resolveAmpiReviewChangedFiles("HEAD", repository, env), { kind: "revision", revision: "HEAD", files });
+    assert.deepEqual(resolveAmpiReviewChangedFiles(second, repository, env), { kind: "revision", revision: second, files });
+    // A dirty tree keeps the working-tree diff for a single revision.
+    write(root, "README.md", "# repo, edited\n");
+    assert.deepEqual(resolveAmpiReviewChangedFiles("HEAD", repository, env), { kind: "revision", revision: "HEAD", files: ["README.md"] });
+    // A revision that still yields no files is unknown, so every check runs rather than none.
+    assert.deepEqual(resolveAmpiReviewChangedFiles("HEAD..HEAD", repository, env), { kind: "unknown" });
+    assert.deepEqual(resolveAmpiReviewChangedFiles("HEAD", makeRootOnly(), env), { kind: "unknown" });
   });
 
   it("treats a description that is not a revision as unknown, so every check runs", async () => {
@@ -481,6 +515,12 @@ const EXPECTED_CHECKS_SECTION = [
   "",
   "### b-docs (repository root): no issues",
   "",
+  "Docs are fine.",
+  "",
+  "Findings",
+  "",
+  "None.",
+  "",
   "### c-broken (repository root): failed: worker exited with code 1: boom",
   "",
   "### style (repository root): 2 findings",
@@ -500,7 +540,11 @@ const EXPECTED_CHECKS_SECTION = [
   "",
   "### logs (packages/x): no issues",
   "",
+  "Clean.",
+  "",
   "### perf (packages/y): no issues",
+  "",
+  "Clean.",
   "",
   "Warnings:",
   '- .agents/checks/c-broken.md: the front matter line "not a pair" is not "key: value"; the check runs as "c-broken".',
@@ -635,6 +679,23 @@ describe("reviewer with review checks", () => {
     assert.equal(result.details.mainReview, undefined);
   });
 
+  it("keeps a check's whole report when its findings use a shape the counter does not recognize", async () => {
+    const { env } = fakeGitRepo({ "src/api/.agents/checks/handlers.md": "Handlers validate input.\n" }, [" M src/api/h.ts"]);
+    const report = [
+      "Two handlers trust their input.",
+      "",
+      "- `src/api/h.ts:42` — high, bug",
+      "**File:** `src/api/h.ts:40-44`",
+      "#### 1. `src/api/h.ts:40-44`",
+      "| src/api/h.ts:40-44 | high |",
+    ].join("\n");
+    const { runner } = immediateRunner((options) => workerResult(runName(options) === "handlers" ? report : "Main: clean."));
+    const tool = await reviewerTool({ runner, reviewCheckEnv: env });
+    const result = await tool.execute("c1", { diff_description: "uncommitted changes" }, undefined, undefined, { cwd: "/repo" });
+    assert.equal(result.content[0].text, `Main: clean.\n\n## Checks\n\n### handlers (src/api): no issues\n\n${report}`);
+    assert.deepEqual(result.details.checks.map((check) => [check.name, check.status, check.findings]), [["handlers", "no-issues", 0]]);
+  });
+
   it("fails the call only when every run failed", async () => {
     const { env } = fakeGitRepo({ ".agents/checks/one.md": "One.\n", ".agents/checks/two.md": "Two.\n" }, [" M src/a.ts"]);
     const failing = () => workerResult("", { exitCode: 1, stderr: "boom", stopReason: "error" });
@@ -712,7 +773,7 @@ describe("reviewer with review checks", () => {
     assert.deepEqual(projected.details.checks, EXPECTED_CHECK_DETAILS);
   });
 
-  it("reports progress from the main review with the checks still running", async () => {
+  it("reports progress from the main review, and again when a check settles", async () => {
     const { env } = fakeGitRepo({ ".agents/checks/one.md": "One.\n" }, [" M src/a.ts"]);
     const manual = manualRunner();
     const tool = await reviewerTool({ runner: manual.runner, reviewCheckEnv: env });
@@ -727,9 +788,17 @@ describe("reviewer with review checks", () => {
     assert.deepEqual(updates.at(-1).details.checks, [
       { name: "one", scope: ".", file: ".agents/checks/one.md", status: "running", findings: 0, changedFiles: ["src/a.ts"] },
     ]);
-    main.settle(resultFor(main.options));
+    const before = updates.length;
     check.settle(workerResult("Clean."));
+    main.settle(resultFor(main.options));
     await pending;
+    // The run re-sent the main review's last progress once the check settled, before it finished.
+    const refreshed = updates.slice(before).find((update) => update.details.checks?.[0]?.status === "no-issues");
+    assert.ok(refreshed, "a progress update carries the settled check");
+    assert.equal(refreshed.content[0].text, "Reading the diff.");
+    assert.deepEqual(refreshed.details.checks, [
+      { name: "one", scope: ".", file: ".agents/checks/one.md", status: "no-issues", findings: 0, changedFiles: ["src/a.ts"] },
+    ]);
   });
 });
 
@@ -742,7 +811,7 @@ describe("review checks in a Jujutsu repository", () => {
         const line = [command, ...args].join(" ");
         commands.push(`${line} @ ${cwd}`);
         if (line === "jj root") return { stdout: "/jjrepo\n", exitCode: 0 };
-        if (line === "jj file list") return { stdout: ".agents/checks/naming.md\nsrc/a.ts\nlib/b.ts\n", exitCode: 0 };
+        if (line === 'jj file list glob:"**/.agents/checks/*.md"') return { stdout: ".agents/checks/naming.md\n", exitCode: 0 };
         if (line === "jj diff --name-only") return { stdout: "src/a.ts\n", exitCode: 0 };
         return { stdout: "", exitCode: 1 };
       },
@@ -753,7 +822,7 @@ describe("review checks in a Jujutsu repository", () => {
     return { env, commands };
   }
 
-  it("finds the root with jj root, checks with jj file list and changes with jj diff --name-only", async () => {
+  it("finds the root with jj root, checks with a jj file list fileset and changes with jj diff --name-only", async () => {
     const { planAmpiReviewChecks } = await importSource(CHECKS_MODULE);
     const { env, commands } = fakeJjRepo();
     const result = planAmpiReviewChecks({ cwd: "/jjrepo/src", diffDescription: "uncommitted changes", env });
@@ -763,7 +832,7 @@ describe("review checks in a Jujutsu repository", () => {
       result.selected.map((selection) => [selection.check.name, selection.changedFiles]),
       [["naming", ["src/a.ts"]]],
     );
-    assert.deepEqual(commands, ["jj root @ /jjrepo/src", "jj file list @ /jjrepo", "jj diff --name-only @ /jjrepo"]);
+    assert.deepEqual(commands, ["jj root @ /jjrepo/src", 'jj file list glob:"**/.agents/checks/*.md" @ /jjrepo', "jj diff --name-only @ /jjrepo"]);
   });
 
   it("tells the check child to read the diff with jj diff --git", async () => {

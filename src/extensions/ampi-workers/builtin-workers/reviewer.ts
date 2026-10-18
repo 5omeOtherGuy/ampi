@@ -1,4 +1,5 @@
 import type {
+  AgentToolResult,
   ExtensionAPI,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -579,8 +580,10 @@ function checkOutcomeLabel(details: ReviewerCheckDetails): string {
 
 /**
  * The `Checks` section after the main report: a heading per check with its
- * scope and outcome, the check's report below a check with findings, then
- * the front-matter warnings.
+ * scope and outcome, the check's report below it whenever the check
+ * answered, then the front-matter warnings. The findings count only labels
+ * the heading: a report whose findings use a shape the counter does not
+ * recognize still reaches the parent in full.
  */
 function buildChecksSection(state: ReviewerRunState): string {
   const parts = ["## Checks"];
@@ -588,7 +591,8 @@ function buildChecksSection(state: ReviewerRunState): string {
     const details = checkRunDetails(run, true);
     const scope = details.scope === "." ? "repository root" : details.scope;
     parts.push(`### ${details.name} (${scope}): ${checkOutcomeLabel(details)}`);
-    if (details.status === "findings" && run.result) parts.push(reviewerReportText(run.result));
+    const report = details.status !== "failed" && run.result ? reviewerReportText(run.result) : "";
+    if (report.length > 0) parts.push(report);
   }
   const warnings = state.checks.flatMap((run) => (run.selection.check.warning ? [run.selection.check.warning] : []));
   if (warnings.length > 0) parts.push(`Warnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`);
@@ -798,7 +802,8 @@ function reviewerToolBlueprint(deps: ReviewerToolDeps): {
  * prompt, its own task text) and replaces the run thunk with one that runs
  * them all, at most {@link REVIEWER_MAX_CONCURRENT_RUNS} at once, on the
  * call's abort signal. Progress comes from the main review, or from the
- * first check under `checks_only`.
+ * first check under `checks_only`; when a check starts or settles, the last
+ * progress update is sent again with the checks' new states.
  */
 function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPreparer<ReviewerDetails> {
   const { spec, factoryOptions } = reviewerToolBlueprint(deps);
@@ -845,12 +850,29 @@ function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPrepare
     };
     prepared.run = async ({ signal, onProgress }) => {
       const limit = createRunLimiter(REVIEWER_MAX_CONCURRENT_RUNS);
+      // The lead run's latest shaped progress (the one with content and
+      // details), re-sent with fresh check states when a check changes.
+      let lastShaped: AgentToolResult<ReviewerDetails> | undefined;
+      const leadProgress: typeof onProgress = (update) => {
+        if (isShapedProgress(update)) lastShaped = update as AgentToolResult<ReviewerDetails>;
+        onProgress(update);
+      };
+      const refreshChecks = (): void => {
+        if (!lastShaped) return;
+        const refreshed: AgentToolResult<ReviewerDetails> = {
+          ...lastShaped,
+          details: { ...lastShaped.details, checks: runState.checks.map((run) => checkRunDetails(run, false)) },
+        };
+        lastShaped = refreshed;
+        onProgress(refreshed as Parameters<typeof onProgress>[0]);
+        opts.onUpdate?.(refreshed);
+      };
       const cancelled = (): MmrWorkerResult => syntheticAbortedWorkerResult(prepared.displayPrompt, cwd);
       const jobs: Promise<void>[] = [];
       if (!runState.checksOnly) {
         jobs.push(
           limit(async () => {
-            const result = signal.aborted ? cancelled() : await mainRun({ signal, onProgress });
+            const result = signal.aborted ? cancelled() : await mainRun({ signal, onProgress: leadProgress });
             runState.mainResult = result as MmrWorkerResult;
           }),
         );
@@ -863,11 +885,13 @@ function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPrepare
               run.result = child ? cancelled() : buildSpawnFailure("the check run could not be prepared", cwd);
             } else {
               run.state = "running";
+              refreshChecks();
               syncBoardRef(child);
               const lead = runState.checksOnly && index === 0;
-              run.result = (await child.run({ signal, onProgress: lead ? onProgress : () => {} })) as MmrWorkerResult;
+              run.result = (await child.run({ signal, onProgress: lead ? leadProgress : () => {} })) as MmrWorkerResult;
             }
             run.state = "settled";
+            refreshChecks();
           }),
         );
       });
@@ -876,6 +900,11 @@ function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPrepare
     };
     return prep;
   };
+}
+
+function isShapedProgress(update: unknown): boolean {
+  return typeof update === "object" && update !== null && Array.isArray((update as { content?: unknown }).content)
+    && "details" in update;
 }
 
 function buildSpawnFailure(reason: string, cwd: string): MmrWorkerResult {

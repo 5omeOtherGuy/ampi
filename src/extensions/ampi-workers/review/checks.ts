@@ -21,7 +21,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 
 /** Result of one synchronous command. `exitCode` is non-zero (or -1) when the command could not run. */
@@ -41,6 +41,8 @@ export interface AmpiReviewCheckEnv {
   isDirectory(absolutePath: string): boolean;
   /** Entry names of a directory, or `[]` when it cannot be read. */
   listDirectory(absolutePath: string): readonly string[];
+  /** Canonical path with symlinks resolved, or `undefined` when it cannot be resolved. Optional: without it paths compare as given. */
+  realpath?(absolutePath: string): string | undefined;
 }
 
 /** Commands get this long before they count as failed; discovery never blocks a review for longer. */
@@ -84,6 +86,17 @@ export function createAmpiReviewCheckEnv(): AmpiReviewCheckEnv {
         return readdirSync(absolutePath);
       } catch {
         return [];
+      }
+    },
+    realpath(absolutePath) {
+      try {
+        return realpathSync.native(absolutePath);
+      } catch {
+        try {
+          return realpathSync(absolutePath);
+        } catch {
+          return undefined;
+        }
       }
     },
   };
@@ -267,8 +280,9 @@ function toPosix(relativePath: string): string {
 /**
  * Candidate check paths relative to the root. Git lists the tracked files
  * plus the untracked files that are not ignored, filtered by a pathspec so a
- * large repository is never listed in full; Jujutsu lists its working-copy
- * files (it tracks new files itself and skips ignored ones). Without version
+ * large repository is never listed in full; Jujutsu lists the working-copy
+ * files matching the same glob as a fileset (it tracks new files itself and
+ * skips ignored ones). Without version
  * control only `<cwd>/.agents/checks/*.md` is read: there is no ignore list
  * to keep dependency and build folders out of a disk walk.
  */
@@ -282,7 +296,7 @@ function listCheckCandidates(repository: AmpiReviewRepository, env: AmpiReviewCh
     return listed.exitCode === 0 ? splitNul(listed.stdout) : [];
   }
   if (repository.kind === "jj") {
-    const listed = env.runCommand("jj", ["file", "list"], repository.root);
+    const listed = env.runCommand("jj", ["file", "list", 'glob:"**/.agents/checks/*.md"'], repository.root);
     return listed.exitCode === 0 ? splitLines(listed.stdout).map(toPosix) : [];
   }
   const dir = path.join(repository.root, ".agents", "checks");
@@ -402,8 +416,12 @@ function revisionCandidate(description: string): string | undefined {
  *  - empty or an uncommitted phrase: `git status --porcelain=v1 -z
  *    --untracked-files=all` (or `jj diff --name-only` in Jujutsu);
  *  - a single token git accepts (`A..B`, `A...B`, `HEAD~1`):
- *    `git diff --name-only <it>`; a failing command means unknown, not an
- *    error;
+ *    `git diff --name-only <it>`. A single revision diffs against the
+ *    working tree, so when that is empty (a description that names the
+ *    commit to review, such as `HEAD` with a clean tree) the commit itself is
+ *    read with `<rev>^!`. A failing command means unknown, not an error, and
+ *    so does a revision that still yields no files: every check then runs,
+ *    told its scope, rather than none;
  *  - anything else, or no version control: unknown.
  */
 export function resolveAmpiReviewChangedFiles(
@@ -424,13 +442,19 @@ export function resolveAmpiReviewChangedFiles(
   }
   const revision = repository.kind === "git" ? revisionCandidate(description) : undefined;
   if (revision === undefined) return { kind: "unknown" };
-  const diff = env.runCommand(
-    "git",
-    ["diff", "--name-only", "-z", "--no-renames", "--end-of-options", revision, "--"],
-    repository.root,
-  );
-  if (diff.exitCode !== 0) return { kind: "unknown" };
-  return { kind: "revision", revision, files: uniqueSorted(splitNul(diff.stdout)) };
+  const namesOf = (spec: string): string[] | undefined => {
+    const diff = env.runCommand(
+      "git",
+      ["diff", "--name-only", "-z", "--no-renames", "--end-of-options", spec, "--"],
+      repository.root,
+    );
+    return diff.exitCode === 0 ? uniqueSorted(splitNul(diff.stdout)) : undefined;
+  };
+  let files = namesOf(revision);
+  if (files === undefined) return { kind: "unknown" };
+  if (files.length === 0 && !revision.includes("..")) files = namesOf(`${revision}^!`) ?? [];
+  if (files.length === 0) return { kind: "unknown" };
+  return { kind: "revision", revision, files };
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +483,8 @@ export class AmpiReviewCheckSelectionError extends Error {
 }
 
 export interface SelectAmpiReviewChecksInput {
+  /** Resolves symlinks so `cwd` and the repository root compare as the same tree; see {@link AmpiReviewCheckEnv.realpath}. */
+  realpath?: (absolutePath: string) => string | undefined;
   checks: readonly AmpiReviewCheck[];
   repository: AmpiReviewRepository;
   changes: AmpiReviewChangedFiles;
@@ -498,8 +524,13 @@ export function selectAmpiReviewChecks(input: SelectAmpiReviewChecksInput): Ampi
 
   const scopeInput = input.scope?.trim();
   if (scopeInput) {
-    const relative = toPosix(path.relative(input.repository.root, path.resolve(input.cwd, scopeInput)));
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    // git reports the root with symlinks resolved, while cwd may run through
+    // one (a symlinked temporary directory), so both sides are canonical.
+    const real = (target: string): string => input.realpath?.(target) ?? target;
+    const root = real(path.resolve(input.repository.root));
+    const target = real(path.resolve(real(path.resolve(input.cwd)), scopeInput));
+    const relative = toPosix(path.relative(root, target));
+    if (relative === ".." || relative.startsWith("../") || path.isAbsolute(relative)) {
       throw new AmpiReviewCheckSelectionError(
         `reviewer: check_scope "${scopeInput}" is outside the repository (${input.repository.root}).`,
       );
@@ -555,6 +586,7 @@ export function planAmpiReviewChecks(input: PlanAmpiReviewChecksInput): AmpiRevi
     repository,
     changes,
     cwd: input.cwd,
+    ...(env.realpath ? { realpath: (target: string) => env.realpath?.(target) } : {}),
     ...(input.scope !== undefined ? { scope: input.scope } : {}),
     ...(input.filter !== undefined ? { filter: input.filter } : {}),
   });

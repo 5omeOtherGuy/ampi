@@ -200,7 +200,7 @@ const BUILTIN_BACKGROUND_AGENTS: ReadonlyMap<string, MmrBackgroundAgentDescripto
         toolName: REVIEWER_TOOL_NAME,
         exposure: ["tool", "background"],
         contractPreset: "degrading-advisory",
-        paramsHint: "{diff_description, files?, instructions?}",
+        paramsHint: "{diff_description, files?, instructions?, checks_only?, check_filter?, check_scope?}",
         promptParamKey: "diff_description",
         start: {
           parametersSchema: REVIEWER_PARAMETERS_SCHEMA,
