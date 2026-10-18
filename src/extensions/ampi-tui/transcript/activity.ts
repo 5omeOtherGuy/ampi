@@ -699,17 +699,21 @@ interface Verbs {
 /** Fixed verbs for ampi's own tools that read best as a phrase of their own. */
 const NAMED_TOOLS: Record<string, Verbs & { object?: string }> = {
   web_search: { kind: "web-search", present: "Searching the web", past: "Searched the web" },
-  finder: { kind: "subagent", present: "Searching codebase", past: "Searched codebase" },
-  oracle: { kind: "subagent", present: "Consulting", past: "Consulted", object: "oracle" },
-  librarian: { kind: "subagent", present: "Researching", past: "Researched", object: "with librarian" },
-  reviewer: { kind: "subagent", present: "Reviewing", past: "Reviewed", object: "changes" },
-  Task: { kind: "subagent", present: "Running", past: "Ran", object: "subagent" },
-  start_task: { kind: "subagent", present: "Starting", past: "Started", object: "background task" },
-  task_poll: { kind: "tool", present: "Checking on", past: "Checked on", object: "background tasks" },
-  task_wait: { kind: "tool", present: "Waiting for", past: "Waited for", object: "background tasks" },
-  task_cancel: { kind: "tool", present: "Cancelling", past: "Cancelled", object: "background task" },
   task_list: { kind: "tool", present: "Updating", past: "Updated", object: "task list" },
 };
+
+/**
+ * ampi-workers' tools: its subagents, custom Markdown subagents (`sa__<name>`)
+ * and background task tools. They draw their own rows, because a worker's
+ * outcome is in its result details, which only its own renderer reads (see
+ * `tool-renderers.ts`); here they are only named so a run of calls never
+ * folds one into a group.
+ */
+const WORKER_TOOLS = new Set(["finder", "oracle", "librarian", "reviewer", "Task", "start_task", "task_poll", "task_wait", "task_cancel"]);
+
+function isWorkerTool(toolName: string): boolean {
+  return WORKER_TOOLS.has(toolName) || toolName.startsWith("sa__");
+}
 
 function shellActivity(args: Record<string, unknown>, options: ClassifyOptions): Activity {
   const raw = text(args.command) ?? "";
@@ -887,7 +891,7 @@ export function classifyToolCall(toolName: string, rawArgs: unknown, options: Cl
   const mcp = /^mcp__(.+?)__(.+)$/.exec(toolName);
   const detail = genericDetail(args);
   return {
-    kind: "tool",
+    kind: isWorkerTool(toolName) ? "subagent" : "tool",
     toolName,
     present: "Running",
     past: "Ran",

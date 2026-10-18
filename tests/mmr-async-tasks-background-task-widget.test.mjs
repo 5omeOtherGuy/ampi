@@ -170,11 +170,10 @@ describe("background-task widget", () => {
     const widget = last.value(undefined, theme);
     const text = widget.render(80).join("\n");
     assert.doesNotMatch(text, /Background agents/, "background widget must render rows directly without a header");
-    assert.match(text, /finder/);
-    assert.match(text, /Search the repo/);
-    assert.match(text, /Task/);
+    assert.match(text, /Searching codebase · Search the repo/);
+    assert.match(text, /Running subagent · Slow build/);
     assert.match(text, /\[stalled\]/);
-    assert.doesNotMatch(text, /oracle/, "finished agents drop off the running board");
+    assert.doesNotMatch(text, /oracle|Review design/, "finished agents drop off the running board");
     assert.doesNotMatch(text, /task_1/, "raw task ids must not lead the widget UI");
   });
 

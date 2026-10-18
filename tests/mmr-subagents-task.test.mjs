@@ -566,9 +566,7 @@ describe("Task tool", () => {
       fakeTheme,
       { args: { prompt: "Run tests", description: "Run tests" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(collapsed, /running\.\.\./i);
-    assert.doesNotMatch(collapsed, /[▸▾◐●⚠]/);
-    assert.match(collapsed, /Ctrl\+O/i);
+    assert.match(collapsed, /^ ⠋ Running subagent · Run tests$/, "a running worker is one line with a spinner");
     assert.doesNotMatch(collapsed, /bash/);
     assert.doesNotMatch(collapsed, /npm test/);
 
@@ -578,10 +576,8 @@ describe("Task tool", () => {
       fakeTheme,
       { args: { prompt: "Run tests", description: "Run tests" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(expanded, /Task/);
-    assert.match(expanded, /bash/);
-    assert.match(expanded, /running\.\.\./);
-    assert.match(expanded, /npm test/);
+    assert.match(expanded, /Running subagent · Run tests/);
+    assert.match(expanded, /⠋ bash npm test/, "the running child tool shows in the trail");
   });
 
   it("surfaces worker activation failures without treating empty output as success", async () => {

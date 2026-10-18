@@ -93,8 +93,8 @@ and `worker-usage-format.ts`. Implementation lives in themed subdirectories:
   `reviewer`, and `Task` tools.
 - `background/` — async-task registry, tools, schemas, formatting,
   projection, delivery, and dispatch.
-- `rendering/` — progress cards, fleet dashboard, worker run views,
-  and trail rendering.
+- `rendering/` — one-line worker rows and their trail, the inline
+  background cards, the fleet dashboard, and worker run views.
 
 The subagent framework *contracts and policy spine* stay in `ampi-core`
 (profiles, resolver, activation, tool policy, CLI-flag and env parsing,
@@ -186,7 +186,35 @@ All spawned workers emit:
 - stderr/spawn metadata, `spawnError`, `subagentActivationError`,
 - status / no-agent-start diagnostics, and the worker's effective `workerTools`.
 
-The TUI renderer prefers a producing tool's known `details.status` when present, renders `success` as completed, other known statuses as failed, and otherwise falls back to raw exit/signal heuristics. Collapsed rows use shared `running...` / `completed` labels; expanded rows render native-style transcript/tool blocks plus a worker footer.
+The renderer prefers a producing tool's known `details.status` when present, renders `success` as finished, an aborted run as cancelled, other known statuses as failed, and otherwise falls back to raw exit/signal heuristics.
+
+### Transcript rows
+
+Every worker call is one Amp-compatible line in the transcript: a status glyph, a phrase that says what the worker does, and what it was asked.
+
+```text
+ ⠋ Consulting oracle · Review the retry plan
+ ✓ Searched codebase · where are retries configured
+ ✗ Subagent (read-write) finished · Fix the lint errors
+ ⊘ Researched with librarian · How does upstream cancel requests?
+```
+
+| Worker | While it runs | Once it finished | After ` · ` |
+| --- | --- | --- | --- |
+| `finder` | `Searching codebase` | `Searched codebase` | `query` |
+| `oracle` | `Consulting oracle` | `Consulted oracle` | `task` |
+| `librarian` | `Researching with librarian` | `Researched with librarian` | `query` |
+| `reviewer` | `Reviewing changes` | `Reviewed changes` | `diff_description` |
+| `Task` | `Running subagent (<profile>)` | `Subagent (<profile>) finished` | `description` |
+| `sa__<name>` | `Running subagent (<name>)` | `Subagent (<name>) finished` | `task` |
+
+- Glyphs: a spinner while the worker runs, `✓` done, `✗` failed, `⊘` cancelled. `(<profile>)` appears when a `Task` call sets `capabilityProfile`. A multi-line request shows its first line and ` …`.
+- Expanding tool output (Pi's Ctrl+O, or Alt+T with `ampi-tui`) draws, indented under the row: a failure's diagnostic in red (a provider note on a run that still answered in yellow), the full request when the row shows only part of it, the worker's latest 8 trail events in dim text (child tool calls with their glyph and what they acted on, the worker's own text, shell commands), with `… N earlier events` above them, a fallback notice, and, once the worker finished, its answer as Markdown, cut after 20 lines with `… N more lines`, and a dim usage line (turns, tokens, context use, model).
+- The worker's prompt echo and an answer repeated as the last trail event are left out; thinking stays hidden.
+- Rows use theme colours for text only, never a background.
+- With `ampi-tui` on, these renderers still draw the rows, collapsed and expanded, so they look the same either way; `ampi-tui` never folds a worker call into a group of other tool calls.
+- A polled background task that finished (`task_poll`, `task_wait`, `task_cancel` with a `task_id`) draws the same row, expandable the same way. A background start (`background: true` or `start_task`), a group poll and a still-running poll draw nothing while the run is in flight, because the fleet dashboard shows it live, then a static row (or a group header with a row per member) once it settled. A `task_poll` without an id draws the board: active, stalled and finished rows.
+- The completion notice of a background task is a row too: `✓ Background task finished · <description>`, with the outcome and the `task_poll` call that reads its result below it.
 
 ### Runner
 
@@ -249,7 +277,7 @@ Delivery state is tracked per task so the two paths cannot both fire for the sam
 
 #### Fleet dashboard
 
-A pinned `aboveEditor` widget renders the current board — running, finished, and failed tasks with their groups — and updates as the registry changes, giving an always-current view without polling. Public snapshots exposed to the dashboard and to `task_poll` are produced by `toPublicAsyncTaskSnapshot`.
+A pinned `aboveEditor` widget renders the current board — running, finished, and failed tasks with their groups — and updates as the registry changes, giving an always-current view without polling. Its rows use the transcript rows' phrases and glyphs, followed by the elapsed time, model and progress (`⠋ Searching codebase · auth flow entry points · 12s · gpt-5.4-mini · 3 turns`). Public snapshots exposed to the dashboard and to `task_poll` are produced by `toPublicAsyncTaskSnapshot`.
 
 ### Background diagnostics
 

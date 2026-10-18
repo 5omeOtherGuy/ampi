@@ -176,7 +176,7 @@ Layout (top level holds the extension entry, ownership, and compatibility surfac
 - `profiles/` — `prompts.ts`, the built-in worker prompt builders.
 - `builtin-workers/` — the concrete `finder`, `oracle`, `librarian`, `reviewer`, and `Task` worker tools (finder/librarian/reviewer/Task accept `background`/`group`/`notify`).
 - `background/` — the background task surface: `async-task-tools.ts` (background start path plus `task_poll`, `task_wait`, `task_cancel`), `async-task-registry.ts` (in-memory, session-scoped registry of worker lifecycles and concurrency caps), `async-task-delivery.ts` (at-most-once completion notices and idle-wake pushes), schemas, formatting, projection, and dispatch.
-- `rendering/` — inline worker cards and the pinned `aboveEditor` fleet dashboard (`ampi-background-tasks`) in `progress-rendering.ts` over the `background-task-view.ts` vocabulary, plus worker run views/envelopes and trail rendering.
+- `rendering/` — one-line worker rows (`worker-row.ts` holds their phrases and glyphs, `worker-row-lines.ts` draws a row with its trail, answer and usage), the inline background cards and the pinned `aboveEditor` fleet dashboard (`ampi-background-tasks`) in `progress-rendering.ts` over the `background-task-view.ts` row vocabulary, plus worker run views and envelopes.
 - `README.md`, `ROADMAP.md` — behavior, public API, and milestones.
 
 ### `src/extensions/ampi-custom-subagents/`

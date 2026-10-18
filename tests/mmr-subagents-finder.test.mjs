@@ -551,9 +551,7 @@ describe("finder execute() seam", () => {
       fakeTheme,
       { args: { query: "find" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(collapsed, /running\.\.\./i);
-    assert.doesNotMatch(collapsed, /[▸▾◐●⚠]/);
-    assert.match(collapsed, /Ctrl\+O/i);
+    assert.match(collapsed, /^ ⠋ Searching codebase · find$/, "a running worker is one line with a spinner");
     assert.doesNotMatch(collapsed, /grep/);
     assert.doesNotMatch(collapsed, /auth/);
 
@@ -563,10 +561,8 @@ describe("finder execute() seam", () => {
       fakeTheme,
       { args: { query: "find" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(expanded, /finder/i);
-    assert.match(expanded, /grep/);
-    assert.match(expanded, /running\.\.\./);
-    assert.match(expanded, /auth/);
+    assert.match(expanded, /Searching codebase · find/);
+    assert.match(expanded, /⠋ grep auth src/, "the running child tool shows in the trail");
   });
 
   it("returns the worker's truncated final output as visible content and exposes runner metadata in details", async () => {
@@ -608,16 +604,15 @@ describe("finder execute() seam", () => {
 
     const fakeTheme = {
       fg(color, text) { return `[${color}]${text}`; },
-      bg(_color, text) { return text; },
       bold(text) { return text; },
     };
     const rendered = tool.renderResult(
       result,
-      { expanded: false, isPartial: false },
+      { expanded: true, isPartial: false },
       fakeTheme,
       { args: { query: "verify settings" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(rendered, /completed/i);
+    assert.match(rendered, /\[success\]✓ \[toolTitle\]Searched codebase/);
     assert.doesNotMatch(rendered, /\[error\]/);
     assert.match(rendered, /\[warning\]Antigravity request failed with HTTP 429/);
   });

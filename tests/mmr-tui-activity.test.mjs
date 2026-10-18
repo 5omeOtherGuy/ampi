@@ -227,16 +227,21 @@ describe("ampi-tui activity: tool calls", () => {
     const title = (name, args) => titleText(mod, mod.classifyToolCall(name, args, options));
     assert.equal(title("web_search", { objective: "pi tool renderers" }), "Searched the web · pi tool renderers");
     assert.equal(title("read_web_page", { url: "https://example.com/docs" }), "Read https://example.com/docs");
-    assert.equal(title("finder", { query: "where are modes resolved" }), "Searched codebase · where are modes resolved");
-    assert.equal(title("oracle", { task: "Review the plan\nin detail" }), "Consulted oracle · Review the plan …");
-    assert.equal(title("Task", { prompt: "long prompt", description: "Fix lint" }), "Ran subagent · Fix lint");
     assert.equal(title("task_list", { tasks: [{}, {}, {}] }), "Updated task list · 3 items");
-    assert.equal(title("task_wait", { task_id: "task_ab12" }), "Waited for background tasks · task_ab12");
     const mcp = mod.classifyToolCall("mcp__docs__search", { query: "tokens", limit: 5 }, options);
     assert.equal(mcp.server, "docs");
     assert.equal(titleText(mod, mcp), "Ran docs/search · tokens");
     assert.equal(title("frobnicate", { level: 3 }), "Ran frobnicate");
     assert.equal(mod.classifyToolCall("frobnicate", {}, options).kind, "tool");
+  });
+
+  it("marks ampi-workers' tools and custom subagents as subagents, which draw their own rows", async () => {
+    const mod = await load();
+    for (const name of ["finder", "oracle", "librarian", "reviewer", "Task", "start_task", "task_poll", "task_wait", "task_cancel", "sa__security_audit"]) {
+      assert.equal(mod.classifyToolCall(name, {}, options).kind, "subagent", name);
+    }
+    assert.equal(mod.classifyToolCall("task_list", {}, options).kind, "tool");
+    assert.equal(mod.classifyToolCall("subagent_report", {}, options).kind, "tool");
   });
 });
 

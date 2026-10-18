@@ -51,6 +51,15 @@ Use reviewer to review all uncommitted changes.
 Use librarian to explain how owner/repo implements request cancellation.
 ```
 
+Each worker call shows as one line in the transcript; expand tool output (Ctrl+O, or Alt+T with `ampi-tui`) to see its latest steps, its answer and its token use:
+
+```text
+ ⠋ Searching codebase · where mode activation applies tool allowlists
+ ✓ Consulted oracle · Review the fallback design and list risks
+ ✗ Subagent finished · Update the focused docs file
+ ⊘ Researched with librarian · how owner/repo implements request cancellation
+```
+
 ## Patch
 
 Owned by `ampi-patch` (`mmr-patch` runtime id).

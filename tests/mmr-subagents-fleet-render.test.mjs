@@ -104,7 +104,8 @@ describe("fleet inline card", () => {
       "start_task", fleetResult("s1"), { expanded: false, isPartial: false }, fakeTheme, makeContext(), extras,
     ));
     assert.match(text, /● completed · 2\/2/);
-    assert.match(text, /✓ finder find routes/);
+    assert.match(text, /✓ Searched codebase · find routes/);
+    assert.match(text, /✓ Subagent finished · inspect handlers/);
     assert.doesNotMatch(text, /Launching them now/);
   });
 

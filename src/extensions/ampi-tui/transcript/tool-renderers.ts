@@ -7,8 +7,10 @@
  * card for shell commands, file edits, reads, searches and MCP tools: the
  * command with its output, the edited path with a numbered diff, or the
  * arguments and result of a generic tool. Other tools that bring their own
- * renderers (ampi's subagents and task list, other extensions' tools) keep
- * their own card when expanded and only get the one-line row.
+ * renderers (ampi's task list, other extensions' tools) keep their own card
+ * when expanded and only get the one-line row. ampi-workers' tools draw
+ * their rows themselves, collapsed and expanded: a worker's outcome is in
+ * its result details, which only its own renderer reads.
  *
  * A run of consecutive calls (see `activity-groups.ts`) folds into one
  * summary row ("✓ Ran 3 commands, read 4 files ▸") drawn by the run's first
@@ -521,7 +523,8 @@ export interface ToolRendererOptions {
 /**
  * Resolver for `pi.registerToolRenderer`: one-line rows for every tool, and
  * ampi's own expanded cards for Pi's built-in tools, `apply_patch`, MCP tools
- * and tools without renderers of their own. With a group store, a run of
+ * and tools without renderers of their own. ampi-workers' tools keep their
+ * own renderers, which draw the same kind of row. With a group store, a run of
  * calls folds into one summary row drawn by its first call; the later calls
  * draw nothing until the group is expanded.
  */
@@ -531,6 +534,7 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
   return (toolName, next) => {
     const own = OWN_CARDS.has(toolName) || toolName.startsWith("mcp__");
     const fallback = own ? undefined : next();
+    if (fallback && classifyToolCall(toolName, {}).kind === "subagent") return fallback;
     const renderCall: CallRenderer = (args, theme, context) => {
       const state = rowState(context);
       // A snapshot's call comes before its result, so its status is unknown here:

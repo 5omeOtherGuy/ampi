@@ -1,5 +1,4 @@
 import { homedir } from "node:os";
-import { Container, Text } from "@earendil-works/pi-tui";
 import { isRecord } from "../../ampi-core/internal/json.js";
 import type { MmrWorkerTrailItem } from "../framework/runner.js";
 import {
@@ -7,7 +6,6 @@ import {
   type BackgroundTaskDetails,
   type RenderContextLike,
   type SubagentProgressDetails,
-  type SubagentTheme,
 } from "./subagent-render-format.js";
 
 function readStringField(value: unknown, key: string): string | undefined {
@@ -16,18 +14,19 @@ function readStringField(value: unknown, key: string): string | undefined {
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
 }
 
+/** The argument that says what a worker other than `Task` was asked; custom Markdown subagents take `task`. */
+function askedField(toolName: string): string {
+  if (toolName === "finder" || toolName === "librarian") return "query";
+  if (toolName === "reviewer") return "diff_description";
+  return "task";
+}
+
 export function operationLabel(
   toolName: string,
   details: SubagentProgressDetails | undefined,
   context: RenderContextLike | undefined,
 ): string | undefined {
-  const args = context?.args;
-  const fromArgs = toolName === "Task"
-    ? readStringField(args, "description") ?? readStringField(args, "prompt")
-    : toolName === "oracle"
-      ? readStringField(args, "task")
-      : readStringField(args, "query");
-  return fromArgs
+  return operationLabelFromArgs(toolName, context?.args)
     ?? details?.description
     ?? details?.task
     ?? details?.query
@@ -39,16 +38,12 @@ export function expandedOperationLabel(
   details: SubagentProgressDetails | undefined,
   context: RenderContextLike | undefined,
 ): string | undefined {
-  const args = context?.args;
-  if (toolName === "Task") return readStringField(args, "prompt") ?? details?.prompt ?? operationLabel(toolName, details, context);
-  if (toolName === "oracle") return readStringField(args, "task") ?? details?.task ?? operationLabel(toolName, details, context);
-  return readStringField(args, "query") ?? details?.query ?? operationLabel(toolName, details, context);
+  return workerPromptFromArgs(toolName, details, context) ?? operationLabel(toolName, details, context);
 }
 
 export function operationLabelFromArgs(toolName: string, args: unknown): string | undefined {
   if (toolName === "Task") return readStringField(args, "description") ?? readStringField(args, "prompt");
-  if (toolName === "oracle") return readStringField(args, "task");
-  return readStringField(args, "query");
+  return readStringField(args, askedField(toolName));
 }
 
 function normalizeStartTaskAgent(raw: unknown): string | undefined {
@@ -238,21 +233,6 @@ export function formatToolArguments(item: Extract<MmrWorkerTrailItem, { type: "t
   return item.argsPreview ?? "";
 }
 
-function imageAttachmentText(count: number | undefined): string | undefined {
-  if (!count || count <= 0) return undefined;
-  return `${count} image${count === 1 ? "" : "s"} attached`;
-}
-
-export function addImageAttachmentNote(
-  container: Container,
-  count: number | undefined,
-  theme: SubagentTheme,
-  paddingX = 1,
-): void {
-  const images = imageAttachmentText(count);
-  if (images) container.addChild(new Text(theme.fg("muted", images), paddingX, 0));
-}
-
 function normalizedForMatch(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -273,7 +253,7 @@ export function workerPromptFromArgs(
   const args = context?.args;
   if (toolName === "Task") return readStringField(args, "prompt") ?? details?.prompt;
   if (toolName === "oracle") return readStringField(args, "task") ?? details?.task;
-  return readStringField(args, "query") ?? details?.query;
+  return readStringField(args, askedField(toolName)) ?? details?.query ?? details?.task;
 }
 
 export function isWorkerPromptEcho(text: string, workerPrompt: string | undefined): boolean {
