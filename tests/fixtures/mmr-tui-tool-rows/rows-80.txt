@@ -1,0 +1,134 @@
+=== read success · collapsed ===
+
+ ✓ Read src/index.ts L1-120
+=== read success · expanded ===
+
+ ✓ Read src/index.ts L1-120
+=== bash read through sed · collapsed ===
+
+ ✓ Read src/x.ts L1-220
+=== bash read through sed · expanded ===
+
+ $ sed -n '1,220p' src/x.ts
+   one
+   two
+=== bash success · collapsed ===
+
+ ✓ Ran npm test
+=== bash success · expanded ===
+
+ $ npm test
+   ok 1 - parses
+   ok 2 - renders
+=== bash error · collapsed ===
+
+ ✗ Ran npm test -- --grep 'tool rows' (exit code: 1)
+=== bash error · expanded ===
+
+ $ npm test -- --grep 'tool rows' (exit code: 1)
+   not ok 1 - renders
+=== bash running · collapsed ===
+
+ ⠋ Running npm run build
+=== bash running · expanded ===
+
+ ⠋ npm run build
+=== bash long output in another directory · collapsed ===
+
+ ✓ Ran npm run build --workspace app
+=== bash long output in another directory · expanded ===
+
+ $ npm run build --workspace app (in ~/proj/packages/app)
+   line 1 of the build log
+   line 2 of the build log
+   line 3 of the build log
+   line 4 of the build log
+   line 5 of the build log
+   line 6 of the build log
+   line 7 of the build log
+   line 8 of the build log
+   line 9 of the build log
+   line 10 of the build log
+   line 11 of the build log
+   line 12 of the build log
+   line 13 of the build log
+   line 14 of the build log
+   line 15 of the build log
+   … 25 more lines
+=== bash long command · collapsed ===
+
+ ✓ Ran node scripts/check-changelog.mjs && node --test tests/mmr-tui-activity.t…
+=== bash long command · expanded ===
+
+ $ node scripts/check-changelog.mjs && node --test
+   tests/mmr-tui-activity.test.mjs tests/mmr-tui-tool-renderers.test.mjs
+   --test-reporter=spec
+   ok
+=== grep cancelled · collapsed ===
+
+ ⊘ Grep "foo"
+=== grep cancelled · expanded ===
+
+ ⊘ Grep "foo"
+   Operation aborted
+=== edit with diff · collapsed ===
+
+ ✓ Edited src/retry.ts +2 -1
+=== edit with diff · expanded ===
+
+ ✓ Edited src/retry.ts +2 -1
+   1    import { load } from './load.js';
+   2 -  const retries = 1;
+   2 +  const retries = 3;
+   3 +  const delayMs = 250;
+   4    export { retries };
+=== edit error · collapsed ===
+
+ ✗ Edited src/retry.ts
+=== edit error · expanded ===
+
+ ✗ Edited src/retry.ts
+   Could not find the exact text in src/retry.ts.
+=== write new file · collapsed ===
+
+ ✓ Created docs/notes.md +3
+=== write new file · expanded ===
+
+ ✓ Created docs/notes.md +3
+   1 +  # Notes
+   2 +  
+   3 +  First line.
+=== apply_patch two files · collapsed ===
+
+ ✓ Edited 2 files +3 -1
+=== apply_patch two files · expanded ===
+
+ ✓ Edited 2 files +3 -1
+   src/config.ts +1 -1
+   10    const a = 1;
+   11 -  const b = 2;
+   11 +  const b = 20;
+   12    const c = 3;
+   src/new-file.ts +2
+   1 +  export const created = true;
+   2 +  export default created;
+=== mcp tool · collapsed ===
+
+ ✓ Ran docs/search · tool rendering
+=== mcp tool · expanded ===
+
+ ✓ Ran docs/search · tool rendering
+   query: tool rendering
+   limit: 5
+   Found 2 pages:
+   - Extensions: tool rendering
+   - TUI components
+=== unknown tool · collapsed ===
+
+ ✓ Ran frobnicate
+=== unknown tool · expanded ===
+
+ ✓ Ran frobnicate
+   target: build cache
+   force: true
+   Frobnicated 3 entries.

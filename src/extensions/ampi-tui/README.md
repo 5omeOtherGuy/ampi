@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Footer-free terminal layout; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End | Interactive Pi session | No footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
+| On | Footer-free terminal layout; one-line tool rows; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End | Interactive Pi session | No footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 
 ## When to use it
 
@@ -27,6 +27,7 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | Surface | Type | Purpose |
 | --- | --- | --- |
 | Footer | Pi footer slot | Replaced with an empty component, so no row is drawn below the editor |
+| Tool rows | Pi tool renderer | One line per tool call, and a card per call when tool output is expanded |
 | `thread.interrupt` | Command, `esc esc` | Stop the running turn |
 | `ampi.quit` | Command, `ctrl+c ctrl+c` | Quit Pi, stopping a running turn first |
 | `thread.scrollToTop`, `thread.scrollToBottom` | Commands, `home` / `end` | Jump to the start or end of the transcript while the prompt is empty |
@@ -107,9 +108,32 @@ Everything else keeps Pi's binding, including Ctrl+O (tool output), Ctrl+D (quit
 - Pi's header and its list of loaded resources at startup. Pi's `quietStartup` setting hides them: `"header"` keeps the header and hides the list, `true` hides both.
 - The working directory, branch, token usage, cost, context use, model and mode that the footer showed are not shown elsewhere yet. `/ampi-status` still reports the mode and model.
 
+### Transcript tool rows
+
+Every tool call in the transcript is drawn as one line: a status glyph, a verb and what the call acted on.
+
+```text
+ ✓ Read src/index.ts L1-120
+ ✗ Ran npm test (exit code: 1)
+ ⊘ Grep "foo"
+ ✓ Edited src/retry.ts +2 -1
+```
+
+- Glyphs: `✓` done, `✗` failed, `⊘` cancelled, and a spinner while the call runs. The verb is in the present tense while it runs (`Reading`, `Running`, `Editing`).
+- Shell commands are named for what they do. A command that only reads a file (`cat`, `head`, `tail`, `sed -n`, `less`) shows as `Read <path>` with the line range when the command names one (`sed -n '1,220p' x.ts` is `Read x.ts L1-220`). A search (`rg`, `grep`, `git grep`) shows as `Grep`, a listing (`ls`, `find`, `fd`) as `Listed`, `sed -i` as `Edited`. Anything else, including pipelines into other programs, redirections into files and command substitutions, is `Ran <command>`. A leading `cd <dir> &&` is followed into that directory.
+- Edits show the diff stat (`+N -M`), failed commands their exit code. Paths are shown relative to the working directory, or with `~` for the home directory.
+- MCP tools show as `Ran <server>/<tool>`, other tools as `Ran <tool>`, each with the first argument that says what the call is about.
+- Expanding tool output (Pi's Ctrl+O, which applies to every row) switches to cards:
+  - shell commands: `$ <command>` with the program in bold and flags and strings in syntax colours, `(in <dir>)` when it ran elsewhere, `(exit code: N)` when it failed, then the first 15 lines of output and `… N more lines`;
+  - `edit`, `write` and `apply_patch`: the underlined path (a clickable `file://` link where the terminal supports links), the diff stat, and the diff with line numbers, removed lines in red and added lines in green, cut after 60 lines;
+  - `read`: the linked path and its line range; `grep`, `find` and `ls`: their output;
+  - MCP and other tools without renderers of their own: their arguments as `key: value` lines and the result text.
+- Tools that bring their own renderers, such as ampi's subagents and task list, get the one-line row when collapsed and keep their own card when expanded.
+- Rows use theme colours for text only, never a background. The same renderers draw tool calls in Pi's HTML export.
+
 ### Planned
 
-Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a command palette on Ctrl+O, a mode picker, compact tool rows and a welcome header. Each lands behind the same `ampiTui.enabled` switch.
+Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a command palette on Ctrl+O, a mode picker, grouped tool rows and a welcome header. Each lands behind the same `ampiTui.enabled` switch.
 
 ## Diagnostics and troubleshooting
 
@@ -129,3 +153,4 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
 - `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, transcript scrolling, the reserved shortcut list. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
 - Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order), `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner).
+- Tool rows: `transcript/activity.ts` classifies a call (pure, no Pi imports) and `summarizeActivities` folds a run of calls into one phrase for grouped rows; `transcript/tool-renderers.ts` draws rows and cards through one `pi.registerToolRenderer` resolver. Tests: `tests/mmr-tui-activity.test.mjs` and `tests/mmr-tui-tool-renderers.test.mjs`, whose 80- and 140-column fixtures in `tests/fixtures/mmr-tui-tool-rows/` are refreshed with `PI_MMR_UPDATE_FIXTURES=1`.

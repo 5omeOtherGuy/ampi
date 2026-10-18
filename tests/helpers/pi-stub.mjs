@@ -33,7 +33,8 @@
  *    invoked after `setThinkingLevel`.
  *
  * Returns `{ pi, calls, commands, shortcuts, handlers, tools, flagDefs, emits,
- * setEventContext }`. `tools`, `commands`, and `flagDefs` are also exposed as
+ * toolRenderers, setEventContext }`. `toolRenderers` lists the resolvers passed
+ * to `registerToolRenderer`, in registration order. `tools`, `commands`, and `flagDefs` are also exposed as
  * `pi.tools` / `pi.commands` / `pi.flagDefs` so tests can drive registered
  * tools (`pi.tools.get(name).execute(...)`) and assert on the declarative
  * surfaces the extension exposes to Pi (e.g. the description+type of a
@@ -55,6 +56,7 @@ export function createMockPi(options = {}) {
   // round-tripping through the resolved `getFlag` value.
   const flagDefs = new Map();
   const emits = [];
+  const toolRenderers = [];
   const calls = {
     setActiveTools: [],
     setModel: [],
@@ -93,7 +95,9 @@ export function createMockPi(options = {}) {
       return flagValues.get(name);
     },
     registerTool: (def) => tools.set(def.name, def),
+    registerToolRenderer: (resolver) => toolRenderers.push(resolver),
     tools,
+    toolRenderers,
     commands,
     flagDefs,
     shortcuts,
@@ -149,6 +153,7 @@ export function createMockPi(options = {}) {
     tools,
     flagDefs,
     emits,
+    toolRenderers,
     setEventContext: (ctx) => {
       eventContext = ctx;
     },

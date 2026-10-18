@@ -3,6 +3,7 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
 import { createMmrTuiKeys } from "./keys/install.js";
+import { installToolRenderers } from "./transcript/tool-renderers.js";
 
 /** Name `ampi-tui` registers under in ampi-core's chrome-owner seam. */
 const MMR_TUI_CHROME_OWNER = "ampi-tui";
@@ -16,6 +17,10 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrTuiSettings(process.cwd());
     // Disabled: register nothing, so ampi-core's footer shows as before.
     if (!settings.enabled) return;
+
+    // Renderers only draw in the interactive transcript (and HTML exports),
+    // so registering them is harmless in print, JSON and RPC runs.
+    installToolRenderers(pi);
 
     let releaseChrome: (() => void) | undefined;
     let tui: TUI | undefined;
