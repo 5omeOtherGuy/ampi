@@ -36,6 +36,15 @@ import {
  * | any change of the thread status            | `status` (phase, label, queue count)  |
  * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
  *
+ * Pi's streaming message is one object that the provider keeps filling, so
+ * by the time an event is handled it may already hold text from later
+ * deltas. The bridge therefore never reads a streaming text or thinking
+ * block from it: it builds each block's text from the deltas it has seen and
+ * shows only the blocks whose start it has seen, in `item` events and in the
+ * snapshot alike. A client that applies the deltas after either one ends up
+ * with each delta once. The finished message from `message_end` replaces the
+ * copy.
+ *
  * It keeps the last {@link MMR_GUI_REPLAY_LIMIT} events, so a client that
  * reconnects with the id of the last event it saw gets what it missed. A
  * snapshot (`snapshot()`) joins the saved branch with the messages of the
@@ -139,6 +148,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   const live = new Map<string, unknown>();
   /** Tool results of the current run, by call id. */
   const liveResults = new Map<string, MmrGuiToolResult>();
+  /** Streaming assistant messages, by item id: the blocks started so far and their text from the deltas. */
+  const streams = new Map<string, { started: number; text: Map<number, string> }>();
   let titled = false;
 
   function emit(event: MmrGuiEvent["event"], data: unknown): void {
@@ -175,8 +186,22 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     return { cwd: ctx?.cwd, home, pending: (id: string) => busy && !liveResults.has(id) };
   }
 
+  /** A streaming message as far as the events so far describe it. */
+  function streamed(message: unknown): unknown {
+    const id = mmrGuiItemId(message);
+    const stream = id ? streams.get(id) : undefined;
+    const content = (message as { content?: unknown }).content;
+    if (!stream || !Array.isArray(content)) return message;
+    const blocks = content.slice(0, stream.started).map((block, index) => {
+      const text = stream.text.get(index);
+      if (text === undefined) return block;
+      return block?.type === "thinking" ? { ...block, thinking: text } : { ...block, text };
+    });
+    return { ...(message as object), content: blocks };
+  }
+
   function buildItem(message: unknown): MmrGuiItem | undefined {
-    return buildMmrGuiItem(message, liveResults, viewOptions());
+    return buildMmrGuiItem(streamed(message), liveResults, viewOptions());
   }
 
   function sessionInfo(): MmrGuiSessionInfo {
@@ -243,6 +268,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     if (role === "assistant") {
       stage = undefined;
       stageBytes = 0;
+      const id = mmrGuiItemId(event.message);
+      if (id) streams.set(id, { started: 0, text: new Map() });
     }
     if (role === "user" && queued > 0) setQueued(queued - 1);
     if (role !== "user" && role !== "assistant") return;
@@ -270,8 +297,15 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     }
     if (!id) return;
     const type = String(update?.type ?? "");
+    const index = update?.contentIndex;
+    const stream = streams.get(id);
+    if (stream && content && typeof index === "number") {
+      stream.started = Math.max(stream.started, index + 1);
+      if (type === "text_start" || type === "thinking_start") stream.text.set(index, "");
+    }
     if ((type === "text_delta" || type === "thinking_delta") && typeof update?.delta === "string") {
-      emit("delta", { itemId: id, part: update.contentIndex, text: update.delta });
+      if (stream && typeof index === "number") stream.text.set(index, (stream.text.get(index) ?? "") + update.delta);
+      emit("delta", { itemId: id, part: index, text: update.delta });
     } else if (type.endsWith("_start") || type === "start" || type === "toolcall_end") {
       const item = buildItem(event.message);
       if (item) emit("item", item);
@@ -279,7 +313,10 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   });
   pi.on("message_end", (event, context) => {
     if (!active(context)) return;
-    if (roleOf(event.message) === "assistant") upsert(event.message);
+    if (roleOf(event.message) !== "assistant") return;
+    const id = mmrGuiItemId(event.message);
+    if (id) streams.delete(id);
+    upsert(event.message);
   });
   pi.on("tool_execution_start", (event, context) => {
     if (!active(context)) return;
@@ -325,6 +362,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     // Pi has written every message of the run by now.
     live.clear();
     liveResults.clear();
+    streams.clear();
   });
   pi.on("input", (event, context) => {
     if (!active(context)) return;
@@ -346,6 +384,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       titled = false;
       live.clear();
       liveResults.clear();
+      streams.clear();
       releaseMode ??= onMmrStateChanged(pi, () => {
         if (ctx) emit("session", sessionInfo());
       });

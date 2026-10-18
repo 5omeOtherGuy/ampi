@@ -165,6 +165,11 @@ transcript.addEventListener(
 // ---------------------------------------------------------------------------
 // State
 
+/** The status label is a live region: write it only when the phase changes. */
+function setPhaseLabel(text) {
+  if ($("status-label").textContent !== text) $("status-label").textContent = text;
+}
+
 function setSession(session) {
   $("title").textContent = session.title || "New thread";
   document.title = `${session.title || "New thread"} · ampi`;
@@ -183,7 +188,7 @@ function setStatus(status) {
   app.dataset.busy = String(status.busy);
   app.dataset.phase = status.phase;
   const label = status.label || (status.phase === "idle" ? "Idle" : status.phase);
-  $("status-label").textContent = label;
+  setPhaseLabel(label);
   const details = [];
   if (status.detail) details.push(status.detail);
   if (status.queued > 0) details.push(`${status.queued} queued`);
@@ -263,7 +268,7 @@ function connect() {
   });
   source.addEventListener("error", () => {
     // The browser retries on its own; Pi may have quit or switched sessions.
-    $("status-label").textContent = "Disconnected";
+    setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Waiting for Pi";
     app.dataset.busy = "false";
     liveDot.hidden = true;
@@ -280,7 +285,7 @@ async function start() {
     jump.hidden = true;
     connect();
   } catch {
-    $("status-label").textContent = "Disconnected";
+    setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Could not reach Pi";
   }
 }

@@ -187,7 +187,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 
 Turn it on with `AMPI_GUI_ENABLE=true` or `{ "ampiGui": { "enabled": true } }` in a settings file. In an interactive session Pi then prints `Web GUI: http://127.0.0.1:<port>/?t=<token>`; open that link, or run `thread open in browser` from the command palette.
 
-The server listens on `127.0.0.1` only, on a random port, and checks every request: the `Host` must name the server, a foreign `Origin` is refused, and the per-session token from the link (kept afterwards in an `HttpOnly`, `SameSite=Strict` cookie) is required. It sets no CORS headers, serves only its own page files, and records the running session in `<agentDir>/data/ampi/live/<pid>.json` with a hash of the token, never the token. Details: [`ampi-gui`](src/extensions/ampi-gui/README.md#security-model).
+The server listens on `127.0.0.1` only, on a random port, and checks every request: the `Host` must name the server, a foreign `Origin` is refused, and the per-session token from the link (kept afterwards in an `HttpOnly`, `SameSite=Strict` cookie) is required. It sets no CORS headers, serves only its own page files, and records the running session in `<agentDir>/data/ampi/live/<pid>.json` with a hash of the token, never the token. On a machine shared with other users, open the printed link yourself: `thread open in browser` hands it to the system's URL opener on the command line, where other users may be able to read it. Details: [`ampi-gui`](src/extensions/ampi-gui/README.md#security-model).
 
 ## Configuration
 

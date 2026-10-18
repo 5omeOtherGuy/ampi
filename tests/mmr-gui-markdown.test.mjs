@@ -27,6 +27,15 @@ describe("ampi-gui Markdown renderer", () => {
     assert.match(renderMarkdown("<https://pi.example/docs>"), /<a href="https:\/\/pi\.example\/docs"/);
   });
 
+  it("keeps inline code and emphasis inside a link label", async () => {
+    const { renderMarkdown } = await load();
+    assert.equal(
+      renderMarkdown("[`code`](https://x.dev) and [**run** `npm test`](https://y.dev)"),
+      '<p><a href="https://x.dev" target="_blank" rel="noreferrer noopener"><code>code</code></a> and ' +
+        '<a href="https://y.dev" target="_blank" rel="noreferrer noopener"><strong>run</strong> <code>npm test</code></a></p>',
+    );
+  });
+
   it("renders headings, emphasis, inline code and rules", async () => {
     const { renderMarkdown } = await load();
     assert.equal(
@@ -43,6 +52,12 @@ describe("ampi-gui Markdown renderer", () => {
       '<div class="code-card"><div class="code-label">ts</div><pre><code>const a = 1 &lt; 2;</code></pre></div><p>after</p>',
     );
     assert.equal(renderMarkdown("```\nstill typing"), '<div class="code-card"><pre><code>still typing</code></pre></div>');
+    assert.equal(
+      renderMarkdown("```\nx\n```js\ny\n```\nafter"),
+      '<div class="code-card"><pre><code>x\n```js\ny</code></pre></div><p>after</p>',
+      "a line with an info string does not close the block",
+    );
+    assert.equal(renderMarkdown("~~~~\na\n~~~\n~~~~~"), '<div class="code-card"><pre><code>a\n~~~</code></pre></div>', "a shorter marker does not close it");
   });
 
   it("renders nested and numbered lists", async () => {

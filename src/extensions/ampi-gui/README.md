@@ -71,6 +71,7 @@ Pi starts each session with a fresh set of extensions, so `/new`, `/resume` and 
 - Responses carry no CORS headers, a Content-Security-Policy that allows only the page's own scripts, styles and connections, and `X-Frame-Options: DENY`.
 - The server serves only files inside its `client/` directory, by extension with an explicit content type. Model output is HTML-escaped before Markdown formatting is applied, and links keep only `http`, `https` and `mailto` targets.
 - It writes nothing outside the live registry directory. Anyone who can run programs as your user can read the token from the terminal or the browser; the GUI does not protect against them.
+- `thread open in browser` passes the link, token included, to `xdg-open` or `open` as a command-line argument. On a machine shared with other users, they may be able to read it there (on Linux, from `/proc/<pid>/cmdline`), for as long as that process runs; a browser that the command starts keeps the link in its arguments until it quits. On a shared machine, copy the link from the notice into a browser that is already running instead.
 
 ## Diagnostics and troubleshooting
 

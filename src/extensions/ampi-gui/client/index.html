@@ -37,9 +37,10 @@
       </button>
       <footer class="statusbar">
         <div class="column">
-          <div class="status-card" id="status" role="status" aria-live="polite">
+          <div class="status-card" id="status">
             <span class="status-dot" aria-hidden="true"></span>
-            <span class="status-label" id="status-label">Connecting</span>
+            <!-- Only the phase is announced; the token count changes with every delta. -->
+            <span class="status-label" id="status-label" role="status">Connecting</span>
             <span class="status-detail" id="status-detail"></span>
             <span class="status-note">Read-only</span>
           </div>

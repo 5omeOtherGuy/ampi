@@ -17,15 +17,21 @@ const SAFE_URL = /^(https?:|mailto:)/i;
 
 /** Inline Markdown to HTML. */
 export function renderInline(source) {
-  const slots = [];
+  return inline(String(source).replace(/\u0000/g, ""), []);
+}
+
+// Finished pieces wait in `slots`, marked in the text by NUL-delimited
+// indexes. A link label is rendered with the same slots, so a code span the
+// outer pass already took out of it comes back inside the link.
+function inline(source, slots) {
   const hold = (html) => `\u0000${slots.push(html) - 1}\u0000`;
-  let text = String(source).replace(/\u0000/g, "");
+  let text = source;
   // Code spans first, so nothing inside them is touched.
   text = text.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_m, _ticks, code) => hold(`<code>${escapeHtml(code.replace(/^ (.*) $/, "$1"))}</code>`));
   // Links: [label](url). The label keeps its inline formatting.
   text = text.replace(/\[([^\]\n]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (match, label, url) => {
     if (!SAFE_URL.test(url)) return match;
-    return hold(`<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">${renderInline(label)}</a>`);
+    return hold(`<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">${inline(label, slots)}</a>`);
   });
   text = text.replace(/<(https?:\/\/[^\s>]+)>/g, (_m, url) => hold(`<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(url)}</a>`));
   text = escapeHtml(text);
@@ -140,10 +146,11 @@ export function renderMarkdown(source) {
     }
     const fence = FENCE.exec(line);
     if (fence) {
-      const marker = fence[1];
+      // Only a bare marker at least as long closes the block; "```js" opens no new one inside it.
+      const closer = new RegExp(`^ {0,3}${fence[1][0]}{${fence[1].length},}\\s*$`);
       const body = [];
       index++;
-      while (index < lines.length && !lines[index].trim().startsWith(marker)) body.push(lines[index++]);
+      while (index < lines.length && !closer.test(lines[index])) body.push(lines[index++]);
       index++;
       out.push(renderCode(body, fence[2]));
       continue;

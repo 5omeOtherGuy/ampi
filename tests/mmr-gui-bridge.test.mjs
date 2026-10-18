@@ -79,6 +79,49 @@ describe("ampi-gui bridge", () => {
     assert.equal(seen.at(-1).data.busy, false);
   });
 
+  it("never sends streamed text twice when Pi's partial message runs ahead of its events", async () => {
+    const { bridge, ctx, fire } = await setup();
+    bridge.start(ctx);
+    const seen = [];
+    bridge.subscribe((event) => seen.push(event));
+    // Pi hands each event a shallow copy of one partial message whose blocks
+    // the provider has already filled further. Here the whole reply is in the
+    // partial before the first event is handled.
+    const partial = assistant([], 20);
+    partial.content.push({ type: "thinking", thinking: "Plan it." }, { type: "text", text: "Hello world" });
+    const update = (assistantMessageEvent) => fire("message_update", { message: { ...partial }, assistantMessageEvent });
+    fire("turn_start", {});
+    fire("message_start", { message: { ...partial } });
+    update({ type: "thinking_start", contentIndex: 0 });
+    update({ type: "thinking_delta", contentIndex: 0, delta: "Plan " });
+    const midway = bridge.snapshot();
+    update({ type: "thinking_delta", contentIndex: 0, delta: "it." });
+    update({ type: "thinking_end", contentIndex: 0, content: "Plan it." });
+    update({ type: "text_start", contentIndex: 1 });
+    update({ type: "text_delta", contentIndex: 1, delta: "Hello " });
+    update({ type: "text_delta", contentIndex: 1, delta: "world" });
+
+    // The client: an item replaces the whole item, a delta appends to its part.
+    const replay = (items, events) => {
+      for (const { event, data } of events) {
+        if (event === "item") items.set(data.id, structuredClone(data));
+        if (event === "delta") items.get(data.itemId).parts[data.part].text += data.text;
+      }
+      return items.get("a20").parts.map((part) => part.text);
+    };
+    assert.deepEqual(replay(new Map(), seen), ["Plan it.", "Hello world"], "from the first event");
+    const fromSnapshot = new Map(midway.items.map((item) => [item.id, structuredClone(item)]));
+    assert.deepEqual(midway.items.at(-1).parts, [{ type: "thinking", text: "Plan " }], "the snapshot holds only what its events described");
+    assert.deepEqual(replay(fromSnapshot, bridge.eventsAfter(midway.lastEventId)), ["Plan it.", "Hello world"], "from a snapshot taken mid-stream");
+
+    fire("message_end", { message: { ...partial } });
+    assert.deepEqual(
+      seen.at(-1).data.parts.map((part) => part.text),
+      ["Plan it.", "Hello world"],
+      "the finished message replaces the streamed copy",
+    );
+  });
+
   it("labels tool calls with activity words and follows them from start to result", async () => {
     const { bridge, ctx, fire } = await setup();
     bridge.start(ctx);
@@ -119,6 +162,7 @@ describe("ampi-gui bridge", () => {
     entries.push(entry("e5", user("second", 4)));
     const streaming = assistant([{ type: "text", text: "Work" }], 5);
     fire("message_start", { message: streaming });
+    fire("message_update", { message: streaming, assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
     fire("message_update", { message: streaming, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Work" } });
 
     const snapshot = bridge.snapshot();
