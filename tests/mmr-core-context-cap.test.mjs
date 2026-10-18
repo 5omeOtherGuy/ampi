@@ -113,7 +113,8 @@ function buildPi(setModelCalls, handlers, flagValue) {
     appendEntry: () => {},
     registerCommand: () => {},
     registerShortcut: () => {},
-    on: (name, handler) => handlers.set(name, handler),
+    // Keep the first handler per event: ampi-core's lifecycle hook, ahead of the live registry's.
+    on: (name, handler) => handlers.has(name) || handlers.set(name, handler),
     events: { emit: () => {}, on: () => {}, off: () => {} },
   };
 }

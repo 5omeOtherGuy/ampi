@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Locked modes, model resolver, tool registry, prompt rewrite, subagent execution profile | none | `/ampi-status` (`debug` for model/tool resolution detail) |
+| On | Locked modes, model resolver, tool registry, prompt rewrite, subagent execution profile, live registry of running sessions | none | `/ampi-status` (`debug` for model/tool resolution detail); `<agentDir>/data/ampi/live/<pid>.json` |
 
 ## When to use it
 
@@ -227,6 +227,34 @@ The assembled surface drives [`tests/fixtures/mmr-subagent-surface/`](../../../t
 [`spinner.ts`](spinner.ts) is the running glyph every ampi extension draws: one braille character whose eight dots run a tiny cellular automaton. `createMmrSpinner()` returns `glyph()` and `step()`; callers own the timer and step every `MMR_SPINNER_INTERVAL_MS` (200 ms). A fresh spinner shows `⠋`, and the pattern starts over from a random one whenever it would die out, stop changing or loop, so the glyph changes on every step and is never blank.
 
 [`animation.ts`](animation.ts) holds `isMmrAnimationDisabled()`: true when the environment variable `NO_ANIMATION` is set to a non-empty value, or `ampiTui.animations` is `false` in `~/.pi/agent/settings.json` or, overriding it, `<project>/.pi/settings.json`. `ampi-tui`, `ampi-workers` and `ampi-tasks` ask it when a running row, a widget or a session starts; when it is true, spinners stay on `⠋` and start no timer, and other animations rest on their first frame.
+### Live registry
+
+Pi does not lock session files: two processes that write one session file can each overwrite the other's messages. So ampi-core records every running session that has a file in a live registry, where other processes on the machine (`ampi-gui`'s sidebar, and the `ampi` command through its own reader) find which sessions run and which process writes a given session file.
+
+- **Where.** One file per process, `<agentDir>/data/ampi/live/<pid>.json` (`<agentDir>` is `~/.pi/agent` unless `PI_CODING_AGENT_DIR` says otherwise). The directory is created owner-only (`0700`), each file is owner-only (`0600`) and written to a temporary file that is then renamed over it, so a reader never sees half an entry.
+- **Who writes.** ampi-core, and only for its own process, from `session_start` to `session_shutdown`: an interactive terminal session (`kind` `tui`) and a print, JSON or RPC run (`execute`), with or without `ampi-gui`, `ampi-threads` or `ampi-tui`. A session without a file writes nothing: `--no-session`, which every subagent worker runs with, and in-memory sessions. `/new`, `/resume` and `/fork` end one session and start the next, so the entry is rewritten for the new session file.
+- **What it holds.** Paths, pids, a title and a hash of the GUI's access token, never the token:
+
+  | Field | Value |
+  | --- | --- |
+  | `version` | `2` |
+  | `pid` | The process |
+  | `procStart` | The process start time from `/proc/<pid>/stat` (clock ticks after boot); `null` off Linux |
+  | `kind` | `tui`, `execute`, `app` (a multi-session host) or `app-session` (a session such a host serves) |
+  | `sessionId`, `sessionPath` | Pi's session id and session file |
+  | `cwd` | The session's working directory |
+  | `title` | Pi's session name, else a title `ampi-threads` generated; `null` without either |
+  | `mode` | The ampi mode key (`low`, `medium`, `high`, `ultra`, `free`); `null` when none applies |
+  | `status` | `{ phase, label }` from the [thread status](../../../docs/ampi-core-api.md#thread-status) of the running turn, such as `{ "phase": "runningTools", "label": "Running Tools" }` |
+  | `startedAt`, `updatedAt` | ISO timestamps: when the session started in this process, and the last write |
+  | `gui` | `{ port, tokenHash }` while `ampi-gui` serves the session (`tokenHash` is the SHA-256 of the access token, hex); otherwise `null` |
+  | `ownerPid` | Only for `app-session`: the host process |
+
+- **When it changes.** At session start, then whenever the mode, the status phase or a contributed field changes: at most one write per 250 ms, and a change inside that window is written when it ends. Other extensions contribute fields through `setMmrLiveFields({ title?, gui? })` (`ampi-gui` its port, `ampi-threads` a generated title) instead of writing a file, so each entry has one writer.
+- **When it goes.** At `session_shutdown`, and, best effort, when the process exits. A process that is killed leaves its file behind; every reader removes the entries of processes that no longer run, and of a pid whose start time no longer matches (the pid now names a later process). Files that are not valid entries are skipped and left alone. Readers also accept the version 1 files older `ampi-gui` releases wrote, as terminal sessions with only `gui` known.
+- **Two writers.** When another live entry names the same session file at session start (compared after resolving symbolic links), ampi-core warns, naming the other process's pid and kind: a warning notice in the terminal, one line on stderr starting `ampi:` in other modes. It does not stop the session, because Pi has opened the file before extensions run; close one of the two.
+
+Code: [`live-registry.ts`](live-registry.ts); Pi's events reach the status through [`thread-status-events.ts`](thread-status-events.ts). The `ampi` command reads the same files with `packages/ampi-cli/src/live-registry.js`.
 
 ## Diagnostics and troubleshooting
 
@@ -284,4 +312,4 @@ Non-goals:
 - No legacy `<!-- mmr-core:start --> / <!-- mmr-core:end -->` block emission.
 - Prompt text is `ampi`-authored; no third-party prompt material is copied. Provenance: [`docs/prompt-provenance.md`](../../../docs/prompt-provenance.md).
 
-Tests: `tests/mmr-core*.test.mjs`, `tests/fixtures/mmr-core-prompts/`, `tests/fixtures/mmr-effective-surface/`, `tests/fixtures/mmr-subagent-surface/`.
+Tests: `tests/mmr-core*.test.mjs`, `tests/fixtures/mmr-core-prompts/`, `tests/fixtures/mmr-effective-surface/`, `tests/fixtures/mmr-subagent-surface/`. The live registry: `tests/mmr-core-live-registry.test.mjs`, and `tests/mmr-cli-live-registry.test.mjs`, which reads `tests/fixtures/live-registry/` with both readers and fails when they disagree.

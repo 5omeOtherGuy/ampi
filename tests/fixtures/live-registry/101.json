@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "pid": 101,
+  "sessionPath": "/sessions/a.jsonl",
+  "cwd": "/work/app",
+  "port": 40101,
+  "tokenHash": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+  "startedAt": "2026-10-18T10:00:00.000Z"
+}

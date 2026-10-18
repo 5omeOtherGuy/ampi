@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "pid": 109,
+  "procStart": null,
+  "kind": "tui",
+  "sessionId": null,
+  "sessionPath": null,
+  "cwd": "/work/app",
+  "title": null,
+  "mode": null,
+  "status": null,
+  "startedAt": "2026-10-18T10:08:00.000Z",
+  "updatedAt": "2026-10-18T10:08:00.000Z",
+  "gui": null
+}

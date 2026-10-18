@@ -531,8 +531,9 @@ write `ampi-core.mode-state` entries from outside `ampi-core`.
 `createMmrThreadStatusReducer()` (alias `createAmpiThreadStatusReducer`)
 returns a reducer that turns the events of an agent run into the
 Amp-compatible status a terminal or browser UI shows next to the prompt.
-It is pure and synchronous, starts no timers, and is not wired into the
-`ampi-core` lifecycle; the UI that owns it maps Pi events onto
+It is pure and synchronous and starts no timers. Each holder keeps its own
+instance: `ampi-core` keeps one for its live registry of running sessions,
+and a UI that shows the status keeps another, maps Pi events onto
 `MmrThreadStatusEvent` and calls `apply(event)`.
 
 ```ts
@@ -713,6 +714,11 @@ above unless they have a specific reason to use these.
   state; readers use the exported `getMmrSubagentState`).
 - Raw mutable registries (`getMmrToolRegistry`,
   `getMmrFeatureGateRegistry`).
+- The live registry of running sessions (`setMmrLiveFields`,
+  `readMmrLiveEntries`, `findMmrLiveOwner` and the writer) and the mapping
+  of Pi events onto thread status events: ampi's own extensions import them
+  from their modules. The registry's file format is described in the
+  [`ampi-core` README](../src/extensions/ampi-core/README.md#live-registry).
 - Any helper not re-exported from `src/index.ts`.
 
 If you find yourself reaching past the public surface, open an issue

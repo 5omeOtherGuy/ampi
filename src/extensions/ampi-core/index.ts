@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createMmrModeController } from "./mode-controller.js";
 import { registerMmrCommands } from "./command-registration.js";
 import { registerMmrLifecycleHooks } from "./lifecycle-hooks.js";
+import { registerMmrLiveRegistry } from "./live-registry.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("ampi-mode", {
@@ -36,9 +37,12 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
 
   // Registration order is observable and load-bearing (pinned by
   // tests/mmr-core-registration-order.test.mjs): flags, then the commands and
-  // shortcuts, then the lifecycle hooks. The controller owns all shared mutable
-  // mode state; the registration modules talk to it through accessors only.
+  // shortcuts, then the lifecycle hooks, then the live registry's hooks (after
+  // the mode is resolved at session start). The controller owns all shared
+  // mutable mode state; the registration modules talk to it through accessors
+  // only.
   const controller = createMmrModeController(pi);
   registerMmrCommands(pi, controller);
   registerMmrLifecycleHooks(pi, controller);
+  registerMmrLiveRegistry(pi);
 }

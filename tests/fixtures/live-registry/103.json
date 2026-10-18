@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "pid": 103,
+  "procStart": null,
+  "kind": "execute",
+  "sessionId": "s-c",
+  "sessionPath": "/sessions/c.jsonl",
+  "cwd": "/work/other",
+  "title": null,
+  "mode": null,
+  "status": null,
+  "startedAt": "2026-10-18T10:03:00.000Z",
+  "updatedAt": "2026-10-18T10:03:00.000Z",
+  "gui": null,
+  "ownerPid": 102
+}

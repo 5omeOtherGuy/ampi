@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "pid": 111,
+  "procStart": null,
+  "kind": "remote",
+  "sessionId": null,
+  "sessionPath": null,
+  "cwd": "/work/app",
+  "title": null,
+  "mode": null,
+  "status": null,
+  "startedAt": "2026-10-18T10:11:00.000Z",
+  "updatedAt": "2026-10-18T10:11:00.000Z",
+  "gui": null
+}

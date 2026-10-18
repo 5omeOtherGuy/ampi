@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "pid": 104,
+  "procStart": 6000,
+  "kind": "app-session",
+  "sessionId": "s-d",
+  "sessionPath": "/sessions/d.jsonl",
+  "cwd": "/work/app",
+  "title": null,
+  "mode": "high",
+  "status": { "phase": "idle", "label": "" },
+  "startedAt": "2026-10-18T10:04:00.000Z",
+  "updatedAt": "2026-10-18T10:04:30.000Z",
+  "gui": null,
+  "ownerPid": 102
+}
