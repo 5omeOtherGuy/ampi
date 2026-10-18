@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving `ampi`.
+Thanks for improving `ampi`. Small fixes are welcome directly as a pull request; larger changes start with an issue so we can agree on the approach first. Every change must pass the gate (`npm run gate`). Contributions are licensed under the repository's [MIT licence](LICENSE); there is no CLA.
 
 ## Quick start
 
@@ -14,8 +14,11 @@ Thanks for improving `ampi`.
      single file, or `npm run test:watch -- tests/<file>.test.mjs` while iterating)
    - `npm run check`
    - `npm run pack:dry-run` when package contents or exports change
-   - `npm run gate` runs lint, test, check, and pack:dry-run together
-6. Open a pull request into `main`.
+   - `npm run gate` runs everything a change must pass: secret scan, lint,
+     tests, type check, and package dry run. CI runs the same command (job
+     `gate`), and the pre-push hook runs it before every branch push
+     (`npm ci` enables the hooks with `git config core.hooksPath .githooks`).
+6. Open a pull request into `main`. It is squash-merged once `gate` is green.
 
 ## Pull request workflow
 
@@ -24,12 +27,12 @@ Thanks for improving `ampi`.
 - Keep the PR focused on one behavior or documentation change.
 - Use the PR body to list summary bullets, verification commands, and follow-up work.
 - Link related issues with `Closes #123` when the PR should close an issue on merge.
-- Use labels to make release notes and triage easier: `bug`, `enhancement`, `documentation`, `security`, `dependencies`, `chore`, `tooling`, or `good first issue`.
+- Labels are the same in every repository: `bug`, `enhancement`, `docs`, `question`, `needs-info`, `needs-owner`, `accepted`, `P0`, `P1`, `P2`, `good first issue`, `duplicate`, `wontfix`, `dependencies`, `security`.
 - After checks finish, review failures with `gh pr checks` or `gh run view --log-failed`.
 
 ## Commit messages
 
-Prefer Conventional Commits for new commits:
+Commit subjects and PR titles follow Conventional Commits 1.0 (`type(scope)!: summary`; types `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`; a breaking change takes `!` and a `BREAKING CHANGE:` footer):
 
 - `feat(scope): add new behavior`
 - `fix(scope): correct broken behavior`
@@ -46,6 +49,10 @@ Keep the summary imperative and under 72 characters. Add a body when it helps ex
 - Do not commit secrets, local session data, raw provider payloads, credentials, private notes, or exact local-only paths.
 - Keep public text framed in `ampi` terms.
 - Prefer existing helpers and dependencies over new one-off utilities.
+
+## Issues and reviews
+
+New issues are triaged and pull requests reviewed within 7 days. An issue waiting on a reply for 30 days is closed with a note; replying reopens it.
 
 ## Tests
 
