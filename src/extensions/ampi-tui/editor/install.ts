@@ -31,6 +31,8 @@ export interface MmrPromptBoxInstallOptions {
   readonly helpEntries?: () => readonly MmrShortcutHelpEntry[];
   /** tmux's `extended-keys` value, or `undefined` outside tmux or when it cannot be read. */
   readonly tmuxExtendedKeys?: () => Promise<string | undefined>;
+  /** Enter on an empty prompt: steer with the next queued message. False when there is none. */
+  readonly steerQueued?: () => boolean;
 }
 
 export interface MmrPromptBoxInstall {
@@ -121,6 +123,7 @@ export function createMmrPromptBoxInstall(
     slots,
     theme: () => ctx?.ui.theme ?? { fg: (_token: string, text: string) => text },
     dequeued: () => feed.refreshQueue(),
+    steerQueued: () => options.steerQueued?.() ?? false,
     help: () => ({ entries: options.helpEntries?.() ?? [], note: tmuxNote ? MMR_SHORTCUT_HELP_TMUX_NOTE : undefined }),
   };
 

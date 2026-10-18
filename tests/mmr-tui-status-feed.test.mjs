@@ -188,6 +188,24 @@ describe("ampi-tui status feed", () => {
     assert.equal(t.feed.status.queued, 0);
   });
 
+  it("follows the queue length Pi reports, and stops counting inputs and deliveries itself", () => {
+    const t = setup();
+    t.emit("turn_start");
+    t.feed.followQueue(2);
+    assert.equal(t.feed.status.hint, "Enter to steer, Backspace to dequeue");
+    // Pi reports the delivery before extensions see the user message start.
+    t.feed.followQueue(1);
+    t.emit("message_start", { message: { role: "user", content: "first" } });
+    assert.equal(t.feed.status.queued, 1, "a delivery Pi already reported is not counted twice");
+    t.emit("input", { text: "more", source: "interactive", streamingBehavior: "steer" });
+    assert.equal(t.feed.status.queued, 1, "the input waits for Pi's report");
+    t.state.pendingMessages = false;
+    t.emit("tool_execution_start", { toolCallId: "c1", toolName: "bash", args: {} });
+    assert.equal(t.feed.status.queued, 1, "Pi's reports win over hasPendingMessages()");
+    t.feed.followQueue(0);
+    assert.equal(t.feed.status.hint, "Enter to steer");
+  });
+
   it("shows the force-quit hint until the quit chord ends", () => {
     const t = setup();
     t.feed.setQuitHint(1500);

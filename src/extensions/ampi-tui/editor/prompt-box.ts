@@ -31,8 +31,9 @@ import { type MmrShortcutHelp, renderMmrShortcutHelp } from "./help.js";
  *
  * Text editing, wrapping, scrolling, autocomplete and Pi's app keys come
  * from Pi's `CustomEditor`. The box adds Alt+Enter for a newline, Esc to
- * clear the prompt (or close the help), and Backspace on an empty prompt to
- * take queued messages back. Any key that reaches the box closes the help;
+ * clear the prompt (or close the help), Backspace on an empty prompt to
+ * take queued messages back, and Enter on an empty prompt to steer with the
+ * next queued message. Any key that reaches the box closes the help;
  * one that is not Esc then does what it always does.
  */
 
@@ -84,6 +85,8 @@ export interface MmrPromptBoxHost {
   theme(): MmrPromptBoxTheme;
   /** Called after Backspace took the queued messages back into the prompt. */
   dequeued?(): void;
+  /** Enter on an empty prompt: steer with the next queued message. False when there is none. */
+  steerQueued?(): boolean;
   /** What the shortcuts help lists; read on each render while it is open. */
   help?(): MmrShortcutHelp;
 }
@@ -350,6 +353,7 @@ export class MmrPromptBox extends CustomEditor {
         return;
       }
     }
+    if (matchesKey(data, "enter") && this.getText().length === 0 && this.host.steerQueued?.()) return;
     this.withBoxRows(() => super.handleInput(data));
   }
 }

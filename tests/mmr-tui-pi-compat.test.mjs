@@ -3,11 +3,12 @@
 // against the installed Pi packages; a failure means Pi changed shape and the
 // adapter needs updating.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, before, describe, it } from "node:test";
-import { CustomEditor } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, createAgentSession, InteractiveMode, SessionManager } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
@@ -21,8 +22,10 @@ let terminalInput;
 let messages;
 let keymap;
 let slashCommands;
+let queueCompat;
 
 before(async () => {
+  queueCompat = await importSource("extensions/ampi-tui/pi-compat/queue.ts");
   slashCommands = await importSource("extensions/ampi-tui/pi-compat/slash-commands.ts");
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
   editorHeight = await importSource("extensions/ampi-tui/pi-compat/editor-height.ts");
@@ -140,6 +143,18 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.equal(editorCompat.submitMmrEditorText(tui, "/tree"), false);
   });
 
+  it("editor: a prompt added to the editor's history comes back on Up", () => {
+    const tui = new TuiMainScreen(stubTerminal());
+    const editor = new CustomEditor(tui, editorTheme, new KeybindingsManager({}));
+    tui.setFocus(editor);
+    assert.equal(editorCompat.addMmrEditorHistory(tui, "queued from the palette"), true);
+    editor.handleInput("\x1b[A");
+    assert.equal(editor.getText(), "queued from the palette");
+
+    tui.setFocus({ handleInput() {}, render: () => [], invalidate() {} });
+    assert.equal(editorCompat.addMmrEditorHistory(tui, "lost"), false);
+  });
+
   it("editor: Pi's interactive mode runs slash commands from onSubmit and toggles thinking through an editor action", () => {
     const source = readFileSync(path.join(piDist(), "modes/interactive/interactive-mode.js"), "utf8");
     assert.match(source, /defaultEditor\.onSubmit = async \(text\) => \{[\s\S]{0,400}text === "\/settings"/, "onSubmit handles built-in commands");
@@ -236,6 +251,67 @@ describe("ampi-tui Pi compatibility probes", () => {
       undefined,
       "Pi changed UserMessageComponent; update src/extensions/ampi-tui/pi-compat/messages.ts",
     );
+  });
+
+  it("queue: steering a queued follow-up moves only that message inside a live Pi session", async () => {
+    assert.equal(queueCompat.probeMmrPiQueue(), undefined, "Pi changed InteractiveMode; update src/extensions/ampi-tui/pi-compat/queue.ts");
+    const original = InteractiveMode.prototype.updatePendingMessagesDisplay;
+    const offline = process.env.PI_OFFLINE;
+    process.env.PI_OFFLINE = "1";
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ampi-queue-"));
+    const { session } = await createAgentSession({ cwd: dir, agentDir: dir, sessionManager: SessionManager.inMemory(dir), noTools: "all" });
+    const drawn = ["Pi's list"];
+    // Pi's interactive mode around the live session, with the fields its own methods read.
+    const mode = Object.assign(Object.create(InteractiveMode.prototype), {
+      runtimeHost: { session },
+      compactionQueuedMessages: [{ text: "after compaction", mode: "followUp" }],
+      pendingMessagesContainer: { clear: () => drawn.splice(0), addChild: (child) => drawn.push(child) },
+    });
+    session.subscribe((event) => {
+      if (event.type === "queue_update") mode.updatePendingMessagesDisplay();
+    });
+    const reports = [];
+    const watch = queueCompat.watchMmrPiQueue((queue) => reports.push(queue));
+    try {
+      assert.equal(queueCompat.probeMmrPiQueueSession(session), undefined, "Pi changed AgentSession; update src/extensions/ampi-tui/pi-compat/queue.ts");
+      assert.ok(watch);
+      assert.equal(watch.steerNext(), false, "nothing to steer before Pi reported its queue");
+
+      await session.steer("already steering");
+      // What pi.sendMessage(..., { deliverAs: "followUp" }) does while a turn runs.
+      session._isAgentRunActive = true;
+      await session.sendCustomMessage({ customType: "review-note", content: "note", display: true }, { deliverAs: "followUp" });
+      session._isAgentRunActive = false;
+      const image = { type: "image", data: "aW1n", mimeType: "image/png" };
+      await session.followUp("look at this", [image]);
+      await session.followUp("then the docs");
+      const queued = () => session.agent.followUpQueue.messages.map((message) => message.customType ?? message.content[0].text);
+      assert.deepEqual(queued(), ["review-note", "look at this", "then the docs"], "the custom message waits in the agent's follow-up queue");
+      const lookAtThis = session.agent.followUpQueue.messages[1];
+      assert.deepEqual(reports.at(-1), { steering: ["already steering"], followUp: ["look at this", "then the docs", "after compaction"] });
+      assert.deepEqual(drawn, [], "Pi's own list is left empty");
+
+      assert.equal(watch.steerBlocked(), undefined);
+      assert.equal(watch.steerNext(), true);
+      assert.deepEqual(queued(), ["review-note", "then the docs"], "the custom message stays queued");
+      assert.equal(session.agent.steeringQueue.messages.at(-1), lookAtThis, "the same message steers, image included");
+      assert.deepEqual(lookAtThis.content.at(-1), image);
+      assert.deepEqual(session.getSteeringMessages(), ["already steering", "look at this"]);
+      assert.deepEqual(session.getFollowUpMessages(), ["then the docs"]);
+      assert.deepEqual(reports.at(-1), { steering: ["already steering", "look at this"], followUp: ["then the docs", "after compaction"] });
+
+      assert.equal(watch.steerNext(), true);
+      assert.equal(watch.steerNext(), false, "no user follow-up is left in the session");
+      assert.equal(watch.steerBlocked(), "the queued message waits for compaction to finish");
+      assert.deepEqual(queued(), ["review-note"]);
+    } finally {
+      watch?.stop();
+      session.dispose();
+      rmSync(dir, { recursive: true, force: true });
+      if (offline === undefined) delete process.env.PI_OFFLINE;
+      else process.env.PI_OFFLINE = offline;
+    }
+    assert.equal(InteractiveMode.prototype.updatePendingMessagesDisplay, original, "stop gives Pi its own method back");
   });
 
   it("reserved keys: ampi combos map to Pi key ids", () => {

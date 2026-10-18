@@ -9,6 +9,7 @@ import { createMmrTitleNotify } from "./chrome/title-notify.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
 import { buildMmrShortcutHelpEntries } from "./editor/help.js";
 import { createMmrPromptBoxInstall } from "./editor/install.js";
+import { createMmrPromptQueue } from "./editor/queue.js";
 import { createMmrStatusFeed } from "./editor/status-feed.js";
 import { createMmrTuiKeys } from "./keys/install.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
@@ -43,8 +44,10 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     const promptBox = createMmrPromptBoxInstall(pi, feed, {
       helpEntries: () =>
         buildMmrShortcutHelpEntries({ keymap: keys.keymap(), commands: getMmrCommands(), modeKeys: getMmrModeState() !== undefined }),
+      steerQueued: () => queue.steerNext(),
     });
     const titleNotify = createMmrTitleNotify(pi, feed, { settings: settings.notifications });
+    const queue = createMmrPromptQueue(pi, { feed, getTui: () => tui });
     const keys = createMmrTuiKeys(pi, {
       editorHeight: () => promptBox.renderedHeight(),
       onEscapePending: () => promptBox.clearPrompt(),
@@ -76,12 +79,14 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       look.start(ctx);
       feed.reset(ctx);
       promptBox.start(ctx, () => footerData);
+      queue.start(ctx);
       keys.start(ctx, () => tui);
       titleNotify.start(ctx);
     });
 
     pi.on("session_shutdown", (event, ctx) => {
       keys.stop();
+      queue.stop();
       promptBox.stop();
       look.stop();
       titleNotify.stop();

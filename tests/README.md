@@ -42,6 +42,7 @@ Two import patterns coexist intentionally — see the helper header for details:
 - [`fixtures/mmr-subagent-surface/`](fixtures/mmr-subagent-surface) — one fixture per shipped subagent surface (`finder.md`, `oracle.md`, `task.md`, `librarian-local-mvp.md`), capturing the assembled subagent system prompt + profile-filtered active tool manifest.
 - [`fixtures/mmr-tui-tool-rows/`](fixtures/mmr-tui-tool-rows) — transcript tool rows at 80 and 140 columns, collapsed and expanded, as plain text.
 - [`fixtures/mmr-tui-tool-groups/`](fixtures/mmr-tui-tool-groups) — runs of tool calls folded into one summary row at 80 and 140 columns, collapsed and expanded, running and finished, as plain text.
+- [`fixtures/mmr-tui-queue/`](fixtures/mmr-tui-queue) — the box of queued messages above the prompt at 80 and 140 columns, as plain text and with ANSI kept.
 
 Update workflow: rerun the relevant fixture test with `PI_MMR_UPDATE_FIXTURES=1` to regenerate snapshots, review the diff before committing. Without that env var, fixture drift fails the test with the offending file path.
 

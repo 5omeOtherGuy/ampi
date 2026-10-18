@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; mode dial on Ctrl+S; Alt+T details toggle; shortcuts help on `?`; Help & Keymap screen and the keymap as JSONC from the palette; terminal title, notifications, quit summary | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; the window title; `/ampi-status` |
+| On | Prompt box with mode, cost, turn status and path in its borders; queued messages above it; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; mode dial on Ctrl+S; Alt+T details toggle; shortcuts help on `?`; Help & Keymap screen and the keymap as JSONC from the palette; terminal title, notifications, quit summary | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; the window title; `/ampi-status` |
 
 ## When to use it
 
@@ -43,6 +43,10 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | `prompt.openPalette` | Command, `/` | Open the command palette when the prompt is empty |
 | `thread.toggleDetails` | Command, `alt+t` | Expand or collapse tool output and thinking together |
 | `prompt.toggleHelp` | Command, `?` on an empty prompt | Show or hide the shortcuts help inside the prompt box |
+| Queue box | Pi widget above the editor | Lists the messages waiting for the running turn: `steering:` and `queued:` |
+| `prompt.queue` | Command, no key | Queue the prompt to run after the current turn instead of steering it |
+| `prompt.dequeue` | Command, Backspace on an empty prompt | Take every queued message back into the prompt (Pi's `app.message.dequeue`, also on Alt+Up) |
+| `prompt.steerQueuedMessage` | Command, Enter on an empty prompt | Send the next queued message now, to steer the running turn |
 | `ampi.status`, `ampi.changelog`, `ampi.config` | Commands, no key | Run `/ampi-status`, `/ampi-changelog` and `/ampi-config` (need `ampi-core`) |
 | `mode.toggle` | Command, `ctrl+s` | Open the mode dial; while it is open, turn it to the next mode (needs `ampi-core`); once the session's mode is locked it says why instead |
 | `mode.use.low` … `mode.use.free` | Commands, no key | Switch to that mode, as `/mode <key>` does (need `ampi-core`); hidden once the session's mode is locked |
@@ -170,12 +174,38 @@ The model, token totals and context use that Pi's footer showed are not on scree
 | Key | Does |
 | --- | --- |
 | Enter | Sends the prompt; while a turn runs, Pi delivers it to steer the turn |
+| Enter on an empty prompt | Steers with the next queued message, while one is queued (see [Queued messages](#queued-messages)) |
 | Alt+Enter, Shift+Enter, Ctrl+J | Insert a newline (Alt+Enter is Pi's follow-up key; the box takes it over) |
 | Esc | Closes the shortcuts help when it is open; otherwise clears the prompt when it has text. On an empty prompt with nothing running, Esc does what it does in Pi |
 | `?` on an empty prompt | Shows or hides the shortcuts help |
 | Backspace on an empty prompt | Takes queued messages back into the prompt (Pi's `app.message.dequeue`) |
 
 Everything else, including Ctrl+A and Ctrl+E for the line start and end, is Pi's editor behaviour.
+
+### Queued messages
+
+While a turn runs, a message can wait for it in two ways: Enter steers the turn (Pi hands the message to the model at its next step), and `prompt queue message` in the palette queues it to run after the turn ends. Waiting messages are listed in a box directly above the prompt box, one per row:
+
+```text
+ ╭────────────────────────────────────────────────────────────────────────────╮
+ │ steering: also check the tests                                             │
+ │ queued:   then update the docs                                             │
+ │           and the quick reference too                                      │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────── $0.00 ─ medium ─╮
+│                                                                              │
+│                                                                              │
+│                                                                              │
+╰ ≋ Running Tools bash · Enter to steer, Backspace to dequeue ─ …t/cwd (main) ─╯
+```
+
+- **Rows.** Messages that steer come first, labelled `steering:` in the accent colour; then the queued ones, the first labelled `queued:`, in a muted colour. Line breaks in a message show as spaces and long messages are cut. The box goes when nothing waits.
+- **Queue.** `prompt queue message` needs a running turn and text in the prompt; with an empty prompt the palette says "type a prompt to queue it". Prompt templates and skills expand as they do on Enter, and Up on an empty prompt recalls the message. It has no key by default; bind one under `ampi.keymap`.
+- **Steer a queued message.** Enter on an empty prompt, or `prompt steer queued message`, moves the next queued message into the steering ones, so the model sees it at its next step instead of after the turn. The message keeps its images and is not sent again, and messages other extensions queued for the turn stay queued.
+- **Take them back.** Backspace on an empty prompt, `prompt dequeue`, or Pi's own Alt+Up puts every waiting message, steering ones included, back into the prompt, above any text already there. This is Pi's own action: it also drops the messages other extensions queued for the turn.
+- The prompt box's hint reads `Enter to steer, Backspace to dequeue` while anything waits, and the queue count it uses follows Pi's queue.
+- Not while Pi compacts the conversation: Pi refuses new messages then, so queueing and steering a queued message are unavailable until it finishes.
+- Pi's own list of queued messages above the editor is not drawn while the box is there. When a Pi release changes how its queue is reached, the box and `prompt steer queued message` are left out and Pi's list returns; queueing, Backspace and `prompt dequeue` keep working.
 
 ### Keys
 
@@ -322,6 +352,7 @@ Pi prints the resume line only when the session has been saved, so a session wit
 | Esc with text, nothing running | Nothing | Clears the prompt |
 | Alt+Enter | Queues a follow-up message | Inserts a newline |
 | Backspace on an empty prompt | Nothing | Takes queued messages back into the prompt |
+| Enter on an empty prompt while messages are queued | Nothing | Steers with the next queued message |
 | Ctrl+C | Clears the prompt; twice within 0.5 s quits | Shows the "Ctrl+C then" popup and keeps the prompt; twice within 1.5 s quits |
 | Ctrl+X | Copies the last assistant message | Leader key; the popup lists what can follow |
 | Home / End on an empty prompt | Moves the cursor | Jumps to the start or end of the transcript |
@@ -335,7 +366,7 @@ Pi prints the resume line only when the session has been saved, so a session wit
 Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctrl+D (quit on an empty prompt) and Ctrl+Home / Ctrl+End (transcript scrolling).
 
 - Clearing the prompt: Ctrl+C no longer clears it; Esc does.
-- Follow-up messages: Alt+Enter no longer queues one. Bind Pi's `app.message.followUp` to another key in Pi's `keybindings.json` to keep follow-ups on a key; Enter while a turn runs still steers it.
+- Follow-up messages: Alt+Enter no longer queues one; `prompt queue message` in the palette does (see [Queued messages](#queued-messages)). To keep follow-ups on a key, bind `prompt.queue` under `ampi.keymap`, or Pi's `app.message.followUp` in Pi's `keybindings.json`; Enter while a turn runs still steers it.
 - Pi's own key hints still describe Pi's keys: the hint line under the startup header ("escape interrupt", "ctrl+c/ctrl+d clear/exit", "ctrl+o more"), "Press ctrl+o to show full startup help" and the "ctrl+o to expand" note on collapsed tool output. Where they name Ctrl+O, press Alt+T instead: it expands tool output, thinking and the full startup help.
 - When nothing is running, Pi's double Esc on an empty prompt opens the session tree. Set Pi's `doubleEscapeAction` to `"none"` to turn that off.
 - To keep a Pi key, unbind the ampi command that takes it: `"ampi.quit": null` gives Ctrl+C back to Pi, `"thread.interrupt": null` brings back Pi's Esc interrupt (Esc still clears a non-empty prompt first). Copying with Ctrl+X needs the leader moved elsewhere, or Pi's `app.message.copy` bound to another key in Pi's `keybindings.json`.
@@ -441,12 +472,13 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 
 - Manifest: risk class `terminal-ui`, child role `none`. No subagent child keep-set lists it, and child workers never run in the terminal UI.
 - Layout: `index.ts` (entry point), `config.ts` (settings), `chrome/look.ts` (installs the welcome header, message styling and theme), `chrome/welcome.ts` (header component, mark and card), `chrome/title-notify.ts` (terminal title and notifications), `chrome/quit-summary.ts` (the summary printed after quitting), `editor/` (the prompt box), `transcript/messages.ts` (user message drawing, thinking label), `transcript/activity.ts` and `transcript/tool-renderers.ts` (tool rows), `theme/` (`ampi.json` and its session selection), `keys/`, `ui/`, `overlays/`, `pi-compat/`.
-- `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass), its border slots and the open shortcuts help; `editor/help.ts` builds the help rows from the effective keymap and the command registry and lays them out; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start, feeds it the mode, cost, status, wave glyph and branch, toggles the help and runs the one-time tmux check.
+- `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass), its border slots and the open shortcuts help; `editor/help.ts` builds the help rows from the effective keymap and the command registry and lays them out; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start, feeds it the mode, cost, status, wave glyph and branch, toggles the help and runs the one-time tmux check; `editor/queue.ts` draws the queue box as an `aboveEditor` widget (set again on each change, so it stays nearest the prompt box), hands the queue length to the status feed and defines the three queue commands.
 - `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi, opens the palette and tells the prompt box about the first Esc, the pending quit, the open palette, the help toggle and every other key command (which closes the help).
 - `ui/frame.ts` draws the box overlays share (rounded border, title in the top border, key hints in the bottom border, scrollbar column); `overlays/palette.ts` is the command palette; `overlays/mode-dial.ts` is the mode dial with its list view; `overlays/help-keymap.ts` builds the Help & Keymap sections from the registry, the keymap and Pi's keybindings, and draws them and the keymap JSONC in one scrolling box.
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
 - Tool rows: `transcript/activity.ts` classifies a call (pure, no Pi imports) and `summarizeActivities` folds a run of calls into one phrase; `transcript/activity-groups.ts` keeps the runs, fed by Pi's message and tool events and rebuilt from the session's context entries, because a renderer sees only its own call; `transcript/tool-renderers.ts` draws rows and cards through one `pi.registerToolRenderer` resolver. The first call of a run draws the summary, and the others render no lines, which Pi draws with no height and no spacer. Tests: `tests/mmr-tui-activity.test.mjs`, `tests/mmr-tui-activity-groups.test.mjs`, `tests/mmr-tui-tool-renderers.test.mjs` and `tests/mmr-tui-tool-groups.test.mjs`, whose 80- and 140-column fixtures in `tests/fixtures/mmr-tui-tool-rows/` and `tests/fixtures/mmr-tui-tool-groups/` are refreshed with `PI_MMR_UPDATE_FIXTURES=1`.
-- `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands, the editor's height rule (`editor-height.ts`), transcript scrolling, the reserved shortcut list, raw input, and the user message component. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
+- `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands, the editor's height rule (`editor-height.ts`), transcript scrolling, the reserved shortcut list, raw input, the user message component, and the message queue. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
+- `pi-compat/queue.ts` replaces `InteractiveMode.prototype.updatePendingMessagesDisplay`, which Pi runs on every queue change, between session start and shutdown: Pi's own list stays empty and ampi receives the queued texts. Steering a queued message moves that one message inside Pi's session, from its agent's follow-up queue to its steering queue, and updates the session's lists of queued texts, so custom messages from other extensions, images and the rest of the queue stay as they are. `probeMmrPiQueue` names any change in the class shape and `probeMmrPiQueueSession` any change in the session; with a changed session, `prompt steer queued message` and Enter on an empty prompt do nothing and the palette says why.
 - `pi-compat/messages.ts` patches `UserMessageComponent.prototype.rebuild`. It is installed when the extension loads, because Pi rebuilds the chat on `/reload` before `session_start`, and removed at `session_shutdown`. `probeMmrUserMessageComponent` names any change in the class shape.
 - The theme is applied as a `Theme` object, never by name: `ctx.ui.setTheme("ampi")` would write the user's settings. An empty widget below the editor re-applies it when Pi returns to `system`, using the component `invalidate()` call Pi makes on every theme change.
-- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys, the shortcuts help), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-help-keymap.test.mjs` (sections, keys and the two commands; fixtures in `tests/fixtures/ampi-tui-help-keymap/`), `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection), `tests/mmr-tui-title-notify.test.mjs` (title forms, notification policy and throttles on a fake clock), `tests/mmr-tui-quit-summary.test.mjs` and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.
+- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys, the shortcuts help), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-queue.test.mjs` (queue box fixtures in `tests/fixtures/mmr-tui-queue/`, command availability, queue, dequeue and steer against a played Pi queue), `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-help-keymap.test.mjs` (sections, keys and the two commands; fixtures in `tests/fixtures/ampi-tui-help-keymap/`), `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection), `tests/mmr-tui-title-notify.test.mjs` (title forms, notification policy and throttles on a fake clock), `tests/mmr-tui-quit-summary.test.mjs` and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.
