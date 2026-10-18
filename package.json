@@ -99,7 +99,7 @@
     "worktrees:report": "bash scripts/list-merged-worktrees.sh",
     "gate": "bash scripts/gate.sh",
     "release:notes": "node scripts/github-release-notes.mjs",
-    "pack:dry-run": "npm pack --dry-run",
+    "pack:dry-run": "npm pack --dry-run && npm pack --dry-run ./packages/ampi-cli",
     "verify:pack": "node scripts/verify-pack.mjs"
   },
   "engines": {

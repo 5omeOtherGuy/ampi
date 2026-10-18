@@ -10,7 +10,8 @@
 #   -v / --verbose   stream each step's output live instead of buffering
 #
 # Steps: npm run scan:secrets, npm run lint, npm test, npm run check,
-# npm run pack:dry-run. AGENTS.md, CONTRIBUTING.md and CI (job `gate`) all
+# npm run pack:dry-run (the root package and packages/ampi-cli).
+# AGENTS.md, CONTRIBUTING.md and CI (job `gate`) all
 # name this one command.
 
 set -uo pipefail
@@ -19,7 +20,7 @@ VERBOSE=0
 for arg in "$@"; do
   case "$arg" in
     -v|--verbose) VERBOSE=1 ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     *) echo "gate: unknown argument: $arg" >&2; exit 64 ;;
   esac
 done

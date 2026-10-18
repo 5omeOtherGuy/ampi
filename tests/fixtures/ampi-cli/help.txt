@@ -1,0 +1,56 @@
+ampi: Pi with the ampi extensions, started with Amp-compatible options
+
+Usage: ampi [options] [command] [message...]
+
+Commands:
+
+  help                          Print this help and exit
+  version                       Print the ampi-cli, ampi and Pi versions and exit
+
+  Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
+  unchanged, without ampi's options.
+
+Options:
+
+  -m, --mode <mode>
+      Start in an ampi mode: low, medium, high, ultra or free (rush, smart, deep and fable are
+      accepted as aliases). --mode text, json and rpc keep Pi's meaning (output format).
+  --title <title>
+      Accepted for compatibility; not applied yet.
+  -l, --label <label>
+      Accepted for compatibility; not applied yet. Repeat the flag for several labels.
+  -h, --help
+      Print this help and exit
+  -V, -v, --version
+      Print the versions and exit
+  --pi-help
+      Print Pi's own options, including the flags ampi's extensions add
+  --
+      Hand everything after it to Pi as the message, without reading ampi options
+
+  Every other option and argument goes to Pi unchanged, for example --model, -c, -r or -p.
+
+Environment variables:
+
+  PI_CODING_AGENT_DIR           Pi's configuration directory (default ~/.pi/agent): settings,
+                                sessions and installed packages
+  PI_OFFLINE                    Set to 1 to start without network activity such as model
+                                catalogue refreshes
+
+Examples:
+
+Open a session:
+
+  $ ampi
+
+Open a session in high mode:
+
+  $ ampi -m high
+
+Open a session and send a first message:
+
+  $ ampi "explain how the build scripts fit together"
+
+Pick up the latest session in this directory:
+
+  $ ampi -c

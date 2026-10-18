@@ -138,6 +138,20 @@ Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader
 { "ampi": { "keymap": { "leader": "alt+x", "ampi.quit": null } } }
 ```
 
+## Command line
+
+The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi with ampi loaded. Other options and Pi's own commands go to Pi unchanged.
+
+| I want to... | Run | Notes |
+| --- | --- | --- |
+| Start a session | `ampi` | Same as `pi -e npm:@skippermissions/ampi` |
+| Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`; `--mode text`, `json`, `rpc` stay Pi's output format |
+| Pass a message that looks like an option | `ampi -- -m is a flag` | Everything after `--` goes to Pi as the message |
+| See versions | `ampi version` | ampi-cli, ampi and Pi |
+| See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |
+
+If Pi already loads ampi (from its settings, an extension directory or a `-e` argument), the command uses that copy and says so on stderr instead of loading ampi twice.
+
 ## Settings
 
 Minimal settings example:

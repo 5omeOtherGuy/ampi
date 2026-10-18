@@ -1,6 +1,9 @@
 # release-please keeps a release PR open from the Conventional Commits on main
 # (version bump in package.json plus CHANGELOG.md). Merging that PR tags
 # vX.Y.Z, creates the GitHub Release, and publishes to npm in the same run.
+# The CLI package in packages/ampi-cli is versioned separately (tags
+# ampi-cli-vX.Y.Z) and is published after @skippermissions/ampi when both
+# release together, so its dependency on the new ampi version resolves.
 #
 # Needs, from the owner:
 # - a GitHub App installed on this repository (contents, pull requests and
@@ -8,8 +11,9 @@
 #   RELEASE_APP_CLIENT_ID and its private key in the secret
 #   RELEASE_APP_PRIVATE_KEY. A PR opened with the default GITHUB_TOKEN would
 #   get no CI run.
-# - npm trusted publishing for @skippermissions/ampi pointing at this
-#   repository and this workflow file (release.yml). No npm token is stored.
+# - npm trusted publishing for @skippermissions/ampi and
+#   @skippermissions/ampi-cli pointing at this repository and this workflow
+#   file (release.yml). No npm token is stored.
 
 name: Release
 
@@ -37,6 +41,8 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      cli_release_created: ${{ steps.release.outputs['packages/ampi-cli--release_created'] }}
+      cli_tag_name: ${{ steps.release.outputs['packages/ampi-cli--tag_name'] }}
     steps:
       - name: Create GitHub App token
         id: app-token
@@ -96,4 +102,47 @@ jobs:
         run: npm run gate
 
       - name: Publish
+        run: npm publish --provenance --access public
+
+  publish-cli:
+    name: Publish ampi-cli to npm
+    needs: [release-please, publish]
+    # Runs when the CLI was released, after the core package's publish job
+    # succeeded or was skipped (no core release in this run).
+    if: ${{ always() && needs.release-please.outputs.cli_release_created == 'true' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.cli_tag_name }}
+          persist-credentials: false
+
+      - name: Verify provenance source
+        run: |
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$GITHUB_SHA" ]; then
+            echo "::error::Release tag commit $actual differs from workflow commit $GITHUB_SHA; refusing to publish with wrong provenance. Re-run the publish from the release commit."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gate
+        run: npm run gate
+
+      - name: Publish
+        working-directory: packages/ampi-cli
         run: npm publish --provenance --access public

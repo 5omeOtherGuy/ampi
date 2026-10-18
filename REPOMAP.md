@@ -15,6 +15,7 @@
 | [`REPOMAP.md`](REPOMAP.md) | This repository structure and ownership map. |
 | [`package.json`](package.json) | Package metadata, Pi extension registration, export map, and npm scripts. |
 | [`package-lock.json`](package-lock.json) | Locked dependency graph. |
+| [`packages/ampi-cli/`](packages/ampi-cli/README.md) | The `@skippermissions/ampi-cli` package: the `ampi` command. |
 | [`tsconfig.json`](tsconfig.json) | TypeScript strict-mode configuration. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor workflow. |
 | [`AGENTS.md`](AGENTS.md) | Coding-agent profile, landing workflow, and repository rules. |
@@ -238,6 +239,24 @@ Not registered in `pi.extensions` and registers no tools. `index.ts` re-exports 
 ### `src/extensions/ampi-debug/` (developer-only)
 
 Not registered in `pi.extensions` and excluded from the published package via `.npmignore`. Loaded explicitly with `pi -e "$PWD/src/extensions/ampi-debug/index.ts"` and inert unless `AMPI_DEBUG_CAPTURE_FILE` (legacy `MMR_DEBUG_CAPTURE_FILE` still accepted) is set. A pure hook-based observer (`index.ts`, `capture.ts`) that records system-prompt source/text, advertised tool names, response status/headers, and message end metadata for ground-truth review. See its `README.md` for usage.
+
+## Packages under `packages/`
+
+Each package is published and versioned on its own (`release-please-config.json`). They are not npm workspaces: Pi installs a git source of ampi with `npm install` at the repository root, and a workspace would pull each package's dependencies, a second Pi among them, into that install. In a checkout the packages run on the root install, which already provides Pi as a peer dependency.
+
+```text
+packages/
+  ampi-cli/
+    bin/ampi.js      # the `ampi` executable
+    src/argv.js      # argument router and help text (pure)
+    src/packages.js  # package lookup and the guard against loading ampi twice
+    src/pi-compat.js # the undocumented Pi calls the guard needs, in one place
+    src/main.js      # prints help or versions, or starts Pi through its exported main()
+```
+
+### `packages/ampi-cli/`
+
+`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
 
 ## Documentation tree
 

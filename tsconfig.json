@@ -7,7 +7,9 @@
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "packages/*/bin/*.js", "packages/*/src/**/*.js"]
 }
