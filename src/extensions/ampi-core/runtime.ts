@@ -563,6 +563,15 @@ export function setMmrModeState(state: MmrModeState | undefined): void {
 }
 
 /**
+ * True while the session's mode is fixed: the mode lock is on and the session
+ * has a user message. A mode control then shows the mode instead of changing
+ * it; `getMmrModeState()?.modeLock?.reason` says why.
+ */
+export function isMmrModeLocked(): boolean {
+  return runtime.getMmrModeState()?.modeLock?.locked === true;
+}
+
+/**
  * Live read of the current subagent runtime state. Undefined when no
  * `--ampi-subagent <name>` worker is active. The returned object is the
  * runtime singleton's frozen value and must not be mutated.

@@ -483,6 +483,22 @@ describe("ampi-tui mode dial key", () => {
     assert.equal(t.overlays[1].closed, true, "stopping closes an open dial");
   });
 
+  it("refuses Ctrl+S with the reason while the session's mode is locked", () => {
+    const t = setup();
+    t.pi.registerCommand("mode", {});
+    runtime.setMmrModeState({ mode: "high", modeLock: { enabled: true, locked: true, reason: "fixed" } });
+    assert.equal(t.send("\x13"), true, "the key is taken, not passed to Pi");
+    assert.equal(t.overlays.length, 0, "no dial opens");
+    assert.deepEqual(t.calls.sendUserMessage, []);
+    assert.deepEqual(t.notifications.at(-1), { message: "Mode stays high: fixed. /mode <key> still switches it.", level: "warning" });
+
+    // Before the first message the lock is open and the dial opens.
+    runtime.setMmrModeState({ mode: "high", modeLock: { enabled: true, locked: false } });
+    assert.equal(t.send("\x13"), true);
+    assert.equal(t.overlays.length, 1);
+    t.keys.stop();
+  });
+
   it("leaves Ctrl+S to Pi when ampi-core's /mode is missing", () => {
     const t = setup();
     assert.equal(t.send("\x13"), false);
@@ -729,6 +745,32 @@ describe("ampi-tui command palette and details toggle", () => {
         ["use high", "unavailable", "high is the current mode"],
       ],
     );
+  });
+
+  it("hides the mode rows while the session's mode is locked", () => {
+    const t = setup();
+    t.pi.registerCommand("mode", {});
+    runtime.setMmrModeState({ mode: "high", modeLock: { enabled: true, locked: true, reason: "fixed" } });
+    t.send("\x0f");
+    const locked = t.overlays[0].component.getRows();
+    const ids = locked.map((row) => row.command.id);
+    assert.deepEqual(ids.filter((id) => id.startsWith("mode.use.")), []);
+    assert.ok(ids.includes("mode.toggle"), "the dial row stays and refuses with the reason");
+    assert.ok(ids.includes("ampi.status"), "other ampi rows stay");
+    // `/mode` is the override, so its row takes their place and puts the command into the prompt.
+    const modeRow = locked.find((row) => row.command.id === "pi.mode");
+    assert.equal(modeRow?.state, "available");
+    modeRow.command.run(t.ctx);
+    assert.equal(t.state.editorText, "/mode ");
+    t.state.editorText = "";
+    t.overlays[0].component.handleInput("\x1b");
+
+    // Before the first message the lock is open: the mode rows are back and `pi /mode` is gone.
+    runtime.setMmrModeState({ mode: "high", modeLock: { enabled: true, locked: false } });
+    t.send("\x0f");
+    const rows = t.overlays.at(-1).component.getRows();
+    assert.equal(rows.filter((row) => row.command.id.startsWith("mode.use.")).length, 5);
+    assert.ok(!rows.some((row) => row.command.id === "pi.mode"));
   });
 
   it("toggles tool output and thinking together with Alt+T", () => {

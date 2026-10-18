@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { createMmrAutoCompactor, type MmrAutoCompactor } from "./auto-compact.js";
 import { withMmrModeContextCap } from "./context-cap.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
+import { isRecord } from "./internal/json.js";
 import {
   DEFAULT_MMR_MODE,
   getMmrMode,
@@ -51,6 +52,7 @@ import type {
   MmrEditToolsSetting,
   MmrLockedModeKey,
   MmrModeKey,
+  MmrModeLock,
   MmrModeSelectionSource,
   MmrModeState,
   MmrModelPreference,
@@ -60,6 +62,14 @@ import type {
 // The picker includes every canonical mode; the cycle drops `free`.
 const CYCLABLE_MMR_MODE_KEYS: MmrModeKey[] = MMR_HOTKEY_MODE_KEYS.filter((mode) => mode !== "free");
 
+/** Why a mode change is refused once the session has a user message. */
+const MMR_MODE_LOCK_REASON = "the mode is fixed once a session has messages; start a new session to change it";
+
+/** Whether the session entries hold a user message (Pi's `message` entry with role `user`). */
+function hasMmrUserMessage(entries: readonly unknown[]): boolean {
+  return entries.some((entry) => isRecord(entry) && entry.type === "message" && isRecord(entry.message) && entry.message.role === "user");
+}
+
 export interface ApplyModeOptions {
   source: MmrModeSelectionSource;
   persist?: boolean;
@@ -68,6 +78,12 @@ export interface ApplyModeOptions {
   rejectedSources?: readonly MmrRejectedModeSource[];
   nativeModel?: Parameters<ExtensionAPI["setModel"]>[0];
   nativeThinkingLevel?: ThinkingLevel;
+  /**
+   * Change the mode even when the session's mode is locked. Set by `/mode`,
+   * the session's initial mode and native Pi model or thinking changes; the
+   * cycle and picker shortcuts leave it unset and are refused while locked.
+   */
+  overrideModeLock?: boolean;
 }
 
 export interface MmrBaseline {
@@ -106,6 +122,8 @@ export function notifyWarnings(ctx: ExtensionContext, warnings: readonly string[
 export interface MmrModeController {
   applyMode(modeKey: MmrModeKey, ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState | undefined>;
   resolveInitialMode(ctx: ExtensionContext): Promise<void>;
+  /** Lock the mode once the session gets its first user message. */
+  noteUserMessage(): void;
   switchLockedModeToFreeForNativeControl(
     ctx: ExtensionContext,
     options?: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">,
@@ -174,6 +192,31 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   // default is re-derived on each apply so stale persisted levels never pin a
   // mode away from its default after a reload.
   const modeThinkingOverrides: Partial<Record<MmrToggleableModeKey, MmrToggleThinkingLevel>> = {};
+  // The mode lock: on unless `ampiCore.modeLock` is false, engaged once the
+  // session has a user message. Both are re-read at every session start.
+  let modeLockEnabled = true;
+  let sessionHasUserMessage = false;
+
+  function currentModeLock(): MmrModeLock {
+    return modeLockEnabled && sessionHasUserMessage
+      ? { enabled: true, locked: true, reason: MMR_MODE_LOCK_REASON }
+      : { enabled: modeLockEnabled, locked: false };
+  }
+
+  function notifyModeLocked(ctx: ExtensionContext, mode: MmrModeKey): void {
+    ctx.ui.notify(`Mode stays ${mode}: ${MMR_MODE_LOCK_REASON}. /mode <key> still switches it.`, "warning");
+  }
+
+  // Bring the live state's lock in line with the session, for example when
+  // the first user message arrives between two mode changes.
+  function publishModeLock(): void {
+    const state = getMmrModeState();
+    if (!state) return;
+    const modeLock = currentModeLock();
+    if (state.modeLock?.enabled === modeLock.enabled && state.modeLock?.locked === modeLock.locked) return;
+    setMmrModeState({ ...state, modeLock });
+    publishStateChange();
+  }
 
   function safeGetThinkingLevel(): ThinkingLevel | undefined {
     try {
@@ -229,6 +272,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       featureGateDecisions: resolveMmrFeatureGates(mode.featureGates ?? []),
       settingsFilesRead,
       settingsWarnings,
+      modeLock: currentModeLock(),
     });
   }
 
@@ -375,6 +419,14 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   }
 
   async function applyMode(modeKey: MmrModeKey, ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState | undefined> {
+    // Refuse before anything changes, so a refused cycle also keeps a
+    // session-fallback route in place.
+    const currentState = getMmrModeState();
+    if (!options.overrideModeLock && currentState && currentState.mode !== modeKey && currentModeLock().locked) {
+      if (options.notify) notifyModeLocked(ctx, currentState.mode);
+      return currentState;
+    }
+
     clearMmrManagedModelOverride();
     const mode = getMmrMode(modeKey);
 
@@ -484,6 +536,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         featureGateDecisions: resolveMmrFeatureGates(mode.featureGates ?? []),
         settingsFilesRead,
         settingsWarnings,
+        modeLock: currentModeLock(),
       });
       setMmrModeState(state);
       publishStateChange();
@@ -537,7 +590,11 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     settingsWarnings = [...loadedSettings.warnings];
     notifyWarnings(ctx, loadedSettings.warnings);
 
-    const persisted = findLatestPersistedModeState(ctx.sessionManager.getEntries());
+    const entries = ctx.sessionManager.getEntries();
+    modeLockEnabled = loadedSettings.settings.modeLock !== false;
+    sessionHasUserMessage = hasMmrUserMessage(entries);
+
+    const persisted = findLatestPersistedModeState(entries);
     const selection = resolveMmrModeSelection({
       flagValue: readPreferredFlag(pi, "ampi-mode", "mmr-mode"),
       persistedMode: persisted?.mode,
@@ -551,7 +608,16 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       persist: selection.source === "flag",
       notify: selection.source === "flag",
       rejectedSources: selection.rejectedSources,
+      overrideModeLock: true,
     });
+    // A failed apply keeps the previous session's state; give it this session's lock.
+    publishModeLock();
+  }
+
+  function noteUserMessage(): void {
+    if (sessionHasUserMessage) return;
+    sessionHasUserMessage = true;
+    publishModeLock();
   }
 
   async function switchLockedModeToFreeForNativeControl(
@@ -574,6 +640,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       persist: true,
       notify: true,
       nativeControlOptOut: true,
+      // Pi has already switched the model or thinking level; follow it.
+      overrideModeLock: true,
       ...options,
     });
   }
@@ -661,6 +729,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (ctx.hasUI === false) return;
 
     const currentMode = getMmrModeState()?.mode;
+    if (currentMode && currentModeLock().locked) {
+      notifyModeLocked(ctx, currentMode);
+      return;
+    }
     const title = currentMode ? `MMR mode (current: ${currentMode})` : "MMR mode";
     const choice = await ctx.ui.select(title, [...MMR_HOTKEY_MODE_KEYS]);
     if (!choice || !isMmrModeKey(choice)) return;
@@ -750,6 +822,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   return {
     applyMode,
     resolveInitialMode,
+    noteUserMessage,
     switchLockedModeToFreeForNativeControl,
     reassertActiveModelInvariants,
     refreshEditTools,

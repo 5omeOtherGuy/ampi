@@ -86,6 +86,14 @@ function formatBaseline(state: MmrModeState): string {
   return state.baselineModel ? `yes (${state.baselineModel})` : "yes (model unknown)";
 }
 
+function formatModeLock(state: MmrModeState): string | undefined {
+  const lock = state.modeLock;
+  if (!lock) return undefined;
+  if (!lock.enabled) return "Mode lock: off (ampiCore.modeLock is false)";
+  if (lock.locked) return `Mode lock: locked - ${lock.reason ?? "the session has messages"}; /mode overrides it`;
+  return "Mode lock: open until the first message";
+}
+
 function formatMmrContextCap(effectiveMaxInputTokens: number | undefined, mode: string): string {
   if (mode === "free") return "none";
   if (typeof effectiveMaxInputTokens === "number" && Number.isFinite(effectiveMaxInputTokens) && effectiveMaxInputTokens > 0) {
@@ -494,6 +502,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       "Mode: Free (free)",
       `Selected source: ${state.source}`,
       formatRejectedSources(state),
+      formatModeLock(state),
       "Mode control: native Pi controls",
       "Prompt surface: Pi standard prompt (MMR disabled)",
       "Tool allowlist: disabled",
@@ -513,6 +522,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     `Mode: ${state.displayName} (${state.mode})`,
     `Selected source: ${state.source}`,
     formatRejectedSources(state),
+    formatModeLock(state),
     `Model preference order: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`,
     `Resolved model: ${formatSelectedModel(state)}`,
     `Resolved model available: ${state.modelFound ? "yes" : "no"}`,

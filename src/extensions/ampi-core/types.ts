@@ -338,6 +338,26 @@ export interface MmrModeState {
    * cleared to `undefined` on a clean turn.
    */
   promptAssembly?: MmrPromptAssemblyObservation;
+  /**
+   * Runtime-only: whether the session's mode may still change. Set by the
+   * mode controller on every apply and when the session gets its first user
+   * message; never persisted, because it is derived from the session entries.
+   */
+  modeLock?: MmrModeLock;
+}
+
+/**
+ * The per-session mode lock. A session chooses its mode before the first
+ * user message; from then on the mode cycle, the mode picker and the palette's
+ * mode rows refuse to change it. `/mode <key>` stays an explicit override.
+ */
+export interface MmrModeLock {
+  /** False when the `ampiCore.modeLock` setting is `false`. */
+  enabled: boolean;
+  /** True once the lock is enabled and the session has a user message. */
+  locked: boolean;
+  /** Why the mode cannot change; set while `locked` is true. */
+  reason?: string;
 }
 
 /**
@@ -559,6 +579,11 @@ export interface MmrCoreSettings {
    * either way.
    */
   editTools?: MmrEditToolsSetting;
+  /**
+   * Fix the mode once the session has a user message (default `true`).
+   * `false` lets the mode cycle, picker and palette change it at any time.
+   */
+  modeLock?: boolean;
 }
 
 /**

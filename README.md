@@ -98,14 +98,17 @@ Model IDs above are the shipped defaults; you can override the preference list p
 
 The file-editing tool follows the resolved route rather than the mode: OpenAI-family routes (`openai`, `openai-codex`, `azure`) get `apply_patch`, every other route gets Pi's `edit`, and every locked mode keeps `write`. Set `ampiCore.editTools` to `"patch"` or `"edit"` to use one family everywhere; `/ampi-status` shows which is active and why.
 
+A session keeps the mode it had when you sent its first message. From then on `Ctrl+S` (the mode dial), the mode picker and the palette leave the mode as it is: the keys say why, and the palette hides its `mode use` rows. `/mode <key>` still switches it as an explicit override, and a native Pi model or thinking change still drops to `free`. To work in another mode, start a new session; to switch at any time as before, set `"ampiCore": { "modeLock": false }`.
+
 Interactive controls:
 
 ```text
 /mode                # show current mode
-/mode high           # switch mode
-Ctrl+Shift+S         # mode picker (Alt+M fallback)
-Ctrl+S               # mode dial; each further press turns low → medium → high → ultra, Tab lists every mode
-                     # (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
+/mode high           # switch mode (also overrides the lock after the first message)
+Ctrl+Shift+S         # mode picker (Alt+M fallback), until the first message
+Ctrl+S               # mode dial, until the first message; each further press turns low → medium → high → ultra,
+                     # Tab lists every mode (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias
+                     # that only works then)
 Alt+D                # toggle the active mode's thinking preset where supported
 Esc                  # clear the prompt
 Esc Esc              # stop the running turn (one Esc no longer does)

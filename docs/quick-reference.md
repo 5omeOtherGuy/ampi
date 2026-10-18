@@ -14,12 +14,12 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 
 ```text
 /mode              # show current mode
-/mode high         # switch mode
-/ampi-status        # concise locked-mode status
+/mode high         # switch mode; after the first message, an explicit override of the lock
+/ampi-status        # concise locked-mode status, including the mode lock
 /ampi-status debug  # model preference candidates, tool resolution, policy details
-Ctrl+S              # mode dial: further presses or ←/→ turn low → medium → high → ultra; Tab lists all modes
-                    # (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
-Ctrl+Shift+S        # mode picker (Alt+M fallback)
+Ctrl+S              # mode dial, until the first message: further presses or ←/→ turn low → medium → high → ultra;
+                    # Tab lists all modes (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
+Ctrl+Shift+S        # mode picker (Alt+M fallback), until the first message
 Alt+D               # toggle the active mode's thinking preset (medium, high, ultra)
 ```
 
@@ -28,6 +28,8 @@ In the interactive TUI, locked modes compact the conversation automatically once
 Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` inputs normalize to `low`, `medium`, `high`, and `ultra`.
 
 File editing follows the route, not the mode: `openai`, `openai-codex`, and `azure` routes get `apply_patch` + `write`; every other provider gets `edit` + `write`. `ampiCore.editTools` (`"auto"`, `"patch"`, `"edit"`) forces one family; `/ampi-status` names the active one on its `Edit tools:` line.
+
+The mode is fixed once a session has a message: the dial or cycle, the picker and the palette's `mode use` rows stop changing it, and only `/mode <key>` or a native Pi model change still does. Start a new session for another mode, or set `ampiCore.modeLock` to `false` to switch at any time.
 
 ## Workers and subagents
 
@@ -170,6 +172,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | `librarian` is `gated` | Enable `AMPI_GITHUB_ENABLE`; add `AMPI_GITHUB_TOKEN` for private repos/search |
 | Web search is unreliable | Configure `AMPI_WEB_SEARXNG_URL` or `BRAVE_API_KEY` |
 | Mode unexpectedly became `free` | Re-enter `/mode <key>` after native `/model` or `/think` changes |
+| Ctrl+S says the mode stays | The session has messages; use `/mode <key>`, start a new session, or set `ampiCore.modeLock: false` |
 | Locked mode refuses to activate | Check model preference candidates and active tool resolution in `/ampi-status debug` |
 | No footer below the editor | `ampi-tui` removes it by default; set `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) and restart Pi to restore it |
 | Ctrl+C no longer clears the prompt | `ampi-tui` uses Ctrl+C Ctrl+C to quit; clear with Ctrl+U, or set `"ampi.quit": null` under `ampi.keymap` to give Ctrl+C back to Pi |

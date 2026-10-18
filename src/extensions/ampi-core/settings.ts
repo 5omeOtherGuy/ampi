@@ -297,6 +297,11 @@ function extractMmrCoreSettings(
     }
   }
 
+  if ("modeLock" in raw) {
+    if (typeof raw.modeLock === "boolean") settings.modeLock = raw.modeLock;
+    else context.warnings.push(`Ignoring ${rootKey}.modeLock in ${context.filePath}: expected true or false.`);
+  }
+
   return settings;
 }
 
