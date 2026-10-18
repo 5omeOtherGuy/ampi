@@ -518,6 +518,61 @@ import type { MmrModeState } from "@skippermissions/ampi";
 Other extensions should treat persisted state as **read-only**: do not
 write `ampi-core.mode-state` entries from outside `ampi-core`.
 
+## Thread status
+
+`createMmrThreadStatusReducer()` (alias `createAmpiThreadStatusReducer`)
+returns a reducer that turns the events of an agent run into the
+Amp-compatible status a terminal or browser UI shows next to the prompt.
+It is pure and synchronous, starts no timers, and is not wired into the
+`ampi-core` lifecycle; the UI that owns it maps Pi events onto
+`MmrThreadStatusEvent` and calls `apply(event)`.
+
+```ts
+import { createMmrThreadStatusReducer } from "@skippermissions/ampi";
+
+const threadStatus = createMmrThreadStatusReducer();
+pi.on("turn_start", () => threadStatus.apply({ type: "turnStart" }));
+pi.on("tool_execution_start", (event) =>
+  threadStatus.apply({ type: "toolStart", toolCallId: event.toolCallId, toolName: event.toolName }),
+);
+```
+
+`apply` returns a frozen `MmrThreadStatus`, and returns the previous
+object when nothing visible changed, so callers can skip redraws by
+identity:
+
+| Field | Meaning |
+| --- | --- |
+| `phase`, `label` | Current phase and its status words (table below) |
+| `detail` | `23 tok` while thinking or streaming, or the running tool's name |
+| `hint` | Steer, dequeue, or force-quit key hint; empty otherwise |
+| `busy`, `queued`, `attention` | Run in progress; queued messages; the user is needed |
+
+| `phase` | `label` | `phase` | `label` |
+| --- | --- | --- | --- |
+| `idle` | (empty) | `runningTools` | `Running Tools` |
+| `sending` | `Sending` | `compacting` | `Auto-Compacting` |
+| `thinking` | `Thinking` | `waitingApproval` | `Waiting for Approval` |
+| `streaming` | `Streaming` | `cancelling` | `Cancelling` |
+| `error` | `Error` | | |
+
+- The hint is `Enter to steer`, or `Enter to steer, Backspace to dequeue`
+  while messages are queued, and `ctrl+c again to force quit` during the
+  quit grace period. Steering hints show only while the agent runs or
+  compacts, not while it waits for approval, cancels, or after an error.
+- The token count appears only when the provider reports output usage
+  while streaming. With several tools running, `detail` names the one that
+  started first.
+- `attention` is true while waiting for approval and after an error.
+
+- Compaction shows over the current phase and the interrupted phase
+  returns when it finishes or fails.
+- An abort shows `Cancelling` until the turn ends, then the thread is idle.
+- A failed tool does not change the phase; an `error` event does, and it
+  stays until the next `turnStart`.
+- The force-quit hint expires once an event's `now` (or a `tick`) reaches
+  the `expiresAt` given with `quitPressed`.
+
 ## Additional exported helpers
 
 The package root re-exports a few lower-level helpers used by tests,
