@@ -21,6 +21,7 @@ import {
 } from "./runtime.js";
 import { loadMmrCoreSettings } from "./settings.js";
 import { isMmrSkillsDisabledByCli, resolveMmrSkillPaths } from "./skill-paths.js";
+import { applyMmrSpeedToPayload, changeMmrSpeed, getMmrSpeed, MMR_FAST_FLAG, registerMmrToggleFastCommand, resolveMmrSessionSpeed } from "./speed.js";
 import { applyMmrSubagentProfile } from "./subagent-activation.js";
 import { updateMmrStatus } from "./status.js";
 import { MMR_TOOLS_DISABLE_SETTING, type MmrToolDisableMatcher } from "./tool-disable.js";
@@ -99,7 +100,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
       // Subagent workers run as a dedicated, non-locked execution profile.
       // Skip baseline capture, locked-mode resolution, mode persistence,
       // status footer, and Free-mode tool restoration so a child Pi process
-      // honors the worker's profile-resolved policy verbatim.
+      // honors the worker's profile-resolved policy verbatim. Workers run at
+      // standard speed; the parent's speed is not inherited.
       await applyMmrSubagentProfile(pi, subagentFlag, ctx, subagentActivationBindings);
       return;
     }
@@ -118,6 +120,20 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // uncapped window, reassert the active mode's context cap. No-op when the
     // cap is already in effect or the mode does not cap (`free`).
     await controller.reassertActiveModelInvariants(ctx);
+    // The speed belongs to the session branch: its newest `ampi-speed` entry,
+    // or for a session without one `--ampi-fast`, then `ampi.speed`.
+    // Fast speed raises the price, so a project's `ampi.speed` counts only
+    // once Pi trusts the project; until then only the user's file applies.
+    // Pi always provides isProjectTrusted; a host without it counts as trusted.
+    const projectTrusted = typeof ctx.isProjectTrusted === "function" ? ctx.isProjectTrusted() : true;
+    const loadedSettings = loadMmrCoreSettings(ctx.cwd).settings;
+    const speed = resolveMmrSessionSpeed({
+      // Some hosts' session managers have no branch view; they get the setting.
+      entries: ctx.sessionManager.getBranch?.() ?? [],
+      flag: pi.getFlag(MMR_FAST_FLAG) === true,
+      setting: projectTrusted ? loadedSettings.speed : loadedSettings.speedByScope?.user,
+    });
+    changeMmrSpeed(pi, speed, ctx.model);
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
@@ -180,9 +196,14 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // cap is already in effect.
     await controller.reassertActiveModelInvariants(ctx);
     const activePolicy = controller.getActivePolicy();
-    if (!activePolicy) return;
-    if (getMmrManagedModelOverride()) return;
-    return applyMmrRequestPolicy(event.payload, activePolicy, { providerId: getMmrModeState()?.provider });
+    const withPolicy = activePolicy && !getMmrManagedModelOverride()
+      ? applyMmrRequestPolicy(event.payload, activePolicy, { providerId: getMmrModeState()?.provider })
+      : undefined;
+    // Speed applies in every mode, free and session fallbacks included, to
+    // whatever model the request goes to.
+    const base = withPolicy ?? event.payload;
+    const withSpeed = applyMmrSpeedToPayload(base, getMmrSpeed(), { providerId: ctx.model?.provider });
+    return withSpeed === base ? withPolicy : withSpeed;
   });
 
   pi.on("before_agent_start", async (event) => {
@@ -255,6 +276,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("model_select", async (event, ctx) => {
+    // The fast-speed verb names the new model's cost multiple.
+    registerMmrToggleFastCommand(pi, event.model);
     // Pi uses source:"set" both for pi.setModel(...) and picker-style model changes;
     // applyingMmrMode separates MMR transactions from native user opt-outs.
     if (controller.isApplyingMmrMode() || isMmrManagedModelUpdateActive() || event.source === "restore") {

@@ -30,6 +30,7 @@
   "prompt.steerQueuedMessage": null, // Send the next waiting follow-up now, to steer the running turn
   "prompt.toggleHelp": "?", // Show or hide the shortcuts help in the prompt box
   "skills.list": null, // List the skills Pi loaded, grouped by where it found them
+  "speed.toggleFast": "alt+r", // Turn fast speed on or off: priority serving from the provider, at a higher price
   "thread.analyzeContext": null, // Show what fills the context window: prompt, tools, AGENTS.md files, skills and messages
   "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
   "thread.archiveAndQuit": "ctrl+c ctrl+e", // Archive and quit

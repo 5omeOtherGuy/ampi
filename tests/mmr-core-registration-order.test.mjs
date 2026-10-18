@@ -17,11 +17,11 @@ describe("mmr-core registration order", () => {
 
     extension(pi);
 
-    assert.deepEqual([...flagDefs.keys()], ["ampi-mode", "mmr-mode", "ampi-subagent", "mmr-subagent", "ampi-parent-mode", "mmr-parent-mode"]);
+    assert.deepEqual([...flagDefs.keys()], ["ampi-mode", "mmr-mode", "ampi-subagent", "mmr-subagent", "ampi-parent-mode", "mmr-parent-mode", "ampi-fast"]);
 
     assert.deepEqual([...commands.keys()], ["mode", "ampi-status", "mmr-status", "ampi-changelog", "mmr-changelog", "ampi-config", "mmr-config"]);
 
-    assert.deepEqual([...shortcuts.keys()], ["ctrl+shift+s", "alt+m", "ctrl+s", "ctrl+space", "alt+d"]);
+    assert.deepEqual([...shortcuts.keys()], ["ctrl+shift+s", "alt+m", "ctrl+s", "ctrl+space", "alt+d", "alt+r"]);
 
     assert.deepEqual(
       [...handlers.keys()],
@@ -99,6 +99,7 @@ describe("mmr-core registration order", () => {
       "flag:mmr-subagent",
       "flag:ampi-parent-mode",
       "flag:mmr-parent-mode",
+      "flag:ampi-fast",
       "command:mode",
       "command:ampi-status",
       "command:mmr-status",
@@ -111,6 +112,7 @@ describe("mmr-core registration order", () => {
       "shortcut:ctrl+s",
       "shortcut:ctrl+space",
       "shortcut:alt+d",
+      "shortcut:alt+r",
       "hook:session_start",
       "hook:before_provider_request",
       "hook:before_agent_start",

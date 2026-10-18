@@ -88,6 +88,7 @@ const CASES = {
   "mode-high": { slots: { mode: "high" } },
   "mode-ultra": { slots: { mode: "ultra" } },
   "mode-free": { slots: { mode: "free" } },
+  "mode-fast": { slots: { mode: "medium", fast: true, gauge: "$0.02" } },
   "status-thinking": {
     slots: {
       gauge: "$····",
@@ -242,6 +243,17 @@ describe("ampi-tui prompt box: geometry", () => {
     const narrow = plain(makeBox({ slots: { gauge: "$0.02" } }).editor.render(12)[0]);
     // 12 columns leave 9 for the slot after the corners and one line cell: " medium ─" fits, the gauge does not.
     assert.equal(narrow, "╭─ medium ─╮", "the gauge goes first");
+  });
+
+  it("puts the fast marker directly before the mode, in the mode colour, and drops the gauge first", () => {
+    const top = makeBox({ slots: { gauge: "$0.02", fast: true } }).editor.render(80)[0];
+    assert.ok(top.includes("\x1b[38;2;61;255;166m↯medium\x1b[39m"), JSON.stringify(top));
+    assert.match(plain(top), / \$0\.02 ─ ↯medium ─╮$/);
+    // 13 columns leave 10 for the slot: " ↯medium ─" fits, the gauge does not.
+    assert.equal(plain(makeBox({ slots: { gauge: "$0.02", fast: true } }).editor.render(13)[0]), "╭─ ↯medium ─╮");
+    // One column fewer and the label goes too.
+    assert.equal(plain(makeBox({ slots: { gauge: "$0.02", fast: true } }).editor.render(12)[0]), `╭${"─".repeat(10)}╮`);
+    assert.equal(plain(makeBox({ slots: { mode: undefined, fast: true } }).editor.render(20)[0]), `╭${"─".repeat(18)}╮`);
   });
 
   it("shows no label without a mode and the free mode in the border colour", () => {

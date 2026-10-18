@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { MmrCommandDefinition } from "./extensions/ampi-core/command-registry.js";
 import { formatMmrKeymapJsonc, readMmrKeymapSettings, resolveMmrKeymap } from "./extensions/ampi-core/keymap.js";
+import { createMmrToggleFastCommand } from "./extensions/ampi-core/speed.js";
 import { createMmrThreadCommands, type MmrThreadCommandHost } from "./extensions/ampi-threads/commands.js";
 import { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
 import { loadMmrTuiSettings } from "./extensions/ampi-tui/config.js";
@@ -13,8 +14,8 @@ import { createMmrMessageNavigation } from "./extensions/ampi-tui/transcript/nav
 /**
  * The keymap outside a Pi session, for `ampi config keymap`.
  *
- * In a terminal session `ampi-tui` and `ampi-threads` register their palette
- * commands in ampi-core's command registry. This module builds the same
+ * In a terminal session ampi-core, `ampi-tui` and `ampi-threads` register their
+ * palette commands in ampi-core's command registry. This module builds the same
  * definitions without a session, so the command line lists the same ids,
  * descriptions and default keys. The hosts below are never called: the
  * definitions are only read, never run.
@@ -34,6 +35,8 @@ export function collectMmrDefaultCommands(options: { threads?: boolean } = {}): 
     sendUserMessage: nothing,
     on: () => nothing,
     registerCommand: nothing,
+    appendEntry: nothing,
+    events: { emit: nothing, on: () => nothing },
   };
   const tuiHost: MmrTuiCommandHost = {
     getTui: nothing,
@@ -57,7 +60,13 @@ export function collectMmrDefaultCommands(options: { threads?: boolean } = {}): 
   const queue = createMmrPromptQueue(pi, { feed: {} as MmrStatusFeed, getTui: nothing });
   const navigation = createMmrMessageNavigation(pi);
   const threadCommands = options.threads === false ? [] : createMmrThreadCommands(threadHost);
-  return [...threadCommands, ...queue.commands, ...createMmrTuiCommands(tuiHost), ...navigation.commands];
+  return [
+    createMmrToggleFastCommand(pi, undefined),
+    ...threadCommands,
+    ...queue.commands,
+    ...createMmrTuiCommands(tuiHost),
+    ...navigation.commands,
+  ];
 }
 
 export interface MmrEffectiveKeymapJsonc {

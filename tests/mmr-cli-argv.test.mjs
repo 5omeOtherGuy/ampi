@@ -70,6 +70,19 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(route.options.labels, ["docs", "release"]);
   });
 
+  it("translates --fast to --ampi-fast once, interactive and in execute mode", () => {
+    assert.equal(routeAmpiArgv(["fix it"]).options.fast, false);
+    const interactive = routeAmpiArgv(["--fast", "-m", "high", "fix it"]);
+    assert.equal(interactive.command, "pi");
+    assert.deepEqual(interactive.piArgs, ["--ampi-fast", "--ampi-mode", "high", "fix it"]);
+    assert.equal(interactive.options.fast, true);
+    const execute = routeAmpiArgv(["-x", "fix it", "--fast", "--fast"]);
+    assert.deepEqual(execute.piArgs, ["fix it", "--ampi-fast"]);
+    assert.deepEqual([execute.options.execute, execute.options.fast], [true, true]);
+    // After -- it is part of the message.
+    assert.deepEqual(routeAmpiArgv(["--", "--fast"]).piArgs, ["--", "--fast"]);
+  });
+
   it("reads -x/--execute, --timings and --no-archive-after-execute and keeps them away from Pi", () => {
     const plain = routeAmpiArgv(["fix", "it"]).options;
     assert.deepEqual([plain.execute, plain.timings, plain.archive], [false, false, true]);

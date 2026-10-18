@@ -69,9 +69,10 @@ describe("mmr-core mode shortcuts", () => {
     assert.equal(shortcuts.get("alt+m")?.description, "Select ampi mode");
     assert.equal(shortcuts.get("ctrl+s")?.description, "Cycle ampi mode");
     assert.match(shortcuts.get("alt+d")?.description ?? "", /Toggle ampi thinking level/);
+    assert.equal(shortcuts.get("alt+r")?.description, "Toggle ampi fast speed");
   });
 
-  it("keeps ctrl+space only as a deprecated cycle alias and frees alt+r", async () => {
+  it("keeps ctrl+space only as a deprecated cycle alias", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();
     runtime.setMmrModeState(createState("high"));
@@ -80,7 +81,6 @@ describe("mmr-core mode shortcuts", () => {
 
     extension(pi);
 
-    assert.equal(shortcuts.has("alt+r"), false);
     assert.match(shortcuts.get("ctrl+space")?.description ?? "", /deprecated/i);
     assert.doesNotMatch(shortcuts.get("ctrl+s")?.description ?? "", /deprecated/i);
 

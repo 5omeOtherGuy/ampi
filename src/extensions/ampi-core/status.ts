@@ -3,6 +3,7 @@ import type { MmrAutoCompactStatus } from "./auto-compact.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { MMR_EDIT_TOOL_FAMILY_TOOLS } from "./modes.js";
+import { formatMmrSpeedStatus, type MmrSpeed } from "./speed.js";
 import { MMR_TOOLS_DISABLE_SETTING } from "./tool-disable.js";
 import { formatMmrCompactTokens } from "./token-format.js";
 import {
@@ -75,11 +76,17 @@ export interface FormatMmrStatusOptions {
   disabledBySetting?: readonly { tool: string; entry: string }[];
   /** The `ampi-permissions` gate decision; shown in every mode, Free included, because the gate applies there too. */
   permissions?: MmrFeatureGateDecision;
+  /** The session's speed and the model it applies to; adds a `Speed:` line. */
+  speed?: { speed: MmrSpeed; provider?: string; model?: string };
 }
 
 function formatPermissions(decision: MmrFeatureGateDecision | undefined): string | undefined {
   if (!decision) return undefined;
   return `Permissions: ${decision.status} via ${decision.source} (${decision.reason})`;
+}
+
+function formatSpeed(speed: FormatMmrStatusOptions["speed"]): string | undefined {
+  return speed ? `Speed: ${formatMmrSpeedStatus(speed.speed, speed.provider, speed.model)}` : undefined;
 }
 
 function formatSelectedModel(state: MmrModeState): string {
@@ -521,6 +528,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       formatRejectedSources(state),
       formatModeLock(state),
       "Mode control: native Pi controls",
+      formatSpeed(options.speed),
       "Prompt surface: Pi standard prompt (MMR disabled)",
       "Tool allowlist: disabled",
       "Context cap: none",
@@ -550,6 +558,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     `Thinking: ${state.thinkingLevel ?? "Pi default"} (request policy: ${formatMmrPolicyThinking(getRequestPolicyForState(state))})`,
     `Context: ${formatMmrPolicyContext(getRequestPolicyForState(state), getContextOverridesForState(state))}`,
     `Context cap: ${formatMmrContextCap(state.effectiveMaxInputTokens, state.mode)}`,
+    formatSpeed(options.speed),
     `Baseline captured: ${formatBaseline(state)}`,
     `Prompt surface: ${state.promptRoute}`,
     `Active tools: ${state.activeTools.join(", ") || "none"}`,

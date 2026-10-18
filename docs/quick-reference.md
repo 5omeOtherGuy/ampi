@@ -20,8 +20,11 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 Ctrl+S              # mode dial, until the first message: further presses or ←/→ turn low → medium → high → ultra;
                     # Tab lists all modes (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
 Ctrl+Shift+S        # mode picker (Alt+M fallback), until the first message
-Alt+D               # toggle the active mode's thinking preset (medium, high, ultra)
+Alt+D               # toggle the active mode's thinking preset (medium, high, ultra); Alt+R before 0.4.0
+Alt+R               # toggle fast speed (OpenAI and OpenAI Codex models; about 2x the price, 2.5x for gpt-5.5)
 ```
+
+Fast speed asks the provider for priority serving. It applies in every mode, is remembered per session, and never reaches subagent workers; `↯` before the mode name in the prompt box and the `Speed:` line of `/ampi-status` show it. New sessions start at `ampi.speed` (`"standard"` or `"fast"`), or fast with `--ampi-fast`.
 
 In the interactive TUI, locked modes compact the conversation automatically once a finished run leaves it at 90% of the context window (Medium: 270k of 300k); `free`, subagent workers and `print`, `json` and `rpc` runs never do. Set `ampiCore.autoCompact` to `{ "threshold": 0.8 }` to compact earlier or to `false` to leave compaction to Pi; `/ampi-status debug` shows the threshold and the last auto-compaction.
 
@@ -132,6 +135,7 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Ctrl+O` | Open the command palette | Type to filter, ↑/↓ to move, Enter to run, Esc to close; Pi's slash commands are listed under `pi` |
 | `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
+| `Alt+R` | Turn fast speed on or off | From ampi-core; only for OpenAI and OpenAI Codex models, otherwise it says why. In the palette as `speed use fast (2x cost)` or `speed disable fast` |
 | `?` | Show or hide the shortcuts help | Only on an empty prompt; Esc or any other key closes it |
 | `Shift+Tab` / `Tab` | Select your previous / next message | Shift+Tab only on an empty prompt (with text it cycles Pi's thinking level); Tab past the newest, Esc or typing clears the selection |
 | `e` | Edit the selected message | Puts it into the prompt and continues the thread from before it on a new branch; the old branch stays in `/tree` |
@@ -159,7 +163,7 @@ Mentions are plain text in your message. The model sees `@:<sha>` and can run gi
 
 The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
-The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
+The prompt box shows the session's state in its borders: the mode (with `↯` in front at fast speed) and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
 
 While a turn runs, `prompt queue message` in the palette queues the prompt to run after the turn instead of steering it. Waiting messages are listed above the prompt box, `steering:` first, then `queued:`. `prompt steer queued message` and `prompt dequeue` do what Enter and Backspace on an empty prompt do.
 
@@ -179,6 +183,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | --- | --- | --- |
 | Start a session | `ampi` | Same as `pi -e npm:@skippermissions/ampi` |
 | Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`; `--mode text`, `json`, `rpc` stay Pi's output format |
+| Start at fast speed | `ampi --fast` | Becomes `--ampi-fast`; also with `-x` |
 | Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; `--stream-json-thinking` adds thinking blocks |
 | Send several messages to one session | `producer \| ampi -x --stream-json --stream-json-input` | One JSON user message per stdin line, `"steer": true` to redirect the run in progress; a result record after each run |
@@ -234,6 +239,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | --- | --- | --- |
 | `ampi.tools.disable` | Turns tools off in every mode and in workers, and blocks calls to them, nested calls included. Exact names, `*` globs, or `builtin:<name>` for Pi's own built-in tools only; user and project lists combine | `["web_search", "task_*", "builtin:grep"]` |
 | `ampi.skills.path` | Extra skill directories, `:`-separated (`;` on Windows); `~` is home, relative entries resolve against the repository root. A project value counts only when Pi trusts the project | `"~/my-skills:/shared/team-skills"` |
+| `ampi.speed` | The speed a new session starts at: `"standard"` (default) or `"fast"`, priority serving at a higher price for OpenAI and OpenAI Codex models. A session keeps the speed you last chose in it. A project file's value applies only once Pi trusts the project | `"fast"` |
 | `ampi.skills.disableClaudeCodeSkills` | `true` stops loading skills from `.claude/skills` (project, up to the repository root, with project trust) and `~/.claude/skills`, which are read by default | `true` |
 | `ampi.terminal.detailsExpandedByDefault` | `true` starts sessions with tool output expanded and thinking shown; Alt+T still toggles them. Showing thinking saves `hideThinkingBlock: false` to your user settings | `true` |
 | `ampi.fuzzy.alwaysIncludePaths` | Globs relative to the working directory whose paths `@` file mentions offer even when git ignores them | `["dist/**"]` |
@@ -270,6 +276,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | No notification when a turn finishes | Check `ampiTui.notifications`; inside tmux, or in a terminal without OSC 777 notifications, set `AMPI_FORCE_BEL=1` for a bell |
 | You want no moving glyphs | Set `NO_ANIMATION=1` in the environment, or `ampiTui.animations: false` in a settings file |
 | Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; use `prompt queue message` in the palette, or bind `prompt.queue` under `ampi.keymap` |
+| Alt+R no longer toggles the thinking level | Since 0.4.0 Alt+D toggles the thinking preset; Alt+R turns fast speed on or off |
 | Shift+Tab no longer cycles the thinking level | On an empty prompt it selects your previous message; type something first, or set `"thread.selectPreviousMessage": null` under `ampi.keymap` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

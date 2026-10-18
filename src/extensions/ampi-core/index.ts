@@ -3,6 +3,7 @@ import { createMmrModeController } from "./mode-controller.js";
 import { registerMmrCommands } from "./command-registration.js";
 import { registerMmrLifecycleHooks } from "./lifecycle-hooks.js";
 import { registerMmrLiveRegistry } from "./live-registry.js";
+import { MMR_FAST_FLAG } from "./speed.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("ampi-mode", {
@@ -33,6 +34,11 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("mmr-parent-mode", {
     description: "Legacy alias for --ampi-parent-mode.",
     type: "string",
+  });
+
+  pi.registerFlag(MMR_FAST_FLAG, {
+    description: "Start a new session at fast speed: priority serving where the provider offers it, at a higher price",
+    type: "boolean",
   });
 
   // Registration order is observable and load-bearing (pinned by

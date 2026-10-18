@@ -597,6 +597,10 @@ export interface MmrCoreSettings {
   skillsPath?: { user?: string; project?: string };
   /** `ampi.skills.disableClaudeCodeSkills`: `true` leaves out the `.claude/skills` folders. */
   disableClaudeCodeSkills?: boolean;
+  /** `ampi.speed`: the speed a new session starts at (default `standard`); the project file wins. */
+  speed?: "standard" | "fast";
+  /** `ampi.speed` per settings file, so the project's value can be held back until Pi trusts the project. */
+  speedByScope?: { user?: "standard" | "fast"; project?: "standard" | "fast" };
 }
 
 /**
