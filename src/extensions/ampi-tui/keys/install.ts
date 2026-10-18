@@ -21,6 +21,7 @@ import type { MmrModeKey } from "../../ampi-core/types.js";
 import { pickMmrThreadMention } from "../editor/mentions.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
+import { createMmrOutline } from "../overlays/outline.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { openMmrPromptHistory } from "../overlays/prompt-history.js";
 import { openMmrThreadPicker } from "../overlays/thread-picker.js";
@@ -145,6 +146,11 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let promptHistoryOpen = false;
   let threadSwitcherOpen = false;
   let threadMentionOpen = false;
+  // The outline sits where the dial and the key hint popup open; it steps aside while they show.
+  const outline = createMmrOutline({
+    offsetY: abovePrompt,
+    yields: () => hint !== undefined || (modeDial !== undefined && !modeDial.isClosed()),
+  });
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -157,9 +163,17 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openThreadMention,
     openThreadCost: (current, reports) => openReport(() => openMmrThreadCost(current, reports.cost(current))),
     openContextAnalysis: (current, reports) => openReport(() => openMmrContextAnalysis(current, reports.analyzeContext(current))),
+    toggleOutline: (current) => outline.toggle(current),
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
+
+  // An open outline follows the session: each response that ends, and each
+  // move through the session tree (editing a message goes there too).
+  pi.on("message_end", (event, eventCtx) => {
+    if (event.message.role === "assistant") outline.refresh(eventCtx, event.message);
+  });
+  pi.on("session_tree", (_event, eventCtx) => outline.refresh(eventCtx));
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -569,10 +583,12 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       unsubscribeCommands ??= onMmrCommandsChanged(() => rebuild());
       unsubscribeInput?.();
       unsubscribeInput = subscribeMmrTerminalInput(nextCtx.ui, onInput);
+      outline.refresh(nextCtx);
     },
     stop() {
       dispatcher?.cancel();
       closeHint();
+      outline.close();
       modeDial?.close();
       modeDial = undefined;
       // Switches still waiting belong to this session; drop them.

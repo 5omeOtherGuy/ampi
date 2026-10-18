@@ -12,14 +12,15 @@ const FOREGROUND = {
   success: "\x1b[32m",
   userMessageText: "\x1b[32m",
   dim: "\x1b[2m",
+  mdHeading: "\x1b[36m",
   scrollbarThumb: "\x1b[38;5;243m",
 };
 
 /**
  * A theme with the methods ampi-tui components call, mapping each token to a
  * fixed ANSI color in the spirit of the `ampi` theme: `accent` blue,
- * `warning` yellow, `success` and `userMessageText` green, `dim` faint, a
- * gray scrollbar.
+ * `warning` yellow, `success` and `userMessageText` green, `mdHeading` cyan,
+ * `dim` faint, a gray scrollbar.
  */
 export function createAnsiTheme() {
   const tokenAnsi = (token) => {

@@ -47,6 +47,7 @@ export function collectMmrDefaultCommands(options: { threads?: boolean } = {}): 
     openThreadMention: nothing,
     openThreadCost: nothing,
     openContextAnalysis: nothing,
+    toggleOutline: nothing,
   };
   const threadHost = { pi, now: () => "" } as unknown as MmrThreadCommandHost;
   const queue = createMmrPromptQueue(pi, { feed: {} as MmrStatusFeed, getTui: nothing });

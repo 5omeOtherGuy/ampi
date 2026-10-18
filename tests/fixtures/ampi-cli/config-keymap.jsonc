@@ -39,5 +39,6 @@
   "thread.switchToNext": null, // Go forward again after switching to the previous session
   "thread.switchToPrevious": null, // Go back to the session you switched away from
   "thread.toggleDetails": null, // Expand or collapse tool output and thinking together
+  "thread.toggleOutline": null, // Show or hide the headings of the last response, next to the prompt
   "thread.unarchive": null // Take this session out of the archive
 }

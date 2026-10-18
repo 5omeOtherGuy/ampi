@@ -43,6 +43,7 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | Mentions | Pi autocomplete provider | `@` keeps Pi's file rows and adds hints; `@:` lists commits; `@@` opens the Mention Thread picker ([Mentions](#mentions)) |
 | `thread.showCost` | Command, no key | Open the [Thread Cost](#thread-cost-and-analyze-context) overlay (needs `ampi-threads`, which computes the cost) |
 | `thread.analyzeContext` | Command, no key | Open the [Analyze Context](#thread-cost-and-analyze-context) overlay (needs `ampi-threads`) |
+| `thread.toggleOutline` | Command, no key | Show or hide the [outline](#outline) of the last response next to the prompt |
 | `ampi.showVersion` | Command, no key | Show the ampi and Pi versions |
 | `ampi.help` | Command, no key | Open the [Help & Keymap screen](#help--keymap-screen) |
 | `ampi.keymapJson` | Command, no key | Show the keymap in effect as JSONC ("ampi show keymap" in the palette) |
@@ -413,6 +414,25 @@ Typing `@` in the prompt mentions a file, `@:` a commit and `@@` a session. The 
 ```
 
 - Analyze Context: the model and its context window, the estimated tokens of each section and its share of the window (the count of tools, files or skills in brackets), the total and the free space, the compactions on this branch, and the count Pi measured at its last response when it has one. Without a known window the shares read "—" and the free space is left out.
+
+### Outline
+
+`thread toggle outline` in the command palette (no default key) shows the headings of the last response in a box at the right edge, just above the prompt box; running it again hides the box.
+
+```text
+╭─ Outline ────────────────────────────────────────────────╮
+│ ↑  Explain how the cache works and where it is configur… │
+│ Cache layout                                             │
+│   Keys                                                   │
+│   Eviction                                               │
+│     Least recently used                                  │
+╰──────────────────────────────────────────────────────────╯
+```
+
+- The box is 60 columns wide (or the terminal width less four), two columns in from the right edge, and as tall as its content, up to a third of the terminal's rows; rows that do not fit are counted in a last row, `… 8 more`.
+- The first row is `↑` and the first line of the message the response answers (for a skill call, the words typed with it), dim in the heading colour. Then come the response's Markdown headings, `#` lines and underlined ones, indented two columns per level below the shallowest one present, level 1 in bold; lines in fenced code blocks are not headings. A response without headings shows `No headings`.
+- The response is all assistant text after your newest message that has an answer, so it does not follow scrolling. While a turn has written no text yet, the previous response stays. The box updates when a response ends and when the thread moves in the session tree (editing a message, `/tree`); it closes when the session ends or changes.
+- The box takes no keys: typing goes on in the prompt. It hides while the mode dial or a key hint popup is open, and on a terminal narrower than 40 columns.
 
 ### Mode dial
 
