@@ -43,6 +43,7 @@
       "./src/extensions/ampi-github/index.ts",
       "./src/extensions/ampi-workers/index.ts",
       "./src/extensions/ampi-custom-subagents/index.ts",
+      "./src/extensions/ampi-tui/index.ts",
       "./src/extensions/ampi-history/index.ts"
     ]
   },
@@ -57,6 +58,7 @@
     "./extensions/ampi-github": "./src/extensions/ampi-github/index.ts",
     "./extensions/ampi-workers": "./src/extensions/ampi-workers/index.ts",
     "./extensions/ampi-custom-subagents": "./src/extensions/ampi-custom-subagents/index.ts",
+    "./extensions/ampi-tui": "./src/extensions/ampi-tui/index.ts",
     "./extensions/ampi-history": "./src/extensions/ampi-history/index.ts",
     "./extensions/mmr-core": "./src/extensions/ampi-core/index.ts",
     "./extensions/mmr-session-fallback": "./src/extensions/ampi-session-fallback/index.ts",
@@ -67,6 +69,7 @@
     "./extensions/mmr-github": "./src/extensions/ampi-github/index.ts",
     "./extensions/mmr-workers": "./src/extensions/ampi-workers/index.ts",
     "./extensions/mmr-custom-subagents": "./src/extensions/ampi-custom-subagents/index.ts",
+    "./extensions/mmr-tui": "./src/extensions/ampi-tui/index.ts",
     "./extensions/mmr-history": "./src/extensions/ampi-history/index.ts"
   },
   "scripts": {

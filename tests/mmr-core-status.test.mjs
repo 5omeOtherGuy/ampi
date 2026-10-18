@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { renderFooter, statusLineMatcher } from "./helpers/footer.mjs";
+import { createMockExtensionContext } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
 
@@ -188,6 +189,35 @@ describe("mmr-core footer status", () => {
 
     assert.equal(statuses.at(-1)?.value, undefined);
     assert.equal(footers.at(-1), undefined);
+  });
+
+  it("leaves the footer slot alone while a chrome owner is registered, and resumes after release", async () => {
+    const { updateMmrStatus } = await importSource("extensions/ampi-core/status.ts");
+    // A separate module copy shares the registry, as Pi's isolated loads do.
+    const { getMmrChromeOwner, registerMmrChromeOwner } = await importSource("extensions/ampi-core/chrome-owner.ts");
+    const locked = await buildState();
+    const free = await buildState({ modeKey: "free" });
+    const { ctx, footers, statuses } = createMockExtensionContext();
+
+    const releaseFirst = registerMmrChromeOwner("first-owner");
+    const releaseSecond = registerMmrChromeOwner("ampi-tui");
+    assert.equal(getMmrChromeOwner(), "ampi-tui", "the most recent owner wins");
+    releaseFirst();
+    releaseFirst();
+    assert.equal(getMmrChromeOwner(), "ampi-tui", "releasing another owner, even twice, keeps this one");
+
+    for (const state of [locked, free, undefined]) updateMmrStatus(ctx, state);
+    assert.deepEqual(footers, [], "core neither installs its footer nor restores Pi's");
+    assert.equal(statuses.length, 6);
+    assert.ok(statuses.every((entry) => entry.value === undefined));
+
+    releaseSecond();
+    assert.equal(getMmrChromeOwner(), undefined);
+    updateMmrStatus(ctx, locked);
+    updateMmrStatus(ctx, free);
+    assert.equal(footers.length, 2);
+    assert.equal(typeof footers[0], "function", "locked mode installs ampi's footer again");
+    assert.equal(footers[1], undefined, "free mode restores Pi's footer again");
   });
 });
 

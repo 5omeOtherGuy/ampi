@@ -235,6 +235,20 @@ describe("architecture manifest guardrails", () => {
     }
   });
 
+  it("subagent child keep-sets never keep an extension whose child role is none", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const { MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS } = await importSource(
+      "extensions/ampi-workers/child-extension-scope.ts",
+    );
+    const noChildRole = new Set(MMR_EXTENSION_MANIFEST.filter((e) => e.childRole === "none").map((e) => e.name));
+    assert.ok(noChildRole.has("ampi-tui"), "ampi-tui draws terminal chrome only and plays no child role");
+    for (const [profile, keep] of Object.entries(MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS)) {
+      for (const ext of keep) {
+        assert.equal(noChildRole.has(ext), false, `child keep-set for ${profile} keeps ${ext}, whose childRole is none`);
+      }
+    }
+  });
+
   it("feature gate ids are unique across the manifest", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const seen = new Map();

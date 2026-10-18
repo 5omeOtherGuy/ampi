@@ -605,6 +605,13 @@ above unless they have a specific reason to use these.
 - `isMmrToolAllowed(toolName, resolution)` — stateless check against a
   pre-resolved `MmrToolResolution`. Use `isToolAllowed` for the
   current runtime state.
+- `registerMmrChromeOwner(name)` / `getMmrChromeOwner()` — seam for an
+  extension that draws its own terminal chrome. While any owner is
+  registered, `ampi-core` leaves Pi's footer slot alone: it neither
+  installs its locked-mode footer nor restores Pi's footer in `free` mode.
+  The most recent registration wins; `registerMmrChromeOwner` returns an
+  idempotent function that removes that registration. `ampi-tui` is the
+  built-in owner.
 - `buildMmrPromptLayer(context)`, `MMR_PROMPT_LAYER_START`,
   `MMR_PROMPT_LAYER_END` — the prompt assembly helper used by the
   `ampi-core` extension's `before_agent_start` hook, plus legacy

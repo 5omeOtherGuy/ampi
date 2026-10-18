@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMmrChromeOwner } from "./chrome-owner.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
 import { formatMmrCompactTokens } from "./token-format.js";
 import {
@@ -309,22 +310,18 @@ function installMmrFooter(ctx: ExtensionContext, state: MmrModeState): void {
 
 
 export function updateMmrStatus(ctx: ExtensionContext, state: MmrModeState | undefined): void {
-  if (!state) {
-    ctx.ui.setStatus("ampi-mode", undefined);
-    ctx.ui.setStatus("mmr-mode", undefined);
-    ctx.ui.setFooter?.(undefined);
-    return;
-  }
-
-  if (state.mode === "free") {
-    ctx.ui.setStatus("ampi-mode", undefined);
-    ctx.ui.setStatus("mmr-mode", undefined);
-    ctx.ui.setFooter?.(undefined);
-    return;
-  }
-
   ctx.ui.setStatus("ampi-mode", undefined);
   ctx.ui.setStatus("mmr-mode", undefined);
+
+  // Another extension draws ampi's chrome (see chrome-owner.ts): leave Pi's
+  // footer slot to it, neither installing ours nor restoring Pi's.
+  if (getMmrChromeOwner() !== undefined) return;
+
+  if (!state || state.mode === "free") {
+    ctx.ui.setFooter?.(undefined);
+    return;
+  }
+
   installMmrFooter(ctx, state);
 }
 

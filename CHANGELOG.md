@@ -28,6 +28,11 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   `Waiting for Approval`, `Cancelling` or `Error`, with token counts, the
   running tool, and the steer, dequeue and force-quit hints. Nothing displays
   it yet.
+- `ampi-tui`: a new extension, on by default, that owns ampi's look in
+  interactive terminal sessions. It starts by removing the footer below the
+  editor, the first step towards an Amp-compatible single-screen layout. Set
+  `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) to bring the previous
+  footer back.
 
 ### Changed
 

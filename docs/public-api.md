@@ -2,7 +2,7 @@
 
 **Audience.** Developers writing code that imports from `ampi` and wants the stable programmatic surface owned by the non-core extensions.
 
-**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, and `ampi-session-fallback`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
+**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, `ampi-session-fallback`, and `ampi-tui`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
 
 **Related.** Package overview: [`../README.md`](../README.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
@@ -45,6 +45,7 @@ Identical to `ampi-core`:
 | Web | `ampi/extensions/ampi-web` | `ampi/extensions/mmr-web` |
 | GitHub | `ampi/extensions/ampi-github` | `ampi/extensions/mmr-github` |
 | History | `ampi/extensions/ampi-history` | `ampi/extensions/mmr-history` |
+| Terminal UI | `ampi/extensions/ampi-tui` | `ampi/extensions/mmr-tui` |
 | Deprecated toolbox shim | `ampi/extensions/ampi-toolbox` | `ampi/extensions/mmr-toolbox` |
 
 Runtime commands, environment variables, and settings keys are available under
@@ -463,6 +464,25 @@ heuristics without taking on the rest of the fallback prompt UI.
 Persisted-state helpers tolerate malformed input (they return
 `undefined` rather than throwing) and are safe to use from outside a
 running Pi session.
+
+---
+
+## `ampi-tui`
+
+Terminal look for interactive sessions, on by default. It claims ampi's
+chrome through the `ampi-core` chrome-owner seam and removes the footer.
+`ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) turns it off.
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrTuiExtension` | function | Factory producing the Pi extension; accepts a `loadSettings` override. |
+| `loadMmrTuiSettings` | function | Reads `ampiTui.enabled` from the settings files, then `AMPI_TUI_ENABLE`. |
+
+### Re-exported types
+
+`MmrTuiSettings`, `MmrTuiFactoryOverrides`.
 
 ---
 

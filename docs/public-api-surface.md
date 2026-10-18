@@ -61,6 +61,7 @@ names.
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
 - Thread status model: `createMmrThreadStatusReducer` and its types.
+  `loadMmrHistorySettings`, `loadMmrTuiSettings`.
 - Extension factories: every `createMmr*Extension` factory.
 - Public tool register/create functions: the `register*`/`create*`
   functions for the `oracle`, `finder`, `librarian`, `history-reader`,
@@ -75,6 +76,8 @@ names.
   helpers (`assembleActiveSurface`, `assembleMmrSubagentSurface`, the
   builtin-tool-guidance helpers).
 - Planned-tool catalog: `MMR_PLANNED_TOOL_CATALOG`.
+- Chrome-owner seam for extensions that draw their own terminal chrome:
+  `registerMmrChromeOwner`, `getMmrChromeOwner`.
 - Debug-fixture renderers: `renderMmrPromptDebugFixture`,
   `stringifyMmrToolSchema`.
 - Legacy convenience constants such as `ORACLE_DEFAULT_MODEL_PREFERENCES`
