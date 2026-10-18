@@ -49,6 +49,7 @@ const RESERVED_GATE_REASONS: Record<string, string> = {
   "ampi-patch": "Reserved for the ampi-patch extension; not yet provided.",
   "ampi-tasks": "Reserved for the ampi-tasks extension; not yet provided.",
   "ampi-toolbox-mcp": "Reserved for the ampi-toolbox-mcp extension; not yet provided.",
+  "ampi-permissions": "Reserved for the ampi-permissions extension; not loaded.",
   "mmr-workers": "Legacy alias for the ampi-workers extension; not yet provided.",
   "mmr-subagents": "Legacy alias for the worker surface in ampi-workers; not yet provided.",
   "mmr-async-tasks": "Legacy alias for background task tools in ampi-workers; not yet provided.",
@@ -60,6 +61,7 @@ const RESERVED_GATE_REASONS: Record<string, string> = {
   "mmr-patch": "Legacy alias for the ampi-patch extension; not yet provided.",
   "mmr-tasks": "Legacy alias for the ampi-tasks extension; not yet provided.",
   "mmr-toolbox-mcp": "Legacy alias for the ampi-toolbox-mcp extension; not yet provided.",
+  "mmr-permissions": "Legacy alias for the ampi-permissions extension; not loaded.",
 };
 
 const RESERVED_PROVIDER: MmrFeatureGateProvider = {

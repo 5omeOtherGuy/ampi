@@ -87,6 +87,17 @@ describe("mmr-core public API surface", () => {
       "resolveMmrTools",
       "selectMmrModelRoute",
       "MMR_EVENT_STATE_CHANGED",
+      "MMR_EVENT_APPROVAL",
+      "onMmrApproval",
+      "MMR_PERMISSIONS_DEFAULT_RULES",
+      "evaluateMmrPermission",
+      "validateMmrPermissionRule",
+      "formatMmrPermissionRule",
+      "splitMmrShellCommand",
+      "setMmrPermissionsSessionAllowAll",
+      "isMmrPermissionsSessionAllowAll",
+      "createMmrPermissionsExtension",
+      "formatMmrPermissionsNoUiReason",
     ];
     for (const name of expected) {
       assert.equal(typeof root[name] !== "undefined", true, `expected root export "${name}"`);

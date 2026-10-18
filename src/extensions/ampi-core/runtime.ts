@@ -89,6 +89,19 @@ export const MMR_EVENT_STATE_CHANGED = "mmr-core:state-changed";
  */
 export const MMR_EVENT_SESSION_IDENTITY_CHANGED = "mmr-core:session-identity-changed";
 
+/**
+ * Pi event-bus topic for tool approvals: `phase: "request"` when a dialog
+ * asks the user about a tool call, `phase: "answer"` once the user answered
+ * or the dialog went away. Status displays count the open requests by
+ * `requestId`. Subscribe with `onMmrApproval(pi, handler)`.
+ */
+export const MMR_EVENT_APPROVAL = "mmr-core:approval";
+
+export interface MmrApprovalEvent {
+  phase: "request" | "answer";
+  requestId: string;
+}
+
 // Intentionally a JSON-shaped clone, not a generic deep clone. Runtime
 // snapshots are treated as JSON data; JSON round-trip behavior is observable
 // and differs from structuredClone for own undefined-valued properties and
@@ -215,6 +228,19 @@ export function onMmrSessionIdentityChanged(
     }
     if (!looksLikeMmrSessionIdentity(data)) return;
     handler(cloneMmrSessionIdentity(data));
+  });
+  return typeof dispose === "function" ? dispose : () => {};
+}
+
+/**
+ * Subscribe to tool-approval events. Payloads that are not an
+ * `MmrApprovalEvent` are dropped; each handler gets its own copy.
+ */
+export function onMmrApproval(pi: MmrEventBusHost, handler: (event: MmrApprovalEvent) => void): () => void {
+  const dispose = pi.events.on(MMR_EVENT_APPROVAL, (data) => {
+    const event = data as Partial<MmrApprovalEvent> | null | undefined;
+    if ((event?.phase !== "request" && event?.phase !== "answer") || typeof event.requestId !== "string") return;
+    handler({ phase: event.phase, requestId: event.requestId });
   });
   return typeof dispose === "function" ? dispose : () => {};
 }

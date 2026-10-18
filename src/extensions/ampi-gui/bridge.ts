@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getMmrPromptQueue, type MmrQueuedPrompts, onMmrPromptQueueChanged } from "../ampi-core/prompt-queue.js";
-import { getMmrModeState, onMmrStateChanged } from "../ampi-core/runtime.js";
+import { getMmrModeState, onMmrApproval, onMmrStateChanged } from "../ampi-core/runtime.js";
 import {
   createMmrThreadStatusReducer,
   type MmrThreadStatus,
@@ -37,6 +37,7 @@ import {
  * | `tool_execution_start` / `_end`            | `tool`: the call's row                |
  * | `turn_end`                                 | `turn_end`                            |
  * | any of the above that changes a work group | `groups`: the changed groups, the removed ids |
+ * | `mmr-core:approval` request / answer       | `status` (waiting for approval, and back) |
  * | any change of the thread status            | `status` (phase, label, queue count)  |
  * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
  * | a change of the prompt queue (ampi-core's seam) | `queue`: the texts, or `null` |
@@ -448,6 +449,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   });
   let releaseMode: (() => void) | undefined;
   let releaseQueue: (() => void) | undefined;
+  let releaseApproval: (() => void) | undefined;
 
   function queueView(): MmrQueuedPrompts | null {
     return getMmrPromptQueue() ?? null;
@@ -478,6 +480,9 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       releaseQueue ??= onMmrPromptQueueChanged(() => {
         if (ctx) followQueue();
       });
+      releaseApproval ??= onMmrApproval(pi, (event) => {
+        if (ctx) apply({ type: event.phase === "request" ? "approvalRequest" : "approvalAnswer", requestId: event.requestId });
+      });
       const queue = queueView();
       exact = queue !== null;
       if (queue) setQueued(queue.steering.length + queue.followUp.length);
@@ -489,6 +494,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       releaseMode = undefined;
       releaseQueue?.();
       releaseQueue = undefined;
+      releaseApproval?.();
+      releaseApproval = undefined;
     },
     context: () => ctx,
     interrupted() {
