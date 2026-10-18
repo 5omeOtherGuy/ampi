@@ -21,15 +21,20 @@
   "prompt.queue": null, // Run the prompt as a follow-up message after the current turn instead of steering it
   "prompt.steerQueuedMessage": null, // Send the next waiting follow-up now, to steer the running turn
   "prompt.toggleHelp": "?", // Show or hide the shortcuts help in the prompt box
+  "thread.analyzeContext": null, // Show what fills the context window: prompt, tools, AGENTS.md files, skills and messages
   "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
   "thread.archiveAndQuit": "ctrl+c ctrl+e", // Archive and quit
+  "thread.copyMarkdown": null, // Copy this session to the clipboard as Markdown
   "thread.editSelectedMessage": "e", // Put the selected message into the prompt and continue the thread from before it, on a new branch
   "thread.interrupt": "esc esc", // Stop the running turn
+  "thread.mention": null, // Pick a session and insert a reference to it (@<session id>) at the cursor
   "thread.new": "<leader>n", // Start a new session, as /new does
+  "thread.rename": null, // Give this session a new title
   "thread.scrollToBottom": "end", // Jump to the end of the transcript and follow new output
   "thread.scrollToTop": "home", // Jump to the start of the transcript
   "thread.selectNextMessage": "tab", // Select the next user message; past the newest, clear the selection
   "thread.selectPreviousMessage": "shift+tab", // Select the previous user message of the thread; e then edits it
+  "thread.showCost": null, // Show what this session cost so far, per model
   "thread.switch": ["ctrl+t", "<leader>t"], // Pick another session and switch to it
   "thread.switchToNext": null, // Go forward again after switching to the previous session
   "thread.switchToPrevious": null, // Go back to the session you switched away from
