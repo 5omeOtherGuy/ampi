@@ -164,13 +164,15 @@ describe("ampi-tui help screen sections", () => {
     assert.equal(keysFor(sections, "Editor Shortcuts", "Go to the start of the line"), "Home, Ctrl+A", "Home moves the cursor while the prompt has text");
   });
 
-  it("gives Alt+D to the thinking preset only while ampi-core is loaded", () => {
+  it("lists ampi-core's mode picker keys and gives Alt+D to the thinking preset only while ampi-core is loaded", () => {
     const withCore = help.buildMmrHelpKeymapSections(sources({ modeKeys: true }));
+    assert.equal(keysFor(withCore, "Editor Shortcuts", "Open the mode picker"), "Ctrl+Shift+S, Alt+M");
     assert.equal(keysFor(withCore, "Editor Shortcuts", "Delete the word after the cursor"), "Alt+Delete");
     assert.equal(keysFor(withCore, "Editor Shortcuts", "Toggle the thinking preset of the active mode"), "Alt+D");
     const withoutCore = help.buildMmrHelpKeymapSections(sources({ modeKeys: false }));
     assert.equal(keysFor(withoutCore, "Editor Shortcuts", "Delete the word after the cursor"), "Alt+D, Alt+Delete");
     assert.equal(keysFor(withoutCore, "Editor Shortcuts", "Toggle the thinking preset of the active mode"), undefined);
+    assert.equal(keysFor(withoutCore, "Editor Shortcuts", "Open the mode picker"), undefined);
   });
 
   it("follows the keymap and Pi's keybindings in effect", () => {
@@ -294,7 +296,9 @@ describe("ampi-tui keymap JSONC screen", () => {
   it("shows the note and the JSONC at 140 and 80 columns", () => {
     const at140 = openJson().render(140);
     const rows = plain(at140);
-    assert.match(rows[2], /^│ To change a key, copy its line under "ampi\.keymap" in Pi's settings/);
+    assert.match(rows[2], /^│ To change a key, copy its line into Pi's settings/);
+    const note = rows.slice(2, 5).map((row) => row.slice(1, -2).trim()).join(" ");
+    assert.match(note, /inside \{ "ampi": \{ "keymap": \{ … \} \} \}/, "the note shows the nested settings key");
     assert.ok(rows.some((row) => /^│ {3}"ampi\.help": null, \/\/ List every key and command/.test(row)));
     assert.ok(rows.some((row) => /^│ {3}"mode\.toggle": \["ctrl\+s", "f2"\], \/\/ Show the mode dial/.test(row)));
     assert.ok(rows.some((row) => /^│ {3}"ampi\.showVersion": "<leader>v", /.test(row)), "a leader chord keeps <leader>");

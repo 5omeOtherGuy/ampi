@@ -1,8 +1,8 @@
 ╭─ [1m[33mTitle[39m[22m ──────────────────────────────────────────────────────────────────────────────────────────╮
 │                                                                                                  │
-│ [2mTo change a key, copy its line under "ampi.keymap" in Pi's settings (~/.pi/agent/settings.json,[22m  │
-│ [2mor .pi/settings.json in a project) and edit it: a key string, an array of key strings, or null[22m   │
-│ [2mto unbind. Then run /reload.[22m                                                                     │
+│ [2mTo change a key, copy its line into Pi's settings (~/.pi/agent/settings.json, or[22m                 │
+│ [2m.pi/settings.json in a project) inside { "ampi": { "keymap": { … } } } and edit it: a key[22m        │
+│ [2mstring, an array of key strings, or null to unbind. Then run /reload.[22m                            │
 │                                                                                                  │
 │ {                                                                                                │
 │   "leader": "ctrl+x",                                                                            │

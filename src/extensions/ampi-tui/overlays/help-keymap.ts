@@ -27,7 +27,8 @@ import { type MmrFrameHint, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFra
  * ```
  *
  * - Editor Shortcuts: the prompt box's own keys (newline, Esc, Backspace on
- *   an empty prompt, `@`, the leader, ampi-core's Alt+D) and the Pi editing
+ *   an empty prompt, `@`, the leader, ampi-core's mode picker keys and Alt+D)
+ *   and the Pi editing
  *   keys that still reach the editor, with the keys Pi's keybindings give
  *   them. A Pi key that ampi always takes first is left out.
  * - Scrolling & Navigation: the bound navigation commands from the registry,
@@ -83,7 +84,7 @@ export interface MmrHelpKeymapSources {
   readonly commands: readonly Pick<MmrCommandDefinition, "id" | "noun" | "verb" | "description" | "availability">[];
   /** Pi's keys for one of its keybinding ids, as Pi writes them (`ctrl+a`, `pageUp`). */
   readonly piKeys: (id: string) => readonly string[];
-  /** ampi-core is loaded, so Alt+D switches the mode's thinking preset. */
+  /** ampi-core is loaded, so Ctrl+Shift+S and Alt+M open the mode picker and Alt+D switches the mode's thinking preset. */
   readonly modeKeys: boolean;
   /** The transcript scrolls (Pi's fullscreen mode), so Pi's transcript keys apply. */
   readonly scrolling: boolean;
@@ -135,18 +136,19 @@ const SCROLL_ROWS: readonly KeyRow[] = [
   { fixed: ["Mouse wheel"], text: "Scroll the transcript" },
 ];
 
-/** ampi-core's thinking key, a Pi shortcut that wins over Pi's editor. */
+/** ampi-core's mode picker keys and thinking key, Pi shortcuts that win over Pi's editor. */
+const MODE_PICKER_KEYS: readonly string[] = ["ctrl+shift+s", "alt+m"];
 const THINKING_KEY = "alt+d";
 
 /**
  * Keys ampi takes before Pi's editor sees them: the leader, ampi-core's
- * thinking key, and the first key of every chord whose command has no
+ * mode picker and thinking keys, and the first key of every chord whose command has no
  * availability check, which therefore always runs.
  */
 function takenKeys(sources: MmrHelpKeymapSources): Set<string> {
   const always = new Set(sources.commands.filter((command) => !command.availability).map((command) => command.id));
   const taken = new Set([formatMmrKeyCombo(sources.keymap.leader)]);
-  if (sources.modeKeys) taken.add(THINKING_KEY);
+  if (sources.modeKeys) for (const key of [...MODE_PICKER_KEYS, THINKING_KEY]) taken.add(key);
   for (const [chord, id] of sources.keymap.byChord) if (always.has(id)) taken.add(chord.split(" ")[0]);
   return taken;
 }
@@ -174,7 +176,10 @@ export function buildMmrHelpKeymapSections(sources: MmrHelpKeymapSources): MmrHe
   const { keymap } = sources;
   const taken = takenKeys(sources);
   const editor = keyRows(EDITOR_ROWS, sources, taken);
-  if (sources.modeKeys) editor.push({ keys: displayMmrKeyChord(THINKING_KEY), text: "Toggle the thinking preset of the active mode" });
+  if (sources.modeKeys) {
+    editor.push({ keys: MODE_PICKER_KEYS.map(displayMmrKeyChord).join(", "), text: "Open the mode picker" });
+    editor.push({ keys: displayMmrKeyChord(THINKING_KEY), text: "Toggle the thinking preset of the active mode" });
+  }
   editor.push({ keys: formatMmrKeyCombo(keymap.leader, "display"), text: "Leader key; a popup lists the keys that can follow" });
 
   const navigation: MmrHelpKeymapRow[] = [];
@@ -318,7 +323,7 @@ function jsoncLines(line: string, width: number, theme: MmrFrameTheme): string[]
 
 /** Says where the JSONC goes; shown above it. */
 export const MMR_KEYMAP_JSON_NOTE =
-  'To change a key, copy its line under "ampi.keymap" in Pi\'s settings (~/.pi/agent/settings.json, or .pi/settings.json in a project) and edit it: a key string, an array of key strings, or null to unbind. Then run /reload.';
+  'To change a key, copy its line into Pi\'s settings (~/.pi/agent/settings.json, or .pi/settings.json in a project) inside { "ampi": { "keymap": { … } } } and edit it: a key string, an array of key strings, or null to unbind. Then run /reload.';
 
 /** The keymap screen's lines: the note, a blank line, then the JSONC. */
 export function renderMmrKeymapJsonLines(jsonc: string, width: number, theme: MmrFrameTheme): string[] {

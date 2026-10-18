@@ -50,6 +50,8 @@
 │     [34mTab[39m              Complete a file path  │
 │                      or command            │
 │     [34m@[39m                Mention files         │
+│     [34mCtrl+Shift+S,    Open the mode picker  │
+│     [34mAlt+M[39m                                  │
 │     [34mAlt+D[39m            Toggle the thinking   │
 │                      preset of the active  │
 │                      mode                  │
@@ -95,8 +97,6 @@
 │     [2mthread[22m scroll to   Jump to the start   │
 │     top                of the transcript   │
 │     [34mHome[39m                                   │
-│                                            │
-│                                            │
 │                                            │
 │                                            │
 │                                            │
