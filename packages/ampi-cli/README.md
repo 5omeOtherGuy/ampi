@@ -104,6 +104,7 @@ ampi -x --session-id "$id" "summarize the README"
 ampi threads                                   # this directory's sessions, newest first
 ampi threads list --all --archived --limit 10  # every directory, archived sessions included
 ampi threads list --json | jq -r 'select(.messageCount > 10) | .id'
+ampi threads search parser label:docs after:7d # every directory, latest update first
 ampi threads continue 019a3c                   # open a session in the terminal UI
 ampi last                                      # open the most recent session that is not archived
 ampi threads markdown 019a3c > session.md      # the session as Markdown
@@ -127,6 +128,7 @@ ID                                    Title                    Updated  Messages
 | `threads new` (`n`) | Prints the id of a new session in the current directory, a UUID version 7 as Pi makes them, and writes nothing: Pi creates the session file with its first message. Open it with `threads continue <id>`, or send that message with `ampi -x --session-id <id> "message"`. `--json` prints `{"id", "cwd"}`. Sessions stay on this machine, so there is no `--visibility`; passing it is a usage error. |
 | `threads list` (`ls`; also plain `threads`) | The sessions of the current directory, newest activity first: id, title (the session's name, else its first message), time since the last activity and message count. Archived sessions are left out. `--all` lists every directory, `--archived` (or `--include-archived`) adds archived sessions with an `archived` marker, `--limit <n>` stops after n sessions. Titles are cut to the terminal width; redirected output keeps them whole. |
 | `threads list --json` | One JSON object per line: `id`, `title`, `name` (when the session has one), `created` and `updated` (ISO 8601), `messageCount`, `cwd`, `path` (the session file), `parentSessionPath` for a fork, and from the thread index `archived`, `labels`, `color` and `pinned` when set. |
+| `threads search <query...>` (`find`) | Searches the sessions of every directory, archived ones included, and prints the matches in the list's table with the `Archived` column, latest update first, or "No sessions match.". The words after `search` form the query, so quoting it whole is optional. `-n`/`--limit <n>` prints at most n sessions (20 by default); when more match, a note on stderr gives both counts. `--json` prints one object per line: the fields of `list --json` plus `matchedTerms`. The query keys are below. |
 | `threads continue <id>` (`c`) | Opens the session in the terminal UI through Pi's `--session`, with ampi loaded. Without an id it opens Pi's session picker; `--last` does what `ampi last` does. A session from another directory opens in that directory. A complete id that no session has, such as one `threads new` printed, starts a new session under that id in the current directory through Pi's `--session-id`, with a note on stderr. |
 | `last` | Opens the most recent session of the current directory that is not archived. Pi's `-c` also counts archived sessions, such as the ones execute mode archives. |
 | `threads markdown <id>` (`md`) | Prints the session as Markdown: front matter (`title`, `sessionId`, `created`, `mode`), then a `## User` or `## Assistant` section per turn, with tool calls and results as fenced blocks. The same layout as ampi-threads' Markdown export. |
@@ -137,8 +139,27 @@ ID                                    Title                    Updated  Messages
 | `threads color <id> <color>` | Sets the session's color in the thread index: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`, `gray` or an RGB hex color such as `#3f2d1d`, stored in lowercase. `none` removes it. Any other value is a usage error. |
 | `threads delete <id>` | Asks `[y/N]` on stderr and reads the answer from stdin, then deletes the session file and its thread index record. `-y`/`--yes` skips the question. Run from the agent's own shell, it refuses to delete the session it runs in. |
 
+- **Search queries.** A query is words and `"quoted phrases"` plus `key:value` filters. A session matches when it contains every word and phrase (in its name, first message or any message text) and passes every filter. Matching ignores case. A key that search does not know, a key such as `commit:`, `pr:` or `author:` whose data only a hosted service has, a value it cannot read (`after:soon`) and an empty query are usage errors that name the problem. When the thread index cannot be read, `pinned:` and `archived:` are ignored with a note on stderr. The search comes from the ampi that Pi loads, as for `config keymap`; an ampi too old to have it is reported with status `1`.
+
+  | Key | A session matches when |
+  | --- | --- |
+  | `id:<id>` | its id is this id or starts with it |
+  | `parent:<id>` | it was forked from the session with this id or id start |
+  | `name:<text>` | its name contains the text |
+  | `label:<label>` | one of its labels in the thread index, or one set on an entry in Pi, contains the text |
+  | `pinned:true`, `pinned:false` | it is pinned in the thread index, or not |
+  | `archived:true`, `archived:false` | it is archived, or not; without the key both are found |
+  | `after:<date>`, `before:<date>`, `updated_before:<date>` | its latest update falls after or before the date |
+  | `created_after:<date>`, `created_before:<date>` | it was started after or before the date |
+  | `cwd:<text>`, `project:<text>` | its directory contains the text |
+  | `repo:<owner/repo>` | its directory's git remote is that repository (`host/owner/repo` and a remote URL work too) |
+  | `file:<path>` | a read, edit, write or patch in it named a file whose path contains the text |
+  | `model:<text>`, `provider:<text>`, `tool:<name>` | a model, provider or tool it used contains the text |
+  | `has:tools`, `has:errors` | it called a tool, or something in it failed |
+
+  Dates are `YYYY-MM-DD` or relative: `today` and `yesterday` (from midnight UTC), `week`, `month` (30 days), or a number of days or weeks such as `7d` or `2w`.
 - **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
-- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error. `ampi threads --help` lists the commands and options.
+- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error, including a search query it cannot use. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
 ## Keymap and settings
@@ -188,7 +209,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, and `threads color`).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors).
 
 ## Development
 

@@ -79,7 +79,7 @@ export const FIND_SESSION_PARAMETERS_SCHEMA = Type.Object(
   {
     query: Type.String({
       description:
-        "Search query for local Pi sessions across every project cwd Pi has recorded on disk. Supports bare keywords, quoted phrases, id:, name:, date filters (after:/since:/before:/until: plus created_after:/created_before:/modified_after:/modified_before:, with YYYY-MM-DD, 7d, 2w, today, yesterday, week, month), file:, repo:, project:/cwd:/projectRef:, provider:, model:, tool:, label:, has:tools, has:errors, sort:modified|created, and offset:<n>. file:, repo:, provider:, model:, tool:, label:, and has: filters are evaluated per session, not against the active workspace. Unknown filters and filters that cannot be evaluated against any candidate session are reported in queryDiagnostics. Results carry an opaque projectRef per match; raw session file paths and project roots are never surfaced.",
+        "Search query for local Pi sessions across every project cwd Pi has recorded on disk. Supports bare keywords, quoted phrases, id:, name:, parent:, date filters (after:/since:/before:/until:/updated_before: plus created_after:/created_before:/modified_after:/modified_before:, with YYYY-MM-DD, 7d, 2w, today, yesterday, week, month), file:, repo:, project:/cwd:/projectRef:, provider:, model:, tool:, label:, pinned:true|false, archived:true|false, has:tools, has:errors, sort:modified|created, and offset:<n>. label:, pinned: and archived: read ampi's thread index (label: also matches Pi entry labels). file:, repo:, provider:, model:, tool:, label:, and has: filters are evaluated per session, not against the active workspace. Unknown filters and filters that cannot be evaluated against any candidate session are reported in queryDiagnostics. Results carry an opaque projectRef per match; raw session file paths and project roots are never surfaced.",
     }),
     limit: Type.Optional(
       Type.Number({
@@ -134,7 +134,7 @@ export const FIND_SESSION_DESCRIPTION = `Find prior Pi sessions across every loc
 
 Use this when the user asks about prior Pi conversations, sessions, or work history — including history from another project on the same machine. Do not use this for git commit history, blame, or who changed a file; use git commands for those questions.
 
-Supported query syntax: bare keywords and quoted phrases for text search; id:<prefix>; name:<text>; recency filters after:/since:/before:/until: (modified time) plus explicit modified_after:/modified_before:/created_after:/created_before: using YYYY-MM-DD, 7d, 2w, today, yesterday, week, or month; file:<partial-path> (structured read/edit/write/apply_patch evidence, cwd-relative per session); repo:<host/owner/repo|owner/repo|credential-stripped-url>; project:<cwd-substring-or-projectRef>, cwd:<cwd-substring>, projectRef:<opaque-ref>; provider:<value>; model:<value>; tool:<name>; label:<value>; has:tools; has:errors; sort:modified|created; offset:<n>. Use the top-level offset parameter (or offset:<n>) plus details.hasMore/details.totalCount for pagination. Matching is case-insensitive. Unknown filters are reported as \`unsupported\`; filters that cannot be evaluated against any candidate session are reported as \`non_applicable\`. Results carry an opaque \`projectRef\` per match; raw session file paths and project roots are never surfaced.`;
+Supported query syntax: bare keywords and quoted phrases for text search; id:<prefix>; name:<text>; parent:<session-id-or-prefix> (sessions forked from that session); recency filters after:/since:/before:/until:/updated_before: (modified time) plus explicit modified_after:/modified_before:/created_after:/created_before: using YYYY-MM-DD, 7d, 2w, today, yesterday, week, or month; file:<partial-path> (structured read/edit/write/apply_patch evidence, cwd-relative per session); repo:<host/owner/repo|owner/repo|credential-stripped-url>; project:<cwd-substring-or-projectRef>, cwd:<cwd-substring>, projectRef:<opaque-ref>; provider:<value>; model:<value>; tool:<name>; label:<value> (thread index labels and Pi entry labels); pinned:true|false and archived:true|false (thread index); has:tools; has:errors; sort:modified|created; offset:<n>. Use the top-level offset parameter (or offset:<n>) plus details.hasMore/details.totalCount for pagination. Matching is case-insensitive. Unknown filters and the hosted-only commit:, pr: and author: are reported as \`unsupported\`; filters that cannot be evaluated against any candidate session are reported as \`non_applicable\`; pinned: and archived: are reported as \`unavailable\` and ignored when no thread index is loaded. Results carry an opaque \`projectRef\` per match; raw session file paths and project roots are never surfaced.`;
 
 export const READ_SESSION_DESCRIPTION = `Read a prior Pi session and extract content relevant to a stated goal.
 
@@ -207,11 +207,13 @@ function formatDiagnosticsLines(diagnostics: readonly QueryDiagnostic[]): string
   const unsupported = diagnostics.filter((d) => d.status === "unsupported").map((d) => d.filter);
   const nonApplicable = diagnostics.filter((d) => d.status === "non_applicable").map((d) => d.filter);
   const invalid = diagnostics.filter((d) => d.status === "invalid").map((d) => d.filter);
+  const unavailable = diagnostics.filter((d) => d.status === "unavailable").map((d) => d.filter);
   const lines: string[] = [];
   if (applied.length > 0) lines.push(`Applied filters: ${applied.join(", ")}`);
   if (unsupported.length > 0) lines.push(`Unsupported filters: ${unsupported.join(", ")}`);
   if (nonApplicable.length > 0) lines.push(`Non-applicable filters: ${nonApplicable.join(", ")}`);
   if (invalid.length > 0) lines.push(`Invalid filters ignored: ${invalid.join(", ")}`);
+  if (unavailable.length > 0) lines.push(`Unavailable filters ignored (no thread index): ${unavailable.join(", ")}`);
   return lines;
 }
 

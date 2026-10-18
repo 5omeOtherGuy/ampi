@@ -253,15 +253,17 @@ async function runThreads(threadArgs) {
   const pi = await import(PI_PACKAGE_NAME);
   // Loaded here, with Pi, so other commands do not load the terminal helpers it needs.
   const { runThreadsCommand } = await import("./threads.js");
+  const cwd = process.cwd();
   const result = await runThreadsCommand(threadArgs, {
     pi,
-    cwd: process.cwd(),
+    cwd,
     env: process.env,
     now: () => Date.now(),
     columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
     out: (text) => process.stdout.write(text),
     err: (text) => process.stderr.write(text),
     confirm,
+    locateAmpi: () => locateLoadedAmpi(pi, cwd),
   });
   if ("code" in result) return result.code;
   return startPi(routeAmpiArgv(result.piArgs));

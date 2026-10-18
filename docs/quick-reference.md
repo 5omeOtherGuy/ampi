@@ -178,6 +178,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Pass a message that looks like an option | `ampi -- -m is a flag` | Everything after `--` goes to Pi as the message |
 | Create an empty session | `ampi threads new` | Prints a new session id and writes nothing; open it with `ampi threads continue <id>` or `ampi -x --session-id <id> "..."`; `--json` adds the directory |
 | List sessions | `ampi threads` | This directory, archived ones left out; `--all`, `--archived`, `--json`, `--limit <n>` |
+| Search sessions | `ampi threads search parser label:docs after:7d` | Every directory, latest update first; words, `"phrases"` and keys such as `id:`, `parent:`, `label:`, `pinned:`, `archived:`, `repo:`, `cwd:`, `model:`; `-n <n>` (default 20), `--json` |
 | Reopen a session | `ampi threads continue 019a3c` | An id or its first characters; `ampi last` opens the latest session that is not archived |
 | Print a session | `ampi threads markdown 019a3c` | `threads export` prints JSON with every session entry |
 | Rename, archive, label, color or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `color <id> <color>` (a name, `#rrggbb` or `none`), `delete` (asks first; `--yes` skips) |

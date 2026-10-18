@@ -200,6 +200,8 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "src/extensions/ampi-gui/client/markdown.js",
       "src/extensions/ampi-gui/client/tokens.css",
       "src/extensions/ampi-gui/client/app.css",
+      "src/extensions/ampi-core/session-query.ts",
+      "src/cli-threads.ts",
     ];
     const allFindings = [];
     for (const file of files) {
