@@ -35,15 +35,18 @@ if it touches none.
 
 <!--
 Does this PR change a path listed under "Sensitive paths" in the AGENTS.md
-profile, or a public interface, credential handling, install or setup, CI or
-release configuration, or agent policy? If yes, an independent review
-(another agent or the owner) reads the diff and records its verdict on this
-PR against the reviewed head commit before merge; a later push needs a new
+profile, a public interface, security-sensitive code, auth or credential
+handling, install or setup, deployment, CI or release configuration, or
+agent policy files (`AGENTS.md`, `.agents/`, `.githooks/`)? These need review
+whether the path is listed or not, and docs changes that alter rules or
+executable instructions count too. If yes, an independent review (another
+agent or the owner) reads the diff and records its verdict on this PR
+against the reviewed head commit before merge; a later push needs a new
 review.
 -->
 
-- [ ] No sensitive path changed.
-- [ ] A sensitive path changed: independent review recorded on this PR for head commit `<sha>`.
+- [ ] No sensitive path or category changed.
+- [ ] A sensitive path or category changed: independent review recorded on this PR for head commit `<sha>`.
 
 ## Linked issues
 
