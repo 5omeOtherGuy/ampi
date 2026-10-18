@@ -109,6 +109,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "none",
   },
   {
+    name: "ampi-shell",
+    entrypoint: "./src/extensions/ampi-shell/index.ts",
+    exportSubpath: "./extensions/ampi-shell",
+    exportAliases: ["./extensions/mmr-shell"],
+    autoLoaded: true,
+    tools: ["shell_command", "shell_command_status", "shell_command_kill"],
+    dynamicTools: false,
+    featureGates: [],
+    riskClass: "local-mutation",
+    childRole: "none",
+  },
+  {
     name: "ampi-tasks",
     entrypoint: "./src/extensions/ampi-tasks/index.ts",
     exportSubpath: "./extensions/ampi-tasks",

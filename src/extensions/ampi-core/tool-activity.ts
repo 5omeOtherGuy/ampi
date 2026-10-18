@@ -715,23 +715,35 @@ function isWorkerTool(toolName: string): boolean {
   return WORKER_TOOLS.has(toolName) || toolName.startsWith("sa__");
 }
 
-function shellActivity(args: Record<string, unknown>, options: ClassifyOptions): Activity {
+/** `dir` as a path: absolute, or joined to `base` when there is one. */
+function resolveDir(dir: string, base: string | undefined): string {
+  return path.isAbsolute(dir) || !base ? dir : path.join(base, dir);
+}
+
+/**
+ * Pi's `bash` and ampi-shell's `shell_command`: the command is classified
+ * the same way, so a read through either reads as a read. `shell_command`
+ * also takes a `workdir`, and a command it left running in the background
+ * says so with its pid.
+ */
+function shellActivity(toolName: string, args: Record<string, unknown>, options: ClassifyOptions): Activity {
   const raw = text(args.command) ?? "";
   const leadingCd = splitLeadingCd(raw);
   const command = leadingCd?.rest ?? raw;
-  const workdir = leadingCd
-    ? path.isAbsolute(leadingCd.dir) || !options.cwd
-      ? leadingCd.dir
-      : path.join(options.cwd, leadingCd.dir)
-    : undefined;
+  const argWorkdir = text(args.workdir);
+  const startDir = argWorkdir ? resolveDir(argWorkdir, options.cwd) : options.cwd;
+  const workdir = leadingCd ? resolveDir(leadingCd.dir, startDir) : argWorkdir ? startDir : undefined;
   const shell = classifyShellCommand(command);
   const output = resultText(options.result);
+  const details = record(options.result?.details);
   const exitCode = /(?:^|\n)Command exited with code (\d+)\s*$/.exec(output)?.[1];
-  const timeout = /(?:^|\n)Command timed out after (\d+) seconds\s*$/.exec(output)?.[1];
+  const timeout = /(?:^|\n)Command timed out after (\d+(?:\.\d+)?) seconds\s*$/.exec(output)?.[1];
   const killed = /(?:^|\n)Command terminated without an exit code\s*$/.test(output);
-  const ended = timeout !== undefined ? `timed out after ${timeout}s` : killed ? "killed" : undefined;
+  const signalled = /(?:^|\n)Command ((?:terminated by|stopped with) SIG[A-Z0-9]+)\s*$/.exec(output)?.[1];
+  const background = details.running === true && typeof details.pid === "number" ? `still running as pid ${details.pid}` : undefined;
+  const ended = timeout !== undefined ? `timed out after ${timeout}s` : killed ? "killed" : (signalled ?? background);
   const base = {
-    toolName: "bash",
+    toolName,
     command: raw,
     ...(workdir ? { workdir } : {}),
     ...(exitCode !== undefined ? { exitCode: Number(exitCode) } : {}),
@@ -785,6 +797,37 @@ function grepObject(pattern: string | undefined, where: string | undefined): str
 }
 
 /**
+ * `shell_command_status` and `shell_command_kill`: "Checked pid 4242, still
+ * running", "Checked pid 4242, finished (exit code: 1)", "Stopped pid 4242
+ * (SIGTERM)". They count as commands in a group's summary.
+ */
+function shellFollowUpActivity(toolName: string, args: Record<string, unknown>, details: Record<string, unknown>): Activity {
+  const kill = toolName === "shell_command_kill";
+  const pid = typeof args.pid === "number" ? args.pid : details.pid;
+  const ended = details.running === false;
+  const exitCode = ended && typeof details.exitCode === "number" ? details.exitCode : undefined;
+  const signal = typeof details.signal === "string" ? details.signal : undefined;
+  const timedOut = details.stoppedBy === "timeout" && typeof details.timeoutMs === "number";
+  let detail: string | undefined;
+  if (details.running === true) detail = "still running";
+  else if (ended && !kill) detail = "finished";
+  let endedText: string | undefined;
+  if (timedOut) endedText = `timed out after ${(details.timeoutMs as number) / 1000}s`;
+  else if (signal) endedText = signal;
+  return {
+    kind: "command",
+    toolName,
+    present: kill ? "Stopping" : "Checking",
+    past: kill ? "Stopped" : "Checked",
+    object: pid !== undefined ? `pid ${pid}` : "",
+    ...(detail ? { detail, detailSeparator: ", " } : {}),
+    ...(typeof details.command === "string" ? { command: details.command } : {}),
+    ...(exitCode !== undefined && !signal && !timedOut ? { exitCode } : {}),
+    ...(endedText ? { ended: endedText } : {}),
+  };
+}
+
+/**
  * Classify one tool call. `options.result`, when present, adds what only the
  * result knows: a shell exit code and the diff stat of an edit.
  */
@@ -813,7 +856,11 @@ export function classifyToolCall(toolName: string, rawArgs: unknown, options: Cl
       };
     }
     case "bash":
-      return shellActivity(args, options);
+    case "shell_command":
+      return shellActivity(toolName, args, options);
+    case "shell_command_status":
+    case "shell_command_kill":
+      return shellFollowUpActivity(toolName, args, details);
     case "grep": {
       const where = text(args.path);
       return {

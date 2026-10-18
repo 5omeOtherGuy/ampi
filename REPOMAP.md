@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers eleven extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, `ampi-threads`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers twelve extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-shell`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-tui`, `ampi-threads`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -29,6 +29,7 @@
   "./src/extensions/ampi-core/index.ts",
   "./src/extensions/ampi-session-fallback/index.ts",
   "./src/extensions/ampi-patch/index.ts",
+  "./src/extensions/ampi-shell/index.ts",
   "./src/extensions/ampi-tasks/index.ts",
   "./src/extensions/ampi-web/index.ts",
   "./src/extensions/ampi-github/index.ts",
@@ -54,6 +55,7 @@ src/
     ampi-core/
     ampi-session-fallback/
     ampi-patch/
+    ampi-shell/
     ampi-tasks/
     ampi-web/
     ampi-github/
@@ -137,6 +139,17 @@ Important files:
 - `apply-patch-tool.ts` — `apply_patch` tool definition, schema, and prompt guidance.
 - `apply-patch.ts` — Codex patch parser and hunk-matching engine.
 - `apply-patch-plan.ts` — path safety, per-file mutation locking, and flush phase.
+
+### `src/extensions/ampi-shell/`
+
+Owns `shell_command`, `shell_command_status` and `shell_command_kill`: shell commands that keep running in the background once a short wait is over, followed and stopped by pid. On by default (`ampiShell.enabled: false` turns it off); every running command is stopped when the session ends.
+
+Important files:
+
+- `index.ts` — Pi extension entry point, tool provider and `session_shutdown` hook.
+- `tools.ts` — the three tool definitions, schemas and prompt guidance.
+- `processes.ts` — per-session registry: process groups, unread output with a 1 MiB cap, waiting and stopping.
+- `config.ts` — `ampiShell.*` settings and `AMPI_SHELL_ENABLE`.
 
 ### `src/extensions/ampi-tasks/`
 

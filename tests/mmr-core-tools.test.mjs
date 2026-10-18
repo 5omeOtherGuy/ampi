@@ -32,14 +32,14 @@ describe("mmr-core tool registry", () => {
     // Legacy aliases and capitalized variants are no longer recognized: they
     // are treated as unknown names with no identity match against Pi tools.
     const resolved = registry.resolve(
-      ["Read", "Bash", "Edit", "Write", "Grep", "LS", "glob", "edit_file", "create_file", "shell_command"],
+      ["Read", "Bash", "Edit", "Write", "Grep", "LS", "glob", "edit_file", "create_file", "run_command"],
       ["read", "bash", "edit", "write", "grep", "ls", "find"],
     );
 
     assert.deepEqual(resolved.activeTools, []);
     assert.deepEqual(
       [...resolved.missingTools].sort(),
-      ["Bash", "Edit", "Grep", "LS", "Read", "Write", "create_file", "edit_file", "glob", "shell_command"],
+      ["Bash", "Edit", "Grep", "LS", "Read", "Write", "create_file", "edit_file", "glob", "run_command"],
     );
     for (const decision of resolved.decisions) {
       assert.equal(decision.status, "missing");

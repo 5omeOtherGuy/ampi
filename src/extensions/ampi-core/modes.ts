@@ -38,6 +38,9 @@ export const MMR_HOTKEY_MODE_KEYS: readonly MmrModeKey[] = MMR_MODE_KEYS.filter(
 export const MMR_SMART_TOOL_NAMES = [
   "read",
   "bash",
+  "shell_command",
+  "shell_command_status",
+  "shell_command_kill",
   "write",
   "web_search",
   "read_web_page",
@@ -62,6 +65,9 @@ export const MMR_RUSH_TOOL_NAMES = [
   "find",
   "finder",
   "bash",
+  "shell_command",
+  "shell_command_status",
+  "shell_command_kill",
   "write",
   "web_search",
   "read_web_page",
@@ -98,6 +104,9 @@ export const MMR_RUSH_TOOL_NAMES = [
  */
 export const MMR_DEEP_TOOL_NAMES = [
   "bash",
+  "shell_command",
+  "shell_command_status",
+  "shell_command_kill",
   "write",
   "web_search",
   "read_web_page",

@@ -163,6 +163,54 @@ describe("ampi-tui activity: tool calls", () => {
     assert.equal(bash("Command timed out after 1 seconds").exitCode, undefined);
   });
 
+  it("classifies shell_command like bash, in its workdir, and says when it was left running", async () => {
+    const mod = await load();
+    const read = mod.classifyToolCall("shell_command", { command: "sed -n '1,20p' a.ts", workdir: "pkg" }, options);
+    assert.equal(read.kind, "read");
+    assert.equal(read.toolName, "shell_command");
+    assert.equal(read.workdir, `${CWD}/pkg`);
+    assert.equal(titleText(mod, read), "Read pkg/a.ts L1-20");
+    const failed = mod.classifyToolCall("shell_command", { command: "npm test" }, {
+      ...options,
+      result: { content: [{ type: "text", text: "1 failing\n\nCommand exited with code 1" }] },
+    });
+    assert.equal(titleText(mod, failed, "error"), "Ran npm test (exit code: 1)");
+    const background = mod.classifyToolCall("shell_command", { command: "npm run dev" }, {
+      ...options,
+      result: { content: [{ type: "text", text: "ready" }], details: { pid: 4242, running: true } },
+    });
+    assert.equal(background.kind, "command");
+    assert.equal(titleText(mod, background), "Ran npm run dev (still running as pid 4242)");
+    const timedOut = mod.classifyToolCall("shell_command", { command: "make" }, {
+      ...options,
+      result: { content: [{ type: "text", text: "Command timed out after 1.5 seconds" }] },
+    });
+    assert.equal(titleText(mod, timedOut, "error"), "Ran make (timed out after 1.5s)");
+    assert.equal(
+      mod.summarizeActivities([{ activity: failed, status: "error" }, { activity: background, status: "done" }]),
+      "Ran 2 commands",
+    );
+  });
+
+  it("names shell_command_status and shell_command_kill by pid", async () => {
+    const mod = await load();
+    const status = (details) =>
+      mod.classifyToolCall("shell_command_status", { pid: 4242 }, { ...options, ...(details ? { result: { content: [], details } } : {}) });
+    assert.equal(titleText(mod, status(), "running"), "Checking pid 4242");
+    assert.equal(titleText(mod, status({ running: true })), "Checked pid 4242, still running");
+    assert.equal(titleText(mod, status({ running: false, exitCode: 0 })), "Checked pid 4242, finished");
+    assert.equal(titleText(mod, status({ running: false, exitCode: 2 })), "Checked pid 4242, finished (exit code: 2)");
+    assert.equal(
+      titleText(mod, status({ running: false, exitCode: 143, signal: "SIGTERM", stoppedBy: "timeout", timeoutMs: 5000 })),
+      "Checked pid 4242, finished (timed out after 5s)",
+    );
+    assert.equal(status().kind, "command");
+    const kill = (details) => mod.classifyToolCall("shell_command_kill", { pid: 4242 }, { ...options, result: { content: [], details } });
+    assert.equal(titleText(mod, kill({ running: false, exitCode: 137, signal: "SIGKILL", command: "npm run dev" })), "Stopped pid 4242 (SIGKILL)");
+    assert.equal(kill({ running: false, command: "npm run dev" }).command, "npm run dev");
+    assert.equal(titleText(mod, kill({ running: true })), "Stopped pid 4242, still running");
+  });
+
   it("follows a leading cd into the directory it names", async () => {
     const mod = await load();
     const read = mod.classifyToolCall("bash", { command: `cd ${CWD}/pkg && cat a.ts` }, options);

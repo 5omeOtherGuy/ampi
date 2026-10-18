@@ -133,6 +133,40 @@ const CASES = [
     result: textResult("ok"),
   },
   {
+    name: "shell_command left running",
+    tool: "shell_command",
+    args: { command: "npm run dev", workdir: "packages/app" },
+    result: textResult(
+      "ready on http://127.0.0.1:5173\n\nCommand is still running in the background as pid 4242. Follow it with shell_command_status; end it with shell_command_kill.",
+      { pid: 4242, command: "npm run dev", running: true, startedAt: 0 },
+    ),
+  },
+  {
+    name: "shell_command_status still running",
+    tool: "shell_command_status",
+    args: { pid: 4242, timeout_ms: 10000 },
+    result: textResult("compiled in 120 ms\n\nCommand is still running as pid 4242.", {
+      pid: 4242,
+      command: "npm run dev",
+      running: true,
+      startedAt: 0,
+    }),
+  },
+  {
+    name: "shell_command_kill",
+    tool: "shell_command_kill",
+    args: { pid: 4242 },
+    result: textResult("shutting down\n\nCommand stopped with SIGTERM", {
+      pid: 4242,
+      command: "npm run dev",
+      running: false,
+      startedAt: 0,
+      exitCode: 143,
+      signal: "SIGTERM",
+      stoppedBy: "kill",
+    }),
+  },
+  {
     name: "grep cancelled",
     tool: "grep",
     args: { pattern: "foo" },
@@ -232,6 +266,9 @@ describe("ampi-tui tool rows", () => {
     assert.deepEqual(row(byName["bash running"]), ["", " ⠋ Running npm run build"]);
     assert.deepEqual(row(byName["bash timed out"]), ["", " ✗ Ran sleep 3 (timed out after 1s)"]);
     assert.deepEqual(row(byName["edit with diff"]), ["", " ✓ Edited src/retry.ts +2 -1"]);
+    assert.deepEqual(row(byName["shell_command left running"]), ["", " ✓ Ran npm run dev (still running as pid 4242)"]);
+    assert.deepEqual(row(byName["shell_command_status still running"]), ["", " ✓ Checked pid 4242, still running"]);
+    assert.deepEqual(row(byName["shell_command_kill"]), ["", " ✓ Stopped pid 4242 (SIGTERM)"]);
   });
 
   it("cuts long rows to the width with an ellipsis", async () => {

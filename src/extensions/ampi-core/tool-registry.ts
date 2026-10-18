@@ -32,6 +32,10 @@ export const CORE_OWNER = "ampi-core";
 const DEFAULT_TOOL_CATALOG: Record<string, { owner: string }> = {
   // ampi-patch
   apply_patch: { owner: "ampi-patch" },
+  // ampi-shell
+  shell_command: { owner: "ampi-shell" },
+  shell_command_status: { owner: "ampi-shell" },
+  shell_command_kill: { owner: "ampi-shell" },
   // ampi-tasks
   task_list: { owner: "ampi-tasks" },
   // ampi-toolbox-mcp
