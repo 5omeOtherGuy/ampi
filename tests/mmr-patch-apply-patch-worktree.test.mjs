@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, mkdirSync, rmSync, realpathSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
+import { devNull, tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
@@ -10,13 +10,35 @@ import { createMockPi } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
 
+// Git exports GIT_DIR to hooks when pushing from a linked worktree (and
+// GIT_CONFIG_PARAMETERS for `git -c`). Inherited, they would point both the
+// scratch repositories below and the code under test, which also spawns git,
+// at the real repository. Each test file runs in its own process, so the
+// strip is local to this suite.
+for (const name of Object.keys(process.env)) {
+  if (name.startsWith("GIT_")) delete process.env[name];
+}
+
 describe("mmr-patch apply_patch path safety extends to same-repo git worktrees", () => {
   let tmpRoot;
   let mainWt;
   let siblingWt;
 
   function git(cwd, ...args) {
-    return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        // Scratch repositories must not read the developer's git configuration.
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: devNull,
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@t",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@t",
+      },
+    });
   }
 
   beforeEach(() => {
