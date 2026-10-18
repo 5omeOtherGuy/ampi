@@ -65,7 +65,22 @@ export const CARD_DIFF_LINES = 60;
 const GROUP_INDENT = 2;
 
 /** Tools whose expanded card ampi draws itself. Others keep their own renderers when expanded. */
-const OWN_CARDS = new Set(["bash", "read", "edit", "write", "grep", "find", "ls", "apply_patch"]);
+const OWN_CARDS = new Set([
+  "bash",
+  "shell_command",
+  "shell_command_status",
+  "shell_command_kill",
+  "read",
+  "edit",
+  "write",
+  "grep",
+  "find",
+  "ls",
+  "apply_patch",
+]);
+
+/** Tools whose expanded card starts with the `$ command` line. */
+const SHELL_TOOLS = new Set(["bash", "shell_command"]);
 
 const STATUS_GLYPH: Record<Exclude<ActivityStatus, "running">, string> = { done: "✓", error: "✗", cancelled: "⊘" };
 const STATUS_COLOR: Record<ActivityStatus, ThemeColor> = {
@@ -241,9 +256,12 @@ export function highlightShell(command: string, theme: RenderTheme): string {
 function shellOutput(result: ToolResult | undefined): string[] {
   const output = cleanText(resultText(result))
     .replace(/\n*Command exited with code \d+\s*$/, "")
-    .replace(/\n*Command (?:aborted|timed out after \d+ seconds|terminated without an exit code)\s*$/, "")
+    .replace(
+      /\n*Command (?:aborted|timed out after \d+(?:\.\d+)? seconds|terminated without an exit code|(?:terminated by|stopped with) SIG[A-Z0-9]+|is still running (?:in the background )?as pid \d+\..*)\s*$/,
+      "",
+    )
     .replace(/\s+$/, "");
-  return output === "" ? [] : output.split("\n");
+  return output === "" || output === "(no new output)" ? [] : output.split("\n");
 }
 
 function shellHeader(row: Row, activity: Activity, status: ActivityStatus, width: number): string[] {
@@ -413,7 +431,7 @@ function titleLine(row: Row, activity: Activity, status: ActivityStatus, width: 
 function renderHeader(row: Row, width: number): string[] {
   const activity = rowActivity(row);
   const status = rowStatus(row.context, row.state.result);
-  if (row.context.expanded && row.toolName === "bash") {
+  if (row.context.expanded && SHELL_TOOLS.has(row.toolName)) {
     return shellHeader(row, activity, status, width);
   }
   return [titleLine(row, activity, status, width, row.context.expanded)];
@@ -443,6 +461,9 @@ function renderBody(row: Row, width: number): string[] {
 
   switch (toolName) {
     case "bash":
+    case "shell_command":
+    case "shell_command_status":
+    case "shell_command_kill":
       return mutedLines(shellOutput(result));
     case "read":
       return failure ? errorLines() : [];

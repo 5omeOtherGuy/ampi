@@ -537,6 +537,27 @@ registry and the security model.
 
 ---
 
+## `ampi-shell`
+
+Background shell tools, on by default: `shell_command`,
+`shell_command_status` and `shell_command_kill`. `ampiShell.enabled: false`
+(or `AMPI_SHELL_ENABLE=0`) turns them off. See
+[`ampi-shell`](../src/extensions/ampi-shell/README.md) for the tools and
+their limits.
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrShellExtension` | function | Factory producing the Pi extension; accepts `loadSettings` and `registryOptions` overrides. |
+| `loadMmrShellSettings` | function | Reads `ampiShell.*` from the settings files, then `AMPI_SHELL_ENABLE`. |
+
+### Re-exported types
+
+`MmrShellSettings` (`enabled`, `backgroundAfterMs`, `maxBackground`), `MmrShellFactoryOverrides`.
+
+---
+
 ## Compatibility expectations
 
 - Names listed above will not be removed without a deprecation cycle.

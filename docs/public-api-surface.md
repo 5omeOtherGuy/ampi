@@ -62,7 +62,7 @@ names.
   `loadMmrHistorySettings`.
 - Thread status model: `createMmrThreadStatusReducer` and its types.
   `loadMmrHistorySettings`, `loadMmrTuiSettings`, `loadMmrThreadsSettings`,
-  `loadMmrGuiSettings`.
+  `loadMmrGuiSettings`, `loadMmrShellSettings`.
 - Extension factories: every `createMmr*Extension` factory.
 - Public tool register/create functions: the `register*`/`create*`
   functions for the `oracle`, `finder`, `librarian`, `history-reader`,

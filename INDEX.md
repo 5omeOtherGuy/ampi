@@ -22,6 +22,7 @@ Quick links for navigating the repository.
 - [`src/extensions/ampi-history/README.md`](src/extensions/ampi-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
 - [`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md) — terminal look and keys for interactive sessions: Amp-compatible prompt box and chords, no footer, welcome header, message styling, tool rows, `ampi` theme.
 - [`src/extensions/ampi-threads/README.md`](src/extensions/ampi-threads/README.md) — thread index (archived, labels, colour, pinned) and the Amp-compatible archive commands.
+- [`src/extensions/ampi-shell/README.md`](src/extensions/ampi-shell/README.md) — background shell commands (`shell_command`, `shell_command_status`, `shell_command_kill`), limits and session-end cleanup.
 - [`src/extensions/ampi-gui/README.md`](src/extensions/ampi-gui/README.md) — opt-in local web GUI: session sidebar, live transcript, composer (send, steer, queue, interrupt), More Actions, live registry, security model.
 
 The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
@@ -66,6 +67,7 @@ Deprecated / unregistered:
 - [`src/extensions/ampi-session-fallback/index.ts`](src/extensions/ampi-session-fallback/index.ts) — `ampi-session-fallback` Pi extension entry point.
 - [`src/extensions/ampi-patch/index.ts`](src/extensions/ampi-patch/index.ts) — `ampi-patch` Pi extension entry point.
 - [`src/extensions/ampi-tasks/index.ts`](src/extensions/ampi-tasks/index.ts) — `ampi-tasks` Pi extension entry point.
+- [`src/extensions/ampi-shell/index.ts`](src/extensions/ampi-shell/index.ts) — `ampi-shell` Pi extension entry point.
 - [`src/extensions/ampi-web/index.ts`](src/extensions/ampi-web/index.ts) — `ampi-web` Pi extension entry point.
 - [`src/extensions/ampi-github/index.ts`](src/extensions/ampi-github/index.ts) — `ampi-github` Pi extension entry point.
 - [`src/extensions/ampi-workers/index.ts`](src/extensions/ampi-workers/index.ts) — `ampi-workers` Pi extension entry point (blocking workers + background task surface).

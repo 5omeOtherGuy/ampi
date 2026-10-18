@@ -70,6 +70,27 @@
  $ node scripts/check-changelog.mjs && node --test tests/mmr-tui-activity.test.mjs tests/mmr-tui-tool-renderers.test.mjs
    --test-reporter=spec
    ok
+=== shell_command left running · collapsed ===
+
+ ✓ Ran npm run dev (still running as pid 4242)
+=== shell_command left running · expanded ===
+
+ $ npm run dev (in ~/proj/packages/app) (still running as pid 4242)
+   ready on http://127.0.0.1:5173
+=== shell_command_status still running · collapsed ===
+
+ ✓ Checked pid 4242, still running
+=== shell_command_status still running · expanded ===
+
+ ✓ Checked pid 4242, still running
+   compiled in 120 ms
+=== shell_command_kill · collapsed ===
+
+ ✓ Stopped pid 4242 (SIGTERM)
+=== shell_command_kill · expanded ===
+
+ ✓ Stopped pid 4242 (SIGTERM)
+   shutting down
 === grep cancelled · collapsed ===
 
  ⊘ Grep "foo"

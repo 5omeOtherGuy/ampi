@@ -803,6 +803,11 @@ export { createAmpiGuiExtension, createMmrGuiExtension } from "./extensions/ampi
 export type { MmrGuiFactoryOverrides } from "./extensions/ampi-gui/index.js";
 export { loadMmrGuiSettings } from "./extensions/ampi-gui/config.js";
 export type { MmrGuiSettings } from "./extensions/ampi-gui/config.js";
+// --- ampi-shell (Stable) ---
+export { createAmpiShellExtension, createMmrShellExtension } from "./extensions/ampi-shell/index.js";
+export type { MmrShellFactoryOverrides } from "./extensions/ampi-shell/index.js";
+export { loadMmrShellSettings } from "./extensions/ampi-shell/config.js";
+export type { MmrShellSettings } from "./extensions/ampi-shell/config.js";
 // --- ampi-threads: thread index store (Internal / prompt-assembly) ---
 export {
   MmrThreadIndexError,
@@ -1033,6 +1038,9 @@ export {
   loadMmrGuiSettings as loadAmpiGuiSettings,
 } from "./extensions/ampi-gui/config.js";
 export {
+  loadMmrShellSettings as loadAmpiShellSettings,
+} from "./extensions/ampi-shell/config.js";
+export {
   MmrThreadIndexError as AmpiThreadIndexError,
   createMmrThreadIndexStore as createAmpiThreadIndexStore,
   resolveDefaultMmrThreadIndexDir as resolveDefaultAmpiThreadIndexDir,
@@ -1261,6 +1269,12 @@ export type {
 export type {
   MmrGuiFactoryOverrides as AmpiGuiFactoryOverrides,
 } from "./extensions/ampi-gui/index.js";
+export type {
+  MmrShellSettings as AmpiShellSettings,
+} from "./extensions/ampi-shell/config.js";
+export type {
+  MmrShellFactoryOverrides as AmpiShellFactoryOverrides,
+} from "./extensions/ampi-shell/index.js";
 export type {
   LoadedMmrWebSettings as LoadedAmpiWebSettings,
   MmrWebSettings as AmpiWebSettings,

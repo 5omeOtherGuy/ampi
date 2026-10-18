@@ -70,6 +70,18 @@ Owned by `ampi-patch` (`mmr-patch` runtime id).
 | --- | --- | --- |
 | Apply a focused patch | `apply_patch` | Local workspace edits only; rejects ambiguous/path-unsafe patches |
 
+## Background shell
+
+Owned by `ampi-shell` (`mmr-shell` runtime id). Pi's `bash` stays the tool for quick commands. Linux and macOS.
+
+| I need to... | Use | Notes |
+| --- | --- | --- |
+| Run a server, watcher, long build or test suite | `shell_command` | `command`, `workdir?`, `timeout_ms?`; left running in the background after `ampiShell.backgroundAfterMs`, with its pid |
+| Wait for it and read new output | `shell_command_status` | `pid`, `timeout_ms?` (0 to 60000, default 10000) |
+| Stop it | `shell_command_kill` | `pid`; SIGTERM, then SIGKILL after one second |
+
+Every running command is stopped when the session ends.
+
 ## Tasks
 
 Owned by `ampi-tasks` (`mmr-tasks` runtime id).
@@ -192,6 +204,12 @@ Minimal settings example:
 ```
 
 `ampiTui.notifications`: `enabled` turns notifications off entirely, `system` the desktop notification (or bell), `sound` a `paplay` sound from the freedesktop theme.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `ampiShell.enabled` | `true` | Load `ampi-shell` (`AMPI_SHELL_ENABLE=0` also turns it off) |
+| `ampiShell.backgroundAfterMs` | `30000` | How long `shell_command` waits before leaving a command in the background |
+| `ampiShell.maxBackground` | `8` | Background commands that may run at once per session |
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`ampiCore`) and nested (`ampi.core`) forms are accepted where supported by the owning extension.
 

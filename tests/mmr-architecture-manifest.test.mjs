@@ -203,6 +203,23 @@ describe("architecture manifest guardrails", () => {
     );
   });
 
+  it("ampi-shell manifest tools match its tools, the status catalog and every locked mode's allowlist", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const { MMR_SHELL_TOOL_NAMES } = await importSource("extensions/ampi-shell/index.ts");
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/tool-registry.ts");
+    const { MMR_MODES } = await importSource("extensions/ampi-core/modes.ts");
+    const manifestTools = MMR_EXTENSION_MANIFEST.find((entry) => entry.name === "ampi-shell")?.tools ?? [];
+    assert.deepEqual([...manifestTools], [...MMR_SHELL_TOOL_NAMES]);
+    // Without the extension loaded, the catalog still credits ampi-shell.
+    for (const decision of resolveMmrTools(MMR_SHELL_TOOL_NAMES, []).decisions) {
+      assert.equal(decision.status, "deferred");
+      assert.equal(decision.owner, "ampi-shell");
+    }
+    for (const mode of ["low", "medium", "high", "ultra"]) {
+      for (const name of MMR_SHELL_TOOL_NAMES) assert.ok(MMR_MODES[mode].tools.includes(name), `${mode} must allow ${name}`);
+    }
+  });
+
   it("manifest tools never collide with the planned-tool catalog", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/ampi-core/planned-catalog.ts");

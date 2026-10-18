@@ -53,7 +53,7 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       createMmrWebExtension({ loadSettings: () => settings({ enabled: true, braveApiKey: "brv" }) })(pi);
 
       const resolved = runtime.resolveMmrTools(mode, [
-        "read", "bash", "edit", "write", "grep", "find", "glob", "shell_command",
+        "read", "bash", "edit", "write", "grep", "find", "glob", "run_command",
         "web_search", "read_web_page",
       ]);
       const search = resolved.decisions.find((d) => d.requested === "web_search");
@@ -73,7 +73,7 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       createMmrWebExtension({ loadSettings: () => settings({ enabled: true }) })(pi);
 
       const resolved = runtime.resolveMmrTools(mode, [
-        "read", "bash", "edit", "write", "grep", "find", "glob", "shell_command",
+        "read", "bash", "edit", "write", "grep", "find", "glob", "run_command",
         "web_search", "read_web_page",
       ]);
       const search = resolved.decisions.find((d) => d.requested === "web_search");
@@ -91,7 +91,7 @@ describe("mmr-web covers every locked mode that requests web_search / read_web_p
       createMmrWebExtension({ loadSettings: () => settings({ enabled: false }) })(pi);
 
       const resolved = runtime.resolveMmrTools(mode, [
-        "read", "bash", "edit", "write", "grep", "find", "glob", "shell_command",
+        "read", "bash", "edit", "write", "grep", "find", "glob", "run_command",
       ]);
       const search = resolved.decisions.find((d) => d.requested === "web_search");
       const reader = resolved.decisions.find((d) => d.requested === "read_web_page");

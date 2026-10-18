@@ -171,6 +171,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-core` | On | Locked modes, route resolution, thinking/context policy, prompt rewrite, diagnostics, config flow |
 | `ampi-session-fallback` | On | Quota/rate-limit/overload classification and explicit fallback |
 | `ampi-patch` | On | Path-safe `apply_patch` editing |
+| `ampi-shell` | On | Amp-compatible background shell tools: `shell_command` leaves long commands running, `shell_command_status` follows them, `shell_command_kill` stops them (`ampiShell.enabled: false` turns it off) |
 | `ampi-tasks` | On | Session-local `task_list` planning widget |
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
