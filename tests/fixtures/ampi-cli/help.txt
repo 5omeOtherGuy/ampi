@@ -29,6 +29,9 @@ Options:
       Code's stream-json output) instead of the final message
   --stream-json-thinking
       --stream-json with the model's thinking blocks included
+  --stream-json-input
+      With --stream-json, read the messages from stdin, one JSON user message per line, and
+      print a result record after each run; no message argument
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute

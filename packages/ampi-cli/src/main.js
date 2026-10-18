@@ -4,12 +4,14 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
-import { buildExecuteArgs, createRunExtension, isExecuteRun, readAll } from "./execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll } from "./execute.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
-import { capturePiJsonOutput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
+import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
+import { createStreamJsonInputDriver } from "./stream-json-input.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -90,6 +92,14 @@ async function startPi({ piArgs, options }) {
     process.stderr.write(`ampi: --stream-json replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
     return 2;
   }
+  if (options.streamJsonInput && (parsed.messages.length > 0 || parsed.fileArgs.length > 0)) {
+    process.stderr.write("ampi: --stream-json-input reads every message from stdin; leave out the message argument.\n");
+    return 2;
+  }
+  if (options.streamJsonInput && process.stdin.isTTY === true) {
+    process.stderr.write("ampi: --stream-json-input reads JSON lines from stdin, which is a terminal here; pipe the messages in.\n");
+    return 2;
+  }
   const cwd = process.cwd();
   const decision = decideAmpiLoad({
     piArgs: args,
@@ -97,7 +107,7 @@ async function startPi({ piArgs, options }) {
     cwd,
     packageNameAt: (start) => readPackageAt(start)?.name,
   });
-  if (execute) {
+  if (execute && !options.streamJsonInput) {
     const stdin = process.stdin.isTTY === true ? undefined : await readAll(process.stdin);
     hidePipedStdinFromPi();
     const built = buildExecuteArgs(pi.parseArgs, args, stdin);
@@ -133,7 +143,113 @@ async function startPi({ piArgs, options }) {
     await pi.main(args, { extensionFactories });
     return undefined;
   }
+  if (options.streamJsonInput) return runStreamJsonInput(pi, args, extensionFactories, options.streamJsonThinking);
   return runStreamJson(pi, args, extensionFactories, options.streamJsonThinking);
+}
+
+/**
+ * Call `onLine` for each line of `stream`, split on LF only (a JSON string may
+ * contain U+2028, which `readline` would also split on), and `onEnd` at its end.
+ *
+ * @param {NodeJS.ReadableStream} stream
+ * @param {(line: string) => void} onLine
+ * @param {() => void} onEnd
+ */
+function readLines(stream, onLine, onEnd) {
+  const decoder = new StringDecoder("utf8");
+  let pending = "";
+  /** @param {string} text */
+  const split = (text) => {
+    const lines = (pending + text).split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) onLine(line.replace(/\r$/, ""));
+  };
+  stream.on("data", (chunk) => split(typeof chunk === "string" ? chunk : decoder.write(chunk)));
+  stream.on("end", () => {
+    split(decoder.end());
+    if (pending !== "") onLine(pending.replace(/\r$/, ""));
+    pending = "";
+    onEnd();
+  });
+}
+
+/**
+ * Run Pi's RPC mode with the messages from stdin and print stream JSON records
+ * for every run (see stream-json-input.js). Pi starts once the first message
+ * line arrives; stdin ending before that is the missing-message usage error.
+ * RPC mode ends the process itself once its input ends.
+ *
+ * @param {any} pi The `@earendil-works/pi-coding-agent` module.
+ * @param {string[]} args Pi's arguments, without a message.
+ * @param {{ name: string, factory: (pi: any) => void, hidden: boolean }[]} extensionFactories
+ * @param {boolean} thinking
+ * @returns {Promise<number>}
+ */
+async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
+  /** @type {import("./stream-json-input.js").StreamJsonInputDriver | undefined} */
+  let driver;
+  /** @type {string[]} Lines read before the driver exists. */
+  const early = [];
+  let stdinEnded = false;
+  const hasMessage = await new Promise((resolve) => {
+    readLines(
+      process.stdin,
+      (line) => {
+        if (driver !== undefined) {
+          driver.line(line);
+          return;
+        }
+        early.push(line);
+        if (line.trim() !== "") resolve(true);
+      },
+      () => {
+        stdinEnded = true;
+        if (driver !== undefined) driver.end();
+        else resolve(false);
+      },
+    );
+  });
+  if (!hasMessage) {
+    process.stderr.write(`ampi: ${EXECUTE_NO_MESSAGE_ERROR}\n`);
+    return 2;
+  }
+
+  /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
+  let runtime;
+  const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
+  const rpcInput = feedPiRpcInput();
+  const output = capturePiJsonOutput((record) => {
+    driver?.receive(record);
+    return "";
+  });
+  let written = Promise.resolve();
+  const current = createStreamJsonInputDriver(encoder, {
+    send: rpcInput.send,
+    write: (records) => {
+      if (records.length > 0) written = output.write(records.map((record) => `${JSON.stringify(record)}\n`).join(""));
+    },
+    warn: (text) => process.stderr.write(`${text}\n`),
+    // The last records must reach stdout before Pi exits the process.
+    end: () => void written.finally(rpcInput.end),
+  });
+  driver = current;
+  for (const line of early) current.line(line);
+  if (stdinEnded) current.end();
+  exitWithCodeAfterPiRpc(() => current.exitCode);
+
+  // RPC output has no session header: the session's id and directory come from the session itself.
+  const factory = (/** @type {any} */ api) => {
+    runtime = api;
+    api.on("session_start", (/** @type {unknown} */ _event, /** @type {any} */ ctx) => {
+      encoder.push({ type: "session", id: ctx.sessionManager.getSessionId(), cwd: ctx.cwd });
+    });
+  };
+  try {
+    await pi.main(["--mode", "rpc", ...args], { extensionFactories: [...extensionFactories, { name: "ampi-cli-stream-json", factory, hidden: true }] });
+  } finally {
+    output.restore();
+  }
+  return current.exitCode;
 }
 
 /**

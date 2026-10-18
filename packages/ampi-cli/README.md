@@ -37,6 +37,7 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 | `-x`, `--execute` | Run one message without the terminal UI and print only the final assistant message. See [Execute mode](#execute-mode). |
 | `--stream-json` | In execute mode, print the run as JSON records, one per line, instead of the final message. See [Stream JSON](#stream-json). |
 | `--stream-json-thinking` | `--stream-json` with the model's thinking blocks. |
+| `--stream-json-input` | With `--stream-json`, read the messages from stdin as JSON lines and keep the session open until stdin ends. See [Messages on stdin](#messages-on-stdin). |
 | `--timings` | In execute mode, print the startup, turn and total durations to stderr. |
 | `--no-archive-after-execute` | Keep an execute-mode session out of the archive. |
 | `--title <title>` | Name the session; the same as Pi's `--name`. |
@@ -87,12 +88,34 @@ The records, in order:
 | `{"type": "system", "subtype": "init"}` | First | `cwd`; `session_id`, the session's id (the same as in ampi's thread index); `tools`, the names of the tools the model can call; `mcp_servers`; `agent_mode`, the ampi mode, left out when no ampi mode is active. |
 | `{"type": "user"}` | For the message and each tool result | `message.content`: `text` blocks, or one `tool_result` block (`tool_use_id`, `content` as text, `is_error`); `parent_tool_use_id`; `session_id`. |
 | `{"type": "assistant"}` | For each answer of the model | `message.content`: `text`, `tool_use` (`id`, `name`, `input`), and with `--stream-json-thinking` `thinking` (`thinking`) and `redacted_thinking` (`data`); `message.stop_reason`: `end_turn`, `tool_use`, `max_tokens` or `null`; `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`; `parent_tool_use_id`; `session_id`. |
-| `{"type": "result"}` | Last | `subtype` `success` with `result`, the final answer's text, or `error_during_execution` with `error`; `is_error`; `duration_ms`; `num_turns`; `session_id`; `usage`, summed over the run. |
+| `{"type": "result"}` | Last (with `--stream-json-input`, after each run) | `subtype` `success` with `result`, the final answer's text, or `error_during_execution` with `error`; `is_error`; `duration_ms`; `num_turns`; `session_id`; `usage`, summed over the run. |
 
 - **Exit status.** As in execute mode: `0` with a `success` result, `1` with an error result (a failed or aborted request, or an answer cut off at the model's output limit), `2` for a usage error, which prints no records. When Pi's automatic retry recovers from a failed request, the run succeeds.
 - **Usage errors.** `--stream-json` needs execute mode: `-x`, or redirected input or output. It replaces Pi's output format, so it cannot be combined with `--mode text`, `json` or `rpc`. `--stream-json-thinking` implies `--stream-json`.
 - **Not included.** Subagent output is not streamed, so `parent_tool_use_id` is always `null`. `mcp_servers` is always empty, because Pi does not tell extensions the connection state of its MCP servers. Images in messages and tool results are left out, and Pi has no turn limit, so there is no `error_max_turns` result. Pi's own diagnostics stay on stderr; an error that stops Pi before the session starts is reported there, without records.
 - **Pi's own format.** `ampi -x --mode json` prints Pi's JSON event stream instead, with every streaming update.
+
+### Messages on stdin
+
+`ampi -x --stream-json --stream-json-input` reads the messages from stdin instead of taking one message, so a program can hold one session open and send it message after message. Each line of stdin is one JSON object:
+
+```json
+{"type": "user", "message": {"role": "user", "content": "list the npm scripts"}}
+{"type": "user", "steer": true, "message": {"role": "user", "content": [{"type": "text", "text": "only the test scripts"}]}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": "what does this show?"}, {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "iVBORw0KGgo..."}}]}}
+```
+
+```bash
+printf '%s\n' '{"type":"user","message":{"role":"user","content":"list files"}}' | ampi -x --stream-json --stream-json-input
+```
+
+- **Content.** `message.content` is a string or a list of blocks: `{"type": "text", "text"}`, and `{"type": "image", "source": {"type": "base64", "media_type", "data"}}` with an optional `source_path`. `media_type` is `image/png`, `image/jpeg`, `image/gif` or `image/webp`, and it must match the image data. A line carries at most 10 images. Text blocks are joined with newlines. Other fields on the line are ignored; blank lines are skipped.
+- **When messages run.** A message that arrives while no run is in progress starts one. A message that arrives while a run is in progress joins it: with `"steer": true` the agent reads it before its next request to the model, and without it the agent takes it up once it has finished its current work.
+- **Records.** One `init` record first, then the records of each run as with `--stream-json`, with a `result` record each time a run has finished; its `num_turns`, `duration_ms`, `usage` and `result` cover that run only. Messages that joined a run share its result. Images are not echoed in `user` records.
+- **The end.** ampi exits once stdin has ended and the last run has finished. `--title`, `-l`, `--timings` and the archive after execute mode work as with one message.
+- **Invalid lines.** A line that is not such a message stops reading: the run in progress finishes, then an `error_during_execution` result names the line and the problem (for example `stdin line 2: not valid JSON`).
+- **Exit status.** `0` when every run succeeded; `1` when a run failed or a line was invalid; `2` for a usage error, which prints no records: `--stream-json-input` without `--stream-json` or `--stream-json-thinking`, together with a message argument, with stdin as a terminal, or stdin ending before the first message.
+- **Extension dialogs.** Nobody can answer a dialog during such a run, so ampi cancels every dialog an extension opens: a confirmation counts as "no".
 
 ## Threads
 
@@ -209,7 +232,7 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, and `threads color`, and `threads search` with filters, JSON and its usage errors).
 
 ## Development
 

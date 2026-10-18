@@ -2,7 +2,8 @@
 // json`, documented in Pi's docs/json.md) turned into Claude Code-compatible
 // stream-json records, one JSON object per line: a `system`/`init` record, a
 // `user` record per user message and tool result, an `assistant` record per
-// completed assistant message, and a final `result` record.
+// completed assistant message, and a `result` record when the run ends (one
+// per run when `--stream-json-input` sends several messages).
 //
 // Not covered: subagent output is not streamed (`parent_tool_use_id` is always
 // null), Pi has no turn limit (no `error_max_turns` result), Pi does not tell
@@ -35,8 +36,8 @@ const STOP_REASONS = /** @type {Record<string, string>} */ ({ stop: "end_turn", 
  * @typedef {object} StreamJsonEncoder
  * @property {(event: any) => StreamJsonRecord[]} push The records for one Pi JSON event, in order.
  * @property {(failure?: string) => { records: StreamJsonRecord[], exitCode: 0 | 1 }} finish The records
- *   that end the stream, ending with the result; `failure` reports a run that failed outside the
- *   model's answer.
+ *   that end the current run, ending with its result; `failure` reports a run that failed outside
+ *   the model's answer. The next events start a new run with its own turns, usage and duration.
  */
 
 /** @param {any} usage Pi's usage of one assistant message. */
@@ -87,14 +88,15 @@ function failureOf(message) {
  * @returns {StreamJsonEncoder}
  */
 export function createStreamJsonEncoder({ thinking, now, context }) {
-  const startedAt = now();
+  /** @type {number | undefined} When the current run started: at creation for the first, at its agent_start for later ones. */
+  let startedAt = now();
   let sessionId = "";
   let cwd = "";
   let started = false;
   let turns = 0;
   /** @type {any} */
   let lastAssistant;
-  const usage = usageOf(undefined);
+  let usage = usageOf(undefined);
 
   /**
    * @param {string} role
@@ -168,6 +170,7 @@ export function createStreamJsonEncoder({ thinking, now, context }) {
         return [];
       }
       const records = init();
+      if (event.type === "agent_start") startedAt ??= now();
       if (event.type === "turn_start") turns++;
       if (event.type === "message_end") records.push(...recordsOfMessage(event.message));
       return records;
@@ -176,9 +179,15 @@ export function createStreamJsonEncoder({ thinking, now, context }) {
     finish(failure) {
       const records = init();
       const error = failure ?? failureOf(lastAssistant);
-      const common = { duration_ms: Math.round(now() - startedAt), num_turns: turns, session_id: sessionId, usage: { ...usage } };
+      const end = now();
+      const common = { duration_ms: Math.round(end - (startedAt ?? end)), num_turns: turns, session_id: sessionId, usage: { ...usage } };
+      const result = lastAssistant ? textOf(lastAssistant.content) : "";
+      startedAt = undefined;
+      turns = 0;
+      lastAssistant = undefined;
+      usage = usageOf(undefined);
       if (error === undefined) {
-        records.push({ type: "result", subtype: "success", is_error: false, ...common, result: lastAssistant ? textOf(lastAssistant.content) : "" });
+        records.push({ type: "result", subtype: "success", is_error: false, ...common, result });
         return { records, exitCode: 0 };
       }
       records.push({ type: "result", subtype: "error_during_execution", is_error: true, ...common, error });

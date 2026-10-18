@@ -14,6 +14,7 @@ import { parseArgs } from "node:util";
  * @property {boolean} archive Archive the session after execute mode; `--no-archive-after-execute` turns it off.
  * @property {boolean} streamJson `--stream-json`: print stream JSON records instead of the final message (execute mode).
  * @property {boolean} streamJsonThinking `--stream-json-thinking`: `--stream-json` with thinking blocks.
+ * @property {boolean} streamJsonInput `--stream-json-input`: read the messages from stdin as JSON lines (stream JSON only).
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
@@ -43,6 +44,7 @@ const OPTIONS = /** @type {const} */ ({
   "no-archive-after-execute": { type: "boolean" },
   "stream-json": { type: "boolean" },
   "stream-json-thinking": { type: "boolean" },
+  "stream-json-input": { type: "boolean" },
   "settings-file": { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
@@ -92,7 +94,15 @@ const SETTINGS_FILE_ERROR =
 export function routeAmpiArgv(argv) {
   const args = [...argv];
   /** @type {AmpiOptions} */
-  const options = { labels: [], execute: false, timings: false, archive: true, streamJson: false, streamJsonThinking: false };
+  const options = {
+    labels: [],
+    execute: false,
+    timings: false,
+    archive: true,
+    streamJson: false,
+    streamJsonThinking: false,
+    streamJsonInput: false,
+  };
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
   if (args[0] === "threads" || args[0] === "last") return { command: "threads", piArgs: [], options, threadArgs: args };
@@ -200,8 +210,12 @@ export function routeAmpiArgv(argv) {
         options.streamJson = true;
         options.streamJsonThinking = true;
         break;
+      case "stream-json-input":
+        options.streamJsonInput = true;
+        break;
     }
   }
+  if (options.streamJsonInput && !options.streamJson) error ??= "--stream-json-input needs --stream-json or --stream-json-thinking.";
 
   if (error !== undefined) return { command: "error", piArgs: [], options, error };
   if (help) return { command: "help", piArgs: [], options };
@@ -246,6 +260,9 @@ Options:
       Code's stream-json output) instead of the final message
   --stream-json-thinking
       --stream-json with the model's thinking blocks included
+  --stream-json-input
+      With --stream-json, read the messages from stdin, one JSON user message per line, and
+      print a result record after each run; no message argument
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute
