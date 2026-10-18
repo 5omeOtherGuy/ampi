@@ -561,9 +561,7 @@ describe("oracle execute() seam", () => {
       fakeTheme,
       { args: { task: "go" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(collapsed, /running\.\.\./i);
-    assert.doesNotMatch(collapsed, /[▸▾◐●⚠]/);
-    assert.match(collapsed, /Ctrl\+O/i);
+    assert.match(collapsed, /^ ⠋ Consulting oracle · go$/, "a running worker is one line with a spinner");
     assert.doesNotMatch(collapsed, /src\/auth\.ts/);
 
     const expanded = tool.renderResult(
@@ -572,10 +570,8 @@ describe("oracle execute() seam", () => {
       fakeTheme,
       { args: { task: "go" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(expanded, /oracle/i);
-    assert.match(expanded, /read/);
-    assert.match(expanded, /42 lines/);
-    assert.match(expanded, /src\/auth\.ts/);
+    assert.match(expanded, /Consulting oracle · go/);
+    assert.match(expanded, / read src\/auth\.ts/, "the child tool shows in the trail");
     assert.doesNotMatch(expanded, /→ toolCall/);
   });
 
@@ -666,16 +662,15 @@ describe("oracle execute() seam", () => {
 
     const fakeTheme = {
       fg(color, text) { return `[${color}]${text}`; },
-      bg(_color, text) { return text; },
       bold(text) { return text; },
     };
     const rendered = tool.renderResult(
       result,
-      { expanded: false, isPartial: false },
+      { expanded: true, isPartial: false },
       fakeTheme,
       { args: { task: "review" }, showImages: false, isError: false },
     ).render(200).join("\n");
-    assert.match(rendered, /completed/i);
+    assert.match(rendered, /\[success\]✓ \[toolTitle\]Consulted oracle/);
     assert.doesNotMatch(rendered, /\[error\]/);
     assert.match(rendered, /\[warning\]provider returned a transient 429/);
   });

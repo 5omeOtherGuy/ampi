@@ -1,8 +1,9 @@
 import {
+  getMarkdownTheme,
   type AgentToolResult,
   type MessageRenderer,
 } from "@earendil-works/pi-coding-agent";
-import { Box, Container, Spacer, Text, type Component } from "@earendil-works/pi-tui";
+import { Container, Markdown, Text, type Component } from "@earendil-works/pi-tui";
 import { isRecord } from "../../ampi-core/internal/json.js";
 import {
   getAboveEditorDashboardSlotRowBudget,
@@ -10,10 +11,6 @@ import {
 } from "../../ampi-core/above-editor-dashboard.js";
 import { reassertLowerAboveEditorWidgets } from "../../ampi-core/above-editor-order.js";
 import {
-  formatTitle,
-  statusBgFn,
-  statusColor,
-  statusLabel,
   textContent,
   type BackgroundTaskDetails,
   type RenderContextLike,
@@ -27,21 +24,12 @@ import {
   startTaskDisplayFromArgs,
   workerPromptFromArgs,
 } from "./tool-argument-display.js";
-import {
-  addDiagnostic,
-  addFallbackNoticeBlock,
-  addFinalOutputBox,
-  addMarkdownBlock,
-  addTrailComponents,
-  taskPreviewForDisplay,
-  WorkerStatusLineComponent,
-} from "./subagent-trail-components.js";
+import { workerRowColor, workerRowGlyph, WORKER_ROW_SPINNER_FRAMES, WORKER_ROW_SPINNER_INTERVAL_MS } from "./worker-row.js";
+import { workerRowBody, workerRowLine } from "./worker-row-lines.js";
 import { getMmrBackgroundCardExtras } from "../background/background-dispatch.js";
 import {
   advanceLoaderFrame,
-  backgroundStatusColor,
   backgroundStatusGlyph,
-  backgroundStatusWord,
   compareRows,
   currentLoaderFrame,
   groupMembersFromBoard,
@@ -197,8 +185,10 @@ function renderBackgroundWorkerCard(options: {
   theme: SubagentTheme;
   buildSections: readonly CardSectionBuilder[];
   gated: boolean;
+  /** Columns every line is indented by, as Pi indents tool output. */
+  pad: string;
 }): Component {
-  const { sessionKey, extras, theme, buildSections, gated } = options;
+  const { sessionKey, extras, theme, buildSections, gated, pad } = options;
   // Everything live is computed inside the thunk so the card re-resolves the
   // board, reveal, loader frame and elapsed on every render(width) frame.
   const build = (): CardBuild => {
@@ -271,7 +261,10 @@ function renderBackgroundWorkerCard(options: {
     });
     return { lines };
   };
-  return new BackgroundCardComponent(build);
+  return new BackgroundCardComponent(() => {
+    const card = build();
+    return { ...card, lines: card.lines.map((line) => `${pad}${line}`) };
+  });
 }
 
 /**
@@ -375,11 +368,88 @@ export interface AsyncTaskCompletionDetails {
   outcomeText?: string;
 }
 
+/** A result that is not a worker payload: its text as Markdown. */
+function markdownText(text: string | undefined): Component {
+  const container = new Container();
+  const body = text?.trim();
+  if (body) container.addChild(new Markdown(body, 1, 0, getMarkdownTheme()));
+  return container;
+}
+
 const RESULT_RENDERED_STATE_KEY = "mmrSubagentResultRendered";
 const CALL_COMPONENT_STATE_KEY = "mmrSubagentCallComponent";
+const ROW_SPINNER_STATE_KEY = "ampiWorkerRow";
 
 function renderState(context: RenderContextLike | undefined): Record<string, unknown> | undefined {
   return isRecord(context?.state) ? context.state : undefined;
+}
+
+/**
+ * A worker row's lines, built on the first render at a width and kept for
+ * it. Pi asks for new components on every change (a result, a spinner
+ * frame, the expand toggle), so the kept lines never go stale.
+ */
+class WorkerRowComponent implements Component {
+  private build: ((width: number) => string[]) | undefined;
+  private width: number | undefined;
+  private lines: string[] = [];
+  constructor(build: (width: number) => string[]) {
+    this.build = build;
+  }
+  render(width: number): string[] {
+    if (!this.build) return [];
+    if (width !== this.width) {
+      this.lines = this.build(width);
+      this.width = width;
+    }
+    return this.lines;
+  }
+  /** Blank the row so a remembered call row does not duplicate the result's row. */
+  clear(): void {
+    this.build = undefined;
+  }
+  invalidate(): void {
+    this.width = undefined;
+  }
+}
+
+interface RowSpinner {
+  frame: number;
+  timer?: ReturnType<typeof setInterval>;
+  /**
+   * The row was first drawn with its execution already started, as Pi's
+   * HTML export draws every call once before its result; live Pi always
+   * draws a new row before its execution starts. The call then draws
+   * nothing, so the result's row is the only one.
+   */
+  snapshot: boolean;
+}
+
+function rowSpinner(context: RenderContextLike | undefined): RowSpinner {
+  const state = renderState(context);
+  if (!state) return { frame: 0, snapshot: false };
+  state[ROW_SPINNER_STATE_KEY] ??= { frame: 0, snapshot: context?.executionStarted === true } satisfies RowSpinner;
+  return state[ROW_SPINNER_STATE_KEY] as RowSpinner;
+}
+
+/** Keep the running glyph moving while the worker runs; stop once it finished. */
+function syncSpinner(spinner: RowSpinner, context: RenderContextLike | undefined, running: boolean): void {
+  const invalidate = context?.invalidate;
+  if (running && !spinner.timer && typeof invalidate === "function") {
+    spinner.timer = setInterval(() => {
+      spinner.frame = (spinner.frame + 1) % WORKER_ROW_SPINNER_FRAMES.length;
+      invalidate();
+    }, WORKER_ROW_SPINNER_INTERVAL_MS);
+    spinner.timer.unref?.();
+  } else if (!running && spinner.timer) {
+    clearInterval(spinner.timer);
+    spinner.timer = undefined;
+  }
+}
+
+/** Columns a row is indented by: Pi's tool output padding. */
+function rowPad(context: RenderContextLike | undefined): string {
+  return " ".repeat(context?.outputPad ?? 1);
 }
 
 function rememberCallComponent(context: RenderContextLike | undefined, component: Component): void {
@@ -391,7 +461,7 @@ function clearRenderedCall(context: RenderContextLike | undefined): void {
   const component = renderState(context)?.[CALL_COMPONENT_STATE_KEY];
   if (component instanceof Text) component.setText("");
   else if (component instanceof Container) component.clear();
-  else if (component instanceof Box) component.clear();
+  else if (component instanceof WorkerRowComponent) component.clear();
   else if (component instanceof BackgroundCardComponent) component.clear();
 }
 
@@ -438,6 +508,7 @@ export function renderMmrBackgroundTaskResult(
       theme,
       buildSections: fleetSectionBuilders(view.fleet),
       gated: true,
+      pad: rowPad(context),
     });
   }
 
@@ -445,9 +516,7 @@ export function renderMmrBackgroundTaskResult(
   if (view.surface === "board") {
     const boardComponent = renderBackgroundTaskBoard(view.board, theme);
     if (boardComponent) return boardComponent;
-    const container = new Container();
-    addMarkdownBlock(container, output, theme, { paddingX: 1 });
-    return container;
+    return markdownText(output);
   }
 
   // 2. Group control result (task_poll / task_wait / task_cancel with group_id)
@@ -467,14 +536,13 @@ export function renderMmrBackgroundTaskResult(
       theme,
       buildSections: [groupSectionBuilder(view.details, view.groupId)],
       gated: true,
+      pad: rowPad(context),
     });
   }
 
   if (view.surface !== "spawn" && view.surface !== "background-final") {
     // Not a background-task payload on this entry point: render the text.
-    const container = new Container();
-    addMarkdownBlock(container, output, theme, { paddingX: 1 });
-    return container;
+    return markdownText(output);
   }
 
   // 3. start_task spawn → GATED inline card: the group section for the
@@ -496,6 +564,7 @@ export function renderMmrBackgroundTaskResult(
           : singleSectionBuilder(view.details),
       ],
       gated: true,
+      pad: rowPad(context),
     });
   }
 
@@ -518,14 +587,13 @@ export function renderMmrBackgroundTaskResult(
       theme,
       buildSections: [singleSectionBuilder(details)],
       gated: true,
+      pad: rowPad(context),
     });
   }
 
-  // Terminal or unrecognised → rich result card.
+  // Terminal or unrecognised → the task's row.
   if (!renderStatus || !details.taskId || !details.agent) {
-    const container = new Container();
-    addMarkdownBlock(container, output || details.errorMessage, theme, { paddingX: 1 });
-    return container;
+    return markdownText(output || details.errorMessage);
   }
   const startDisplay = details.tool === "start_task" ? startTaskDisplayFromArgs(context?.args) : undefined;
   const final = buildWorkerRunFinal({
@@ -535,16 +603,14 @@ export function renderMmrBackgroundTaskResult(
     startDisplay,
     output: details.finalOutput?.trim() ?? "",
   });
-  return renderWorkerRunCard(final, options.expanded === true, theme, context);
+  return renderWorkerRow(final, options.expanded === true, theme, context);
 }
 
-function asyncTaskCompletionHeaderLine(
-  details: AsyncTaskCompletionDetails | undefined,
-  theme: SubagentTheme,
-): string {
-  const title = theme.fg("toolTitle", theme.bold("background task"));
-  const badge = theme.fg("muted", "finished");
-  return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(details?.status, theme)}`;
+/** Status of a completion notice's row; an unknown status reads as finished. */
+function completionRowStatus(status: string | undefined): "done" | "error" | "cancelled" {
+  if (status === "failed") return "error";
+  if (status === "cancelled") return "cancelled";
+  return "done";
 }
 
 /**
@@ -554,8 +620,10 @@ function asyncTaskCompletionHeaderLine(
  * The message `content` stays the model-facing `<task-notification>` XML
  * (the agent consumes it next turn); this renderer draws the human-facing
  * row from the structured `details` instead of dumping that XML into the
- * transcript. Returning `undefined` (e.g. malformed or legacy details)
- * makes the host fall back to its default custom-message box.
+ * transcript: `✓ Background task finished · <description>`, then the
+ * outcome and the `task_poll` call that reads the result, dim and indented.
+ * Returning `undefined` (e.g. malformed or legacy details) makes the host
+ * fall back to its default custom-message box.
  */
 export const renderAsyncTaskCompletionMessage: MessageRenderer<AsyncTaskCompletionDetails> = (
   message,
@@ -564,116 +632,59 @@ export const renderAsyncTaskCompletionMessage: MessageRenderer<AsyncTaskCompleti
 ) => {
   try {
     const details = message.details;
-    const box = new Box(1, 1, backgroundStatusBgFn(details?.status, theme));
-    box.addChild(new Text(asyncTaskCompletionHeaderLine(details, theme), 0, 0));
-    addMarkdownBlock(box, details?.description, theme, { paddingX: 1 });
-    addMarkdownBlock(box, details?.outcomeText, theme, { paddingX: 1 });
+    const status = completionRowStatus(details?.status);
+    const description = details?.description?.replace(/\s+/g, " ").trim();
     const groupId = details?.groupId?.trim();
     const taskId = details?.taskId?.trim();
-    if (groupId) {
-      box.addChild(new Text(theme.fg("muted", `task_poll({group_id:"${groupId}"})`), 0, 0));
-    } else if (taskId) {
-      box.addChild(new Text(theme.fg("muted", `task_poll({task_id:"${taskId}"})`), 0, 0));
-    }
-    const container = new Container();
-    container.addChild(box);
-    return container;
+    const hint = groupId
+      ? `task_poll({group_id:"${groupId}"})`
+      : taskId
+        ? `task_poll({task_id:"${taskId}"})`
+        : undefined;
+    const outcome = details?.outcomeText?.trim().split(/\r?\n/) ?? [];
+    return new WorkerRowComponent((width) => {
+      const lines = [
+        truncateWidgetLines(
+          [` ${theme.fg(workerRowColor(status), workerRowGlyph(status))} ${theme.fg("toolTitle", "Background task finished")}${description ? theme.fg("muted", ` · ${description}`) : ""}`],
+          width,
+        )[0] as string,
+      ];
+      for (const line of [...outcome, ...(hint ? [hint] : [])]) {
+        if (line.trim()) lines.push(...truncateWidgetLines([`   ${theme.fg("dim", line)}`], width));
+      }
+      return lines;
+    });
   } catch {
     return undefined;
   }
 };
 
 // ---------------------------------------------------------------------------
-// The ONE rich N=1 card assembler. Both the blocking transcript card
-// (renderMmrSubagentResult) and the background-final poll card
-// (renderMmrBackgroundTaskResult branch 4) build their components here from a
-// WorkerRunFinal projection. Surface differences (background badge + neutral
-// status bg, partial chip, spacer placement, terminal-section gating, status-
-// line name) are projection flags, never a second assembly path.
+// The ONE N=1 row assembler. Both the blocking transcript row
+// (renderMmrSubagentResult) and the background-final poll row
+// (renderMmrBackgroundTaskResult branch 4) draw a WorkerRunFinal projection
+// here; surface differences are projection fields, never a second path.
 // ---------------------------------------------------------------------------
 
-function richCardHeaderLine(final: WorkerRunFinal, theme: SubagentTheme): string {
-  const title = formatTitle(final.headerName, final.model, theme);
-  if (final.surface === "background") {
-    const badge = theme.fg("muted", "background");
-    const outcome = final.partial ? ` ${theme.fg("warning", "partial")}` : "";
-    return `${title} ${theme.fg("muted", "•")} ${badge}  ${backgroundStatusBadge(final.backgroundStatus, theme)}${outcome}`;
-  }
-  return `${title}  ${theme.fg(statusColor(final.status), statusLabel(final.status))}`;
-}
-
-function richCardBoxBgFn(final: WorkerRunFinal, theme: SubagentTheme): (text: string) => string {
-  return final.surface === "background"
-    ? backgroundStatusBgFn(final.backgroundStatus, theme)
-    : statusBgFn(final.status, theme);
-}
-
 /**
- * Render a {@link WorkerRunFinal} as the rich N=1 card: header task box
- * (title + Markdown body + optional hint + optional diagnostic), optional
- * fallback notice, optional expanded trail, optional final-output box, and
- * optional usage status line. Pure over the projection: the only surface
- * branching is the header/box-bg helpers above, driven by projection flags.
+ * Draw a {@link WorkerRunFinal} as a worker row: one line collapsed;
+ * expanded, the row and below it the trail, then the answer and the usage
+ * line once the worker finished. A running row animates its glyph.
  */
-export function renderWorkerRunCard(
+export function renderWorkerRow(
   final: WorkerRunFinal,
   expanded: boolean,
   theme: SubagentTheme,
   context: RenderContextLike | undefined,
 ): Component {
-  const container = new Container();
-
-  const box = new Box(1, 1, richCardBoxBgFn(final, theme));
-  box.addChild(new Text(richCardHeaderLine(final, theme), 0, 0));
-  const preview = taskPreviewForDisplay(final.collapsedBody, final.expandedBody, expanded);
-  const hasOperation = addMarkdownBlock(box, preview.body, theme, { paddingX: 1 });
-  if (preview.hint) box.addChild(new Text(theme.fg("muted", preview.hint), 1, 0));
-  const hasDiagnostic = addDiagnostic(box, final.diagnostic, final.diagnosticStatus, theme);
-  container.addChild(box);
-  const hasTaskBody = hasOperation || hasDiagnostic;
-
-  addFallbackNoticeBlock(container, final.fallbackNotice, theme);
-
-  const addOutput = (space: boolean): void => {
-    if (!final.output || !final.showTerminalSections) return;
-    if (space) container.addChild(new Spacer(1));
-    addFinalOutputBox(container, final.output, theme);
-  };
-  const addStatusLine = (): void => {
-    if (!final.showTerminalSections || !(final.usage || final.model)) return;
-    container.addChild(new Spacer(1));
-    container.addChild(
-      new WorkerStatusLineComponent(final.statusLineName, final.usage, final.contextWindow, final.model, theme),
-    );
-  };
-
-  if (!expanded) {
-    addOutput(true);
-    addStatusLine();
-    return container;
-  }
-
-  // Background-final inserts a spacer before the trail when the raw trail is
-  // non-empty (even if every item is later skipped as an echo/duplicate); the
-  // blocking card never does. The output-box spacer is unconditional for
-  // background and conditional (only when a trail or task body precedes it) for
-  // blocking.
-  if (final.spaceBeforeTrailWhenExpanded === "whenRawTrailNonEmpty" && final.trail.length > 0) {
-    container.addChild(new Spacer(1));
-  }
-  const hasTrail = addTrailComponents(
-    container,
-    final.trail,
-    final.output,
-    theme,
-    context,
-    final.trailWorkerPrompt,
-    final.suppressDuplicateFinalOutput,
-  );
-
-  addOutput(final.spaceBeforeOutputWhenExpanded === "always" ? true : hasTrail || hasTaskBody);
-  addStatusLine();
-  return container;
+  const spinner = rowSpinner(context);
+  syncSpinner(spinner, context, final.status === "running" && !spinner.snapshot);
+  const pad = rowPad(context);
+  const frame = spinner.frame;
+  return new WorkerRowComponent((width) => [
+    workerRowLine(final, theme, pad, frame, width),
+    ...(expanded ? workerRowBody(final, theme, pad, frame, width) : []),
+  ]);
 }
 
 export function renderMmrSubagentCall(
@@ -682,19 +693,30 @@ export function renderMmrSubagentCall(
   theme: SubagentTheme,
   context?: RenderContextLike,
 ): Component {
-  if (context?.isPartial === false || resultAlreadyRendered(context)) return new Container();
+  const spinner = rowSpinner(context);
+  if (spinner.snapshot || context?.isPartial === false || resultAlreadyRendered(context)) return new Container();
   // v2 background call through a named worker tool: like start_task, the
   // result card owns the entire staged reveal, so the call renders nothing.
   if (isRecord(args) && args.background === true) return new Container();
-  const title = theme.fg("toolTitle", theme.bold(toolName));
-  const label = operationLabelFromArgs(toolName, args);
-  const component = context?.lastComponent instanceof Box ? context.lastComponent : new Box(1, 1, statusBgFn("running", theme));
-  component.setBgFn(statusBgFn("running", theme));
-  component.clear();
-  component.addChild(new Text(title, 0, 0));
-  if (label?.trim()) {
-    addMarkdownBlock(component, label, theme, { paddingX: 1 });
-  }
+  const callContext = { ...context, args };
+  const final = buildWorkerRunFinal({
+    surface: "blocking",
+    toolName,
+    details: undefined,
+    isPartial: true,
+    context: callContext,
+    collapsedBody: operationLabelFromArgs(toolName, args),
+    expandedBody: expandedOperationLabel(toolName, undefined, callContext),
+    trailWorkerPrompt: undefined,
+    output: "",
+  });
+  // The glyph waits for the arguments to finish streaming before it spins.
+  syncSpinner(spinner, context, context?.executionStarted === true);
+  const pad = rowPad(context);
+  const component = new WorkerRowComponent((width) => [
+    workerRowLine(final, theme, pad, spinner.frame, width),
+    ...(context?.expanded === true ? workerRowBody(final, theme, pad, spinner.frame, width) : []),
+  ]);
   rememberCallComponent(context, component);
   return component;
 }
@@ -727,39 +749,14 @@ export function renderMmrSubagentResult(
     trailWorkerPrompt: workerPromptFromArgs(toolName, details, context),
     output: textContent(result).trim(),
   });
-  return renderWorkerRunCard(final, options.expanded === true, theme, context);
+  return renderWorkerRow(final, options.expanded === true, theme, context);
 }
 
 
 // ---------------------------------------------------------------------------
-// Background board + per-call status primitives (folded from the former
+// Background board primitives (folded from the former
 // background-task-rendering module: same consumers, one render module).
 // ---------------------------------------------------------------------------
-
-export function backgroundStatusBgFn(
-  status: string | undefined,
-  theme: SubagentTheme,
-): (text: string) => string {
-  if (status === "succeeded") return (text) => theme.bg?.("toolSuccessBg", text) ?? text;
-  if (status === "failed") return (text) => theme.bg?.("toolErrorBg", text) ?? text;
-  if (status === "running" || status === "cancelling") {
-    return (text) => theme.bg?.("toolPendingBg", text) ?? text;
-  }
-  // cancelled / unknown: neutral background so an intentional cancel never
-  // reads as a hard failure.
-  return (text) => text;
-}
-
-export function backgroundStatusBadge(
-  status: string | undefined,
-  theme: SubagentTheme,
-): string {
-  // The shared glyph/colour helpers expect a concrete status; an unknown one
-  // resolves to the neutral `•`/muted pair, matching the prior local behavior.
-  const concrete = status ?? "";
-  const color = backgroundStatusColor(concrete);
-  return `${theme.fg(color, backgroundStatusGlyph(concrete))} ${theme.fg(color, backgroundStatusWord(status))}`;
-}
 
 const BACKGROUND_STATUS_VALUES: ReadonlySet<string> = new Set([
   "ready",

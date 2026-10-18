@@ -6,8 +6,6 @@ import {
   stripMmrWorkerModelProvider,
 } from "../worker-usage-format.js";
 
-type TrailToolStatus = Extract<MmrWorkerTrailItem, { type: "tool" }>["status"];
-
 /**
  * Subagent-tool status discriminator the producing tool may set on
  * `result.details.status` to make the rendered row reflect the tool's
@@ -113,7 +111,6 @@ export interface BackgroundTaskDetails {
 
 export interface SubagentTheme {
   fg(color: string, text: string): string;
-  bg?(color: string, text: string): string;
   bold(text: string): string;
   italic?(text: string): string;
 }
@@ -129,6 +126,10 @@ export interface RenderContextLike {
   argsComplete?: boolean;
   expanded?: boolean;
   lastComponent?: unknown;
+  /** Redraws the row; Pi supplies it, so a running row can animate its glyph. */
+  invalidate?: () => void;
+  /** Columns Pi indents tool output by. */
+  outputPad?: number;
 }
 
 export type RenderStatus = "running" | "succeeded" | "failed";
@@ -243,37 +244,6 @@ export function statusFromDetails(
   if (details?.errorMessage) return "failed";
   if (!isSuccessfulStopReason(details?.stopReason)) return "failed";
   return "succeeded";
-}
-
-export function statusColor(status: RenderStatus | TrailToolStatus): string {
-  if (status === "failed") return "error";
-  if (status === "running") return "warning";
-  return "success";
-}
-
-function statusBgColor(status: RenderStatus): string {
-  if (status === "failed") return "toolErrorBg";
-  if (status === "running") return "toolPendingBg";
-  return "toolSuccessBg";
-}
-
-export function statusBgFn(status: RenderStatus, theme: SubagentTheme): (text: string) => string {
-  return (text: string) => theme.bg?.(statusBgColor(status), text) ?? text;
-}
-
-export function successBgFn(theme: SubagentTheme): (text: string) => string {
-  return (text: string) => theme.bg?.("toolSuccessBg", text) ?? text;
-}
-
-export function statusLabel(status: RenderStatus | TrailToolStatus): string {
-  if (status === "running") return "running...";
-  if (status === "succeeded" || status === "completed") return "completed";
-  return status;
-}
-
-export function formatTitle(toolName: string, model: string | undefined, theme: SubagentTheme): string {
-  const title = theme.fg("toolTitle", theme.bold(toolName));
-  return model ? `${title} ${theme.fg("muted", "•")} ${theme.fg("accent", model)}` : title;
 }
 
 export function diagnosticMessage(details: SubagentProgressDetails | undefined, status: RenderStatus): string | undefined {

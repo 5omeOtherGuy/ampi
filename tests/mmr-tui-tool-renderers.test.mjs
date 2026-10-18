@@ -389,12 +389,12 @@ describe("ampi-tui tool rows", () => {
       renderCall: () => ({ render: () => ["own call"], invalidate() {} }),
       renderResult: () => ({ render: () => ["own result"], invalidate() {} }),
     };
-    const oracle = { tool: "oracle", args: { task: "Review the plan" }, result: textResult("Looks good."), next: own };
-    assert.deepEqual(toolRow(resolver, { ...oracle, expanded: false }).render(80).map(stripAnsi), [
+    const list = { tool: "task_list", args: { tasks: [{}, {}] }, result: textResult("Updated."), next: own };
+    assert.deepEqual(toolRow(resolver, { ...list, expanded: false }).render(80).map(stripAnsi), [
       "",
-      " ✓ Consulted oracle · Review the plan",
+      " ✓ Updated task list · 2 items",
     ]);
-    assert.deepEqual(toolRow(resolver, { ...oracle, expanded: true }).render(80), ["", "own call", "own result"]);
+    assert.deepEqual(toolRow(resolver, { ...list, expanded: true }).render(80), ["", "own call", "own result"]);
     // Pi's built-in renderers never replace ampi's cards for its built-in tools.
     let asked = false;
     resolver("bash", () => {
@@ -402,6 +402,26 @@ describe("ampi-tui tool rows", () => {
       return own;
     });
     assert.equal(asked, false);
+  });
+
+  it("hands ampi-workers' tools their own renderers, collapsed and expanded", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    const own = {
+      renderShell: "self",
+      renderCall: () => ({ render: () => ["own call"], invalidate() {} }),
+      renderResult: () => ({ render: () => ["own result"], invalidate() {} }),
+    };
+    for (const tool of ["oracle", "Task", "task_poll", "sa__security_audit"]) {
+      assert.equal(resolver(tool, () => own), own, tool);
+      const row = { tool, args: { task: "Review the plan" }, result: textResult("Looks good."), next: own };
+      assert.deepEqual(toolRow(resolver, { ...row, expanded: false }).render(80), ["", "own call", "own result"], tool);
+    }
+    // Without renderers of its own (its extension is not loaded), a worker call still gets a row.
+    assert.deepEqual(toolRow(resolver, { tool: "oracle", args: { task: "Review the plan" }, result: textResult("Looks good.") }).render(80).map(stripAnsi), [
+      "",
+      " ✓ Ran oracle · Review the plan",
+    ]);
   });
 });
 

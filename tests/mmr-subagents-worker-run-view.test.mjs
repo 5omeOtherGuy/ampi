@@ -87,7 +87,7 @@ describe("worker-run-view", () => {
 
 const ENVELOPE_MODULE = "extensions/ampi-workers/rendering/worker-run-envelope.ts";
 
-describe("buildWorkerRunFinal (rich N=1 projection)", () => {
+describe("buildWorkerRunFinal (N=1 row projection)", () => {
   it("projects blocking status/model/diagnostic/body precedence from legacy details", async () => {
     const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
     const final = buildWorkerRunFinal({
@@ -114,16 +114,40 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
       output: "final answer",
     });
     assert.equal(final.surface, "blocking");
-    assert.equal(final.status, "succeeded");
+    assert.equal(final.agent, "Task");
+    assert.equal(final.status, "done");
     assert.equal(final.model, "gpt-5.4-mini");
     assert.match(final.diagnostic, /Spawn failed: pi not found/);
-    assert.equal(final.collapsedBody, "short body");
-    assert.equal(final.expandedBody, "long body");
-    assert.equal(final.background, false);
-    assert.equal(final.partial, false);
-    assert.equal(final.showTerminalSections, true);
-    assert.equal(final.spaceBeforeTrailWhenExpanded, "never");
-    assert.equal(final.spaceBeforeOutputWhenExpanded, "conditional");
+    // The run succeeded, so its diagnostic is a note, not an error.
+    assert.equal(final.diagnosticColor, "warning");
+    assert.equal(final.detail, "short body");
+    assert.equal(final.prompt, "long body");
+    assert.equal(final.tail, undefined);
+    assert.equal(final.finished, true);
+    assert.equal(final.usageName, "Task");
+  });
+
+  it("projects an aborted blocking run as cancelled and a failed one as an error", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const project = (details, args) => buildWorkerRunFinal({
+      surface: "blocking",
+      toolName: "Task",
+      details,
+      isPartial: false,
+      context: { args },
+      collapsedBody: "Fix lint\nand tests",
+      expandedBody: undefined,
+      trailWorkerPrompt: undefined,
+      output: "",
+    });
+    const aborted = project({ aborted: true, stopReason: "aborted" }, { capabilityProfile: "read-only" });
+    assert.equal(aborted.status, "cancelled");
+    assert.equal(aborted.variant, "read-only");
+    assert.equal(aborted.detail, "Fix lint …", "the detail is the first line of what the worker was asked");
+    const failed = project({ exitCode: 1, errorMessage: "worker crashed" });
+    assert.equal(failed.status, "error");
+    assert.equal(failed.diagnosticColor, "error");
+    assert.equal(failed.variant, undefined);
   });
 
   it("marks a partial blocking run as running with terminal sections suppressed", async () => {
@@ -140,7 +164,7 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
       output: "",
     });
     assert.equal(final.status, "running");
-    assert.equal(final.showTerminalSections, false);
+    assert.equal(final.finished, false);
     assert.equal(final.suppressDuplicateFinalOutput, false);
   });
 
@@ -175,13 +199,13 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
       trailWorkerPrompt: undefined,
       output: "o",
     });
-    assert.equal(final.status, "succeeded");
+    assert.equal(final.status, "done");
     assert.equal(final.model, "gpt-5.4-mini");
     assert.deepEqual(final.trail, [{ type: "assistant", text: "legacy trail" }]);
     assert.deepEqual(final.usage, { turns: 2 });
   });
 
-  it("projects a cancelled background run as neutral (raw status kept, no error diagnostic)", async () => {
+  it("projects a cancelled background run as cancelled, with no error diagnostic", async () => {
     const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
     const final = buildWorkerRunFinal({
       surface: "background",
@@ -201,15 +225,25 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
       output: "",
     });
     assert.equal(final.surface, "background");
-    assert.equal(final.backgroundStatus, "cancelled");
-    assert.equal(final.status, "failed");
+    assert.equal(final.agent, "finder");
+    assert.equal(final.status, "cancelled");
     assert.equal(final.diagnostic, undefined);
-    assert.equal(final.background, true);
     assert.equal(final.model, "gemini-3");
-    assert.equal(final.collapsedBody, "desc body");
-    assert.equal(final.expandedBody, "full prompt body");
-    assert.equal(final.spaceBeforeTrailWhenExpanded, "whenRawTrailNonEmpty");
-    assert.equal(final.spaceBeforeOutputWhenExpanded, "always");
+    assert.equal(final.detail, "desc body");
+    assert.equal(final.prompt, "full prompt body");
+    assert.equal(final.finished, true);
+  });
+
+  it("drops the agent name a run description starts with, as the row's phrase names it", async () => {
+    const { buildWorkerRunFinal } = await importSource(VIEW_MODULE);
+    const final = buildWorkerRunFinal({
+      surface: "background",
+      details: { worker: "ampi-workers.async-task", tool: "task_wait", agent: "oracle", taskId: "t9", status: "succeeded", description: "oracle: Review the plan" },
+      final: {},
+      startDisplay: undefined,
+      output: "",
+    });
+    assert.equal(final.detail, "Review the plan");
   });
 
   it("surfaces the failed-background diagnostic, the partial chip, and final-model precedence", async () => {
@@ -230,12 +264,13 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
       startDisplay: undefined,
       output: "",
     });
-    assert.equal(final.status, "failed");
+    assert.equal(final.status, "error");
     assert.equal(final.diagnostic, "boom");
-    assert.equal(final.partial, true);
+    assert.equal(final.diagnosticColor, "error");
+    assert.equal(final.tail, "(partial)");
     // final.reportedModel wins over final.model and details.resolvedModel.
     assert.equal(final.model, "rm");
-    assert.equal(final.statusLineName, "Task");
+    assert.equal(final.usageName, "Task");
   });
 
   it("tolerates an empty background final snapshot without throwing", async () => {
@@ -250,6 +285,6 @@ describe("buildWorkerRunFinal (rich N=1 projection)", () => {
     assert.equal(final.trail.length, 0);
     assert.equal(final.usage, undefined);
     assert.equal(final.model, undefined);
-    assert.equal(final.showTerminalSections, true);
+    assert.equal(final.finished, true);
   });
 });

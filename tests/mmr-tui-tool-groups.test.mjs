@@ -63,9 +63,10 @@ const RESULTS = {
 /**
  * Play one assistant message through a store and Pi's tool rows in the
  * order Pi's interactive mode uses: extension handlers see each event before
- * the transcript does. Calls listed in `running` start but do not finish.
+ * the transcript does. Calls listed in `running` start but do not finish;
+ * `own` holds the renderers a tool brings (`next()` of the resolver).
  */
-function playTurn(store, resolver, blocks, { expanded = false, running = [] } = {}) {
+function playTurn(store, resolver, blocks, { expanded = false, running = [], own = {} } = {}) {
   const message = assistant(blocks);
   const rows = new Map();
   store.messageStart(assistant([]));
@@ -73,7 +74,7 @@ function playTurn(store, resolver, blocks, { expanded = false, running = [] } = 
     const partial = assistant(blocks.slice(0, i));
     store.messageUpdate(partial);
     const block = blocks[i - 1];
-    const component = new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false }, { name: block.name, ...resolver(block.name, () => undefined) }, noopTui, CWD);
+    const component = new ToolExecutionComponent(block.name, block.id, block.arguments, { showImages: false }, { name: block.name, ...resolver(block.name, () => own[block.name]) }, noopTui, CWD);
     component.setExpanded(expanded);
     rows.set(block.id, component);
   }
@@ -223,10 +224,16 @@ describe("ampi-tui grouped tool rows", () => {
     assert.deepEqual(result.render(80), [" ✓ Ran npm test -- --grep retry"]);
   });
 
-  it("draws a subagent call on its own row between two groups", async () => {
+  it("draws a subagent call on its own row between two groups, with the worker's own renderers", async () => {
+    const workers = await importSource("extensions/ampi-workers/rendering/progress-rendering.ts");
+    const oracleRenderers = {
+      renderShell: "self",
+      renderCall: (args, theme, context) => workers.renderMmrSubagentCall("oracle", args, theme, context),
+      renderResult: (result, options, theme, context) => workers.renderMmrSubagentResult("oracle", result, options, theme, context),
+    };
     const { store, resolver } = await setup();
     const oracle = call("o1", "oracle", { task: "Review the retry plan" });
-    const rows = playTurn(store, resolver, [READ, oracle, GREP]);
+    const rows = playTurn(store, resolver, [READ, oracle, GREP], { own: { oracle: oracleRenderers } });
     assert.deepEqual(transcript(rows, 80).map(stripAnsi), [
       "",
       " ✓ Read 1 file ▸",
@@ -235,6 +242,11 @@ describe("ampi-tui grouped tool rows", () => {
       "",
       " ✓ Ran 1 search ▸",
     ]);
+    // The same row as with ampi-tui off, where Pi draws the worker's renderers directly.
+    const alone = new ToolExecutionComponent("oracle", "o2", oracle.arguments, { showImages: false }, { name: "oracle", ...oracleRenderers }, noopTui, CWD);
+    alone.markExecutionStarted();
+    alone.updateResult({ ...output("ok"), isError: false }, false);
+    assert.deepEqual(alone.render(80).map(stripAnsi), ["", " ✓ Consulted oracle · Review the retry plan"]);
   });
 });
 

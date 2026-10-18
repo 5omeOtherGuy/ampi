@@ -24,6 +24,14 @@ import {
   formatMmrWorkerTokens,
   stripMmrWorkerModelProvider,
 } from "../worker-usage-format.js";
+import {
+  stripAgentPrefix,
+  WORKER_ROW_SPINNER_FRAMES,
+  WORKER_ROW_SPINNER_INTERVAL_MS,
+  workerRowColor,
+  workerRowGlyph,
+  workerRowPhrase,
+} from "./worker-row.js";
 
 /**
  * Minimal theme shape both surfaces share: foreground colouring + bold. The
@@ -43,27 +51,11 @@ export type MmrWidgetGroupResolver = (
   groupId: string,
 ) => MmrAsyncTaskGroupSnapshot | undefined;
 
-/**
- * Pi's native streaming loader frames (see `@earendil-works/pi-tui` `Loader`).
- * Mirrored here so running background agents animate with the same braille
- * spinner the rest of Pi uses. Public-safe constant; pi-tui does not export its
- * frame array.
- */
-export const PI_LOADER_FRAMES = [
-  "⠋",
-  "⠙",
-  "⠹",
-  "⠸",
-  "⠼",
-  "⠴",
-  "⠦",
-  "⠧",
-  "⠇",
-  "⠏",
-] as const;
+/** The worker rows' braille spinner frames (Pi's loader frames). */
+export const PI_LOADER_FRAMES = WORKER_ROW_SPINNER_FRAMES;
 
 /** Frame interval matching Pi's native loader cadence. */
-export const PI_LOADER_INTERVAL_MS = 80;
+export const PI_LOADER_INTERVAL_MS = WORKER_ROW_SPINNER_INTERVAL_MS;
 
 // Module-global loader frame, advanced by the aboveEditor widget's animation
 // interval and read by BOTH surfaces. Nested transcript components cannot own a
@@ -129,11 +121,12 @@ export interface WidgetSection {
   rows: WidgetRow[];
 }
 
+/** A row's glyph colour, as a worker row colours its glyph; `ready` and unknown statuses are muted. */
 export function backgroundStatusColor(status: string): string {
-  if (status === "running" || status === "cancelling") return "warning";
-  if (status === "succeeded") return "success";
-  if (status === "failed") return "error";
-  // cancelled / unknown: neutral. A user-initiated cancel is not an error.
+  if (status === "running" || status === "cancelling") return workerRowColor("running");
+  if (status === "succeeded") return workerRowColor("done");
+  if (status === "failed") return workerRowColor("error");
+  if (status === "cancelled") return workerRowColor("cancelled");
   return "muted";
 }
 
@@ -149,19 +142,18 @@ export function groupStatusColor(status: MmrAsyncTaskGroupStatus): string {
 /**
  * Status glyph for a row. Running/cancelling resolve to `activeFrame` when one
  * is supplied (the live animated frame), else the first loader frame as a
- * resting glyph. ✓ succeeded, ✕ failed, – cancelled.
+ * resting glyph. ✓ succeeded, ✗ failed, ⊘ cancelled, as on a worker row.
  */
 export function backgroundStatusGlyph(status: string, activeFrame?: string): string {
-  // `ready` (declared, not launched) reads as an ASCII hyphen — deliberately
-  // distinct from the cancelled en-dash `–` so a not-started row and a
-  // cancelled row never look identical.
+  // `ready` (declared, not launched) reads as an ASCII hyphen, distinct from
+  // every other glyph.
   if (status === "ready") return "-";
   if (status === "running" || status === "cancelling") {
     return activeFrame ?? PI_LOADER_FRAMES[0];
   }
-  if (status === "succeeded") return "✓";
-  if (status === "failed") return "✕";
-  if (status === "cancelled") return "–";
+  if (status === "succeeded") return workerRowGlyph("done");
+  if (status === "failed") return workerRowGlyph("error");
+  if (status === "cancelled") return workerRowGlyph("cancelled");
   return "•";
 }
 
@@ -217,7 +209,7 @@ function formatContextUsage(row: WidgetRow): string | undefined {
 
 /**
  * Row metadata chips. `"full"` is the board's rich set (elapsed, model,
- * profile, latest tool, turns, tools, ctx%); `"minimal"` keeps just elapsed +
+ * latest tool, turns, tools, ctx%); `"minimal"` keeps just elapsed +
  * model so the inline card stays GROK-compact; `"none"` omits them.
  */
 export type RowMetadataLevel = "full" | "minimal" | "none";
@@ -246,9 +238,8 @@ function widgetMetadataParts(row: WidgetRow, level: RowMetadataLevel): string[] 
   const model = stripMmrWorkerModelProvider(row.resolvedModel);
   if (model) parts.push(model);
   if (level === "minimal") return parts;
-  // Capability profile (e.g. `read-only` / `read-write`) shown verbatim as the
-  // worker's lane. The group id is NOT a row chip — it labels the section header.
-  if (row.capabilityProfile) parts.push(row.capabilityProfile);
+  // The capability profile is in the row's phrase (`Running subagent (read-only)`)
+  // and the group id labels the section header, so neither is a chip.
   if (row.latestToolName) {
     const suffix = row.latestToolStatus === "running" ? "…" : "";
     parts.push(`${row.latestToolName}${suffix}`);
@@ -453,8 +444,9 @@ export function makeSafeFg(theme: BackgroundViewTheme | undefined) {
 }
 
 /**
- * One background row: `<glyph> [taskId] <agent> <desc> · <metadata> [groupId]
- * [fresh]`. `indent` prefixes grouped rows; `activeFrame` animates running
+ * One background row: `<glyph> [taskId] <phrase> · <desc> · <metadata>
+ * [groupId] [fresh]`, with the worker row's phrase (`Searching codebase`,
+ * `Searched codebase`). `indent` prefixes grouped rows; `activeFrame` animates running
  * rows when supplied. `showTaskId` leads with the accent task id (the board
  * view, where the id is the handle for follow-up `task_poll` calls);
  * `showGroupId` trails the dim group id (flat lists with no section headers).
@@ -473,9 +465,10 @@ export function renderRowLine(
   const taskId = options.showTaskId === true && row.taskId
     ? ` ${safeFg("accent", row.taskId)}`
     : "";
-  const agent = safeFg("accent", row.agent);
-  const desc = row.description
-    ? ` ${safeFg("muted", compactOneLine(row.description, 60))}`
+  const phrase = safeFg("toolTitle", workerRowPhrase(row.agent, !isTerminalRowStatus(row.status), row.capabilityProfile));
+  const description = stripAgentPrefix(row.description, row.agent);
+  const desc = description
+    ? safeFg("muted", ` · ${compactOneLine(description, 60)}`)
     : "";
   const metadataParts = widgetMetadataParts(row, metadataLevel);
   const metadata = metadataParts.length > 0
@@ -487,7 +480,7 @@ export function renderRowLine(
   const fresh = row.freshness === "stalled" || row.freshness === "dead"
     ? ` ${safeFg(row.freshness === "dead" ? "error" : "warning", `[${row.freshness}]`)}`
     : "";
-  return `${indent}${glyph}${taskId} ${agent}${desc}${metadata}${groupId}${fresh}`;
+  return `${indent}${glyph}${taskId} ${phrase}${desc}${metadata}${groupId}${fresh}`;
 }
 
 /**

@@ -170,11 +170,10 @@ describe("background-task widget", () => {
     const widget = last.value(undefined, theme);
     const text = widget.render(80).join("\n");
     assert.doesNotMatch(text, /Background agents/, "background widget must render rows directly without a header");
-    assert.match(text, /finder/);
-    assert.match(text, /Search the repo/);
-    assert.match(text, /Task/);
+    assert.match(text, /Searching codebase · Search the repo/);
+    assert.match(text, /Running subagent · Slow build/);
     assert.match(text, /\[stalled\]/);
-    assert.doesNotMatch(text, /oracle/, "finished agents drop off the running board");
+    assert.doesNotMatch(text, /oracle|Review design/, "finished agents drop off the running board");
     assert.doesNotMatch(text, /task_1/, "raw task ids must not lead the widget UI");
   });
 
@@ -247,9 +246,11 @@ describe("background-task widget", () => {
     assert.match(text, /▸ Diff recent deploys · group_aaa111/);
     assert.match(text, /running/);
     assert.match(text, /1\/2/);
-    // Capability profile is a row chip; the group id is NOT repeated per row.
-    assert.match(text, /read-only/);
-    assert.match(text, /read-write/);
+    // The capability profile is in the phrase, as on the transcript row, and
+    // not repeated as a chip; the group id is NOT repeated per row.
+    assert.match(text, /Running subagent \(read-only\) · Explore order services/);
+    assert.match(text, /Subagent \(read-write\) finished · Diff recent deploys/);
+    assert.equal((text.match(/read-only/g) ?? []).length, 1);
     const rowLines = lines.filter((l) => /^ {2}\S/.test(l) && /Explore order services|Diff recent deploys/.test(l));
     assert.equal(rowLines.length, 2, "both grouped rows render");
     for (const l of rowLines) assert.match(l, /^ {2}\S/, "group members are indented under the header");

@@ -16,8 +16,9 @@
  */
 import { isRecord } from "../../ampi-core/internal/json.js";
 import type { MmrWorkerRunEnvelopeV1 } from "../../ampi-core/worker-contract.js";
-import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import { readWorkerRunEnvelope } from "./worker-run-envelope.js";
+import { stripAgentPrefix, workerRowDetail, type WorkerRowStatus } from "./worker-row.js";
+import type { WorkerRowView } from "./worker-row-lines.js";
 import {
   diagnosticMessage,
   statusFromDetails,
@@ -64,9 +65,9 @@ export function isMmrBackgroundWorkerDetails(details: unknown): details is Backg
  *  - `"spawn"` — start_task single/group-opener or a named tool's
  *    `background: true` start; GATED card (invisible until settled, then a
  *    latched static snapshot).
- *  - `"background-final"` — single-task poll/wait/cancel result; the rich
- *    N=1 result card (header, Markdown body, trail, final output, usage).
- *  - `"blocking"` — a blocking subagent result; the rich N=1 transcript card.
+ *  - `"background-final"` — single-task poll/wait/cancel result; the task's
+ *    one-line row, expandable to its trail, answer and usage.
+ *  - `"blocking"` — a blocking subagent result; the same one-line row.
  *  - `"plain"` — no recognized worker payload; render the text content.
  */
 export type WorkerRunView =
@@ -141,16 +142,13 @@ function hasBackgroundSections(details: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// WorkerRunFinal: the N=1 rich-card projection
+// WorkerRunFinal: the N=1 row projection
 // ---------------------------------------------------------------------------
 
 /**
- * Coarse render status for a background-task poll/wait/cancel result. Mirrors
- * the async-task status vocabulary onto the three-value {@link RenderStatus}
- * the rich card draws: a user-initiated `cancelled` folds into the coarse
- * `failed` bucket for section gating, but the neutral colouring is preserved
- * separately via the raw status (see {@link WorkerRunFinal.backgroundStatus}).
- * `undefined` for a non-terminal-or-running status the card cannot render.
+ * Coarse render status for a background-task poll/wait/cancel result:
+ * `running` keeps the inline card gated, any other known status draws the
+ * task's row. `undefined` for a status the row cannot draw.
  */
 export function backgroundTaskRenderStatus(status: string | undefined): RenderStatus | undefined {
   if (status === "running" || status === "cancelling") return "running";
@@ -188,56 +186,16 @@ export function backgroundTaskDisplayText(
   return { collapsed, expanded };
 }
 
+
 /**
- * The ONE data projection both rich N=1 cards (blocking transcript card and
- * background-final poll card) consume. A pure view built from frozen details
- * plus a few render-time bits; the rich-card assembler in `progress-rendering`
- * turns it into components with zero surface branching beyond the flags carried
- * here. Live registry state is never required — replayed transcripts project
- * the same shape.
- *
- * Surface differences are encoded as data, not duplicate assembly:
- *  - `background` toggles the `• background` header badge; `partial` the
- *    partial-outcome chip.
- *  - `backgroundStatus` carries the raw async-task status so the neutral
- *    `cancelled` colouring (box bg + badge) survives the coarse
- *    {@link RenderStatus} fold (a blocking failure stays error-red).
- *  - `showTerminalSections` gates the final-output box and the usage line
- *    (`!isPartial` for blocking; `renderStatus !== "running"` for background).
- *  - `spaceBeforeTrailWhenExpanded` / `spaceBeforeOutputWhenExpanded` capture
- *    the two surfaces' distinct spacer placement in the expanded trail view.
+ * The ONE row projection both N=1 surfaces (a blocking worker's transcript
+ * row and a polled background task's terminal row) draw. A pure view built
+ * from frozen details plus a few render-time bits; `progress-rendering`
+ * draws it with `worker-row.ts`. Live registry state is never required —
+ * replayed transcripts project the same shape.
  */
-export interface WorkerRunFinal {
+export interface WorkerRunFinal extends WorkerRowView {
   surface: "blocking" | "background";
-  /** Display name in the header title. */
-  headerName: string;
-  /** Tool name shown on the trailing usage status line. */
-  statusLineName: string;
-  model: string | undefined;
-  contextWindow: number | undefined;
-  /** Coarse status: box bg (blocking), section gating, diagnostic colour. */
-  status: RenderStatus;
-  /** Raw async-task status (background badge + neutral-cancelled bg). */
-  backgroundStatus?: string;
-  /** Whether the final-output box and usage line render. */
-  showTerminalSections: boolean;
-  collapsedBody: string | undefined;
-  expandedBody: string | undefined;
-  /** Cleaned final output text; surface-specific source. */
-  output: string;
-  trail: readonly MmrWorkerTrailItem[];
-  trailWorkerPrompt: string | undefined;
-  suppressDuplicateFinalOutput: boolean;
-  usage: MmrWorkerUsageStats | undefined;
-  diagnostic: string | undefined;
-  diagnosticStatus: RenderStatus;
-  fallbackNotice: string | undefined;
-  /** Render the `• background` header badge. */
-  background: boolean;
-  /** Render the partial-outcome chip. */
-  partial: boolean;
-  spaceBeforeTrailWhenExpanded: "never" | "whenRawTrailNonEmpty";
-  spaceBeforeOutputWhenExpanded: "always" | "conditional";
 }
 
 /** Discriminated input for {@link buildWorkerRunFinal}. */
@@ -248,8 +206,9 @@ export type WorkerRunFinalInput =
       details: SubagentProgressDetails | undefined;
       isPartial: boolean;
       context: RenderContextLike | undefined;
-      /** Derived at the call site via `operationLabel` (needs `context.args`). */
+      /** What the worker was asked, derived at the call site via `operationLabel` (needs `context.args`). */
       collapsedBody: string | undefined;
+      /** The full prompt, via `expandedOperationLabel`. */
       expandedBody: string | undefined;
       trailWorkerPrompt: string | undefined;
       /** `textContent(result).trim()`. */
@@ -265,74 +224,97 @@ export type WorkerRunFinalInput =
       output: string;
     };
 
+/** A run stopped by its caller rather than failed on its own. */
+function wasCancelled(details: SubagentProgressDetails | undefined): boolean {
+  return details?.aborted === true || details?.stopReason === "aborted" || details?.status === "aborted";
+}
+
+function blockingRowStatus(status: RenderStatus, details: SubagentProgressDetails | undefined): WorkerRowStatus {
+  if (status === "running") return "running";
+  if (status === "succeeded") return "done";
+  return wasCancelled(details) ? "cancelled" : "error";
+}
+
+function backgroundRowStatus(status: string | undefined): WorkerRowStatus {
+  if (status === "running" || status === "cancelling") return "running";
+  if (status === "succeeded") return "done";
+  if (status === "cancelled") return "cancelled";
+  return "error";
+}
+
+function readArg(args: unknown, key: string): string | undefined {
+  const value = isRecord(args) ? args[key] : undefined;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
 /**
- * Project a frozen worker-result payload into the {@link WorkerRunFinal} both
- * rich cards render. Pure: status/model/diagnostic/body precedence is derived
- * here (reusing `statusFromDetails`, `stripProvider`, `diagnosticMessage`, and
+ * Project a frozen worker-result payload into the {@link WorkerRunFinal} row.
+ * Pure: status/model/diagnostic/body precedence is derived here (reusing
+ * `statusFromDetails`, `stripProvider`, `diagnosticMessage`, and
  * `backgroundTaskDisplayText`), so the two entry points never re-derive them
- * inline. During the envelope dual-write window the rich fields (trail, usage,
- * model, body) are read from the legacy details shape — which the producers
- * still stamp alongside the light envelope snapshot — so replay parity holds
- * without doubling the session-log size.
+ * inline. During the envelope dual-write window the rich fields (trail,
+ * usage, model, body) are read from the legacy details shape — which the
+ * producers still stamp alongside the light envelope snapshot.
  */
 export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal {
   if (input.surface === "background") {
     const { details, final } = input;
-    const renderStatus = backgroundTaskRenderStatus(details.status) ?? "failed";
-    const model = stripProvider(final.reportedModel ?? final.model ?? details.resolvedModel);
+    const agent = details.agent ?? "background task";
+    const status = backgroundRowStatus(details.status);
     const operation = backgroundTaskDisplayText(details, final, input.startDisplay);
+    const unprefixed = (text: string | undefined) => (text !== undefined ? stripAgentPrefix(text, agent) : undefined);
+    const detail = workerRowDetail(unprefixed(operation.collapsed));
+    const prompt = unprefixed(operation.expanded);
+    const workerPrompt = prompt ?? unprefixed(operation.collapsed);
+    const model = stripProvider(final.reportedModel ?? final.model ?? details.resolvedModel);
+    const contextWindow = final.contextWindow ?? details.contextWindow;
     return {
       surface: "background",
-      headerName: details.agent ?? "background task",
-      statusLineName: details.agent ?? "background task",
-      model,
-      contextWindow: final.contextWindow ?? details.contextWindow,
-      status: renderStatus,
-      backgroundStatus: details.status,
-      showTerminalSections: renderStatus !== "running",
-      collapsedBody: operation.collapsed,
-      expandedBody: operation.expanded,
-      output: input.output,
+      agent,
+      status,
+      ...(detail !== undefined ? { detail } : {}),
+      ...(details.terminalOutcome === "partial" ? { tail: "(partial)" } : {}),
+      ...(prompt !== undefined ? { prompt } : {}),
       trail: final.trail ?? [],
-      trailWorkerPrompt: operation.expanded ?? operation.collapsed,
+      ...(workerPrompt !== undefined ? { workerPrompt } : {}),
+      output: input.output,
       suppressDuplicateFinalOutput: true,
-      usage: final.usage,
-      // Neutral cancel stays neutral: only a hard `failed` surfaces the
-      // error-coloured diagnostic (matches the pre-collapse gate).
-      diagnostic: details.status === "failed" ? details.errorMessage : undefined,
-      diagnosticStatus: renderStatus,
-      fallbackNotice: undefined,
-      background: true,
-      partial: details.terminalOutcome === "partial",
-      spaceBeforeTrailWhenExpanded: "whenRawTrailNonEmpty",
-      spaceBeforeOutputWhenExpanded: "always",
+      finished: status !== "running",
+      ...(final.usage !== undefined ? { usage: final.usage } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(model !== undefined ? { model } : {}),
+      usageName: agent,
+      // A cancel is not a failure: only a hard `failed` shows its error.
+      ...(details.status === "failed" && details.errorMessage ? { diagnostic: details.errorMessage, diagnosticColor: "error" } : {}),
     };
   }
 
-  const { details } = input;
-  const status = statusFromDetails(details, input.isPartial, input.context);
+  const { details, toolName } = input;
+  const coarse = statusFromDetails(details, input.isPartial, input.context);
+  const status = blockingRowStatus(coarse, details);
   const model = stripProvider(details?.reportedModel ?? details?.model);
+  const diagnostic = diagnosticMessage(details, coarse);
+  const detail = workerRowDetail(input.collapsedBody);
+  const variant = toolName === "Task" ? readArg(input.context?.args, "capabilityProfile") : undefined;
   return {
     surface: "blocking",
-    headerName: input.toolName,
-    statusLineName: input.toolName,
-    model,
-    contextWindow: details?.contextWindow,
+    agent: toolName,
+    ...(variant !== undefined ? { variant } : {}),
     status,
-    showTerminalSections: !input.isPartial,
-    collapsedBody: input.collapsedBody,
-    expandedBody: input.expandedBody,
-    output: input.output,
+    ...(detail !== undefined ? { detail } : {}),
+    ...(input.expandedBody !== undefined ? { prompt: input.expandedBody } : {}),
     trail: details?.trail ?? [],
-    trailWorkerPrompt: input.trailWorkerPrompt,
+    ...(input.trailWorkerPrompt !== undefined ? { workerPrompt: input.trailWorkerPrompt } : {}),
+    output: input.output,
     suppressDuplicateFinalOutput: !input.isPartial,
-    usage: details?.usage,
-    diagnostic: diagnosticMessage(details, status),
-    diagnosticStatus: status,
-    fallbackNotice: details?.fallbackNotice,
-    background: false,
-    partial: false,
-    spaceBeforeTrailWhenExpanded: "never",
-    spaceBeforeOutputWhenExpanded: "conditional",
+    finished: !input.isPartial,
+    ...(details?.usage !== undefined ? { usage: details.usage } : {}),
+    ...(details?.contextWindow !== undefined ? { contextWindow: details.contextWindow } : {}),
+    ...(model !== undefined ? { model } : {}),
+    usageName: toolName,
+    // A provider error on a run that still answered is a note, not a failure;
+    // a cancelled run needs no diagnostic, its glyph says it was stopped.
+    ...(diagnostic !== undefined && status !== "cancelled" ? { diagnostic, diagnosticColor: status === "error" ? "error" : "warning" } : {}),
+    ...(details?.fallbackNotice !== undefined ? { fallbackNotice: details.fallbackNotice } : {}),
   };
 }

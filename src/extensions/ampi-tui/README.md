@@ -349,7 +349,7 @@ A run of consecutive tool calls is folded into one summary line, with a count pe
 ```
 
 - A run ends where the transcript shows something else between two calls: an assistant message with text, a user message (a steered message too), a summary or a custom message. Thinking, failed calls and a change of kind do not end it, so one run can span several assistant messages.
-- Subagent calls (`oracle`, `librarian`, `finder`, `Task`, `reviewer`, `start_task`) are never grouped: each keeps its own row and splits the run around it. A call whose result shows an image, such as a `read` of a screenshot in a terminal that draws images, does the same once its result arrives, so its row stays above the image.
+- Calls of ampi-workers' tools (`oracle`, `librarian`, `finder`, `Task`, `reviewer`, custom `sa__*` subagents, `start_task`, `task_poll`, `task_wait`, `task_cancel`) are never grouped: each keeps its own row and splits the run around it. A call whose result shows an image, such as a `read` of a screenshot in a terminal that draws images, does the same once its result arrives, so its row stays above the image.
 - Pi always draws an assistant message's thinking. A collapsed run that spans a message with thinking shows the summary line, then that thinking, with the later calls counted in the summary above it.
 - The summary is in the present tense with a spinner while any call of the run is still running (`⠋ Read 1 file, running 1 command ▸`). Its glyph stays `✓` when a call failed; only that call's row shows the failure. A cancelled call turns the glyph to `⊘` and adds `(N cancelled)`.
 - A run of one call gets a summary line too (`✓ Ran 1 command ▸`).
@@ -374,7 +374,7 @@ Each call's own row is one line: a status glyph, a verb and what the call acted 
   - `edit`, `write` and `apply_patch`: the underlined path (a clickable `file://` link where the terminal supports links), the diff stat, and the diff with line numbers, removed lines in red and added lines in green, cut after 60 lines;
   - `read`: the linked path and its line range; `grep`, `find` and `ls`: their output;
   - MCP and other tools without renderers of their own: their arguments as `key: value` lines and the result text.
-- Tools that bring their own renderers, such as ampi's subagents and task list, get the one-line row when collapsed and keep their own card when expanded.
+- Tools that bring their own renderers, such as ampi's task list, get the one-line row when collapsed and keep their own card when expanded. ampi-workers' tools draw their own rows, collapsed and expanded (`✓ Consulted oracle · Review the plan`), because only their renderers read a worker's outcome; see [ampi-workers](../ampi-workers/README.md#transcript-rows).
 - Rows use theme colours for text only, never a background.
 - Pi's HTML export draws the tools it does not render itself (such as `grep`, `find`, `apply_patch` and MCP tools) with these renderers. There the row with its final status sits below the tool name, and expanding it shows the card.
 
