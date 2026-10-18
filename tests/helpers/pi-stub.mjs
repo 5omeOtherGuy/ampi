@@ -24,6 +24,7 @@
  *  - `shortcutsThrowOn` (default `[]`): array of shortcut keys for which
  *    `registerShortcut` will throw, simulating Pi's duplicate-binding rejection.
  *    Used to exercise the toolbox's fallback chain (`ctrl+t` -> `ctrl+shift+t` -> `alt+t`).
+ *  - `settings` (default `{}`): object returned (as a copy) by `getSettings`.
  *  - `setModelResult` (default `true`): boolean returned by `setModel`.
  *  - `initialModel` (default `undefined`): initial value tracked by `getModel`.
  *  - `onModelSet(model, { handlers, eventContext })` (optional): async hook
@@ -110,6 +111,8 @@ export function createMockPi(options = {}) {
       return options.setModelResult ?? true;
     },
     getModel: () => currentModel,
+    // A copy, as Pi returns one: callers cannot change the stored settings.
+    getSettings: () => structuredClone(options.settings ?? {}),
     getThinkingLevel: () => thinkingLevel,
     setThinkingLevel: (level) => {
       thinkingLevel = level;
@@ -164,9 +167,15 @@ export function createMockPi(options = {}) {
  *  - `model`: the `ctx.model` currently selected by Pi.
  *  - `getContextUsage` (default returns `undefined`): hook for token-usage info.
  *  - `entries` (default `[]`): mutable list returned by `sessionManager.getEntries`.
+ *  - `idle` (default `true`): what `isIdle()` returns; change it later through `state.idle`.
+ *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`.
  *
  * Returns the ctx and the recorders it populates:
- *   `{ ctx, notifications, statuses, footers, selectCalls, entries }`.
+ *   `{ ctx, notifications, statuses, footers, selectCalls, entries, compactCalls,
+ *   terminalInput, overlays, lifecycle, state }`. `terminalInput.send(data)` feeds the
+ *   listeners registered with `ui.onTerminalInput` and returns true when one consumed it.
+ *   `overlays` records `ui.custom` calls as `{ options, component, theme, closed }`;
+ *   `lifecycle` counts `abort()` and `shutdown()` calls.
  *
  * `ctx.ui.select` returns `undefined` by default; assign a custom impl on
  * `ctx.ui.select` if a test needs to drive the picker.
@@ -184,6 +193,20 @@ export function createMockExtensionContext(options = {}) {
   const footers = [];
   const selectCalls = [];
   const compactCalls = [];
+  const state = { idle: options.idle ?? true, editorText: options.editorText ?? "" };
+  const lifecycle = { abort: 0, shutdown: 0 };
+  const inputListeners = new Set();
+  const terminalInput = {
+    listeners: inputListeners,
+    send(data) {
+      for (const listener of [...inputListeners]) {
+        if (listener(data)?.consume) return true;
+      }
+      return false;
+    },
+  };
+  const overlays = [];
+  const plainTheme = { fg: (_name, value) => value, bold: (value) => value };
 
   const ctx = {
     cwd,
@@ -207,12 +230,32 @@ export function createMockExtensionContext(options = {}) {
         model.provider.endsWith("subscription") || model.provider.endsWith("codex"),
     },
     getContextUsage,
-    isIdle: () => true,
+    isIdle: () => state.idle,
+    abort: () => {
+      lifecycle.abort += 1;
+    },
+    shutdown: () => {
+      lifecycle.shutdown += 1;
+    },
     compact: (opts) => {
       compactCalls.push(opts);
     },
     ui: {
       notify: (message, level) => notifications.push({ message, level }),
+      onTerminalInput: (listener) => {
+        inputListeners.add(listener);
+        return () => inputListeners.delete(listener);
+      },
+      getEditorText: () => state.editorText,
+      custom: (factory, customOptions) =>
+        new Promise((resolve) => {
+          const record = { options: customOptions, theme: plainTheme, closed: false };
+          overlays.push(record);
+          record.component = factory(undefined, plainTheme, undefined, (result) => {
+            record.closed = true;
+            resolve(result);
+          });
+        }),
       setStatus: (key, value) => statuses.push({ key, value }),
       setFooter: (factory) => footers.push(factory),
       select: async (title, choices) => {
@@ -223,5 +266,17 @@ export function createMockExtensionContext(options = {}) {
     },
   };
 
-  return { ctx, notifications, statuses, footers, selectCalls, entries, compactCalls };
+  return {
+    ctx,
+    notifications,
+    statuses,
+    footers,
+    selectCalls,
+    entries,
+    compactCalls,
+    terminalInput,
+    overlays,
+    lifecycle,
+    state,
+  };
 }

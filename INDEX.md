@@ -20,7 +20,7 @@ Quick links for navigating the repository.
 - [`src/extensions/ampi-github/README.md`](src/extensions/ampi-github/README.md) — opt-in read-only GitHub repository tools and librarian gating.
 - [`src/extensions/ampi-workers/README.md`](src/extensions/ampi-workers/README.md) — `finder`, `oracle`, `Task`, `librarian`, the background task surface, worker behavior, and public API.
 - [`src/extensions/ampi-history/README.md`](src/extensions/ampi-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
-- [`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md) — terminal look for interactive sessions; removes the footer.
+- [`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md) — terminal look and keys for interactive sessions; removes the footer and adds Amp-compatible chords.
 
 The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
 

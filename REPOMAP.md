@@ -192,7 +192,11 @@ Important files:
 
 ### `src/extensions/ampi-tui/`
 
-Terminal look for interactive sessions, on by default (`ampiTui.enabled: false` opts out). Claims ampi's chrome through `ampi-core/chrome-owner.ts` and removes the footer; print, JSON, RPC and worker runs are untouched. Owns no tools. Files: `index.ts` (entry point), `config.ts` (the `ampiTui.enabled` switch), `README.md`.
+Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled: false` opts out). Claims ampi's chrome through `ampi-core/chrome-owner.ts` and removes the footer; print, JSON, RPC and worker runs are untouched. Owns no tools; registers the first palette commands and binds Amp-compatible chords. Files:
+
+- `index.ts` (entry point), `config.ts` (the `ampiTui.enabled` switch), `README.md`.
+- `keys/decode.ts` (terminal input to keymap combos), `keys/dispatcher.ts` (pure chord state machine: leader, prefixes, Esc Esc, deadlines), `keys/hint-popup.ts` (the "then" popup), `keys/commands.ts` (`thread.interrupt`, `ampi.quit`, `thread.scrollToTop`/`Bottom`, `prompt.openInEditor`, `ampi.showVersion`), `keys/install.ts` (keymap resolution from the command registry and `ampi.keymap`, shortcut versus raw-input routing, popup overlay).
+- `pi-compat/` — the only code that uses Pi runtime surface outside the extension API (focused editor and its actions, transcript scrolling, the reserved shortcut list, raw input); probed by `tests/mmr-tui-pi-compat.test.mjs`.
 
 ### `src/extensions/ampi-history/`
 
