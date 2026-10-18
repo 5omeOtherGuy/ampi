@@ -3,6 +3,7 @@ import { runMmrConfigFlow } from "./config-flow.js";
 import { formatMmrModeList, MMR_MODE_KEYS, resolveMmrModeKey } from "./modes.js";
 import { getMmrModeHistory, getMmrModeState } from "./runtime.js";
 import { showMmrChangelogCommand } from "./changelog.js";
+import { getMmrChromeOwner } from "./chrome-owner.js";
 import { formatMmrStatus } from "./status.js";
 import type { MmrModeController } from "./mode-controller.js";
 
@@ -109,10 +110,13 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   // `ctrl+s` is the Amp-compatible mode key. Pi binds it to non-reserved
   // picker actions (save model selection, save thinking level, session sort),
   // so an extension may take it in the main editor; Pi reports the override as
-  // a startup warning.
+  // a startup warning. An extension that owns ampi's terminal chrome (such as
+  // `ampi-tui`, whose mode dial takes Ctrl+S) also owns the mode keys, so both
+  // cycle shortcuts do nothing while one is registered.
   pi.registerShortcut("ctrl+s", {
     description: "Cycle ampi mode",
     handler: async (ctx) => {
+      if (getMmrChromeOwner() !== undefined) return;
       await controller.cycleModeFromShortcut(ctx);
     },
   });
@@ -121,6 +125,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
   pi.registerShortcut("ctrl+space", {
     description: "Cycle ampi mode (deprecated: use ctrl+s)",
     handler: async (ctx) => {
+      if (getMmrChromeOwner() !== undefined) return;
       await controller.cycleModeFromShortcut(ctx);
     },
   });

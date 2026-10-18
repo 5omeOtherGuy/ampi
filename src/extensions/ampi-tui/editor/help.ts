@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { MmrCommandDefinition } from "../../ampi-core/command-registry.js";
 import { formatMmrKeyChord, type MmrResolvedKeymap } from "../../ampi-core/keymap.js";
-import { MMR_HELP_COMMAND_ID } from "../keys/commands.js";
+import { MMR_HELP_COMMAND_ID, MMR_MODE_DIAL_COMMAND_ID } from "../keys/commands.js";
 import { displayMmrKeyChord, formatMmrKeyCombo } from "../keys/dispatcher.js";
 import type { MmrPromptBoxTheme } from "./prompt-box.js";
 
@@ -20,10 +20,11 @@ import type { MmrPromptBoxTheme } from "./prompt-box.js";
  * ```
  *
  * Rows are built from the effective keymap and the command registry, so a
- * rebound or newly registered command shows up with its real key. A few
- * keys that are not registry commands come first: ampi-core's mode keys,
- * the box's newline key and Pi's file mention. The help's own toggle comes
- * last and is the one row that stays when the help runs out of room.
+ * rebound or newly registered command shows up with its real key. The mode
+ * keys come first (the mode dial's key and ampi-core's Alt+D), then two keys
+ * that are not registry commands: the box's newline key and Pi's file
+ * mention. The help's own toggle comes last and is the one row that stays
+ * when the help runs out of room.
  */
 
 export interface MmrShortcutHelpEntry {
@@ -49,7 +50,7 @@ export interface MmrShortcutHelpSources {
   readonly keymap?: Pick<MmrResolvedKeymap, "bindings" | "leader">;
   /** Registered commands, in registration order. */
   readonly commands: readonly Pick<MmrCommandDefinition, "id" | "noun" | "verb">[];
-  /** ampi-core is loaded, so its mode keys (Ctrl+S, Alt+D) are bound. */
+  /** ampi-core is loaded, so the mode dial's key and Alt+D switch modes and thinking. */
   readonly modeKeys: boolean;
 }
 
@@ -73,10 +74,17 @@ function mergedLabel(a: string, b: string): string | undefined {
  * command are joined with `or`, since `/` can itself be a key.
  */
 export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): MmrShortcutHelpEntry[] {
-  const entries: MmrShortcutHelpEntry[] = [];
-  if (sources.modeKeys) entries.push({ key: "Ctrl+S", label: "switch modes" }, { key: "Alt+D", label: "toggle thinking" });
-  entries.push({ key: "Alt+Enter", label: "newline" }, { key: "@", label: "mention files" });
   const keymap = sources.keymap;
+  const keyOf = (id: string, map: NonNullable<typeof keymap>) =>
+    (map.bindings.get(id) ?? []).map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: map.leader }))).join(" or ");
+  const entries: MmrShortcutHelpEntry[] = [];
+  if (sources.modeKeys) {
+    // ampi-core's own Ctrl+S yields to the mode dial, so the row shows the dial's key.
+    const dial = keymap ? keyOf(MMR_MODE_DIAL_COMMAND_ID, keymap) : "";
+    if (dial) entries.push({ key: dial, label: "switch modes" });
+    entries.push({ key: "Alt+D", label: "toggle thinking" });
+  }
+  entries.push({ key: "Alt+Enter", label: "newline" }, { key: "@", label: "mention files" });
   if (!keymap) return entries;
   entries.push({ key: formatMmrKeyCombo(keymap.leader, "display"), label: "leader key" });
 
@@ -84,8 +92,8 @@ export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): Mm
   let toggle: MmrShortcutHelpEntry | undefined;
   for (const command of sources.commands) {
     const chords = keymap.bindings.get(command.id) ?? [];
-    if (chords.length === 0) continue;
-    const key = chords.map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: keymap.leader }))).join(" or ");
+    if (chords.length === 0 || command.id === MMR_MODE_DIAL_COMMAND_ID) continue;
+    const key = keyOf(command.id, keymap);
     if (command.id === MMR_HELP_COMMAND_ID) {
       toggle = { key, label: command.verb };
       continue;

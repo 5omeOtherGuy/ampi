@@ -89,6 +89,32 @@ describe("mmr-core mode shortcuts", () => {
     assert.equal(runtime.getMmrModeState()?.mode, "ultra");
   });
 
+  it("leaves ctrl+s and ctrl+space to an extension that owns the terminal chrome", async () => {
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
+    const { registerMmrChromeOwner } = await importSource("extensions/ampi-core/chrome-owner.ts");
+    const runtime = await importRuntime();
+    runtime.setMmrModeState(createState("medium"));
+    const { ctx } = createContext();
+    const { pi, calls, shortcuts } = createPi();
+    extension(pi);
+
+    const release = registerMmrChromeOwner("ampi-tui");
+    try {
+      await shortcuts.get("ctrl+s").handler(ctx);
+      await shortcuts.get("ctrl+space").handler(ctx);
+      assert.equal(runtime.getMmrModeState()?.mode, "medium");
+      assert.equal(calls.setModel.length, 0);
+    } finally {
+      release();
+    }
+
+    // Without an owner (ampi-tui turned off) both cycle again.
+    await shortcuts.get("ctrl+s").handler(ctx);
+    assert.equal(runtime.getMmrModeState()?.mode, "high");
+    await shortcuts.get("ctrl+space").handler(ctx);
+    assert.equal(runtime.getMmrModeState()?.mode, "ultra");
+  });
+
   it("toggles the thinking level in place via alt+d without releasing the mode", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const runtime = await importRuntime();

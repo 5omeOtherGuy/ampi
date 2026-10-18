@@ -55,11 +55,30 @@ function fakeTui({ scrollable = true } = {}, settings = {}) {
   return { tui, calls, editor };
 }
 
-function setup({ settings = {}, idle = true, editorText = "", tuiOptions, hooks = {} } = {}) {
+/** Let pending promise callbacks run. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+/** Pi's event bus: `emit` calls every handler `on` registered for the channel. */
+function eventBus() {
+  const handlers = new Map();
+  return {
+    emit: (name, data) => {
+      for (const handler of [...(handlers.get(name) ?? [])]) handler(data);
+    },
+    on: (name, handler) => {
+      const list = handlers.get(name) ?? new Set();
+      list.add(handler);
+      handlers.set(name, list);
+      return () => list.delete(handler);
+    },
+  };
+}
+
+function setup({ settings = {}, idle = true, editorText = "", tuiOptions, hooks = {}, mock = createMockPi({ settings }), context } = {}) {
   let time = 0;
   const timers = [];
-  const mock = createMockPi({ settings });
-  const context = createMockExtensionContext({ idle, editorText });
+  mock.pi.events = eventBus();
+  context ??= createMockExtensionContext({ idle, editorText });
   const handle = fakeTui(tuiOptions, settings);
   const keys = createMmrTuiKeys(mock.pi, {
     now: () => time,
@@ -113,6 +132,7 @@ describe("ampi-tui key installation", () => {
       "ampi.status": undefined,
       "ampi.changelog": undefined,
       "ampi.config": undefined,
+      "mode.toggle": "ctrl+s",
       "mode.use.low": undefined,
       "mode.use.medium": undefined,
       "mode.use.high": undefined,
@@ -404,6 +424,141 @@ describe("ampi-tui key installation", () => {
   });
 });
 
+describe("ampi-tui mode dial key", () => {
+  beforeEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+  afterEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+
+  it("takes Ctrl+S through raw input, ahead of Pi's and ampi-core's bindings, and opens the dial once above the prompt", async () => {
+    const t = setup();
+    t.pi.registerCommand("mode", {});
+    runtime.setMmrModeState({ mode: "medium" });
+    const sent = () => t.calls.sendUserMessage.map((call) => call.content);
+    assert.equal(t.shortcuts.has("ctrl+s"), false, "no registerShortcut for ctrl+s");
+    assert.equal(t.send("\x13"), true);
+    assert.equal(t.overlays.length, 1);
+    const overlay = t.overlays[0];
+    const placement = overlay.options.overlayOptions();
+    assert.deepEqual(placement, { anchor: "bottom-right", width: 58, margin: { left: 4 }, offsetY: -3 });
+    assert.equal(overlay.component.getMode(), "medium");
+    assert.deepEqual(t.calls.sendUserMessage, [], "opening changes nothing");
+
+    // Keys reach the open dial; each turn goes through /mode.
+    overlay.component.handleInput("\x13");
+    await settle();
+    assert.deepEqual(t.calls.sendUserMessage, [{ content: "/mode high", options: { expandPromptTemplates: true } }]);
+    // The command running again (from the palette, say) turns the open dial instead of opening a second one.
+    assert.equal(t.send("\x13"), true);
+    assert.equal(t.overlays.length, 1);
+    assert.equal(overlay.component.getMode(), "ultra");
+    await settle();
+    assert.deepEqual(sent(), ["/mode high"], "the next switch waits for ampi-core to report this one");
+    runtime.setMmrModeState({ mode: "high" });
+    t.pi.events.emit(runtime.MMR_EVENT_STATE_CHANGED, runtime.getMmrModeState());
+    t.advance(0);
+    await settle();
+    assert.deepEqual(sent(), ["/mode high", "/mode ultra"]);
+
+    // A switch that reports nothing holds the next one back for 3 s at most,
+    // and the dial's last turn still lands after it has closed.
+    overlay.component.handleInput("\x13");
+    t.advance(2000);
+    assert.equal(overlay.closed, true, "the dial closes itself after 2 s");
+    await settle();
+    assert.deepEqual(sent(), ["/mode high", "/mode ultra"]);
+    t.advance(1000);
+    await settle();
+    assert.deepEqual(sent(), ["/mode high", "/mode ultra", "/mode low"]);
+
+    t.send("\x13");
+    assert.equal(t.overlays.length, 2, "the next Ctrl+S opens a new dial");
+    t.keys.stop();
+    assert.equal(t.overlays[1].closed, true, "stopping closes an open dial");
+  });
+
+  it("leaves Ctrl+S to Pi when ampi-core's /mode is missing", () => {
+    const t = setup();
+    assert.equal(t.send("\x13"), false);
+    assert.equal(t.overlays.length, 0);
+  });
+
+  it("switches one turn at a time with ampi-core, so fast turns end on the last mode and never drop to free", async () => {
+    const core = (await importSource("extensions/ampi-core/index.ts")).default;
+    const models = [
+      { provider: "openai-codex", id: "gpt-5.6-terra" },
+      { provider: "openai-codex", id: "gpt-5.6-sol" },
+    ];
+    // Pi's setModel takes a moment (checking the provider's auth), then
+    // reports model_select before it returns; setThinkingLevel reports
+    // thinking_level_select without waiting. The test releases each setModel.
+    const inFlight = [];
+    const mock = createMockPi({
+      activeTools: ["read", "bash", "grep"],
+      allTools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+      thinkingLevel: "off",
+      onModelSet: async (model, { handlers, eventContext }) => {
+        await new Promise((resolve) => inFlight.push(resolve));
+        await handlers.get("model_select")?.({ type: "model_select", model, previousModel: undefined, source: "set" }, eventContext);
+      },
+      onThinkingLevelSet: (level, { handlers, eventContext }) => {
+        void handlers.get("thinking_level_select")?.({ type: "thinking_level_select", level, previousLevel: "off" }, eventContext);
+      },
+    });
+    const context = createMockExtensionContext({ models });
+    mock.setEventContext(context.ctx);
+    const t = setup({ mock, context });
+    core(mock.pi);
+    // As in Pi, an extension's /mode runs the command without the sender waiting for it.
+    mock.pi.sendUserMessage = (content, options) => {
+      mock.calls.sendUserMessage.push({ content, options });
+      const [name, ...args] = content.slice(1).split(" ");
+      void mock.commands.get(name).handler(args.join(" "), context.ctx);
+    };
+    const seen = [];
+    mock.pi.events.on(runtime.MMR_EVENT_STATE_CHANGED, (state) => seen.push(state.mode));
+    const run = async () => {
+      // Release the setModel calls one by one, oldest first, and fire due timers, until nothing is left.
+      for (let round = 0; round < 50; round++) {
+        await settle();
+        t.advance(0);
+        await settle();
+        if (inFlight.length === 0) return;
+        inFlight.shift()();
+      }
+      assert.fail("the switches did not finish");
+    };
+
+    void mock.commands.get("mode").handler("medium", context.ctx);
+    await run();
+    assert.equal(runtime.getMmrModeState()?.mode, "medium");
+    seen.length = 0;
+    mock.calls.setModel.length = 0;
+
+    t.send("\x13");
+    const dial = t.overlays[0].component;
+    // A turn to high, and while high is still switching, two more: ultra, low.
+    dial.handleInput("\x13");
+    await settle();
+    assert.equal(inFlight.length, 1);
+    dial.handleInput("\x13");
+    dial.handleInput("\x13");
+    assert.equal(dial.getMode(), "low");
+    await settle();
+    assert.equal(inFlight.length, 1, "one switch at a time");
+    await run();
+
+    assert.equal(runtime.getMmrModeState()?.mode, "low", "the last chosen mode wins");
+    assert.deepEqual(seen, ["high", "low"], "never free, and the turns made during a switch collapse into the last one");
+    assert.equal(mock.calls.setModel.at(-1)?.id, "gpt-5.6-terra");
+    t.keys.stop();
+  });
+});
+
 describe("ampi-tui command palette and details toggle", () => {
   beforeEach(() => {
     registry.__resetMmrCommandsForTests();
@@ -561,7 +716,7 @@ describe("ampi-tui command palette and details toggle", () => {
     t.pi.registerCommand("mode", {});
     runtime.setMmrModeState({ mode: "high" });
     t.send("\x0f");
-    const rows = t.overlays[0].component.getRows().filter((row) => row.command.noun === "mode");
+    const rows = t.overlays[0].component.getRows().filter((row) => row.command.id.startsWith("mode.use."));
     assert.deepEqual(
       rows.map((row) => [row.command.verb, row.state, row.reason]),
       [

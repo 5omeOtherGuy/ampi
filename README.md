@@ -102,7 +102,8 @@ Interactive controls:
 /mode                # show current mode
 /mode high           # switch mode
 Ctrl+Shift+S         # mode picker (Alt+M fallback)
-Ctrl+S               # cycle low → medium → high → ultra (Ctrl+Space: deprecated alias)
+Ctrl+S               # mode dial; each further press turns low → medium → high → ultra, Tab lists every mode
+                     # (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
 Alt+D                # toggle the active mode's thinking preset where supported
 Esc                  # clear the prompt
 Esc Esc              # stop the running turn (one Esc no longer does)
