@@ -243,7 +243,7 @@ describe("ampi-gui server: static files", () => {
     const css = await send({ path: "/client/tokens.css", headers: cookie() });
     assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
     assert.match(css.body, /--ampi-bg: light-dark\(/);
-    for (const file of ["sidebar.js", "titlebar.js"]) {
+    for (const file of ["sidebar.js", "titlebar.js", "transcript.js"]) {
       const res = await send({ path: `/client/${file}`, headers: cookie() });
       assert.equal(res.status, 200, file);
       assert.equal(res.headers["content-type"], "text/javascript; charset=utf-8", file);
@@ -283,6 +283,7 @@ describe("ampi-gui server: API", () => {
     assert.equal(info.status.phase, "idle");
     const transcript = JSON.parse((await send({ path: "/api/transcript", headers: cookie() })).body);
     assert.deepEqual(transcript.items, []);
+    assert.deepEqual(transcript.groups, []);
     assert.equal(typeof transcript.lastEventId, "number");
   });
 
@@ -462,6 +463,7 @@ describe("ampi-gui server: sessions", () => {
       view.items.map((item) => item.type),
       ["user", "assistant"],
     );
+    assert.deepEqual(view.groups, [], "the saved session made no tool calls");
     for (const target of ["/api/sessions/unknown", "/api/sessions/s-saved/x", "/api/sessions/..%2fs-saved", "/api/sessions/"]) {
       assert.equal((await send({ path: target, headers: cookie() })).status, 404, target);
     }
@@ -528,6 +530,25 @@ describe("ampi-gui server: event stream", () => {
     const [event] = parseEvents(res.body);
     assert.equal(event.event, "session");
     assert.equal(event.data.id, "s-1");
+  });
+
+  it("streams a work group when its call arrives and again when it ends", async () => {
+    const read = { type: "toolCall", id: "c-77", name: "read", arguments: { path: "/work/app/src/a.ts" } };
+    const message = { role: "assistant", content: [read], timestamp: 77, stopReason: "toolUse" };
+    const res = await stream(
+      { path: "/api/events" },
+      (text) => (text.match(/event: groups/g) ?? []).length === 2,
+      () => {
+        fire("message_end", { message });
+        fire("tool_execution_end", { toolCallId: "c-77", toolName: "read", isError: false, result: { content: [{ type: "text", text: "x" }] } });
+      },
+    );
+    const groups = parseEvents(res.body).filter((event) => event.event === "groups");
+    assert.deepEqual(
+      groups.map((event) => event.data.groups.map((group) => [group.id, group.label, group.status])),
+      [[["c-77", "Read 1 file (1 cancelled)", "cancelled"]], [["c-77", "Read 1 file", "done"]]],
+      "outside a turn a call without a result counts as cancelled until its result arrives",
+    );
   });
 
   it("replays what a reconnecting client missed, from Last-Event-ID", async () => {

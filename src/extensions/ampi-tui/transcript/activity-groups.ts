@@ -3,12 +3,12 @@
  *
  * Pi draws one row per tool call and hands a renderer only its own call, so
  * this store follows the session's messages to know which calls sit next to
- * each other. A run of calls ends where the transcript shows something else
- * between them: an assistant message with text (Pi draws a message's text
- * above all of its calls), a user or steered message, a summary or a custom
- * message, and a call that stands alone: a subagent call, or a call whose
- * result shows an image. Thinking, failed calls and a change of kind do not
- * end a run.
+ * each other. Where a run of calls ends is decided by ampi-core's
+ * `activity-runs.ts`, which the web GUI shares: an assistant message with
+ * text (Pi draws a message's text above all of its calls), a user or steered
+ * message, a summary or a custom message, and a call that stands alone: a
+ * subagent call, or a call whose result shows an image where the terminal
+ * shows images. Thinking, failed calls and a change of kind do not end a run.
  *
  * The store is fed from Pi's events while a session runs, checked against
  * the session's messages when an assistant message starts, and rebuilt from
@@ -24,6 +24,7 @@ import {
   sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
 import { getCapabilities } from "@earendil-works/pi-tui";
+import { endsActivityRun, groupActivityRuns, shownOnItsOwn, standsAlone as callStandsAlone, toolCallBlocks } from "../../ampi-core/activity-runs.js";
 import {
   type ActivityEntry,
   type ActivityStatus,
@@ -85,40 +86,6 @@ interface MessageRecord {
   callIds: string[];
 }
 
-function blocks(message: GroupMessage): Record<string, unknown>[] {
-  return Array.isArray(message.content)
-    ? message.content.filter(isRecord)
-    : [];
-}
-
-function toolCalls(message: GroupMessage): { id: string; name: string; args: unknown }[] {
-  return blocks(message)
-    .filter((block) => block.type === "toolCall" && typeof block.id === "string")
-    .map((block) => ({ id: block.id as string, name: typeof block.name === "string" ? block.name : "", args: block.arguments }));
-}
-
-/** Pi draws an assistant message's text, a truncation notice, or the error of a message without calls above its calls. */
-function assistantBoundary(message: GroupMessage, callCount: number): boolean {
-  const text = blocks(message).some((block) => block.type === "text" && typeof block.text === "string" && block.text.trim() !== "");
-  if (text || message.stopReason === "length") return true;
-  return callCount === 0 && (message.stopReason === "aborted" || message.stopReason === "error");
-}
-
-/** Messages other than assistant messages and tool results that the transcript shows on their own. */
-function drawnOnItsOwn(message: GroupMessage): boolean {
-  switch (message.role) {
-    case "user":
-    case "bashExecution":
-    case "compactionSummary":
-    case "branchSummary":
-      return true;
-    case "custom":
-      return Boolean(message.display);
-    default:
-      return false;
-  }
-}
-
 /** The result Pi shows on the calls of an assistant message that was aborted or failed. */
 function interruptedResult(message: GroupMessage): ToolResult | undefined {
   if (message.stopReason === "aborted") return { content: [{ type: "text", text: "Operation aborted" }] };
@@ -132,13 +99,7 @@ function interruptedResult(message: GroupMessage): ToolResult | undefined {
  * own title above it.
  */
 function standsAlone(call: GroupedCall): boolean {
-  if (classifyToolCall(call.toolName, {}).kind === "subagent") return true;
-  const content = call.result?.content;
-  return Boolean(getCapabilities().images) && Array.isArray(content) && content.some((block) => isRecord(block) && block.type === "image");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return callStandsAlone(call.toolName, call.result, Boolean(getCapabilities().images));
 }
 
 function callStatus(call: GroupedCall): ActivityStatus {
@@ -196,7 +157,7 @@ export class ActivityGroupStore {
       } else if (message.role === "toolResult") {
         const call = message.toolCallId ? this.calls.get(message.toolCallId) : undefined;
         if (call && !call.result) this.finish(call, message, Boolean(message.isError));
-      } else if (drawnOnItsOwn(message)) {
+      } else if (shownOnItsOwn(message)) {
         this.records.push({ boundary: true, callIds: [] });
       }
     }
@@ -207,7 +168,7 @@ export class ActivityGroupStore {
       this.current = { boundary: false, callIds: [] };
       this.records.push(this.current);
       this.updateCurrent(message);
-    } else if (drawnOnItsOwn(message)) {
+    } else if (shownOnItsOwn(message)) {
       // Splits the run only for calls that follow, which regroup when they arrive.
       this.current = undefined;
       this.records.push({ boundary: true, callIds: [] });
@@ -298,8 +259,8 @@ export class ActivityGroupStore {
 
   /** Read an assistant message's calls into its record. */
   private updateRecord(record: MessageRecord, message: GroupMessage): { structural: boolean; changed: string[] } {
-    const found = toolCalls(message);
-    const boundary = assistantBoundary(message, found.length);
+    const found = toolCallBlocks(message);
+    const boundary = endsActivityRun(message, found.length);
     let structural = boundary !== record.boundary || found.length !== record.callIds.length;
     const changed: string[] = [];
     for (const [i, block] of found.entries()) {
@@ -340,20 +301,10 @@ export class ActivityGroupStore {
 
   private regroup(): void {
     this.positions = new Map();
-    let group: { calls: GroupedCall[] } | undefined;
-    for (const record of this.records) {
-      if (record.boundary) group = undefined;
-      for (const id of record.callIds) {
-        const call = this.calls.get(id);
-        if (!call) continue;
-        if (standsAlone(call)) {
-          group = undefined;
-          continue;
-        }
-        group ??= { calls: [] };
-        this.positions.set(id, { group, index: group.calls.length });
-        group.calls.push(call);
-      }
+    const records = this.records.map((record) => ({ ...record, callIds: record.callIds.filter((id) => this.calls.has(id)) }));
+    for (const run of groupActivityRuns(records, (id) => standsAlone(this.calls.get(id) as GroupedCall))) {
+      const group = { calls: run.map((id) => this.calls.get(id) as GroupedCall) };
+      for (const [index, call] of group.calls.entries()) this.positions.set(call.id, { group, index });
     }
   }
 

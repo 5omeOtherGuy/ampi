@@ -624,6 +624,11 @@ button {
   align-items: flex-end;
 }
 
+/* A message whose calls are all drawn inside an earlier group. */
+.msg.assistant:empty {
+  display: none;
+}
+
 .bubble {
   max-width: min(85%, 672px);
   padding: 8px 12px;
@@ -875,19 +880,149 @@ details[open] > summary .chevron {
   border-left: 1px solid color-mix(in srgb, var(--ampi-border-strong) 70%, transparent);
 }
 
-.tool-output {
+/* An expanded call: the command or arguments, then the change or the output, divided by hairlines. */
+.tool-card {
+  overflow: hidden;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-card);
+}
+
+.tool-card > pre {
   max-height: 20rem;
   margin: 0;
   padding: 8px 12px;
   overflow: auto;
-  border-radius: var(--ampi-radius-md);
-  background: var(--ampi-card);
-  color: var(--ampi-muted-fg);
   font-family: var(--ampi-font-mono);
   font-size: var(--ampi-text-sm);
   line-height: 18px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.tool-card > pre + pre {
+  border-top: 1px solid var(--ampi-border-strong);
+}
+
+.tool-command {
+  color: var(--ampi-fg);
+  line-height: 20px;
+}
+
+.tool-args,
+.tool-output {
+  color: var(--ampi-muted-fg);
+}
+
+.tool-card > .tool-diff {
+  padding: 4px 0;
+}
+
+.diff-line {
+  display: block;
+  padding: 0 12px;
+  color: var(--ampi-muted-fg);
+}
+
+.diff-add {
+  background: var(--ampi-diff-add-bg);
+  color: var(--ampi-diff-add-fg);
+}
+
+.diff-remove {
+  background: var(--ampi-diff-remove-bg);
+  color: var(--ampi-diff-remove-fg);
+}
+
+.diff-meta {
+  color: var(--ampi-diff-meta-fg);
+}
+
+/* A work group: a run of tool calls as one line, its calls indented below it with a rule on the left. */
+.work-group {
+  min-width: 0;
+  color: color-mix(in srgb, var(--ampi-fg) 75%, transparent);
+}
+
+.work-group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ampi-space);
+  min-width: 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.work-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-group > summary:hover {
+  color: var(--ampi-fg);
+}
+
+.work-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.work-group[data-status="running"] > summary .work-label {
+  animation: ampi-fade 1.6s ease-in-out infinite;
+}
+
+.work-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: calc(var(--ampi-space) * 1) 0 calc(var(--ampi-space) * 1) var(--ampi-space);
+  padding-left: calc(var(--ampi-space) * 3);
+  border-left: 1px solid color-mix(in srgb, var(--ampi-border-strong) 70%, transparent);
+}
+
+.work-children .row-body {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+
+/* The fold over a finished turn's work: a centred "Worked for …" between two hairlines. */
+.work-fold {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 3);
+  color: var(--ampi-muted-fg);
+}
+
+.work-fold::before,
+.work-fold::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--ampi-border-strong);
+}
+
+.work-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ampi-space);
+  padding: 2px 4px;
+  border: none;
+  border-radius: var(--ampi-radius-xs);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+  cursor: pointer;
+}
+
+.work-toggle:hover {
+  color: var(--ampi-fg);
+}
+
+.work-toggle[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
 }
 
 .thinking-text {

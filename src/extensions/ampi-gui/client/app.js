@@ -4,9 +4,19 @@
 // module, no framework.
 
 import { mountComposer } from "./composer.js";
-import { escapeHtml, renderMarkdown } from "./markdown.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountTitlebar } from "./titlebar.js";
+import {
+  CHEVRON,
+  createTranscript,
+  groupItemIds,
+  groupOf,
+  itemHtml,
+  partNodeHtml,
+  planWorkFolds,
+  setGroups,
+  setItem,
+} from "./transcript.js";
 
 const $ = (id) => document.getElementById(id);
 const app = document.querySelector(".app");
@@ -16,9 +26,10 @@ const liveDot = $("live-dot");
 const empty = $("empty");
 const jump = $("jump");
 
-/** Items by id, in transcript order. */
-const items = new Map();
-/** Rows the user opened, by key, so redraws keep them open. */
+/** The live session's items, in transcript order, and its work groups. */
+const live = createTranscript();
+const items = live.items;
+/** Rows, groups and work folds the user opened, by key, so redraws keep them open. */
 const openRows = new Set();
 let lastEventId = 0;
 let source;
@@ -138,45 +149,6 @@ document.addEventListener("keydown", (event) => {
 // ---------------------------------------------------------------------------
 // Drawing
 
-const CHEVRON = '<svg class="icon chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
-
-function titleHtml(parts) {
-  return parts.map((part) => `<span class="part-${escapeHtml(part.role)}">${escapeHtml(part.text)}</span>`).join("");
-}
-
-function rowHtml(key, status, line, body) {
-  if (!body) return `<div class="row" data-status="${status}"><div class="row-line">${CHEVRON}<span class="row-text">${line}</span></div></div>`;
-  const open = openRows.has(key) ? " open" : "";
-  return `<details class="row" data-status="${status}" data-key="${escapeHtml(key)}"${open}><summary>${CHEVRON}<span class="row-text">${line}</span></summary><div class="row-body">${body}</div></details>`;
-}
-
-function toolHtml(part) {
-  const output = part.output ? `<pre class="tool-output">${escapeHtml(part.output)}${part.outputTruncated ? "\n…" : ""}</pre>` : "";
-  return rowHtml(`tool:${part.toolCallId}`, part.status, titleHtml(part.title), output);
-}
-
-function partHtml(item, part, index) {
-  if (part.type === "text") return part.text.trim() ? `<div class="prose">${renderMarkdown(part.text)}</div>` : "";
-  if (part.type === "thinking") {
-    if (part.redacted) return rowHtml("", "done", '<span class="part-muted">Thinking (hidden by the provider)</span>', "");
-    const body = part.text.trim() ? `<div class="thinking-text">${escapeHtml(part.text.trim())}</div>` : "";
-    return rowHtml(`thinking:${item.id}:${index}`, "done", '<span class="part-muted">Thinking</span>', body);
-  }
-  if (part.type === "tool") return toolHtml(part);
-  return "";
-}
-
-function itemHtml(item) {
-  if (item.type === "user") {
-    const images = item.images > 0 ? `<div class="attachments">${item.images === 1 ? "1 image" : `${item.images} images`}</div>` : "";
-    return `<div class="bubble">${escapeHtml(item.text)}</div>${images}`;
-  }
-  const parts = item.parts.map((part, index) => `<div class="part" data-part="${index}">${partHtml(item, part, index)}</div>`).join("");
-  const stopped = item.stopReason === "aborted" ? '<p class="msg-error">Interrupted</p>' : "";
-  const error = item.error && item.stopReason !== "aborted" ? `<p class="msg-error">${escapeHtml(item.error)}</p>` : "";
-  return parts + stopped + error;
-}
-
 function itemNode(item) {
   let node = transcript.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
   if (!node) {
@@ -192,15 +164,75 @@ function itemNode(item) {
 function drawItem(item) {
   // Live items keep arriving while another session is shown; they are drawn on the way back.
   if (viewing) return;
-  itemNode(item).innerHTML = itemHtml(item);
+  itemNode(item).innerHTML = itemHtml(live, item, openRows);
 }
 
 function drawPart(item, index) {
   if (viewing) return;
   const node = itemNode(item).querySelector(`[data-part="${index}"]`);
-  if (node) node.innerHTML = partHtml(item, item.parts[index], index);
+  if (node) node.outerHTML = partNodeHtml(live, item, index, openRows);
   else drawItem(item);
 }
+
+/** Redraw the items with these ids. */
+function drawItems(ids) {
+  for (const id of ids) {
+    const item = items.get(id);
+    if (item) drawItem(item);
+  }
+}
+
+/** The transcript the page shows: the live one, or a saved session's. */
+function shownTranscript() {
+  return viewing ? viewing.transcript : live;
+}
+
+/**
+ * Fold each finished turn's work behind its "Worked for …" line: a divider
+ * before the turn's first message, and every message of the work hidden
+ * except the last, which keeps its final answer and any error note.
+ */
+function drawFolds() {
+  const folds = planWorkFolds(shownTranscript(), busy && !viewing);
+  const byItem = new Map();
+  for (const fold of folds) for (const id of fold.itemIds) byItem.set(id, fold);
+  const wanted = new Set(folds.map((fold) => fold.key));
+  for (const node of transcript.querySelectorAll(".work-fold")) if (!wanted.has(node.dataset.key)) node.remove();
+  for (const fold of folds) {
+    const first = transcript.querySelector(`.msg[data-id="${CSS.escape(fold.firstId)}"]`);
+    if (!first) continue;
+    let divider = transcript.querySelector(`.work-fold[data-key="${CSS.escape(fold.key)}"]`);
+    if (!divider) {
+      divider = document.createElement("div");
+      divider.className = "work-fold";
+      divider.dataset.key = fold.key;
+      divider.innerHTML = `<button type="button" class="work-toggle"><span class="work-toggle-label"></span>${CHEVRON}</button>`;
+    }
+    if (divider.nextElementSibling !== first) first.before(divider);
+    const open = openRows.has(fold.key);
+    const button = divider.querySelector("button");
+    button.setAttribute("aria-expanded", String(open));
+    divider.querySelector(".work-toggle-label").textContent = fold.label;
+  }
+  for (const article of transcript.querySelectorAll(".msg.assistant")) {
+    const fold = byItem.get(article.dataset.id);
+    const folded = Boolean(fold) && !openRows.has(fold.key);
+    const whole = folded && article.dataset.id !== fold.lastId;
+    article.hidden = whole;
+    for (const part of article.querySelectorAll(":scope > .part")) {
+      part.hidden = folded && !whole && !(fold.answer && part.dataset.kind === "text");
+    }
+  }
+}
+
+transcript.addEventListener("click", (event) => {
+  const button = event.target.closest?.(".work-toggle");
+  if (!button) return;
+  const key = button.parentElement.dataset.key;
+  if (openRows.has(key)) openRows.delete(key);
+  else openRows.add(key);
+  drawFolds();
+});
 
 function drawChrome() {
   empty.hidden = (viewing ? viewing.items.length : items.size) > 0;
@@ -257,6 +289,7 @@ function setSession(session) {
 
 function setStatus(status) {
   lastStatus = status;
+  const settled = busy && !status.busy;
   busy = status.busy;
   app.dataset.busy = String(status.busy);
   app.dataset.phase = status.phase;
@@ -270,6 +303,8 @@ function setStatus(status) {
   sidebar.setBusy(status.busy);
   $("title-disc").dataset.busy = String(status.busy && !viewing);
   drawChrome();
+  // A turn that ends folds its work.
+  if (settled && !viewing) drawFolds();
 }
 
 function upsertItem(item) {
@@ -279,17 +314,27 @@ function upsertItem(item) {
     const replaced = !viewing && transcript.querySelector(`[data-id="${CSS.escape(item.replaces)}"]`);
     if (replaced) replaced.dataset.id = item.id;
   }
-  items.set(item.id, item);
+  setItem(live, item);
   drawItem(item);
+  // Calls that join a group begun in an earlier item are drawn by that item's group.
+  const leaders = new Set();
+  for (const part of item.parts ?? []) {
+    const group = part.type === "tool" ? groupOf(live, part.toolCallId) : undefined;
+    const leader = group && live.callItem.get(group.id);
+    if (leader && leader !== item.id) leaders.add(leader);
+  }
+  drawItems(leaders);
 }
 
 function load(snapshot) {
-  items.clear();
+  for (const map of Object.values(live)) map.clear();
   if (!viewing) transcript.replaceChildren();
   lastEventId = snapshot.lastEventId;
   setSession(snapshot.session);
+  setGroups(live, snapshot.groups ?? []);
   for (const item of snapshot.items) upsertItem(item);
   setStatus(snapshot.status);
+  if (!viewing) drawFolds();
   composer.setQueue(snapshot.queue);
 }
 
@@ -299,7 +344,10 @@ const handlers = {
     setSession(data);
     refreshSessions();
   },
-  item: (data) => upsertItem(data),
+  item: (data) => {
+    upsertItem(data);
+    if (!viewing) drawFolds();
+  },
   delta: (data) => {
     const item = items.get(data.itemId);
     const part = item?.parts?.[data.part];
@@ -315,7 +363,23 @@ const handlers = {
     const index = item.parts.findIndex((part) => part.type === "tool" && part.toolCallId === data.part.toolCallId);
     if (index < 0) return;
     item.parts[index] = data.part;
-    drawPart(item, index);
+    // A call inside a group is drawn by the group, in the item of its first call.
+    const group = groupOf(live, data.part.toolCallId);
+    if (group) drawItems([live.callItem.get(group.id)]);
+    else drawPart(item, index);
+  },
+  groups: (data) => {
+    // Redraw the items that held or now hold a changed group's calls.
+    const touched = new Set();
+    const note = (group) => {
+      if (group) for (const id of groupItemIds(live, group)) touched.add(id);
+    };
+    for (const id of data.removed) note(live.groups.get(id));
+    for (const group of data.groups) note(live.groups.get(group.id));
+    setGroups(live, data.groups, data.removed);
+    for (const group of data.groups) note(group);
+    drawItems(touched);
+    if (!viewing) drawFolds();
   },
   turn_end: () => refreshSessions(),
   queue: (data) => composer.setQueue(data),
@@ -413,6 +477,7 @@ function showLive() {
   $("readonly-banner").hidden = true;
   transcript.replaceChildren();
   for (const item of items.values()) drawItem(item);
+  drawFolds();
   drawTitle();
   drawChrome();
   chat.scrollTop = chat.scrollHeight;
@@ -433,6 +498,9 @@ async function showSession(id) {
     return;
   }
   viewing = view;
+  viewing.transcript = createTranscript();
+  setGroups(viewing.transcript, view.groups ?? []);
+  for (const item of view.items) setItem(viewing.transcript, item);
   app.dataset.view = "readonly";
   composer.setEnabled(false);
   $("readonly-text").textContent = view.row.elsewhere
@@ -445,9 +513,10 @@ async function showSession(id) {
     node.className = `msg ${item.type}`;
     node.dataset.id = item.id;
     node.setAttribute("aria-label", item.type === "user" ? "You" : "Assistant");
-    node.innerHTML = itemHtml(item);
+    node.innerHTML = itemHtml(viewing.transcript, item, openRows);
     transcript.append(node);
   }
+  drawFolds();
   drawTitle();
   drawChrome();
   chat.scrollTop = 0;

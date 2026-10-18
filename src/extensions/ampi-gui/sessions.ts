@@ -7,7 +7,7 @@ import { findLatestPersistedModeState } from "../ampi-core/state.js";
 import { getMmrThreadIndex, type MmrThreadIndex, type MmrThreadRecord } from "../ampi-core/thread-index.js";
 import { getMmrThreadReports } from "../ampi-core/thread-reports.js";
 import type { MmrGuiSessionInfo } from "./bridge.js";
-import { buildMmrGuiTranscript, type MmrGuiItem, mmrGuiSessionTitle } from "./view-model.js";
+import { buildMmrGuiTranscript, type MmrGuiGroup, type MmrGuiItem, mmrGuiSessionTitle } from "./view-model.js";
 
 /**
  * The sessions the web GUI's sidebar lists, and read-only views of them.
@@ -77,6 +77,7 @@ export interface MmrGuiSessionView {
   session: MmrGuiSessionInfo;
   row: MmrGuiSessionRow;
   items: MmrGuiItem[];
+  groups: MmrGuiGroup[];
 }
 
 export interface MmrGuiGroupInput {
@@ -267,7 +268,7 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
       const row = (await groups()).flatMap((group) => group.sessions).find((candidate) => candidate.id === id);
       if (!row) return undefined;
       const { branch } = await sessions.read(info);
-      const items = buildMmrGuiTranscript(branch, { cwd: info.cwd, home });
+      const transcript = buildMmrGuiTranscript(branch, { cwd: info.cwd, home });
       return {
         session: {
           id: info.id,
@@ -277,7 +278,7 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
           model: null,
         },
         row,
-        items,
+        ...transcript,
       };
     },
   };
