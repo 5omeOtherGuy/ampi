@@ -7,9 +7,11 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../ampi-core/command-registry.js";
+import { getMmrModeState } from "../ampi-core/runtime.js";
 import { listMmrSessionsInScope, type MmrSessionScope } from "../ampi-core/session-catalog.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../ampi-core/thread-index.js";
 import type { MmrThreadIndexStore } from "./index-store.js";
+import { formatMmrThreadMarkdown } from "./markdown.js";
 import {
   forgetMmrThreadSwitchTarget,
   type MmrThreadSwitchDirection,
@@ -31,6 +33,8 @@ export interface MmrThreadCommandHost {
   readonly store: MmrThreadIndexStore;
   /** Current time as an ISO 8601 string, recorded as the archive date. */
   readonly now: () => string;
+  /** Put text on the clipboard. */
+  readonly copyText: (text: string) => Promise<void>;
 }
 
 /** The command `ampi-tui` binds to Ctrl+C Ctrl+C; archive-and-quit ends the same way. */
@@ -38,6 +42,7 @@ const QUIT_COMMAND_ID = "ampi.quit";
 
 const AVAILABLE: MmrCommandAvailability = { state: "available" };
 const NOTHING_TO_ARCHIVE: MmrCommandAvailability = { state: "hidden" };
+const NO_MESSAGES: MmrCommandAvailability = { state: "unavailable", reason: "this session has no messages yet" };
 const ALREADY_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is already archived" };
 const NOT_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is not archived" };
 const NO_SWITCH_REASON: Readonly<Record<MmrThreadSwitchDirection, string>> = {
@@ -140,6 +145,24 @@ async function switchThroughHistory(ctx: ExtensionCommandContext, direction: Mmr
   await switchToSession(ctx, target, direction);
 }
 
+/** Copy the current branch of the session as Markdown, with a notice either way. */
+async function copyMarkdown(host: MmrThreadCommandHost, ctx: ExtensionContext): Promise<void> {
+  const header = ctx.sessionManager.getHeader();
+  // The branch alone, since the current entry need not be the last one; the
+  // session's name may sit on another branch.
+  const markdown = formatMmrThreadMarkdown([...(header ? [header] : []), ...ctx.sessionManager.getBranch()], {
+    title: ctx.sessionManager.getSessionName(),
+    mode: getMmrModeState()?.mode,
+  });
+  try {
+    await host.copyText(markdown);
+  } catch (error) {
+    ctx.ui.notify(`Could not copy the thread: ${error instanceof Error ? error.message : String(error)}`, "error");
+    return;
+  }
+  ctx.ui.notify("Copied the thread as Markdown", "info");
+}
+
 /** Handler of `/ampi-thread new`, `archive`, `switch <session id>`, `previous` and `next`. */
 export function createMmrThreadSlashHandler(host: MmrThreadCommandHost) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
@@ -234,6 +257,14 @@ export function createMmrThreadCommands(host: MmrThreadCommandHost): MmrCommandD
       description: "Go forward again after switching to the previous session",
       availability: (ctx) => switchAvailability(ctx, "next"),
       run: () => sendThreadAction(host, "next"),
+    },
+    {
+      id: "thread.copyMarkdown",
+      noun: "thread",
+      verb: "copy markdown",
+      description: "Copy this session to the clipboard as Markdown",
+      availability: (ctx) => (hasMmrSessionMessages(ctx) ? AVAILABLE : NO_MESSAGES),
+      run: (ctx) => copyMarkdown(host, ctx),
     },
   ];
 }

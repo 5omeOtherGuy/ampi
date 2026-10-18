@@ -1,6 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { copyToClipboard, type ExtensionAPI, type ExtensionContext, type ToolInfo } from "@earendil-works/pi-coding-agent";
 import { registerMmrPromptHistory } from "../ampi-core/prompt-history.js";
 import { MMR_THREAD_SLASH_COMMAND, registerMmrThreadIndex } from "../ampi-core/thread-index.js";
+import { registerMmrThreadReports } from "../ampi-core/thread-reports.js";
 import {
   archiveMmrSession,
   createMmrThreadSlashHandler,
@@ -9,6 +10,8 @@ import {
   registerMmrThreadCommands,
 } from "./commands.js";
 import { loadMmrThreadsSettings, type MmrThreadsSettings } from "./config.js";
+import { analyzeMmrContext, type MmrContextAnalysisInput } from "./context-analysis.js";
+import { summarizeMmrThreadCost } from "./cost.js";
 import { createMmrPromptHistoryStore, type MmrPromptHistoryStore } from "./history-store.js";
 import { createMmrThreadIndexStore, type MmrThreadIndexStore, type MmrThreadIndexStoreOptions } from "./index-store.js";
 
@@ -20,6 +23,28 @@ export interface MmrThreadsFactoryOverrides {
   createHistoryStore?: () => MmrPromptHistoryStore;
   /** Archive timestamps; defaults to the current time. */
   now?: () => string;
+  /** Puts text on the clipboard; defaults to Pi's `copyToClipboard`. */
+  copyText?: (text: string) => Promise<void>;
+}
+
+/** Pi's MCP adapter registers its tools from the `builtin:mcp` extension, in `mcp__<server>` namespaces. */
+function isMcpTool(tool: ToolInfo): boolean {
+  return tool.sourceInfo?.path === "builtin:mcp" || tool.namespace?.name.startsWith("mcp__") === true;
+}
+
+/** The context analysis' input for the current session. */
+function contextInput(pi: ExtensionAPI, ctx: ExtensionContext): MmrContextAnalysisInput {
+  const usage = ctx.getContextUsage();
+  const tools = pi.getAllTools();
+  const active = new Set(pi.getActiveTools());
+  return {
+    entries: ctx.sessionManager.getBranch(),
+    model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+    contextWindow: usage?.contextWindow ?? ctx.model?.contextWindow,
+    measuredTokens: usage?.tokens ?? undefined,
+    mcpTools: new Set(tools.filter(isMcpTool).map((tool) => tool.name)),
+    pending: { systemPrompt: ctx.getSystemPrompt(), tools: tools.filter((tool) => active.has(tool.name)) },
+  };
 }
 
 export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides = {}) {
@@ -33,13 +58,24 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       else console.warn(`[ampi-threads] ${message}`);
     };
     const store = overrides.createStore ? overrides.createStore({ onWarning }) : createMmrThreadIndexStore({ onWarning });
-    const host: MmrThreadCommandHost = { pi, store, now: overrides.now ?? (() => new Date().toISOString()) };
+    const host: MmrThreadCommandHost = {
+      pi,
+      store,
+      now: overrides.now ?? (() => new Date().toISOString()),
+      copyText: overrides.copyText ?? copyToClipboard,
+    };
 
     // The store works in every run mode; the commands only matter where a
     // palette or key dispatcher shows them, and are harmless elsewhere.
     const releaseIndex = registerMmrThreadIndex(store);
     const history = overrides.createHistoryStore ? overrides.createHistoryStore() : createMmrPromptHistoryStore();
     const releaseHistory = registerMmrPromptHistory(history);
+    const releaseReports = registerMmrThreadReports({
+      showCosts: settings.showCosts,
+      cost: (current) =>
+        summarizeMmrThreadCost(current.sessionManager.getEntries(), (provider, model) => current.modelRegistry.find(provider, model)?.cost),
+      analyzeContext: (current) => analyzeMmrContext(contextInput(pi, current)),
+    });
     const unregisterCommands = registerMmrThreadCommands(host);
     pi.registerCommand(MMR_THREAD_SLASH_COMMAND, {
       description: "Start, archive or switch sessions (used by the thread commands and the thread picker)",
@@ -84,6 +120,7 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
         unregisterCommands();
         releaseIndex();
         releaseHistory();
+        releaseReports();
         ctx = undefined;
       }
     });

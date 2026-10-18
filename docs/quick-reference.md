@@ -126,6 +126,8 @@ In the command palette, "ampi help" opens the Help & Keymap screen: every editor
 
 To change sessions, run `thread switch` from the palette: it lists this workspace's sessions, newest first, with a preview of the selected one; Enter switches, Alt+W or Ctrl+T shows every workspace's, Alt+A adds archived ones. `thread switch to previous` and `thread switch to next` go back and forth through the sessions you switched between. These need `ampi-threads` and have no default key.
 
+`thread copy markdown` copies the session as Markdown; `thread show cost` shows what it cost so far, per model; `thread analyze context` shows what fills the context window: system prompt, tools, AGENTS.md files, skills, compaction summary and messages, with their share of the window. These need `ampi-threads` and have no default key. `ampiThreads.showCosts: false` hides the cost gauge and `thread show cost`.
+
 The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.

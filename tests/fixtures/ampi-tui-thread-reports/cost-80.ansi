@@ -1,0 +1,11 @@
+╭─ [1m[33mThread Cost[39m[22m ────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ Total: [1m$0.03[22m[2m, not counting 1 model without a price[22m                       │
+│                                                                          │
+│ anthropic/claude-sonnet-4-5                                        $0.03 │
+│   [2m13k in · 116 out · 26k cache read · 13k cache write[22m                    │
+│ local/a-model-with-a-rather-long-name-that-the-narrow-box-has-t[0m…[0m [2munknown[22m │
+│   [2m2.1k in · 40 out[22m                                                       │
+│ session summaries                                                 $0.002 │
+│   [2m9.0k in · 300 out[22m                                                      │
+╰────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯

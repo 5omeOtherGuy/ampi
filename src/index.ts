@@ -796,6 +796,8 @@ export { createAmpiThreadsExtension, createMmrThreadsExtension } from "./extensi
 export type { MmrThreadsFactoryOverrides } from "./extensions/ampi-threads/index.js";
 export { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
 export type { MmrThreadsSettings } from "./extensions/ampi-threads/config.js";
+export { formatMmrThreadMarkdown } from "./extensions/ampi-threads/markdown.js";
+export type { MmrThreadMarkdownOptions } from "./extensions/ampi-threads/markdown.js";
 // --- ampi-threads: thread index store (Internal / prompt-assembly) ---
 export {
   MmrThreadIndexError,
@@ -1020,6 +1022,9 @@ export {
   loadMmrThreadsSettings as loadAmpiThreadsSettings,
 } from "./extensions/ampi-threads/config.js";
 export {
+  formatMmrThreadMarkdown as formatAmpiThreadMarkdown,
+} from "./extensions/ampi-threads/markdown.js";
+export {
   MmrThreadIndexError as AmpiThreadIndexError,
   createMmrThreadIndexStore as createAmpiThreadIndexStore,
   resolveDefaultMmrThreadIndexDir as resolveDefaultAmpiThreadIndexDir,
@@ -1232,6 +1237,9 @@ export type {
 export type {
   MmrThreadsSettings as AmpiThreadsSettings,
 } from "./extensions/ampi-threads/config.js";
+export type {
+  MmrThreadMarkdownOptions as AmpiThreadMarkdownOptions,
+} from "./extensions/ampi-threads/markdown.js";
 export type {
   MmrThreadIndexStore as AmpiThreadIndexStore,
   MmrThreadIndexStoreOptions as AmpiThreadIndexStoreOptions,

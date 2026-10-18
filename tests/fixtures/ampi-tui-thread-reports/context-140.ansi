@@ -1,0 +1,19 @@
+╭─ [1m[33mAnalyze Context[39m[22m ────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│ anthropic/claude-sonnet-4-5 · 200k context window                                                │
+│                                                                                                  │
+│ System prompt        3.1k    1.6%                                                                │
+│ Built-in tools (15)  5.2k    2.6%                                                                │
+│ AGENTS.md files (2)   820    0.4%                                                                │
+│ MCP tools (0)           0    0.0%                                                                │
+│ Loaded skills (3)     210    0.1%                                                                │
+│ Compaction summary    640    0.3%                                                                │
+│ Messages              48k   24.1%                                                                │
+│                                                                                                  │
+│ [1mTotal                 58k   29.1%[22m                                                                │
+│ [1mFree space           142k   70.9%[22m                                                                │
+│                                                                                                  │
+│ Compactions: 1                                                                                   │
+│ [2mPi counted 61k tokens at the last response.[22m                                                      │
+│ [2mEstimates at four characters to a token.[22m                                                         │
+╰────────────────────────────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯

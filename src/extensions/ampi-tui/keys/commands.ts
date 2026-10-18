@@ -13,6 +13,7 @@ import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
 import { getMmrPromptHistory, type MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { getMmrThreadIndex, MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
+import { getMmrThreadReports, type MmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
@@ -37,6 +38,10 @@ export interface MmrTuiCommandHost {
   openPromptHistory(ctx: ExtensionContext, history: MmrPromptHistory): void;
   /** Open the Switch Thread picker. */
   openThreadSwitcher(ctx: ExtensionContext): void;
+  /** Open the Thread Cost overlay. */
+  openThreadCost(ctx: ExtensionContext, reports: MmrThreadReports): void;
+  /** Open the Analyze Context overlay. */
+  openContextAnalysis(ctx: ExtensionContext, reports: MmrThreadReports): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -59,6 +64,21 @@ const PROMPT_HAS_TEXT: MmrCommandAvailability = { state: "unavailable", reason: 
 const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-core is not loaded" };
 const THREADS_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-threads is not loaded" };
 const TERMINAL_ONLY: MmrCommandAvailability = { state: "unavailable", reason: "only in Pi's terminal UI" };
+const COSTS_HIDDEN: MmrCommandAvailability = { state: "unavailable", reason: "costs are turned off (ampiThreads.showCosts)" };
+
+/** A command that shows one of ampi-threads' reports: terminal only, and only with ampi-threads loaded. */
+function reportAvailability(ctx: ExtensionContext, needsCosts = false): MmrCommandAvailability {
+  if (ctx.mode !== "tui") return TERMINAL_ONLY;
+  const reports = getMmrThreadReports();
+  if (!reports) return THREADS_MISSING;
+  return needsCosts && !reports.showCosts ? COSTS_HIDDEN : AVAILABLE;
+}
+
+function requireReports(): MmrThreadReports {
+  const reports = getMmrThreadReports();
+  if (!reports) throw new Error(THREADS_MISSING.reason);
+  return reports;
+}
 
 /** ampi-core slash commands the ampi rows run; the `pi` category leaves them out. */
 const CORE_SLASH = { status: "ampi-status", changelog: "ampi-changelog", config: "ampi-config", mode: "mode" } as const;
@@ -240,6 +260,23 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         return getMmrThreadIndex() ? AVAILABLE : THREADS_MISSING;
       },
       run: (ctx) => host.openThreadSwitcher(ctx),
+    },
+    {
+      id: "thread.showCost",
+      noun: "thread",
+      verb: "show cost",
+      description: "Show what this session cost so far, per model",
+      // ampi-threads computes the report; ampiThreads.showCosts can turn costs off.
+      availability: (ctx) => reportAvailability(ctx, true),
+      run: (ctx) => host.openThreadCost(ctx, requireReports()),
+    },
+    {
+      id: "thread.analyzeContext",
+      noun: "thread",
+      verb: "analyze context",
+      description: "Show what fills the context window: prompt, tools, AGENTS.md files, skills and messages",
+      availability: (ctx) => reportAvailability(ctx),
+      run: (ctx) => host.openContextAnalysis(ctx, requireReports()),
     },
     {
       id: "ampi.showVersion",
