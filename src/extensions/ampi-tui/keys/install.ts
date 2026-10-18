@@ -57,6 +57,16 @@ export interface MmrTuiKeysOptions {
   readonly clearTimer?: (handle: unknown) => void;
   readonly chordTimeoutMs?: number;
   readonly escapeWindowMs?: number;
+  /** Rows the prompt editor drew last; defaults to the height Pi's editor records. */
+  readonly editorHeight?: () => number | undefined;
+  /** The first Esc of Esc Esc was taken while a turn runs (the prompt box clears its text). */
+  readonly onEscapePending?: () => void;
+  /** The quit chord waits for its second Ctrl+C until `until` (epoch ms), or stopped waiting (`undefined`). */
+  readonly onQuitPending?: (until: number | undefined) => void;
+  /** The `thread.interrupt` command ran. */
+  readonly onInterrupt?: () => void;
+  /** The command palette opened (`true`) or closed (`false`); the prompt box dims its frame meanwhile. */
+  readonly onPaletteOpen?: (open: boolean) => void;
 }
 
 export interface MmrTuiKeys {
@@ -98,7 +108,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let hint: { close(): void } | undefined;
   let hintTimer: unknown;
   let resolved: MmrResolvedKeymap | undefined;
-  const host: MmrTuiCommandHost = { getTui: () => getTui(), pi, openPalette };
+  let quitPending = false;
+  const host: MmrTuiCommandHost = { getTui: () => getTui(), pi, openPalette, onInterrupt: options.onInterrupt };
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -142,7 +153,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
         .map((command) => ({ command, key: displayKey(command.id) })),
       ...createMmrSlashPaletteCommands(host).map((command) => ({ command })),
     ];
+    options.onPaletteOpen?.(true);
     void openMmrPalette(current, items)
+      .finally(() => options.onPaletteOpen?.(false))
       .then((command) => {
         if (command) runCommand(command);
       })
@@ -164,11 +177,20 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     hintTimer = undefined;
     hint?.close();
     hint = undefined;
+    if (quitPending) {
+      quitPending = false;
+      options.onQuitPending?.(undefined);
+    }
   }
 
   function showHint(next: MmrKeyHint): void {
     closeHint();
     if (!ctx) return;
+    // The prompt box's force-quit hint names Ctrl+C, so only that chord sets it.
+    if (next.prefix === "Ctrl+C" && next.rows.some((row) => row.id === "ampi.quit" && row.key === "Ctrl+C")) {
+      quitPending = true;
+      options.onQuitPending?.(next.deadline);
+    }
     const content = { prefix: next.prefix, rows: next.rows };
     let done: ((result: undefined) => void) | undefined;
     let closed = false;
@@ -194,7 +216,11 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
             width: MMR_HINT_POPUP_WIDTH,
             // Sit on the row above the prompt box. Without a rendered height,
             // count its text lines plus two borders.
-            offsetY: -(getMmrEditorRenderedHeight(getTui()) ?? ui.getEditorText().split("\n").length + 2),
+            offsetY: -(
+              options.editorHeight?.() ??
+              getMmrEditorRenderedHeight(getTui()) ??
+              ui.getEditorText().split("\n").length + 2
+            ),
             nonCapturing: true,
           }),
         },
@@ -288,7 +314,12 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     const context = { editorFocused: isMmrEditorFocused(tui) };
     if (!combos) return active.handle(undefined, context);
     let consumed = false;
-    for (const combo of combos) consumed = active.handle(combo, context) || consumed;
+    for (const combo of combos) {
+      const taken = active.handle(combo, context);
+      consumed = taken || consumed;
+      // Esc took and now waits for its second press: a turn is running.
+      if (taken && formatMmrKeyCombo(combo) === "esc" && active.isPending()) options.onEscapePending?.();
+    }
     return consumed;
   }
 

@@ -55,7 +55,7 @@ function fakeTui({ scrollable = true } = {}, settings = {}) {
   return { tui, calls, editor };
 }
 
-function setup({ settings = {}, idle = true, editorText = "", tuiOptions } = {}) {
+function setup({ settings = {}, idle = true, editorText = "", tuiOptions, hooks = {} } = {}) {
   let time = 0;
   const timers = [];
   const mock = createMockPi({ settings });
@@ -71,6 +71,7 @@ function setup({ settings = {}, idle = true, editorText = "", tuiOptions } = {})
     clearTimer: (timer) => {
       timer.cleared = true;
     },
+    ...hooks,
   });
   keys.start(context.ctx, () => handle.tui);
   return {
@@ -194,6 +195,43 @@ describe("ampi-tui key installation", () => {
     assert.equal(t.send("\x1b"), false, "idle: Esc goes to Pi");
     assert.equal(t.send("\x1b\x1b"), false);
     assert.equal(t.lifecycle.abort, 2);
+  });
+
+  it("tells the prompt box about the first Esc, the pending quit and the interrupt", () => {
+    const events = [];
+    const t = setup({
+      idle: false,
+      hooks: {
+        onEscapePending: () => events.push("esc pending"),
+        onQuitPending: (until) => events.push(`quit until ${until}`),
+        onInterrupt: () => events.push("interrupt"),
+      },
+    });
+    t.send("\x1b");
+    t.send("\x1b");
+    assert.deepEqual(events, ["esc pending", "interrupt"]);
+    assert.equal(t.lifecycle.abort, 1);
+
+    events.length = 0;
+    t.send("\x03");
+    assert.deepEqual(events, ["quit until 1500"], "the hint lasts as long as the chord waits");
+    t.advance(1500);
+    assert.deepEqual(events, ["quit until 1500", "quit until undefined"], "the chord timed out");
+
+    events.length = 0;
+    t.send("\x18");
+    t.send("\x1b");
+    assert.deepEqual(events, [], "the leader is no quit chord, and Esc only cancels it");
+
+    t.state.idle = true;
+    t.send("\x1b");
+    assert.deepEqual(events, [], "idle: the first Esc goes to the prompt box itself");
+  });
+
+  it("places the popup above the prompt box's own height when it reports one", () => {
+    const t = setup({ hooks: { editorHeight: () => 9 } });
+    t.send("\x18");
+    assert.equal(t.overlays[0].options.overlayOptions().offsetY, -9);
   });
 
   it("ignores kitty key releases between the keys of a chord", () => {

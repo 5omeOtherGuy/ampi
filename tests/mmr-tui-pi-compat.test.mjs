@@ -14,6 +14,7 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 let editorCompat;
+let editorHeight;
 let scrollCompat;
 let reservedKeys;
 let terminalInput;
@@ -24,6 +25,7 @@ let slashCommands;
 before(async () => {
   slashCommands = await importSource("extensions/ampi-tui/pi-compat/slash-commands.ts");
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
+  editorHeight = await importSource("extensions/ampi-tui/pi-compat/editor-height.ts");
   scrollCompat = await importSource("extensions/ampi-tui/pi-compat/scroll.ts");
   reservedKeys = await importSource("extensions/ampi-tui/pi-compat/reserved-keys.ts");
   terminalInput = await importSource("extensions/ampi-tui/pi-compat/terminal-input.ts");
@@ -167,6 +169,34 @@ describe("ampi-tui Pi compatibility probes", () => {
         .sort(),
       [...new Set(withArguments)].sort(),
     );
+  });
+
+  it("editor height: Pi's editor shows at most max(5, 30% of the terminal rows) text rows", () => {
+    for (const rows of [10, 24, 44, 60]) {
+      const tui = new TuiMainScreen(new Proxy({ columns: 80, rows }, { get: (t, n) => (n in t ? t[n] : () => {}) }));
+      const editor = new CustomEditor(tui, editorTheme, new KeybindingsManager({}));
+      editor.setText(Array.from({ length: 40 }, (_, index) => `line ${index}`).join("\n"));
+      assert.equal(editor.render(80).length - 2, Math.max(5, Math.floor(rows * 0.3)), `${rows} rows`);
+    }
+  });
+
+  it("editor height: a TUI view with a stand-in terminal height sets the editor's maximum", () => {
+    const tui = new TuiMainScreen(stubTerminal());
+    let renders = 0;
+    tui.requestRender = () => {
+      renders += 1;
+    };
+    const editor = new CustomEditor(tui, editorTheme, new KeybindingsManager({}));
+    editor.setText(Array.from({ length: 40 }, (_, index) => `line ${index}`).join("\n"));
+    for (const maxLines of [5, 6, 8, 13, 14, 20, 33]) {
+      editor.tui = editorHeight.mmrTuiWithEditorMaxLines(tui, maxLines);
+      assert.equal(editor.render(80).length - 2, maxLines, `${maxLines} lines`);
+    }
+    editor.tui = editorHeight.mmrTuiWithEditorMaxLines(tui, 3);
+    assert.equal(editor.render(80).length - 2, editorHeight.MMR_PI_EDITOR_MIN_MAX_LINES, "Pi keeps its floor");
+    editor.tui.requestRender();
+    assert.equal(renders, 1, "the view forwards calls to the real TUI");
+    assert.equal(editorHeight.mmrTuiWithEditorMaxLines(tui, 14), editorHeight.mmrTuiWithEditorMaxLines(tui, 14));
   });
 
   it("scroll: only Pi's fullscreen renderer can scroll the transcript", () => {

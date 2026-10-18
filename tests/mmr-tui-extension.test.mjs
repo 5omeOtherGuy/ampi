@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
+import { KeybindingsManager, stripTerminalSequences, TuiMainScreen } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
@@ -22,6 +23,42 @@ async function chromeOwner() {
   return getMmrChromeOwner();
 }
 
+/** Pi's footer data with a branch that tests can change. */
+function fakeFooterData(branch) {
+  const listeners = new Set();
+  const state = { branch };
+  const data = {
+    getGitBranch: () => state.branch,
+    onBranchChange: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  return { data, listeners, state };
+}
+
+/** A TUI that never starts, with render requests counted. */
+function fakeTui(rows = 24) {
+  const terminal = new Proxy({ columns: 80, rows }, { get: (target, name) => (name in target ? target[name] : () => {}) });
+  const tui = new TuiMainScreen(terminal);
+  tui.renders = 0;
+  tui.requestRender = () => {
+    tui.renders += 1;
+  };
+  return tui;
+}
+
+const editorTheme = {
+  borderColor: (text) => text,
+  selectList: {
+    selectedPrefix: (text) => text,
+    selectedText: (text) => text,
+    description: (text) => text,
+    scrollInfo: (text) => text,
+    noMatch: (text) => text,
+  },
+};
+
 const startEvent = { type: "session_start", reason: "startup" };
 const shutdownEvent = { type: "session_shutdown", reason: "quit" };
 
@@ -40,9 +77,12 @@ describe("ampi-tui extension", () => {
     assert.equal(await chromeOwner(), "ampi-tui");
     assert.equal(headers.length, 1, "the welcome header replaces Pi's");
     assert.equal(footers.length, 1);
-    const footer = footers[0]();
+    const branch = fakeFooterData("main");
+    const footer = footers[0](fakeTui(), undefined, branch.data);
     assert.deepEqual(footer.render(140), []);
     assert.deepEqual(footer.render(80), []);
+    footer.dispose();
+    assert.equal(branch.listeners.size, 0, "the footer stops following the branch when Pi disposes it");
 
     await handlers.get("session_shutdown")(shutdownEvent, ctx);
     assert.equal(await chromeOwner(), undefined);
@@ -60,6 +100,107 @@ describe("ampi-tui extension", () => {
     assert.equal(await chromeOwner(), undefined);
   });
 
+  it("replaces Pi's editor with the prompt box, hides Pi's working row and follows the turn", async () => {
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, footers, editors, workingVisible, entries } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      assert.deepEqual(workingVisible, [false]);
+      assert.equal(editors.length, 1);
+      const tui = fakeTui();
+      const branch = fakeFooterData("main");
+      footers[0](tui, undefined, branch.data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      tui.setFocus(box);
+      const top = () => stripTerminalSequences(box.render(80)[0]);
+      const bottom = () => stripTerminalSequences(box.render(80).at(-1));
+
+      assert.match(bottom(), /^╰─+ \/work\/demo \(main\) ─╯$/);
+      assert.ok(!top().includes("$"), "a fresh session shows no gauge");
+
+      handlers.get("turn_start")({ type: "turn_start", turnIndex: 0, timestamp: 0 }, ctx);
+      assert.match(bottom(), /^╰ ∼ Sending · Enter to steer ─+ \/work\/demo \(main\) ─╯$/);
+      assert.match(top(), / \$···· ─/, "the cost is unknown until the first response");
+      entries.push({ type: "message", message: { role: "assistant", usage: { input: 10, output: 5, cost: { total: 0.0234 } } } });
+      assert.match(top(), / \$0\.02 ─/);
+
+      const renders = tui.renders;
+      branch.state.branch = "feature";
+      for (const listener of branch.listeners) listener();
+      assert.ok(tui.renders > renders, "a branch change redraws");
+      assert.match(bottom(), /\(feature\) ─╯$/);
+
+      handlers.get("agent_settled")({ type: "agent_settled", aborted: false }, ctx);
+      assert.match(bottom(), /^╰─+ \/work\/demo \(feature\) ─╯$/);
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
+  it("clears the prompt on the first Esc of a running turn and shows Cancelling on the second", async () => {
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, footers, editors, terminalInput, state, lifecycle } = createMockExtensionContext({ hasUI: true, idle: false, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const tui = fakeTui();
+      footers[0](tui, undefined, fakeFooterData(undefined).data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      tui.setFocus(box);
+      handlers.get("turn_start")({ type: "turn_start", turnIndex: 0, timestamp: 0 }, ctx);
+      state.editorText = "half a thought";
+      assert.equal(terminalInput.send("\x1b"), true);
+      assert.equal(state.editorText, "", "the first Esc clears the prompt");
+      assert.equal(lifecycle.abort, 0);
+      assert.equal(terminalInput.send("\x1b"), true);
+      assert.equal(lifecycle.abort, 1);
+      assert.match(stripTerminalSequences(box.render(80).at(-1)), /^╰ ∼ Cancelling ─/);
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
+  it("shows the force-quit hint after the first Ctrl+C", async () => {
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, footers, editors, terminalInput } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const tui = fakeTui();
+      footers[0](tui, undefined, fakeFooterData(undefined).data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      tui.setFocus(box);
+      terminalInput.send("\x03");
+      assert.match(stripTerminalSequences(box.render(80).at(-1)), /^╰ ctrl\+c again to force quit ─/);
+      terminalInput.send("x");
+      assert.doesNotMatch(stripTerminalSequences(box.render(80).at(-1)), /force quit/, "another key ends the chord and the hint");
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
+  it("dims the prompt box frame while the command palette is open", async () => {
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, footers, editors, terminalInput, overlays } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const tui = fakeTui();
+      footers[0](tui, undefined, fakeFooterData(undefined).data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      tui.setFocus(box);
+      const dim = () => box.render(80)[0].startsWith("\x1b[2m╭");
+      assert.equal(dim(), false);
+      assert.equal(terminalInput.send("\x0f"), true);
+      const palette = overlays.at(-1);
+      assert.equal(palette.options.overlayOptions.anchor, "center", "Ctrl+O opened the palette");
+      assert.equal(dim(), true, "the frame dims while the palette is open");
+      palette.component.handleInput("\x1b");
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(palette.closed, true);
+      assert.equal(dim(), false, "closing the palette restores the frame");
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+  });
+
   it("does nothing at all when disabled", async () => {
     const { handlers } = await loadExtension({ enabled: false });
     assert.deepEqual([...handlers.keys()], []);
@@ -72,12 +213,14 @@ describe("ampi-tui extension", () => {
   ]) {
     it(`leaves ${label} sessions untouched`, async () => {
       const { handlers } = await loadExtension({ enabled: true });
-      const { ctx, footers, headers, statuses, notifications } = createMockExtensionContext(options);
+      const { ctx, footers, headers, statuses, notifications, editors, workingVisible } = createMockExtensionContext(options);
 
       await handlers.get("session_start")(startEvent, ctx);
 
       assert.equal(footers.length, 0);
       assert.equal(headers.length, 0);
+      assert.equal(editors.length, 0, "Pi's editor stays");
+      assert.equal(workingVisible.length, 0);
       assert.equal(statuses.length, 0);
       assert.equal(notifications.length, 0);
       assert.equal(await chromeOwner(), undefined);

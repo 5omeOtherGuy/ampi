@@ -24,6 +24,8 @@ export interface MmrTuiCommandHost {
   readonly pi: Pick<ExtensionAPI, "getCommands" | "getSettings" | "sendUserMessage">;
   /** Open the command palette. */
   openPalette(ctx: ExtensionContext): void;
+  /** Called when `thread.interrupt` stops the running turn. */
+  onInterrupt?(): void;
 }
 
 /** Commands that open the palette; the palette does not list them. */
@@ -128,7 +130,10 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       description: "Stop the running turn",
       defaultKey: "esc esc",
       availability: (ctx) => (ctx.isIdle() ? { state: "unavailable", reason: "nothing is running" } : AVAILABLE),
-      run: (ctx) => ctx.abort(),
+      run: (ctx) => {
+        host.onInterrupt?.();
+        ctx.abort();
+      },
     },
     {
       id: "ampi.quit",

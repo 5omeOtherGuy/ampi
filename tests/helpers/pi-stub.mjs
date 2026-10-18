@@ -40,6 +40,17 @@
  * surfaces the extension exposes to Pi (e.g. the description+type of a
  * registered CLI flag).
  */
+/** Call each handler in turn; once one returns a promise, chain the rest after it. */
+function runHandlers(list, args) {
+  for (const [index, handler] of list.entries()) {
+    const result = handler(...args);
+    if (typeof result?.then === "function") {
+      return list.slice(index + 1).reduce((chain, next) => chain.then(() => next(...args)), result);
+    }
+  }
+  return undefined;
+}
+
 export function createMockPi(options = {}) {
   const initialActiveTools = options.activeTools ?? ["read", "bash"];
   const rawAllTools = options.allTools ?? [...initialActiveTools];
@@ -51,6 +62,7 @@ export function createMockPi(options = {}) {
   const commands = new Map();
   const shortcuts = new Map();
   const handlers = new Map();
+  const handlerLists = new Map();
   // Records the raw `opts` passed to `registerFlag(name, opts)` so tests
   // can assert on declared metadata (description, type, default) without
   // round-tripping through the resolved `getFlag` value.
@@ -139,7 +151,14 @@ export function createMockPi(options = {}) {
       }
       shortcuts.set(key, definition);
     },
-    on: (name, handler) => handlers.set(name, handler),
+    on: (name, handler) => {
+      // Pi runs every handler for an event in registration order; with more
+      // than one, `handlers.get(name)` does the same, awaiting async ones.
+      const list = handlerLists.get(name) ?? [];
+      list.push(handler);
+      handlerLists.set(name, list);
+      handlers.set(name, list.length === 1 ? handler : (...args) => runHandlers(list, args));
+    },
     events: {
       emit: (name, data) => emits.push({ name, data }),
       on: () => () => {},
@@ -176,18 +195,20 @@ export function createMockPi(options = {}) {
  *  - `getContextUsage` (default returns `undefined`): hook for token-usage info.
  *  - `entries` (default `[]`): mutable list returned by `sessionManager.getEntries`.
  *  - `idle` (default `true`): what `isIdle()` returns; change it later through `state.idle`.
- *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`.
+ *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through
+ *   `state.editorText` (`ui.setEditorText` writes it too).
+ *  - `state.pendingMessages` (default `false`): what `hasPendingMessages()` returns.
  *  - `themeName` (default `undefined`): `ctx.ui.theme.name`, the active theme.
  *  - `themes` (default `{}`): theme objects by name, returned by `ctx.ui.getTheme`.
- *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`;
- *    `ui.setEditorText` updates it.
  *  - `toolsExpanded` (default `false`): what `ui.getToolsExpanded()` returns; `ui.setToolsExpanded` updates `state.toolsExpanded`.
  *
  * Returns the ctx and the recorders it populates:
  *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
  *   thinkingLabels, selectCalls, entries, compactCalls, terminalInput, overlays,
- *   lifecycle, state }`. `terminalInput.send(data)` feeds the listeners registered
- *   with `ui.onTerminalInput` and returns true when one consumed it.
+ *   editors, workingVisible, lifecycle, state }`.
+ *   `editors` records `ui.setEditorComponent` factories, `workingVisible` the
+ *   values passed to `ui.setWorkingVisible`. `terminalInput.send(data)` feeds the
+ *   listeners registered with `ui.onTerminalInput` and returns true when one consumed it.
  *   `overlays` records `ui.custom` calls as `{ options, component, theme, closed }`;
  *   `lifecycle` counts `abort()` and `shutdown()` calls.
  *   `widgets` maps each `setWidget` key to `{ content, options }`.
@@ -217,6 +238,7 @@ export function createMockExtensionContext(options = {}) {
     idle: options.idle ?? true,
     editorText: options.editorText ?? "",
     toolsExpanded: options.toolsExpanded ?? false,
+    pendingMessages: false,
   };
   const lifecycle = { abort: 0, shutdown: 0 };
   const inputListeners = new Set();
@@ -230,6 +252,8 @@ export function createMockExtensionContext(options = {}) {
     },
   };
   const overlays = [];
+  const editors = [];
+  const workingVisible = [];
   const plainTheme = { fg: (_name, value) => value, bold: (value) => value, style: (value) => value, colors: {} };
 
   const ctx = {
@@ -241,6 +265,10 @@ export function createMockExtensionContext(options = {}) {
     model: options.model,
     sessionManager: {
       getEntries: () => entries,
+      // The transcript group store rebuilds from the context entries at session
+      // start; only entries shaped like Pi messages take part, as Pi's converter
+      // reads `message.role`.
+      buildContextEntries: () => entries.filter((entry) => entry?.type === "message" && typeof entry?.message?.role === "string"),
       getCwd: () => cwd,
       getSessionId: () => options.sessionId,
       getSessionName: () => options.sessionName,
@@ -255,6 +283,7 @@ export function createMockExtensionContext(options = {}) {
     },
     getContextUsage,
     isIdle: () => state.idle,
+    hasPendingMessages: () => state.pendingMessages,
     abort: () => {
       lifecycle.abort += 1;
     },
@@ -278,6 +307,8 @@ export function createMockExtensionContext(options = {}) {
       setToolsExpanded: (expanded) => {
         state.toolsExpanded = expanded;
       },
+      setEditorComponent: (factory) => editors.push(factory),
+      setWorkingVisible: (visible) => workingVisible.push(visible),
       custom: (factory, customOptions) =>
         new Promise((resolve) => {
           const record = { options: customOptions, theme: plainTheme, closed: false };
@@ -320,6 +351,8 @@ export function createMockExtensionContext(options = {}) {
     compactCalls,
     terminalInput,
     overlays,
+    editors,
+    workingVisible,
     lifecycle,
     state,
   };
