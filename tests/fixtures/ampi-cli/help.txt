@@ -15,10 +15,18 @@ Options:
   -m, --mode <mode>
       Start in an ampi mode: low, medium, high, ultra or free (rush, smart, deep and fable are
       accepted as aliases). --mode text, json and rpc keep Pi's meaning (output format).
+  -x, --execute
+      Run the message once without the terminal UI, print only the final assistant message
+      and exit. The message is the argument, stdin, or the argument, a newline and stdin.
+      Implied when stdin or stdout is not a terminal.
+  --timings
+      In execute mode, print the startup, turn and total durations to stderr
+  --no-archive-after-execute
+      Keep the session out of the archive after execute mode (it is archived by default)
   --title <title>
-      Accepted for compatibility; not applied yet.
+      Name the session (Pi's --name)
   -l, --label <label>
-      Accepted for compatibility; not applied yet. Repeat the flag for several labels.
+      Add a label to the session in ampi's thread index. Repeat the flag for several labels.
   -h, --help
       Print this help and exit
   -V, -v, --version
@@ -29,6 +37,9 @@ Options:
       Hand everything after it to Pi as the message, without reading ampi options
 
   Every other option and argument goes to Pi unchanged, for example --model, -c, -r or -p.
+
+Exit status in execute mode: 0 on success, 1 when the agent or Pi fails, 2 on a usage
+error such as a missing message.
 
 Environment variables:
 
@@ -50,6 +61,14 @@ Open a session in high mode:
 Open a session and send a first message:
 
   $ ampi "explain how the build scripts fit together"
+
+Run one message and print the answer:
+
+  $ ampi -x "list the npm scripts and what they do"
+
+Send a diff with a request, and save the answer:
+
+  $ git diff | ampi -x "review this change" > review.md
 
 Pick up the latest session in this directory:
 

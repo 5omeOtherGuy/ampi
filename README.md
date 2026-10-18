@@ -51,6 +51,7 @@ pi install git:github.com/5omeOtherGuy/ampi
 ```bash
 npm i -g @skippermissions/ampi-cli
 ampi -m high          # same session as: pi -e npm:@skippermissions/ampi --ampi-mode high
+git diff | ampi -x "review this change"   # one run, only the final answer on stdout
 ampi --help
 ```
 

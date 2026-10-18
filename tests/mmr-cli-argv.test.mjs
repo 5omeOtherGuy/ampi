@@ -10,7 +10,6 @@ describe("ampi argv router: starting Pi", () => {
     const route = routeAmpiArgv([]);
     assert.equal(route.command, "pi");
     assert.deepEqual(route.piArgs, []);
-    assert.deepEqual(route.notices, []);
   });
 
   it("translates every spelling of the agent mode to --ampi-mode", () => {
@@ -63,15 +62,23 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(route.piArgs, ["--ampi-mode", "low", "--", "-m", "is", "--help", "text"]);
   });
 
-  it("accepts --title and repeated -l/--label, keeps them, and tells the user they are ignored", () => {
+  it("names the session with --title through Pi's --name and keeps repeated -l/--label for the thread index", () => {
     const route = routeAmpiArgv(["--title", "Release notes", "-l", "docs", "--label", "release", "go"]);
     assert.equal(route.command, "pi");
-    assert.deepEqual(route.piArgs, ["go"]);
+    assert.deepEqual(route.piArgs, ["--name", "Release notes", "go"]);
     assert.equal(route.options.title, "Release notes");
     assert.deepEqual(route.options.labels, ["docs", "release"]);
-    assert.equal(route.notices.length, 2);
-    assert.match(route.notices[0], /--title .*ignored/);
-    assert.match(route.notices[1], /--label .*ignored/);
+  });
+
+  it("reads -x/--execute, --timings and --no-archive-after-execute and keeps them away from Pi", () => {
+    const plain = routeAmpiArgv(["fix", "it"]).options;
+    assert.deepEqual([plain.execute, plain.timings, plain.archive], [false, false, true]);
+    for (const flag of ["-x", "--execute"]) {
+      const route = routeAmpiArgv([flag, "--timings", "--no-archive-after-execute", "-m", "high", "fix it"]);
+      assert.equal(route.command, "pi", flag);
+      assert.deepEqual(route.piArgs, ["--ampi-mode", "high", "fix it"], flag);
+      assert.deepEqual([route.options.execute, route.options.timings, route.options.archive], [true, true, false], flag);
+    }
   });
 
   it("maps --pi-help to Pi's own --help", () => {

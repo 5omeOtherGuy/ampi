@@ -7,15 +7,17 @@ import { parseArgs } from "node:util";
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
- * @property {string} [title] `--title`, accepted and not applied yet.
- * @property {string[]} labels `-l`/`--label` values, accepted and not applied yet.
+ * @property {string} [title] `--title`, forwarded as Pi's `--name`.
+ * @property {string[]} labels `-l`/`--label` values, stored in the thread index once the session starts.
+ * @property {boolean} execute `-x`/`--execute`: run one prompt and print the final assistant message.
+ * @property {boolean} timings `--timings`: report durations on stderr (execute mode).
+ * @property {boolean} archive Archive the session after execute mode; `--no-archive-after-execute` turns it off.
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
  *   ampi, run one of Pi's own commands, or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {AmpiOptions} options ampi options read from the command line.
- * @property {string[]} notices One-line messages for stderr before Pi starts.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
 
@@ -29,6 +31,9 @@ const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
   title: { type: "string" },
   label: { type: "string", short: "l", multiple: true },
+  execute: { type: "boolean", short: "x" },
+  timings: { type: "boolean" },
+  "no-archive-after-execute": { type: "boolean" },
   "settings-file": { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
@@ -78,10 +83,10 @@ const SETTINGS_FILE_ERROR =
 export function routeAmpiArgv(argv) {
   const args = [...argv];
   /** @type {AmpiOptions} */
-  const options = { labels: [] };
-  if (args[0] === "help") return { command: "help", piArgs: [], options, notices: [] };
-  if (args[0] === "version") return { command: "version", piArgs: [], options, notices: [] };
-  if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options, notices: [] };
+  const options = { labels: [], execute: false, timings: false, archive: true };
+  if (args[0] === "help") return { command: "help", piArgs: [], options };
+  if (args[0] === "version") return { command: "version", piArgs: [], options };
+  if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options };
 
   const { tokens } = parseArgs({
     args,
@@ -106,8 +111,6 @@ export function routeAmpiArgv(argv) {
     passed.add(index);
     piArgs.push(args[index]);
   };
-  /** @type {Set<string>} */
-  const ignored = new Set();
   let help = false;
   let version = false;
   /** @type {string | undefined} */
@@ -156,23 +159,33 @@ export function routeAmpiArgv(argv) {
         }
         break;
       case "title":
-        if (value === undefined) error ??= "--title needs a value.";
-        else options.title = value;
-        ignored.add("--title");
+        if (value === undefined) {
+          error ??= "--title needs a value.";
+        } else {
+          options.title = value;
+          piArgs.push("--name", value);
+        }
         break;
       case "label":
         if (value === undefined) error ??= `${token.rawName} needs a value.`;
         else options.labels.push(value);
-        ignored.add("--label");
+        break;
+      case "execute":
+        options.execute = true;
+        break;
+      case "timings":
+        options.timings = true;
+        break;
+      case "no-archive-after-execute":
+        options.archive = false;
         break;
     }
   }
 
-  const notices = [...ignored].map((flag) => `ampi: ${flag} is accepted but not applied yet; it was ignored.`);
-  if (error !== undefined) return { command: "error", piArgs: [], options, notices: [], error };
-  if (help) return { command: "help", piArgs: [], options, notices: [] };
-  if (version) return { command: "version", piArgs: [], options, notices: [] };
-  return { command: "pi", piArgs, options, notices };
+  if (error !== undefined) return { command: "error", piArgs: [], options, error };
+  if (help) return { command: "help", piArgs: [], options };
+  if (version) return { command: "version", piArgs: [], options };
+  return { command: "pi", piArgs, options };
 }
 
 /**
@@ -198,10 +211,18 @@ Options:
   -m, --mode <mode>
       Start in an ampi mode: low, medium, high, ultra or free (rush, smart, deep and fable are
       accepted as aliases). --mode text, json and rpc keep Pi's meaning (output format).
+  -x, --execute
+      Run the message once without the terminal UI, print only the final assistant message
+      and exit. The message is the argument, stdin, or the argument, a newline and stdin.
+      Implied when stdin or stdout is not a terminal.
+  --timings
+      In execute mode, print the startup, turn and total durations to stderr
+  --no-archive-after-execute
+      Keep the session out of the archive after execute mode (it is archived by default)
   --title <title>
-      Accepted for compatibility; not applied yet.
+      Name the session (Pi's --name)
   -l, --label <label>
-      Accepted for compatibility; not applied yet. Repeat the flag for several labels.
+      Add a label to the session in ampi's thread index. Repeat the flag for several labels.
   -h, --help
       Print this help and exit
   -V, -v, --version
@@ -212,6 +233,9 @@ Options:
       Hand everything after it to Pi as the message, without reading ampi options
 
   Every other option and argument goes to Pi unchanged, for example --model, -c, -r or -p.
+
+Exit status in execute mode: 0 on success, 1 when the agent or Pi fails, 2 on a usage
+error such as a missing message.
 
 Environment variables:
 
@@ -233,6 +257,14 @@ Open a session in high mode:
 Open a session and send a first message:
 
   $ ampi "explain how the build scripts fit together"
+
+Run one message and print the answer:
+
+  $ ampi -x "list the npm scripts and what they do"
+
+Send a diff with a request, and save the answer:
+
+  $ git diff | ampi -x "review this change" > review.md
 
 Pick up the latest session in this directory:
 
