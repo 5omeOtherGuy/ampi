@@ -80,6 +80,8 @@ export interface MmrPromptQueue {
   stop(): void;
   /** Send the next queued follow-up as a steering message now. False when there is none to steer. */
   steerNext(): boolean;
+  /** The palette commands `start` registers. */
+  readonly commands: readonly MmrCommandDefinition[];
 }
 
 const AVAILABLE: MmrCommandAvailability = { state: "available" };
@@ -202,5 +204,6 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
       ctx = undefined;
     },
     steerNext,
+    commands,
   };
 }

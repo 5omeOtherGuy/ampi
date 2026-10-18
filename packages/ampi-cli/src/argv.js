@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "pi" | "pi-command" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "config" | "pi" | "pi-command" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -20,6 +20,7 @@ import { parseArgs } from "node:util";
  *   ampi, run one of Pi's own commands, or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads` or `last` on, when `command` is `"threads"`.
+ * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
@@ -29,6 +30,9 @@ const PI_OUTPUT_MODES = new Set(["text", "json", "rpc"]);
 
 /** Pi's own commands. Pi recognises them only as the first argument and rejects options it does not know. */
 const PI_COMMANDS = new Set(["install", "remove", "uninstall", "update", "list", "config", "auth", "mcp"]);
+
+/** The `config` subcommands ampi runs itself. */
+const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
 
 const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
@@ -92,6 +96,10 @@ export function routeAmpiArgv(argv) {
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
   if (args[0] === "threads" || args[0] === "last") return { command: "threads", piArgs: [], options, threadArgs: args };
+  // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
+  if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
+    return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
+  }
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options };
 
   const { tokens } = parseArgs({
@@ -218,9 +226,11 @@ Commands:
   threads [command]             List, open, print, rename, archive, label or delete sessions;
                                 ampi threads --help lists the commands
   last                          Open the most recent session of this directory that is not archived
+  config keymap                 Print every command id with its keys as JSONC
+  config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
 
   Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
-  unchanged, without ampi's options.
+  unchanged, without ampi's options; config keymap and config edit are ampi's.
 
 Options:
 

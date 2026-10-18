@@ -107,6 +107,8 @@ export interface MmrMessageNavigation {
   readonly isSelected: MmrUserMessageSelected;
   /** Esc: drop the selection and return to the end of the transcript. True when there was one. */
   clear(): boolean;
+  /** The palette commands `start` registers. */
+  readonly commands: readonly MmrCommandDefinition[];
 }
 
 interface Selection {
@@ -281,5 +283,6 @@ export function createMmrMessageNavigation(
       return number === selection.number && text === selection.shown;
     },
     clear,
+    commands,
   };
 }

@@ -143,7 +143,7 @@ While a turn runs, `prompt queue message` in the palette queues the prompt to ru
 
 The terminal title reads `<title> - ampi - <cwd>`, with the wave glyph in front while a turn runs and `! <status>:` when the turn needs you. When a turn finishes or waits for an approval, ampi sends a desktop notification through the terminal (a bell over SSH or with `AMPI_FORCE_BEL=1`). After Ctrl+C Ctrl+C, ampi's mark, the session title and the working directory stay in the scrollback above Pi's resume line.
 
-Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
+Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`. With the `ampi` command, `ampi config keymap` prints the keymap in effect from the shell and `ampi config edit` opens Pi's settings file:
 
 ```json
 { "ampi": { "keymap": { "leader": "alt+x", "ampi.quit": null } } }

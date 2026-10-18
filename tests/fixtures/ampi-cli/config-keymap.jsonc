@@ -1,0 +1,38 @@
+{
+  "leader": "ctrl+b",
+  "ampi.changelog": null, // Show what changed in recent ampi releases
+  "ampi.config": null, // Pick the models for modes and subagents, or set up ampi-web
+  "ampi.help": "f1", // List every key and command with the key it is bound to
+  "ampi.keymapJson": null, // Show the keymap in effect as JSONC, to copy into your settings
+  "ampi.palette": "ctrl+o", // Open the command palette
+  "ampi.quit": "ctrl+c ctrl+c", // Quit
+  "ampi.showVersion": "ctrl+o", // Show the ampi and Pi versions
+  "ampi.status": null, // Show the current mode, model and tools, as /ampi-status does
+  "mode.toggle": "ctrl+s", // Show the mode dial; each further press turns it to the next mode
+  "mode.use.free": null, // Switch to the free mode
+  "mode.use.high": null, // Switch to the high mode
+  "mode.use.low": null, // Switch to the low mode
+  "mode.use.medium": null, // Switch to the medium mode
+  "mode.use.ultra": null, // Switch to the ultra mode
+  "prompt.dequeue": null, // Take everything that waits to run back into the prompt
+  "prompt.history": "ctrl+r", // Pick a prompt you sent before and put it into the prompt
+  "prompt.openInEditor": "ctrl+g", // Edit the prompt in your external editor
+  "prompt.openPalette": "/", // Open the command palette when / is typed into an empty prompt
+  "prompt.queue": null, // Run the prompt as a follow-up message after the current turn instead of steering it
+  "prompt.steerQueuedMessage": null, // Send the next waiting follow-up now, to steer the running turn
+  "prompt.toggleHelp": "?", // Show or hide the shortcuts help in the prompt box
+  "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
+  "thread.archiveAndQuit": "ctrl+c ctrl+e", // Archive and quit
+  "thread.editSelectedMessage": "e", // Put the selected message into the prompt and continue the thread from before it, on a new branch
+  "thread.interrupt": "esc esc", // Stop the running turn
+  "thread.new": "<leader>n", // Start a new session, as /new does
+  "thread.scrollToBottom": "end", // Jump to the end of the transcript and follow new output
+  "thread.scrollToTop": "home", // Jump to the start of the transcript
+  "thread.selectNextMessage": "tab", // Select the next user message; past the newest, clear the selection
+  "thread.selectPreviousMessage": "shift+tab", // Select the previous user message of the thread; e then edits it
+  "thread.switch": ["ctrl+t", "<leader>t"], // Pick another session and switch to it
+  "thread.switchToNext": null, // Go forward again after switching to the previous session
+  "thread.switchToPrevious": null, // Go back to the session you switched away from
+  "thread.toggleDetails": null, // Expand or collapse tool output and thinking together
+  "thread.unarchive": null // Take this session out of the archive
+}

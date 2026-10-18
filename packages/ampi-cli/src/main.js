@@ -189,6 +189,16 @@ export async function runAmpi(argv) {
       return runPiCommand(route.piArgs);
     case "threads":
       return runThreads(route.threadArgs ?? []);
+    case "config": {
+      const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
+      return runConfigCommand(route.configArgs ?? [], {
+        pi,
+        cwd: process.cwd(),
+        ampi: locateAmpiPackage(CLI_ROOT),
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
   }
   return startPi(route);
 }

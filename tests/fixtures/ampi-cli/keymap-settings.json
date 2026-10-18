@@ -1,0 +1,15 @@
+{
+  "defaultMode": "medium",
+  "ampi": {
+    "keymap": {
+      "leader": "ctrl+b",
+      "thread.new": "<leader>n",
+      "thread.switch": ["ctrl+t", "<leader> t"],
+      "thread.toggleDetails": null,
+      "ampi.help": "F1",
+      "ampi.quit": "ctrl+q nope+x",
+      "ampi.showVersion": "ctrl+o",
+      "puck.open": "<leader>p"
+    }
+  }
+}

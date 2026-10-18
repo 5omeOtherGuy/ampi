@@ -23,6 +23,8 @@ ampi "fix the failing test in parser.test.ts"   # start with a first message
 ampi -x "list the npm scripts"                  # run one message and print the answer
 ampi last                # continue the most recent session that is not archived
 ampi threads             # list this directory's sessions
+ampi config keymap       # every command id with its keys, as JSONC
+ampi config edit         # open Pi's settings file in your editor
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
@@ -134,6 +136,30 @@ ID                                    Title                    Updated  Messages
 - **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, `2` on a usage error. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive` and `label` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
+## Keymap and settings
+
+`ampi config keymap` prints the keymap of the terminal UI as JSONC: the leader key first, then every command id in alphabetical order with its key, an array of keys or `null`, and what the command does as a comment. It is the keymap in effect in the current directory: ampi's default keys with the overrides under `ampi.keymap` in Pi's user settings and, once Pi trusts the project, the project's `.pi/settings.json`. Overrides that do not apply (an unknown id, a key that does not parse, two commands on one key) are reported on stderr, as the terminal UI warns about them.
+
+```bash
+ampi config keymap
+```
+
+```text
+{
+  "leader": "ctrl+x",
+  "ampi.changelog": null, // Show what changed in recent ampi releases
+  …
+  "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
+  …
+}
+```
+
+The output is valid JSON once the `//` comments are removed. Copy the entries you want to change under `ampi.keymap` in Pi's settings, with a key string, an array of key strings, or `null` to unbind, and run `/reload` in a running session; the key syntax is described in [ampi-tui's keymap section](../../src/extensions/ampi-tui/README.md#keymap). The list holds the commands of ampi's own extensions; commands that other packages register at run time appear only in the terminal UI's Help & Keymap screen.
+
+`ampi config edit` opens Pi's user settings file (`settings.json` in Pi's configuration directory) in your editor; `--workspace` opens the project's `.pi/settings.json` instead (`--global` names the default). The editor is the one Pi opens the prompt in: the `externalEditor` setting, else `$VISUAL`, else `$EDITOR`, else `nano` (`notepad` on Windows). A missing settings directory is created, so the editor can save the file.
+
+Exit status: `0` on success, `1` when the keymap cannot be loaded or the editor exits with an error, `2` on a usage error. Every other `ampi config` command line, such as `ampi config` alone, runs Pi's own `config` command.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -151,7 +177,7 @@ Project settings count even before you trust the project: once you grant trust, 
 
 ### Pi's own commands
 
-When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`), the command runs Pi's own executable with the command line untouched, and ampi is not added.
+When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)).
 
 ## Compatibility
 

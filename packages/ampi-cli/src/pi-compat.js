@@ -6,6 +6,7 @@
 // those in tests/mmr-cli-stream-json.test.mjs for capturePiJsonOutput.
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * @typedef {object} PiSessionInfo The parts of Pi's `SessionInfo` the `ampi` command reads.
@@ -177,4 +178,80 @@ export function capturePiJsonOutput(convert) {
       stdout.write = original;
     },
   };
+}
+
+/**
+ * Pi's settings for `cwd`, with the project's settings read only when Pi would
+ * read them: the project has nothing that needs trust, or it is trusted.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ */
+function piSettingsManager(pi, cwd) {
+  const agentDir = pi.getAgentDir();
+  const projectTrusted = !pi.hasTrustRequiringProjectResources(cwd) || new pi.ProjectTrustStore(agentDir).get(cwd) === true;
+  return pi.SettingsManager.create(cwd, agentDir, { projectTrusted });
+}
+
+/**
+ * The settings Pi runs with in `cwd`: user and project settings merged, as an
+ * extension's `pi.getSettings()` returns them.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {unknown}
+ */
+export function readPiSettings(pi, cwd) {
+  return piSettingsManager(pi, cwd).getSettings();
+}
+
+/**
+ * The command Pi opens its external editor with: the `externalEditor`
+ * setting, else `$VISUAL`, else `$EDITOR`, else Pi's platform default.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {string}
+ */
+export function piExternalEditorCommand(pi, cwd) {
+  return piSettingsManager(pi, cwd).getExternalEditorCommand();
+}
+
+/**
+ * Pi's settings file: the user settings in Pi's configuration directory, or
+ * the project's in `cwd`.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @param {"user" | "project"} scope
+ * @returns {string}
+ */
+export function piSettingsPath(pi, cwd, scope) {
+  return scope === "project" ? path.join(cwd, pi.CONFIG_DIR_NAME, "settings.json") : path.join(pi.getAgentDir(), "settings.json");
+}
+
+/**
+ * Load one TypeScript file through Pi's extension loader, the only way to
+ * import ampi's TypeScript, and return what its factory emits on `channel` of
+ * Pi's event bus. Pi also looks for extension directories under the working
+ * and configuration directories it is given; this module's directory has
+ * none, so only `file` loads.
+ *
+ * @param {any} pi
+ * @param {string} file
+ * @param {string} channel
+ * @returns {Promise<unknown>}
+ */
+export async function loadThroughPi(pi, file, channel) {
+  const events = pi.createEventBus();
+  /** @type {unknown} */
+  let received;
+  events.on(channel, (/** @type {unknown} */ data) => {
+    received = data;
+  });
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  /** @type {{ errors: { error: string }[] }} */
+  const result = await pi.discoverAndLoadExtensions([file], here, here, events);
+  if (result.errors.length > 0) throw new Error(result.errors[0].error);
+  return received;
 }
