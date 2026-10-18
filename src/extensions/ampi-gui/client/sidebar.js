@@ -180,8 +180,9 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
   for (const button of toggles) button.addEventListener("click", () => toggle({ focus: narrow.matches }));
   scrim.addEventListener("click", () => setOpen(false, { focus: true }));
   narrow.addEventListener("change", () => setOpen(narrow.matches ? false : readStored("ampi-gui-sidebar-open") !== "false"));
-  sidebar.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && narrow.matches && open) {
+  // On the document, so Escape closes the sheet even when focus fell to the page body.
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.defaultPrevented && narrow.matches && open) {
       event.preventDefault();
       setOpen(false, { focus: true });
     }

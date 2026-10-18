@@ -409,6 +409,7 @@ function showLive() {
   if (!viewing) return;
   viewing = null;
   app.dataset.view = "live";
+  composer.setEnabled(true);
   $("readonly-banner").hidden = true;
   transcript.replaceChildren();
   for (const item of items.values()) drawItem(item);
@@ -433,6 +434,7 @@ async function showSession(id) {
   }
   viewing = view;
   app.dataset.view = "readonly";
+  composer.setEnabled(false);
   $("readonly-text").textContent = view.row.elsewhere
     ? "Another terminal runs this session: continue it there."
     : "This session is read-only here: open it in the terminal to continue.";

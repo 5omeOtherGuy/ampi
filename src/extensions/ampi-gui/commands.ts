@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getMmrCommand } from "../ampi-core/command-registry.js";
 import { getMmrPromptQueue, removeMmrQueuedPrompt } from "../ampi-core/prompt-queue.js";
 import { getMmrModeState } from "../ampi-core/runtime.js";
+import { findLatestPersistedModeState } from "../ampi-core/state.js";
 import { getMmrThreadIndex } from "../ampi-core/thread-index.js";
 import { getMmrThreadReports } from "../ampi-core/thread-reports.js";
 import type { MmrGuiBridge } from "./bridge.js";
@@ -97,7 +98,12 @@ export function createMmrGuiCommands(
       const info = await sessions.find(target.id);
       if (!info) return unknownSession;
       const { header, branch } = await sessions.read(info);
-      return ok({ markdown: reports.markdown([...(header ? [header] : []), ...branch], { title: info.name }) });
+      return ok({
+        markdown: reports.markdown([...(header ? [header] : []), ...branch], {
+          title: info.name,
+          mode: findLatestPersistedModeState(branch)?.mode,
+        }),
+      });
     },
     async archive(body) {
       const { archived } = record(body);

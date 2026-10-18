@@ -30,11 +30,12 @@ let reportsRegistration;
 const renamed = [];
 const NOW = "2026-10-18T12:00:00.000Z";
 
-/** A small saved session file: a header, a prompt and a reply. */
+/** A small saved session file: a header, a prompt, a reply and the mode it ran in. */
 const SAVED_FILE = [
   { type: "session", version: 3, id: "s-saved", timestamp: "2026-10-18T09:00:00.000Z", cwd: "/work/lib" },
   { type: "message", id: "e1", parentId: null, timestamp: "2026-10-18T09:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "Saved prompt" }], timestamp: 1 } },
   { type: "message", id: "e2", parentId: "e1", timestamp: "2026-10-18T09:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Saved reply" }], timestamp: 2, stopReason: "stop" } },
+  { type: "custom", id: "e3", parentId: "e2", timestamp: "2026-10-18T09:00:03.000Z", customType: "ampi-core.mode-state", data: { version: 1, mode: "high", model: "faux/faux-1" } },
 ]
   .map((entry) => JSON.stringify(entry))
   .join("\n");
@@ -66,12 +67,16 @@ const fakeIndex = {
   },
 };
 
-/** Stand-in for ampi-threads' formatter: the title and every entry's text. */
+/** Stand-in for ampi-threads' formatter: the title, the mode when given and every entry's text. */
 const fakeReports = {
   cost: () => ({}),
   analyzeContext: () => ({}),
   markdown: (entries, options = {}) =>
-    [`# ${options.title ?? "Untitled"}`, ...entries.map((entry) => entry.message?.content?.[0]?.text ?? `(${entry.type})`)].join("\n"),
+    [
+      `# ${options.title ?? "Untitled"}`,
+      ...(options.mode ? [`Mode: ${options.mode}`] : []),
+      ...entries.map((entry) => entry.message?.content?.[0]?.text ?? `(${entry.type})`),
+    ].join("\n"),
 };
 
 function send(options) {
@@ -469,7 +474,7 @@ describe("ampi-gui server: More Actions", () => {
     assert.equal(live.status, 200);
     assert.equal(live.json.markdown, "# Server test\n(session)");
     const saved = await command("markdown", { sessionId: "s-saved" });
-    assert.equal(saved.json.markdown, "# Untitled\n(session)\nSaved prompt\nSaved reply");
+    assert.equal(saved.json.markdown, "# Untitled\nMode: high\n(session)\nSaved prompt\nSaved reply\n(custom)", "the mode the saved session last ran in");
     assert.equal((await command("markdown", { sessionId: "unknown" })).status, 404);
     assert.equal((await command("markdown", {})).status, 400);
     reportsRegistration();
