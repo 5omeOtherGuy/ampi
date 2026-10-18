@@ -388,6 +388,11 @@ function extractMmrCoreSettings(
     else context.warnings.push(`Ignoring ${rootKey}.modeLock in ${context.filePath}: expected true or false.`);
   }
 
+  if ("subtreeGuidance" in raw) {
+    if (typeof raw.subtreeGuidance === "boolean") settings.subtreeGuidance = raw.subtreeGuidance;
+    else context.warnings.push(`Ignoring ${rootKey}.subtreeGuidance in ${context.filePath}: expected true or false.`);
+  }
+
   return settings;
 }
 

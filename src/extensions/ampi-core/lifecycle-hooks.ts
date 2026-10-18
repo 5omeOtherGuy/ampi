@@ -24,6 +24,7 @@ import { isMmrSkillsDisabledByCli, resolveMmrSkillPaths } from "./skill-paths.js
 import { applyMmrSpeedToPayload, changeMmrSpeed, getMmrSpeed, MMR_FAST_FLAG, registerMmrToggleFastCommand, resolveMmrSessionSpeed } from "./speed.js";
 import { applyMmrSubagentProfile } from "./subagent-activation.js";
 import { updateMmrStatus } from "./status.js";
+import { type MmrSubtreeGuidanceHooks, registerMmrSubtreeGuidanceHooks } from "./subtree-guidance-hooks.js";
 import { MMR_TOOLS_DISABLE_SETTING, type MmrToolDisableMatcher } from "./tool-disable.js";
 import type { MmrModelPreference, MmrSessionIdentity } from "./types.js";
 import { notifyWarnings, type MmrModeController } from "./mode-controller.js";
@@ -40,13 +41,18 @@ function readPreferredStringFlag(pi: ExtensionAPI, preferred: string, legacy: st
  * order Pi observes: `session_start`, `before_provider_request`,
  * `before_agent_start`, `tool_call`, `model_select`, `input`,
  * `thinking_level_select`, `agent_settled`, `resources_discover`. Registration order is load-bearing and pinned by the
- * registration-order characterization test. Hooks read live controller state
+ * registration-order characterization test. The subfolder guidance hooks
+ * (`subtree-guidance-hooks.ts`) follow them; `before_agent_start` feeds them
+ * the context files Pi passed. Hooks read live controller state
  * via `controller.getActivePolicy()` / `controller.isApplyingMmrMode()` (never
  * a value captured at registration time) and forward mode transitions to the
  * controller. Afterwards it subscribes the controller's edit-tool refresh to
  * published mode-state changes.
  */
 export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeController): void {
+  // Registered after the hooks below; set before any event can fire.
+  let subtreeGuidance: MmrSubtreeGuidanceHooks | undefined;
+
   function captureSessionIdentity(ctx: ExtensionContext): void {
     // Read fields opportunistically: Pi's ReadonlySessionManager exposes a
     // UUID-like session id and optional session name. MMR treats sessionId as
@@ -206,7 +212,10 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     return withSpeed === base ? withPolicy : withSpeed;
   });
 
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
+    // Every session, subagent workers and `free` included.
+    subtreeGuidance?.observeAgentStart(event, ctx);
+
     // Subagent workers preserve Pi's base prompt (including any
     // `--append-system-prompt` content) byte-for-byte and do not apply
     // locked-mode prompt templates.
@@ -335,6 +344,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     const skillPaths = resolveMmrSkillPaths({ cwd: event.cwd, projectTrusted: ctx.isProjectTrusted(), settings });
     return skillPaths.length > 0 ? { skillPaths } : undefined;
   });
+
+  subtreeGuidance = registerMmrSubtreeGuidanceHooks(pi);
 
   // A route change published outside a mode apply (a session fallback to
   // another provider) can call for the other edit tool family.

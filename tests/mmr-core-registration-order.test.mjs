@@ -35,7 +35,11 @@ describe("mmr-core registration order", () => {
         "thinking_level_select",
         "agent_settled",
         "resources_discover",
-        // The live registry's hooks; events already listed keep their first position.
+        // The subfolder guidance hooks, then the live registry's; events
+        // already listed keep their first position.
+        "session_tree",
+        "session_compact",
+        "tool_result",
         "session_shutdown",
         "turn_start",
         "message_start",
@@ -43,7 +47,6 @@ describe("mmr-core registration order", () => {
         "tool_execution_start",
         "tool_execution_end",
         "session_before_compact",
-        "session_compact",
         "session_compact_failed",
         "turn_end",
       ],
@@ -54,7 +57,8 @@ describe("mmr-core registration order", () => {
   // registered before a command) or a duplicate same-name registration masked
   // by Map#set. Record one chronological log of every registration call via a
   // proxy and pin the exact global sequence the slim wiring shell must emit:
-  // flags -> commands -> shortcuts -> lifecycle hooks -> live registry hooks.
+  // flags -> commands -> shortcuts -> lifecycle hooks -> subfolder guidance
+  // hooks -> live registry hooks.
   it("registers everything in one stable chronological sequence", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi } = createMockPi();
@@ -122,6 +126,10 @@ describe("mmr-core registration order", () => {
       "hook:thinking_level_select",
       "hook:agent_settled",
       "hook:resources_discover",
+      "hook:session_start",
+      "hook:session_tree",
+      "hook:session_compact",
+      "hook:tool_result",
       "hook:session_start",
       "hook:session_shutdown",
       "hook:turn_start",
