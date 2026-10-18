@@ -208,7 +208,9 @@ export function createMockPi(options = {}) {
  * Returns the ctx and the recorders it populates:
  *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
  *   thinkingLabels, selectCalls, entries, compactCalls, terminalInput, overlays,
- *   editors, workingVisible, titles, lifecycle, state }`.
+ *   editors, workingVisible, titles, lifecycle, state, pastes, autocompleteProviders }`.
+ *   `pastes` records `ui.pasteToEditor` texts (appended to `state.editorText`),
+ *   `autocompleteProviders` the factories passed to `ui.addAutocompleteProvider`.
  *   `editors` records `ui.setEditorComponent` factories, `workingVisible` the
  *   values passed to `ui.setWorkingVisible`, `titles` those passed to `ui.setTitle`. `terminalInput.send(data)` feeds the
  *   listeners registered with `ui.onTerminalInput` and returns true when one consumed it.
@@ -256,6 +258,8 @@ export function createMockExtensionContext(options = {}) {
   };
   const overlays = [];
   const editors = [];
+  const pastes = [];
+  const autocompleteProviders = [];
   const workingVisible = [];
   const titles = [];
   const plainTheme = { fg: (_name, value) => value, bold: (value) => value, style: (value) => value, colors: {} };
@@ -311,6 +315,12 @@ export function createMockExtensionContext(options = {}) {
       setToolsExpanded: (expanded) => {
         state.toolsExpanded = expanded;
       },
+      // Pasting appends: the stub keeps no cursor.
+      pasteToEditor: (text) => {
+        pastes.push(text);
+        state.editorText += text;
+      },
+      addAutocompleteProvider: (factory) => autocompleteProviders.push(factory),
       setEditorComponent: (factory) => editors.push(factory),
       setWorkingVisible: (visible) => workingVisible.push(visible),
       setTitle: (title) => titles.push(title),
@@ -361,5 +371,7 @@ export function createMockExtensionContext(options = {}) {
     titles,
     lifecycle,
     state,
+    pastes,
+    autocompleteProviders,
   };
 }

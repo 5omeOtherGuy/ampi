@@ -38,6 +38,8 @@ export interface MmrTuiCommandHost {
   openPromptHistory(ctx: ExtensionContext, history: MmrPromptHistory): void;
   /** Open the Switch Thread picker. */
   openThreadSwitcher(ctx: ExtensionContext): void;
+  /** Open the Mention Thread picker and insert the reference at the cursor. */
+  openThreadMention(ctx: ExtensionContext): void;
   /** Open the Thread Cost overlay. */
   openThreadCost(ctx: ExtensionContext, reports: MmrThreadReports): void;
   /** Open the Analyze Context overlay. */
@@ -260,6 +262,14 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         return getMmrThreadIndex() ? AVAILABLE : THREADS_MISSING;
       },
       run: (ctx) => host.openThreadSwitcher(ctx),
+    },
+    {
+      id: "thread.mention",
+      noun: "thread",
+      verb: "mention",
+      description: "Pick a session and insert a reference to it (@<session id>) at the cursor",
+      availability: (ctx) => (ctx.mode === "tui" ? AVAILABLE : TERMINAL_ONLY),
+      run: (ctx) => host.openThreadMention(ctx),
     },
     {
       id: "thread.showCost",

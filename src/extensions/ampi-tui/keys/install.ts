@@ -18,6 +18,7 @@ import type { MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import type { MmrModeKey } from "../../ampi-core/types.js";
+import { pickMmrThreadMention } from "../editor/mentions.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
@@ -90,6 +91,8 @@ export interface MmrTuiKeysOptions {
   readonly onKeyCommand?: () => void;
   /** A lone Esc reached the prompt; returning true takes it from Pi (a message selection was cleared). Esc Esc still sees it. */
   readonly onEscape?: () => boolean;
+  /** Opens the Mention Thread picker for `thread.mention`; resolves with the reference to insert. */
+  readonly pickThread?: (ctx: ExtensionContext) => Promise<string | undefined>;
 }
 
 export interface MmrTuiKeys {
@@ -140,6 +143,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let dialSwitches: Promise<void> = Promise.resolve();
   let promptHistoryOpen = false;
   let threadSwitcherOpen = false;
+  let threadMentionOpen = false;
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -149,6 +153,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openKeymapJson,
     openPromptHistory,
     openThreadSwitcher,
+    openThreadMention,
     openThreadCost: (current, reports) => openReport(() => openMmrThreadCost(current, reports.cost(current))),
     openContextAnalysis: (current, reports) => openReport(() => openMmrContextAnalysis(current, reports.analyzeContext(current))),
     onInterrupt: options.onInterrupt,
@@ -276,6 +281,31 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
           }
         },
         (error: unknown) => report("Could not list the sessions", error),
+      );
+  }
+
+  /**
+   * Open the Mention Thread picker; the session picked goes into the prompt
+   * at the cursor as `@<session id> `. Ignored while the picker is loading
+   * or open.
+   */
+  function openThreadMention(current: ExtensionContext): void {
+    if (threadMentionOpen) return;
+    threadMentionOpen = true;
+    options.onPaletteOpen?.(true);
+    void (options.pickThread ?? pickMmrThreadMention)(current)
+      .finally(() => {
+        threadMentionOpen = false;
+        options.onPaletteOpen?.(false);
+      })
+      .then(
+        (reference) => {
+          if (reference === undefined) return;
+          current.ui.pasteToEditor(reference);
+          getTui()?.requestRender();
+        },
+        (error: unknown) =>
+          current.ui.notify(`Could not read the sessions: ${error instanceof Error ? error.message : String(error)}`, "error"),
       );
   }
 

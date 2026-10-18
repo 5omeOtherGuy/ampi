@@ -121,12 +121,17 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `?` | Show or hide the shortcuts help | Only on an empty prompt; Esc or any other key closes it |
 | `Shift+Tab` / `Tab` | Select your previous / next message | Shift+Tab only on an empty prompt (with text it cycles Pi's thinking level); Tab past the newest, Esc or typing clears the selection |
 | `e` | Edit the selected message | Puts it into the prompt and continues the thread from before it on a new branch; the old branch stays in `/tree` |
+| `@` | Mention a file or directory | Pi's completion, with two hint rows under it for `@:` and `@@` |
+| `@:` | Mention a commit | The repository's last 30 commits with how long ago each was made; type to filter by sha or subject, Enter inserts `@:<short sha>` |
+| `@@` | Mention a session | Opens the Mention Thread picker; Enter inserts `@<session id>`, Esc types the `@` |
 
 In the command palette, "ampi help" opens the Help & Keymap screen: every editor key, scrolling key and command with the key in effect (`—` when it has none). "ampi show keymap" shows the keymap in effect as JSONC to copy under `ampi.keymap`. Both scroll with ↑/↓, j/k and PgUp/PgDn; Esc closes them.
 
 To change sessions, run `thread switch` from the palette: it lists this workspace's sessions, newest first, with a preview of the selected one; Enter switches, Alt+W or Ctrl+T shows every workspace's, Alt+A adds archived ones. `thread switch to previous` and `thread switch to next` go back and forth through the sessions you switched between. These need `ampi-threads` and have no default key.
 
 A new session gets a title of a few words from a small model once its first reply completes; `thread rename` sets your own, which is never replaced. `ampiThreads.titles: false` turns generated titles off.
+
+Mentions are plain text in your message. The model sees `@:<sha>` and can run git on it; it sees `@<session id>` (Pi's session id, with no `T-` prefix) and can read that session with `read_session` when `ampi-history` is enabled (`AMPI_HISTORY_ENABLE=true`). `thread mention` in the palette opens the same picker as `@@` and inserts the reference at the cursor.
 
 `thread copy markdown` copies the session as Markdown; `thread show cost` shows what it cost so far, per model; `thread analyze context` shows what fills the context window: system prompt, tools, AGENTS.md files, skills, compaction summary and messages, with their share of the window. These need `ampi-threads` and have no default key. `ampiThreads.showCosts: false` hides the cost gauge and `thread show cost`.
 

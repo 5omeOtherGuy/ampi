@@ -140,6 +140,8 @@ export const READ_SESSION_DESCRIPTION = `Read a prior Pi session and extract con
 
 Use this after find_session returns a relevant session, or when the user gives a Pi session id/prefix and asks to reuse a plan, decisions, files, errors, or implementation approach from that session — including a session from another project. Do not use this when the needed context is already in the current conversation. Raw session file paths are not accepted.
 
+A \`@<session-id>\` in the user's message is a mention of a Pi session: when the request needs what happened there, pass it as sessionId.
+
 The tool sends a sanitized session packet — including tool calls, tool results, and command output — to the in-process \`history-reader\` subagent, which has no tool allowlist. Session content is sent raw for the local same-user case by default; set \`AMPI_HISTORY_REDACT=true\` (legacy \`MMR_HISTORY_REDACT=true\`) to deterministically redact packet content first. If the worker route is unauthenticated, missing, cancelled, or empty, the tool falls back to deterministic lexical extraction and sets \`details.analysisFallbackReason\`.`;
 
 export const FIND_SESSION_PROMPT_SNIPPET = "Search local Pi sessions across every project on disk by keywords, id/name/date/project/repo/file/model/provider/tool/label filters with pagination";
