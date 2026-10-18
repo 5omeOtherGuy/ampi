@@ -17,6 +17,11 @@
  *   once instead of printing a link;
  * - ampi-core's live registry records the session as `app-session` with the
  *   host's pid as `ownerPid`.
+ *
+ * `ampi app` itself runs an in-memory session (never saved) with a `hub`
+ * record, which adds `startSession`: with it, ampi-gui serves the app's page
+ * (every session on the machine) instead of one session's, and the live
+ * registry records the process as `app` although it has no session file.
  */
 
 // globalThis-anchored so every cache-isolated copy of ampi's modules in the
@@ -34,7 +39,41 @@ export interface MmrGuiSessionHost {
   ready(info: { port: number }): void;
 }
 
-export type MmrGuiHost = MmrGuiSessionHost;
+/** What `startSession` opens: a saved session file, or a new session in a directory. */
+export type MmrGuiHubStartRequest = { path: string } | { cwd: string };
+
+/** A session the app started in a worker process; its GUI listens on `127.0.0.1:<port>` with `token`. */
+export interface MmrGuiHubSession {
+  pid: number;
+  port: number;
+  token: string;
+  sessionId: string;
+  sessionPath: string | null;
+  /** Ask the worker to end the session; resolves once the process has exited. */
+  stop(): Promise<void>;
+  /** Called once when the worker process exits, for whatever reason. */
+  onExit(listener: () => void): void;
+  /** Called when the agent starts working (`busy`) or settles (`idle`). */
+  onActivity(listener: (state: "busy" | "idle") => void): void;
+}
+
+/** The `ampi app` process: it serves every session from one page and starts workers for them. */
+export interface MmrGuiHubHost {
+  role: "hub";
+  /** The app page's access token. */
+  token: string;
+  /** The `ampi app` process itself. */
+  ownerPid: number;
+  /** Called once, when the app's server listens. */
+  ready(info: { port: number }): void;
+  /**
+   * Start a worker for a session. Rejects when it cannot; an error whose
+   * `holder` is `{ kind, pid }` means another live process has the file open.
+   */
+  startSession(request: MmrGuiHubStartRequest): Promise<MmrGuiHubSession>;
+}
+
+export type MmrGuiHost = MmrGuiSessionHost | MmrGuiHubHost;
 
 const globalStore = globalThis as typeof globalThis & { [MMR_GUI_HOST_GLOBAL_KEY]?: unknown };
 
@@ -43,7 +82,9 @@ export function getMmrGuiHost(): MmrGuiHost | undefined {
   const host = globalStore[MMR_GUI_HOST_GLOBAL_KEY];
   if (typeof host !== "object" || host === null) return undefined;
   const { role, token, ownerPid, ready } = host as Record<string, unknown>;
-  if (role !== "session" || typeof token !== "string" || token === "" || typeof ready !== "function") return undefined;
+  if (role !== "session" && role !== "hub") return undefined;
+  if (typeof token !== "string" || token === "" || typeof ready !== "function") return undefined;
   if (!Number.isSafeInteger(ownerPid) || (ownerPid as number) <= 0) return undefined;
+  if (role === "hub" && typeof (host as Record<string, unknown>).startSession !== "function") return undefined;
   return host as MmrGuiHost;
 }

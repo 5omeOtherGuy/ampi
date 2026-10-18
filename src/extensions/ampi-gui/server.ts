@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import type { MmrGuiBridge, MmrGuiEvent } from "./bridge.js";
+import type { MmrGuiBridge } from "./bridge.js";
 import type { MmrGuiCommands } from "./commands.js";
 import type { MmrGuiSessions } from "./sessions.js";
 
@@ -54,7 +54,7 @@ export interface MmrGuiServer {
   close(): Promise<void>;
 }
 
-const LOOPBACK = "127.0.0.1";
+export const MMR_GUI_LOOPBACK = "127.0.0.1";
 
 /** Largest command body the server reads. */
 const MAX_BODY_BYTES = 512 * 1024;
@@ -66,7 +66,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".svg": "image/svg+xml",
 };
 
-const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+export const MMR_GUI_SECURITY_HEADERS: Readonly<Record<string, string>> = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -106,21 +106,23 @@ function readCookie(header: string | undefined, name: string): string | undefine
   return undefined;
 }
 
-function send(res: ServerResponse, status: number, body: string, headers: Record<string, string> = {}): void {
-  res.writeHead(status, { ...SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8", ...headers });
+export function send(res: ServerResponse, status: number, body: string, headers: Record<string, string> = {}): void {
+  res.writeHead(status, { ...MMR_GUI_SECURITY_HEADERS, "Content-Type": "text/plain; charset=utf-8", ...headers });
   res.end(body);
 }
 
-function sendJson(res: ServerResponse, status: number, value: unknown): void {
+export function sendJson(res: ServerResponse, status: number, value: unknown): void {
   send(res, status, JSON.stringify(value), { "Content-Type": "application/json; charset=utf-8" });
 }
 
-function formatEvent(event: MmrGuiEvent): string {
+/** One event-stream event; the hub's own events have no `id`, so they leave the replay position alone. */
+export function formatMmrGuiEvent(event: { id?: number; event: string; data: unknown }): string {
+  if (event.id === undefined) return `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
   return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
 }
 
-/** The request body as JSON, or `undefined` when it is too large or not JSON. */
-function readJson(req: IncomingMessage): Promise<unknown> {
+/** The request body, or `undefined` when it is larger than {@link MAX_BODY_BYTES} or the request fails. */
+export function readMmrGuiBody(req: IncomingMessage): Promise<Buffer | undefined> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -129,17 +131,20 @@ function readJson(req: IncomingMessage): Promise<unknown> {
       // Past the limit the rest is drained, not kept, so the answer still arrives.
       if (size <= MAX_BODY_BYTES) chunks.push(chunk);
     });
-    req.on("end", () => {
-      if (size > MAX_BODY_BYTES) return resolve(undefined);
-      const text = Buffer.concat(chunks).toString("utf8");
-      try {
-        resolve(text.trim() === "" ? {} : JSON.parse(text));
-      } catch {
-        resolve(undefined);
-      }
-    });
+    req.on("end", () => resolve(size > MAX_BODY_BYTES ? undefined : Buffer.concat(chunks)));
     req.on("error", () => resolve(undefined));
   });
+}
+
+/** A request body as JSON (`{}` when empty), or `undefined` when it is not JSON. */
+export function parseMmrGuiJson(body: Buffer | undefined): unknown {
+  if (body === undefined) return undefined;
+  const text = body.toString("utf8");
+  try {
+    return text.trim() === "" ? {} : JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 /** The file under `clientDir` for a `/client/...` path, or `undefined` when the path tries to leave it. */
@@ -156,10 +161,45 @@ function clientFile(clientDir: string, rest: string): string | undefined {
   return file.startsWith(clientDir + path.sep) ? file : undefined;
 }
 
-export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiServer> {
-  const { bridge, token } = options;
+/** A request that passed the policy, for the routes of one kind of server. */
+export interface MmrGuiRequest {
+  req: IncomingMessage;
+  res: ServerResponse;
+  /** `GET`, `HEAD` or `POST`. */
+  method: string;
+  /** The path without the query string, as sent. */
+  rawPath: string;
+  url: URL;
+  /** The server's own port. */
+  port: number;
+  /** Serve `index.html` from the client directory. */
+  servePage(): Promise<void>;
+  /** Keep an event stream open until it closes or the server closes. */
+  track(res: ServerResponse): void;
+}
+
+export interface MmrGuiHttpServerOptions {
+  token: string;
+  /** Directory of the static client files. */
+  clientDir: string;
+  /** Port to listen on; 0 (the default) picks a free one. */
+  port?: number;
+  /**
+   * Answer a request the policy let through: a POST with the server's own
+   * `Origin` and the token cookie, or a GET or HEAD with the cookie that is
+   * not `/` or a client file.
+   */
+  route(request: MmrGuiRequest): Promise<void>;
+}
+
+/**
+ * A server with the request policy described at the top of this module, the
+ * token link, `GET /` and the client files; everything else goes to `route`.
+ * The session server and `ampi app`'s hub (`hub.ts`) share it.
+ */
+export async function startMmrGuiHttpServer(options: MmrGuiHttpServerOptions): Promise<MmrGuiServer> {
+  const { token } = options;
   const clientDir = await realpath(options.clientDir);
-  const heartbeatMs = options.heartbeatMs ?? 25_000;
   const streams = new Set<ServerResponse>();
   let port = 0;
 
@@ -170,49 +210,28 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
       const real = await realpath(file);
       if (!real.startsWith(clientDir + path.sep) || !(await stat(real)).isFile()) return send(res, 404, "Not found");
       const body = await readFile(real);
-      res.writeHead(200, { ...SECURITY_HEADERS, "Content-Type": type, "Content-Length": String(body.length) });
+      res.writeHead(200, { ...MMR_GUI_SECURITY_HEADERS, "Content-Type": type, "Content-Length": String(body.length) });
       res.end(body);
     } catch {
       send(res, 404, "Not found");
     }
   }
 
-  function serveEvents(req: IncomingMessage, res: ServerResponse, url: URL): void {
-    res.writeHead(200, {
-      ...SECURITY_HEADERS,
-      "Content-Type": "text/event-stream; charset=utf-8",
-      Connection: "keep-alive",
-    });
-    res.write("retry: 2000\n\n");
-    const raw = req.headers["last-event-id"] ?? url.searchParams.get("after");
-    const after = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : bridge.lastEventId;
-    const missed = bridge.eventsAfter(after);
-    // Too far behind (or another server's id): the client reloads the snapshot.
-    if (missed === undefined) res.write("event: reset\ndata: {}\n\n");
-    else for (const event of missed) res.write(formatEvent(event));
-    const unsubscribe = bridge.subscribe((event) => res.write(formatEvent(event)));
-    const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), heartbeatMs);
-    heartbeat.unref();
+  function track(res: ServerResponse): void {
     streams.add(res);
-    const done = () => {
-      clearInterval(heartbeat);
-      unsubscribe();
-      streams.delete(res);
-    };
-    req.on("close", done);
-    res.on("close", done);
+    res.on("close", () => streams.delete(res));
   }
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const host = req.headers.host;
     if (!host) return send(res, 400, "Missing Host header");
-    if (host !== `${LOOPBACK}:${port}` && host !== `localhost:${port}`) return send(res, 403, "Unexpected Host header");
+    if (host !== `${MMR_GUI_LOOPBACK}:${port}` && host !== `localhost:${port}`) return send(res, 403, "Unexpected Host header");
     const origin = req.headers.origin;
-    const origins = [`http://${LOOPBACK}:${port}`, `http://localhost:${port}`];
+    const origins = [`http://${MMR_GUI_LOOPBACK}:${port}`, `http://localhost:${port}`];
     if (origin !== undefined && !origins.includes(origin)) return send(res, 403, "Unexpected Origin header");
 
     const rawPath = (req.url ?? "/").split("?")[0] ?? "/";
-    const url = new URL(req.url ?? "/", `http://${LOOPBACK}:${port}`);
+    const url = new URL(req.url ?? "/", `http://${MMR_GUI_LOOPBACK}:${port}`);
     const method = req.method ?? "GET";
 
     if (method === "GET" && rawPath === "/" && url.searchParams.has("t")) {
@@ -231,42 +250,21 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
       // A command without the cookie is a cross-site attempt, not a reader who needs the link.
       return send(res, method === "POST" ? 403 : 401, "Open the link Pi printed to use this page.");
     }
+    if (method !== "GET" && method !== "HEAD" && method !== "POST") {
+      req.resume();
+      return send(res, 405, "Method not allowed", { Allow: "GET, POST" });
+    }
 
-    if (method === "POST") {
-      const name = rawPath.startsWith("/api/") ? rawPath.slice("/api/".length) : "";
-      const command = Object.hasOwn(options.commands, name) ? options.commands[name] : undefined;
-      if (!command) {
-        req.resume();
-        return send(res, 404, "Not found");
+    const servePage = () => serveFile(res, path.join(clientDir, "index.html"));
+    if (method !== "POST") {
+      if (rawPath === "/") return servePage();
+      if (rawPath.startsWith("/client/")) {
+        const file = clientFile(clientDir, rawPath.slice("/client/".length));
+        if (!file) return send(res, 400, "Bad path");
+        return serveFile(res, file);
       }
-      if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) {
-        req.resume();
-        return send(res, 415, "Send JSON");
-      }
-      const body = await readJson(req);
-      if (body === undefined) return sendJson(res, 400, { error: "The request body is not JSON or is too large." });
-      const result = await command(body);
-      return sendJson(res, result.status, result.body);
     }
-    if (method !== "GET" && method !== "HEAD") return send(res, 405, "Method not allowed", { Allow: "GET, POST" });
-
-    if (rawPath === "/") return serveFile(res, path.join(clientDir, "index.html"));
-    if (rawPath.startsWith("/client/")) {
-      const file = clientFile(clientDir, rawPath.slice("/client/".length));
-      if (!file) return send(res, 400, "Bad path");
-      return serveFile(res, file);
-    }
-    if (rawPath === "/api/session") return sendJson(res, 200, { ...bridge.session(), status: bridge.status() });
-    if (rawPath === "/api/transcript") return sendJson(res, 200, bridge.snapshot());
-    if (rawPath === "/api/events") return serveEvents(req, res, url);
-    if (rawPath === "/api/sessions") return sendJson(res, 200, await options.sessions.list());
-    if (rawPath.startsWith("/api/sessions/")) {
-      const id = rawPath.slice("/api/sessions/".length);
-      // Pi's session ids are UUIDs; anything else names no session.
-      const view = /^[A-Za-z0-9_-]{1,128}$/.test(id) ? await options.sessions.view(id) : undefined;
-      return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
-    }
-    return send(res, 404, "Not found");
+    return options.route({ req, res, method, rawPath, url, port, servePage, track });
   }
 
   const server = createServer((req, res) => {
@@ -278,7 +276,7 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(options.port ?? 0, LOOPBACK, () => {
+    server.listen(options.port ?? 0, MMR_GUI_LOOPBACK, () => {
       server.off("error", reject);
       resolve();
     });
@@ -288,7 +286,7 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
 
   return {
     port,
-    url: `http://${LOOPBACK}:${port}/?t=${token}`,
+    url: `http://${MMR_GUI_LOOPBACK}:${port}/?t=${token}`,
     async close() {
       for (const res of streams) res.end();
       streams.clear();
@@ -298,4 +296,76 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
       });
     },
   };
+}
+
+/** One session's server: its transcript, events and commands, and the sidebar's session list. */
+export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiServer> {
+  const { bridge } = options;
+  const heartbeatMs = options.heartbeatMs ?? 25_000;
+
+  function serveEvents({ req, res, url, track }: MmrGuiRequest): void {
+    res.writeHead(200, {
+      ...MMR_GUI_SECURITY_HEADERS,
+      "Content-Type": "text/event-stream; charset=utf-8",
+      Connection: "keep-alive",
+    });
+    res.write("retry: 2000\n\n");
+    const raw = req.headers["last-event-id"] ?? url.searchParams.get("after");
+    const after = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : bridge.lastEventId;
+    const missed = bridge.eventsAfter(after);
+    // Too far behind (or another server's id): the client reloads the snapshot.
+    if (missed === undefined) res.write("event: reset\ndata: {}\n\n");
+    else for (const event of missed) res.write(formatMmrGuiEvent(event));
+    const unsubscribe = bridge.subscribe((event) => res.write(formatMmrGuiEvent(event)));
+    const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), heartbeatMs);
+    heartbeat.unref();
+    track(res);
+    const done = () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+    req.on("close", done);
+    res.on("close", done);
+  }
+
+  async function route(request: MmrGuiRequest): Promise<void> {
+    const { req, res, method, rawPath } = request;
+    if (method === "POST") {
+      const name = rawPath.startsWith("/api/") ? rawPath.slice("/api/".length) : "";
+      const command = Object.hasOwn(options.commands, name) ? options.commands[name] : undefined;
+      if (!command) {
+        req.resume();
+        return send(res, 404, "Not found");
+      }
+      if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) {
+        req.resume();
+        return send(res, 415, "Send JSON");
+      }
+      const body = parseMmrGuiJson(await readMmrGuiBody(req));
+      if (body === undefined) return sendJson(res, 400, { error: "The request body is not JSON or is too large." });
+      const result = await command(body);
+      return sendJson(res, result.status, result.body);
+    }
+    if (rawPath === "/api/session") return sendJson(res, 200, { ...bridge.session(), status: bridge.status() });
+    if (rawPath === "/api/transcript") return sendJson(res, 200, bridge.snapshot());
+    if (rawPath === "/api/events") return serveEvents(request);
+    if (rawPath === "/api/sessions") return sendJson(res, 200, await options.sessions.list());
+    if (rawPath.startsWith("/api/sessions/")) {
+      const view = await viewMmrGuiSession(options.sessions, rawPath.slice("/api/sessions/".length));
+      return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
+    }
+    return send(res, 404, "Not found");
+  }
+
+  return startMmrGuiHttpServer({ token: options.token, clientDir: options.clientDir, port: options.port, route });
+}
+
+/** Pi's session ids are UUIDs; anything else names no session. */
+export function isMmrGuiSessionId(id: string): boolean {
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id);
+}
+
+/** The read-only view of a session by id, or `undefined` for an id that names none. */
+export async function viewMmrGuiSession(sessions: Pick<MmrGuiSessions, "view">, id: string) {
+  return isMmrGuiSessionId(id) ? await sessions.view(id) : undefined;
 }

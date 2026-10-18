@@ -12,7 +12,8 @@ import type { MmrModeKey } from "./types.js";
 
 /**
  * The live registry: one small JSON file per running Pi process whose
- * session has a file, at `<agentDir>/data/ampi/live/<pid>.json`. Other
+ * session has a file, and one for `ampi app`, at
+ * `<agentDir>/data/ampi/live/<pid>.json`. Other
  * processes on the same machine read it to list running sessions and to
  * find the process that writes a session file. Pi does not lock session
  * files, so a second writer would interleave its messages with the first.
@@ -266,13 +267,16 @@ export async function findMmrLiveOwner(
  * a session without a file (`--no-session`, which every subagent worker
  * uses, and in-memory sessions), which writes none. A session that
  * `ampi app` hosts (see `gui-host.ts`) is `app-session`, with the host's pid.
+ * `ampi app`'s own in-memory session is `app`: the one entry without a file,
+ * so other processes find the running app.
  */
 export function resolveMmrLiveKind(
   ctx: Pick<ExtensionContext, "mode" | "sessionManager">,
 ): { kind: MmrLiveKind; ownerPid?: number } | undefined {
+  const host = getMmrGuiHost();
+  if (host?.role === "hub") return { kind: "app" };
   // Feature-detected like the session identity: hosts that lack the accessor have no file to share.
   if (!ctx.sessionManager.getSessionFile?.()) return undefined;
-  const host = getMmrGuiHost();
   if (host?.role === "session") return { kind: "app-session", ownerPid: host.ownerPid };
   return { kind: ctx.mode === "tui" ? "tui" : "execute" };
 }
@@ -364,7 +368,7 @@ export function registerMmrLiveRegistry(
         ctx: ExtensionContext;
         kind: MmrLiveKind;
         ownerPid?: number;
-        sessionPath: string;
+        sessionPath: string | null;
         procStart: number | null;
         startedAt: string;
       }
@@ -457,13 +461,14 @@ export function registerMmrLiveRegistry(
   pi.on("session_start", async (_event, ctx) => {
     const identity = resolveMmrLiveKind(ctx);
     if (!identity) return;
-    const sessionPath = ctx.sessionManager.getSessionFile() as string;
+    const sessionPath = ctx.sessionManager.getSessionFile?.() ?? null;
     reducer = createMmrThreadStatusReducer();
     mapper.reset();
     session = { ctx, ...identity, sessionPath, procStart: procStart(process.pid), startedAt: new Date(now()).toISOString() };
     process.off("exit", removeOnExit);
     process.on("exit", removeOnExit);
     await write();
+    if (sessionPath === null) return;
 
     let owner: MmrLiveEntry | undefined;
     try {
