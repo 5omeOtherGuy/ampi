@@ -365,7 +365,34 @@ describe("ampi-tui settings", () => {
         enabled: true,
         quietStartup: false,
         notifications: { enabled: true, system: true, sound: false },
+        detailsExpandedByDefault: false,
+        alwaysIncludePaths: [],
       });
+    });
+  });
+
+  it("reads ampi.terminal.detailsExpandedByDefault and ampi.fuzzy.alwaysIncludePaths, the project file winning per key", async () => {
+    const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
+    await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
+      const load = () => {
+        const { detailsExpandedByDefault, alwaysIncludePaths } = loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} });
+        return { detailsExpandedByDefault, alwaysIncludePaths };
+      };
+      writeGlobal({ ampi: { terminal: { detailsExpandedByDefault: true }, fuzzy: { alwaysIncludePaths: ["dist/**"] } } });
+      assert.deepEqual(load(), { detailsExpandedByDefault: true, alwaysIncludePaths: ["dist/**"] });
+      writeProject({ ampi: { fuzzy: { alwaysIncludePaths: ["build/*.js", "out"] } } });
+      assert.deepEqual(load(), { detailsExpandedByDefault: true, alwaysIncludePaths: ["build/*.js", "out"] });
+      writeProject({ ampi: { terminal: { detailsExpandedByDefault: false }, fuzzy: { alwaysIncludePaths: [] } } });
+      assert.deepEqual(load(), { detailsExpandedByDefault: false, alwaysIncludePaths: [] });
+      // A value of the wrong type is skipped, as for the other keys: the user file's values stay.
+      writeProject({ ampi: { terminal: { detailsExpandedByDefault: "yes" }, fuzzy: { alwaysIncludePaths: ["ok", 3] } } });
+      assert.deepEqual(load(), { detailsExpandedByDefault: true, alwaysIncludePaths: ["dist/**"] });
+      writeProject({ ampi: { terminal: true, fuzzy: { alwaysIncludePaths: "dist/**" } } });
+      assert.deepEqual(load(), { detailsExpandedByDefault: true, alwaysIncludePaths: ["dist/**"] });
+      // The flat ampiTui block does not carry them.
+      writeGlobal({ ampiTui: { terminal: { detailsExpandedByDefault: true } } });
+      writeProject({});
+      assert.deepEqual(load(), { detailsExpandedByDefault: false, alwaysIncludePaths: [] });
     });
   });
 

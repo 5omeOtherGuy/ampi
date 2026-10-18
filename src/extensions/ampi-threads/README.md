@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `thread.new`, `thread.rename`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, `thread.copyMarkdown`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; generated titles; the thread index; the prompt history; the switch route; the cost and context reports | none (`ampi-tui` for the keys, palette, prompt history, thread pickers and report overlays; `ampi-workers` for generated titles) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R; `thread switch`; `thread show cost`; `thread analyze context` |
+| On | `thread.new`, `thread.rename`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`, `thread.copyMarkdown`, `thread.copyURL`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; generated titles; the thread index; the prompt history; the switch route; the cost and context reports | none (`ampi-tui` for the keys, palette, prompt history, thread pickers and report overlays; `ampi-workers` for generated titles) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R; `thread switch`; `thread show cost`; `thread analyze context` |
 
 ## When to use it
 
@@ -37,6 +37,7 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | `thread.switchToPrevious` | Command, no key | Go back to the session you last switched away from |
 | `thread.switchToNext` | Command, no key | Go forward again after going back |
 | `thread.copyMarkdown` | Command, no key | Copy this session to the clipboard as [Markdown](#markdown-export) |
+| `thread.copyURL` | Command, no key | Copy `ampi threads continue <session id>`, the shell command that continues this session ([Resume command](#resume-command)) |
 | `thread.rename` | Command, no key | Give this session a new [title](#titles) |
 | Generated titles | Event handlers | Name a new session after its first exchange through `ampi-core`'s `title` subagent profile ([Titles](#titles)) |
 | Cost and context reports, Markdown export | Seam | `ampi-core/thread-reports.ts`: the numbers behind `ampi-tui`'s `thread show cost` and `thread analyze context`, `showCosts` for its cost gauge, and the Markdown export `ampi-gui`'s Copy as Markdown uses |
@@ -44,7 +45,7 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | Thread index | File | `<agentDir>/data/ampi/threads/index.json` |
 | Prompt history | Files | `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, read by `ampi-tui`'s `prompt.history` (Ctrl+R) |
 
-The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive`, `thread archive and quit`, `thread switch to previous`, `thread switch to next`, `thread copy markdown` and `thread rename`. `thread switch`, which opens the picker, and `thread show cost` and `thread analyze context`, which show the reports, come from `ampi-tui` (see [its README](../ampi-tui/README.md#switch-thread-picker)).
+The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive`, `thread archive and quit`, `thread switch to previous`, `thread switch to next`, `thread copy markdown`, `thread copy resume command` and `thread rename`. `thread switch`, which opens the picker, and `thread show cost` and `thread analyze context`, which show the reports, come from `ampi-tui` (see [its README](../ampi-tui/README.md#switch-thread-picker)).
 
 ## Configuration
 
@@ -133,6 +134,10 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 - Within one Pi process, operations on a file run one at a time. Several Pi processes can append to one file safely; a rewrite racing an append from another process can lose that one prompt.
 - Recording does not hold up the prompt. If a file cannot be written, a warning says so and the prompt is sent as usual.
 - To forget the history, delete the files; turning `ampi-threads` off stops recording and makes Ctrl+R unavailable.
+
+### Resume command
+
+`thread copy resume command` copies `ampi threads continue <session id>` with the session's full id, ready to paste into a shell to open the session again, and says "Copied the resume command: …". A Pi session has no URL to share, so this is what the command copies; its id, `thread.copyURL`, is Amp-compatible, so keymaps that bind it keep working. The palette also finds it by `url`, `link`, `continue` and `resume`. It is unavailable until the session has a message, and in a session Pi does not save (`--no-session`). With `ampi-gui` turned on, its `thread.openInBrowser` opens the session in the browser instead.
 
 ### Markdown export
 

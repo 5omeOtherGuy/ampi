@@ -112,6 +112,7 @@ describe("ampi-threads extension", () => {
       "thread.switchToPrevious": undefined,
       "thread.switchToNext": undefined,
       "thread.copyMarkdown": undefined,
+      "thread.copyURL": undefined,
     });
     assert.deepEqual(
       registry.getMmrCommands().map((c) => `${c.noun} ${c.verb}`),
@@ -124,6 +125,7 @@ describe("ampi-threads extension", () => {
         "thread switch to previous",
         "thread switch to next",
         "thread copy markdown",
+        "thread copy resume command",
       ],
     );
     assert.ok(t.commands.has("ampi-thread"));
@@ -636,6 +638,39 @@ describe("ampi-threads Markdown, cost and context", () => {
       copyError = new Error("Clipboard unavailable");
       await command("thread.copyMarkdown").run(context.ctx);
       assert.deepEqual(context.notifications.at(-1), { message: "Could not copy the thread: Clipboard unavailable", level: "error" });
+      assert.equal(copied.length, 1);
+    } finally {
+      await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
+    }
+  });
+
+  it("copies the command that continues a saved session, and is unavailable before a message or without a session file", async () => {
+    const t = await started();
+    const sessionId = "0193f1c2-7a4e-7b10-9c3d-5e6f7a8b9c0d";
+    try {
+      assert.deepEqual(availability("thread.copyURL", sessionContext({ sessionId, entries: [], sessionFile: "/s/a.jsonl" }).ctx), {
+        state: "unavailable",
+        reason: "this session has no messages yet",
+      });
+      // Pi run with --no-session keeps the session in memory, with no file.
+      assert.deepEqual(availability("thread.copyURL", sessionContext({ sessionId }).ctx), {
+        state: "unavailable",
+        reason: "this session is not saved (Pi runs with --no-session)",
+      });
+      const context = sessionContext({ sessionId, sessionFile: "/s/a.jsonl" });
+      assert.deepEqual(availability("thread.copyURL", context.ctx), { state: "available" });
+      await command("thread.copyURL").run(context.ctx);
+      assert.deepEqual(copied, ["ampi threads continue 0193f1c2-7a4e-7b10-9c3d-5e6f7a8b9c0d"]);
+      assert.deepEqual(context.notifications, [
+        { message: "Copied the resume command: ampi threads continue 0193f1c2-7a4e-7b10-9c3d-5e6f7a8b9c0d", level: "info" },
+      ]);
+
+      copyError = new Error("Clipboard unavailable");
+      await command("thread.copyURL").run(context.ctx);
+      assert.deepEqual(context.notifications.at(-1), {
+        message: "Could not copy the resume command: Clipboard unavailable",
+        level: "error",
+      });
       assert.equal(copied.length, 1);
     } finally {
       await t.handlers.get("session_shutdown")(quitEvent, t.ctx);

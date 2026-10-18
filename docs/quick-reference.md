@@ -147,7 +147,9 @@ A new session gets a title of a few words from a small model once its first repl
 
 Mentions are plain text in your message. The model sees `@:<sha>` and can run git on it; it sees `@<session id>` (Pi's session id, with no `T-` prefix) and can read that session with `read_session` when `ampi-history` is enabled (`AMPI_HISTORY_ENABLE=true`). `thread mention` in the palette opens the same picker as `@@` and inserts the reference at the cursor.
 
-`thread copy markdown` copies the session as Markdown; `thread show cost` shows what it cost so far, per model; `thread analyze context` shows what fills the context window: system prompt, tools, AGENTS.md files, skills, compaction summary and messages, with their share of the window. These need `ampi-threads` and have no default key. `ampiThreads.showCosts: false` hides the cost gauge and `thread show cost`.
+`thread copy markdown` copies the session as Markdown; `thread copy resume command` copies `ampi threads continue <session id>` to open it again from a shell (it is unavailable before the first message and with `--no-session`); `thread show cost` shows what it cost so far, per model; `thread analyze context` shows what fills the context window: system prompt, tools, AGENTS.md files, skills, compaction summary and messages, with their share of the window. These need `ampi-threads` and have no default key. `ampiThreads.showCosts: false` hides the cost gauge and `thread show cost`.
+
+`prompt clear` empties the prompt; `prompt move to line start` and `prompt move to line end` move the cursor within its line; `prompt copy selection` copies the transcript text selected with the mouse (Pi's fullscreen mode only; the prompt itself has no selection). They have no default key.
 
 `thread toggle outline` shows the headings of the last response in a small box above the prompt, under the message it answers; it takes no keys and updates as responses end. Run it again to hide it. It has no default key.
 
@@ -230,6 +232,9 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | `ampi.tools.disable` | Turns tools off in every mode and in workers, and blocks calls to them, nested calls included. Exact names, `*` globs, or `builtin:<name>` for Pi's own built-in tools only; user and project lists combine | `["web_search", "task_*", "builtin:grep"]` |
 | `ampi.skills.path` | Extra skill directories, `:`-separated (`;` on Windows); `~` is home, relative entries resolve against the repository root. A project value counts only when Pi trusts the project | `"~/my-skills:/shared/team-skills"` |
 | `ampi.skills.disableClaudeCodeSkills` | `true` stops loading skills from `.claude/skills` (project, up to the repository root, with project trust) and `~/.claude/skills`, which are read by default | `true` |
+| `ampi.terminal.detailsExpandedByDefault` | `true` starts sessions with tool output expanded and thinking shown; Alt+T still toggles them. Showing thinking saves `hideThinkingBlock: false` to your user settings | `true` |
+| `ampi.fuzzy.alwaysIncludePaths` | Globs relative to the working directory whose paths `@` file mentions offer even when git ignores them | `["dist/**"]` |
+| `fullscreenCopyOnSelect` | Pi's own setting (default `true`): copy transcript text as soon as you select it with the mouse, in fullscreen mode only. Set it to `false` to stop copying on select | `false` |
 
 ## Tool status words
 

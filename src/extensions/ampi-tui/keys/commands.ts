@@ -12,8 +12,15 @@ import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { getMmrThreadIndex, MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { getMmrThreadReports, type MmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { formatMmrVersionNotice, readMmrVersionInfo } from "../overlays/info.js";
-import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
+import {
+  canMmrSubmitEditorText,
+  hasMmrEditorAction,
+  moveMmrEditorCursorInLine,
+  runMmrEditorAction,
+  submitMmrEditorText,
+} from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
+import { getMmrTranscriptSelection } from "../pi-compat/selection.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
 import { MMR_EDIT_MESSAGE_COMMAND } from "../transcript/navigation.js";
 
@@ -69,6 +76,13 @@ const AVAILABLE: MmrCommandAvailability = { state: "available" };
 const EXTERNAL_EDITOR_ACTION = "app.editor.external";
 const THINKING_TOGGLE_ACTION = "app.thinking.toggle";
 const PROMPT_HAS_TEXT: MmrCommandAvailability = { state: "unavailable", reason: "the prompt has text" };
+const PROMPT_EMPTY: MmrCommandAvailability = { state: "unavailable", reason: "the prompt is empty" };
+const PROMPT_NOT_FOCUSED: MmrCommandAvailability = { state: "unavailable", reason: "the prompt is not focused" };
+const NO_SELECTION_MODE: MmrCommandAvailability = {
+  state: "unavailable",
+  reason: "transcript text can be selected only in Pi's fullscreen mode",
+};
+const NOTHING_SELECTED: MmrCommandAvailability = { state: "unavailable", reason: "no transcript text is selected" };
 const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-core is not loaded" };
 const THREADS_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-threads is not loaded" };
 const TERMINAL_ONLY: MmrCommandAvailability = { state: "unavailable", reason: "only in Pi's terminal UI" };
@@ -111,6 +125,27 @@ function scrollAvailability(host: MmrTuiCommandHost, ctx: ExtensionContext): Mmr
   return AVAILABLE;
 }
 
+/** Whether Pi's prompt editor has focus, judged by its external-editor action as `prompt.openInEditor` needs it. */
+function promptFocused(host: MmrTuiCommandHost): boolean {
+  return hasMmrEditorAction(host.getTui(), EXTERNAL_EDITOR_ACTION);
+}
+
+/** A command that moves the prompt's cursor to the start or end of its line. */
+function lineMoveCommand(host: MmrTuiCommandHost, to: "start" | "end"): MmrCommandDefinition {
+  const side = to === "start" ? "Start" : "End";
+  return {
+    id: `prompt.moveToLine${side}`,
+    noun: "prompt",
+    verb: `move to line ${to}`,
+    description: `Move the cursor to the ${to} of its line in the prompt`,
+    availability: () => (promptFocused(host) ? AVAILABLE : PROMPT_NOT_FOCUSED),
+    run: () => {
+      if (!moveMmrEditorCursorInLine(host.getTui(), to)) throw new Error(PROMPT_NOT_FOCUSED.reason);
+      host.getTui()?.requestRender();
+    },
+  };
+}
+
 function hasSlashCommand(host: MmrTuiCommandHost, name: string): boolean {
   try {
     return host.pi.getCommands().some((command) => command.name === name);
@@ -145,12 +180,32 @@ function coreSlashCommand(
  * that sets `hideThinkingBlock` wins over that saved value, so there the
  * reading stays fixed and Alt+T can leave thinking out of step with the tools.
  */
-function thinkingHidden(host: MmrTuiCommandHost): boolean {
+function thinkingHidden(host: Pick<MmrTuiCommandHost, "pi">): boolean {
   try {
     return host.pi.getSettings().hideThinkingBlock === true;
   } catch {
     return false;
   }
+}
+
+/**
+ * Expand or collapse tool output and thinking together, as `thread.toggleDetails`
+ * does. Pi keeps thinking visibility apart from tool output and changes it
+ * only through the prompt editor's thinking toggle, which also saves it as
+ * `hideThinkingBlock`; while the editor is not focused, thinking stays as it is.
+ */
+export function setMmrDetailsExpanded(
+  host: Pick<MmrTuiCommandHost, "getTui" | "pi">,
+  ctx: ExtensionContext,
+  expanded: boolean,
+): void {
+  ctx.ui.setToolsExpanded(expanded);
+  if (thinkingHidden(host) === expanded) runMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
+}
+
+/** Whether {@link setMmrDetailsExpanded} can reach the thinking toggle now. */
+export function canMmrSetDetailsExpanded(host: Pick<MmrTuiCommandHost, "getTui">): boolean {
+  return hasMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
 }
 
 export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
@@ -222,12 +277,47 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       verb: "open in editor",
       description: "Edit the prompt in your external editor",
       defaultKey: "ctrl+g",
-      availability: () =>
-        hasMmrEditorAction(host.getTui(), EXTERNAL_EDITOR_ACTION)
-          ? AVAILABLE
-          : { state: "unavailable", reason: "the prompt is not focused" },
+      availability: () => (promptFocused(host) ? AVAILABLE : PROMPT_NOT_FOCUSED),
       run: () => {
         runMmrEditorAction(host.getTui(), EXTERNAL_EDITOR_ACTION);
+      },
+    },
+    {
+      id: "prompt.clear",
+      noun: "prompt",
+      verb: "clear",
+      description: "Empty the prompt",
+      availability: (ctx) => {
+        if (!promptFocused(host)) return PROMPT_NOT_FOCUSED;
+        return ctx.ui.getEditorText().length > 0 ? AVAILABLE : PROMPT_EMPTY;
+      },
+      run: (ctx) => {
+        ctx.ui.setEditorText("");
+        // Pi's setEditorText does not redraw; without this the text stays until the next key.
+        host.getTui()?.requestRender();
+      },
+    },
+    lineMoveCommand(host, "start"),
+    lineMoveCommand(host, "end"),
+    {
+      id: "prompt.copySelection",
+      noun: "prompt",
+      verb: "copy selection",
+      description: "Copy the transcript text selected with the mouse",
+      // Pi's prompt editor has no selection of its own; the transcript's is the only one.
+      availability: () => {
+        const selection = getMmrTranscriptSelection(host.getTui());
+        if (!selection) return NO_SELECTION_MODE;
+        return selection.has() ? AVAILABLE : NOTHING_SELECTED;
+      },
+      run: async (ctx) => {
+        const selection = getMmrTranscriptSelection(host.getTui());
+        if (!selection?.has()) {
+          ctx.ui.notify("Nothing to copy: the selection was cleared.", "info");
+          return;
+        }
+        // Pi flashes "Copied!" or why the copy failed.
+        await selection.copy();
       },
     },
     {
@@ -358,13 +448,8 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       verb: "toggle details",
       description: "Expand or collapse tool output and thinking together",
       defaultKey: "alt+t",
-      run: (ctx) => {
-        const expand = !ctx.ui.getToolsExpanded();
-        ctx.ui.setToolsExpanded(expand);
-        // Pi keeps thinking visibility separately; bring it in line, so one
-        // key shows or hides every detail of the transcript.
-        if (thinkingHidden(host) === expand) runMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
-      },
+      // One key shows or hides every detail of the transcript.
+      run: (ctx) => setMmrDetailsExpanded(host, ctx, !ctx.ui.getToolsExpanded()),
     },
     {
       id: MMR_HELP_COMMAND_ID,

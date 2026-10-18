@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, before, describe, it } from "node:test";
 import { CustomEditor, createAgentSession, InteractiveMode, SessionManager } from "@earendil-works/pi-coding-agent";
-import { KeybindingsManager, ScrollView, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
+import { getKeybindings, KeybindingsManager, ScrollView, TUI_KEYBINDINGS, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -17,6 +17,7 @@ after(cleanupLoadedSource);
 let editorCompat;
 let editorHeight;
 let scrollCompat;
+let selectionCompat;
 let reservedKeys;
 let terminalInput;
 let messages;
@@ -32,6 +33,7 @@ before(async () => {
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
   editorHeight = await importSource("extensions/ampi-tui/pi-compat/editor-height.ts");
   scrollCompat = await importSource("extensions/ampi-tui/pi-compat/scroll.ts");
+  selectionCompat = await importSource("extensions/ampi-tui/pi-compat/selection.ts");
   reservedKeys = await importSource("extensions/ampi-tui/pi-compat/reserved-keys.ts");
   terminalInput = await importSource("extensions/ampi-tui/pi-compat/terminal-input.ts");
   messages = await importSource("extensions/ampi-tui/pi-compat/messages.ts");
@@ -91,6 +93,25 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.equal(editorCompat.isMmrEditorFocused(tui), false);
     assert.equal(editorCompat.runMmrEditorAction(tui, "app.editor.external"), false);
     assert.equal(editorCompat.isMmrEditorFocused(undefined), true, "unknown focus keeps keys working");
+  });
+
+  it("editor: the line moves reach pi-tui's cursorLineStart and cursorLineEnd actions through the first bound key", () => {
+    for (const action of Object.values(editorCompat.MMR_EDITOR_LINE_ACTIONS)) {
+      assert.ok(action in TUI_KEYBINDINGS, `pi-tui no longer defines ${action}`);
+      assert.ok(getKeybindings().getKeys(action).length > 0, `pi-tui binds no key to ${action}`);
+    }
+    const tui = new TuiMainScreen(stubTerminal());
+    const editor = new CustomEditor(tui, editorTheme, new KeybindingsManager({}));
+    editor.setText("one\ntwo three");
+    tui.setFocus(editor);
+    assert.equal(editorCompat.moveMmrEditorCursorInLine(tui, "start"), true);
+    assert.deepEqual(editor.getCursor(), { line: 1, col: 0 });
+    assert.equal(editorCompat.moveMmrEditorCursorInLine(tui, "end"), true);
+    assert.deepEqual(editor.getCursor(), { line: 1, col: 9 });
+    assert.equal(editor.getText(), "one\ntwo three");
+
+    tui.setFocus({ handleInput() {}, render: () => [], invalidate() {} });
+    assert.equal(editorCompat.moveMmrEditorCursorInLine(tui, "start"), false);
   });
 
   it("editor: Pi's prompt editor reports an open autocomplete list, which Esc closes", async () => {
@@ -254,6 +275,34 @@ describe("ampi-tui Pi compatibility probes", () => {
       tui.compositeOverlays([], 80, 24);
       assert.equal(handle.getBounds().row, 16, `${TuiClass.name} moved the overlay with the new offset`);
       handle.hide();
+    }
+  });
+
+  it("selection: the fullscreen renderer reports and copies a mouse selection of the transcript", async () => {
+    assert.equal(selectionCompat.getMmrTranscriptSelection(new TuiMainScreen(stubTerminal())), undefined);
+    const copied = [];
+    const tui = new TuiAltScreen(stubTerminal(), false, undefined, {
+      copyOnSelect: false,
+      copySelection: async (text) => {
+        copied.push(text);
+        return true;
+      },
+    });
+    tui.addChild({ render: () => ["hello world", "second line"], invalidate() {} });
+    tui.start();
+    try {
+      tui.doRender();
+      const selection = selectionCompat.getMmrTranscriptSelection(tui);
+      assert.ok(selection);
+      assert.equal(selection.has(), false);
+      assert.equal(await selection.copy(), false);
+      // Press on the first cell, drag to the fifth and release: SGR mouse reports.
+      for (const report of ["\x1b[<0;1;1M", "\x1b[<32;5;1M", "\x1b[<0;5;1m"]) tui.handleTerminalInput(report);
+      assert.equal(selection.has(), true);
+      assert.equal(await selection.copy(), true);
+      assert.deepEqual(copied, ["hello"]);
+    } finally {
+      tui.stop();
     }
   });
 

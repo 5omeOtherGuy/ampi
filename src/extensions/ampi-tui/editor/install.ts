@@ -39,6 +39,8 @@ export interface MmrPromptBoxInstallOptions {
   readonly steerQueued?: () => boolean;
   /** Opens the Mention Thread picker; resolves with the reference to insert. */
   readonly pickThread?: (ctx: ExtensionContext) => Promise<string | undefined>;
+  /** `ampi.fuzzy.alwaysIncludePaths`: globs `@` file mentions offer even when git ignores them. */
+  readonly alwaysIncludePaths?: readonly string[];
 }
 
 export interface MmrPromptBoxInstall {
@@ -229,6 +231,7 @@ export function createMmrPromptBoxInstall(
           },
           visibleRows: () => box?.getAutocompleteMaxVisible(),
           suppressed: () => mentionOpen,
+          alwaysInclude: { cwd: nextCtx.sessionManager.getCwd(), patterns: options.alwaysIncludePaths ?? [] },
         }),
       );
       unsubscribeMode ??= onMmrStateChanged(pi, requestRender);
