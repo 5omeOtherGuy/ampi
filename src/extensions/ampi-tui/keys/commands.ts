@@ -12,6 +12,7 @@ import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { getMmrThreadIndex, MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { getMmrThreadReports, type MmrThreadReports } from "../../ampi-core/thread-reports.js";
 import { formatMmrVersionNotice, readMmrVersionInfo } from "../overlays/info.js";
+import { MMR_MCP_SLASH_COMMAND } from "../overlays/mcp-info.js";
 import {
   canMmrSubmitEditorText,
   hasMmrEditorAction,
@@ -57,6 +58,8 @@ export interface MmrTuiCommandHost {
   openExtensions(ctx: ExtensionContext): void;
   /** Open the Version dialog. */
   openVersion(ctx: ExtensionContext): void;
+  /** Open the MCP Servers dialog. */
+  openMcpInfo(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -87,6 +90,7 @@ const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "am
 const THREADS_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-threads is not loaded" };
 const TERMINAL_ONLY: MmrCommandAvailability = { state: "unavailable", reason: "only in Pi's terminal UI" };
 const COSTS_HIDDEN: MmrCommandAvailability = { state: "unavailable", reason: "costs are turned off (ampiThreads.showCosts)" };
+const MCP_OFF: MmrCommandAvailability = { state: "unavailable", reason: "MCP support is off in this session (no /mcp command)" };
 
 /** A command that shows one of ampi-threads' reports: terminal only, and only with ampi-threads loaded. */
 function reportAvailability(ctx: ExtensionContext, needsCosts = false): MmrCommandAvailability {
@@ -425,6 +429,29 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       run: () => {
         if (!submitMmrEditorText(host.getTui(), "/reload")) throw new Error("the prompt is not focused");
       },
+    },
+    {
+      id: "mcp.info",
+      noun: "mcp",
+      verb: "info",
+      description: "Show the MCP servers Pi is set up with and the tools each one offers",
+      keywords: ["servers", "tools"],
+      availability: terminalOnly,
+      run: (ctx) => host.openMcpInfo(ctx),
+    },
+    {
+      id: "mcp.authenticate",
+      noun: "mcp",
+      verb: "authenticate",
+      description: "Open Pi's MCP manager (/mcp) to sign in to a server",
+      keywords: ["sign in", "login"],
+      // /mcp opens its manager in place of the prompt, so it waits for the turn to end.
+      availability: (ctx) => {
+        if (ctx.mode !== "tui") return TERMINAL_ONLY;
+        if (!hasSlashCommand(host, MMR_MCP_SLASH_COMMAND)) return MCP_OFF;
+        return ctx.isIdle() ? AVAILABLE : { state: "unavailable", reason: "a turn is running" };
+      },
+      run: () => host.pi.sendUserMessage(`/${MMR_MCP_SLASH_COMMAND}`, { expandPromptTemplates: true }),
     },
     {
       id: "ampi.help",

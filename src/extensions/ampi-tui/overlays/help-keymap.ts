@@ -36,6 +36,8 @@ import { type MmrFrameHint, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFra
  * - Command Palette Commands: every registry command, sorted by category and
  *   name, with its keys in effect or "—" when it has none.
  * - ↑/↓ or k/j scroll a row, PageUp/PageDown a page less one row; Esc closes.
+ * - A box with tabs (the MCP Servers dialog) shows them in a row above the
+ *   content; Tab moves to the next one.
  */
 
 export const MMR_HELP_KEYMAP_TITLE = "ampi — Help & Keymap";
@@ -54,6 +56,8 @@ const HINTS: readonly MmrFrameHint[] = [
   { key: "Esc", text: "close" },
   { key: "↑↓/j/k", text: "scroll" },
 ];
+const TAB_HINT: MmrFrameHint = { key: "Tab", text: "switch tab" };
+const TAB_SEPARATOR = "  ·  ";
 /** Terminal height assumed before Pi reports one. */
 const DEFAULT_TERMINAL_ROWS = 24;
 /** Rows of the frame besides its content: two borders and the padding row. */
@@ -333,8 +337,14 @@ export function renderMmrKeymapJsonLines(jsonc: string, width: number, theme: Mm
 
 export interface MmrScrollOverlayOptions {
   readonly title: string;
-  /** The content lines for a given inner width. */
-  readonly content: (width: number, theme: MmrFrameTheme) => readonly string[];
+  /** The content lines for a given inner width and, with {@link tabs}, the index of the tab shown. */
+  readonly content: (width: number, theme: MmrFrameTheme, tab: number) => readonly string[];
+  /**
+   * Tab labels, shown in a row above the content that does not scroll: the
+   * active one bold in the title color, the others dim. Tab moves to the next
+   * tab; the box is as tall as the tallest tab's content.
+   */
+  readonly tabs?: readonly string[];
   readonly theme: MmrFrameTheme;
   /** Called once, when the overlay closes. */
   readonly onClose: () => void;
@@ -347,8 +357,10 @@ export interface MmrScrollOverlayOptions {
 /** A read-only, scrolling text box in the shared frame. */
 export class MmrScrollOverlay implements Component {
   private readonly options: MmrScrollOverlayOptions;
-  private cache: { width: number; lines: readonly string[] } | undefined;
+  /** Content lines by tab, for one inner width. */
+  private cache: { width: number; tabs: Map<number, readonly string[]> } | undefined;
   private offset = 0;
+  private tab = 0;
   /** Rows a page moves and the largest offset, as of the last render. */
   private page = 1;
   private maxOffset = Number.POSITIVE_INFINITY;
@@ -363,12 +375,20 @@ export class MmrScrollOverlay implements Component {
     return this.offset;
   }
 
+  /** Index of the tab shown. */
+  getTab(): number {
+    return this.tab;
+  }
+
   handleInput(data: string): void {
     if (this.closed) return;
     const keybindings = getKeybindings();
     if (keybindings.matches(data, "tui.select.cancel")) {
       this.closed = true;
       this.options.onClose();
+    } else if (this.options.tabs && matchesKey(data, "tab")) {
+      this.tab = (this.tab + 1) % this.options.tabs.length;
+      this.offset = 0;
     } else if (keybindings.matches(data, "tui.select.up") || matchesKey(data, "k")) {
       this.scroll(-1);
     } else if (keybindings.matches(data, "tui.select.down") || matchesKey(data, "j")) {
@@ -384,21 +404,42 @@ export class MmrScrollOverlay implements Component {
     this.cache = undefined;
   }
 
+  private contentOf(tab: number, inner: number): readonly string[] {
+    if (this.cache?.width !== inner) this.cache = { width: inner, tabs: new Map() };
+    let lines = this.cache.tabs.get(tab);
+    if (!lines) {
+      lines = this.options.content(inner, this.options.theme, tab);
+      this.cache.tabs.set(tab, lines);
+    }
+    return lines;
+  }
+
   render(width: number): string[] {
     const inner = mmrFrameInnerWidth(width);
-    if (this.cache?.width !== inner) this.cache = { width: inner, lines: this.options.content(inner, this.options.theme) };
-    const lines = this.cache.lines;
+    const { tabs, theme } = this.options;
+    const lines = this.contentOf(this.tab, inner);
+    // The tab row and a blank line under it stay put above the content.
+    const header = tabs
+      ? [
+          tabs
+            .map((label, index) => (index === this.tab ? theme.bold(theme.fg("warning", label)) : theme.fg("dim", label)))
+            .join(theme.fg("dim", TAB_SEPARATOR)),
+          "",
+        ]
+      : [];
+    const tallest = tabs ? Math.max(...tabs.map((_, index) => this.contentOf(index, inner).length)) : lines.length;
     const rows = this.options.terminalRows?.() ?? DEFAULT_TERMINAL_ROWS;
-    const room = Math.max(1, rows - 2 - FRAME_ROWS);
-    const visible = this.options.fit ? Math.max(1, Math.min(room, lines.length)) : room;
+    const room = Math.max(1, rows - 2 - FRAME_ROWS - header.length);
+    const visible = this.options.fit ? Math.max(1, Math.min(room, tallest)) : room;
     // A page keeps the last row of the previous one on screen.
     this.page = Math.max(1, visible - 1);
     this.maxOffset = Math.max(0, lines.length - visible);
     this.offset = Math.min(this.offset, this.maxOffset);
     const body = Array.from({ length: visible }, (_, index) => lines[this.offset + index] ?? "");
-    const scrollbar = renderMmrScrollbar({ total: lines.length, visible, offset: this.offset }, this.options.theme);
-    const hints = this.options.fit && this.maxOffset === 0 ? HINTS.slice(0, 1) : HINTS;
-    return renderMmrFrame({ title: this.options.title, hints, lines: body, gutter: scrollbar }, width, this.options.theme);
+    const scrollbar = renderMmrScrollbar({ total: lines.length, visible, offset: this.offset }, theme);
+    const hints = [...(tabs ? [TAB_HINT] : []), ...(this.options.fit && this.maxOffset === 0 ? HINTS.slice(0, 1) : HINTS)];
+    const gutter = scrollbar ? [...header.map(() => " "), ...scrollbar] : undefined;
+    return renderMmrFrame({ title: this.options.title, hints, lines: [...header, ...body], gutter }, width, theme);
   }
 
   private scroll(delta: number): void {
@@ -414,7 +455,7 @@ export function openMmrScrollOverlay(
   ctx: ExtensionContext,
   title: string,
   content: MmrScrollOverlayOptions["content"],
-  options: Pick<MmrScrollOverlayOptions, "fit"> & { readonly width?: number } = {},
+  options: Pick<MmrScrollOverlayOptions, "fit" | "tabs"> & { readonly width?: number } = {},
 ): Promise<void> {
   return ctx.ui.custom<void>(
     (tui, theme, _keybindings, done) =>
@@ -425,6 +466,7 @@ export function openMmrScrollOverlay(
         onClose: () => done(undefined),
         terminalRows: () => tui?.terminal?.rows,
         fit: options.fit,
+        tabs: options.tabs,
       }),
     {
       overlay: true,

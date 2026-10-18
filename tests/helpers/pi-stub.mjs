@@ -26,6 +26,7 @@
  *    Used to exercise the toolbox's fallback chain (`ctrl+t` -> `ctrl+shift+t` -> `alt+t`).
  *  - `settings` (default `{}`): object returned (as a copy) by `getSettings`.
  *  - `setModelResult` (default `true`): boolean returned by `setModel`.
+ *  - `mcpServers` (default `[]`): servers returned (as copies) by `getMcpServers`.
  *  - `initialModel` (default `undefined`): initial value tracked by `getModel`.
  *  - `onModelSet(model, { handlers, eventContext })` (optional): async hook
  *    invoked after `setModel`, used to simulate Pi emitting downstream events.
@@ -118,6 +119,8 @@ export function createMockPi(options = {}) {
     handlers,
     getActiveTools: () => [...activeTools],
     getAllTools: () => allTools.map((tool) => ({ ...tool })),
+    // Servers extensions registered, as Pi lists them (copies).
+    getMcpServers: () => structuredClone(options.mcpServers ?? []),
     setActiveTools: (toolList) => {
       calls.setActiveTools.push([...toolList]);
       activeTools = [...toolList];

@@ -8,6 +8,8 @@
   "ampi.quit": "ctrl+c ctrl+c", // Quit
   "ampi.showVersion": "ctrl+o", // Show the ampi and Pi versions
   "ampi.status": null, // Show the current mode, model and tools, as /ampi-status does
+  "mcp.authenticate": null, // Open Pi's MCP manager (/mcp) to sign in to a server
+  "mcp.info": null, // Show the MCP servers Pi is set up with and the tools each one offers
   "mode.toggle": "ctrl+s", // Show the mode dial; each further press turns it to the next mode
   "mode.use.free": null, // Switch to the free mode
   "mode.use.high": null, // Switch to the high mode

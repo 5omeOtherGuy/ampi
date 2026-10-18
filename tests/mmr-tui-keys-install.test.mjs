@@ -140,6 +140,8 @@ describe("ampi-tui key installation", () => {
       "skills.list": undefined,
       "plugins.list": undefined,
       "plugins.reload": undefined,
+      "mcp.info": undefined,
+      "mcp.authenticate": undefined,
       "ampi.help": undefined,
       "ampi.keymapJson": undefined,
       "thread.toggleDetails": "alt+t",

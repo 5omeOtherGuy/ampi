@@ -1,0 +1,11 @@
+╭─ [1m[33mMCP Servers[39m[22m ────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ [1m[33mServers[39m[22m[2m  ·  [22m[2mTools[22m                                                        │
+│                                                                          │
+│ No MCP servers are set up. Add one with pi mcp add, or list it under     │
+│ mcpServers in mcp.json in Pi's agent directory, or in .pi/mcp.json for   │
+│ one project.                                                             │
+│                                                                          │
+│ [2mRun /mcp to sign in, reconnect, change a server's exposure or turn a[22m     │
+│ [2mserver on or off.[22m                                                        │
+╰───────────────────────────────────────────── [34mTab[39m [2mswitch tab[22m[2m · [22m[34mEsc[39m [2mclose[22m ─╯
