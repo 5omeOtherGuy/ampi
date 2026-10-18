@@ -21,6 +21,8 @@ const INDEX_VERSION = 1;
 const LABELS_MAX = 20;
 const LABEL_MAX_LENGTH = 32;
 const LABEL = /^[a-z0-9-]+$/;
+/** Session ids ampi-threads refuses as index keys: it sets aside an index that holds one. */
+const UNSAFE_IDS = new Set(["__proto__", "prototype", "constructor"]);
 
 /** A thread index that cannot be read or changed, or a label that is not allowed. */
 export class ThreadIndexError extends Error {
@@ -112,7 +114,8 @@ export function readThreadIndex(file) {
  * Change one session's record and write the index back through a temporary
  * file, so a reader never sees half a file. `patch` sets fields; a `null`
  * value removes one, and `null` for the whole patch removes the record.
- * Returns the record as written, or `undefined` when none is left.
+ * Returns the record as written, or `undefined` when none is left. A session
+ * id ampi-threads refuses is refused here too, before anything is written.
  *
  * @param {string} file
  * @param {string} sessionId
@@ -120,6 +123,9 @@ export function readThreadIndex(file) {
  * @returns {ThreadRecord | undefined}
  */
 export function updateThreadRecord(file, sessionId, patch) {
+  if (sessionId.trim() === "" || UNSAFE_IDS.has(sessionId)) {
+    throw new ThreadIndexError(`ampi keeps no thread metadata for the session id ${JSON.stringify(sessionId)}.`);
+  }
   const threads = readThreadIndex(file);
   /** @type {Record<string, unknown>} */
   const next = patch === null ? {} : { ...threads[sessionId] };

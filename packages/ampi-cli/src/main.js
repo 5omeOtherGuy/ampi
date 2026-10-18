@@ -10,7 +10,6 @@ import { buildExecuteArgs, createRunExtension, isExecuteRun, readAll } from "./e
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
 import { capturePiJsonOutput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
-import { runThreadsCommand } from "./threads.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -224,6 +223,8 @@ async function runThreads(threadArgs) {
     process.exit(0);
   });
   const pi = await import(PI_PACKAGE_NAME);
+  // Loaded here, with Pi, so other commands do not load the terminal helpers it needs.
+  const { runThreadsCommand } = await import("./threads.js");
   const result = await runThreadsCommand(threadArgs, {
     pi,
     cwd: process.cwd(),

@@ -14,7 +14,7 @@ import * as pi from "@earendil-works/pi-coding-agent";
 import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
 import { formatThreadMarkdown } from "../packages/ampi-cli/src/thread-markdown.js";
 import { readThreadIndex, threadIndexPath, updateThreadRecord, validateThreadLabels } from "../packages/ampi-cli/src/thread-index.js";
-import { formatThreadsHelp, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
+import { formatRelativeTime, formatThreadsHelp, formatThreadTable, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -147,6 +147,68 @@ describe("ampi threads: routing and help", () => {
   });
 });
 
+describe("ampi threads: the table", () => {
+  const info = (id, title, minutesAgo, named = false) => ({
+    id,
+    path: `/sessions/${id}.jsonl`,
+    cwd: DEMO,
+    ...(named ? { name: title } : {}),
+    created: new Date(NOW - minutesAgo * 60_000),
+    modified: new Date(NOW - minutesAgo * 60_000),
+    messageCount: 1,
+    firstMessage: named ? "" : title,
+  });
+
+  it("drops control characters from titles and cuts them by terminal columns, never inside a character", () => {
+    const sessions = [
+      info("s-esc", "evil \u001b]0;PWNED\u0007 title \u001b[2J cleared\u009b", 5),
+      // 30 characters, 60 columns wide.
+      info("s-wide", "表示幅".repeat(10), 180, true),
+      info("s-emoji", "Ship it 🚀🚀 now", 2 * 24 * 60),
+      info("s-ctl", "\u001b\u0007", 2 * 24 * 60),
+    ];
+    assert.equal(
+      formatThreadTable(sessions, {}, { now: NOW, columns: 80, archivedColumn: false }),
+      [
+        `ID       Title${" ".repeat(47)}  Updated  Messages`,
+        `───────  ${"─".repeat(52)}  ───────  ────────`,
+        `s-esc    evil ]0;PWNED title [2J cleared${" ".repeat(21)}  5m ago          1`,
+        `s-wide   ${"表示幅".repeat(8)}表… ${"  "}3h ago          1`,
+        `s-emoji  Ship it 🚀🚀 now${" ".repeat(36)}  2d ago          1`,
+        `s-ctl    untitled${" ".repeat(44)}  2d ago          1`,
+        "",
+      ].join("\n"),
+    );
+    // Above, the 52-column title had room for 25.5 wide characters and the ellipsis, so one column stays
+    // empty; a 31-column title takes exactly 15 of them.
+    const exact = formatThreadTable([info("s-wide", "表示幅".repeat(10), 180, true)], {}, { now: NOW, columns: 58, archivedColumn: false });
+    assert.equal(exact.split("\n")[2], `s-wide  ${"表示幅".repeat(5)}…  3h ago          1`);
+  });
+
+  it("words the time since the last activity like the Switch Thread picker, on both sides of each step", async () => {
+    const { formatMmrRelativeTime } = await importSource("extensions/ampi-tui/overlays/thread-picker.ts");
+    const minute = 60_000;
+    const day = 24 * 60 * minute;
+    for (const [ago, words] of [
+      [-minute, "now"],
+      [minute - 1, "now"],
+      [minute, "1m ago"],
+      [59 * minute, "59m ago"],
+      [60 * minute, "1h ago"],
+      [day - 1, "23h ago"],
+      [day, "1d ago"],
+      [29 * day, "29d ago"],
+      [30 * day, "1mo ago"],
+      [364 * day, "12mo ago"],
+      [365 * day, "1y ago"],
+    ]) {
+      const then = new Date(NOW - ago);
+      assert.equal(formatRelativeTime(then, NOW), words, String(ago));
+      assert.equal(formatMmrRelativeTime(then, NOW), words, `picker ${ago}`);
+    }
+  });
+});
+
 describe("ampi threads: reading sessions", () => {
   let agentDir;
   before(async () => {
@@ -169,6 +231,20 @@ describe("ampi threads: reading sessions", () => {
     );
     // `ampi threads` alone lists too.
     assert.equal((await run(["threads"])).out, out);
+  });
+
+  it("keeps titles at least 10 columns wide when the terminal is narrower than the other columns allow", async () => {
+    const { out } = await run(["threads", "list"], { columns: 60 });
+    assert.equal(
+      out,
+      [
+        "ID                                    Title       Updated  Messages",
+        "────────────────────────────────────  ──────────  ───────  ────────",
+        "019a0000-aaaa-7000-8000-000000000001  Rename th…  1h ago          2",
+        "019a0000-aaaa-7000-8000-000000000002  Fix the f…  2d ago          3",
+        "",
+      ].join("\n"),
+    );
   });
 
   it("includes archived sessions with a marker for --archived and --include-archived", async () => {
@@ -445,6 +521,51 @@ describe("ampi threads: changing sessions", () => {
     assert.deepEqual(unasked.questions, []);
     assert.ok(!existsSync(fileD));
     assert.deepEqual((await run(["threads", "delete", "019b", "--yes"])).result, { code: 1 });
+  });
+
+  it("refuses the session ids ampi-threads refuses as index keys, and never writes them", async () => {
+    const file = path.join(temporary, "unsafe-ids", "index.json");
+    const shared = (await importSource("extensions/ampi-threads/index-store.ts")).createMmrThreadIndexStore({ baseDir: path.dirname(file) });
+    for (const id of ["__proto__", "prototype", "constructor", "", "release.v2_x-1"]) {
+      let storeRefused = false;
+      await shared.update(id, { pinned: true }).catch(() => {
+        storeRefused = true;
+      });
+      let cliRefused = false;
+      try {
+        updateThreadRecord(file, id, { archived: "2026-10-18T09:00:00.000Z" });
+      } catch (error) {
+        cliRefused = true;
+        assert.equal(error.message, `ampi keeps no thread metadata for the session id ${JSON.stringify(id)}.`);
+      }
+      assert.equal(cliRefused, storeRefused, JSON.stringify(id));
+    }
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, "utf8")).threads), ["release.v2_x-1"]);
+    assert.deepEqual(await shared.get("release.v2_x-1"), { pinned: true, archived: "2026-10-18T09:00:00.000Z" });
+  });
+
+  it("archives and labels no session with such an id, and renames it without the index", async () => {
+    mock.timers.enable({ apis: ["Date"], now: at("2026-10-12T10:00:00.000Z") });
+    try {
+      pi.SessionManager.create(OTHER, undefined, { id: "prototype" }).appendMessage(user("Sketch it", "2026-10-12T10:00:00.000Z"));
+    } finally {
+      mock.timers.reset();
+    }
+    const index = readFileSync(threadIndexPath(agentDir), "utf8");
+    const refusal = 'ampi: ampi keeps no thread metadata for the session id "prototype".\n';
+    for (const args of [["threads", "archive", "prototype"], ["threads", "label", "prototype", "draft"]]) {
+      const { result, err } = await run(args);
+      assert.deepEqual(result, { code: 1 }, args.join(" "));
+      assert.equal(err, refusal);
+    }
+    const renamed = await run(["threads", "rename", "prototype", "Sketch"]);
+    assert.deepEqual(renamed.result, { code: 0 });
+    assert.equal(renamed.out, 'Renamed prototype to "Sketch".\n');
+    assert.equal(renamed.err, `ampi: the session was renamed, but the thread index was not updated: ${refusal.slice("ampi: ".length)}`);
+    assert.equal((await pi.SessionManager.list(OTHER)).find((session) => session.id === "prototype")?.name, "Sketch");
+    // The index is unchanged, so ampi-threads still reads every record in it.
+    assert.equal(readFileSync(threadIndexPath(agentDir), "utf8"), index);
+    assert.deepEqual(Object.keys(await store.list()).sort(), [A, B].sort());
   });
 });
 

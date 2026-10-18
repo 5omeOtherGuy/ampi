@@ -4,6 +4,74 @@
 // stdin read is not exported, so the spawn tests in
 // tests/mmr-cli-execute.test.mjs are the probe for hidePipedStdinFromPi, and
 // those in tests/mmr-cli-stream-json.test.mjs for capturePiJsonOutput.
+import { homedir } from "node:os";
+import path from "node:path";
+
+/**
+ * @typedef {object} PiSessionInfo The parts of Pi's `SessionInfo` the `ampi` command reads.
+ * @property {string} path
+ * @property {string} id
+ * @property {string} cwd
+ * @property {string} [name]
+ * @property {string} [parentSessionPath]
+ * @property {Date} created
+ * @property {Date} modified Last activity.
+ * @property {number} messageCount
+ * @property {string} firstMessage
+ */
+
+/**
+ * Pi's configuration directory (`PI_CODING_AGENT_DIR`, else Pi's default).
+ *
+ * @param {any} pi The `@earendil-works/pi-coding-agent` module.
+ * @returns {string}
+ */
+export function piAgentDir(pi) {
+  return pi.getAgentDir();
+}
+
+/**
+ * The session directory Pi uses, from `PI_CODING_AGENT_SESSION_DIR` or the
+ * `sessionDir` setting, in Pi's order; `undefined` for Pi's default layout.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string | undefined}
+ */
+function piSessionDir(pi, cwd, env) {
+  const fromEnv = env.PI_CODING_AGENT_SESSION_DIR;
+  if (fromEnv) return fromEnv === "~" || fromEnv.startsWith("~/") ? path.join(homedir(), fromEnv.slice(1)) : fromEnv;
+  return pi.SettingsManager.create(cwd, pi.getAgentDir()).getSessionDir();
+}
+
+/**
+ * The sessions Pi would offer to resume: those of `cwd`, or of every directory.
+ * A session id can appear more than once (a copied file).
+ *
+ * @param {any} pi
+ * @param {{ cwd: string, env: NodeJS.ProcessEnv, scope: "workspace" | "all" }} options
+ * @returns {Promise<PiSessionInfo[]>}
+ */
+export async function listPiSessions(pi, { cwd, env, scope }) {
+  const { SessionManager } = pi;
+  const sessionDir = piSessionDir(pi, cwd, env);
+  if (scope === "workspace") return SessionManager.list(cwd, sessionDir);
+  // A directory directly in <agentDir>/sessions is Pi's own layout: list every directory there.
+  const usesDefault = sessionDir === undefined || path.dirname(path.resolve(sessionDir)) === path.resolve(pi.getAgentDir(), "sessions");
+  return usesDefault ? SessionManager.listAll() : SessionManager.listAll(sessionDir);
+}
+
+/**
+ * Set a session's name (a `session_info` entry appended to its file).
+ *
+ * @param {any} pi
+ * @param {string} file
+ * @param {string} name
+ */
+export function setPiSessionName(pi, file, name) {
+  pi.SessionManager.open(file).appendSessionInfo(name);
+}
 
 /**
  * @typedef {object} PiExtensionSources

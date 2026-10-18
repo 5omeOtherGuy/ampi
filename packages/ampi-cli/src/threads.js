@@ -1,28 +1,18 @@
 // `ampi threads …` and `ampi last`: Amp-compatible thread commands on Pi's
-// session files. Sessions are listed and opened through Pi's SessionManager;
+// session files. Sessions are listed and renamed through Pi (pi-compat.js);
 // archive dates, labels and the title source live in ampi's thread index
 // (thread-index.js). Opening a session in the terminal UI is left to Pi: the
 // commands that do it return the Pi arguments to start with.
 import { readFileSync, unlinkSync } from "node:fs";
-import { homedir } from "node:os";
-import path from "node:path";
 import { parseArgs } from "node:util";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import { listPiSessions, piAgentDir, setPiSessionName } from "./pi-compat.js";
 import { formatThreadMarkdown } from "./thread-markdown.js";
 import { readThreadIndex, ThreadIndexError, threadIndexPath, updateThreadRecord, validateThreadLabels } from "./thread-index.js";
 
 /**
  * @typedef {import("./thread-index.js").ThreadRecord} ThreadRecord
- *
- * @typedef {object} PiSessionInfo The parts of Pi's `SessionInfo` this module reads.
- * @property {string} path
- * @property {string} id
- * @property {string} cwd
- * @property {string} [name]
- * @property {string} [parentSessionPath]
- * @property {Date} created
- * @property {Date} modified Last activity.
- * @property {number} messageCount
- * @property {string} firstMessage
+ * @typedef {import("./pi-compat.js").PiSessionInfo} PiSessionInfo
  *
  * @typedef {object} ThreadsHost
  * @property {any} pi The `@earendil-works/pi-coding-agent` module.
@@ -44,6 +34,9 @@ const UNTITLED = "untitled";
 const GAP = "  ";
 /** Narrowest title column the listing cuts titles to. */
 const TITLE_MIN = 10;
+/** C0 and C1 control characters: a title is printed to a terminal, so none may start an escape sequence. */
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 /** @type {Record<string, string>} */
 const ALIASES = { ls: "list", l: "list", c: "continue", md: "markdown", r: "rename" };
@@ -120,9 +113,16 @@ function usage(message) {
   return { code: 2, message };
 }
 
-/** @param {PiSessionInfo} session */
+/**
+ * A session's title on one line without control characters: its name, else
+ * its first message, else "untitled".
+ *
+ * @param {PiSessionInfo} session
+ */
 export function threadTitle(session) {
-  return session.name?.trim() || session.firstMessage.replace(/\s+/g, " ").trim() || UNTITLED;
+  /** @param {string} text */
+  const clean = (text) => text.replace(/\s+/g, " ").replace(CONTROL, "").trim();
+  return clean(session.name ?? "") || clean(session.firstMessage) || UNTITLED;
 }
 
 /**
@@ -144,18 +144,8 @@ export function formatRelativeTime(then, now) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
-/**
- * The session directory Pi uses, from `PI_CODING_AGENT_SESSION_DIR` or the
- * `sessionDir` setting, in Pi's order; `undefined` for Pi's default layout.
- *
- * @param {ThreadsHost} host
- * @returns {string | undefined}
- */
-function sessionDirOf(host) {
-  const fromEnv = host.env.PI_CODING_AGENT_SESSION_DIR;
-  if (fromEnv) return fromEnv === "~" || fromEnv.startsWith("~/") ? path.join(homedir(), fromEnv.slice(1)) : fromEnv;
-  return host.pi.SettingsManager.create(host.cwd, host.pi.getAgentDir()).getSessionDir();
-}
+/** @param {ThreadsHost} host */
+const indexFileOf = (host) => threadIndexPath(piAgentDir(host.pi));
 
 /**
  * One record per session id (the most recently active one), newest first.
@@ -165,16 +155,7 @@ function sessionDirOf(host) {
  * @returns {Promise<PiSessionInfo[]>}
  */
 async function listSessions(host, scope) {
-  const { SessionManager } = host.pi;
-  const sessionDir = sessionDirOf(host);
-  /** @type {PiSessionInfo[]} */
-  let sessions;
-  if (scope === "workspace") sessions = await SessionManager.list(host.cwd, sessionDir);
-  else {
-    // A directory directly in <agentDir>/sessions is Pi's own layout: list every directory there.
-    const usesDefault = sessionDir === undefined || path.dirname(path.resolve(sessionDir)) === path.resolve(host.pi.getAgentDir(), "sessions");
-    sessions = usesDefault ? await SessionManager.listAll() : await SessionManager.listAll(sessionDir);
-  }
+  const sessions = await listPiSessions(host.pi, { cwd: host.cwd, env: host.env, scope });
   /** @type {Map<string, PiSessionInfo>} */
   const byId = new Map();
   for (const session of sessions) {
@@ -215,7 +196,7 @@ async function resolveSession(host, query) {
  */
 function readIndexForListing(host) {
   try {
-    return readThreadIndex(threadIndexPath(host.pi.getAgentDir()));
+    return readThreadIndex(indexFileOf(host));
   } catch (error) {
     host.err(`ampi: ${error instanceof Error ? error.message : String(error)} Archive dates and labels are left out.\n`);
     return {};
@@ -249,10 +230,27 @@ export function describeSession(session, record) {
   };
 }
 
-/** @param {string} text @param {number} width */
+/**
+ * `text` cut to `width` terminal columns, whole characters only, with an
+ * ellipsis when anything was cut.
+ *
+ * @param {string} text
+ * @param {number} width
+ */
 function cut(text, width) {
-  return text.length <= width ? text : `${text.slice(0, Math.max(0, width - 1)).trimEnd()}…`;
+  if (visibleWidth(text) <= width) return text;
+  let kept = "";
+  let used = 0;
+  for (const { segment } of GRAPHEMES.segment(text)) {
+    used += visibleWidth(segment);
+    if (used > width - 1) break;
+    kept += segment;
+  }
+  return `${kept.trimEnd()}…`;
 }
+
+/** @param {string} text @param {number} width */
+const padEnd = (text, width) => text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 
 /**
  * The listing as a table: id, title, time since the last activity, message
@@ -274,14 +272,14 @@ export function formatThreadTable(sessions, threads, { now, columns, archivedCol
   ]);
   const header = ["ID", "Title", "Updated", "Messages", "Archived"];
   const count = archivedColumn ? 5 : 4;
-  const widths = header.slice(0, count).map((name, column) => Math.max(name.length, ...rows.map((row) => row[column].length)));
+  const widths = header.slice(0, count).map((name, column) => Math.max(visibleWidth(name), ...rows.map((row) => visibleWidth(row[column]))));
   const others = widths.reduce((sum, width, column) => (column === 1 ? sum : sum + width), 0) + GAP.length * (count - 1);
   widths[1] = Math.min(widths[1], Math.max(TITLE_MIN, columns - others));
   /** @param {string[]} cells */
   const line = (cells) =>
     cells
       .slice(0, count)
-      .map((cell, column) => (column === 3 ? cell.padStart(widths[column]) : cut(cell, widths[column]).padEnd(widths[column])))
+      .map((cell, column) => (column === 3 ? cell.padStart(widths[column]) : padEnd(cut(cell, widths[column]), widths[column])))
       .join(GAP)
       .trimEnd();
   return `${[line(header), widths.map((width) => "─".repeat(width)).join(GAP), ...rows.map(line)].join("\n")}\n`;
@@ -458,10 +456,10 @@ async function rename(host, [query, ...words]) {
   const title = words.join(" ").replace(/\s+/g, " ").trim();
   if (query === undefined || !title) return usage("threads rename takes a session id and a title.");
   return withSession(host, query, (session) => {
-    host.pi.SessionManager.open(session.path).appendSessionInfo(title);
+    setPiSessionName(host.pi, session.path, title);
     try {
       // As --title does: the title is the user's, not one to generate.
-      updateThreadRecord(threadIndexPath(host.pi.getAgentDir()), session.id, { titleSource: "user" });
+      updateThreadRecord(indexFileOf(host), session.id, { titleSource: "user" });
     } catch (error) {
       host.err(`ampi: the session was renamed, but the thread index was not updated: ${messageOf(error)}\n`);
     }
@@ -478,7 +476,7 @@ async function rename(host, [query, ...words]) {
  */
 async function archive(host, query, archived) {
   return withSession(host, query, (session) => {
-    const file = threadIndexPath(host.pi.getAgentDir());
+    const file = indexFileOf(host);
     const isArchived = recordOf(readThreadIndex(file), session.id)?.archived !== undefined;
     if (isArchived === archived) {
       host.out(`${session.id} is ${archived ? "already" : "not"} archived.\n`);
@@ -504,7 +502,7 @@ async function label(host, [query, ...labels]) {
     throw error;
   }
   return withSession(host, query, (session) => {
-    const file = threadIndexPath(host.pi.getAgentDir());
+    const file = indexFileOf(host);
     const merged = validateThreadLabels([...(recordOf(readThreadIndex(file), session.id)?.labels ?? []), ...labels]);
     updateThreadRecord(file, session.id, { labels: merged });
     host.out(`Labels of ${session.id}: ${merged.join(", ")}.\n`);
@@ -528,7 +526,7 @@ async function remove(host, query, yes) {
       return { code: 1, message: "nothing was deleted." };
     }
     unlinkSync(session.path);
-    const file = threadIndexPath(host.pi.getAgentDir());
+    const file = indexFileOf(host);
     try {
       if (recordOf(readThreadIndex(file), session.id) !== undefined) updateThreadRecord(file, session.id, null);
     } catch (error) {
