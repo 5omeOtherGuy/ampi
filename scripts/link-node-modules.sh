@@ -4,19 +4,13 @@
 # 300+ MB install instead of each running `npm ci`. Source stays isolated per
 # worktree; only the dependency tree is shared.
 #
-# It also surfaces `AGENTS.md` into the worktree. `AGENTS.md` is gitignored and
-# exists only in the primary checkout, but all task work happens in worktrees —
-# without this, a session or subagent whose cwd is the worktree never sees the
-# workflow instructions. The symlink is gitignored too, so it cannot leak into
-# a commit.
-#
-# This is the sanctioned setup step for a new worktree (AGENTS.md "Workflow").
+# This is the sanctioned setup step for a new worktree (AGENTS.md "Landing a
+# change").
 # It is safe and idempotent:
 #   - Refuses to run from the primary checkout (it already owns these).
 #   - No-op if node_modules is already the correct symlink.
 #   - Refuses to clobber a real node_modules directory (a worktree that
 #     deliberately installed its own, e.g. a different peer-dep version).
-#   - Never clobbers an existing AGENTS.md (real file or symlink).
 #
 # IMPORTANT: never run `npm install`/`npm ci` while node_modules is this shared
 # symlink — writes would mutate the primary's install for every worktree.
@@ -52,19 +46,6 @@ if [ "$WT_TOP" = "$PRIMARY_TOP" ]; then
   note "this is the primary checkout ($PRIMARY_TOP); nothing to link"
   exit 12
 fi
-
-# Surface AGENTS.md (gitignored, primary-only) into the worktree. Independent of
-# node_modules so it still happens even if the primary install is missing.
-link_agents_md() {
-  local src="$PRIMARY_TOP/AGENTS.md"
-  local dst="$WT_TOP/AGENTS.md"
-  [ -e "$src" ] || return 0
-  if [ -e "$dst" ] || [ -L "$dst" ]; then return 0; fi
-  local rel
-  rel=$(realpath --relative-to="$WT_TOP" "$src" 2>/dev/null || echo "$src")
-  ln -s "$rel" "$dst" && note "linked AGENTS.md -> $rel"
-}
-link_agents_md
 
 if [ ! -d "$PRIMARY_TOP/node_modules" ]; then
   warn "primary checkout has no node_modules ($PRIMARY_TOP/node_modules)"

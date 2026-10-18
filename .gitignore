@@ -16,8 +16,7 @@ coverage/
 *.mmr-capture.jsonl
 docs/private/
 
-# Local-only agent guidance (never published; keep your own copy here).
-AGENTS.md
+# Local-only agent commands (never published).
 .claude/commands/refine-prompt.md
 .claude/commands/audit-prompt.md
 # Local-only captured prompt material (never commit).
