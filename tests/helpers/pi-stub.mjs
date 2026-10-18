@@ -31,6 +31,8 @@
  *    invoked after `setModel`, used to simulate Pi emitting downstream events.
  *  - `onThinkingLevelSet(level, { handlers, eventContext })` (optional): hook
  *    invoked after `setThinkingLevel`.
+ *  - `onSendUserMessage(content, options)` (optional): hook invoked after
+ *    `sendUserMessage` is recorded, used to simulate Pi queueing the message.
  *
  * Returns `{ pi, calls, commands, shortcuts, handlers, tools, flagDefs, emits,
  * toolRenderers, setEventContext }`. `toolRenderers` lists the resolvers passed
@@ -140,6 +142,7 @@ export function createMockPi(options = {}) {
     appendEntry: (...entry) => calls.appendEntry.push(entry),
     sendUserMessage: (content, opts) => {
       calls.sendUserMessage.push({ content, options: opts });
+      options.onSendUserMessage?.(content, opts);
     },
     registerCommand: (name, command) => commands.set(name, command),
     // Registered commands as Pi lists them (extension commands only).

@@ -61,11 +61,11 @@ function defaultHelpEntries() {
 }
 
 /** `shortcuts`: open the shortcuts help with this content. */
-function makeBox({ rows = 24, text = "", slots = {}, onDequeued, shortcuts } = {}) {
+function makeBox({ rows = 24, text = "", slots = {}, onDequeued, steerQueued, shortcuts } = {}) {
   const terminal = new Proxy({ columns: 140, rows }, { get: (target, name) => (name in target ? target[name] : () => {}) });
   const tui = new TuiMainScreen(terminal);
   const current = { mode: "medium", status: status(), waveFrame: 0, location: "/work/demo (main)", overlay: false, ...slots };
-  const host = { slots: () => current, theme: () => theme, dequeued: onDequeued, help: shortcuts ? () => shortcuts : undefined };
+  const host = { slots: () => current, theme: () => theme, dequeued: onDequeued, steerQueued, help: shortcuts ? () => shortcuts : undefined };
   const editor = new box.MmrPromptBox(tui, editorTheme, new PiKeybindings({}), host);
   editor.setText(text);
   if (shortcuts) editor.setHelpOpen(true);
@@ -349,6 +349,29 @@ describe("ampi-tui prompt box: keys", () => {
     editor.setText("");
     editor.handleInput("\x7f");
     assert.equal(dequeued, 1, "nothing queued: nothing to take back");
+  });
+
+  it("steers with the next queued message on Enter with an empty prompt", () => {
+    let queuedFollowUps = 1;
+    let steered = 0;
+    const submitted = [];
+    const { editor } = makeBox({
+      steerQueued: () => {
+        if (queuedFollowUps === 0) return false;
+        queuedFollowUps -= 1;
+        steered += 1;
+        return true;
+      },
+    });
+    editor.onSubmit = (text) => submitted.push(text);
+    editor.handleInput("\r");
+    assert.equal(steered, 1);
+    editor.handleInput("\r");
+    assert.deepEqual([steered, submitted], [1, [""]], "nothing left to steer: Enter goes to Pi's editor");
+    editor.setText("new message");
+    queuedFollowUps = 1;
+    editor.handleInput("\r");
+    assert.deepEqual([steered, submitted], [1, ["", "new message"]], "with text Enter sends the prompt");
   });
 
   it("pages by the box's visible rows on PageUp", () => {

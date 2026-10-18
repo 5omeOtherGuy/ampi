@@ -22,6 +22,7 @@ import {
  * | `agent_settled`                  | `settled`                                  |
  * | `input` while a turn runs        | one more queued message                    |
  * | `message_start` (user)           | one queued message delivered               |
+ * | Pi's queue changed (`followQueue`) | the queue's length                       |
  *
  * The token count is an estimate: the UTF-8 bytes of the deltas streamed
  * since the stage began (thinking, or text and tool calls), four bytes to a
@@ -29,11 +30,15 @@ import {
  * when it ends, not while it streams (the faux model sets its whole total up
  * front), so the partial message's usage cannot count up during a stage.
  *
- * Pi reports only whether messages are queued, not how many, so the feed
- * counts them. On every agent event it checks the count against Pi: zero
- * when Pi has none left, at least one when Pi has some. A queue changed some
- * other way (Pi's own dequeue key, or an input another extension handled)
- * then shows the right hint by the next event.
+ * Pi's extension API reports only whether messages are queued, not how
+ * many. Where ampi can read Pi's queue (`pi-compat/queue.ts`), it hands the
+ * length to `followQueue()` on every change, and from then on that is the
+ * count. Otherwise the feed counts them: one more for each input sent while
+ * a turn runs, one less for each user message that starts. On every agent
+ * event it then checks the count against Pi: zero when Pi has none left, at
+ * least one when Pi has some. A queue changed some other way (Pi's own
+ * dequeue key, or an input another extension handled) then shows the right
+ * hint by the next event.
  *
  * Two signals come from ampi's keys rather than from Pi: `abort()` when the
  * user interrupts the turn, and `setQuitHint()` while the quit chord waits
@@ -58,6 +63,8 @@ export interface MmrStatusFeed {
   setQuitHint(until: number | undefined): void;
   /** Re-read whether messages are still queued (after the user took them back). */
   refreshQueue(): void;
+  /** Pi's queue now holds `count` messages. From the first call on, the count follows these reports alone. */
+  followQueue(count: number): void;
 }
 
 type AssistantContent = "text" | "thinking" | "toolCall";
@@ -85,6 +92,8 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
   let reducer: MmrThreadStatusReducer = createMmrThreadStatusReducer();
   let ctx: ExtensionContext | undefined;
   let queued = 0;
+  /** Pi reports its queue length: no counting, no checking. */
+  let exact = false;
   let quitTimer: unknown;
   /** The stage being counted (`thinking` or `streaming`) and the bytes streamed in it. */
   let stage: "thinking" | "streaming" | undefined;
@@ -104,7 +113,7 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
 
   /** Match the count to what Pi says: none left, or at least one. */
   function syncQueue(): void {
-    if (!ctx) return;
+    if (!ctx || exact) return;
     if (!ctx.hasPendingMessages()) setQueued(0);
     else if (queued === 0) setQueued(1);
   }
@@ -128,7 +137,7 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
     track(context);
     const role = (event.message as { role?: unknown }).role;
     if (role === "assistant") newStage();
-    if (role === "user" && queued > 0) setQueued(queued - 1);
+    if (role === "user" && queued > 0 && !exact) setQueued(queued - 1);
   });
   pi.on("message_update", (event, context) => {
     track(context);
@@ -181,7 +190,7 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
   });
   pi.on("input", (event, context) => {
     track(context);
-    if (event.streamingBehavior) setQueued(queued + 1);
+    if (event.streamingBehavior && !exact) setQueued(queued + 1);
   });
 
   return {
@@ -214,5 +223,9 @@ export function createMmrStatusFeed(pi: ExtensionAPI, options: MmrStatusFeedOpti
       }, until - at);
     },
     refreshQueue: syncQueue,
+    followQueue(count) {
+      exact = true;
+      setQueued(count);
+    },
   };
 }

@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, before, describe, it } from "node:test";
-import { CustomEditor } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
@@ -21,8 +21,10 @@ let terminalInput;
 let messages;
 let keymap;
 let slashCommands;
+let queueCompat;
 
 before(async () => {
+  queueCompat = await importSource("extensions/ampi-tui/pi-compat/queue.ts");
   slashCommands = await importSource("extensions/ampi-tui/pi-compat/slash-commands.ts");
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
   editorHeight = await importSource("extensions/ampi-tui/pi-compat/editor-height.ts");
@@ -236,6 +238,45 @@ describe("ampi-tui Pi compatibility probes", () => {
       undefined,
       "Pi changed UserMessageComponent; update src/extensions/ampi-tui/pi-compat/messages.ts",
     );
+  });
+
+  it("queue: Pi's interactive mode reads, empties and reports its queue through the methods the watch uses", () => {
+    assert.equal(queueCompat.probeMmrPiQueue(), undefined, "Pi changed InteractiveMode; update src/extensions/ampi-tui/pi-compat/queue.ts");
+    const original = InteractiveMode.prototype.updatePendingMessagesDisplay;
+    // A stand-in with the fields Pi's own methods read; they run unchanged on it.
+    let steering = ["steer now"];
+    let followUp = ["later one", "later two"];
+    const drawn = ["Pi's list"];
+    const session = {
+      getSteeringMessages: () => steering,
+      getFollowUpMessages: () => followUp,
+      clearQueue() {
+        const taken = { steering, followUp };
+        steering = [];
+        followUp = [];
+        return taken;
+      },
+    };
+    // `session` is a getter that reads the runtime host's session.
+    const mode = Object.assign(Object.create(InteractiveMode.prototype), {
+      runtimeHost: { session },
+      compactionQueuedMessages: [{ text: "after compaction", mode: "followUp" }],
+      pendingMessagesContainer: { clear: () => drawn.splice(0), addChild: (child) => drawn.push(child) },
+    });
+    const reports = [];
+    const watch = queueCompat.watchMmrPiQueue((queue) => reports.push(queue));
+    try {
+      assert.ok(watch);
+      assert.equal(watch.take(), undefined, "nothing to take before Pi reported its queue");
+      mode.updatePendingMessagesDisplay();
+      assert.deepEqual(reports, [{ steering: ["steer now"], followUp: ["later one", "later two", "after compaction"] }]);
+      assert.deepEqual(drawn, [], "Pi's own list is left empty");
+      assert.deepEqual(watch.take(), { steering: ["steer now"], followUp: ["later one", "later two", "after compaction"] });
+      assert.deepEqual(reports.at(-1), { steering: [], followUp: [] }, "the emptied queue is reported");
+    } finally {
+      watch?.stop();
+    }
+    assert.equal(InteractiveMode.prototype.updatePendingMessagesDisplay, original, "stop gives Pi its own method back");
   });
 
   it("reserved keys: ampi combos map to Pi key ids", () => {

@@ -1,0 +1,27 @@
+# queued-several
+
+## 80 columns
+ ╭────────────────────────────────────────────────────────────────────────────╮ 
+ │ queued: Then update the changelog                                          │ 
+ │         Check the README too, and the quick reference                      │ 
+ │         Finally rename every helper that still uses the old prefix rename… │ 
+ ╰────────────────────────────────────────────────────────────────────────────╯ 
+
+" ╭────────────────────────────────────────────────────────────────────────────╮ "
+" │ \u001b[38;5;242mqueued:\u001b[39m \u001b[38;5;246mThen update the changelog\u001b[39m                                          │ "
+" │         \u001b[38;5;246mCheck the README too, and the quick reference\u001b[39m                      │ "
+" │         \u001b[38;5;246mFinally rename every helper that still uses the old prefix rename\u001b[0m…\u001b[0m │ "
+" ╰────────────────────────────────────────────────────────────────────────────╯ "
+
+## 140 columns
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ 
+ │ queued: Then update the changelog                                                                                                      │ 
+ │         Check the README too, and the quick reference                                                                                  │ 
+ │         Finally rename every helper that still uses the old prefix rename every helper that still uses the old prefix rename every he… │ 
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ 
+
+" ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ "
+" │ \u001b[38;5;242mqueued:\u001b[39m \u001b[38;5;246mThen update the changelog\u001b[39m                                                                                                      │ "
+" │         \u001b[38;5;246mCheck the README too, and the quick reference\u001b[39m                                                                                  │ "
+" │         \u001b[38;5;246mFinally rename every helper that still uses the old prefix rename every helper that still uses the old prefix rename every he\u001b[0m…\u001b[0m │ "
+" ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ "
