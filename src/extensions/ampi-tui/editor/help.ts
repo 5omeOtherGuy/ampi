@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { MmrCommandDefinition } from "../../ampi-core/command-registry.js";
 import { formatMmrKeyChord, type MmrResolvedKeymap } from "../../ampi-core/keymap.js";
+import { MMR_HELP_COMMAND_ID } from "../keys/commands.js";
 import { displayMmrKeyChord, formatMmrKeyCombo } from "../keys/dispatcher.js";
 import type { MmrPromptBoxTheme } from "./prompt-box.js";
 
@@ -21,7 +22,8 @@ import type { MmrPromptBoxTheme } from "./prompt-box.js";
  * Rows are built from the effective keymap and the command registry, so a
  * rebound or newly registered command shows up with its real key. A few
  * keys that are not registry commands come first: ampi-core's mode keys,
- * the box's newline key and Pi's file mention.
+ * the box's newline key and Pi's file mention. The help's own toggle comes
+ * last and is the one row that stays when the help runs out of room.
  */
 
 export interface MmrShortcutHelpEntry {
@@ -53,7 +55,8 @@ export interface MmrShortcutHelpSources {
 
 /**
  * Two neighbouring commands of one noun whose verbs differ only in their last
- * word share a row: `Home/End scroll to top/bottom`.
+ * word share a row: `Home/End scroll to top/bottom`. Only commands with one
+ * key each are merged, so every key pairs with one word.
  */
 function mergedLabel(a: string, b: string): string | undefined {
   const left = a.split(" ");
@@ -64,7 +67,11 @@ function mergedLabel(a: string, b: string): string | undefined {
   return `${stem} ${left.at(-1)}/${right.at(-1)}`;
 }
 
-/** The help rows: fixed keys first, then the leader, then each bound command in registration order. */
+/**
+ * The help rows: fixed keys first, then the leader, then each bound command
+ * in registration order, and the help's own toggle last. Several keys of one
+ * command are joined with `or`, since `/` can itself be a key.
+ */
 export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): MmrShortcutHelpEntry[] {
   const entries: MmrShortcutHelpEntry[] = [];
   if (sources.modeKeys) entries.push({ key: "Ctrl+S", label: "switch modes" }, { key: "Alt+D", label: "toggle thinking" });
@@ -74,11 +81,17 @@ export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): Mm
   entries.push({ key: formatMmrKeyCombo(keymap.leader, "display"), label: "leader key" });
 
   let previous: { noun: string; verb: string } | undefined;
+  let toggle: MmrShortcutHelpEntry | undefined;
   for (const command of sources.commands) {
     const chords = keymap.bindings.get(command.id) ?? [];
     if (chords.length === 0) continue;
-    const key = chords.map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: keymap.leader }))).join("/");
-    const merged = previous?.noun === command.noun ? mergedLabel(previous.verb, command.verb) : undefined;
+    const key = chords.map((chord) => displayMmrKeyChord(formatMmrKeyChord(chord, { leader: keymap.leader }))).join(" or ");
+    if (command.id === MMR_HELP_COMMAND_ID) {
+      toggle = { key, label: command.verb };
+      continue;
+    }
+    const merged =
+      previous?.noun === command.noun && chords.length === 1 ? mergedLabel(previous.verb, command.verb) : undefined;
     if (merged) {
       const last = entries[entries.length - 1];
       entries[entries.length - 1] = { key: `${last.key}/${key}`, label: merged };
@@ -86,8 +99,9 @@ export function buildMmrShortcutHelpEntries(sources: MmrShortcutHelpSources): Mm
       continue;
     }
     entries.push({ key, label: command.verb });
-    previous = command;
+    previous = chords.length === 1 ? command : undefined;
   }
+  if (toggle) entries.push(toggle);
   return entries;
 }
 
@@ -104,7 +118,9 @@ function paintEntry(entry: MmrShortcutHelpEntry, width: number, theme: MmrPrompt
  * the rows, the note, then a rule. Two columns when every entry fits in the
  * first one and the text area is wide enough for the second, otherwise one,
  * with long entries cut. When the lines would exceed `maxLines`, the note
- * goes first, then rows from the end; the rule always stays.
+ * goes first, then entries from the end, except the last entry (the help's
+ * own toggle), which takes the place of the last one shown; the rule always
+ * stays.
  */
 export function renderMmrShortcutHelp(
   help: MmrShortcutHelp,
@@ -114,17 +130,20 @@ export function renderMmrShortcutHelp(
 ): string[] {
   const widest = Math.max(0, ...help.entries.map(entryWidth));
   const twoColumns = widest < MMR_SHORTCUT_HELP_COLUMN && width >= MMR_SHORTCUT_HELP_COLUMN + widest;
+  const room = Math.max(0, maxLines - 1);
+  const fits = twoColumns ? room * 2 : room;
+  const entries =
+    help.entries.length <= fits ? help.entries : fits === 0 ? [] : [...help.entries.slice(0, fits - 1), ...help.entries.slice(-1)];
   const rows: string[] = [];
   if (twoColumns) {
-    for (let index = 0; index < help.entries.length; index += 2) {
-      const right = help.entries[index + 1];
-      const left = paintEntry(help.entries[index], MMR_SHORTCUT_HELP_COLUMN, theme);
+    for (let index = 0; index < entries.length; index += 2) {
+      const right = entries[index + 1];
+      const left = paintEntry(entries[index], MMR_SHORTCUT_HELP_COLUMN, theme);
       rows.push(right ? left + paintEntry(right, width - MMR_SHORTCUT_HELP_COLUMN, theme) : truncateToWidth(left, width, "", true));
     }
   } else {
-    for (const entry of help.entries) rows.push(paintEntry(entry, width, theme));
+    for (const entry of entries) rows.push(paintEntry(entry, width, theme));
   }
-  const room = Math.max(0, maxLines - 1);
   const note = help.note && rows.length < room ? [truncateToWidth(theme.fg("dim", help.note), width, "…", true)] : [];
-  return [...rows.slice(0, room), ...note, theme.fg("border", "─".repeat(width))];
+  return [...rows, ...note, theme.fg("border", "─".repeat(width))];
 }

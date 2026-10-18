@@ -20,6 +20,7 @@ import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserv
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import {
   createMmrSlashPaletteCommands,
+  MMR_HELP_COMMAND_ID,
   MMR_PALETTE_COMMAND_IDS,
   type MmrTuiCommandHost,
   registerMmrTuiCommands,
@@ -69,6 +70,8 @@ export interface MmrTuiKeysOptions {
   readonly onPaletteOpen?: (open: boolean) => void;
   /** The `prompt.toggleHelp` command ran. */
   readonly onToggleHelp?: () => void;
+  /** A key is about to run a command other than `prompt.toggleHelp`; the prompt box closes its help. */
+  readonly onKeyCommand?: () => void;
 }
 
 export interface MmrTuiKeys {
@@ -134,7 +137,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
 
   function run(id: string | undefined): void {
     const command = id === undefined ? undefined : getMmrCommand(id);
-    if (command) runCommand(command);
+    if (!command) return;
+    if (command.id !== MMR_HELP_COMMAND_ID) options.onKeyCommand?.();
+    runCommand(command);
   }
 
   function runCommand(command: MmrCommandDefinition): void {

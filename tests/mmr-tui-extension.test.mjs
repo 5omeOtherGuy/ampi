@@ -206,7 +206,7 @@ describe("ampi-tui extension", () => {
     const tmux = process.env.TMUX;
     delete process.env.TMUX;
     const { handlers } = await loadExtension({ enabled: true });
-    const { ctx, footers, editors, terminalInput, state } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
+    const { ctx, footers, editors, terminalInput, overlays, state } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
     await handlers.get("session_start")(startEvent, ctx);
     try {
       const tui = fakeTui();
@@ -223,6 +223,14 @@ describe("ampi-tui extension", () => {
 
       box.handleInput("\x1b");
       assert.equal(box.render(80).length, 5);
+
+      // A key that runs another command closes the help: / opens the palette.
+      assert.equal(terminalInput.send("?"), true);
+      assert.equal(terminalInput.send("/"), true);
+      assert.equal(overlays.at(-1).options.overlayOptions.anchor, "center", "/ opened the palette");
+      assert.equal(box.render(80).length, 5, "the help closed behind it");
+      overlays.at(-1).component.handleInput("\x1b");
+      await new Promise((resolve) => setImmediate(resolve));
 
       state.editorText = "why";
       assert.equal(terminalInput.send("?"), false, "with text, ? is typed");

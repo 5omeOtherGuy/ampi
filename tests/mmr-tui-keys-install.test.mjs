@@ -294,10 +294,12 @@ describe("ampi-tui key installation", () => {
 
   it("toggles the shortcuts help on ? only while the prompt is empty, and exposes the keymap it resolved", () => {
     let toggles = 0;
-    const t = setup({ hooks: { onToggleHelp: () => (toggles += 1) } });
+    let others = 0;
+    const t = setup({ hooks: { onToggleHelp: () => (toggles += 1), onKeyCommand: () => (others += 1) } });
     assert.equal(t.send("?"), true);
     assert.equal(t.send("\x1b[47:63;2u"), true, "kitty's shifted form of ? counts too");
     assert.equal(toggles, 2);
+    assert.equal(others, 0, "the toggle does not count as another command");
     t.state.editorText = "why";
     assert.equal(t.send("?"), false, "with text, ? is typed");
     assert.equal(toggles, 2);

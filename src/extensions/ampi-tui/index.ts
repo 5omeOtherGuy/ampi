@@ -44,6 +44,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       onInterrupt: () => feed.abort(),
       onPaletteOpen: (open) => promptBox.setOverlayOpen(open),
       onToggleHelp: () => promptBox.toggleHelp(),
+      onKeyCommand: () => promptBox.closeHelp(),
     });
 
     pi.on("session_start", (_event, ctx) => {

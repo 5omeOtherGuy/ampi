@@ -43,6 +43,8 @@ export interface MmrPromptBoxInstall {
   clearPrompt(): void;
   /** Open the shortcuts help, or close it when open. */
   toggleHelp(): void;
+  /** Close the shortcuts help if it is open. */
+  closeHelp(): void;
   /** Rows the box drew last, or `undefined` before its first render. */
   renderedHeight(): number | undefined;
   /** Draw the frame dim while an overlay covers the prompt. */
@@ -134,6 +136,12 @@ export function createMmrPromptBoxInstall(
     );
   }
 
+  function closeHelp(): void {
+    if (!box?.isHelpOpen()) return;
+    box.setHelpOpen(false);
+    requestRender();
+  }
+
   function stopWave(): void {
     if (waveTimer !== undefined) stopInterval(waveTimer);
     waveTimer = undefined;
@@ -173,10 +181,7 @@ export function createMmrPromptBoxInstall(
       requestRender();
     },
     clearPrompt() {
-      if (box?.isHelpOpen()) {
-        box.setHelpOpen(false);
-        requestRender();
-      }
+      closeHelp();
       if (ctx && ctx.ui.getEditorText().length > 0) ctx.ui.setEditorText("");
     },
     toggleHelp() {
@@ -185,6 +190,7 @@ export function createMmrPromptBoxInstall(
       if (box.isHelpOpen()) checkTmux();
       requestRender();
     },
+    closeHelp,
     renderedHeight() {
       const height = box?.renderedHeight();
       return height ? height : undefined;

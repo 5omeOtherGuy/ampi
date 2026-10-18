@@ -30,6 +30,9 @@ export interface MmrTuiCommandHost {
   toggleHelp?(): void;
 }
 
+/** The command `?` runs: open or close the shortcuts help. */
+export const MMR_HELP_COMMAND_ID = "prompt.toggleHelp";
+
 /** Commands that open the palette; the palette does not list them. */
 export const MMR_PALETTE_COMMAND_IDS: ReadonlySet<string> = new Set(["ampi.palette", "prompt.openPalette"]);
 
@@ -204,7 +207,7 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       },
     },
     {
-      id: "prompt.toggleHelp",
+      id: MMR_HELP_COMMAND_ID,
       noun: "prompt",
       verb: "toggle shortcuts help",
       description: "Show or hide the shortcuts help in the prompt box",

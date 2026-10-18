@@ -393,22 +393,28 @@ describe("ampi-tui prompt box: shortcuts help", () => {
     const commands = createMmrTuiCommands({ getTui: () => undefined });
     const keymap = resolveMmrKeymap({
       defaults: Object.fromEntries(commands.map((command) => [command.id, command.defaultKey ?? null])),
-      overrides: { "ampi.showVersion": "<leader>v", "thread.scrollToTop": null, "prompt.toggleHelp": ["?", "f1"] },
+      overrides: {
+        "ampi.showVersion": "<leader>v",
+        "ampi.palette": null,
+        "thread.scrollToTop": ["home", "ctrl+up"],
+        "prompt.toggleHelp": ["?", "f1"],
+      },
       leader: "alt+x",
     });
+    // Keys of one command are joined with "or"; a command with two keys shares no row.
     assert.deepEqual(rows(help.buildMmrShortcutHelpEntries({ keymap, commands, modeKeys: false })), [
       "Alt+Enter newline",
       "@ mention files",
       "Alt+X leader key",
-      "Ctrl+O open command palette",
       "/ open command palette",
       "Esc Esc interrupt",
       "Ctrl+C Ctrl+C quit",
+      "Home or Ctrl+Up scroll to top",
       "End scroll to bottom",
       "Ctrl+G open in editor",
       "Alt+X v show version",
       "Alt+T toggle details",
-      "?/F1 toggle shortcuts help",
+      "? or F1 toggle shortcuts help",
     ]);
     assert.deepEqual(rows(help.buildMmrShortcutHelpEntries({ commands, modeKeys: false })), ["Alt+Enter newline", "@ mention files"]);
   });
@@ -437,10 +443,10 @@ describe("ampi-tui prompt box: shortcuts help", () => {
       assert.equal(lines[8], `│ ${note.padEnd(lines[8].length - 4)} │`, "the note, whole and inside the frame");
       assert.equal(lines[9], rule(lines[9].length));
     }
-    // 80x24 has room for six rows: the note goes, then rows from the end.
-    assert.equal(small[6].indexOf("Alt+T toggle details"), 34);
+    // 80x24 has room for six rows: the note goes, and the last entry before the toggle makes way for it.
+    assert.equal(small[6].indexOf("? toggle shortcuts help"), 34);
     assert.equal(small[7], rule(80));
-    assert.ok(!small.some((line) => line.includes("extended-keys")));
+    assert.ok(!small.some((line) => line.includes("Alt+T") || line.includes("extended-keys")));
     assert.match(narrow[1], /^│ Ctrl\+S switch modes +│$/, "one entry per row when two columns do not fit");
     assert.match(narrow[2], /^│ Alt\+D toggle thinking +│$/);
     assertFixture("help", renders);
@@ -454,16 +460,28 @@ describe("ampi-tui prompt box: shortcuts help", () => {
     assert.equal(tall.renderedHeight(), 14);
     // 24 rows: at most 8 rows inside the frame, so the text area shrinks to one row.
     assert.equal(makeBox({ rows: 24, shortcuts }).editor.render(80).length, 1 + 7 + 1 + 1);
-    // One column at 50 needs 14 rows: the note goes, then rows from the end, and the rule stays.
+    // One column at 50 needs 14 rows: the note goes, then entries from the end
+    // except the help's own toggle, and the rule stays.
     const narrow = makeBox({ rows: 24, shortcuts }).editor.render(50).map(plain);
     assert.equal(narrow.length, 10);
-    assert.match(narrow[6], /^│ Ctrl\+O open command palette +│$/);
+    assert.match(narrow[5], /^│ Ctrl\+X leader key +│$/);
+    assert.match(narrow[6], /^│ \? toggle shortcuts help +│$/);
     assert.equal(narrow[7], rule(50));
     assert.ok(!narrow.some((line) => line.includes("extended-keys")));
     // Without the note the rule follows the rows directly.
     const plainHelp = makeBox({ rows: 44, shortcuts: { entries: defaultHelpEntries() } }).editor.render(140).map(plain);
     assert.equal(plainHelp[8], rule(140));
+  });
 
+  it("uses two columns only when the widest entry is under 32 columns and the second column fits", () => {
+    const entries = (width) => [
+      { key: "K", label: "x".repeat(width - 2) },
+      { key: "A", label: "b" },
+    ];
+    const render = (list, width) => help.renderMmrShortcutHelp({ entries: list }, width, theme).map(plain);
+    assert.equal(render(entries(31), 63).length, 2, "31 columns wide at 32 + 31: one row and the rule");
+    assert.equal(render(entries(31), 62).length, 3, "one column less: one entry per row");
+    assert.equal(render(entries(32), 200).length, 3, "a 32-column entry never shares a row");
 
   });
 
