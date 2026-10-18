@@ -222,6 +222,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "none",
   },
   {
+    name: "ampi-threads",
+    entrypoint: "./src/extensions/ampi-threads/index.ts",
+    exportSubpath: "./extensions/ampi-threads",
+    exportAliases: ["./extensions/mmr-threads"],
+    autoLoaded: true,
+    tools: [],
+    dynamicTools: false,
+    featureGates: [],
+    riskClass: "local-mutation",
+    childRole: "none",
+  },
+  {
     name: "ampi-history",
     entrypoint: "./src/extensions/ampi-history/index.ts",
     exportSubpath: "./extensions/ampi-history",

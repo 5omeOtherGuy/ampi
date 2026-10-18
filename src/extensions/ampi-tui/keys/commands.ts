@@ -11,6 +11,7 @@ import {
 } from "../../ampi-core/command-registry.js";
 import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
 import { getMmrModeState } from "../../ampi-core/runtime.js";
+import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
@@ -49,7 +50,8 @@ const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "am
 
 /** ampi-core slash commands the ampi rows run; the `pi` category leaves them out. */
 const CORE_SLASH = { status: "ampi-status", changelog: "ampi-changelog", config: "ampi-config", mode: "mode" } as const;
-const CORE_SLASH_NAMES: ReadonlySet<string> = new Set(Object.values(CORE_SLASH));
+/** Slash commands the palette leaves out: those the ampi rows already run, and the thread actions' route. */
+const PALETTE_HIDDEN_SLASH_NAMES: ReadonlySet<string> = new Set([...Object.values(CORE_SLASH), MMR_THREAD_SLASH_COMMAND]);
 
 function readAmpiVersion(): string | undefined {
   const root = resolveMmrPackageRoot();
@@ -268,11 +270,12 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
 /**
  * Palette rows for Pi's slash commands under the `pi` category: Pi's
  * built-in commands, then extension commands, prompt templates and skills.
- * Legacy `mmr-*` aliases and the core commands that ampi rows already run
- * are left out. A built-in command that reads no arguments is submitted
- * through the prompt, as typing it and pressing Enter would. Every other
- * command may take arguments, so its row puts `/<name> ` into the prompt
- * for you to finish and send. Both need an empty prompt.
+ * Legacy `mmr-*` aliases, the core commands that ampi rows already run and
+ * `/ampi-thread`, which the thread rows run, are left out. A built-in
+ * command that reads no arguments is submitted through the prompt, as
+ * typing it and pressing Enter would. Every other command may take
+ * arguments, so its row puts `/<name> ` into the prompt for you to finish
+ * and send. Both need an empty prompt.
  */
 export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
   const commands = new Map<string, { description: string; submit: boolean }>(
@@ -283,7 +286,7 @@ export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrComma
   );
   try {
     for (const command of host.pi.getCommands()) {
-      if (!commands.has(command.name) && !command.name.startsWith("mmr-") && !CORE_SLASH_NAMES.has(command.name)) {
+      if (!commands.has(command.name) && !command.name.startsWith("mmr-") && !PALETTE_HIDDEN_SLASH_NAMES.has(command.name)) {
         commands.set(command.name, { description: command.description ?? "Pi command", submit: false });
       }
     }

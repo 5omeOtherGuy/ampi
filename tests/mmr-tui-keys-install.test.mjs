@@ -679,13 +679,13 @@ describe("ampi-tui command palette and details toggle", () => {
 
   it("lists extension commands under pi, leaving out legacy mmr- aliases and commands ampi rows run", () => {
     const t = setup();
-    for (const name of ["review", "mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+    for (const name of ["review", "mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode", "ampi-thread"]) {
       t.pi.registerCommand(name, { description: name });
     }
     t.send("\x0f");
     const rows = labels(t.overlays[0]).filter((row) => row.startsWith("pi "));
     assert.ok(rows.includes("pi /review"));
-    for (const name of ["mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+    for (const name of ["mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode", "ampi-thread"]) {
       assert.ok(!rows.includes(`pi /${name}`), name);
     }
   });

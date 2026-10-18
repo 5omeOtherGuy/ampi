@@ -179,7 +179,7 @@ Everything else, including Ctrl+A and Ctrl+E for the line start and end, is Pi's
 
 **Esc Esc.** While a turn runs, one Esc clears the prompt (if it has text) and two Escapes within half a second stop the turn. While the prompt's autocomplete list is open, Esc closes the list and counts toward nothing. When nothing is running, Esc is left to Pi.
 
-**Ctrl+C.** The first Ctrl+C keeps the prompt as it is and shows the "Ctrl+C then" popup; a second Ctrl+C quits. A running turn is stopped first, then Pi exits the way its own double Ctrl+C does.
+**Ctrl+C.** The first Ctrl+C keeps the prompt as it is and shows the "Ctrl+C then" popup; a second Ctrl+C quits. A running turn is stopped first, then Pi exits the way its own double Ctrl+C does. In a session with messages, `ampi-threads` adds Ctrl+N (archive and start a new session) and Ctrl+E (archive and quit) to the popup.
 
 **Home and End.** With an empty prompt, Home jumps to the start of the transcript and End jumps back to the end and follows new output. With text in the prompt they move the cursor as before. Scrolling needs Pi's fullscreen mode (`tuiMode: "fullscreen"`, Pi's default); in regular mode Home and End stay with the editor.
 

@@ -40,6 +40,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | `ampi-custom-subagents` | `mmr-custom-subagents` | Markdown `sa__*` workers | On |
 | `ampi-session-fallback` | `mmr-session-fallback` | Subscription quota/rate-limit/capacity fallback | On |
 | `ampi-tui` | `mmr-tui` | Amp-compatible prompt box (state in its borders, no footer), key chords, welcome header, message styling, tool rows and `ampi` theme for interactive sessions | On |
+| `ampi-threads` | `mmr-threads` | Thread index and Amp-compatible archive commands (Ctrl+C Ctrl+N, Ctrl+C Ctrl+E) | On |
 | `ampi-web` | `mmr-web` | `web_search`, `read_web_page` | Off |
 | `ampi-history` | `mmr-history` | `find_session`, `read_session` | Off |
 | `ampi-github` | `mmr-github` | Read-only GitHub repository tools | Off |

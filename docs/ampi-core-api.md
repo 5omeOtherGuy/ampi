@@ -622,6 +622,42 @@ switcher consumes it. Every name also has an `Ampi*` alias.
   share resolves to the first and sets `ambiguous`. With `index`, the
   cached listing is used.
 
+## Thread index
+
+```ts
+import { filterMmrSessionsByArchived, getMmrThreadIndex } from "@skippermissions/ampi";
+import type { MmrThreadIndex, MmrThreadRecord } from "@skippermissions/ampi";
+```
+
+Per-session metadata that Pi's session files do not carry, keyed by Pi's
+session id. `ampi-threads` owns the store (see its
+[README](../src/extensions/ampi-threads/README.md#the-thread-index)) and
+registers it here at load, so other extensions use it without importing
+`ampi-threads`. This API is in the Internal tier until the thread switcher
+consumes it. Every name also has an `Ampi*` alias.
+
+- `MmrThreadRecord`: optional `archived` (ISO 8601 date), `labels`,
+  `color` (a colour name or `#rrggbb`), `pinned` and `titleSource`
+  (`"model"` or `"user"`).
+- `getMmrThreadIndex()` returns the registered `MmrThreadIndex`, or
+  `undefined` when `ampi-threads` is not loaded; treat every session as
+  unarchived then. Its methods:
+  - `list()`: every record, keyed by session id.
+  - `get(sessionId)`: one record, or `undefined`.
+  - `update(sessionId, patch)`: a patch value sets a field, `null` removes
+    it, an absent key leaves it. Returns the new record, or `undefined`
+    when no field is left (the entry is then removed). Invalid values are
+    rejected before anything is written.
+- `registerMmrThreadIndex(index)` registers an index; the most recent
+  registration wins. It returns an idempotent function that removes this
+  registration.
+- `filterMmrSessionsByArchived(sessions, threads, archived)` keeps the
+  catalogue sessions (anything with an `id`) whose archived state matches,
+  in their original order. Pass a `list()` result as `threads`.
+- `MMR_THREAD_SLASH_COMMAND` (`"ampi-thread"`) names the slash command the
+  session-replacing thread commands run through. Command palettes leave it
+  out of their slash-command rows.
+
 ## Additional exported helpers
 
 The package root re-exports a few lower-level helpers used by tests,

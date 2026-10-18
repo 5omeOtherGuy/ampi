@@ -378,12 +378,12 @@ describe("ampi-tui settings", () => {
 });
 
 describe("ampi-tui package wiring", () => {
-  it("auto-loads after ampi-custom-subagents and before ampi-history, which stays last", () => {
+  it("auto-loads after ampi-custom-subagents and before ampi-threads, with ampi-history last", () => {
     const pkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
     const order = pkg.pi.extensions;
     const tui = order.indexOf("./src/extensions/ampi-tui/index.ts");
     assert.equal(order[tui - 1], "./src/extensions/ampi-custom-subagents/index.ts");
-    assert.equal(order[tui + 1], "./src/extensions/ampi-history/index.ts");
+    assert.equal(order[tui + 1], "./src/extensions/ampi-threads/index.ts");
     assert.equal(order.at(-1), "./src/extensions/ampi-history/index.ts");
   });
 });

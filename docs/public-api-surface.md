@@ -61,7 +61,7 @@ names.
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
 - Thread status model: `createMmrThreadStatusReducer` and its types.
-  `loadMmrHistorySettings`, `loadMmrTuiSettings`.
+  `loadMmrHistorySettings`, `loadMmrTuiSettings`, `loadMmrThreadsSettings`.
 - Extension factories: every `createMmr*Extension` factory.
 - Public tool register/create functions: the `register*`/`create*`
   functions for the `oracle`, `finder`, `librarian`, `history-reader`,
@@ -91,6 +91,12 @@ names.
 - Session catalogue: `createMmrPiSessionSource`, `createMmrSessionIndex`,
   `dedupeMmrSessionsById`, `resolveMmrSessionById` and their types. They
   stay in this tier until the thread switcher consumes them.
+- Thread index: the `ampi-core` seam (`registerMmrThreadIndex`,
+  `getMmrThreadIndex`, `filterMmrSessionsByArchived`,
+  `MMR_THREAD_SLASH_COMMAND` and the record types) and the `ampi-threads`
+  store (`createMmrThreadIndexStore`, `validateMmrThreadLabels`,
+  `resolveDefaultMmrThreadIndexDir`, `MmrThreadIndexError` and their
+  types). They stay in this tier until the thread switcher consumes them.
 
 ### Test seam
 

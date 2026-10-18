@@ -242,6 +242,7 @@ describe("architecture manifest guardrails", () => {
     );
     const noChildRole = new Set(MMR_EXTENSION_MANIFEST.filter((e) => e.childRole === "none").map((e) => e.name));
     assert.ok(noChildRole.has("ampi-tui"), "ampi-tui draws terminal chrome only and plays no child role");
+    assert.ok(noChildRole.has("ampi-threads"), "ampi-threads keeps the parent's thread index and plays no child role");
     for (const [profile, keep] of Object.entries(MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS)) {
       for (const ext of keep) {
         assert.equal(noChildRole.has(ext), false, `child keep-set for ${profile} keeps ${ext}, whose childRole is none`);

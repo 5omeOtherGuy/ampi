@@ -24,8 +24,8 @@
  *   renderers, legacy convenience constants such as
  *   `ORACLE_DEFAULT_MODEL_PREFERENCES`, and the command registry and keymap
  *   model until the command palette consumes them.
- *   renderers, the chrome-owner seam, and legacy convenience constants such as
- *   `ORACLE_DEFAULT_MODEL_PREFERENCES`.
+ *   renderers, the chrome-owner seam, the thread index seam and store, and
+ *   legacy convenience constants such as `ORACLE_DEFAULT_MODEL_PREFERENCES`.
  *
  * - Test seam: exported (or, in a few cases, deliberately NOT re-exported
  *   from this barrel) only for the repo's own tests. Do not depend on these
@@ -285,6 +285,19 @@ export type {
   MmrSessionMetadata,
   MmrSessionSource,
 } from "./extensions/ampi-core/session-catalog.js";
+// --- ampi-core: thread index seam for per-session metadata (Internal / prompt-assembly) ---
+export {
+  MMR_THREAD_SLASH_COMMAND,
+  filterMmrSessionsByArchived,
+  getMmrThreadIndex,
+  registerMmrThreadIndex,
+} from "./extensions/ampi-core/thread-index.js";
+export type {
+  MmrThreadIndex,
+  MmrThreadRecord,
+  MmrThreadRecordPatch,
+  MmrThreadTitleSource,
+} from "./extensions/ampi-core/thread-index.js";
 // --- ampi-session-fallback (Stable) ---
 export { createMmrSessionFallbackExtension } from "./extensions/ampi-session-fallback/index.js";
 export { classifyMmrSessionFallbackError } from "./extensions/ampi-session-fallback/classifier.js";
@@ -778,6 +791,19 @@ export { createAmpiTuiExtension, createMmrTuiExtension } from "./extensions/ampi
 export type { MmrTuiFactoryOverrides } from "./extensions/ampi-tui/index.js";
 export { loadMmrTuiSettings } from "./extensions/ampi-tui/config.js";
 export type { MmrTuiSettings } from "./extensions/ampi-tui/config.js";
+// --- ampi-threads (Stable) ---
+export { createAmpiThreadsExtension, createMmrThreadsExtension } from "./extensions/ampi-threads/index.js";
+export type { MmrThreadsFactoryOverrides } from "./extensions/ampi-threads/index.js";
+export { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
+export type { MmrThreadsSettings } from "./extensions/ampi-threads/config.js";
+// --- ampi-threads: thread index store (Internal / prompt-assembly) ---
+export {
+  MmrThreadIndexError,
+  createMmrThreadIndexStore,
+  resolveDefaultMmrThreadIndexDir,
+  validateMmrThreadLabels,
+} from "./extensions/ampi-threads/index-store.js";
+export type { MmrThreadIndexStore, MmrThreadIndexStoreOptions } from "./extensions/ampi-threads/index-store.js";
 
 // ===========================================================================
 // Additive `Ampi*` / `AMPI_*` brand aliases (additive-only; each alias keeps
@@ -889,6 +915,12 @@ export {
   resolveMmrSessionById as resolveAmpiSessionById,
 } from "./extensions/ampi-core/session-catalog.js";
 export {
+  MMR_THREAD_SLASH_COMMAND as AMPI_THREAD_SLASH_COMMAND,
+  filterMmrSessionsByArchived as filterAmpiSessionsByArchived,
+  getMmrThreadIndex as getAmpiThreadIndex,
+  registerMmrThreadIndex as registerAmpiThreadIndex,
+} from "./extensions/ampi-core/thread-index.js";
+export {
   expandMmrModelPreferencesToStrings as expandAmpiModelPreferencesToStrings,
   getMmrSubagentProfile as getAmpiSubagentProfile,
   listMmrSubagentProfiles as listAmpiSubagentProfiles,
@@ -985,6 +1017,15 @@ export {
   loadMmrTuiSettings as loadAmpiTuiSettings,
 } from "./extensions/ampi-tui/config.js";
 export {
+  loadMmrThreadsSettings as loadAmpiThreadsSettings,
+} from "./extensions/ampi-threads/config.js";
+export {
+  MmrThreadIndexError as AmpiThreadIndexError,
+  createMmrThreadIndexStore as createAmpiThreadIndexStore,
+  resolveDefaultMmrThreadIndexDir as resolveDefaultAmpiThreadIndexDir,
+  validateMmrThreadLabels as validateAmpiThreadLabels,
+} from "./extensions/ampi-threads/index-store.js";
+export {
   loadMmrWebSettings as loadAmpiWebSettings,
 } from "./extensions/ampi-web/config.js";
 export {
@@ -1068,6 +1109,12 @@ export type {
   MmrSessionMetadata as AmpiSessionMetadata,
   MmrSessionSource as AmpiSessionSource,
 } from "./extensions/ampi-core/session-catalog.js";
+export type {
+  MmrThreadIndex as AmpiThreadIndex,
+  MmrThreadRecord as AmpiThreadRecord,
+  MmrThreadRecordPatch as AmpiThreadRecordPatch,
+  MmrThreadTitleSource as AmpiThreadTitleSource,
+} from "./extensions/ampi-core/thread-index.js";
 export type {
   MmrSubagentBaseMode as AmpiSubagentBaseMode,
   MmrSubagentPartialOutputPolicy as AmpiSubagentPartialOutputPolicy,
@@ -1182,6 +1229,16 @@ export type {
 export type {
   MmrTuiFactoryOverrides as AmpiTuiFactoryOverrides,
 } from "./extensions/ampi-tui/index.js";
+export type {
+  MmrThreadsSettings as AmpiThreadsSettings,
+} from "./extensions/ampi-threads/config.js";
+export type {
+  MmrThreadIndexStore as AmpiThreadIndexStore,
+  MmrThreadIndexStoreOptions as AmpiThreadIndexStoreOptions,
+} from "./extensions/ampi-threads/index-store.js";
+export type {
+  MmrThreadsFactoryOverrides as AmpiThreadsFactoryOverrides,
+} from "./extensions/ampi-threads/index.js";
 export type {
   LoadedMmrWebSettings as LoadedAmpiWebSettings,
   MmrWebSettings as AmpiWebSettings,

@@ -21,6 +21,7 @@ Quick links for navigating the repository.
 - [`src/extensions/ampi-workers/README.md`](src/extensions/ampi-workers/README.md) — `finder`, `oracle`, `Task`, `librarian`, the background task surface, worker behavior, and public API.
 - [`src/extensions/ampi-history/README.md`](src/extensions/ampi-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
 - [`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md) — terminal look and keys for interactive sessions: Amp-compatible prompt box and chords, no footer, welcome header, message styling, tool rows, `ampi` theme.
+- [`src/extensions/ampi-threads/README.md`](src/extensions/ampi-threads/README.md) — thread index (archived, labels, colour, pinned) and the Amp-compatible archive commands.
 
 The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
 
@@ -69,6 +70,7 @@ Deprecated / unregistered:
 - [`src/extensions/ampi-workers/index.ts`](src/extensions/ampi-workers/index.ts) — `ampi-workers` Pi extension entry point (blocking workers + background task surface).
 - [`src/extensions/ampi-custom-subagents/index.ts`](src/extensions/ampi-custom-subagents/index.ts) — `ampi-custom-subagents` Pi extension entry point.
 - [`src/extensions/ampi-tui/index.ts`](src/extensions/ampi-tui/index.ts) — `ampi-tui` Pi extension entry point.
+- [`src/extensions/ampi-threads/index.ts`](src/extensions/ampi-threads/index.ts) — `ampi-threads` Pi extension entry point.
 - [`src/extensions/ampi-history/index.ts`](src/extensions/ampi-history/index.ts) — `ampi-history` Pi extension entry point.
 - [`src/extensions/ampi-toolbox/index.ts`](src/extensions/ampi-toolbox/index.ts) — deprecated re-export shim (unregistered).
 - [`src/extensions/ampi-debug/index.ts`](src/extensions/ampi-debug/index.ts) — developer-only capture extension (unregistered).

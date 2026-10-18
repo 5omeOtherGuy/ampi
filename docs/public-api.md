@@ -2,7 +2,7 @@
 
 **Audience.** Developers writing code that imports from `ampi` and wants the stable programmatic surface owned by the non-core extensions.
 
-**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, `ampi-session-fallback`, and `ampi-tui`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
+**Scope.** Package-root re-exports owned by `ampi-patch`, `ampi-tasks`, `ampi-web`, `ampi-workers`, `ampi-custom-subagents`, `ampi-history`, `ampi-session-fallback`, `ampi-tui`, and `ampi-threads`. The `ampi-core` runtime, locked-mode resolution, prompt assembly, and feature-gate APIs live in [`ampi-core-api.md`](./ampi-core-api.md).
 
 **Related.** Package overview: [`../README.md`](../README.md). Documentation conventions: [`documentation-style-guide.md`](./documentation-style-guide.md).
 
@@ -46,6 +46,7 @@ Identical to `ampi-core`:
 | GitHub | `ampi/extensions/ampi-github` | `ampi/extensions/mmr-github` |
 | History | `ampi/extensions/ampi-history` | `ampi/extensions/mmr-history` |
 | Terminal UI | `ampi/extensions/ampi-tui` | `ampi/extensions/mmr-tui` |
+| Threads | `ampi/extensions/ampi-threads` | `ampi/extensions/mmr-threads` |
 | Deprecated toolbox shim | `ampi/extensions/ampi-toolbox` | `ampi/extensions/mmr-toolbox` |
 
 Runtime commands, environment variables, and settings keys are available under
@@ -484,6 +485,32 @@ the welcome header, styles user messages and ships the `ampi` theme.
 ### Re-exported types
 
 `MmrTuiSettings` (`enabled`, optional `quietStartup`, optional `notifications` with `enabled`, `system` and `sound`), `MmrTuiFactoryOverrides`.
+
+---
+
+## `ampi-threads`
+
+Thread management on top of Pi sessions, on by default: the thread index
+at `<agentDir>/data/ampi/threads/index.json` and the `thread.new`,
+`thread.archive`, `thread.unarchive` and `thread.archiveAndQuit` commands.
+`ampiThreads.enabled: false` (or `AMPI_THREADS_ENABLE=false`) turns it off.
+Other extensions read the index through `ampi-core`'s
+[thread index seam](./ampi-core-api.md#thread-index).
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrThreadsExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `createStore` and `now` overrides. |
+| `loadMmrThreadsSettings` | function | Reads `ampiThreads.enabled` and `ampiThreads.autoArchiveOnQuit` from the settings files, then `AMPI_THREADS_ENABLE` for `enabled`. |
+| `createMmrThreadIndexStore` | function | Internal tier. The index store: `list`, `get`, `update`, `peek` and `path`; accepts `baseDir`, `randomId` and `onWarning`. |
+| `validateMmrThreadLabels` | function | Internal tier. Checks a label list (at most 20 labels of 1 to 32 lowercase letters, digits or hyphens) and drops duplicates. |
+| `resolveDefaultMmrThreadIndexDir` | function | Internal tier. `<agentDir>/data/ampi/threads`. |
+| `MmrThreadIndexError` | class | Internal tier. Thrown for invalid fields and for an index written by a newer version. |
+
+### Re-exported types
+
+`MmrThreadsSettings` (`enabled`, `autoArchiveOnQuit`), `MmrThreadsFactoryOverrides`, and, in the Internal tier, `MmrThreadIndexStore`, `MmrThreadIndexStoreOptions`.
 
 ---
 
