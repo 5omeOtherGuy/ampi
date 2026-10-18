@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
+import { getKeybindings, type Keybinding, type TUI } from "@earendil-works/pi-tui";
 import {
   getMmrCommand,
   getMmrCommands,
@@ -16,10 +16,12 @@ import {
 } from "../../ampi-core/keymap.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import type { MmrModeKey } from "../../ampi-core/types.js";
+import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
+import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import {
   createMmrSlashPaletteCommands,
@@ -134,6 +136,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     pi,
     openPalette,
     openModeDial,
+    openHelpKeymap,
+    openKeymapJson,
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -189,6 +193,22 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
         if (command) runCommand(command);
       })
       .catch(() => {});
+  }
+
+  function openHelpKeymap(current: ExtensionContext): void {
+    if (!resolved) return;
+    void openMmrHelpKeymap(current, {
+      keymap: resolved,
+      commands: getMmrCommands(),
+      piKeys: (id) => getKeybindings().getKeys(id as Keybinding),
+      modeKeys: getMmrModeState() !== undefined,
+      scrolling: getMmrTranscriptScroller(getTui()) !== undefined,
+    }).catch(() => {});
+  }
+
+  function openKeymapJson(current: ExtensionContext): void {
+    if (!resolved) return;
+    void openMmrKeymapJson(current, getMmrCommands(), resolved).catch(() => {});
   }
 
   /**

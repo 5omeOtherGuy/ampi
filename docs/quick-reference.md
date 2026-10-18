@@ -116,6 +116,8 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
 | `?` | Show or hide the shortcuts help | Only on an empty prompt; Esc or any other key closes it |
 
+In the command palette, "ampi help" opens the Help & Keymap screen: every editor key, scrolling key and command with the key in effect (`—` when it has none). "ampi show keymap" shows the keymap in effect as JSONC to copy under `ampi.keymap`. Both scroll with ↑/↓, j/k and PgUp/PgDn; Esc closes them.
+
 The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
