@@ -119,6 +119,8 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
 | `?` | Show or hide the shortcuts help | Only on an empty prompt; Esc or any other key closes it |
+| `Shift+Tab` / `Tab` | Select your previous / next message | Shift+Tab only on an empty prompt (with text it cycles Pi's thinking level); Tab past the newest, Esc or typing clears the selection |
+| `e` | Edit the selected message | Puts it into the prompt and continues the thread from before it on a new branch; the old branch stays in `/tree` |
 
 In the command palette, "ampi help" opens the Help & Keymap screen: every editor key, scrolling key and command with the key in effect (`—` when it has none). "ampi show keymap" shows the keymap in effect as JSONC to copy under `ampi.keymap`. Both scroll with ↑/↓, j/k and PgUp/PgDn; Esc closes them.
 
@@ -185,5 +187,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette; a command that takes arguments is put into the prompt for you to finish and send. Or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
 | No notification when a turn finishes | Check `ampiTui.notifications`; inside tmux, or in a terminal without OSC 777 notifications, set `AMPI_FORCE_BEL=1` for a bell |
 | Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; use `prompt queue message` in the palette, or bind `prompt.queue` under `ampi.keymap` |
+| Shift+Tab no longer cycles the thinking level | On an empty prompt it selects your previous message; type something first, or set `"thread.selectPreviousMessage": null` under `ampi.keymap` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

@@ -12,6 +12,7 @@ import { createMmrPromptBoxInstall } from "./editor/install.js";
 import { createMmrPromptQueue } from "./editor/queue.js";
 import { createMmrStatusFeed } from "./editor/status-feed.js";
 import { createMmrTuiKeys } from "./keys/install.js";
+import { createMmrMessageNavigation } from "./transcript/navigation.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
 
 /** Name `ampi-tui` registers under in ampi-core's chrome-owner seam. */
@@ -34,7 +35,8 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     let releaseChrome: (() => void) | undefined;
     let tui: TUI | undefined;
     let footerData: ReadonlyFooterDataProvider | undefined;
-    const look = installMmrTuiLook(pi, settings);
+    const navigation = createMmrMessageNavigation(pi);
+    const look = installMmrTuiLook(pi, settings, navigation.isSelected);
     const feed = createMmrStatusFeed(pi, {
       onChange: () => {
         promptBox.statusChanged();
@@ -56,6 +58,7 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       onPaletteOpen: (open) => promptBox.setOverlayOpen(open),
       onToggleHelp: () => promptBox.toggleHelp(),
       onKeyCommand: () => promptBox.closeHelp(),
+      onEscape: () => navigation.clear(),
     });
 
     pi.on("session_start", (_event, ctx) => {
@@ -81,10 +84,12 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       promptBox.start(ctx, () => footerData);
       queue.start(ctx);
       keys.start(ctx, () => tui);
+      navigation.start(ctx, () => tui);
       titleNotify.start(ctx);
     });
 
     pi.on("session_shutdown", (event, ctx) => {
+      navigation.stop();
       keys.stop();
       queue.stop();
       promptBox.stop();

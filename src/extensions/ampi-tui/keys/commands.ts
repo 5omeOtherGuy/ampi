@@ -16,6 +16,7 @@ import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
+import { MMR_EDIT_MESSAGE_COMMAND } from "../transcript/navigation.js";
 
 /** Commands `ampi-tui` registers in ampi-core's command registry. */
 
@@ -59,8 +60,15 @@ const TERMINAL_ONLY: MmrCommandAvailability = { state: "unavailable", reason: "o
 
 /** ampi-core slash commands the ampi rows run; the `pi` category leaves them out. */
 const CORE_SLASH = { status: "ampi-status", changelog: "ampi-changelog", config: "ampi-config", mode: "mode" } as const;
-/** Slash commands the palette leaves out: those the ampi rows already run, and the thread actions' route. */
-const PALETTE_HIDDEN_SLASH_NAMES: ReadonlySet<string> = new Set([...Object.values(CORE_SLASH), MMR_THREAD_SLASH_COMMAND]);
+/**
+ * Slash commands the palette leaves out: those the ampi rows already run, the
+ * thread actions' route and the message edit command (it needs an entry id).
+ */
+const PALETTE_HIDDEN_SLASH_NAMES: ReadonlySet<string> = new Set([
+  ...Object.values(CORE_SLASH),
+  MMR_THREAD_SLASH_COMMAND,
+  MMR_EDIT_MESSAGE_COMMAND,
+]);
 
 function readAmpiVersion(): string | undefined {
   const root = resolveMmrPackageRoot();
@@ -316,8 +324,9 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
  * Palette rows for Pi's slash commands under the `pi` category: Pi's
  * built-in commands, then extension commands, prompt templates and skills.
  * Legacy `mmr-*` aliases, the core commands that ampi rows already run and
- * `/ampi-thread`, which the thread rows run, are left out; `/mode` shows
- * only while the session's mode is locked. A built-in command that reads no
+ * `/ampi-thread` and `/ampi-edit-message`, which the thread rows and `e`
+ * on a selected message run, are left out; `/mode` shows only while the
+ * session's mode is locked. A built-in command that reads no
  * arguments is submitted through the prompt, as typing it and pressing Enter
  * would. Every other command may take arguments, so its row puts `/<name> `
  * into the prompt for you to finish and send. Both need an empty prompt.

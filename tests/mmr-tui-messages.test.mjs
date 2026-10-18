@@ -69,6 +69,25 @@ describe("ampi-tui pi-compat user message patch", () => {
     }
   });
 
+  it("numbers components in the order Pi builds them, and keeps the number through a margin change", async () => {
+    const { installMmrUserMessageDraw, getMmrLatestUserMessageNumber } = await importSource(
+      "extensions/ampi-tui/pi-compat/messages.ts",
+    );
+    const restore = installMmrUserMessageDraw((_text, _width, _pad, number) => [`#${number}`]);
+    try {
+      const before = getMmrLatestUserMessageNumber();
+      const first = new UserMessageComponent("a");
+      const second = new UserMessageComponent("b");
+      assert.equal(getMmrLatestUserMessageNumber(), before + 2);
+      first.setOutputPad(0);
+      assert.deepEqual(first.render(10).map(stripOsc133), [`#${before + 1}`]);
+      assert.deepEqual(second.render(10).map(stripOsc133), [`#${before + 2}`]);
+      assert.equal(getMmrLatestUserMessageNumber(), before + 2, "a rebuild is no new message");
+    } finally {
+      restore();
+    }
+  });
+
   it("replaces an earlier draw instead of stacking, and restores Pi's rebuild exactly once", async () => {
     const { installMmrUserMessageDraw } = await importSource("extensions/ampi-tui/pi-compat/messages.ts");
     const first = installMmrUserMessageDraw(() => ["first"]);

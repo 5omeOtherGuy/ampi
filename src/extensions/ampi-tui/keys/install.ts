@@ -85,6 +85,8 @@ export interface MmrTuiKeysOptions {
   readonly onToggleHelp?: () => void;
   /** A key is about to run a command other than `prompt.toggleHelp`; the prompt box closes its help. */
   readonly onKeyCommand?: () => void;
+  /** A lone Esc reached the prompt; returning true takes it (a message selection was cleared) before Esc Esc sees it. */
+  readonly onEscape?: () => boolean;
 }
 
 export interface MmrTuiKeys {
@@ -454,6 +456,15 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       return false;
     }
     const context = { editorFocused: isMmrEditorFocused(tui) };
+    if (
+      context.editorFocused &&
+      combos?.length === 1 &&
+      formatMmrKeyCombo(combos[0]) === "esc" &&
+      !active.isPending() &&
+      options.onEscape?.()
+    ) {
+      return true;
+    }
     if (!combos) return active.handle(undefined, context);
     let consumed = false;
     for (const combo of combos) {
