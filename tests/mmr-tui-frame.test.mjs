@@ -37,7 +37,6 @@ describe("ampi-tui overlay frame", () => {
       "╰────── Esc close · ↑↓ scroll · o open manual ─╯",
     ]);
     assert.ok(lines.every((line) => visibleWidth(line) === 48));
-    assert.equal(frame.mmrFrameHeight(2), lines.length);
     assert.equal(frame.mmrFrameInnerWidth(48), 44);
     expectFixture("ampi-tui-frame", "title-hints-48", lines);
   });
@@ -87,12 +86,5 @@ describe("ampi-tui overlay frame", () => {
     const [top, end] = frame.renderMmrScrollbar({ total: 30, visible: 6, offset: 0 }, theme);
     assert.equal(top, "\x1b[38;5;243m\x1b[48;5;236m█\x1b[49m\x1b[39m");
     assert.equal(end, "\x1b[38;5;243m\x1b[48;5;236m\x1b[7m▆\x1b[27m\x1b[49m\x1b[39m");
-  });
-
-  it("keeps overlays at their preferred width with two spare columns per side, otherwise the terminal less four", () => {
-    assert.equal(frame.mmrOverlayWidth(140, 80), 80);
-    assert.equal(frame.mmrOverlayWidth(84, 80), 80);
-    assert.equal(frame.mmrOverlayWidth(80, 80), 76);
-    assert.equal(frame.mmrOverlayWidth(6, 80), frame.MMR_FRAME_MIN_WIDTH);
   });
 });

@@ -17,9 +17,10 @@ before(async () => {
 
 /**
  * A TUI handle whose focused component is Pi's editor (it has an action map
- * and a submit handler), with scroll calls, submitted text and the thinking
- * toggle recorded. The toggle flips `settings.hideThinkingBlock`, as Pi
- * saves it. Set `editor.autocomplete` to open its autocomplete list.
+ * and a submit handler), with scroll calls, render requests, submitted text
+ * and the thinking toggle recorded. The toggle flips
+ * `settings.hideThinkingBlock`, as Pi saves it. Set `editor.autocomplete` to
+ * open its autocomplete list.
  */
 function fakeTui({ scrollable = true } = {}, settings = {}) {
   const calls = [];
@@ -45,6 +46,7 @@ function fakeTui({ scrollable = true } = {}, settings = {}) {
     getFocusedComponent() {
       return this.focused;
     },
+    requestRender: () => calls.push("render"),
   };
   if (scrollable) {
     tui.scrollToTop = () => calls.push("top");
@@ -438,14 +440,42 @@ describe("ampi-tui command palette and details toggle", () => {
     assert.deepEqual({ state: row.state, reason: row.reason }, { state: "unavailable", reason: "the prompt has text" });
   });
 
-  it("lists extension commands under pi, leaving out legacy mmr- aliases", () => {
+  it("puts a command that takes arguments into the prompt instead of submitting it", async () => {
     const t = setup();
-    t.pi.registerCommand("ampi-status", { description: "Show status" });
-    t.pi.registerCommand("mmr-status", { description: "Legacy" });
+    t.pi.registerCommand("review", { description: "Review changes" });
     t.send("\x0f");
-    const rows = labels(t.overlays[0]);
-    assert.ok(rows.includes("pi /ampi-status"));
-    assert.ok(!rows.includes("pi /mmr-status"));
+    pick(t.overlays[0], "/name");
+    await settle();
+    assert.equal(t.state.editorText, "/name ", "Pi's /name needs a name after it");
+    assert.deepEqual(t.handle.calls, ["render"], "the prompt is redrawn and nothing is submitted");
+
+    t.state.editorText = "";
+    t.send("\x0f");
+    pick(t.overlays[1], "/review");
+    await settle();
+    assert.equal(t.state.editorText, "/review ", "extension commands may take arguments");
+    assert.deepEqual(t.handle.calls, ["render", "render"]);
+    assert.deepEqual(t.calls.sendUserMessage, []);
+  });
+
+  it("ranks Pi's built-in commands by Pi's descriptions", () => {
+    const t = setup();
+    t.send("\x0f");
+    for (const character of "session info") t.overlays[0].component.handleInput(character);
+    assert.equal(labels(t.overlays[0])[0], "pi /session");
+  });
+
+  it("lists extension commands under pi, leaving out legacy mmr- aliases and commands ampi rows run", () => {
+    const t = setup();
+    for (const name of ["review", "mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+      t.pi.registerCommand(name, { description: name });
+    }
+    t.send("\x0f");
+    const rows = labels(t.overlays[0]).filter((row) => row.startsWith("pi "));
+    assert.ok(rows.includes("pi /review"));
+    for (const name of ["mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+      assert.ok(!rows.includes(`pi /${name}`), name);
+    }
   });
 
   it("runs ampi-core's slash commands through Pi's command path, and only when they exist", async () => {
@@ -458,7 +488,7 @@ describe("ampi-tui command palette and details toggle", () => {
     for (const name of ["ampi-status", "ampi-changelog", "ampi-config", "mode"]) t.pi.registerCommand(name, {});
     for (const [query, sent] of [
       ["show status", "/ampi-status"],
-      ["show changelog", "/ampi-changelog"],
+      ["ampi changelog", "/ampi-changelog"],
       ["ampi configure", "/ampi-config"],
       ["mode use ultra", "/mode ultra"],
     ]) {

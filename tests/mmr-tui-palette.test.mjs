@@ -8,12 +8,10 @@ import { createAnsiTheme, expectFixture, plain } from "./helpers/tui-render.mjs"
 after(cleanupLoadedSource);
 
 let palette;
-let frame;
 const theme = createAnsiTheme();
 
 before(async () => {
   palette = await importSource("extensions/ampi-tui/overlays/palette.ts");
-  frame = await importSource("extensions/ampi-tui/ui/frame.ts");
 });
 
 const KEY = { up: "\x1b[A", down: "\x1b[B", enter: "\r", esc: "\x1b", ctrlP: "\x10", ctrlN: "\x0e", backspace: "\x7f" };
@@ -61,7 +59,8 @@ function open({ items = sampleItems(), terminalRows } = {}) {
   const type = (text) => {
     for (const character of text) component.handleInput(character);
   };
-  const render = (columns) => component.render(frame.mmrOverlayWidth(columns, palette.MMR_PALETTE_WIDTH));
+  // Pi sizes the overlay from its options: the preferred width, at most the terminal less the two margins.
+  const render = (columns) => component.render(Math.min(palette.MMR_PALETTE_WIDTH, columns - 4));
   const labels = () => component.getRows().map((row) => `${row.command.noun} ${row.command.verb}`);
   return { component, closed, type, render, labels };
 }

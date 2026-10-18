@@ -152,8 +152,20 @@ describe("ampi-tui Pi compatibility probes", () => {
   it("slash commands: the built-in command list matches Pi's", async () => {
     const { BUILTIN_SLASH_COMMANDS } = await import(pathToFileURL(path.join(piDist(), "core/slash-commands.js")).href);
     assert.deepEqual(
-      [...slashCommands.MMR_PI_BUILTIN_SLASH_COMMANDS],
-      BUILTIN_SLASH_COMMANDS.map((command) => command.name),
+      slashCommands.MMR_PI_BUILTIN_SLASH_COMMANDS.map(({ name, description }) => ({ name, description })),
+      BUILTIN_SLASH_COMMANDS.map(({ name, description }) => ({ name, description })),
+    );
+  });
+
+  it("slash commands: the commands marked as taking arguments are the ones Pi's submit handler reads arguments for", () => {
+    const source = readFileSync(path.join(piDist(), "modes/interactive/interactive-mode.js"), "utf8");
+    const withArguments = [...source.matchAll(/text\.startsWith\("\/([a-z-]+) "\)/g)].map((match) => match[1]);
+    assert.ok(withArguments.length > 0, "Pi no longer reads slash command arguments where the probe expects it");
+    assert.deepEqual(
+      slashCommands.MMR_PI_BUILTIN_SLASH_COMMANDS.filter((command) => command.takesArguments)
+        .map((command) => command.name)
+        .sort(),
+      [...new Set(withArguments)].sort(),
     );
   });
 

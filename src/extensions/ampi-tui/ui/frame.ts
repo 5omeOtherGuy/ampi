@@ -61,20 +61,6 @@ export function mmrFrameInnerWidth(width: number): number {
   return Math.max(MMR_FRAME_MIN_WIDTH, width) - 4;
 }
 
-/** Rows a box with `lineCount` content lines takes: two borders and the padding row. */
-export function mmrFrameHeight(lineCount: number): number {
-  return lineCount + 3;
-}
-
-/**
- * Width of an overlay that prefers `preferred` columns: the preferred width
- * when the terminal has two spare columns on each side, otherwise the
- * terminal width less four.
- */
-export function mmrOverlayWidth(columns: number, preferred: number): number {
-  return Math.max(MMR_FRAME_MIN_WIDTH, Math.min(preferred, columns - 4));
-}
-
 function renderHints(hints: readonly MmrFrameHint[], room: number, theme: MmrFrameTheme): string {
   // Drop hints from the end until the rest fits.
   for (let count = hints.length; count > 0; count--) {

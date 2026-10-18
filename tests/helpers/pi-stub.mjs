@@ -179,6 +179,8 @@ export function createMockPi(options = {}) {
  *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`.
  *  - `themeName` (default `undefined`): `ctx.ui.theme.name`, the active theme.
  *  - `themes` (default `{}`): theme objects by name, returned by `ctx.ui.getTheme`.
+ *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`;
+ *    `ui.setEditorText` updates it.
  *  - `toolsExpanded` (default `false`): what `ui.getToolsExpanded()` returns; `ui.setToolsExpanded` updates `state.toolsExpanded`.
  *
  * Returns the ctx and the recorders it populates:
@@ -269,6 +271,9 @@ export function createMockExtensionContext(options = {}) {
         return () => inputListeners.delete(listener);
       },
       getEditorText: () => state.editorText,
+      setEditorText: (text) => {
+        state.editorText = text;
+      },
       getToolsExpanded: () => state.toolsExpanded,
       setToolsExpanded: (expanded) => {
         state.toolsExpanded = expanded;

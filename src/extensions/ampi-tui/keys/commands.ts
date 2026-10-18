@@ -35,6 +35,10 @@ const THINKING_TOGGLE_ACTION = "app.thinking.toggle";
 const PROMPT_HAS_TEXT: MmrCommandAvailability = { state: "unavailable", reason: "the prompt has text" };
 const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-core is not loaded" };
 
+/** ampi-core slash commands the ampi rows run; the `pi` category leaves them out. */
+const CORE_SLASH = { status: "ampi-status", changelog: "ampi-changelog", config: "ampi-config", mode: "mode" } as const;
+const CORE_SLASH_NAMES: ReadonlySet<string> = new Set(Object.values(CORE_SLASH));
+
 function readAmpiVersion(): string | undefined {
   const root = resolveMmrPackageRoot();
   if (!root) return undefined;
@@ -192,19 +196,19 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         if (thinkingHidden(host) === expand) runMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
       },
     },
-    coreSlashCommand(host, "ampi-status", {
+    coreSlashCommand(host, CORE_SLASH.status, {
       id: "ampi.status",
       noun: "ampi",
       verb: "show status",
       description: "Show the current mode, model and tools, as /ampi-status does",
     }),
-    coreSlashCommand(host, "ampi-changelog", {
+    coreSlashCommand(host, CORE_SLASH.changelog, {
       id: "ampi.changelog",
       noun: "ampi",
       verb: "show changelog",
       description: "Show what changed in recent ampi releases",
     }),
-    coreSlashCommand(host, "ampi-config", {
+    coreSlashCommand(host, CORE_SLASH.config, {
       id: "ampi.config",
       noun: "ampi",
       verb: "configure",
@@ -213,7 +217,7 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
     ...MMR_MODE_KEYS.map((mode) =>
       coreSlashCommand(
         host,
-        `mode ${mode}`,
+        `${CORE_SLASH.mode} ${mode}`,
         { id: `mode.use.${mode}`, noun: "mode", verb: `use ${mode}`, description: `Switch to the ${mode} mode` },
         () =>
           getMmrModeState()?.mode === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE,
@@ -225,30 +229,44 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
 /**
  * Palette rows for Pi's slash commands under the `pi` category: Pi's
  * built-in commands, then extension commands, prompt templates and skills.
- * Legacy `mmr-*` aliases are left out. A row submits `/<name>` through the
- * prompt, as typing it would, so it needs an empty, focused prompt.
+ * Legacy `mmr-*` aliases and the core commands that ampi rows already run
+ * are left out. A built-in command that reads no arguments is submitted
+ * through the prompt, as typing it and pressing Enter would. Every other
+ * command may take arguments, so its row puts `/<name> ` into the prompt
+ * for you to finish and send. Both need an empty prompt.
  */
 export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
-  const names = new Map<string, string>(MMR_PI_BUILTIN_SLASH_COMMANDS.map((name) => [name, "Pi built-in command"]));
+  const commands = new Map<string, { description: string; submit: boolean }>(
+    MMR_PI_BUILTIN_SLASH_COMMANDS.map((command) => [
+      command.name,
+      { description: command.description, submit: !command.takesArguments },
+    ]),
+  );
   try {
     for (const command of host.pi.getCommands()) {
-      if (!names.has(command.name) && !command.name.startsWith("mmr-")) {
-        names.set(command.name, command.description ?? "Pi command");
+      if (!commands.has(command.name) && !command.name.startsWith("mmr-") && !CORE_SLASH_NAMES.has(command.name)) {
+        commands.set(command.name, { description: command.description ?? "Pi command", submit: false });
       }
     }
   } catch {}
-  return [...names].map(([name, description]) => ({
+  return [...commands].map(([name, { description, submit }]) => ({
     id: `pi.${name}`,
     noun: "pi",
     verb: `/${name}`,
     description,
     availability: (ctx: ExtensionContext): MmrCommandAvailability => {
       if (ctx.ui.getEditorText().length > 0) return PROMPT_HAS_TEXT;
-      if (!canMmrSubmitEditorText(host.getTui())) return { state: "unavailable", reason: "the prompt is not focused" };
+      if (submit && !canMmrSubmitEditorText(host.getTui())) {
+        return { state: "unavailable", reason: "the prompt is not focused" };
+      }
       return AVAILABLE;
     },
-    run: () => {
-      if (!submitMmrEditorText(host.getTui(), `/${name}`)) throw new Error("the prompt is not focused");
+    run: (ctx: ExtensionContext) => {
+      if (!submit) {
+        ctx.ui.setEditorText(`/${name} `);
+        // Pi's setEditorText does not redraw; without this the text shows only after the next key.
+        host.getTui()?.requestRender();
+      } else if (!submitMmrEditorText(host.getTui(), `/${name}`)) throw new Error("the prompt is not focused");
     },
   }));
 }

@@ -143,6 +143,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | Ctrl+C no longer clears the prompt | `ampi-tui` uses Ctrl+C Ctrl+C to quit; clear with Ctrl+U, or set `"ampi.quit": null` under `ampi.keymap` to give Ctrl+C back to Pi |
 | One Esc no longer stops a turn | Press Esc twice; or set `"thread.interrupt": null` under `ampi.keymap` |
 | Ctrl+O no longer expands tool output | `ampi-tui` puts the command palette there; Alt+T expands tool output and thinking together |
-| `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette, or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
+| `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette; a command that takes arguments is put into the prompt for you to finish and send. Or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).
