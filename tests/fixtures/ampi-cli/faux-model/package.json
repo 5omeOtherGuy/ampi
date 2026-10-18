@@ -1,0 +1,8 @@
+{
+  "name": "ampi-test-faux-model",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

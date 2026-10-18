@@ -150,6 +150,10 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | --- | --- | --- |
 | Start a session | `ampi` | Same as `pi -e npm:@skippermissions/ampi` |
 | Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`; `--mode text`, `json`, `rpc` stay Pi's output format |
+| Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
+| Send piped input with a request | `git diff \| ampi -x "review this"` | The message is the argument, a newline, then stdin; redirected input or output implies `-x` |
+| Keep a script's session unarchived | `ampi -x --no-archive-after-execute "..."` | Sessions created in execute mode are archived in the thread index by default |
+| Name or label the session | `ampi --title "Release check" -l release` | `--title` is Pi's `--name`; labels go to the thread index |
 | Pass a message that looks like an option | `ampi -- -m is a flag` | Everything after `--` goes to Pi as the message |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |

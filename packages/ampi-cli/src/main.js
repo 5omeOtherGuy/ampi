@@ -5,8 +5,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
+import { buildExecuteArgs, createRunExtension, isExecuteRun, readAll } from "./execute.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
-import { listPiExtensionSources } from "./pi-compat.js";
+import { hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -54,14 +55,31 @@ function runPiCommand(args) {
 
 /**
  * Hand the arguments to Pi's `main()`, adding ampi's package with `-e`, the way
- * Pi loads any package for one run, unless Pi already loads ampi.
+ * Pi loads any package for one run, unless Pi already loads ampi. Execute mode
+ * reads stdin itself and runs Pi's print mode with the combined message.
  *
- * @param {string[]} piArgs
+ * @param {import("./argv.js").AmpiRoute} route
  * @returns {Promise<number | undefined>}
  */
-async function startPi(piArgs) {
+async function startPi({ piArgs, options }) {
   const pi = await import(PI_PACKAGE_NAME);
-  const args = [...piArgs];
+  let args = [...piArgs];
+  const parsed = pi.parseArgs(args);
+  // RPC mode talks JSON over stdin, which execute mode reads for the message.
+  if (options.execute && parsed.mode === "rpc") {
+    process.stderr.write("ampi: -x cannot be combined with --mode rpc.\n");
+    return 2;
+  }
+  const execute = isExecuteRun({
+    explicit: options.execute,
+    parsed,
+    stdinIsTTY: process.stdin.isTTY === true,
+    stdoutIsTTY: process.stdout.isTTY === true,
+  });
+  if (!execute && (options.timings || !options.archive)) {
+    process.stderr.write("ampi: --timings and --no-archive-after-execute need execute mode (-x).\n");
+    return 2;
+  }
   const cwd = process.cwd();
   const decision = decideAmpiLoad({
     piArgs: args,
@@ -69,6 +87,16 @@ async function startPi(piArgs) {
     cwd,
     packageNameAt: (start) => readPackageAt(start)?.name,
   });
+  if (execute) {
+    const stdin = process.stdin.isTTY === true ? undefined : await readAll(process.stdin);
+    hidePipedStdinFromPi();
+    const built = buildExecuteArgs(pi.parseArgs, args, stdin);
+    if ("error" in built) {
+      process.stderr.write(`ampi: ${built.error}\n`);
+      return 2;
+    }
+    args = built.args;
+  }
   if (decision.load) {
     const ampi = locateAmpiPackage(CLI_ROOT);
     if (ampi === undefined) {
@@ -84,7 +112,13 @@ async function startPi(piArgs) {
   process.env.PI_CODING_AGENT = "true";
   process.env.AI_AGENT = "pi";
   process.emitWarning = () => {};
-  await pi.main(args);
+  const runExtension = createRunExtension({
+    labels: options.labels,
+    titled: options.title !== undefined,
+    archive: execute && options.archive,
+    timings: execute && options.timings,
+  });
+  await pi.main(args, { extensionFactories: [{ name: "ampi-cli", factory: runExtension, hidden: true }] });
   return undefined;
 }
 
@@ -109,6 +143,5 @@ export async function runAmpi(argv) {
     case "pi-command":
       return runPiCommand(route.piArgs);
   }
-  for (const notice of route.notices) process.stderr.write(`${notice}\n`);
-  return startPi(route.piArgs);
+  return startPi(route);
 }

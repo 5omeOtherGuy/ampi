@@ -1,6 +1,8 @@
 // Pi surface the `ampi` command uses besides `main()`. Pi exports these
 // classes but does not document them, so every call stays in this module and
-// tests/mmr-cli-pi-compat.test.mjs fails when their shape changes.
+// tests/mmr-cli-pi-compat.test.mjs fails when their shape changes. Pi's piped
+// stdin read is not exported, so the spawn tests in
+// tests/mmr-cli-execute.test.mjs are the probe for hidePipedStdinFromPi.
 
 /**
  * @typedef {object} PiExtensionSources
@@ -47,4 +49,15 @@ export async function listPiExtensionSources(pi, cwd) {
       }
     },
   };
+}
+
+/**
+ * Stop Pi from reading stdin after execute mode has read it. Pi reads piped
+ * stdin into the first message whenever `process.stdin.isTTY` is not true; on
+ * a stream that has already been read to its end it would never see the end
+ * and send nothing. tests/mmr-cli-execute.test.mjs pipes stdin through the
+ * command and fails when this stops working.
+ */
+export function hidePipedStdinFromPi() {
+  Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
 }
