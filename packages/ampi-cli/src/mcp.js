@@ -6,6 +6,7 @@
 // Every other subcommand and option goes to `pi mcp` unchanged.
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { listPiTrustResources, parsePiMcpList, piMcpUsesOAuth, piProjectMcpPath, readPiProjectTrust, trustPiProject } from "./pi-compat.js";
 import { cut } from "./threads.js";
 
@@ -67,11 +68,28 @@ const REMOTE_MESSAGE =
   "mcp remote is not available: ampi keeps MCP servers in Pi's mcp.json files, not on a hosted service. " +
   "Add a server with ampi mcp add <name> <url>.";
 
-/** C0 and C1 control characters: server names, commands and errors are printed to a terminal. */
-const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
+/**
+ * C0 and C1 control characters and Unicode bidirectional controls: server
+ * names, commands and errors are printed to a terminal, and a bidirectional
+ * control can reorder how the rest of a line reads.
+ */
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 
 /** @param {string} text */
 const clean = (text) => text.replace(CONTROL, "");
+
+/**
+ * Text from a project's mcp.json as one line of the approval listing.
+ *
+ * @param {string} text
+ */
+const oneLine = (text) => clean(text).replace(/[\t\n]/g, " ");
+
+/** @param {string} text @param {number} width */
+const padEnd = (text, width) => text + " ".repeat(Math.max(0, width - visibleWidth(text)));
+
+/** The ERROR column of the doctor table is dropped when fewer columns than this are left for it. */
+const ERROR_MIN = 12;
 
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
@@ -268,7 +286,11 @@ function planOauth(args) {
   const end = rest.indexOf("--");
   const credential = (end === -1 ? rest : rest.slice(0, end)).find((arg) => CLIENT_CREDENTIAL_OPTIONS.has(longName(arg) ?? ""));
   if (credential !== undefined) return usage(CLIENT_CREDENTIALS_MESSAGE);
-  if (command === "login" || command === "logout") return { action: "pi", args: [command, ...rest] };
+  if (command === "login" || command === "logout") {
+    // Pi reads only `--timeout <seconds>`.
+    const options = (end === -1 ? rest : rest.slice(0, end)).flatMap((arg) => (arg.startsWith("--timeout=") ? ["--timeout", arg.slice("--timeout=".length)] : [arg]));
+    return { action: "pi", args: [command, ...options, ...(end === -1 ? [] : rest.slice(end))] };
+  }
   if (command !== "status") return usage(`unknown mcp oauth command "${command}".`);
   const parsed = parseStrict("oauth status", rest, {});
   if ("error" in parsed) return usage(parsed.error);
@@ -425,8 +447,14 @@ async function doctor(host, name) {
         (server.error ?? "").split("\n")[0].trim(),
       ]),
     ].map((row) => row.map(clean));
-    const widths = rows[0].map((_, column) => Math.max(...rows.map((row) => row[column].length)));
-    const lines = rows.map((row) => row.map((cell, column) => (column === row.length - 1 ? cell : cell.padEnd(widths[column]))).join("  ").trimEnd());
+    // On a narrow terminal the error is cut first, and dropped when too little room is left for it.
+    const widths = [0, 1, 2, 3].map((column) => Math.max(...rows.map((row) => visibleWidth(row[column]))));
+    const room = host.columns - widths.reduce((sum, width) => sum + width + 2, 0);
+    const lines = rows.map((row) => {
+      const fixed = widths.map((width, column) => padEnd(row[column], width)).join("  ");
+      if (room < ERROR_MIN) return fixed.trimEnd();
+      return `${fixed}  ${Number.isFinite(room) ? cut(row[4], room) : row[4]}`.trimEnd();
+    });
     host.out(`${lines.map((line) => (Number.isFinite(host.columns) ? cut(line, Math.max(host.columns, 20)) : line)).join("\n")}\n`);
     for (const server of shown.filter((entry) => entry.state === "needs-auth")) {
       host.out(`Sign in to ${clean(server.name)} with ampi mcp oauth login ${clean(server.name)}.\n`);
@@ -488,18 +516,25 @@ function readProjectServers(file) {
 }
 
 /**
- * How a project server starts, for the approval listing.
+ * How a project server starts, for the approval listing: its URL or command
+ * line, then the names (never the values) of the environment variables it
+ * sets and its working directory.
  *
  * @param {Record<string, unknown>} config
+ * @returns {string[]}
  */
 function describeServer(config) {
   const disabled = config.enabled === false ? " (disabled)" : "";
-  if (typeof config.url === "string") return `${config.url}${disabled}`;
-  if (typeof config.command === "string") {
+  const lines = [];
+  if (typeof config.url === "string") lines.push(`${config.url}${disabled}`);
+  else if (typeof config.command === "string") {
     const args = Array.isArray(config.args) ? config.args.map(String) : [];
-    return `${[config.command, ...args].join(" ")}${disabled}`;
-  }
-  return `changes only the settings of the user server of this name${disabled}`;
+    lines.push(`${[config.command, ...args].join(" ")}${disabled}`);
+  } else lines.push(`changes only the settings of the user server of this name${disabled}`);
+  const env = config.env !== null && typeof config.env === "object" ? Object.keys(config.env) : [];
+  if (env.length > 0) lines.push(`env: ${env.join(", ")}`);
+  if (typeof config.cwd === "string") lines.push(`cwd: ${config.cwd}`);
+  return lines.map(oneLine);
 }
 
 /**
@@ -533,13 +568,14 @@ async function approve(host, name, yes) {
     host.out(`This project is already trusted (saved for ${clean(trust.path ?? host.cwd)}): Pi starts the servers in ${clean(file)}.\n`);
     return { code: 0 };
   }
-  const width = Math.max(...servers.map(([server]) => server.length));
+  const names = servers.map(([server]) => oneLine(server));
+  const width = Math.max(...names.map(visibleWidth));
   const others = listPiTrustResources(pi, host.cwd).filter((resource) => resource !== file);
   const lines = [
     "Pi trusts a whole project, not one server. Trusting this directory:",
     `  ${host.cwd}`,
     `lets Pi start every server in ${file}:`,
-    ...servers.map(([server, config]) => `  ${server.padEnd(width)}  ${describeServer(config)}`),
+    ...servers.flatMap(([, config], index) => describeServer(config).map((text, line) => `  ${padEnd(line === 0 ? names[index] : "", width)}  ${text}`)),
   ];
   if (others.length > 0) lines.push("and load these project resources, which can also run code:", ...others.map((resource) => `  ${resource}`));
   if (trust.decision === false) lines.push(`Pi has a saved decision not to trust ${trust.path}; approving replaces it for this directory.`);

@@ -101,6 +101,9 @@ describe("ampi mcp: translation onto pi mcp", () => {
 
   it("maps oauth login and logout onto Pi's login and logout, --timeout included", () => {
     assert.deepEqual(piArgsOf(["oauth", "login", "docs", "--timeout", "60"]), ["login", "docs", "--timeout", "60"]);
+    // Pi reads only --timeout <seconds>, so --timeout=N is split.
+    assert.deepEqual(piArgsOf(["oauth", "login", "docs", "--timeout=30"]), ["login", "docs", "--timeout", "30"]);
+    assert.deepEqual(piArgsOf(["oauth", "login", "docs", "--", "--timeout=30"]), ["login", "docs", "--", "--timeout=30"]);
     assert.deepEqual(piArgsOf(["oauth", "logout", "docs"]), ["logout", "docs"]);
     assert.deepEqual(planMcpCommand(["oauth", "status", "docs"]), { action: "oauth-status", name: "docs" });
   });
@@ -171,9 +174,9 @@ describe("ampi mcp against Pi", () => {
    * Run an mcp command in-process, with Pi as a child process.
    *
    * @param {string[]} args
-   * @param {{ interactive?: boolean, answer?: boolean, capturePi?: (args: string[]) => any }} [options]
+   * @param {{ interactive?: boolean, answer?: boolean, capturePi?: (args: string[]) => any, columns?: number }} [options]
    */
-  async function run(args, { interactive = false, answer, capturePi } = {}) {
+  async function run(args, { interactive = false, answer, capturePi, columns = Number.POSITIVE_INFINITY } = {}) {
     let out = "";
     let err = "";
     const questions = [];
@@ -187,7 +190,7 @@ describe("ampi mcp against Pi", () => {
         return result.status ?? 1;
       },
       capturePi: capturePi ?? ((piArgs) => spawnPi(piArgs)),
-      columns: Number.POSITIVE_INFINITY,
+      columns,
       interactive,
       confirm: async (question) => {
         questions.push(question);
@@ -276,6 +279,32 @@ describe("ampi mcp against Pi", () => {
     assert.match(result.err, /no MCP server named "nope"\. Configured: echo\./);
   });
 
+  it("doctor reports config errors on stderr, a sign-in hint on stdout, and cuts the error column to the terminal", async () => {
+    const report = (name, state, extra = {}) => ({ name, scope: "global", source: "mcp.json", enabled: true, exposure: "codemode", transport: `https://${name}.example/mcp`, state, tools: [], ...extra });
+    const listing = () => ({
+      status: 1,
+      stdout: JSON.stringify({
+        servers: [report("docs", "needs-auth"), report("search", "failed", { error: "connect ECONNREFUSED 127.0.0.1:4000 while starting the server" })],
+        errors: ["project mcp.json: Unexpected token } in JSON"],
+      }),
+      stderr: "",
+    });
+    const result = await run(["doctor"], { capturePi: listing });
+    assert.equal(result.code, 1);
+    assert.match(result.out, /^Sign in to docs with ampi mcp oauth login docs\.$/m);
+    assert.doesNotMatch(result.out, /Sign in to search/);
+    assert.match(result.err, /^ampi: config error: project mcp\.json: Unexpected token \} in JSON$/m);
+
+    // NAME, STATUS, TRANSPORT and TOOLS take 6+13+9+5 columns and four gaps of two: 41. At 60 the error
+    // gets 19 columns; at 52 the 11 left are too few, and the column is dropped.
+    const wide = await run(["doctor"], { capturePi: listing, columns: 60 });
+    assert.match(wide.out, /^NAME {4}STATUS {9}TRANSPORT {2}TOOLS {2}ERROR$/m);
+    assert.match(wide.out, /^search {2}failed {9}http {7}0 {6}connect ECONNREFUS…$/m);
+    const narrow = await run(["doctor"], { capturePi: listing, columns: 52 });
+    assert.match(narrow.out, /^NAME {4}STATUS {9}TRANSPORT {2}TOOLS$/m);
+    assert.match(narrow.out, /^search {2}failed {9}http {7}0$/m);
+  });
+
   it("oauth status says a stdio server is not an OAuth server", async () => {
     const result = await run(["oauth", "status", "echo"]);
     assert.equal(result.code, 0, result.err);
@@ -332,6 +361,28 @@ describe("ampi mcp against Pi", () => {
     assert.deepEqual(declined.questions, ["Trust this project? [y/N] "]);
     assert.match(declined.err, /nothing changed/);
     assert.equal(new pi.ProjectTrustStore(agentDir).get(project), null);
+  });
+
+  it("approve shows each project server's env names and cwd, never env values, with bidirectional controls removed", async () => {
+    const file = path.join(project, ".pi", "mcp.json");
+    const saved = readFileSync(file, "utf8");
+    const config = JSON.parse(saved);
+    config.mcpServers.wrapped = {
+      command: "node\u202e\u2066sj.revres\u2069",
+      args: ["--flag\u200f", "two\nlines"],
+      env: { NODE_OPTIONS: "--require ./hook.js", PATH: "./bin" },
+      cwd: "./sub\u202adir",
+    };
+    writeFileSync(file, JSON.stringify(config));
+    try {
+      const result = await run(["approve", "tools"]);
+      assert.equal(result.code, 1);
+      assert.match(result.out, /^ {2}wrapped {2}nodesj\.revres --flag two lines\n {11}env: NODE_OPTIONS, PATH\n {11}cwd: \.\/subdir\n/m);
+      assert.doesNotMatch(result.out, /hook\.js|\.\/bin/);
+      assert.doesNotMatch(result.out, /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/);
+    } finally {
+      writeFileSync(file, saved);
+    }
   });
 
   it("approve --yes lists what trust enables, saves trust in Pi's store, and is idempotent", async () => {
