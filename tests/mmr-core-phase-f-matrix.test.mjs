@@ -100,14 +100,15 @@ const EXPECTED_COMPACT_BLOCK_ORDER = [
 
 const EXPECTED_TOOLS_BY_SET = {
   "core-only": [],
-  "core+patch+tasks": ["apply_patch", "task_list"],
+  "core+patch+tasks": ["apply_patch", "task_list", "ask_user_choice"],
   "core+web": ["web_search", "read_web_page"],
-  "core+patch+tasks+web": ["apply_patch", "task_list", "web_search", "read_web_page"],
+  "core+patch+tasks+web": ["apply_patch", "task_list", "ask_user_choice", "web_search", "read_web_page"],
 };
 
 const EXPECTED_OWNERS = {
   apply_patch: "ampi-patch",
   task_list: "ampi-tasks",
+  ask_user_choice: "ampi-tasks",
   web_search: "ampi-web",
   read_web_page: "ampi-web",
 };

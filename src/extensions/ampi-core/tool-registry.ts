@@ -38,6 +38,7 @@ const DEFAULT_TOOL_CATALOG: Record<string, { owner: string }> = {
   shell_command_kill: { owner: "ampi-shell" },
   // ampi-tasks
   task_list: { owner: "ampi-tasks" },
+  ask_user_choice: { owner: "ampi-tasks" },
   // ampi-toolbox-mcp
   read_mcp_resource: { owner: "ampi-toolbox-mcp" },
   // ampi-web

@@ -31,6 +31,18 @@ export async function taskListManifestEntry() {
   };
 }
 
+export async function askUserChoiceManifestEntry() {
+  const mod = await importSource("extensions/ampi-tasks/ask-user-choice-tool.ts");
+  return {
+    name: "ask_user_choice",
+    owner: "ampi-tasks",
+    promptSnippet: mod.ASK_USER_CHOICE_PROMPT_SNIPPET,
+    promptGuidelines: [...mod.ASK_USER_CHOICE_PROMPT_GUIDELINES],
+    description: mod.ASK_USER_CHOICE_DESCRIPTION,
+    schema: mod.ASK_USER_CHOICE_PARAMS,
+  };
+}
+
 export async function webSearchManifestEntry() {
   const mod = await importSource("extensions/ampi-web/tools.ts");
   return {
@@ -58,7 +70,7 @@ export async function readWebPageManifestEntry() {
 /**
  * Build a manifest for one of the canonical Phase B tool-set combinations.
  * Active manifest order matches the order in which Pi would surface each
- * tool: patch then tasks tools first (apply_patch, task_list) then web tools
+ * tool: patch then tasks tools first (apply_patch, task_list, ask_user_choice) then web tools
  * (web_search, read_web_page). Callers that need a different order should
  * build the manifest by hand.
  */
@@ -69,6 +81,7 @@ export async function buildBaselineManifest(toolSet) {
   if (includePatchTasks) {
     entries.push(await applyPatchManifestEntry());
     entries.push(await taskListManifestEntry());
+    entries.push(await askUserChoiceManifestEntry());
   }
   if (includeWeb) {
     entries.push(await webSearchManifestEntry());

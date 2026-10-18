@@ -36,7 +36,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | `ampi-core` | `mmr-core` | Locked modes, model resolution, prompt rewrite, diagnostics, config flow | On |
 | `ampi-patch` | `mmr-patch` | `apply_patch` | On |
 | `ampi-shell` | `mmr-shell` | `shell_command`, `shell_command_status`, `shell_command_kill` | On |
-| `ampi-tasks` | `mmr-tasks` | `task_list` | On |
+| `ampi-tasks` | `mmr-tasks` | `task_list`, `ask_user_choice` | On |
 | `ampi-workers` | `mmr-workers` | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets | On (`librarian` gated) |
 | `ampi-custom-subagents` | `mmr-custom-subagents` | Markdown `sa__*` workers | On |
 | `ampi-session-fallback` | `mmr-session-fallback` | Subscription quota/rate-limit/capacity fallback | On |

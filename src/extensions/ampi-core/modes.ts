@@ -54,6 +54,7 @@ export const MMR_SMART_TOOL_NAMES = [
   "task_wait",
   "task_cancel",
   "task_list",
+  "ask_user_choice",
   "finder",
   "reviewer",
   "read_mcp_resource",
@@ -82,6 +83,7 @@ export const MMR_RUSH_TOOL_NAMES = [
   "task_wait",
   "task_cancel",
   "task_list",
+  "ask_user_choice",
 ] satisfies string[];
 
 /**
@@ -122,6 +124,7 @@ export const MMR_DEEP_TOOL_NAMES = [
   "finder",
   "reviewer",
   "task_list",
+  "ask_user_choice",
 ] satisfies string[];
 
 export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {

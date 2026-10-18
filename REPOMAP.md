@@ -164,7 +164,7 @@ Important files:
 
 ### `src/extensions/ampi-tasks/`
 
-Owns the session-local `task_list`. Persists a todo list in the current Pi session log and renders it as a pinned TUI widget. Split out of the former `ampi-toolbox`.
+Owns the session-local `task_list` and `ask_user_choice`. Persists a todo list in the current Pi session log and renders it as a pinned TUI widget, and lets the model ask the user to pick one of a few answers. Split out of the former `ampi-toolbox`.
 
 Important files:
 
@@ -172,6 +172,7 @@ Important files:
 - `todo-list-tool.ts` — `task_list` tool definition, whole-list validation, and verification nudges.
 - `todo-list-widget.ts` — pinned `aboveEditor` widget (`ampi-task-list`) with ampi's spinner on in-progress rows.
 - `task-list-wiring.ts` — `/tasks` slash command, shortcuts, and compaction hooks.
+- `ask-user-choice-tool.ts` — `ask_user_choice` tool definition, argument checks, and the select dialog (fails at once without a UI).
 
 ### `src/extensions/ampi-web/`
 

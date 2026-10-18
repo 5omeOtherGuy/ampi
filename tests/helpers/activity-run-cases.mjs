@@ -94,6 +94,18 @@ export const ACTIVITY_RUN_CASES = [
     labels: ["Read 1 file", "Read 1 file, ran 1 tool"],
   },
   {
+    name: "lets a question to the user stand alone and split the run around it",
+    messages: [
+      assistant([read("r1"), call("q1", "ask_user_choice", { question: "Which cache?", options: ["Redis", "SQLite"] })]),
+      result("r1"),
+      result("q1", "The user chose: SQLite"),
+      assistant([bash("b1")]),
+      result("b1"),
+    ],
+    runs: [["r1"], ["b1"]],
+    labels: ["Read 1 file", "Ran 1 command"],
+  },
+  {
     name: "ends a run at a message cut off at the length limit, a compaction and an interrupted message without calls",
     messages: [
       assistant([read("r1")]),

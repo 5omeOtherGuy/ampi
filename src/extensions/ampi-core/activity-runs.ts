@@ -7,9 +7,9 @@
  * assistant message with text (the transcript draws a message's text above
  * all of its calls), a message cut off at the length limit, an interrupted
  * message without calls, a user or steered message, a summary or a custom
- * message that is shown, and a call that stands alone: a subagent call, or a
- * call whose result shows an image where images can be shown. Thinking,
- * failed calls and a change of kind do not end a run.
+ * message that is shown, and a call that stands alone: a subagent call, a
+ * question to the user, or a call whose result shows an image where images
+ * can be shown. Thinking, failed calls and a change of kind do not end a run.
  */
 
 import { classifyToolCall } from "./tool-activity.js";
@@ -81,12 +81,13 @@ export function activityRunRecord(message: ActivityRunMessage): ActivityRunRecor
 }
 
 /**
- * A subagent call, or a call whose result shows an image where `images` says
- * images can be shown: the image is drawn below the call, so the call keeps
- * its own row.
+ * A call that keeps its own row: a subagent call, a question to the user (its
+ * row shows the question and the answer), or a call whose result shows an
+ * image where `images` says images can be shown, as the image is drawn below
+ * the call.
  */
 export function standsAlone(toolName: string, result: { content?: unknown } | undefined, images: boolean): boolean {
-  if (classifyToolCall(toolName, {}).kind === "subagent") return true;
+  if (toolName === "ask_user_choice" || classifyToolCall(toolName, {}).kind === "subagent") return true;
   const content = result?.content;
   return images && Array.isArray(content) && content.some((block) => isRecord(block) && block.type === "image");
 }

@@ -1,6 +1,6 @@
 # ampi-tasks
 
-Ships the session-local `task_list` todo tool and its pinned task-list widget for tracking multi-step work within a Pi session.
+Ships the session-local `task_list` todo tool and its pinned task-list widget for tracking multi-step work within a Pi session, and `ask_user_choice`, through which the model asks the user to pick one of a few answers.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../ampi-toolbox/ROADMAP.md`](../ampi-toolbox/ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -8,25 +8,27 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../amp
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `task_list`, `/tasks` command, pinned widget | none | `/ampi-status`, tool result `details`, `/tasks` |
+| On | `task_list`, `ask_user_choice`, `/tasks` command, pinned widget | none | `/ampi-status`, tool result `details`, `/tasks` |
 
 ## When to use it
 
 - Track multi-step work for the current Pi session with a deterministic, persistable todo list.
 - Keep the model's plan visible after compaction drops older tool calls.
 - Surface current progress in the pinned UI widget above the input editor.
+- Let the model put a decision to the user as a short list of answers instead of guessing.
 
 ## Status and enablement
 
 Default: on. `ampi-tasks` is registered in `package.json` `pi.extensions` and loads without opt-in config.
 
-The extension registers a concrete Pi tool named `task_list` and claims ownership through an `ampi-tasks` tool provider. `ampi-core` resolves the name by exact identity against Pi's live tool inventory; its exact-name status catalog also credits `ampi-tasks` for the name when Pi loads entrypoints in isolated module caches and the provider call cannot reach the central registry. The tool is available whenever this extension is loaded.
+The extension registers concrete Pi tools named `task_list` and `ask_user_choice` and claims ownership through an `ampi-tasks` tool provider. `ampi-core` resolves the names by exact identity against Pi's live tool inventory; its exact-name status catalog also credits `ampi-tasks` for them when Pi loads entrypoints in isolated module caches and the provider call cannot reach the central registry. Both tools are offered in the `low`, `medium`, `high` and `ultra` modes whenever this extension is loaded; `free` mode removes them like every ampi-owned tool, and no subagent gets `ask_user_choice`, because a subagent has no user to ask.
 
 ## Tools / commands / surfaces
 
 | Surface | Type | Purpose |
 | --- | --- | --- |
 | `task_list` | Tool | Manage a session-local todo list with whole-list replacement |
+| `ask_user_choice` | Tool | Ask the user to pick one of 2 to 8 answers, optionally with a typed answer of their own |
 | `/tasks` | Command | Inspect/show/hide/list the pinned task-list widget |
 | Pinned widget | Widget | Project the current list above the input editor (`TASK_LIST_WIDGET_ID`) |
 | Toggle shortcut | Shortcut | Show/hide the widget (none by default; opt in with the flag below) |
@@ -82,11 +84,38 @@ A defense-in-depth validation pass runs inside `execute` so hosts that skip Pi's
 
 `task_list` declares `executionMode: "sequential"`. Pi runs the entire assistant tool-call batch sequentially in model order whenever any called tool is sequential, so two `task_list` calls in one turn cannot race the whole-list session-state replacement.
 
+## `ask_user_choice`
+
+The model calls it when the next step depends on a decision that belongs to the user and the possible answers are known in advance. Its description and prompt guideline tell the model not to use it for anything it can settle itself.
+
+Parameters (strict, no other fields):
+
+- `question` — one line, 1 to 200 characters. It is the title of the list.
+- `options` — 2 to 8 answers, each 1 to 80 characters on one line, distinct after trimming surrounding spaces.
+- `allow_other` — optional, default `false`. Adds a last row, `Type a different answer…`, that opens a text input titled with the question.
+
+Invalid arguments return an error result that names the problem (`ask_user_choice rejected: options[1] repeats options[0] ("Redis")`), and no list opens.
+
+With a UI (the terminal, or a client of Pi's RPC mode, which answers Pi's dialogs), the call opens Pi's select dialog with the options as rows:
+
+| The user… | Result text | `details` |
+| --- | --- | --- |
+| picks an option | `The user chose: <option>`, the option word for word | `{ question, options, choice, index }` |
+| types an answer | `The user answered in their own words: <answer>` | `{ question, options, choice, other: true }` |
+| closes the list, or leaves the typed answer empty | the user did not choose; ask in plain text or continue with a stated assumption (not an error) | `{ question, options, dismissed: true }` |
+
+The call's abort signal reaches the dialog, so interrupting the turn closes the list; the result is then an error that says the question was cancelled (`details.cancelled: true`), and the row shows it as cancelled. The tool runs sequentially, so two questions in one turn are asked one after the other.
+
+Without a UI (print and JSON mode, and subagent children) nobody can answer, so the call returns an error at once telling the model to decide itself and say what it decided (`details.noUI: true`). It never waits.
+
+In the terminal the call keeps a row of its own, never folded into a group of other calls: `Asking <question>` while the list is open, `Asked <question> → <answer>` (or `→ no answer`) afterwards.
+
 ## Diagnostics and troubleshooting
 
 - **`task_list` was rejected.** Validation failures (missing fields, empty `content` / `activeForm`, unknown status, unknown field) return `{ isError: true, details: { error } }` so the model reacts; persistence failures propagate as tool crashes.
 - **Widget did not appear.** The widget appears the first time the model calls `task_list` (or `/tasks show`) in the session — there is no `session_start` hydration. Headless surfaces (`ctx.hasUI === false`) skip the widget entirely.
 - **List did not survive across sessions.** By design: lists are session-scoped. A resumed session reads its own latest `ampi-tasks.todo-state` entry; new and forked sessions start empty.
+- **`ask_user_choice` failed with "No one can answer".** The session has no interactive UI (`pi -p`, JSON mode or a subagent child); the model is told to decide on its own.
 - **Toggle shortcut does nothing.** No key is bound by default, and a bound key may be taken. Run `/tasks` to see the live binding (or `disabled`), or set `--task-widget-toggle-key`.
 
 ## Public API

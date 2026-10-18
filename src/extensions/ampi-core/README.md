@@ -51,7 +51,7 @@ Exact-name resolution against Pi's live tool inventory through the tool-provider
 | `deferred` | Recognized name reserved in the status catalog; concrete tool not shipped. |
 | `missing` | No extension claimed the name; Pi has not registered it. |
 
-The status catalog covers `apply_patch`, `task_list`, `web_search`, `read_web_page`, `Task`, `finder`, `oracle`, `librarian`, `reviewer`, `start_task`, `task_poll`, `task_wait`, `task_cancel`, `find_session`, `read_session`, `read_mcp_resource` so `/ampi-status` credits the owning extension when a tool is deferred. Sibling extensions claim exact names via `registerMmrToolProvider(...)`; latest-registered wins. Active-tool allowlist enforcement and `tool_call` blocking apply while locked.
+The status catalog covers `apply_patch`, `task_list`, `ask_user_choice`, `web_search`, `read_web_page`, `Task`, `finder`, `oracle`, `librarian`, `reviewer`, `start_task`, `task_poll`, `task_wait`, `task_cancel`, `find_session`, `read_session`, `read_mcp_resource` so `/ampi-status` credits the owning extension when a tool is deferred. Sibling extensions claim exact names via `registerMmrToolProvider(...)`; latest-registered wins. Active-tool allowlist enforcement and `tool_call` blocking apply while locked.
 
 ### File-editing tools
 

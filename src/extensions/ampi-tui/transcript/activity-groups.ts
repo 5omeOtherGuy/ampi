@@ -7,8 +7,9 @@
  * `activity-runs.ts`, which the web GUI shares: an assistant message with
  * text (Pi draws a message's text above all of its calls), a user or steered
  * message, a summary or a custom message, and a call that stands alone: a
- * subagent call, or a call whose result shows an image where the terminal
- * shows images. Thinking, failed calls and a change of kind do not end a run.
+ * subagent call, a question to the user, or a call whose result shows an
+ * image where the terminal shows images. Thinking, failed calls and a change
+ * of kind do not end a run.
  *
  * The store is fed from Pi's events while a session runs, checked against
  * the session's messages when an assistant message starts, and rebuilt from
@@ -94,9 +95,9 @@ function interruptedResult(message: GroupMessage): ToolResult | undefined {
 }
 
 /**
- * Subagent calls, and calls whose result shows an image: Pi draws the image
- * below the call's row even when the row draws nothing, so the row keeps its
- * own title above it.
+ * Subagent calls, questions to the user, and calls whose result shows an
+ * image: Pi draws the image below the call's row even when the row draws
+ * nothing, so the row keeps its own title above it.
  */
 function standsAlone(call: GroupedCall): boolean {
   return callStandsAlone(call.toolName, call.result, Boolean(getCapabilities().images));
