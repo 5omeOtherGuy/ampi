@@ -406,12 +406,15 @@ export class MmrScrollOverlay implements Component {
   }
 }
 
-/** Open a read-only, scrolling text box, centred and 100 columns wide at most; resolves when it closes. */
+/**
+ * Open a read-only, scrolling text box, centred and `width` columns wide at
+ * most (100 by default); resolves when it closes.
+ */
 export function openMmrScrollOverlay(
   ctx: ExtensionContext,
   title: string,
   content: MmrScrollOverlayOptions["content"],
-  options: Pick<MmrScrollOverlayOptions, "fit"> = {},
+  options: Pick<MmrScrollOverlayOptions, "fit"> & { readonly width?: number } = {},
 ): Promise<void> {
   return ctx.ui.custom<void>(
     (tui, theme, _keybindings, done) =>
@@ -425,7 +428,7 @@ export function openMmrScrollOverlay(
       }),
     {
       overlay: true,
-      overlayOptions: { width: MMR_HELP_KEYMAP_WIDTH, margin: { left: 2, right: 2, top: 1, bottom: 1 }, anchor: "center" },
+      overlayOptions: { width: options.width ?? MMR_HELP_KEYMAP_WIDTH, margin: { left: 2, right: 2, top: 1, bottom: 1 }, anchor: "center" },
     },
   );
 }

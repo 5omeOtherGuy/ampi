@@ -1,0 +1,25 @@
+╭─ [1m[33mExtensions[39m[22m ─────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                  │
+│ [1m7 extensions (6 commands, 8 tools)[22m                                                               │
+│                                                                                                  │
+│ [1mampi-core[22m  [2m~/projects/ampi/src/extensions/ampi-core/index.ts[22m                                     │
+│   Commands: [34m/ampi-status, /ampi-changelog, /ampi-config, /mode[39m                                   │
+│                                                                                                  │
+│ [1mampi-threads[22m  [2m~/projects/ampi/src/extensions/ampi-threads/index.ts[22m                               │
+│   Commands: [34m/ampi-thread[39m                                                                         │
+│                                                                                                  │
+│ [1mampi-tui[22m  [2m~/projects/ampi/src/extensions/ampi-tui/index.ts[22m                                       │
+│   Commands: [34m/ampi-edit-message[39m                                                                   │
+│                                                                                                  │
+│ [1mampi-patch[22m  [2m~/projects/ampi/src/extensions/ampi-patch/index.ts[22m                                   │
+│   Tools: apply_patch                                                                             │
+│                                                                                                  │
+│ [1mampi-web[22m  [2m~/projects/ampi/src/extensions/ampi-web/index.ts[22m                                       │
+│   Tools: web_search, read_web_page                                                               │
+│                                                                                                  │
+│ [1mampi-workers[22m  [2m~/projects/ampi/src/extensions/ampi-workers/index.ts[22m                               │
+│   Tools: oracle, finder, Task                                                                    │
+│                                                                                                  │
+│ [1mPi built-in[22m                                                                                      │
+│   Tools: read, bash                                                                              │
+╰────────────────────────────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯

@@ -1,0 +1,10 @@
+╭─ [1m[33mSkills (0)[39m[22m ─────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ Pi has loaded no skills.                                                 │
+│                                                                          │
+│ [2mPi looks for skills (a directory with a SKILL.md) in ~/.pi/agent/skills[22m  │
+│ [2mand ~/.agents/skills, in the project's .pi/skills, in .agents/skills[22m     │
+│ [2mfrom the working directory up to the repository root, in the paths of[22m    │
+│ [2mthe skills setting and in Pi packages. Run /reload to pick up a skill[22m    │
+│ [2myou added.[22m                                                               │
+╰────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯

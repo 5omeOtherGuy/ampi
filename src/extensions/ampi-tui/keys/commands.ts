@@ -1,8 +1,5 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { type ExtensionAPI, type ExtensionContext, VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { resolveMmrPackageRoot } from "../../ampi-core/changelog.js";
 import {
   type MmrCommandAvailability,
   type MmrCommandDefinition,
@@ -14,6 +11,7 @@ import { getMmrPromptHistory, type MmrPromptHistory } from "../../ampi-core/prom
 import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { getMmrThreadIndex, MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { getMmrThreadReports, type MmrThreadReports } from "../../ampi-core/thread-reports.js";
+import { formatMmrVersionNotice, readMmrVersionInfo } from "../overlays/info.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
@@ -46,6 +44,12 @@ export interface MmrTuiCommandHost {
   openContextAnalysis(ctx: ExtensionContext, reports: MmrThreadReports): void;
   /** Open the outline of the last response, or close it when it is open. */
   toggleOutline(ctx: ExtensionContext): void;
+  /** Open the Skills dialog. */
+  openSkills(ctx: ExtensionContext): void;
+  /** Open the Extensions dialog. */
+  openExtensions(ctx: ExtensionContext): void;
+  /** Open the Version dialog. */
+  openVersion(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -96,16 +100,7 @@ const PALETTE_HIDDEN_SLASH_NAMES: ReadonlySet<string> = new Set([
   MMR_EDIT_MESSAGE_COMMAND,
 ]);
 
-function readAmpiVersion(): string | undefined {
-  const root = resolveMmrPackageRoot();
-  if (!root) return undefined;
-  try {
-    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version?: unknown };
-    return typeof pkg.version === "string" ? pkg.version : undefined;
-  } catch {
-    return undefined;
-  }
-}
+const terminalOnly = (ctx: ExtensionContext): MmrCommandAvailability => (ctx.mode === "tui" ? AVAILABLE : TERMINAL_ONLY);
 
 function scrollAvailability(host: MmrTuiCommandHost, ctx: ExtensionContext): MmrCommandAvailability {
   if (!getMmrTranscriptScroller(host.getTui())) {
@@ -304,7 +299,42 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       noun: "ampi",
       verb: "show version",
       description: "Show the ampi and Pi versions",
-      run: (ctx) => ctx.ui.notify(`ampi ${readAmpiVersion() ?? "(unknown version)"} on Pi ${PI_VERSION}`, "info"),
+      // Outside the terminal UI there is no dialog: a notification says it.
+      run: (ctx) => (ctx.mode === "tui" ? host.openVersion(ctx) : ctx.ui.notify(formatMmrVersionNotice(readMmrVersionInfo()), "info")),
+    },
+    {
+      id: "skills.list",
+      noun: "skills",
+      verb: "list",
+      description: "List the skills Pi loaded, grouped by where it found them",
+      keywords: ["skill"],
+      availability: terminalOnly,
+      run: (ctx) => host.openSkills(ctx),
+    },
+    {
+      id: "plugins.list",
+      noun: "extensions",
+      verb: "list",
+      description: "List the loaded extensions with the commands and tools each registers",
+      keywords: ["plugins"],
+      availability: terminalOnly,
+      run: (ctx) => host.openExtensions(ctx),
+    },
+    {
+      id: "plugins.reload",
+      noun: "extensions",
+      verb: "reload",
+      description: "Reload extensions, skills, prompt templates and themes, as /reload does",
+      keywords: ["plugins", "reload"],
+      // Pi runs its built-in /reload only from the prompt's submit path.
+      availability: (ctx) => {
+        if (ctx.mode !== "tui") return TERMINAL_ONLY;
+        if (ctx.ui.getEditorText().length > 0) return PROMPT_HAS_TEXT;
+        return canMmrSubmitEditorText(host.getTui()) ? AVAILABLE : { state: "unavailable", reason: "the prompt is not focused" };
+      },
+      run: () => {
+        if (!submitMmrEditorText(host.getTui(), "/reload")) throw new Error("the prompt is not focused");
+      },
     },
     {
       id: "ampi.help",

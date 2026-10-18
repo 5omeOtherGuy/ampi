@@ -14,6 +14,8 @@
   "mode.use.low": null, // Switch to the low mode
   "mode.use.medium": null, // Switch to the medium mode
   "mode.use.ultra": null, // Switch to the ultra mode
+  "plugins.list": null, // List the loaded extensions with the commands and tools each registers
+  "plugins.reload": null, // Reload extensions, skills, prompt templates and themes, as /reload does
   "prompt.dequeue": null, // Take everything that waits to run back into the prompt
   "prompt.history": "ctrl+r", // Pick a prompt you sent before and put it into the prompt
   "prompt.openInEditor": "ctrl+g", // Edit the prompt in your external editor
@@ -21,6 +23,7 @@
   "prompt.queue": null, // Run the prompt as a follow-up message after the current turn instead of steering it
   "prompt.steerQueuedMessage": null, // Send the next waiting follow-up now, to steer the running turn
   "prompt.toggleHelp": "?", // Show or hide the shortcuts help in the prompt box
+  "skills.list": null, // List the skills Pi loaded, grouped by where it found them
   "thread.analyzeContext": null, // Show what fills the context window: prompt, tools, AGENTS.md files, skills and messages
   "thread.archive": "ctrl+c ctrl+n", // Archive and start a new session
   "thread.archiveAndQuit": "ctrl+c ctrl+e", // Archive and quit
