@@ -17,6 +17,7 @@ let editorCompat;
 let scrollCompat;
 let reservedKeys;
 let terminalInput;
+let messages;
 let keymap;
 
 before(async () => {
@@ -24,6 +25,7 @@ before(async () => {
   scrollCompat = await importSource("extensions/ampi-tui/pi-compat/scroll.ts");
   reservedKeys = await importSource("extensions/ampi-tui/pi-compat/reserved-keys.ts");
   terminalInput = await importSource("extensions/ampi-tui/pi-compat/terminal-input.ts");
+  messages = await importSource("extensions/ampi-tui/pi-compat/messages.ts");
   keymap = await importSource("extensions/ampi-core/keymap.ts");
 });
 
@@ -145,6 +147,14 @@ describe("ampi-tui Pi compatibility probes", () => {
       assert.ok(piKeys.length > 0, `${action} has no default key in Pi`);
       for (const key of piKeys) assert.ok(keys.includes(key), `${action}: Pi binds ${key} by default`);
     }
+  });
+
+  it("messages: Pi's user message component has the shape the drawing patch relies on", () => {
+    assert.equal(
+      messages.probeMmrUserMessageComponent(),
+      undefined,
+      "Pi changed UserMessageComponent; update src/extensions/ampi-tui/pi-compat/messages.ts",
+    );
   });
 
   it("reserved keys: ampi combos map to Pi key ids", () => {

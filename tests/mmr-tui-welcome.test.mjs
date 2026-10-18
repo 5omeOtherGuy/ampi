@@ -157,22 +157,23 @@ describe("ampi-tui welcome header component", () => {
     assert.equal(clock.intervals.size, 0);
   });
 
-  it("treats key presses, not mouse reports, focus changes or terminal replies, as dismissing input", async () => {
+  it("treats key presses, not releases, mouse reports, focus changes or terminal replies, as dismissing input", async () => {
     const { isMmrKeyInput } = await importSource("extensions/ampi-tui/chrome/welcome.ts");
     for (const key of ["a", "\r", "\x1b", "\x1b[A", "\x0f", "\x1b[13;2u"]) assert.equal(isMmrKeyInput(key), true, JSON.stringify(key));
-    for (const report of ["\x1b[<35;10;5M", "\x1b[M #!", "\x1b[I", "\x1b[O", "\x1b[?62;4c", "\x1b[6;18;9t", "\x1b]11;rgb:0000/0000/0000\x07", "\x1bP>|kitty\x1b\\", "\x1b_Gi=1;OK\x1b\\"]) {
+    // Kitty key-release reports follow every press when the terminal sends them.
+    for (const report of ["\x1b[13;1:3u", "\x1b[97;5:3u", "\x1b[1;1:3A", "\x1b[<35;10;5M", "\x1b[M #!", "\x1b[I", "\x1b[O", "\x1b[?62;4c", "\x1b[6;18;9t", "\x1b]11;rgb:0000/0000/0000\x07", "\x1bP>|kitty\x1b\\", "\x1b_Gi=1;OK\x1b\\"]) {
       assert.equal(isMmrKeyInput(report), false, JSON.stringify(report));
     }
   });
 });
 
 describe("ampi-tui welcome card from the changelog", () => {
-  function withFixturePackage(run) {
+  function withFixturePackage(run, { changelog = "CHANGELOG.md", version = "1.2.0" } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), "ampi-tui-welcome-"));
     const packageRoot = path.join(root, "pkg");
     mkdirSync(packageRoot);
-    copyFileSync(path.join(fixtureDir, "CHANGELOG.md"), path.join(packageRoot, "CHANGELOG.md"));
-    writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: "ampi", version: "1.2.0" }));
+    copyFileSync(path.join(fixtureDir, changelog), path.join(packageRoot, "CHANGELOG.md"));
+    writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: "ampi", version }));
     return Promise.resolve(run({ packageRoot, statePath: path.join(root, "state.json") })).finally(() =>
       rmSync(root, { recursive: true, force: true }),
     );
@@ -196,6 +197,21 @@ describe("ampi-tui welcome card from the changelog", () => {
       summary: "Draft.",
     });
     assert.equal(buildMmrWelcomeCard({ kind: "versioned", displayVersion: "1.0.0", markdown: "## 1.0.0\n\nNo bullets." }), undefined);
+  });
+
+  it("reads a section release-please wrote, without its issue and commit links", async () => {
+    const { evaluateMmrChangelogForDisplay } = await importSource("extensions/ampi-core/changelog.ts");
+    const { buildMmrWelcomeCard } = await importSource("extensions/ampi-tui/chrome/welcome.ts");
+    await withFixturePackage(
+      ({ packageRoot, statePath }) => {
+        const display = evaluateMmrChangelogForDisplay({ packageRoot, statePath, now: "2026-10-21T00:00:00.000Z" });
+        assert.deepEqual(buildMmrWelcomeCard(display), {
+          title: "New in ampi 1.3.0",
+          summary: "ampi-tui: add a welcome screen with the newest changelog item",
+        });
+      },
+      { changelog: "CHANGELOG-release-please.md", version: "1.3.0" },
+    );
   });
 
   // Pi records these before session_start in every new session.
@@ -244,6 +260,8 @@ describe("ampi-tui welcome card from the changelog", () => {
         assert.equal(header.cardVisible, false, "a key press dismisses it");
         assert.equal(terminalInput.listeners.size, KEY_LISTENERS, "and the listener goes away");
 
+        handlers.get("input")({ type: "input", text: "from another extension", source: "extension" }, ctx);
+        assert.equal(header.animating, true, "a prompt another extension sends leaves the header running");
         handlers.get("input")({ type: "input", text: "hello", source: "interactive" }, ctx);
         assert.equal(header.animating, false, "the first message stops the animation");
       } finally {

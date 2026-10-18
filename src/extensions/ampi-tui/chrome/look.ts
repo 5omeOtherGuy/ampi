@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrChangelogPresenter } from "../../ampi-core/changelog.js";
 import type { MmrTuiSettings } from "../config.js";
+import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import { keepMmrTuiTheme } from "../theme/select.js";
 import { createMmrTuiMessageStyle } from "../transcript/messages.js";
 import { buildMmrWelcomeCard, isMmrKeyInput, MmrWelcomeHeader, type MmrWelcomeCard } from "./welcome.js";
@@ -33,8 +34,10 @@ export function installMmrTuiLook(pi: ExtensionAPI, settings: MmrTuiSettings): M
     return pendingCard !== undefined;
   });
 
-  pi.on("input", () => {
-    header?.settle();
+  // Only the user's own first message settles the header; a prompt another
+  // extension sends at startup leaves it for the user to see.
+  pi.on("input", (event) => {
+    if (event.source === "interactive") header?.settle();
   });
 
   const stopKeyListener = () => {
@@ -66,12 +69,12 @@ export function installMmrTuiLook(pi: ExtensionAPI, settings: MmrTuiSettings): M
 
       stopKeyListener();
       if (card) {
-        stopListening = ctx.ui.onTerminalInput((data) => {
+        stopListening = subscribeMmrTerminalInput(ctx.ui, (data) => {
           if (isMmrKeyInput(data)) {
             header?.dismiss();
             stopKeyListener();
           }
-          return undefined;
+          return false;
         });
       }
     },

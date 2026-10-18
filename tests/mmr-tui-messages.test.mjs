@@ -1,5 +1,6 @@
-// User message styling: the renderer, the pi-compat patch on Pi's real
-// UserMessageComponent, and the probe that guards the patch's assumptions.
+// User message styling: the renderer and the pi-compat patch on Pi's real
+// UserMessageComponent. The probe against the installed Pi lives in
+// tests/mmr-tui-pi-compat.test.mjs.
 
 import assert from "node:assert/strict";
 import { after, afterEach, describe, it } from "node:test";
@@ -50,15 +51,6 @@ describe("ampi-tui user message renderer", () => {
 describe("ampi-tui pi-compat user message patch", () => {
   afterEach(() => {
     assert.equal(UserMessageComponent.prototype.rebuild, originalRebuild, "each case must restore Pi's rebuild");
-  });
-
-  it("finds the UserMessageComponent shape it relies on in the installed Pi", async () => {
-    const { probeMmrUserMessageComponent } = await importSource("extensions/ampi-tui/pi-compat/messages.ts");
-    assert.equal(
-      probeMmrUserMessageComponent(),
-      undefined,
-      "Pi changed UserMessageComponent; update src/extensions/ampi-tui/pi-compat/messages.ts",
-    );
   });
 
   it("draws Pi's own user message components, wrapped lines included, until restored", async () => {

@@ -130,14 +130,16 @@ Everything else keeps Pi's binding, including Ctrl+O (tool output), Ctrl+D (quit
 ### The `ampi` theme
 
 - Shipped in the package as `theme/ampi.json` and listed in `/settings` as `ampi`. Every colour is an ANSI palette index or the terminal default, so it follows your terminal's palette on dark and light backgrounds.
-- Roles: user messages green (2); headings cyan (6), bold; inline code yellow (3); links blue (4), underlined; diff additions green and removals red; borders, rules and quote bars grey (8); secondary and thinking text a mid grey (244), which stays readable on both dark and light backgrounds; no backgrounds behind user messages or tool rows.
+- Roles: user messages green (2); headings cyan (6), bold; inline code yellow (3); links blue (4), underlined; diff additions green and removals red; Markdown rules, quote bars and code block borders grey (8); secondary and thinking text, frames and the prompt border without thinking a mid grey (244), which stays readable on both dark and light backgrounds; the selected row in lists a fixed dark grey (240); no backgrounds behind user messages or tool rows.
 - While Pi is on its default `system` theme, `ampi-tui` uses `ampi` for the session without writing your settings, and keeps it after `/reload`, `/new`, `/resume` and `/fork`. Pick any other theme in `/settings` and it stays. To use Pi's `system` theme, turn `ampi-tui` off.
 
 ### Limits
 
 - Theme files hold colours only, so inline code is not bold, tables keep Pi's square borders in the default text colour, level-three and deeper headings keep their `###` marks, and secondary text is grey rather than faint.
 - Links are clickable (OSC 8) only where Pi detects hyperlink support; elsewhere Pi prints the URL after the link text.
-- Hidden thinking leaves a blank row or two where the label used to be.
+- Thinking starts expanded, as in Pi, unless Pi's `hideThinkingBlock` is set: Pi lets extensions change only the collapsed label, and `Ctrl+T` writes the setting.
+- Collapsed thinking leaves an empty row where the label used to be, so three blank rows separate your message from the reply.
+- Palettes that give slot 8 the background colour (Solarized Dark, for one) hide Markdown rules, quote bars and code block borders.
 - Pi offers no API to draw user messages, so `ampi-tui` replaces the drawing method of Pi's user message component. When a Pi release changes that component, `ampi-tui` leaves it alone and Pi's own user message box appears.
 
 ### What stays on screen

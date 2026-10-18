@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { isKeyRelease, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { MmrChangelogDisplay } from "../../ampi-core/changelog.js";
 
 /** Milliseconds between two frames of the welcome mark. */
@@ -82,18 +82,27 @@ export interface MmrWelcomeCard {
   readonly summary: string;
 }
 
-/** Plain text of the first bullet in a changelog section, without Markdown markup. */
+/** A top-level list item: hand-written entries use `- `, release-please writes `* `. */
+const BULLET = /^[-*] /;
+
+/**
+ * Plain text of the first bullet in a changelog section, without Markdown
+ * markup and without the pull request and commit references release-please
+ * appends (`([#12](url)) ([abc1234](url))`, `, closes [#3](url)`).
+ */
 function firstBullet(markdown: string): string | undefined {
   const lines = markdown.replaceAll("\r\n", "\n").split("\n");
-  const start = lines.findIndex((line) => line.startsWith("- "));
+  const start = lines.findIndex((line) => BULLET.test(line));
   if (start === -1) return undefined;
   const parts = [lines[start].slice(2)];
   for (const line of lines.slice(start + 1)) {
-    if (line.trim() === "" || line.startsWith("- ") || line.startsWith("#")) break;
+    if (line.trim() === "" || BULLET.test(line) || line.startsWith("#")) break;
     parts.push(line.trim());
   }
   const text = parts
     .join(" ")
+    .replace(/(?:,\s*closes\s+\[#\d+\]\([^)]*\))+\s*$/, "")
+    .replace(/(?:\s*\(\[(?:#\d+|[0-9a-f]{7,40})\]\([^)]*\)\))+\s*$/, "")
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\*\*|`/g, "")
     .replace(/\s+/g, " ")
@@ -280,9 +289,9 @@ export class MmrWelcomeHeader {
 
 /**
  * Whether raw terminal input is a key press rather than a mouse report, a
- * focus change or a terminal reply, so moving the mouse does not dismiss
- * the card.
+ * focus change, a terminal reply or a key release (kitty keyboard protocol),
+ * so moving the mouse does not dismiss the card.
  */
 export function isMmrKeyInput(data: string): boolean {
-  return !/^\x1b(?:\[<|\[M|\[I|\[O|\[\?|\[\d+;\d+;\d+t|\]|P|_)/.test(data);
+  return !isKeyRelease(data) && !/^\x1b(?:\[<|\[M|\[I|\[O|\[\?|\[\d+;\d+;\d+t|\]|P|_)/.test(data);
 }

@@ -65,6 +65,13 @@ describe("ampi theme file", () => {
     assert.equal(resolve(theme.colors.dim), resolve(theme.colors.thinkingText), "thinking text is the secondary grey");
   });
 
+  it("keeps selections, frames and the editor border off slot 8, which some palettes paint as the background", () => {
+    for (const token of ["selectedBg", "border", "borderMuted", "thinkingOff", "thinkingMinimal"]) {
+      const resolved = resolve(theme.colors[token]);
+      assert.ok(Number.isInteger(resolved) && resolved > 15, `${token} resolves to ${JSON.stringify(resolved)}`);
+    }
+  });
+
   it("ships through package.json pi.themes under the name ampi", async () => {
     const pkg = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
     assert.deepEqual(pkg.pi.themes, ["./src/extensions/ampi-tui/theme/ampi.json"]);
