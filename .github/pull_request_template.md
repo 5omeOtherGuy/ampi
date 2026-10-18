@@ -1,6 +1,6 @@
-## Summary
+## Intent
 
--
+<!-- Why this change: the problem it solves or the goal it serves. -->
 
 <!--
 The PR title is the changelog entry: use Conventional Commits in user-facing
@@ -8,9 +8,42 @@ words (`feat: ...`, `fix(ampi-core): ...`). release-please builds CHANGELOG.md
 from it; do not edit CHANGELOG.md by hand.
 -->
 
-## Verification
+## Changed behavior
+
+<!-- What users, callers or contributors will see differently. "None" for a pure refactor. -->
+
+-
+
+## Constraints touched
+
+<!--
+Which repository rules this change touches (AGENTS.md "Rules for this
+repository", docs/adr/), for example the canonical mode keys, the legacy
+`mmr-*` exports and aliases, hermetic tests or the pinned `typebox`. "None"
+if it touches none.
+-->
+
+-
+
+## Evidence
+
+<!-- How you verified it: commands and their decisive output, tests added, manual checks. -->
 
 - [ ] `npm run gate`
+
+## Sensitive paths
+
+<!--
+Does this PR change a path listed under "Sensitive paths" in the AGENTS.md
+profile, or a public interface, credential handling, install or setup, CI or
+release configuration, or agent policy? If yes, an independent review
+(another agent or the owner) reads the diff and records its verdict on this
+PR against the reviewed head commit before merge; a later push needs a new
+review.
+-->
+
+- [ ] No sensitive path changed.
+- [ ] A sensitive path changed: independent review recorded on this PR for head commit `<sha>`.
 
 ## Linked issues
 
