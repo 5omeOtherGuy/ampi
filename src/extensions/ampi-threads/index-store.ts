@@ -168,15 +168,15 @@ function applyPatch(current: MmrThreadRecord | undefined, patch: MmrThreadRecord
   return Object.keys(next).length > 0 ? (next as MmrThreadRecord) : undefined;
 }
 
-// One promise chain per absolute index path, shared by every copy of this
+// One promise chain per absolute file path, shared by every copy of this
 // module that Pi loads, so two extensions writing the same file still queue.
 const LOCKS_GLOBAL_KEY = "__pi_ampi_thread_index_locks_v1__";
 const globalLocks = globalThis as typeof globalThis & { [LOCKS_GLOBAL_KEY]?: Map<string, Promise<void>> };
 const locks: Map<string, Promise<void>> = globalLocks[LOCKS_GLOBAL_KEY] ?? new Map();
 globalLocks[LOCKS_GLOBAL_KEY] = locks;
 
-/** Run `task` after every earlier task on `key` has settled. */
-function withLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+/** Run `task` after every earlier task on `key` (an absolute file path) has settled. The prompt history store queues on it too. */
+export function withMmrThreadsFileLock<T>(key: string, task: () => Promise<T>): Promise<T> {
   const previous = locks.get(key) ?? Promise.resolve();
   const result = previous.then(task);
   const tail = result.then(
@@ -251,15 +251,15 @@ export function createMmrThreadIndexStore(options: MmrThreadIndexStoreOptions = 
   return {
     path: filePath,
     peek: (sessionId) => known.get(sessionId),
-    list: () => withLock(filePath, async () => Object.freeze(Object.fromEntries(await load()))),
+    list: () => withMmrThreadsFileLock(filePath, async () => Object.freeze(Object.fromEntries(await load()))),
     get(sessionId) {
-      return withLock(filePath, async () => {
+      return withMmrThreadsFileLock(filePath, async () => {
         checkSessionId(sessionId);
         return (await load()).get(sessionId);
       });
     },
     update(sessionId, patch) {
-      return withLock(filePath, async () => {
+      return withMmrThreadsFileLock(filePath, async () => {
         checkSessionId(sessionId);
         const threads = new Map(await load());
         const record = applyPatch(threads.get(sessionId), patch);

@@ -409,6 +409,7 @@ describe("ampi-tui prompt box: shortcuts help", () => {
       "Ctrl+C Ctrl+C quit",
       "Home/End scroll to top/bottom",
       "Ctrl+G open in editor",
+      "Ctrl+R history",
       "Alt+T toggle details",
       "? toggle shortcuts help",
     ]);
@@ -440,6 +441,7 @@ describe("ampi-tui prompt box: shortcuts help", () => {
       "Home or Ctrl+Up scroll to top",
       "End scroll to bottom",
       "Ctrl+G open in editor",
+      "Ctrl+R history",
       "Alt+X v show version",
       "Alt+T toggle details",
       "? or F1 toggle shortcuts help",
@@ -467,7 +469,7 @@ describe("ampi-tui prompt box: shortcuts help", () => {
       assert.equal(lines[1].indexOf("Alt+D toggle thinking"), 34);
     }
     for (const lines of [tall, wide]) {
-      assert.match(lines[7], /^│ \? toggle shortcuts help +│$/);
+      assert.match(lines[7], /^│ Alt\+T toggle details +\? toggle shortcuts help +│$/);
       assert.equal(lines[8], `│ ${note.padEnd(lines[8].length - 4)} │`, "the note, whole and inside the frame");
       assert.equal(lines[9], rule(lines[9].length));
     }

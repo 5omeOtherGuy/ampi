@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registerMmrPromptHistory } from "../ampi-core/prompt-history.js";
 import { MMR_THREAD_SLASH_COMMAND, registerMmrThreadIndex } from "../ampi-core/thread-index.js";
 import {
   archiveMmrSession,
@@ -8,12 +9,15 @@ import {
   registerMmrThreadCommands,
 } from "./commands.js";
 import { loadMmrThreadsSettings, type MmrThreadsSettings } from "./config.js";
+import { createMmrPromptHistoryStore, type MmrPromptHistoryStore } from "./history-store.js";
 import { createMmrThreadIndexStore, type MmrThreadIndexStore, type MmrThreadIndexStoreOptions } from "./index-store.js";
 
 export interface MmrThreadsFactoryOverrides {
   loadSettings?: () => MmrThreadsSettings;
   /** Builds the index store; receives the warning callback the extension wires to the UI. */
   createStore?: (options: Pick<MmrThreadIndexStoreOptions, "onWarning">) => MmrThreadIndexStore;
+  /** Builds the prompt history store. */
+  createHistoryStore?: () => MmrPromptHistoryStore;
   /** Archive timestamps; defaults to the current time. */
   now?: () => string;
 }
@@ -34,6 +38,8 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
     // The store works in every run mode; the commands only matter where a
     // palette or key dispatcher shows them, and are harmless elsewhere.
     const releaseIndex = registerMmrThreadIndex(store);
+    const history = overrides.createHistoryStore ? overrides.createHistoryStore() : createMmrPromptHistoryStore();
+    const releaseHistory = registerMmrPromptHistory(history);
     const unregisterCommands = registerMmrThreadCommands(host);
     pi.registerCommand(MMR_THREAD_SLASH_COMMAND, {
       description: "Start a new session, or archive this one and start a new one (used by the thread commands)",
@@ -51,6 +57,18 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       }
     });
 
+    // Prompt history keeps what you type into the terminal prompt: not slash
+    // commands or prompt templates, and not prompts that extensions, RPC
+    // clients or print runs send. The prompt is not held up while the file
+    // is written.
+    pi.on("input", (event, current) => {
+      if (event.source !== "interactive" || current.mode !== "tui") return;
+      if (event.text.trimStart().startsWith("/")) return;
+      history.append(current.cwd, event.text).catch((error: unknown) => {
+        onWarning(`Could not record the prompt history: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    });
+
     pi.on("session_shutdown", async (event, current) => {
       try {
         // Quitting an interactive session, by any route, archives it when
@@ -65,6 +83,7 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       } finally {
         unregisterCommands();
         releaseIndex();
+        releaseHistory();
         ctx = undefined;
       }
     });

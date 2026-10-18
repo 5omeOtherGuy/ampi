@@ -14,11 +14,13 @@ import {
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
+import type { MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import type { MmrModeKey } from "../../ampi-core/types.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
+import { openMmrPromptHistory } from "../overlays/prompt-history.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
@@ -131,6 +133,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   /** The mode the dial last chose, and the dial's switches, one after another. */
   let dialMode: MmrModeKey | undefined;
   let dialSwitches: Promise<void> = Promise.resolve();
+  let promptHistoryOpen = false;
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -138,6 +141,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openModeDial,
     openHelpKeymap,
     openKeymapJson,
+    openPromptHistory,
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -209,6 +213,31 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   function openKeymapJson(current: ExtensionContext): void {
     if (!resolved) return;
     void openMmrKeymapJson(current, getMmrCommands(), resolved).catch(() => {});
+  }
+
+  /**
+   * Open the prompt history picker; the prompt picked replaces the prompt's
+   * text, unsent. Ignored while a picker is loading or open: the editor keeps
+   * focus until the first read finishes, so a quick second Ctrl+R lands here.
+   */
+  function openPromptHistory(current: ExtensionContext, history: MmrPromptHistory): void {
+    if (promptHistoryOpen) return;
+    promptHistoryOpen = true;
+    const report = (error: unknown) =>
+      current.ui.notify(`Could not read the prompt history: ${error instanceof Error ? error.message : String(error)}`, "error");
+    options.onPaletteOpen?.(true);
+    void openMmrPromptHistory(current, history)
+      .finally(() => {
+        promptHistoryOpen = false;
+        options.onPaletteOpen?.(false);
+      })
+      .then((text) => {
+        if (text === undefined) return;
+        current.ui.setEditorText(text);
+        // Pi's setEditorText does not redraw; without this the text shows only after the next key.
+        getTui()?.requestRender();
+      })
+      .catch(report);
   }
 
   /**

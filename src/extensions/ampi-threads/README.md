@@ -1,6 +1,6 @@
 # ampi-threads
 
-Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source) and Amp-compatible commands to start, archive and unarchive sessions.
+Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source), Amp-compatible commands to start, archive and unarchive sessions, and the prompt history behind Ctrl+R.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../../ROADMAP.md`](../../../ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -8,12 +8,13 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index | none (`ampi-tui` for the keys and palette) | `<agentDir>/data/ampi/threads/index.json`; the Ctrl+C popup |
+| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index; the prompt history | none (`ampi-tui` for the keys, palette and prompt history picker) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R |
 
 ## When to use it
 
 - You want to put a finished session away: Ctrl+C Ctrl+N archives it and starts a new one, Ctrl+C Ctrl+E archives it and quits.
 - You want Pi to archive every session you quit (`ampiThreads.autoArchiveOnQuit`).
+- You want a prompt you sent before, in this workspace or another: Ctrl+R lists them and puts the one you pick back into the prompt.
 - You are building on per-session metadata (thread pickers, labels, colours): read and update it through `getMmrThreadIndex()` in `ampi-core`.
 
 ## Status and enablement
@@ -32,6 +33,7 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | `thread.archiveAndQuit` | Command, `ctrl+c ctrl+e` | Archive this session and quit |
 | `/ampi-thread new`, `/ampi-thread archive` | Slash command | The route the session-replacing commands take; you can type it too |
 | Thread index | File | `<agentDir>/data/ampi/threads/index.json` |
+| Prompt history | Files | `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, read by `ampi-tui`'s `prompt.history` (Ctrl+R) |
 
 The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive` and `thread archive and quit`.
 
@@ -83,12 +85,28 @@ One file per Pi agent directory, `<agentDir>/data/ampi/threads/index.json` (`~/.
 - A file with a newer `version` is left alone; every change fails until ampi is updated.
 - Within one Pi process, operations on the index run one at a time. Across processes the last writer wins: each change reads the file afresh, so only two changes landing at the same moment can lose one.
 
+### Prompt history
+
+Every prompt you type into the terminal prompt and send is recorded for its working directory; `ampi-tui` shows them on Ctrl+R (see [its README](../ampi-tui/README.md#prompt-history)).
+
+- Recorded: what you type and send in the interactive terminal, also while a turn runs. Not recorded: slash commands and prompt templates (text starting with `/`), prompts sent by extensions or RPC clients, and print or JSON runs.
+- A prompt identical to the one before it in the same workspace is recorded once.
+- One file per working directory, `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, where the key is the first 32 hex digits of the SHA-256 of the absolute path, so file names carry no paths. Each line is one prompt, oldest first: `{ "v": 1, "ts": "2026-10-18T10:00:00.000Z", "text": "Rename the parser module" }`, where `v` is the line's format version. The files are readable only by you.
+- A workspace keeps its newest 1000 prompts. The file grows by appending until it holds 1200 prompts; the next prompt rewrites it with the newest 1000, through a temp file renamed over it.
+- Only lines of version 1 are read. A line of another version, written by a different ampi version using the same agent directory, is skipped when reading and kept as it is when the file is rewritten. A line that cannot be read at all, such as one cut off by a crash, is skipped and dropped at the next rewrite.
+- "All workspaces" reads every history file and merges the prompts by time.
+- Within one Pi process, operations on a file run one at a time. Several Pi processes can append to one file safely; a rewrite racing an append from another process can lose that one prompt.
+- Recording does not hold up the prompt. If a file cannot be written, a warning says so and the prompt is sent as usual.
+- To forget the history, delete the files; turning `ampi-threads` off stops recording and makes Ctrl+R unavailable.
+
 ## Diagnostics and troubleshooting
 
 - **Ctrl+C shows only Quit.** The session has no messages yet, `ampi-threads` is off (`ampiThreads.enabled: false` or `AMPI_THREADS_ENABLE=false`), or the keys were rebound under `ampi.keymap`.
 - **"thread archive and new is not available: this session is already archived".** The session was archived before; run `thread unarchive` from the palette to take it out.
 - **A warning says the thread index could not be read.** The file was not a valid index. It was moved to the `.corrupt` name in the warning; inspect it by hand and copy back any entries you need.
 - **Archiving fails with "written by a newer ampi".** Another ampi version on this machine uses a newer index format. Update ampi.
+- **Ctrl+R does nothing.** `ampi-threads` is off, and the picker needs it. The palette lists the command as "history (unavailable)" and, when you select it, gives the reason "ampi-threads is not loaded".
+- **A prompt is missing from Ctrl+R.** It started with `/`, was sent by an extension, repeated the prompt before it, or was sent in another working directory: press Alt+W to show every workspace.
 
 ## Public API
 
@@ -97,7 +115,8 @@ Stable re-exports from `ampi`: `createMmrThreadsExtension`, `loadMmrThreadsSetti
 ## Developer notes
 
 - Manifest: risk class `local-mutation` (it writes the thread index under the agent directory), child role `none`. No subagent child keep-set lists it.
-- Layout: `index.ts` (entry point: registers the index, commands and slash route at load, releases them at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `commands.ts` (palette commands and the `/ampi-thread` handler).
+- Layout: `index.ts` (entry point: registers the index, prompt history, commands and slash route at load, records prompts from Pi's `input` event, releases everything at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `history-store.ts` (the prompt history files), `commands.ts` (palette commands and the `/ampi-thread` handler).
+- The prompt history picker lives in `ampi-tui`, which may not import this extension. `ampi-threads` registers its history store in `ampi-core/prompt-history.ts` (`registerMmrPromptHistory`), and the picker reads it from there (`getMmrPromptHistory`). The store queues on the same per-path lock as the index store.
 - Only a command handler gets Pi's `newSession`. The palette commands that replace the session therefore send `/ampi-thread …` with `pi.sendUserMessage(…, { expandPromptTemplates: true })`, which Pi runs as an extension command at once, even during a turn.
 - Command availability is checked synchronously, so it reads the store's last known record (`peek`); `session_start` loads the current session's record.
-- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, the Ctrl+C popup through `ampi-tui`'s dispatcher, settings, load order).
+- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam), `tests/mmr-threads-history-store.test.mjs` (prompt history files, trimming, workspaces, seam) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, prompt recording, the Ctrl+C popup and Ctrl+R through `ampi-tui`'s dispatcher, settings, load order).

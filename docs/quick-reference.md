@@ -114,6 +114,7 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Ctrl+X` | Leader | Bindings written `<leader>z` mean Ctrl+X, then Z |
 | `Home` / `End` | Jump to the start / end of the transcript | Only with an empty prompt, in Pi's fullscreen mode |
 | `Ctrl+G` | Edit the prompt in your external editor | Pi's action, now a command |
+| `Ctrl+R` | Open the prompt history | Prompts you sent in this workspace, newest first; type to filter, Enter puts one in the prompt without sending it, Alt+W or Ctrl+T shows every workspace's; needs `ampi-threads` |
 | `Ctrl+O` | Open the command palette | Type to filter, ↑/↓ to move, Enter to run, Esc to close; Pi's slash commands are listed under `pi` |
 | `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
