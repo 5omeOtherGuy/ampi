@@ -253,6 +253,36 @@ ID                                    Title                    Updated  Messages
 - **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, or when the ampi in use is too old for a command, `2` on a usage error, including a search query it cannot use and a malformed time. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
+## Import
+
+`ampi threads import` copies other coding agents' conversations on this machine into Pi sessions, which you can then list, read, search and mention like your own. Imported sessions are read-only. Claude Code is supported; Codex and OpenCode are not yet.
+
+```bash
+ampi threads import detect                            # where each agent keeps its conversations
+ampi threads import claude --all --dry-run            # what would be imported, and nothing written
+ampi threads import claude --all --max-age 7          # sessions updated in the last 7 days
+ampi threads import claude 3f2c9a7e-1b4d-4e8a-9c3f-5d6e7f8a9b0c
+ampi threads search label:imported                    # the imported sessions
+```
+
+```text
+Imported 3f2c9a7e-1b4d-4e8a-9c3f-5d6e7f8a9b0c as 019a3c71-5e0b-7c2a-9d41-0b6f2c8e1a10 (24 messages)
+Skipped 8d1e0f2a-6b7c-4d8e-9f0a-1b2c3d4e5f6a: already imported as 019a3a02-77d4-7f19-8b3e-5c1d9e2f4a07; --reimport imports it again
+Claude Code: 1 imported, 1 skipped, 0 failed.
+```
+
+| Command | What it does |
+| --- | --- |
+| `threads import detect` | Prints each agent's data location and whether it exists, without reading a conversation: Claude Code's `projects` folder in `$CLAUDE_CONFIG_DIR` (default `~/.claude`), Codex's `sessions` folder in `$CODEX_HOME` (default `~/.codex`) and OpenCode's `opencode` folder in `$XDG_DATA_HOME` (default `~/.local/share`). `--json` prints `{"agents": [{"agent", "path", "found"}]}`. |
+| `threads import claude [ids...]` (`claude-code`) | Imports the Claude Code sessions with these ids, the names of their files in `projects/<folder>/<id>.jsonl`. `--all` imports instead every session whose file changed within `--max-age` days (30 by default, `0` for no limit), newest first, and `--limit <n>` stops after n sessions. Giving neither ids nor `--all`, or both, is a usage error. `--claude-dir <path>` reads another configuration directory. |
+| `threads import codex`, `threads import opencode` | Not supported yet: a usage error. |
+
+- **What a session keeps.** Each conversation becomes one Pi session in the session directory Pi uses for the directory it ran in. User text and images (base64 images as images, others as "(image)"), assistant text and thinking, tool calls and their results, and errors are kept, each message with its original time. The lines Claude Code writes for one assistant message become one message. A helper agent's side conversation, notes Claude Code added for the model, and bookkeeping lines are left out. Assistant messages keep Claude Code's model id under the provider `claude-code-import`, which Pi has no provider for, and their token counts; their cost is unknown, never zero. The session is named with the title Claude Code recorded (one you set, else its generated title or summary), else Pi shows its first prompt.
+- **Labels and provenance.** The session gets the labels `imported` and `claude-code` in the thread index, and a first entry of type `ampi-import` holding `agent`, `sourceId`, `sourcePath`, `sourceModified`, `sourceStarted`, `importedAt` and `formatVersion`. ampi-core reads that entry and refuses every new prompt in the session, from any host; see the ampi-core README.
+- **Imported once.** `<agent dir>/data/ampi/imports.json` records, per `claude-code:<id>`, the Pi session the conversation became and when. A recorded conversation is skipped unless you pass `--reimport`, which writes it again under the same session id and removes the old session file once the new one is complete. A record whose session file was deleted is ignored, so the conversation is imported again.
+- **Output.** One line per conversation (imported, skipped with the reason, or failed with the reason) and a summary line. `--json` prints one object per line instead: `{"type": "imported" | "skipped" | "failed", "agent", "sourceId", "sessionId", "messages", "reason"}` with the fields that apply, then `{"type": "summary", "agent", "imported", "skipped", "failed"}`. `--dry-run` reads and converts every conversation and prints the message counts, without `sessionId`, and writes nothing.
+- **Exit status.** `0` when every conversation was imported or skipped, `1` when one failed or an id has no session, `2` on a usage error. `ampi threads import --help` lists the options.
+
 ## ampi app
 
 `ampi app` serves every Pi session on this machine from one local web page: read any of them, carry on those that no other process has open without a terminal, and join those a terminal runs with its web GUI on.

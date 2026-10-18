@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isMmrImportedSession } from "../ampi-core/imported-session.js";
 import { setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { type LoadedMmrCoreSettings, loadMmrCoreSettings } from "../ampi-core/settings.js";
 import { assembleMmrSubagentSurface, registerMmrSubagentPromptBuilder } from "../ampi-core/subagent-prompt-assembly.js";
@@ -236,9 +237,11 @@ export function registerMmrThreadTitles(options: MmrThreadTitlesOptions): MmrThr
 
   // Only the first run that completes a reply counts, so a resumed session
   // is left alone and a failed title is not tried again. Workers and print,
-  // JSON and RPC runs are never titled.
+  // JSON and RPC runs are never titled, and neither are imported sessions,
+  // which keep the title their agent gave them.
   pi.on("agent_start", (_event, ctx) => {
-    firstRun = ctx.mode === "tui" && !hasCompletedReply(ctx) ? ctx.sessionManager.getSessionId() : undefined;
+    const titled = ctx.mode === "tui" && !hasCompletedReply(ctx) && !isMmrImportedSession(ctx.sessionManager.getEntries());
+    firstRun = titled ? ctx.sessionManager.getSessionId() : undefined;
   });
 
   pi.on("agent_settled", (event, ctx) => {

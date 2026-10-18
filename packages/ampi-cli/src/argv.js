@@ -309,7 +309,7 @@ Commands:
 
   help                          Print this help and exit
   version                       Print the ampi-cli, ampi and Pi versions and exit
-  threads [command]             Create, list, open, print, change or delete sessions;
+  threads [command]             Create, list, open, print, change, delete or import sessions;
                                 ampi threads --help lists the commands
   last                          Open the most recent session of this directory that is not archived
   usage                         Print the cost and tokens of every session of the last 30 days;

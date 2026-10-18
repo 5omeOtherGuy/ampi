@@ -79,7 +79,7 @@ A session's title is its Pi session name: the terminal title, the Switch Thread 
 - The answer is cut to its first line, six words and 60 characters, without quotes, Markdown or trailing periods, and becomes the session name. The thread index records `titleSource: "model"`.
 - No title is generated when the session already has a name, when its title was ever set by you (`titleSource: "user"`), when the first prompt has fewer than three words, or when the first run was aborted before it replied. A session resumed from disk is left alone.
 - One attempt per session. When there is no model route, no worker host (`ampi-workers` is off) or the call fails, nothing is shown and the session keeps no name. A name you give while the model answers wins.
-- Print, JSON and RPC runs, subagent workers among them, are never titled.
+- Print, JSON and RPC runs, subagent workers among them, are never titled, and neither are [imported sessions](#imported-sessions).
 - The call runs on the `title` subagent profile: the routes of the `low` mode, thinking off. Point it at another model with `ampiCore.subagentModelPreferences.title` (see [`ampi-core`](../ampi-core/README.md#subagent-profiles)). Each title costs one small request to that model.
 
 `thread rename` opens an empty input. It passes the placeholder "Thread title", which RPC clients can show; Pi's terminal dialog leaves it out. Enter sets the new title and records `titleSource: "user"`, so generated titles never replace it; Escape or an empty answer keeps the current title. The terminal title follows at once, through Pi's `session_info_changed` event, and the Switch Thread picker shows the new title the next time it opens.
@@ -92,6 +92,10 @@ A session's title is its Pi session name: the terminal title, the Switch Thread 
 - `thread archive and new` starts the new session through Pi's own `newSession`, which first stops a running turn. A notice in the new session confirms the archive.
 - `thread archive and quit` archives the session, then quits the way `ampi.quit` (Ctrl+C Ctrl+C) does. Without `ampi-tui` it stops a running turn and shuts Pi down itself.
 - With `autoArchiveOnQuit`, quitting an interactive session archives it. Switching sessions, `/reload`, and print, JSON or RPC runs (subagent workers included) never archive. An archive date that is already set is kept.
+
+### Imported sessions
+
+`ampi threads import` (the `ampi` command; see its [README](../../../packages/ampi-cli/README.md#import)) copies other coding agents' conversations into Pi sessions labelled `imported` and the agent's name (`claude-code`) in the thread index. They are read-only: `ampi-core` refuses every prompt in them, whatever host sends it ([its README](../ampi-core/README.md#imported-sessions-are-read-only)), so the guard holds with `ampi-threads` off too. Everything here that only reads a session works on them: switching to one, the Markdown export, the cost report (their models have no price, so their cost is unknown) and labels. They keep the title their agent recorded and get no generated title. To continue the work, start a new session and mention the imported one with `@@`. The GUI's host will check the same predicate before it forwards a prompt; whichever of the import and the GUI's host lands second also disables the GUI composer for imported sessions (see [`ampi-gui`](../ampi-gui/README.md#the-composer)).
 
 ### Switching sessions
 

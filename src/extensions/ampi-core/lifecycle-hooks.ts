@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { maybeShowMmrChangelogOnSessionStart } from "./changelog.js";
 import { buildPromptAssemblyObservation } from "./diagnostics.js";
+import { refuseMmrImportedSessionInput } from "./imported-session.js";
 import { readPreferredEnv } from "./internal/env.js";
 import { isRecord } from "./internal/json.js";
 import { assembleActiveSurface } from "./prompt-assembly.js";
@@ -300,6 +301,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("input", async (_event, ctx) => {
+    // An imported session is read-only, whatever host sent the prompt.
+    if (refuseMmrImportedSessionInput(ctx)) return { action: "handled" };
     // The first user message fixes the session's mode.
     controller.noteUserMessage();
     // Reassert the active mode's context cap before Pi runs its pre-prompt

@@ -249,6 +249,13 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "tests/mmr-workers-review-checks.test.mjs",
       "tests/mmr-cli-mcp.test.mjs",
       "tests/fixtures/ampi-cli/mcp-echo-server.mjs",
+      "packages/ampi-cli/src/import/index.js",
+      "packages/ampi-cli/src/import/claude-code.js",
+      "packages/ampi-cli/src/import/ledger.js",
+      "src/extensions/ampi-core/imported-session.ts",
+      "src/extensions/ampi-threads/README.md",
+      "tests/mmr-cli-import.test.mjs",
+      "tests/mmr-core-imported-session.test.mjs",
     ];
     const allFindings = [];
     for (const file of files) {
