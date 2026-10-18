@@ -1,6 +1,6 @@
 // ampi-gui extension: off by default, a no-op outside the interactive
-// terminal, and in it a server, a live registry entry and the
-// `thread.openInBrowser` command for the session's lifetime.
+// terminal, and in it a server, its port in ampi-core's live registry entry
+// and the `thread.openInBrowser` command for the session's lifetime.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -29,7 +29,8 @@ function tempDir() {
 
 function get(port, target, headers = {}) {
   return new Promise((resolve, reject) => {
-    request({ host: "127.0.0.1", port, path: target, headers }, (res) => {
+    // A new connection each time: a pooled keep-alive socket would outlive the server.
+    request({ host: "127.0.0.1", port, path: target, headers, agent: false }, (res) => {
       res.resume();
       res.on("end", () => resolve(res.statusCode));
     })
@@ -38,9 +39,21 @@ function get(port, target, headers = {}) {
   });
 }
 
-async function load(overrides) {
+/** Load ampi-gui, after ampi-core's live registry writer when `live` names its directory. */
+async function load(overrides, live) {
   const { createMmrGuiExtension } = await importSource("extensions/ampi-gui/index.ts");
   const mock = createMockPi();
+  if (live) {
+    const { registerMmrLiveRegistry } = await importSource("extensions/ampi-core/live-registry.ts");
+    // A clock that never moves and timers run by hand, so throttled writes need no waiting.
+    live.timers = [];
+    live.writer = registerMmrLiveRegistry(mock.pi, {
+      dir: live.dir,
+      now: () => 0,
+      setTimer: (callback) => live.timers.push(callback),
+      clearTimer: () => {},
+    });
+  }
   createMmrGuiExtension(overrides)(mock.pi);
   return mock;
 }
@@ -86,19 +99,23 @@ describe("ampi-gui extension", () => {
     assert.throws(() => readdirSync(registryDir), { code: "ENOENT" });
   });
 
-  it("serves the session in the terminal, records it, and cleans up at shutdown", async () => {
+  it("serves the session in the terminal, adds its port to the live registry entry, and cleans up at shutdown", async () => {
     const registryDir = path.join(tempDir(), "live");
+    const live = { dir: registryDir };
     const opened = [];
     let opener = true;
-    const { handlers } = await load({
-      loadSettings: () => ({ enabled: true }),
-      registryDir,
-      createToken: () => TOKEN,
-      openUrl: async (url) => {
-        opened.push(url);
-        return opener;
+    const { handlers } = await load(
+      {
+        loadSettings: () => ({ enabled: true }),
+        registryDir,
+        createToken: () => TOKEN,
+        openUrl: async (url) => {
+          opened.push(url);
+          return opener;
+        },
       },
-    });
+      live,
+    );
     const { getMmrCommand } = await importSource("extensions/ampi-core/command-registry.ts");
     const { ctx, notifications } = createMockExtensionContext({ mode: "tui", cwd: "/work/app", sessionId: "s-1", sessionFile: "/sessions/s-1.jsonl" });
     await handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
@@ -111,12 +128,14 @@ describe("ampi-gui extension", () => {
     assert.equal(token, TOKEN);
     assert.equal(await get(port, `/?t=${TOKEN}`), 303);
 
+    for (const run of live.timers.splice(0)) run();
+    await live.writer.idle();
     const file = path.join(registryDir, `${process.pid}.json`);
     const recorded = JSON.parse(readFileSync(file, "utf8"));
-    assert.equal(recorded.port, port);
+    assert.deepEqual(recorded.gui, { port, tokenHash: createHash("sha256").update(TOKEN).digest("hex") });
+    assert.equal(recorded.kind, "tui");
     assert.equal(recorded.sessionPath, "/sessions/s-1.jsonl");
     assert.equal(recorded.cwd, "/work/app");
-    assert.equal(recorded.tokenHash, createHash("sha256").update(TOKEN).digest("hex"));
     assert.equal(readFileSync(file, "utf8").includes(TOKEN), false, "the registry never holds the token");
 
     const command = getMmrCommand("thread.openInBrowser");

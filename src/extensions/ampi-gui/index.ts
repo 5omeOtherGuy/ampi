@@ -4,11 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
+import { readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
-import { readMmrGuiLiveEntries, removeMmrGuiLiveEntry, writeMmrGuiLiveEntry } from "./registry.js";
 import { hashMmrGuiToken, type MmrGuiServer, startMmrGuiServer } from "./server.js";
 import { createMmrGuiSessions } from "./sessions.js";
 
@@ -19,7 +19,7 @@ const CLIENT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "clie
 
 export interface MmrGuiFactoryOverrides {
   loadSettings?: () => MmrGuiSettings;
-  /** Directory of the live registry; defaults to `<agentDir>/data/ampi/live`. */
+  /** Directory of ampi-core's live registry, read for the sessions other processes run; defaults to `<agentDir>/data/ampi/live`. */
   registryDir?: string;
   /** Opens a URL in a browser; resolves `false` when no browser could be started. */
   openUrl?: (url: string) => Promise<boolean>;
@@ -47,7 +47,6 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
     if (!settings.enabled) return;
 
     const bridge = createMmrGuiBridge(pi);
-    const registry = { baseDir: overrides.registryDir };
     const sessions = createMmrGuiSessions({
       // Every saved session, from the session directory this Pi uses (a custom one included).
       source: {
@@ -57,8 +56,10 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
         },
       },
       current: () => (bridge.context() ? bridge.session() : undefined),
+      // Every session file another running process has open: terminal
+      // sessions with or without a GUI, and print, JSON and RPC runs.
       elsewhere: async () =>
-        (await readMmrGuiLiveEntries(registry))
+        (await readMmrLiveEntries({ dir: overrides.registryDir }))
           .filter((entry) => entry.pid !== process.pid && entry.sessionPath !== null)
           .map((entry) => entry.sessionPath as string),
     });
@@ -95,21 +96,8 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
           current.ui.notify(opened ? `Opening the web GUI: ${url}` : `Open this link in a browser: ${url}`, "info");
         },
       });
-      try {
-        await writeMmrGuiLiveEntry(
-          {
-            pid: process.pid,
-            sessionPath: ctx.sessionManager.getSessionFile() ?? null,
-            cwd: ctx.cwd,
-            port: server.port,
-            tokenHash: hashMmrGuiToken(token),
-            startedAt: new Date().toISOString(),
-          },
-          registry,
-        );
-      } catch (error) {
-        warn(ctx, "could not record the session in the live registry", error);
-      }
+      // ampi-core writes this process's live registry entry; the GUI adds its port.
+      setMmrLiveFields({ gui: { port: server.port, tokenHash: hashMmrGuiToken(token) } });
       ctx.ui.notify(`Web GUI: ${url}`, "info");
     });
 
@@ -118,9 +106,9 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       const closing = server;
       server = undefined;
       unregisterMmrCommand(MMR_GUI_OPEN_COMMAND_ID);
+      setMmrLiveFields({ gui: null });
       bridge.stop();
       await closing.close();
-      await removeMmrGuiLiveEntry(process.pid, registry).catch(() => {});
     });
   };
 }

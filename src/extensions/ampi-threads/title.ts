@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { type LoadedMmrCoreSettings, loadMmrCoreSettings } from "../ampi-core/settings.js";
 import { assembleMmrSubagentSurface, registerMmrSubagentPromptBuilder } from "../ampi-core/subagent-prompt-assembly.js";
 import { getMmrSubagentProfile } from "../ampi-core/subagent-profiles.js";
@@ -226,6 +227,7 @@ export function registerMmrThreadTitles(options: MmrThreadTitlesOptions): MmrThr
       // The session may have ended, or been named, while the model answered.
       if (!generated || current.signal.aborted || ctx.sessionManager.getSessionName()) return;
       pi.setSessionName(generated);
+      setMmrLiveFields({ title: generated });
       await index.update(sessionId, { titleSource: "model" });
     } finally {
       if (controller === current) controller = undefined;

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "pid": 105,
+  "procStart": 7000,
+  "kind": "tui",
+  "sessionId": "s-e",
+  "sessionPath": "/sessions/e.jsonl",
+  "cwd": "/work/app",
+  "title": null,
+  "mode": "low",
+  "status": { "phase": "idle", "label": "" },
+  "startedAt": "2026-10-18T10:05:00.000Z",
+  "updatedAt": "2026-10-18T10:05:00.000Z",
+  "gui": null
+}

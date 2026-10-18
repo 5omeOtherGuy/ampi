@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "pid": 102,
+  "procStart": 5000,
+  "kind": "tui",
+  "sessionId": "s-b",
+  "sessionPath": "/sessions/b.jsonl",
+  "cwd": "/work/app",
+  "title": "Fix the parser",
+  "mode": "medium",
+  "status": { "phase": "runningTools", "label": "Running Tools" },
+  "startedAt": "2026-10-18T10:01:00.000Z",
+  "updatedAt": "2026-10-18T10:02:00.000Z",
+  "gui": { "port": 40102, "tokenHash": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f" }
+}

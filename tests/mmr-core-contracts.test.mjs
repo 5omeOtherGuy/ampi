@@ -401,7 +401,8 @@ describe("mmr-core activation notifications use the policy diagnostic pipeline",
       appendEntry: () => {},
       registerCommand: (name, command) => commands.set(name, command),
       registerShortcut: () => {},
-      on: (name, handler) => handlers.set(name, handler),
+      // Keep the first handler per event: ampi-core's lifecycle hook, ahead of the live registry's.
+      on: (name, handler) => handlers.has(name) || handlers.set(name, handler),
       events: { emit: () => {}, on: () => {}, off: () => {} },
     };
     extension(pi);
@@ -557,7 +558,8 @@ describe("mmr-core event constants", () => {
       appendEntry: () => {},
       registerCommand: (name, command) => commands.set(name, command),
       registerShortcut: () => {},
-      on: (name, handler) => handlers.set(name, handler),
+      // Keep the first handler per event: ampi-core's lifecycle hook, ahead of the live registry's.
+      on: (name, handler) => handlers.has(name) || handlers.set(name, handler),
       events: {
         emit: (name, payload) => emissions.push({ name, payload }),
         on: () => {},

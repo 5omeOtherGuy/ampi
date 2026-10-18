@@ -222,6 +222,8 @@ npm run test:one -- tests/mmr-cli-argv.test.mjs
 
 The package is plain JavaScript with JSDoc types and no build step. It is not an npm workspace and has no lockfile of its own: in a checkout it runs on the root install, which provides Pi, and loads ampi from the checkout itself. The root `npm run gate` lints, tests, type-checks and packs it. See the repository's [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
+`src/live-registry.js` reads the live registry ampi-core keeps of running sessions (one `<agentDir>/data/ampi/live/<pid>.json` per process; the format is in the [ampi-core README](../../src/extensions/ampi-core/README.md#live-registry)), because this package cannot import ampi's TypeScript. `readLiveEntries({ dir, isAlive?, procStart? })` returns the entries of running processes and removes stale ones; `findLiveOwner(sessionPath, { dir, exceptPid? })` returns the process that has a session file open; `liveRegistryDir(agentDir)` names the directory. It follows the same rules as ampi-core's reader, and `tests/mmr-cli-live-registry.test.mjs` fails when the two disagree on the shared fixtures, so change both together.
+
 ## License
 
 [MIT](LICENSE).

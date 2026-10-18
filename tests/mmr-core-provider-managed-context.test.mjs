@@ -38,7 +38,8 @@ function buildPi(setModelCalls, notifications, handlers, flagValue) {
     appendEntry: () => {},
     registerCommand: () => {},
     registerShortcut: () => {},
-    on: (name, handler) => handlers.set(name, handler),
+    // Keep the first handler per event: ampi-core's lifecycle hook, ahead of the live registry's.
+    on: (name, handler) => handlers.has(name) || handlers.set(name, handler),
     events: { emit: () => {}, on: () => {}, off: () => {} },
   };
 }
@@ -84,7 +85,10 @@ describe("mmr-core provider-managed context selection", () => {
     extension(pi);
     await handlers.get("session_start")({ type: "session_start", reason: "new" }, ctx);
 
-    assert.equal(handlers.has("turn_end"), false, "MMR must not use extension manual compaction after turns");
+    // ampi-core's only turn_end hook feeds the live registry's status; it never compacts.
+    const compacted = [];
+    await handlers.get("turn_end")?.({ type: "turn_end", message: { role: "assistant" } }, { ...ctx, compact: (options) => compacted.push(options) });
+    assert.deepEqual(compacted, [], "MMR must not use extension manual compaction after turns");
     assert.equal(handlers.has("agent_end"), false, "MMR must leave auto-compaction to Pi and the selected provider route");
     assert.equal(setModelCalls.length, 1);
     assert.notEqual(setModelCalls[0], models[0]);
