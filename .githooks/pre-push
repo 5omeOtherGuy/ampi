@@ -35,7 +35,10 @@ done
 [ "$RUN_GATE" = "1" ] || exit 0
 
 REPO_TOP=$(git rev-parse --show-toplevel)
-if ! (cd "$REPO_TOP" && npm run --silent gate); then
+# Pushing from a linked worktree exports an absolute GIT_DIR to this hook
+# (and `git -c` exports GIT_CONFIG_PARAMETERS). Unset them so tests that
+# create scratch repositories cannot write to this one.
+if ! (unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR GIT_CONFIG_PARAMETERS; cd "$REPO_TOP" && npm run --silent gate); then
   echo "pre-push: npm run gate failed; push refused." >&2
   exit 1
 fi
