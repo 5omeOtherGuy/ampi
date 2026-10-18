@@ -3,6 +3,7 @@ import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getMmrGuiHost } from "./gui-host.js";
 import { isRecord } from "./internal/json.js";
 import { getMmrModeState, onMmrStateChanged } from "./runtime.js";
 import { createMmrThreadStatusEventMapper, onMmrThreadStatusEvents } from "./thread-status-events.js";
@@ -263,12 +264,17 @@ export async function findMmrLiveOwner(
 /**
  * The kind of entry this process writes for its session, or `undefined` for
  * a session without a file (`--no-session`, which every subagent worker
- * uses, and in-memory sessions), which writes none.
+ * uses, and in-memory sessions), which writes none. A session that
+ * `ampi app` hosts (see `gui-host.ts`) is `app-session`, with the host's pid.
  */
-export function resolveMmrLiveKind(ctx: Pick<ExtensionContext, "mode" | "sessionManager">): MmrLiveKind | undefined {
+export function resolveMmrLiveKind(
+  ctx: Pick<ExtensionContext, "mode" | "sessionManager">,
+): { kind: MmrLiveKind; ownerPid?: number } | undefined {
   // Feature-detected like the session identity: hosts that lack the accessor have no file to share.
   if (!ctx.sessionManager.getSessionFile?.()) return undefined;
-  return ctx.mode === "tui" ? "tui" : "execute";
+  const host = getMmrGuiHost();
+  if (host?.role === "session") return { kind: "app-session", ownerPid: host.ownerPid };
+  return { kind: ctx.mode === "tui" ? "tui" : "execute" };
 }
 
 /** Fields other extensions contribute to this process's entry. */
@@ -281,7 +287,8 @@ export interface MmrLiveFields {
 
 interface LiveFieldsStore {
   fields: MmrLiveFields;
-  writers: Set<() => void>;
+  /** Each schedules a throttled write, or with `immediate` writes now and resolves once written. */
+  writers: Set<(immediate?: boolean) => unknown>;
 }
 
 // globalThis-anchored so every cache-isolated copy of this module shares one store.
@@ -307,6 +314,15 @@ export function setMmrLiveFields(fields: MmrLiveFields): void {
   const store = liveStore();
   store.fields = { ...store.fields, ...fields };
   for (const schedule of store.writers) schedule();
+}
+
+/**
+ * Write this process's entry now instead of within the write throttle, and
+ * resolve once it is on disk; for a contribution another process must see
+ * before it is told to look, such as the GUI port of a hosted session.
+ */
+export async function flushMmrLiveEntry(): Promise<void> {
+  await Promise.all([...liveStore().writers].map((writer) => writer(true)));
 }
 
 export interface MmrLiveRegistryHooksOptions extends MmrLiveRegistryOptions {
@@ -344,7 +360,14 @@ export function registerMmrLiveRegistry(
   const writeStderr = options.writeStderr ?? ((line: string) => void process.stderr.write(line));
 
   let session:
-    | { ctx: ExtensionContext; kind: MmrLiveKind; sessionPath: string; procStart: number | null; startedAt: string }
+    | {
+        ctx: ExtensionContext;
+        kind: MmrLiveKind;
+        ownerPid?: number;
+        sessionPath: string;
+        procStart: number | null;
+        startedAt: string;
+      }
     | undefined;
   let reducer = createMmrThreadStatusReducer();
   const mapper = createMmrThreadStatusEventMapper();
@@ -389,6 +412,7 @@ export function registerMmrLiveRegistry(
       startedAt: session.startedAt,
       updatedAt: new Date(now()).toISOString(),
       gui: fields.gui ?? null,
+      ...(session.ownerPid !== undefined ? { ownerPid: session.ownerPid } : {}),
     };
   }
 
@@ -422,15 +446,21 @@ export function registerMmrLiveRegistry(
     if (`${getMmrModeState()?.mode ?? null}|${status.phase}|${status.label}` !== written) schedule();
   }
 
-  liveStore().writers.add(schedule);
+  liveStore().writers.add((immediate) => {
+    if (!immediate) return schedule();
+    if (!session) return chain;
+    if (timer !== undefined) clearTimer(timer);
+    timer = undefined;
+    return write();
+  });
 
   pi.on("session_start", async (_event, ctx) => {
-    const kind = resolveMmrLiveKind(ctx);
-    if (!kind) return;
+    const identity = resolveMmrLiveKind(ctx);
+    if (!identity) return;
     const sessionPath = ctx.sessionManager.getSessionFile() as string;
     reducer = createMmrThreadStatusReducer();
     mapper.reset();
-    session = { ctx, kind, sessionPath, procStart: procStart(process.pid), startedAt: new Date(now()).toISOString() };
+    session = { ctx, ...identity, sessionPath, procStart: procStart(process.pid), startedAt: new Date(now()).toISOString() };
     process.off("exit", removeOnExit);
     process.on("exit", removeOnExit);
     await write();

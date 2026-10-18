@@ -311,6 +311,8 @@ export async function runAmpi(argv) {
       return runPiCommand(route.piArgs);
     case "threads":
       return runThreads(route.threadArgs ?? []);
+    case "app-worker":
+      return runAppWorkerProcess();
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
       const cwd = process.cwd();
@@ -324,6 +326,26 @@ export async function runAmpi(argv) {
     }
   }
   return startPi(route);
+}
+
+/**
+ * Serve one session for `ampi app` over the IPC channel it forked this
+ * process with, then exit: the session's MCP connections and timers would
+ * otherwise keep the process alive.
+ *
+ * @returns {Promise<number>}
+ */
+async function runAppWorkerProcess() {
+  if (typeof process.send !== "function") {
+    process.stderr.write("ampi: app --worker is started by ampi app, which talks to it over an IPC channel; it does not run on its own.\n");
+    return 2;
+  }
+  const [pi, { runAppWorker }] = await Promise.all([import(PI_PACKAGE_NAME), import("./app-worker.js")]);
+  // The process setup Pi's own executable does, so tools see they run under an agent.
+  process.title = "ampi";
+  process.env.PI_CODING_AGENT = "true";
+  process.env.AI_AGENT = "pi";
+  process.exit(await runAppWorker({ channel: /** @type {any} */ (process), pi }));
 }
 
 /**

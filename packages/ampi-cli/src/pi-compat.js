@@ -284,12 +284,13 @@ export function capturePiJsonOutput(convert) {
  * `defaultProjectTrust` is `"always"`. Pi asks first when the setting is
  * `"ask"`, which counts as not trusted here. An extension can also decide
  * trust through Pi's `project_trust` event; that needs the extensions loaded,
- * so it is not followed here.
+ * so it is not followed here. createPiSessionServices hands it to SDK sessions.
  *
  * @param {any} pi
  * @param {string} cwd
+ * @returns {any} Pi's `SettingsManager`.
  */
-function piSettingsManager(pi, cwd) {
+export function piSettingsManager(pi, cwd) {
   const agentDir = pi.getAgentDir();
   /** @type {boolean | null} */
   const decision = new pi.ProjectTrustStore(agentDir).get(cwd);
@@ -297,6 +298,37 @@ function piSettingsManager(pi, cwd) {
     !pi.hasTrustRequiringProjectResources(cwd) ||
     (decision ?? pi.SettingsManager.create(cwd, agentDir, { projectTrusted: false }).getDefaultProjectTrust() === "always");
   return pi.SettingsManager.create(cwd, agentDir, { projectTrusted });
+}
+
+/**
+ * Services for an SDK session in `cwd`: Pi's settings as piSettingsManager
+ * reads them, and a resource loader that also loads `extensionPaths` and
+ * `extensionFactories`. Pi's SDK documentation covers neither the
+ * `resourceLoaderOptions` of createAgentSessionServices nor the loader's
+ * `getExtensions().errors`, so the returned diagnostics carry each extension
+ * that failed to load as an error next to Pi's own diagnostics.
+ *
+ * @param {any} pi
+ * @param {{ cwd: string, agentDir: string, extensionPaths: string[], extensionFactories: unknown[] }} options
+ * @returns {Promise<{ services: any, diagnostics: { type: string, message: string }[] }>} Pi's
+ *   `AgentSessionServices` and the diagnostics.
+ */
+export async function createPiSessionServices(pi, { cwd, agentDir, extensionPaths, extensionFactories }) {
+  const services = await pi.createAgentSessionServices({
+    cwd,
+    agentDir,
+    settingsManager: piSettingsManager(pi, cwd),
+    resourceLoaderOptions: { additionalExtensionPaths: extensionPaths, extensionFactories },
+  });
+  /** @type {{ path: string, error: string }[]} */
+  const errors = services.resourceLoader.getExtensions().errors;
+  return {
+    services,
+    diagnostics: [
+      ...services.diagnostics,
+      ...errors.map(({ path: file, error }) => ({ type: "error", message: `Failed to load extension "${file}": ${error}` })),
+    ],
+  };
 }
 
 /**

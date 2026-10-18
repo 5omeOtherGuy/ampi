@@ -327,6 +327,25 @@ describe("ampi-core live registry writer", () => {
     assert.deepEqual(readdirSync(dir), [], "a contribution after shutdown writes nothing");
   });
 
+  it("writes a contribution at once when flushed, inside the write throttle", async () => {
+    const { setMmrLiveFields, flushMmrLiveEntry } = await load();
+    const dir = path.join(tempDir(), "live");
+    const { emit, clock, handle } = await writer(dir);
+    const { ctx } = createMockExtensionContext({ mode: "rpc", sessionId: "s-1", sessionFile: "/sessions/s-1.jsonl" });
+    await emit("session_start", { reason: "startup" }, ctx);
+    // The clock stands still, so the throttle holds this write for its timer.
+    setMmrLiveFields({ gui: { port: 40124, tokenHash: HASH } });
+    await handle.idle();
+    assert.notEqual(readOwn(dir).gui?.port, 40124);
+    assert.equal(clock.timers.length, 1);
+    await flushMmrLiveEntry();
+    assert.deepEqual(readOwn(dir).gui, { port: 40124, tokenHash: HASH });
+    assert.equal(clock.timers.length, 0, "the flush replaces the pending write");
+    await emit("session_shutdown", { reason: "quit" }, ctx);
+    await flushMmrLiveEntry();
+    assert.deepEqual(readdirSync(dir), [], "a flush after shutdown writes nothing");
+  });
+
   it("follows the mode and the status phase, at most once per 250 ms with a trailing write", async () => {
     const { setMmrModeState, MMR_EVENT_STATE_CHANGED } = await importSource("extensions/ampi-core/runtime.ts");
     const dir = path.join(tempDir(), "live");
@@ -418,8 +437,8 @@ describe("ampi-core live registry writer", () => {
   it("decides the kind in one place", async () => {
     const { resolveMmrLiveKind } = await load();
     const withFile = (mode) => createMockExtensionContext({ mode, sessionFile: "/sessions/a.jsonl" }).ctx;
-    assert.equal(resolveMmrLiveKind(withFile("tui")), "tui");
-    assert.equal(resolveMmrLiveKind(withFile("rpc")), "execute");
+    assert.deepEqual(resolveMmrLiveKind(withFile("tui")), { kind: "tui" });
+    assert.deepEqual(resolveMmrLiveKind(withFile("rpc")), { kind: "execute" });
     assert.equal(resolveMmrLiveKind(createMockExtensionContext({ mode: "tui" }).ctx), undefined);
   });
 });
