@@ -62,6 +62,28 @@ describe("ampi-core session catalogue: Pi session source", () => {
     assert.deepEqual(userTexts, ["plan the alpha release"]);
   });
 
+  it("lists one workspace's sessions or every session, in Pi's default layout and in a custom session directory", async () => {
+    const { listMmrSessionsInScope } = await importSource(CATALOG_MODULE);
+    const alphaCwd = path.join(agentDir, "work", "alpha");
+    const alpha = writeSession(alphaCwd, "plan the alpha release");
+    const beta = writeSession(path.join(agentDir, "work", "beta"), "fix the beta parser");
+    const ids = async (manager, scope) => (await listMmrSessionsInScope(manager, scope)).map((session) => session.id).sort();
+
+    const inAlpha = { getCwd: () => alphaCwd, getSessionDir: () => path.dirname(alpha.path) };
+    assert.deepEqual(await ids(inAlpha, "workspace"), [alpha.id]);
+    assert.deepEqual(await ids(inAlpha, "all"), [alpha.id, beta.id].sort());
+
+    // A custom directory holds every workspace's sessions side by side; `all` lists that directory only.
+    const custom = path.join(agentDir, "custom-sessions");
+    const gamma = SessionManager.create(alphaCwd, custom);
+    gamma.appendMessage({ role: "user", content: "gamma", timestamp: 1 });
+    const delta = SessionManager.create(path.join(agentDir, "work", "delta"), custom);
+    delta.appendMessage({ role: "user", content: "delta", timestamp: 1 });
+    const inCustom = { getCwd: () => alphaCwd, getSessionDir: () => custom };
+    assert.deepEqual(await ids(inCustom, "workspace"), [gamma.getSessionId()]);
+    assert.deepEqual(await ids(inCustom, "all"), [gamma.getSessionId(), delta.getSessionId()].sort());
+  });
+
   it("returns an empty list when no session has been written", async () => {
     const { createMmrPiSessionSource } = await importSource(CATALOG_MODULE);
     assert.deepEqual(await createMmrPiSessionSource().listSessions(), []);

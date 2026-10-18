@@ -16,11 +16,13 @@ import {
 } from "../../ampi-core/keymap.js";
 import type { MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
+import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import type { MmrModeKey } from "../../ampi-core/types.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { openMmrPromptHistory } from "../overlays/prompt-history.js";
+import { openMmrThreadPicker } from "../overlays/thread-picker.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
@@ -136,6 +138,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let dialMode: MmrModeKey | undefined;
   let dialSwitches: Promise<void> = Promise.resolve();
   let promptHistoryOpen = false;
+  let threadSwitcherOpen = false;
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -144,6 +147,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openHelpKeymap,
     openKeymapJson,
     openPromptHistory,
+    openThreadSwitcher,
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -240,6 +244,36 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
         getTui()?.requestRender();
       })
       .catch(report);
+  }
+
+  /**
+   * Open the Switch Thread picker; picking another session switches to it
+   * through ampi-threads' `/ampi-thread switch`, the only route to Pi's
+   * `switchSession` outside a command handler. Ignored while the picker is
+   * loading or open.
+   */
+  function openThreadSwitcher(current: ExtensionContext): void {
+    if (threadSwitcherOpen) return;
+    threadSwitcherOpen = true;
+    const report = (what: string, error: unknown) =>
+      current.ui.notify(`${what}: ${error instanceof Error ? error.message : String(error)}`, "error");
+    options.onPaletteOpen?.(true);
+    void openMmrThreadPicker(current, "switch")
+      .finally(() => {
+        threadSwitcherOpen = false;
+        options.onPaletteOpen?.(false);
+      })
+      .then(
+        (row) => {
+          if (!row || row.current) return;
+          try {
+            pi.sendUserMessage(`/${MMR_THREAD_SLASH_COMMAND} switch ${row.id}`, { expandPromptTemplates: true });
+          } catch (error) {
+            report("Could not switch sessions", error);
+          }
+        },
+        (error: unknown) => report("Could not list the sessions", error),
+      );
   }
 
   /**

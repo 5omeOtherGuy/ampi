@@ -42,7 +42,7 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
     const releaseHistory = registerMmrPromptHistory(history);
     const unregisterCommands = registerMmrThreadCommands(host);
     pi.registerCommand(MMR_THREAD_SLASH_COMMAND, {
-      description: "Start a new session, or archive this one and start a new one (used by the thread commands)",
+      description: "Start, archive or switch sessions (used by the thread commands and the thread picker)",
       handler: createMmrThreadSlashHandler(host),
     });
 

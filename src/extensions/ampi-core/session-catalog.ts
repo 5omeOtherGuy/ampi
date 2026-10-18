@@ -1,4 +1,5 @@
-import { SessionManager, type SessionEntry, type SessionInfo } from "@earendil-works/pi-coding-agent";
+import path from "node:path";
+import { getAgentDir, SessionManager, type SessionEntry, type SessionInfo } from "@earendil-works/pi-coding-agent";
 
 /**
  * Read-only catalogue of the local Pi sessions on disk, shared by every
@@ -15,6 +16,9 @@ import { SessionManager, type SessionEntry, type SessionInfo } from "@earendil-w
  *   index holds a single global TTL cache rather than a per-cwd one.
  * - {@link resolveMmrSessionById} and {@link dedupeMmrSessionsById} turn a
  *   listing into one session per id.
+ * - {@link listMmrSessionsInScope} lists the sessions of the current
+ *   working directory, or of all of them, the way Pi's own session picker
+ *   does.
  *
  * Cache invalidation:
  * - global list cache: invalidated when the set of
@@ -38,6 +42,30 @@ export function createMmrPiSessionSource(): MmrSessionSource {
     listSessions: () => SessionManager.listAll(),
     openSession: (path) => SessionManager.open(path),
   };
+}
+
+/** `workspace`: the sessions started in one working directory; `all`: every session. */
+export type MmrSessionScope = "workspace" | "all";
+
+/**
+ * List the sessions Pi's own session picker shows, newest activity first:
+ * those of the session manager's working directory, or every session for
+ * `all`. A custom session directory (`--session-dir`, the `sessionDir`
+ * setting) is followed the same way: `all` then lists that directory. A custom
+ * directory placed directly in `<agentDir>/sessions` looks like Pi's default
+ * layout, so `all` lists every directory there; the extension API offers no
+ * check that tells the two apart.
+ */
+export function listMmrSessionsInScope(
+  sessionManager: { getCwd(): string; getSessionDir(): string },
+  scope: MmrSessionScope,
+): Promise<SessionInfo[]> {
+  const sessionDir = sessionManager.getSessionDir();
+  if (scope === "workspace") return SessionManager.list(sessionManager.getCwd(), sessionDir);
+  // Pi's default layout keeps one directory per working directory under
+  // `<agentDir>/sessions`; any other directory is a custom one.
+  const usesDefault = path.dirname(path.resolve(sessionDir)) === path.resolve(getAgentDir(), "sessions");
+  return usesDefault ? SessionManager.listAll() : SessionManager.listAll(sessionDir);
 }
 
 export interface MmrSessionIndexDeps {

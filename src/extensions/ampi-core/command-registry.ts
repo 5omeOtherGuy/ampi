@@ -164,9 +164,10 @@ function scoreCommand(command: MmrCommandDefinition, tokens: readonly string[]):
 /**
  * Filter and order commands for a palette query. Each whitespace-separated
  * query word must fuzzy-match the "noun verb" label, the id, the description
- * or a keyword. Available commands come first, best match first, ties in
- * registration order; unavailable ones follow in the same order with their
- * reason. Hidden commands are never returned. An empty query keeps
+ * or a keyword. Available commands come first: a command whose label is the
+ * query itself, then best match first, equal scores by the shorter label and
+ * then in registration order; unavailable ones follow in the same order with
+ * their reason. Hidden commands are never returned. An empty query keeps
  * registration order. Availability is only checked when `options.ctx` is
  * given.
  */
@@ -176,7 +177,8 @@ export function rankMmrCommands(
   options: MmrRankCommandsOptions = {},
 ): MmrRankedCommand[] {
   const tokens = query.trim().split(/\s+/).filter((token) => token.length > 0);
-  const rows: { row: MmrRankedCommand; order: number }[] = [];
+  const exactLabel = tokens.join(" ").toLowerCase();
+  const rows: { row: MmrRankedCommand; order: number; label: string }[] = [];
   for (const [order, command] of commands.entries()) {
     const availability = evaluateAvailability(command, options.ctx);
     if (availability.state === "hidden") continue;
@@ -186,9 +188,17 @@ export function rankMmrCommands(
       availability.state === "unavailable"
         ? { command, state: "unavailable", ...(availability.reason ? { reason: availability.reason } : {}), score }
         : { command, state: "available", score };
-    rows.push({ row, order });
+    rows.push({ row, order, label: `${command.noun} ${command.verb}`.toLowerCase() });
   }
   const rank = (state: MmrRankedCommand["state"]) => (state === "unavailable" ? 1 : 0);
-  rows.sort((a, b) => rank(a.row.state) - rank(b.row.state) || a.row.score - b.row.score || a.order - b.order);
+  const exact = (label: string) => (label === exactLabel ? 0 : 1);
+  rows.sort(
+    (a, b) =>
+      rank(a.row.state) - rank(b.row.state) ||
+      exact(a.label) - exact(b.label) ||
+      a.row.score - b.row.score ||
+      (tokens.length > 0 ? a.label.length - b.label.length : 0) ||
+      a.order - b.order,
+  );
   return rows.map(({ row }) => row);
 }
