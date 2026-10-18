@@ -183,7 +183,7 @@ The model, token totals and context use that Pi's footer showed are not on scree
 | Enter | Sends the prompt; while a turn runs, Pi delivers it to steer the turn |
 | Enter on an empty prompt | Steers with the next queued message, while one is queued (see [Queued messages](#queued-messages)) |
 | Alt+Enter, Shift+Enter, Ctrl+J | Insert a newline (Alt+Enter is Pi's follow-up key; the box takes it over) |
-| Esc | Closes the shortcuts help when it is open, or clears a [message selection](#message-navigation); otherwise clears the prompt when it has text. On an empty prompt with nothing running, Esc does what it does in Pi |
+| Esc | Closes the shortcuts help when it is open, or clears a [message selection](#message-navigation) (while a turn runs, also as the first Esc of Esc Esc); otherwise clears the prompt when it has text. On an empty prompt with nothing running, Esc does what it does in Pi |
 | `?` on an empty prompt | Shows or hides the shortcuts help |
 | Backspace on an empty prompt | Takes queued messages back into the prompt (Pi's `app.message.dequeue`) |
 
@@ -344,10 +344,10 @@ Step back through the messages you sent and pick one to edit. The selected messa
  ┗━e to edit━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-- **Selecting.** Shift+Tab on an empty prompt selects your newest message, and each further press the one before it; at the oldest it stays there. Tab selects the next newer message, and Tab on the newest clears the selection. Esc clears it too, and so does typing into the prompt. The frame and the text use the theme's user message colour, `e` the accent colour.
+- **Selecting.** Shift+Tab on an empty prompt selects your newest message, and each further press the one before it; at the oldest it stays there. Tab selects the next newer message, and Tab on the newest clears the selection. Esc clears it too, and so does typing into the prompt. While a turn runs, that Esc also counts as the first of Esc Esc, so a second Esc stops the turn. The frame and the text use the theme's user message colour, `e` the accent colour.
 - **Scrolling.** In Pi's fullscreen mode the transcript scrolls just enough to show the whole selected message (its top when it is taller than the view). Clearing the selection returns to the end of the transcript. In regular mode (`tuiMode: "regular"`) the frame is drawn but nothing scrolls.
 - **Editing.** `e` puts the selected message's text into the prompt and moves the thread back to the point just before that message, through Pi's session tree, as choosing the message in `/tree` does. The transcript then ends before the message; change the text and send it to continue from there. The old branch stays in the session: `/tree` shows both and returns to the old one. Files the agent changed after that message are not restored.
-- **When the keys are yours.** Shift+Tab takes the selection only while the prompt is empty and the thread has messages; with text in the prompt it stays Pi's thinking level cycle. Tab and `e` act only while a message is selected, so Tab completion and typing `e` work as before. `e` waits for a running turn to finish. While a dialog or overlay has focus, the keys go to it.
+- **When the keys are yours.** Shift+Tab takes the selection only while the prompt is empty and the thread has messages; with text in the prompt it stays Pi's thinking level cycle. Tab and `e` act only while a message is selected, so Tab completion and typing `e` work as before. While a turn runs, `e` is typed into the prompt as usual, which ends the selection; edit once the turn has finished. While a dialog or overlay has focus, the keys go to it.
 - **Which messages.** Every message you sent on the current branch that the transcript shows with text. A message with only images, or a skill call without words of your own, has no user message on screen and is skipped; for a skill call with words, the frame goes around the words and editing puts back the whole message.
 - Rebind or unbind the keys under `ampi.keymap` (`thread.selectPreviousMessage`, `thread.selectNextMessage`, `thread.editSelectedMessage`); Esc is fixed.
 

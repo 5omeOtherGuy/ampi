@@ -223,7 +223,40 @@ describe("ampi-tui message navigation in a session", () => {
     assert.equal(session.send(TAB), false);
   });
 
-  it("e runs the edit command for the selected entry and waits for a running turn", async () => {
+  it("Esc Esc still interrupts a running turn when the first Esc clears a selection", async () => {
+    session = await startSession(thread, { idle: false });
+    session.send(SHIFT_TAB);
+    assert.deepEqual(session.framed(), [false, false, true]);
+    assert.equal(session.send(ESC), true);
+    assert.deepEqual(session.framed(), [false, false, false], "the first Esc clears the selection");
+    assert.equal(session.lifecycle.abort, 0);
+    assert.equal(session.send(ESC), true);
+    assert.equal(session.lifecycle.abort, 1, "the second Esc stops the turn");
+  });
+
+  it("drops the selection when a compaction rebuilds the transcript", async () => {
+    session = await startSession(thread);
+    session.send(SHIFT_TAB);
+    assert.deepEqual(session.framed(), [false, false, true]);
+    await session.handlers.get("session_compact")({ type: "session_compact", reason: "threshold", fromExtension: false, willRetry: false }, session.ctx);
+    assert.deepEqual(session.framed(), [false, false, false]);
+    assert.equal(session.send(TAB), false, "nothing is selected any more");
+  });
+
+  it("registers the edit slash command only for an interactive session", async () => {
+    const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
+    const mock = createMockPi();
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(mock.pi);
+    const print = createMockExtensionContext({ hasUI: false });
+    await mock.handlers.get("session_start")({ type: "session_start", reason: "startup" }, print.ctx);
+    assert.equal(mock.commands.has("ampi-edit-message"), false, "print, JSON and RPC runs do not list it");
+    await mock.handlers.get("session_shutdown")({ type: "session_shutdown", reason: "quit" }, print.ctx);
+
+    session = await startSession(thread);
+    assert.equal(session.commands.has("ampi-edit-message"), true);
+  });
+
+  it("e runs the edit command for the selected entry, and is typed as usual while a turn runs", async () => {
     session = await startSession(thread, { idle: false });
     session.send(SHIFT_TAB);
     session.send(SHIFT_TAB);
@@ -288,7 +321,9 @@ describe("ampi-tui edit message command", () => {
   async function editCommand() {
     const { createMmrMessageNavigation } = await importSource("extensions/ampi-tui/transcript/navigation.ts");
     const mock = createMockPi();
-    createMmrMessageNavigation(mock.pi);
+    const navigation = createMmrMessageNavigation(mock.pi);
+    navigation.start(createMockExtensionContext().ctx, () => undefined);
+    navigation.stop();
     return mock.commands.get("ampi-edit-message");
   }
 

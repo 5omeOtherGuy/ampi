@@ -100,7 +100,7 @@ export interface MmrMessageNavigationOptions {
 }
 
 export interface MmrMessageNavigation {
-  /** Start for a TUI session: register the commands and drop any selection. */
+  /** Start for a TUI session: register the commands (the slash command on the first start) and drop any selection. */
   start(ctx: ExtensionContext, getTui: () => TUI | undefined): void;
   stop(): void;
   /** For the user message drawing: whether this message is the selected one. */
@@ -219,7 +219,7 @@ export function createMmrMessageNavigation(
     },
   ];
 
-  pi.registerCommand(MMR_EDIT_MESSAGE_COMMAND, {
+  const editCommand: Parameters<ExtensionAPI["registerCommand"]>[1] = {
     description: "Edit an earlier user message by its entry id: the thread continues from before it on a new branch",
     handler: async (args: string, current: ExtensionCommandContext) => {
       const id = args.trim();
@@ -236,18 +236,28 @@ export function createMmrMessageNavigation(
       // Pi's setEditorText does not redraw.
       getTui()?.requestRender();
     },
-  });
+  };
+  let editCommandRegistered = false;
 
-  // Another tree move (/tree, a fork) rebuilds the transcript under the selection.
-  pi.on("session_tree", () => {
+  // Another tree move (/tree, a fork) or a compaction rebuilds the transcript
+  // under the selection. A session switch starts the session again.
+  const drop = () => {
     selection = undefined;
-  });
+  };
+  pi.on("session_tree", drop);
+  pi.on("session_compact", drop);
 
   return {
     start(nextCtx, nextGetTui) {
       ctx = nextCtx;
       getTui = nextGetTui;
       selection = undefined;
+      // Only a TUI session can select a message, so print, JSON and RPC runs
+      // never list the command. Pi has no way to remove it again.
+      if (!editCommandRegistered) {
+        pi.registerCommand(MMR_EDIT_MESSAGE_COMMAND, editCommand);
+        editCommandRegistered = true;
+      }
       if (!unregister) {
         for (const command of commands) registerMmrCommand(command);
         unregister = () => {
