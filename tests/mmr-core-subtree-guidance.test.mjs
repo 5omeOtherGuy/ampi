@@ -230,7 +230,13 @@ async function setupHooks(t, { files = {}, settings, argv = [], discovered = [],
     appendEntry(customType, data);
     branch.push({ type: "custom", customType, data });
   };
-  const guidance = registerMmrSubtreeGuidanceHooks(pi, { argv, homeDirectory: tree.home, discoverContextFiles: () => discovered });
+  // `discovery.files` is what Pi's discovery finds now; tests may change it.
+  const discovery = { files: discovered, runs: 0 };
+  const discoverContextFiles = () => {
+    discovery.runs += 1;
+    return discovery.files;
+  };
+  const guidance = registerMmrSubtreeGuidanceHooks(pi, { argv, homeDirectory: tree.home, discoverContextFiles });
   const { ctx } = createMockExtensionContext({ cwd: tree.cwd, entries: branch });
   const fire = (name, event = {}) => handlers.get(name)({ type: name, ...event }, ctx);
   await fire("session_start", { reason: "startup" });
@@ -248,8 +254,8 @@ async function setupHooks(t, { files = {}, settings, argv = [], discovered = [],
       ...overrides,
     });
   const appendedTexts = (result) => (result?.content ?? []).slice(1).map((block) => block.text);
-  const agentStart = (contextFiles) => guidance.observeAgentStart({ systemPromptOptions: { cwd: tree.cwd, contextFiles } }, ctx);
-  return { tree, ctx, fire, read, agentStart, branch, calls, structuredContent, appendedTexts };
+  const agentStart = (contextFiles) => guidance.observeAgentStart({ systemPromptOptions: { cwd: tree.cwd, contextFiles } });
+  return { tree, ctx, fire, read, agentStart, discovery, branch, calls, structuredContent, appendedTexts };
 }
 
 const FEATURE_TREE = {
@@ -399,13 +405,34 @@ describe("turning subfolder guidance off", () => {
 
   it("is off when Pi passes no context files although its discovery finds some", async (t) => {
     const discovered = [{ path: "/project/AGENTS.md", content: "root rules" }];
-    const { read, agentStart } = await setupHooks(t, { files: FEATURE_TREE, discovered });
+    const { read, fire, agentStart } = await setupHooks(t, { files: FEATURE_TREE, discovered });
     agentStart([]);
     assert.equal(await read("src/feature/x.ts"), undefined);
+    agentStart([]);
+    assert.equal(await read("src/feature/x.ts"), undefined, "the verdict holds for the rest of the load");
 
-    // Pi passing its files again turns it back on.
+    // A reload after which Pi passes its files turns it back on.
+    await fire("session_start", { reason: "reload" });
     agentStart(discovered);
     assert.ok(await read("src/feature/x.ts"));
+  });
+
+  it("stays on when a context file appears after Pi loaded its resources", async (t) => {
+    const { read, fire, agentStart, discovery, appendedTexts } = await setupHooks(t, { files: FEATURE_TREE, discovered: [] });
+    // An AGENTS.md created mid-session: discovery finds it, but Pi keeps
+    // passing the files of its last load until the next reload.
+    discovery.files = [{ path: "/project/AGENTS.md", content: "new rules" }];
+    agentStart([]);
+    assert.equal(appendedTexts(await read("src/feature/x.ts")).length, 1);
+    agentStart([]);
+    assert.equal(appendedTexts(await read("src/other/z.ts")).length, 1);
+    assert.equal(discovery.runs, 1, "discovery runs once per resource load, not per prompt");
+
+    // After a reload Pi would pass the new file; passing none then means -nc.
+    await fire("session_start", { reason: "reload" });
+    assert.equal(discovery.runs, 2);
+    agentStart([]);
+    assert.equal(await read("src/feature/y.ts"), undefined);
   });
 
   it("stays on when Pi passes no context files because none exist", async (t) => {
@@ -428,6 +455,7 @@ describe("turning subfolder guidance off", () => {
     const { pi, handlers } = createMockPi();
     extension(pi);
     const { ctx } = createMockExtensionContext({ cwd: tree.cwd });
+    const sessionStart = () => handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
     const agentStart = (contextFiles) =>
       handlers.get("before_agent_start")({ type: "before_agent_start", prompt: "hi", systemPrompt: "", systemPromptOptions: { cwd: tree.cwd, contextFiles } }, ctx);
     const read = () =>
@@ -437,8 +465,10 @@ describe("turning subfolder guidance off", () => {
       );
 
     // The project's AGENTS.md exists, so Pi passing none means -nc.
+    await sessionStart();
     await agentStart([]);
     assert.equal(await read(), undefined);
+    await sessionStart();
     await agentStart([{ path: tree.at("AGENTS.md"), content: "root rules" }]);
     assert.equal((await read()).content.length, 2);
   });
@@ -469,6 +499,13 @@ describe("finder line numbers and subfolder guidance", () => {
   });
 });
 
+/**
+ * Pi's discovery walks up to the file system root, so these probes keep only
+ * the files of their own tree: the temporary directory's parents may hold
+ * context files of their own.
+ */
+const isInside = (root, filePath) => filePath.startsWith(`${root}${path.sep}`);
+
 describe("the installed Pi", () => {
   it("takes the same file per directory as ampi, by the same names and order", async (t) => {
     const { selectMmrSubtreeGuidance } = await importSource(MODULE);
@@ -486,7 +523,9 @@ describe("the installed Pi", () => {
     mkdirSync(agentDir);
     // Pi, started in a/b/c, loads the files of a/b/c and its parents; ampi,
     // started in the project, adds those of the directories below it.
-    const piPicks = loadProjectContextFiles({ cwd: tree.at("a/b/c"), agentDir }).map((file) => [file.path, file.content]);
+    const piPicks = loadProjectContextFiles({ cwd: tree.at("a/b/c"), agentDir })
+      .filter((file) => isInside(tree.root, file.path))
+      .map((file) => [file.path, file.content]);
     const { files } = selectMmrSubtreeGuidance({ filePath: tree.at("a/b/c/x.ts"), cwd: tree.cwd, covered: new Set() });
     assert.deepEqual(piPicks, [
       [tree.at("a/AGENTS.md"), "a agents"],
@@ -505,7 +544,9 @@ describe("the installed Pi", () => {
     await loader.reload();
     assert.deepEqual(loader.getAgentsFiles().agentsFiles, []);
     assert.deepEqual(
-      loadProjectContextFiles({ cwd: tree.cwd, agentDir }).map((file) => file.path),
+      loadProjectContextFiles({ cwd: tree.cwd, agentDir })
+        .filter((file) => isInside(tree.root, file.path))
+        .map((file) => file.path),
       [tree.at("AGENTS.md")],
     );
   });

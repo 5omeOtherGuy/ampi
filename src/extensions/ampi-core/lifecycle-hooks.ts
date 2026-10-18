@@ -212,9 +212,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     return withSpeed === base ? withPolicy : withSpeed;
   });
 
-  pi.on("before_agent_start", async (event, ctx) => {
+  pi.on("before_agent_start", async (event) => {
     // Every session, subagent workers and `free` included.
-    subtreeGuidance?.observeAgentStart(event, ctx);
+    subtreeGuidance?.observeAgentStart(event);
 
     // Subagent workers preserve Pi's base prompt (including any
     // `--append-system-prompt` content) byte-for-byte and do not apply

@@ -2,12 +2,13 @@
 // "Echo: <prompt>", or fails when the prompt contains "please fail". For a
 // prompt containing "list files" it first thinks and calls `bash` with `ls`,
 // then answers with the listing. For "read file <path>" it calls Pi's `read`
-// tool with that path, then answers "Read it." (a compaction summary request
-// that quotes such a prompt gets the echo). For "wait on <fifo>" it calls
-// `bash` with `cat <fifo>`, which blocks until something writes the FIFO, then
-// answers "Waited: <output>". A message containing "release <fifo>" writes that
-// FIFO when Pi receives it, before Pi queues the message, so a steering message
-// can end such a wait without any timing. No network, no credentials.
+// tool with that path, then answers "Read it."; a compaction summary request,
+// whose prompt starts with "<conversation>" or "# Conversation" and may quote
+// such a prompt, gets the echo instead. For "wait on <fifo>" it calls `bash`
+// with `cat <fifo>`, which blocks until something writes the FIFO, then answers
+// "Waited: <output>". A message containing "release <fifo>" writes that FIFO
+// when Pi receives it, before Pi queues the message, so a steering message can
+// end such a wait without any timing. No network, no credentials.
 import { writeFile } from "node:fs";
 import { fauxAssistantMessage, fauxProvider, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
 
@@ -35,8 +36,10 @@ export default function fauxModel(pi: any): void {
       });
     }
     const read = /read file (\S+)/.exec(prompt);
-    // Not in a compaction summary request, which quotes the conversation.
-    if (read && !prompt.startsWith("<conversation>")) {
+    // Not in a compaction summary request, which quotes the conversation:
+    // "<conversation>" opens the history summary, "# Conversation" the summary
+    // of a split turn's prefix.
+    if (read && !prompt.startsWith("<conversation>") && !prompt.startsWith("# Conversation")) {
       if (last?.role === "toolResult") return fauxAssistantMessage("Read it.");
       return fauxAssistantMessage(fauxToolCall("read", { path: read[1] }, { id: `call_read_${context.messages.length}` }), {
         stopReason: "toolUse",

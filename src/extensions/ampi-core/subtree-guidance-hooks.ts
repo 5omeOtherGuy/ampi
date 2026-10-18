@@ -33,10 +33,11 @@ export interface MmrSubtreeGuidanceHookOptions {
 
 export interface MmrSubtreeGuidanceHooks {
   /**
-   * Note the context files Pi passed for this prompt. ampi-core's own
-   * `before_agent_start` hook calls it, so core registers that event once.
+   * Note the context files Pi passed for this prompt; the first prompt after
+   * each resource load decides. ampi-core's own `before_agent_start` hook calls
+   * it, so core registers that event once.
    */
-  observeAgentStart(event: Pick<BeforeAgentStartEvent, "systemPromptOptions">, ctx: Pick<ExtensionContext, "cwd">): void;
+  observeAgentStart(event: Pick<BeforeAgentStartEvent, "systemPromptOptions">): void;
 }
 
 /**
@@ -55,8 +56,14 @@ export function registerMmrSubtreeGuidanceHooks(
   // from a command line (worker children included) carry it on argv.
   const noContextFilesFlag = extractExplicitWorkerCliFlags(options.argv ?? process.argv.slice(2)).noContextFiles === true;
   let enabled = true;
-  // Set when Pi passed no context files although its own discovery finds
-  // some: context files are off for this run, however it was started.
+  // Whether Pi's discovery found context files when Pi last loaded resources:
+  // `session_start` follows every load, `/reload` included. Pi passes the files
+  // of that load on every prompt, so a fresh discovery would mistake a file
+  // created mid-session for `--no-context-files`.
+  let discoveredAtLoad: boolean | undefined;
+  // Set when the first prompt after a load came without context files although
+  // discovery found some then: context files are off for this run, however it
+  // was started.
   let contextFilesWithheld = false;
   let covered = new Set<string>();
 
@@ -66,6 +73,8 @@ export function registerMmrSubtreeGuidanceHooks(
 
   pi.on("session_start", async (_event, ctx) => {
     enabled = loadMmrCoreSettings(ctx.cwd, homeDirectory).settings.subtreeGuidance !== false;
+    discoveredAtLoad = discoverContextFiles(ctx.cwd).length > 0;
+    contextFilesWithheld = false;
     rebuild(ctx);
   });
 
@@ -109,10 +118,11 @@ export function registerMmrSubtreeGuidanceHooks(
   });
 
   return {
-    observeAgentStart(event, ctx) {
+    observeAgentStart(event) {
       const contextFiles = event.systemPromptOptions?.contextFiles;
-      if (!Array.isArray(contextFiles)) return;
-      contextFilesWithheld = contextFiles.length === 0 && discoverContextFiles(ctx.cwd).length > 0;
+      if (discoveredAtLoad === undefined || !Array.isArray(contextFiles)) return;
+      contextFilesWithheld = contextFiles.length === 0 && discoveredAtLoad;
+      discoveredAtLoad = undefined;
     },
   };
 }
