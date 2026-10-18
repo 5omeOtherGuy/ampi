@@ -6,6 +6,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,6 +25,8 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const bin = path.join(repoRoot, "packages", "ampi-cli", "bin", "ampi.js");
 const APP_PID = 7_200_001;
 const PORT = 41_234;
+const RUNNING_PORT = 41_999;
+const RUNNING_TOKEN = ["running", "app", "token"].join("-");
 const dirs = [];
 after(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
@@ -61,6 +64,12 @@ function writeEntry(dir, pid, kind, extra = {}) {
       ...extra,
     }),
   );
+}
+
+/** The live entry of a running app whose page listens on RUNNING_PORT, with its token file (or another token's). */
+function writeRunningApp(dir, pid, token = RUNNING_TOKEN) {
+  writeEntry(dir, pid, "app", { gui: { port: RUNNING_PORT, tokenHash: createHash("sha256").update(RUNNING_TOKEN).digest("hex") } });
+  writeFileSync(path.join(dir, `${pid}.token`), token, { mode: 0o600 });
 }
 
 /**
@@ -178,7 +187,24 @@ describe("ampi app: argument routes", () => {
     assert.doesNotMatch(formatAmpiHelp(), /--worker/);
   });
 
-  it("runs: a second ampi app finds the first and exits 1", () => {
+  it("runs: a second ampi app prints the first one's link from its token file and exits 0", () => {
+    const agentDir = path.join(tempDir(), "agent");
+    // This test process plays the running app.
+    writeRunningApp(path.join(agentDir, "data", "ampi", "live"), process.pid);
+    const result = spawnSync(process.execPath, [bin, "app"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: { ...process.env, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" },
+    });
+    assert.equal(result.stderr, "");
+    assert.equal(
+      result.stdout,
+      `ampi app: http://127.0.0.1:${RUNNING_PORT}/?t=${RUNNING_TOKEN}\nampi app already runs in process ${process.pid}; this is its page.\n`,
+    );
+    assert.equal(result.status, 0);
+  });
+
+  it("runs: a second ampi app that cannot read the first one's link exits 1", () => {
     const agentDir = path.join(tempDir(), "agent");
     // This test process plays the running app.
     writeEntry(path.join(agentDir, "data", "ampi", "live"), process.pid, "app");
@@ -207,24 +233,43 @@ describe("ampi app: the hub", () => {
     assert.equal(typeof host.startSession, "function");
     assert.deepEqual(app.out, [`ampi app: http://127.0.0.1:${PORT}/?t=${host.token}\n`, "Ctrl+C stops ampi app and every session it runs.\n"]);
 
-    // The app's own entry, as ampi-core writes it; the app removes it when it stops.
+    // The app's own entry and token file, as ampi-core writes them; the app removes them when it stops.
     writeEntry(app.registryDir, process.pid, "tui");
     const own = path.join(app.registryDir, `${APP_PID}.json`);
+    const ownToken = path.join(app.registryDir, `${APP_PID}.token`);
     writeFileSync(own, "{}");
+    writeFileSync(ownToken, host.token);
     app.stop();
     assert.equal(await app.exit, 0);
     assert.equal(app.disposed(), 1);
     assert.equal(existsSync(own), false);
+    assert.equal(existsSync(ownToken), false);
     assert.equal(existsSync(path.join(app.registryDir, `${process.pid}.json`)), true, "only its own entry");
   });
 
-  it("refuses to start while another ampi app runs", async () => {
+  it("refuses to start while another ampi app runs, and gives its link when the token file matches", async () => {
+    const refused = `ampi: ampi app already runs in process ${process.pid}. Use that one, or stop it first.\n`;
+    for (const [label, setUp] of [
+      ["no GUI in the entry", (dir) => writeEntry(dir, process.pid, "app")],
+      ["a token file with another token", (dir) => writeRunningApp(dir, process.pid, ["other", "token"].join("-"))],
+    ]) {
+      const registryDir = path.join(tempDir(), "live");
+      setUp(registryDir);
+      const app = startApp({ registryDir });
+      assert.equal(await app.exit, 1, label);
+      assert.deepEqual([app.out, app.err], [[], [refused]], label);
+      assert.deepEqual(app.sessions, [], `${label}: no session was created`);
+    }
+
     const registryDir = path.join(tempDir(), "live");
-    writeEntry(registryDir, process.pid, "app");
-    const app = startApp({ registryDir });
-    assert.equal(await app.exit, 1);
-    assert.deepEqual(app.err, [`ampi: ampi app already runs in process ${process.pid}. Use that one, or stop it first.\n`]);
-    assert.deepEqual(app.sessions, [], "no session was created");
+    writeRunningApp(registryDir, process.pid);
+    const opened = [];
+    const app = startApp({ registryDir, open: true, openUrl: async (url) => (opened.push(url), true) });
+    const url = `http://127.0.0.1:${RUNNING_PORT}/?t=${RUNNING_TOKEN}`;
+    assert.equal(await app.exit, 0);
+    assert.deepEqual(app.out, [`ampi app: ${url}\n`, `ampi app already runs in process ${process.pid}; this is its page.\n`]);
+    assert.deepEqual(opened, [url], "--open opens the running app's page");
+    assert.deepEqual([app.err, app.sessions, app.forked], [[], [], []], "no session, no worker");
   });
 
   it("opens the link with --open and says so when no browser starts", async () => {

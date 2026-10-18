@@ -1,6 +1,13 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import type { MmrGuiHubSession, MmrGuiHubStartRequest } from "../ampi-core/gui-host.js";
-import { findMmrLiveOwner, type MmrLiveEntry, type MmrLiveKind, type MmrLiveRegistryOptions } from "../ampi-core/live-registry.js";
+import {
+  findMmrLiveOwner,
+  type MmrLiveEntry,
+  type MmrLiveKind,
+  type MmrLiveRegistryOptions,
+  readMmrLiveEntries,
+  readMmrLiveToken,
+} from "../ampi-core/live-registry.js";
 import type { MmrGuiCommands } from "./commands.js";
 import {
   formatMmrGuiEvent,
@@ -32,19 +39,26 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | `GET /api/events` | an event stream with `sessions` (no `id`, data `{}`) each time a worker starts or stops, so the page reads the list again |
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
  * | `POST /api/markdown`, `/api/archive` | as on a session server, for any session |
- * | `POST /api/rename` | forwarded to the worker that runs the session; 409 for any other |
+ * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for any other |
  * | `/s/<id>/api/<rest>` | the session's own routes; see below |
  *
- * A session is in one of three states:
+ * A session is in one of four states:
  * - **hosted**: a worker this hub started runs it (`MmrGuiHubSession`).
  *   Every request is forwarded to the worker's own GUI server, event
  *   streams included, with the worker's Host, token cookie and, for a POST,
  *   Origin; only `Content-Type`, `Accept` and `Last-Event-ID` are passed on,
  *   and only `Content-Type` comes back, under the hub's security headers.
  *   When the worker has gone, 502.
- * - **elsewhere**: another live process has its file open (a terminal, a
- *   print or RPC run, another app's worker). `transcript` and `session`
- *   come from the file; `events` and every POST answer 409 with the holder.
+ * - **terminal**: a terminal session whose GUI serves it has the file open.
+ *   Its live entry names the GUI's port, and its token is in the token file
+ *   next to the entry (read only when it matches the entry's hash). Every
+ *   request is forwarded to that server as to a worker. When it no longer
+ *   answers, 502, and the hub reads the registry again and tells the pages.
+ * - **elsewhere**: another live process has its file open (a terminal
+ *   without the GUI or without a usable token file, a print or RPC run,
+ *   another app's worker). `transcript` and `session` come from the file;
+ *   `events` and every POST answer 409 with the holder and, when known,
+ *   whether it serves a GUI (`gui`).
  * - **not running**: the same from the file, `events` answers 409, and
  *   `POST send` starts a worker (one per session however many sends race),
  *   waits for it and forwards the message. Other POSTs answer 409. A send
@@ -110,6 +124,13 @@ interface ProxiedStream {
   write(text: string): void;
 }
 
+/** Where a live session's requests go: a GUI server on loopback with its token, and the hub's worker when it is one. */
+interface Upstream {
+  port: number;
+  token: string;
+  worker?: HubWorker;
+}
+
 interface HubWorker {
   id: string;
   session: MmrGuiHubSession;
@@ -120,7 +141,11 @@ interface HubWorker {
   warned: Set<number>;
 }
 
-type SessionState = { state: "hosted"; worker: HubWorker } | { state: "elsewhere"; kind: MmrLiveKind; pid: number } | { state: "not-running" };
+type SessionState =
+  | { state: "hosted"; worker: HubWorker }
+  | { state: "terminal"; upstream: Upstream }
+  | { state: "elsewhere"; kind: MmrLiveKind; pid: number; gui?: boolean }
+  | { state: "not-running" };
 
 /** A failed start, answered with this status and body. */
 class StartError extends Error {
@@ -133,15 +158,20 @@ class StartError extends Error {
   }
 }
 
-type Unhosted = Exclude<SessionState, { state: "hosted" }>;
+type Unhosted = Exclude<SessionState, { state: "hosted" | "terminal" }>;
 
-function elsewhere(kind: MmrLiveKind, pid: number) {
-  return { state: "elsewhere", kind, pid, error: `Process ${pid} (${kind}) has this session open; continue it there.` };
+function workerUpstream(worker: HubWorker): Upstream {
+  return { port: worker.session.port, token: worker.session.token, worker };
+}
+
+/** `gui` is set only when the holder's live entry was read. */
+function elsewhere(kind: MmrLiveKind, pid: number, gui?: boolean) {
+  return { state: "elsewhere", kind, pid, ...(gui === undefined ? {} : { gui }), error: `Process ${pid} (${kind}) has this session open; continue it there.` };
 }
 
 /** What a request that cannot act now answers, by state. */
 function describe(state: Unhosted): Record<string, unknown> {
-  if (state.state === "elsewhere") return elsewhere(state.kind, state.pid);
+  if (state.state === "elsewhere") return elsewhere(state.kind, state.pid, state.gui);
   return { state: "not-running", error: "Nothing runs this session now. Sending a message starts it." };
 }
 
@@ -212,7 +242,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
   async function startWorker(file: string, id: string): Promise<HubWorker> {
     // One writer per session file: never start a worker for a file another live process has open.
     const owner = await ownerOf(file, pid);
-    if (owner) throw new StartError(409, elsewhere(owner.kind, owner.pid));
+    if (owner) throw new StartError(409, elsewhere(owner.kind, owner.pid, owner.gui !== null));
     let session: MmrGuiHubSession;
     try {
       session = await options.startSession({ path: file });
@@ -266,13 +296,29 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     // A worker that is starting may have its entry already; it is this hub's, not another process's.
     if (starting.has(id)) return { state: "not-running" };
     const owner = await ownerOf(file, pid);
-    return owner ? { state: "elsewhere", kind: owner.kind, pid: owner.pid } : { state: "not-running" };
+    if (!owner) return { state: "not-running" };
+    // A terminal's GUI is reached with the token it left next to its entry; execute runs and other apps' workers stay read-only.
+    const token = owner.kind === "tui" && owner.gui ? await readMmrLiveToken(owner, registry) : undefined;
+    if (owner.gui && token !== undefined) return { state: "terminal", upstream: { port: owner.gui.port, token } };
+    return { state: "elsewhere", kind: owner.kind, pid: owner.pid, gui: owner.gui !== null };
   }
 
-  /** Forward a request to a worker's GUI server as `/api/<rest>`, with the worker's Host, cookie and Origin. */
-  function proxy(worker: HubWorker, request: MmrGuiRequest, rest: string, body?: Buffer): Promise<void> {
+  /** Where a live session's requests go: the worker's server, or the terminal's. */
+  function upstreamOf(state: Extract<SessionState, { state: "hosted" | "terminal" }>): Upstream {
+    return state.state === "hosted" ? workerUpstream(state.worker) : state.upstream;
+  }
+
+  /** A terminal's GUI stopped answering: read the registry again (removing a dead process's files) and let the pages reload the list. */
+  function terminalGone(): void {
+    void readMmrLiveEntries(registry)
+      .catch(() => [])
+      .then(() => announce());
+  }
+
+  /** Forward a request to a GUI server as `/api/<rest>`, with that server's Host, cookie and Origin. */
+  function proxy(upstreamTarget: Upstream, request: MmrGuiRequest, rest: string, body?: Buffer): Promise<void> {
     const { req, res, method, url } = request;
-    const { port, token } = worker.session;
+    const { port, token, worker } = upstreamTarget;
     const headers: Record<string, string> = {
       Host: `${MMR_GUI_LOOPBACK}:${port}`,
       Cookie: `${mmrGuiCookieName(port)}=${token}`,
@@ -286,7 +332,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       headers.Origin = `http://${MMR_GUI_LOOPBACK}:${port}`;
       headers["Content-Length"] = String(body.length);
     }
-    worker.lastUse = now();
+    if (worker) worker.lastUse = now();
     return new Promise((resolve) => {
       const upstream = httpRequest(
         { host: MMR_GUI_LOOPBACK, port, method, path: `/api/${rest}${url.search}`, headers, setHost: false, agent: false },
@@ -298,7 +344,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
           else {
             answer.pipe(res);
             answer.on("end", () => {
-              worker.lastUse = now();
+              if (worker) worker.lastUse = now();
             });
           }
           answer.on("close", () => resolve());
@@ -307,14 +353,15 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       upstream.on("error", () => {
         if (!res.headersSent) sendJson(res, 502, { state: "gone", error: "The process that ran this session has stopped. Reload to continue." });
         else res.end();
+        if (!worker) terminalGone();
         resolve();
       });
       upstream.end(body);
     });
   }
 
-  /** Pass an event stream on whole events at a time, so the hub can add its own between them. */
-  function pipeEvents(worker: HubWorker, request: MmrGuiRequest, upstream: ClientRequest, answer: IncomingMessage): void {
+  /** Pass an event stream on whole events at a time, so the hub can add its own between them (a worker's only). */
+  function pipeEvents(worker: HubWorker | undefined, request: MmrGuiRequest, upstream: ClientRequest, answer: IncomingMessage): void {
     const { res } = request;
     let pending = "";
     const stream: ProxiedStream = {
@@ -324,7 +371,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
         upstream.destroy();
       },
     };
-    worker.streams.add(stream);
+    worker?.streams.add(stream);
     request.track(res);
     answer.setEncoding("utf8");
     answer.on("data", (chunk: string) => {
@@ -336,7 +383,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     });
     answer.on("end", () => res.end());
     res.on("close", () => {
-      if (worker.streams.delete(stream)) worker.lastUse = now();
+      if (worker?.streams.delete(stream)) worker.lastUse = now();
       upstream.destroy();
     });
   }
@@ -369,7 +416,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     if (method === "POST" && !post) return;
 
     let state = await stateOf(info.path, id);
-    if (state.state === "hosted") return proxy(state.worker, request, rest, post?.raw);
+    if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, rest, post?.raw);
     if (post) {
       if (state.state !== "not-running" || rest !== "send") return sendJson(res, 409, describe(state));
       const { text } = record(post.json);
@@ -381,7 +428,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
         if (error instanceof StartError) return sendJson(res, error.status, error.body);
         throw error;
       }
-      return proxy(worker, request, rest, post.raw);
+      return proxy(workerUpstream(worker), request, rest, post.raw);
     }
     if (rest === "events") return sendJson(res, 409, describe(state));
     if (rest !== "transcript" && rest !== "session") return send(res, 404, "Not found");
@@ -389,7 +436,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     if (!view) return sendJson(res, 404, { error: "No such session." });
     // Read again: a worker may have started while the file was read.
     state = await stateOf(info.path, id);
-    if (state.state === "hosted") return proxy(state.worker, request, rest);
+    if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, rest);
     return sendJson(res, 200, rest === "session" ? { ...view.session, state } : { ...view, state });
   }
 
@@ -410,10 +457,11 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     }
     const { sessionId } = record(post.json);
     if (typeof sessionId !== "string" || sessionId === "") return sendJson(res, 400, { error: "Name the session by its id." });
-    const worker = workers.get(sessionId);
-    if (worker) return proxy(worker, request, "rename", post.raw);
-    if (!(await sessions.find(sessionId))) return sendJson(res, 404, { error: "No such session." });
-    return sendJson(res, 409, { error: "Rename this session where it runs; ampi app renames only the sessions it runs." });
+    const info = await sessions.find(sessionId);
+    if (!info) return sendJson(res, 404, { error: "No such session." });
+    const state = await stateOf(info.path, sessionId);
+    if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, "rename", post.raw);
+    return sendJson(res, 409, { error: "Rename this session where it runs; ampi app renames only the sessions it shows live." });
   }
 
   async function route(request: MmrGuiRequest): Promise<void> {

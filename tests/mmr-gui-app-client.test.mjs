@@ -106,6 +106,19 @@ describe("ampi app page: banners", () => {
     assert.match(banner("later-kind").html, /is open in process 4242 \(later-kind\)\./);
   });
 
+  it("tells how to continue here when the holding terminal runs without the web GUI", async () => {
+    const { bannerFor } = await appMode();
+    const banner = (state) => bannerFor({ state: "elsewhere", pid: 4242, error: "ignored", ...state }, "Fix the build");
+    assert.deepEqual(banner({ kind: "tui", gui: false }), {
+      access: "held",
+      html: "<strong>Fix the build</strong> is open in a terminal (pid 4242), which does not run the web GUI. To continue it here, turn on ampiGui in that terminal; until then it is read-only here.",
+    });
+    // A terminal whose GUI the hub could not reach, an unknown GUI and other holders keep the plain banner.
+    for (const state of [{ kind: "tui", gui: true }, { kind: "tui" }, { kind: "execute", gui: false }]) {
+      assert.match(banner(state).html, /Continue it there; here it is read-only/, JSON.stringify(state));
+    }
+  });
+
   it("keeps the composer for a session nothing runs, turns it off with a reason for an imported one, and says when the worker stopped", async () => {
     const { bannerFor } = await appMode();
     assert.deepEqual(bannerFor({ state: "not-running", error: "ignored" }, "T"), { access: "dormant" });

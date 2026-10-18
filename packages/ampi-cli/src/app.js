@@ -8,14 +8,16 @@
 // record (src/extensions/ampi-core/gui-host.ts) with role "hub": the page's
 // token, its own pid, `ready({ port })` and `startSession(request)`, which
 // forks a worker and resolves once its GUI listens. Ctrl+C (SIGINT) or
-// SIGTERM stops every worker, ends the in-memory session and exits 0.
+// SIGTERM stops every worker, ends the in-memory session and exits 0. A
+// second `ampi app` prints the running one's link, from the token file next
+// to its live entry, and exits 0.
 import { fork, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AMPI_GUI_HOST_GLOBAL_KEY } from "./app-worker.js";
-import { liveRegistryDir, readLiveEntries } from "./live-registry.js";
+import { liveRegistryDir, readLiveEntries, readLiveToken } from "./live-registry.js";
 import { piAgentDir } from "./pi-compat.js";
 import { createAmpiSdkSession } from "./sdk-session.js";
 
@@ -120,8 +122,16 @@ export async function runApp(options) {
 
   const running = readLiveEntries({ dir: registryDir }).find((entry) => entry.kind === "app" && entry.pid !== pid);
   if (running) {
-    err(`ampi: ampi app already runs in process ${running.pid}. Use that one, or stop it first.\n`);
-    return 1;
+    const runningToken = readLiveToken(registryDir, running);
+    if (!running.gui || runningToken === undefined) {
+      err(`ampi: ampi app already runs in process ${running.pid}. Use that one, or stop it first.\n`);
+      return 1;
+    }
+    const url = `http://127.0.0.1:${running.gui.port}/?t=${runningToken}`;
+    out(`ampi app: ${url}\n`);
+    out(`ampi app already runs in process ${running.pid}; this is its page.\n`);
+    if (options.open && !(await openUrl(url).catch(() => false))) out("No browser could be started; open the link above.\n");
+    return 0;
   }
 
   /** @type {Set<HubSession>} The workers that have not exited. */
@@ -226,11 +236,12 @@ export async function runApp(options) {
     return 1;
   }
 
-  /** Stop every worker, end the in-memory session and remove the app's entry. */
+  /** Stop every worker, end the in-memory session and remove the app's entry and token file. */
   const shutdown = async () => {
     await Promise.all([...workers].map((worker) => worker.stop()));
     await runtime.dispose();
     rmSync(path.join(registryDir, `${pid}.json`), { force: true });
+    rmSync(path.join(registryDir, `${pid}.token`), { force: true });
   };
 
   if (port === undefined) {

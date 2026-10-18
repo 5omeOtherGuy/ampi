@@ -93,7 +93,7 @@ function holderWords(kind, pid) {
  *
  * | `access` | When | The page |
  * | --- | --- | --- |
- * | `held` | another live process has the file open | read-only, `html` names where it runs |
+ * | `held` | another live process has the file open | read-only, `html` names where it runs; for a terminal without the web GUI (`gui: false`), how to continue here |
  * | `dormant` | nothing runs it | the transcript with the composer on; a send starts it |
  * | `imported` | it was imported and cannot be continued | the composer off, with `reason` |
  * | `gone` | the process that ran it here stopped | read-only, `html` says to open it again |
@@ -102,6 +102,12 @@ export function bannerFor(state, title) {
   const name = `<strong>${escapeHtml(title || "This session")}</strong>`;
   switch (state?.state) {
     case "elsewhere":
+      if (state.kind === "tui" && state.gui === false) {
+        return {
+          access: "held",
+          html: `${name} is open in ${holderWords(state.kind, state.pid)}, which does not run the web GUI. To continue it here, turn on ampiGui in that terminal; until then it is read-only here.`,
+        };
+      }
       return {
         access: "held",
         html: `${name} is open in ${holderWords(state.kind, state.pid)}. Continue it there; here it is read-only, so the two never write the same file.`,
