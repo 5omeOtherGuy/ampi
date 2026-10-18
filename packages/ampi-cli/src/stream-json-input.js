@@ -113,7 +113,7 @@ export function parseStreamJsonInputLine(line, lineNumber) {
  * @typedef {object} StreamJsonInputHost
  * @property {(command: Record<string, unknown>) => void} send Write one command to Pi's RPC input.
  * @property {(records: import("./stream-json.js").StreamJsonRecord[]) => void} write Write records to stdout.
- * @property {(text: string) => void} warn Write a line to stderr.
+ * @property {import("./log.js").Logger} log For extension errors.
  * @property {() => void} end End Pi's RPC input, which shuts the session down; called once.
  *
  * @typedef {object} StreamJsonInputDriver
@@ -228,7 +228,7 @@ export function createStreamJsonInputDriver(encoder, host) {
           if (DIALOG_METHODS.has(record.method)) host.send({ type: "extension_ui_response", id: record.id, cancelled: true });
           return;
         case "extension_error":
-          host.warn(`ampi: extension error (${record.extensionPath}, ${record.event}): ${record.error}`);
+          host.log.error(`extension error (${record.extensionPath}, ${record.event}): ${record.error}`);
           return;
       }
       if (record?.type === "agent_start") running = true;

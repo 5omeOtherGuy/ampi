@@ -55,6 +55,9 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 | `--title <title>` | Name the session; the same as Pi's `--name`. |
 | `-l`, `--label <label>` | Add a label to the session in ampi's thread index. Repeat it for several labels. |
 | `--mcp-config <json\|path>` | Connect MCP servers for this run only. See [MCP servers for one run](#mcp-servers-for-one-run). |
+| `--log-level <level>` | Write the command's own diagnostics at this level and above: `error`, `warn`, `info` (the default) or `debug`. See [Diagnostics and colour](#diagnostics-and-colour). |
+| `--log-file <file>` | Append the command's diagnostics to the file instead of stderr; errors still go to stderr too. |
+| `--color`, `--no-color` | Turn colour on (`FORCE_COLOR=1`) or off (`NO_COLOR=1`) for Pi and the tools it runs. |
 | `--settings-file <path>` | Rejected: Pi reads its settings from its configuration directory; set `PI_CODING_AGENT_DIR` to use another one. |
 | `-h`, `--help`, `help` | Print ampi's help. |
 | `-V`, `-v`, `--version`, `version` | Print the versions. |
@@ -513,6 +516,30 @@ Loading ampi twice would register every ampi tool, command and flag twice, and P
 
 Project settings count even before you trust the project: once you grant trust, Pi loads the project's ampi.
 
+### Diagnostics and colour
+
+The command's diagnostics are the `ampi: …` lines it writes about itself, at four levels:
+
+- `error`: usage errors and failures, such as a missing message in execute mode.
+- `warn`: something it could not do as asked while it goes on, such as labels it could not store or a session it could not archive.
+- `info`: a note about what it chose, such as using the ampi that Pi already loads.
+- `debug`: the command it runs, whether it loads ampi, and the arguments it hands to Pi, with each message argument replaced by `<message>`.
+
+`--log-level` writes the given level and the ones above it; the default, `info`, writes everything but `debug`. `AMPI_LOG_LEVEL` and `AMPI_LOG_FILE` apply when the flags are not given. An unknown level, from the flag or the variable, is a usage error (status `2`).
+
+With `--log-file`, the lines are appended to the file instead of stderr, one per line: an ISO 8601 time, the level and the message, with line breaks written as `\n`. A new file is created with mode `0600`. Errors also go to stderr, so a failing command is never silent. If the file cannot be written, the command says so once on stderr and writes the rest there.
+
+The logger does not touch output you asked for (help, versions, the results of `threads`, `usage` and `config`, the `--timings` line, the `[y/N]` question of `threads delete`), nor anything Pi writes itself: Pi's own warnings, errors and terminal UI are not filtered and do not go to the log file.
+
+The logging and colour options also work in front of a command, as in `ampi --log-level debug threads list`; after `threads`, `usage`, `last`, `config` or one of Pi's commands, the rest of the command line belongs to that command.
+
+The command prints no colour of its own. `--no-color` sets `NO_COLOR=1` and removes `FORCE_COLOR` in the environment that Pi and the tools it runs inherit; `--color` sets `FORCE_COLOR=1` and removes `NO_COLOR`; without either, the environment stays as it is. With Pi 1.3 this changes:
+
+- Pi's text outside the terminal UI, such as `ampi --pi-help`: `--no-color` removes its bold and dim styling, and `--color` keeps it when stdout is not a terminal. Pi reads the flag itself here; `NO_COLOR` alone in your environment does not change Pi's text.
+- Tools the agent runs, such as `bash` commands: they inherit the variables, so programs that follow `NO_COLOR` or `FORCE_COLOR` do so.
+- Pi's own commands (`ampi --color list`): they run as a separate Pi process, which follows `FORCE_COLOR` but not `NO_COLOR`, so `--no-color` leaves their styling as it is.
+- The terminal UI: ampi does not change its theme, so its colours stay with either flag. Under `--no-color`, Pi leaves out the bold and italic styling it adds itself, such as on the welcome line and on your sent messages.
+
 ### Pi's own commands
 
 When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `list`, `config`, `auth`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)). `update` (and `up`) is Pi's only when Pi's update arguments follow, such as `--extensions` or a package source; on its own, or with `--target-version` or `--porcelain`, it updates ampi-cli (see [Update](#update)).
@@ -533,6 +560,8 @@ npm run test:one -- tests/mmr-cli-argv.test.mjs
 ```
 
 The package is plain JavaScript with JSDoc types and no build step. It is not an npm workspace and has no lockfile of its own: in a checkout it runs on the root install, which provides Pi, and loads ampi from the checkout itself. The root `npm run gate` lints, tests, type-checks and packs it. See the repository's [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+
+Every diagnostic the command writes goes through the logger from `src/log.js` (`createLogger`; subcommands get it as `host.log`), so that `--log-level` and `--log-file` apply to it. `tests/mmr-cli-log.test.mjs` fails on a direct `process.stderr` or `console.error` in `src/` outside the logger and a short allow-list of output that is not a diagnostic, each entry with its reason. A new diagnostic uses the logger; new output the user asks for goes on the allow-list. `useColor()` in the same module decides whether the command's own output may use colour, for output that adds it later.
 
 `src/live-registry.js` reads the live registry ampi-core keeps of running sessions (one `<agentDir>/data/ampi/live/<pid>.json` per process; the format is in the [ampi-core README](../../src/extensions/ampi-core/README.md#live-registry)), because this package cannot import ampi's TypeScript. `readLiveEntries({ dir, isAlive?, procStart? })` returns the entries of running processes and removes stale ones; `findLiveOwner(sessionPath, { dir, exceptPid? })` returns the process that has a session file open; `liveRegistryDir(agentDir)` names the directory. It follows the same rules as ampi-core's reader, and `tests/mmr-cli-live-registry.test.mjs` fails when the two disagree on the shared fixtures, so change both together.
 

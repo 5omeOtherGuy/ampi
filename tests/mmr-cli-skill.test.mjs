@@ -12,6 +12,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
 import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { INFO_FILE_LIMIT, parseSkillSource, readSessionSkills, removalAdvice, runSkillCommand } from "../packages/ampi-cli/src/skill.js";
 import { classifySkillSource, skillSourceLabel } from "../packages/ampi-cli/src/skill-sources.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
@@ -89,9 +90,11 @@ async function run(args, { cwd, agentDir, skills = [], readSkills, tempRoot = tm
     out: (text) => {
       out += text;
     },
-    err: (text) => {
-      err += text;
-    },
+    log: createLogger({
+      stderr: (text) => {
+        err += text;
+      },
+    }),
   });
   return { code, out, err, questions };
 }

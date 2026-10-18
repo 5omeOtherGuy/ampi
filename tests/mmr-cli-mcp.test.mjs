@@ -11,6 +11,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
 import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { planMcpCommand, runMcpCommand } from "../packages/ampi-cli/src/mcp.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -147,7 +148,12 @@ describe("ampi mcp: translation onto pi mcp", () => {
         interactive: false,
         confirm: async () => assert.fail("no question"),
         out: () => {},
-        err: (text) => {
+        log: createLogger({
+          stderr: (text) => {
+            err += text;
+          },
+        }),
+        piStderr: (text) => {
           err += text;
         },
       });
@@ -200,7 +206,12 @@ describe("ampi mcp against Pi", () => {
       out: (text) => {
         out += text;
       },
-      err: (text) => {
+      log: createLogger({
+        stderr: (text) => {
+          err += text;
+        },
+      }),
+      piStderr: (text) => {
         err += text;
       },
     });

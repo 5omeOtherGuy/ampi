@@ -32,7 +32,7 @@ import {
  * @property {() => number} now Milliseconds since the epoch.
  * @property {number} columns Width the text listing fits its titles into.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package
  *   whose search `threads search` runs: the one Pi loads from its settings, else the CLI's own.
@@ -316,7 +316,7 @@ function readIndexForListing(host) {
   try {
     return readThreadIndex(indexFileOf(host));
   } catch (error) {
-    host.err(`ampi: ${error instanceof Error ? error.message : String(error)} Archive dates and labels are left out.\n`);
+    host.log.warn(`${error instanceof Error ? error.message : String(error)} Archive dates and labels are left out.`);
     return {};
   }
 }
@@ -436,7 +436,7 @@ function readEntries(file) {
 export async function runThreadsCommand(argv, host) {
   const result = await dispatch(argv, host);
   if ("code" in result && result.message !== undefined) {
-    host.err(`ampi: ${result.message}\n${result.code === 2 ? `${USAGE_HINT}\n` : ""}`);
+    host.log.error(result.code === 2 ? `${result.message}\n${USAGE_HINT}` : result.message);
     return { code: result.code };
   }
   return result;
@@ -580,7 +580,7 @@ async function continueSession(host, query) {
   const resolved = await resolveSession(host, query);
   if ("session" in resolved) return { piArgs: ["--session", resolved.session.path] };
   if (resolved.missing === undefined || !COMPLETE_ID.test(resolved.missing)) return resolved;
-  host.err(`ampi: no session has the id ${resolved.missing}; a new session starts under it in this directory.\n`);
+  host.log.info(`no session has the id ${resolved.missing}; a new session starts under it in this directory.`);
   return { piArgs: ["--session-id", resolved.missing] };
 }
 
@@ -723,13 +723,13 @@ async function search(host, values, positionals) {
   try {
     threads = readThreadIndex(indexFileOf(host));
   } catch (error) {
-    host.err(`ampi: ${messageOf(error)}\n`);
+    host.log.warn(messageOf(error));
   }
   const sessions = await listSessions(host, "all");
   const result = await searchThreads({ query, sessions, threads, now: new Date(host.now()), limit });
   const errors = result.problems.filter((problem) => problem.kind !== "unavailable");
   if (errors.length > 0) return usage(errors.map(describeSearchProblem).join("\n"));
-  for (const problem of result.problems) host.err(`ampi: ${describeSearchProblem(problem)}\n`);
+  for (const problem of result.problems) host.log.warn(describeSearchProblem(problem));
 
   const index = threads ?? {};
   if (values.json) {
@@ -743,7 +743,7 @@ async function search(host, values, positionals) {
     host.out(formatThreadTable(shown, index, { now: host.now(), columns: host.columns, archivedColumn: true }));
   }
   if (result.total > result.matches.length) {
-    host.err(`ampi: showing ${result.matches.length} of ${result.total} matching sessions; --limit shows more.\n`);
+    host.log.info(`showing ${result.matches.length} of ${result.total} matching sessions; --limit shows more.`);
   }
   return { code: 0 };
 }
@@ -758,7 +758,7 @@ async function modelLookup(host) {
   try {
     return await createPiModelLookup(host.pi);
   } catch (error) {
-    host.err(`ampi: could not read Pi's model catalogue, so no model has a price or context window: ${messageOf(error)}\n`);
+    host.log.warn(`could not read Pi's model catalogue, so no model has a price or context window: ${messageOf(error)}`);
     return () => undefined;
   }
 }
@@ -776,7 +776,7 @@ async function context(host, query) {
   return withSession(host, query, async (session) => {
     const report = loaded.functions.reportThreadContext(session.id, readPiSessionEntries(host.pi, session.path), await modelLookup(host));
     if (report.systemPromptRecorded === false) {
-      host.err("ampi: the session records no system prompt yet (Pi records it with the first request), so the prompt and tool sections are 0.\n");
+      host.log.info("the session records no system prompt yet (Pi records it with the first request), so the prompt and tool sections are 0.");
     }
     host.out(`${JSON.stringify(report, null, 2)}\n`);
     return { code: 0 };
@@ -970,7 +970,7 @@ async function rename(host, [query, ...words]) {
       // As --title does: the title is the user's, not one to generate.
       updateThreadRecord(indexFileOf(host), session.id, { titleSource: "user" });
     } catch (error) {
-      host.err(`ampi: the session was renamed, but the thread index was not updated: ${messageOf(error)}\n`);
+      host.log.warn(`the session was renamed, but the thread index was not updated: ${messageOf(error)}`);
     }
     host.out(`Renamed ${session.id} to "${title}".\n`);
     return { code: 0 };
@@ -1061,7 +1061,7 @@ async function remove(host, query, yes) {
     try {
       if (recordOf(readThreadIndex(file), session.id) !== undefined) updateThreadRecord(file, session.id, null);
     } catch (error) {
-      host.err(`ampi: the session was deleted, but its thread metadata was not: ${messageOf(error)}\n`);
+      host.log.warn(`the session was deleted, but its thread metadata was not: ${messageOf(error)}`);
     }
     host.out(`Deleted ${session.id} (${threadTitle(session)}).\n`);
     return { code: 0 };

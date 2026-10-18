@@ -7,7 +7,7 @@
 /**
  * @typedef {object} RunOutputEnd
  * @property {string} stdout Text for stdout after the run; may be empty.
- * @property {string} stderr Text for stderr after the run; may be empty.
+ * @property {{ level: "error" | "warn", message: string }[]} notes Diagnostics for the logger after the run.
  * @property {number} exitCode
  *
  * @typedef {object} RunOutput
@@ -41,7 +41,7 @@ export function createStreamJsonOutput(encoder) {
     push: (event) => jsonLines(encoder.push(event)),
     finish(failure) {
       const { records, exitCode } = encoder.finish(failure);
-      return { stdout: jsonLines(records), stderr: "", exitCode };
+      return { stdout: jsonLines(records), notes: [], exitCode };
     },
   };
 }
@@ -69,7 +69,7 @@ export function createStatsOutput(encoder) {
     },
     finish(failure) {
       const { result, exitCode } = finishRun(encoder, failure);
-      return { stdout: jsonLines([cost === undefined ? result : { ...result, total_cost_usd: cost }]), stderr: "", exitCode };
+      return { stdout: jsonLines([cost === undefined ? result : { ...result, total_cost_usd: cost }]), notes: [], exitCode };
     },
   };
 }
@@ -96,10 +96,11 @@ export function createToolOutput(toolName, encoder) {
     },
     finish(failure) {
       const { result } = finishRun(encoder, failure);
-      let stderr = result.is_error ? `ampi: ${result.error}\n` : "";
+      /** @type {RunOutputEnd["notes"]} */
+      const notes = result.is_error ? [{ level: "error", message: String(result.error) }] : [];
       if (last === undefined) {
-        stderr += `ampi: no call to the tool ${toolName} finished, so there is no output to print.\n`;
-        return { stdout: "", stderr, exitCode: 1 };
+        notes.push({ level: "error", message: `no call to the tool ${toolName} finished, so there is no output to print.` });
+        return { stdout: "", notes, exitCode: 1 };
       }
       /** @type {any[]} */
       const content = Array.isArray(last.result?.content) ? last.result.content : [];
@@ -108,10 +109,10 @@ export function createToolOutput(toolName, encoder) {
         .map((block) => block.text)
         .join("\n");
       const images = content.filter((block) => block.type === "image").length;
-      if (images > 0) stderr += `ampi: left out ${images === 1 ? "an image" : `${images} images`} of the ${toolName} result; only its text is printed.\n`;
+      if (images > 0) notes.push({ level: "warn", message: `left out ${images === 1 ? "an image" : `${images} images`} of the ${toolName} result; only its text is printed.` });
       return {
         stdout: text === "" || text.endsWith("\n") ? text : `${text}\n`,
-        stderr,
+        notes,
         exitCode: result.is_error || last.isError === true ? 1 : 0,
       };
     },

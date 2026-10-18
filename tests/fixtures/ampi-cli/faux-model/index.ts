@@ -6,15 +6,17 @@
 // whose prompt starts with "<conversation>" or "# Conversation" and may quote
 // such a prompt, gets the echo instead. For "wait on <fifo>" it calls `bash`
 // with `cat <fifo>`, which blocks until something writes the FIFO, then answers
-// "Waited: <output>". A message containing "release <fifo>" writes that FIFO
-// when Pi receives it, before Pi queues the message, so a steering message can
-// end such a wait without any timing. A prompt containing "review with checks"
-// calls `reviewer` on the uncommitted changes and then answers with the
-// headings of its report. A reviewer child (its task text contains "Review the
-// following diff:") answers with a clean report in the reviewer's format, or
-// with one finding at `<path>:1-1` when the task text contains
-// "faux-finding <path>"; a review check whose body says "please fail" fails
-// like any other prompt that does. No network, no credentials.
+// "Waited: <output>". For a prompt starting with "run: <command>" it calls
+// `bash` with that command, then answers "Ran: <output>". A message containing
+// "release <fifo>" writes that FIFO when Pi receives it, before Pi queues the
+// message, so a steering message can end such a wait without any timing. A
+// prompt containing "review with checks" calls `reviewer` on the uncommitted
+// changes and then answers with the headings of its report. A reviewer child
+// (its task text contains "Review the following diff:") answers with a clean
+// report in the reviewer's format, or with one finding at `<path>:1-1` when the
+// task text contains "faux-finding <path>"; a review check whose body says
+// "please fail" fails like any other prompt that does. No network, no
+// credentials.
 import { writeFile } from "node:fs";
 import { fauxAssistantMessage, fauxProvider, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
 
@@ -68,6 +70,11 @@ export default function fauxModel(pi: any): void {
         );
       }
       return fauxAssistantMessage("The change looks clean.\n\nFindings\n\nNone.");
+    }
+    const run = /^run: (.+)$/s.exec(prompt);
+    if (run) {
+      if (last?.role === "toolResult") return fauxAssistantMessage(`Ran: ${textOf(last.content).trim()}`);
+      return fauxAssistantMessage(fauxToolCall("bash", { command: run[1] }, { id: "call_run" }), { stopReason: "toolUse" });
     }
     const wait = /wait on (\S+)/.exec(prompt);
     if (wait) {

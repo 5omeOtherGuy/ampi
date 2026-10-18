@@ -66,6 +66,26 @@ function firstMessageIndex(parseArgs, args) {
 }
 
 /**
+ * `args` with every argument Pi reads as message text replaced by
+ * `<message>`, for the debug log. Attached files (`@file`) and option values
+ * stay; an option value that equals a message is kept, as in
+ * `firstMessageIndex`.
+ *
+ * @param {PiParseArgs} parseArgs
+ * @param {string[]} args
+ * @returns {string[]}
+ */
+export function withoutMessages(parseArgs, args) {
+  const messages = new Set(parseArgs(args).messages);
+  return args.map((arg, index) => {
+    if (!messages.has(arg)) return arg;
+    const probe = [...args];
+    probe[index] = PROBE;
+    return parseArgs(probe).messages.includes(PROBE) ? "<message>" : arg;
+  });
+}
+
+/**
  * Pi's arguments for an execute run. The message is the first message
  * argument, then a newline, then stdin; either part may be missing, but not
  * both (an `@file` argument also counts as a message).
@@ -119,15 +139,9 @@ export async function readAll(stream) {
  * @typedef {object} RunExtensionHost
  * @property {() => number} now Milliseconds since the command started.
  * @property {() => string} timestamp The archive date (ISO 8601).
- * @property {(text: string) => void} warn Writes a line to stderr.
+ * @property {import("./log.js").Logger} log For the warnings about labels and the archive.
+ * @property {(line: string) => void} report Writes the --timings line to stderr.
  */
-
-/** @type {RunExtensionHost} */
-const DEFAULT_HOST = {
-  now: () => performance.now(),
-  timestamp: () => new Date().toISOString(),
-  warn: (text) => process.stderr.write(`${text}\n`),
-};
 
 /** @param {unknown} error */
 const messageOf = (error) => (error instanceof Error ? error.message : String(error));
@@ -152,10 +166,10 @@ const hasMessages = (ctx) => ctx.sessionManager.getEntries().some((/** @type {an
  * archive date is kept.
  *
  * @param {RunExtensionOptions} options
- * @param {RunExtensionHost} [host]
+ * @param {RunExtensionHost} host
  * @returns {(pi: any) => void}
  */
-export function createRunExtension(options, host = DEFAULT_HOST) {
+export function createRunExtension(options, host) {
   /** Sessions this run created. */
   const created = new Set();
   /** @type {number | undefined} */
@@ -176,7 +190,7 @@ export function createRunExtension(options, host = DEFAULT_HOST) {
       }
       if (event.reason !== "startup" || (options.labels.length === 0 && !options.titled)) return;
       if (index === undefined) {
-        if (options.labels.length > 0) host.warn("ampi: the thread index is off (ampi-threads is not loaded); the labels were not stored.");
+        if (options.labels.length > 0) host.log.warn("the thread index is off (ampi-threads is not loaded); the labels were not stored.");
         return;
       }
       try {
@@ -187,7 +201,7 @@ export function createRunExtension(options, host = DEFAULT_HOST) {
         if (options.titled) patch.titleSource = "user";
         await index.update(sessionId, patch);
       } catch (error) {
-        host.warn(`ampi: could not store the labels and title in the thread index: ${messageOf(error)}`);
+        host.log.warn(`could not store the labels and title in the thread index: ${messageOf(error)}`);
       }
     });
 
@@ -209,7 +223,7 @@ export function createRunExtension(options, host = DEFAULT_HOST) {
             await index.update(sessionId, { archived: host.timestamp() });
           }
         } catch (error) {
-          host.warn(`ampi: could not archive the session: ${messageOf(error)}`);
+          host.log.warn(`could not archive the session: ${messageOf(error)}`);
         }
       }
       if (options.timings) {
@@ -217,7 +231,7 @@ export function createRunExtension(options, host = DEFAULT_HOST) {
         if (turnStart !== undefined) parts.push(`startup ${Math.round(turnStart)} ms`);
         if (turnStart !== undefined && turnEnd !== undefined) parts.push(`turn ${Math.round(turnEnd - turnStart)} ms`);
         parts.push(`total ${Math.round(host.now())} ms`);
-        host.warn(`ampi: timings: ${parts.join(", ")}`);
+        host.report(`ampi: timings: ${parts.join(", ")}`);
       }
     });
   };

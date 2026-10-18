@@ -81,18 +81,9 @@ function definedServers(file, project) {
  * @property {string} configDirName The project directory with the project's `mcp.json` (`.pi`).
  *
  * @typedef {object} McpConfigHost
- * @property {(text: string) => void} warn Writes a line to stderr.
- * @property {(text: string) => void} fail Writes a line to stderr and exits with status 2.
+ * @property {(message: string) => void} warn Reports a diagnostic at warn level.
+ * @property {(message: string) => void} fail Reports an error and exits with status 2.
  */
-
-/** @type {McpConfigHost} */
-const DEFAULT_HOST = {
-  warn: (text) => process.stderr.write(`${text}\n`),
-  fail: (text) => {
-    process.stderr.write(`${text}\n`);
-    process.exit(2);
-  },
-};
 
 /**
  * The inline Pi extension that registers the `--mcp-config` servers. Pi keeps
@@ -102,17 +93,17 @@ const DEFAULT_HOST = {
  *
  * @param {Record<string, unknown>} servers
  * @param {McpConfigPaths} paths
- * @param {McpConfigHost} [host]
+ * @param {McpConfigHost} host
  * @returns {(pi: any) => void}
  */
-export function createMcpConfigExtension(servers, paths, host = DEFAULT_HOST) {
+export function createMcpConfigExtension(servers, paths, host) {
   let checked = false;
   return (pi) => {
     for (const [name, config] of Object.entries(servers)) {
       try {
         pi.registerMcpServer(name, config);
       } catch (error) {
-        host.fail(`ampi: --mcp-config: ${messageOf(error)}`);
+        host.fail(`--mcp-config: ${messageOf(error)}`);
         return;
       }
     }
@@ -125,8 +116,8 @@ export function createMcpConfigExtension(servers, paths, host = DEFAULT_HOST) {
       for (const name of Object.keys(servers)) {
         const found = files.find(({ file, project }) => definedServers(file, project).some((defined) => sameServerKey(defined) === sameServerKey(name)));
         if (found === undefined) continue;
-        const text = `ampi: the MCP server "${name}" from --mcp-config is not used: ${found.file} defines a server of that name, which Pi uses instead.`;
-        if (ctx.hasUI) ctx.ui.notify(text, "warning");
+        const text = `the MCP server "${name}" from --mcp-config is not used: ${found.file} defines a server of that name, which Pi uses instead.`;
+        if (ctx.hasUI) ctx.ui.notify(`ampi: ${text}`, "warning");
         else host.warn(text);
       }
     });

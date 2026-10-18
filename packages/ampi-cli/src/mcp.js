@@ -26,7 +26,8 @@ import { cut } from "./threads.js";
  * @property {boolean} interactive Whether a question can be answered (stdin is a terminal).
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
+ * @property {(text: string) => void} piStderr Passes on what Pi wrote to stderr.
  *
  * @typedef {{ action: "help" }
  *   | { action: "pi", args: string[], projectServer?: string }
@@ -346,7 +347,7 @@ export function planMcpCommand(argv) {
  */
 export async function runMcpCommand(argv, host) {
   const outcome = await dispatch(planMcpCommand(argv), host);
-  if (outcome.message !== undefined) host.err(`ampi: ${clean(outcome.message)}\n${outcome.code === 2 ? `${USAGE_HINT}\n` : ""}`);
+  if (outcome.message !== undefined) host.log.error(outcome.code === 2 ? `${clean(outcome.message)}\n${USAGE_HINT}` : clean(outcome.message));
   return outcome.code;
 }
 
@@ -365,7 +366,7 @@ async function dispatch(plan, host) {
     case "pi": {
       const code = await host.runPi(plan.args);
       if (code === 0 && plan.projectServer !== undefined && readPiProjectTrust(await host.loadPi(), host.cwd).decision !== true) {
-        host.err(`ampi: run ampi mcp approve ${clean(plan.projectServer)} to trust this project from the shell.\n`);
+        host.log.info(`run ampi mcp approve ${clean(plan.projectServer)} to trust this project from the shell.`);
       }
       return { code };
     }
@@ -391,7 +392,7 @@ function readList(host) {
   try {
     return parsePiMcpList(result.stdout);
   } catch (error) {
-    if (result.stderr !== "") host.err(clean(result.stderr));
+    if (result.stderr !== "") host.piStderr(clean(result.stderr));
     return fail(`could not read the server list from pi mcp list --json: ${messageOf(error)}`);
   }
 }
@@ -461,8 +462,8 @@ async function doctor(host, name) {
     }
   }
   const errors = name === undefined ? list.errors : [];
-  for (const error of errors) host.err(`ampi: config error: ${clean(error)}\n`);
-  if (list.note) host.err(`ampi: ${clean(list.note)} Or trust it with ampi mcp approve <name>.\n`);
+  for (const error of errors) host.log.error(`config error: ${clean(error)}`);
+  if (list.note) host.log.info(`${clean(list.note)} Or trust it with ampi mcp approve <name>.`);
   const failed = errors.length > 0 || shown.some((server) => server.enabled && server.state !== "connected");
   return { code: failed ? 1 : 0 };
 }

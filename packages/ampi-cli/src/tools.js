@@ -31,7 +31,7 @@ import { cut } from "./threads.js";
  *   the mode (undefined: the mode a new session starts in) and read its tools.
  * @property {number} columns Width the text listing fits its rows into.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  */
 
 const USAGE_HINT = "Run ampi tools --help for the options.";
@@ -145,7 +145,7 @@ export async function runToolsCommand(argv, host) {
   try {
     parsed = /** @type {any} */ (parseArgs({ args: [...argv], options: OPTIONS, allowPositionals: true, strict: true }));
   } catch (error) {
-    host.err(`ampi: tools: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}\n`);
+    host.log.error(`tools: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}`);
     return 2;
   }
   const { values, positionals } = parsed;
@@ -155,20 +155,20 @@ export async function runToolsCommand(argv, host) {
     return 0;
   }
   if (given === undefined) {
-    host.err(`ampi: tools needs a command: list or show.\n${USAGE_HINT}\n`);
+    host.log.error(`tools needs a command: list or show.\n${USAGE_HINT}`);
     return 2;
   }
   const command = ALIASES[given] ?? given;
   if (command !== "list" && command !== "show") {
-    host.err(`ampi: unknown tools command "${given}".\n${USAGE_HINT}\n`);
+    host.log.error(`unknown tools command "${given}".\n${USAGE_HINT}`);
     return 2;
   }
   if (command === "list" && rest.length > 0) {
-    host.err(`ampi: tools list takes no arguments.\n${USAGE_HINT}\n`);
+    host.log.error(`tools list takes no arguments.\n${USAGE_HINT}`);
     return 2;
   }
   if (command === "show" && rest.length !== 1) {
-    host.err(`ampi: tools show needs exactly one tool name.\n${USAGE_HINT}\n`);
+    host.log.error(`tools show needs exactly one tool name.\n${USAGE_HINT}`);
     return 2;
   }
   /** @type {string | undefined} */
@@ -177,18 +177,18 @@ export async function runToolsCommand(argv, host) {
     mode = resolveModeArgument(values.mode);
     if (mode === undefined) {
       const aliases = Object.keys(MODE_ALIASES).join(", ");
-      host.err(`ampi: unknown mode "${values.mode}". Valid modes: ${MODE_KEYS.join(", ")} (aliases: ${aliases}).\n`);
+      host.log.error(`unknown mode "${values.mode}". Valid modes: ${MODE_KEYS.join(", ")} (aliases: ${aliases}).`);
       return 2;
     }
   }
 
   const found = await host.readTools(mode);
-  for (const problem of found.problems) host.err(`ampi: ${problem}\n`);
+  for (const problem of found.problems) host.log.warn(problem);
   if (found.mode === undefined || (mode !== undefined && found.mode !== mode)) {
     const which = mode === undefined ? "The default mode" : `${mode[0].toUpperCase()}${mode.slice(1)} mode`;
-    host.err(
-      `ampi: ${which} does not start in this directory, so its tools are unknown: none of its models has ` +
-        "credentials, or none of its tools is available. Sign in with /login in ampi, or pick another mode with --mode.\n",
+    host.log.error(
+      `${which} does not start in this directory, so its tools are unknown: none of its models has ` +
+        "credentials, or none of its tools is available. Sign in with /login in ampi, or pick another mode with --mode.",
     );
     return 1;
   }
@@ -202,7 +202,7 @@ export async function runToolsCommand(argv, host) {
   if (match === undefined) {
     const near = closeNames(wanted, tools.map((tool) => tool.info.name));
     const hint = near.length > 0 ? ` Did you mean ${near.join(", ")}?` : " ampi tools list shows the active tools.";
-    host.err(`ampi: no tool named "${wanted}" is active in ${found.mode} mode.${hint}\n`);
+    host.log.error(`no tool named "${wanted}" is active in ${found.mode} mode.${hint}`);
     return 1;
   }
   host.out(values.json ? formatShowJson(match) : formatShowText(match));

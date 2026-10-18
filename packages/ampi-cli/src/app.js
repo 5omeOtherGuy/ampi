@@ -51,7 +51,7 @@ export const WORKER_STOP_TIMEOUT_MS = 5_000;
  * @property {boolean} open Open the page in a browser.
  * @property {string} cwd The in-memory session's working directory.
  * @property {(text: string) => void} out
- * @property {(text: string) => void} err
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  * @property {Promise<unknown>} stopped Settles on SIGINT or SIGTERM.
  * @property {string} [registryDir] The live registry; defaults to Pi's agent directory's.
  * @property {number} [pid]
@@ -106,7 +106,7 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
  * @returns {Promise<number>} The exit code.
  */
 export async function runApp(options) {
-  const { pi, out, err } = options;
+  const { pi, out, log } = options;
   const pid = options.pid ?? process.pid;
   const registryDir = options.registryDir ?? liveRegistryDir(piAgentDir(pi));
   const createSession = options.createSession ?? createAmpiSdkSession;
@@ -124,7 +124,7 @@ export async function runApp(options) {
   if (running) {
     const runningToken = readLiveToken(registryDir, running);
     if (!running.gui || runningToken === undefined) {
-      err(`ampi: ampi app already runs in process ${running.pid}. Use that one, or stop it first.\n`);
+      log.error(`ampi app already runs in process ${running.pid}. Use that one, or stop it first.`);
       return 1;
     }
     const url = `http://127.0.0.1:${running.gui.port}/?t=${runningToken}`;
@@ -232,7 +232,7 @@ export async function runApp(options) {
       pi,
     });
   } catch (error) {
-    err(`ampi: ampi app could not start: ${error instanceof Error ? error.message : String(error)}\n`);
+    log.error(`ampi app could not start: ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
 
@@ -247,7 +247,7 @@ export async function runApp(options) {
   if (port === undefined) {
     /** @type {string[]} */
     const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);
-    err(`${["ampi: ampi app needs an ampi whose web GUI serves the app; update @skippermissions/ampi.", ...errors].join(" ")}\n`);
+    log.error(["ampi app needs an ampi whose web GUI serves the app; update @skippermissions/ampi.", ...errors].join(" "));
     await shutdown();
     return 1;
   }
