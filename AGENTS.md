@@ -27,6 +27,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 | `docs/` | User and contributor docs (shipped in the package, except `docs/private/`); decisions in `docs/adr/`. |
 | `scripts/gate.sh` | The gate: secret scan, lint, tests, type check, `npm pack --dry-run`. |
 | `scripts/*worktree*`, `scripts/sync-primary.sh`, `scripts/link-node-modules.sh` | Worktree workflow helpers (below). |
+| `.agents/setup` | Orb setup: Node.js check, `npm ci`, hooks, credential presence report. Idempotent. |
 | `REPOMAP.md`, `INDEX.md` | Detailed source map and navigation. |
 
 ## Landing a change

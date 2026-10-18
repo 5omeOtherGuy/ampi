@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Orb and agent setup for ampi. Idempotent and non-interactive: checks the
+# Node.js toolchain, installs the locked dependencies, enables .githooks, and
+# reports which credentials are present without printing them.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Toolchain: package.json engines.node is >=22.19.0.
+if ! command -v node >/dev/null 2>&1; then
+  echo "setup: Node.js is missing; install Node.js 22.19 or later" >&2
+  exit 1
+fi
+if ! node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 19) ? 0 : 1)'; then
+  echo "setup: Node.js $(node -v) is too old; ampi needs 22.19 or later" >&2
+  exit 1
+fi
+
+# Locked dependencies. Skip the reinstall when node_modules was installed
+# from the current lockfile.
+stamp=node_modules/.ampi-setup-lock
+lock_hash=$(sha256sum package-lock.json | cut -d' ' -f1)
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$lock_hash" ]; then
+  npm ci --no-audit --no-fund
+  echo "$lock_hash" >"$stamp"
+fi
+
+git config core.hooksPath .githooks
+
+# Credentials: presence only, never values. None is needed for the gate.
+for name in GH_TOKEN GITHUB_TOKEN BRAVE_API_KEY AMPI_GITHUB_TOKEN; do
+  if [ -n "${!name:-}" ]; then state=present; else state=absent; fi
+  echo "setup: $name $state"
+done
+echo "setup: done (node $(node -v)); run npm run gate to verify"
