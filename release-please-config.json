@@ -20,7 +20,14 @@
     ".": {
       "package-name": "@skippermissions/ampi",
       "changelog-path": "CHANGELOG.md",
-      "exclude-paths": ["packages/ampi-cli"]
+      "exclude-paths": [
+        "packages/ampi-cli",
+        "tests/mmr-cli-argv.test.mjs",
+        "tests/mmr-cli-bin.test.mjs",
+        "tests/mmr-cli-load-guard.test.mjs",
+        "tests/mmr-cli-pi-compat.test.mjs",
+        "tests/fixtures/ampi-cli"
+      ]
     },
     "packages/ampi-cli": {
       "package-name": "@skippermissions/ampi-cli",

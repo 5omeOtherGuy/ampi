@@ -39,18 +39,18 @@ Environment variables:
 
 Examples:
 
-Start an interactive session:
+Open a session:
 
   $ ampi
 
-Start an interactive session in high mode:
+Open a session in high mode:
 
   $ ampi -m high
 
-Start an interactive session with a first message:
+Open a session and send a first message:
 
   $ ampi "explain how the build scripts fit together"
 
-Continue the most recent session in this directory:
+Pick up the latest session in this directory:
 
   $ ampi -c

@@ -7,6 +7,8 @@ export const AMPI_PACKAGE_NAME = "@skippermissions/ampi";
 
 /** `npm:@skippermissions/ampi` with or without a version, as Pi settings and `-e` write it. */
 const AMPI_NPM_SOURCE = /^npm:@skippermissions\/ampi(?:@.*)?$/;
+/** ampi's GitHub repository in any form Pi accepts (`git:`, `https:`, `ssh:`, `git@`), with or without a ref. */
+const AMPI_GIT_SOURCE = /github\.com[/:]5omeOtherGuy\/ampi(?:\.git)?(?:@[^/]*)?\/?$/i;
 /** Sources Pi resolves itself instead of reading a local path. */
 const REMOTE_SOURCE = /^(?:npm:|git:|git@|https?:|ssh:)/;
 
@@ -75,48 +77,48 @@ export function locateAmpiPackage(cliRoot) {
 }
 
 /**
- * @typedef {object} ConfiguredPackage
- * @property {string} source The package source as written in Pi's settings.
- * @property {string} [installedPath] Where Pi installed or finds it, when it exists.
- *
  * @typedef {object} AmpiLoadInput
  * @property {readonly string[]} piArgs Arguments Pi will receive.
- * @property {readonly ConfiguredPackage[]} configured Packages from Pi's user and project settings.
+ * @property {import("./pi-compat.js").PiExtensionSources} pi What Pi loads from its settings and
+ *   extension directories, the sources it will install first, and its cached `-e` packages.
  * @property {string} cwd Directory relative `-e` paths resolve against.
  * @property {(start: string) => string | undefined} packageNameAt Name of the package containing a path.
  *
- * @typedef {{ load: true } | { load: false, reason: "extension-flag" | "settings", source: string }} AmpiLoadDecision
+ * @typedef {{ load: true } | { load: false, reason: "extension-flag" | "pi", source: string }} AmpiLoadDecision
  */
 
 /**
  * Whether the bin should hand ampi to Pi itself. Pi already loads ampi when a
- * `-e` argument names it, or when its settings list it as a package and
- * `--no-extensions` is absent; loading it a second time would register every
- * ampi tool, command and flag twice.
+ * `-e` argument names it, or, unless `--no-extensions` is given, when its
+ * settings or extension directories provide it; loading it a second time would
+ * register every ampi tool, command and flag twice.
  *
  * @param {AmpiLoadInput} input
  * @returns {AmpiLoadDecision}
  */
-export function decideAmpiLoad({ piArgs, configured, cwd, packageNameAt }) {
+export function decideAmpiLoad({ piArgs, pi, cwd, packageNameAt }) {
   const end = piArgs.indexOf("--");
   const options = end === -1 ? piArgs : piArgs.slice(0, end);
   /** @param {string} source */
-  const isAmpi = (source) =>
-    AMPI_NPM_SOURCE.test(source) ||
-    (!REMOTE_SOURCE.test(source) && packageNameAt(path.resolve(cwd, source)) === AMPI_PACKAGE_NAME);
+  const isAmpiSource = (source) => {
+    if (AMPI_NPM_SOURCE.test(source) || AMPI_GIT_SOURCE.test(source)) return true;
+    const location = REMOTE_SOURCE.test(source) ? pi.cachedPathOf(source) : path.resolve(cwd, source);
+    return location !== undefined && packageNameAt(location) === AMPI_PACKAGE_NAME;
+  };
 
   for (let index = 0; index < options.length - 1; index++) {
     const flag = options[index];
-    if ((flag === "-e" || flag === "--extension") && isAmpi(options[index + 1])) {
+    if ((flag === "-e" || flag === "--extension") && isAmpiSource(options[index + 1])) {
       return { load: false, reason: "extension-flag", source: options[index + 1] };
     }
   }
   if (options.includes("--no-extensions") || options.includes("-ne")) return { load: true };
-  for (const pkg of configured) {
-    const installedName = pkg.installedPath === undefined ? undefined : packageNameAt(pkg.installedPath);
-    if (AMPI_NPM_SOURCE.test(pkg.source) || installedName === AMPI_PACKAGE_NAME) {
-      return { load: false, reason: "settings", source: pkg.source };
+  for (const entry of pi.enabled) {
+    if (path.isAbsolute(entry.path) && packageNameAt(entry.path) === AMPI_PACKAGE_NAME) {
+      return { load: false, reason: "pi", source: entry.source };
     }
   }
+  const missing = pi.missing.find((source) => AMPI_NPM_SOURCE.test(source) || AMPI_GIT_SOURCE.test(source));
+  if (missing !== undefined) return { load: false, reason: "pi", source: missing };
   return { load: true };
 }

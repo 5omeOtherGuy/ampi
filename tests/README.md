@@ -35,7 +35,7 @@ Two import patterns coexist intentionally — see the helper header for details:
   runtime.setMmrSessionIdentity(undefined);
   ```
 
-The `ampi` command in `packages/ampi-cli/` is plain JavaScript, so `tests/mmr-cli-*.test.mjs` import its modules directly and spawn `packages/ampi-cli/bin/ampi.js` only for help, version and usage errors, which never start Pi.
+The `ampi` command in `packages/ampi-cli/` is plain JavaScript, so `tests/mmr-cli-*.test.mjs` import its modules directly and spawn `packages/ampi-cli/bin/ampi.js` only for help, version and usage errors, which never start Pi. `mmr-cli-pi-compat.test.mjs` calls the real Pi package against a temporary agent directory, to catch changes in the undocumented Pi calls the command relies on.
 
 ## Fixtures
 

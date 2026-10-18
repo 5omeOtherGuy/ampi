@@ -13,8 +13,8 @@
 | [`CHANGELOG.md`](CHANGELOG.md) | Notable changes and release notes. |
 | [`ROADMAP.md`](ROADMAP.md) | Package-level roadmap and release checklist. |
 | [`REPOMAP.md`](REPOMAP.md) | This repository structure and ownership map. |
-| [`package.json`](package.json) | Package metadata, Pi extension registration, export map, npm workspaces, and npm scripts. |
-| [`package-lock.json`](package-lock.json) | Locked dependency graph for the root package and the workspace packages. |
+| [`package.json`](package.json) | Package metadata, Pi extension registration, export map, and npm scripts. |
+| [`package-lock.json`](package-lock.json) | Locked dependency graph. |
 | [`packages/ampi-cli/`](packages/ampi-cli/README.md) | The `@skippermissions/ampi-cli` package: the `ampi` command. |
 | [`tsconfig.json`](tsconfig.json) | TypeScript strict-mode configuration. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human contributor workflow. |
@@ -240,9 +240,9 @@ Not registered in `pi.extensions` and registers no tools. `index.ts` re-exports 
 
 Not registered in `pi.extensions` and excluded from the published package via `.npmignore`. Loaded explicitly with `pi -e "$PWD/src/extensions/ampi-debug/index.ts"` and inert unless `AMPI_DEBUG_CAPTURE_FILE` (legacy `MMR_DEBUG_CAPTURE_FILE` still accepted) is set. A pure hook-based observer (`index.ts`, `capture.ts`) that records system-prompt source/text, advertised tool names, response status/headers, and message end metadata for ground-truth review. See its `README.md` for usage.
 
-## Workspace packages
+## Packages under `packages/`
 
-`package.json` `workspaces` lists the root package itself (`.`) and `packages/*`, so npm links `@skippermissions/ampi` to the checkout for the packages that depend on it. Each package is published and versioned on its own (`release-please-config.json`).
+Each package is published and versioned on its own (`release-please-config.json`). They are not npm workspaces: Pi installs a git source of ampi with `npm install` at the repository root, and a workspace would pull each package's dependencies, a second Pi among them, into that install. In a checkout the packages run on the root install, which already provides Pi as a peer dependency.
 
 ```text
 packages/
@@ -250,6 +250,7 @@ packages/
     bin/ampi.js      # the `ampi` executable
     src/argv.js      # argument router and help text (pure)
     src/packages.js  # package lookup and the guard against loading ampi twice
+    src/pi-compat.js # the undocumented Pi calls the guard needs, in one place
     src/main.js      # prints help or versions, or starts Pi through its exported main()
 ```
 

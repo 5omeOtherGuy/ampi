@@ -54,7 +54,7 @@ ampi -m high          # same session as: pi -e npm:@skippermissions/ampi --ampi-
 ampi --help
 ```
 
-If ampi is also installed as a Pi package, the command uses that copy instead of loading ampi twice.
+If Pi already loads ampi, as an installed package, from its `extensions` setting or from an extension directory, the command uses that copy instead of loading ampi twice.
 
 ## First minutes
 

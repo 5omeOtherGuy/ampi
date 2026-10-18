@@ -2,7 +2,7 @@
 
 The `ampi` command: Pi with the ampi extensions loaded, plus Amp-compatible short flags and subcommands.
 
-Status: released together with [`@skippermissions/ampi`](../../README.md) from the same repository; while it is `0.x`, a minor release may contain breaking changes.
+Status: released. Versioned on its own, next to [`@skippermissions/ampi`](../../README.md) in the same repository; while it is 0.x, a minor release may contain breaking changes.
 
 `ampi` starts the same interactive Pi session as `pi -e npm:@skippermissions/ampi`, with ampi's modes, tools, workers and terminal layout. It exists because a Pi package can only add long `--flags`: options such as `-m high`, and later commands such as execute mode and thread listings, need a command of their own. Everything the command does not handle itself goes to Pi unchanged, so Pi's options (`--model`, `-c`, `-r`, `-p`, `-e`) and its own commands (`install`, `list`, `config`, `mcp`, …) keep working.
 
@@ -40,13 +40,20 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 
 ### If ampi is also installed as a Pi package
 
-The command loads ampi only when Pi would not load it anyway. When Pi's user or project settings list `@skippermissions/ampi` (from npm, git or a local path), or a `-e` argument names it, Pi loads that copy and the command adds nothing; it prints `ampi: using ampi from Pi's settings (<source>)` on stderr. Loading ampi twice would register every ampi tool, command and flag twice, and Pi refuses to start in that case. With `--no-extensions` (`-ne`), Pi skips its settings packages, so the command adds its own ampi.
+The command loads ampi only when Pi would not load it anyway, and otherwise prints `ampi: using the ampi that Pi already loads (<source>)` on stderr. Pi already loads ampi when:
+
+- a `-e` argument names it: `npm:@skippermissions/ampi`, ampi's git repository, or a path inside an ampi checkout;
+- Pi's user or project settings list it under `packages` (from npm, git or a local path) or `extensions`;
+- one of Pi's extension directories (`~/.pi/agent/extensions/`, `.pi/extensions/`) contains it;
+- the settings list `npm:@skippermissions/ampi` or ampi's git repository and Pi has not installed it yet: Pi installs it when it starts.
+
+Loading ampi twice would register every ampi tool, command and flag twice, and Pi refuses to start in that case. With `--no-extensions` (`-ne`), Pi skips everything but `-e` arguments, so the command adds its own ampi.
 
 Project settings count even before you trust the project: once you grant trust, Pi loads the project's ampi.
 
 ### Pi's own commands
 
-When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`), the command line goes to Pi untouched and ampi is not added.
+When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`), the command runs Pi's own executable with the command line untouched, and ampi is not added.
 
 ## Compatibility
 
@@ -63,7 +70,7 @@ node packages/ampi-cli/bin/ampi.js -m low
 npm run test:one -- tests/mmr-cli-argv.test.mjs
 ```
 
-The package is plain JavaScript with JSDoc types and no build step; the root `npm run gate` lints, type-checks and packs it. See the repository's [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+The package is plain JavaScript with JSDoc types and no build step. It is not an npm workspace and has no lockfile of its own: in a checkout it runs on the root install, which provides Pi, and loads ampi from the checkout itself. The root `npm run gate` lints, tests, type-checks and packs it. See the repository's [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## License
 

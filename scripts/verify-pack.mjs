@@ -31,16 +31,16 @@ function fail(message) {
 }
 
 // 1. The files npm would actually publish, for the root package and every
-//    published workspace package, as repository-relative paths.
+//    package under packages/, as repository-relative paths.
 //    `--ignore-scripts` avoids re-entering any lifecycle (and cannot recurse
 //    into this guard).
 const PACKAGE_DIRS = [".", "packages/ampi-cli"];
 const tarballPaths = [];
 for (const dir of PACKAGE_DIRS) {
-  const workspaceArgs = dir === "." ? [] : ["-w", dir];
+  const folderArgs = dir === "." ? [] : [`./${dir}`];
   let packRaw;
   try {
-    packRaw = run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts", ...workspaceArgs]);
+    packRaw = run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts", ...folderArgs]);
   } catch (error) {
     fail(`could not run "npm pack --dry-run --json" for ${dir}: ${error instanceof Error ? error.message : String(error)}`);
   }

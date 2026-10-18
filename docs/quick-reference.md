@@ -148,7 +148,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |
 
-If Pi's settings already list `@skippermissions/ampi`, the command uses that copy and says so on stderr instead of loading ampi twice.
+If Pi already loads ampi (from its settings, an extension directory or a `-e` argument), the command uses that copy and says so on stderr instead of loading ampi twice.
 
 ## Settings
 

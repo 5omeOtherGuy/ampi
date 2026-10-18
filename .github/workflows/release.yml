@@ -144,4 +144,5 @@ jobs:
         run: npm run gate
 
       - name: Publish
-        run: npm publish -w @skippermissions/ampi-cli --provenance --access public
+        working-directory: packages/ampi-cli
+        run: npm publish --provenance --access public

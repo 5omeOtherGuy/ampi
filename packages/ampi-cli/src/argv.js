@@ -35,6 +35,33 @@ const OPTIONS = /** @type {const} */ ({
   "pi-help": { type: "boolean" },
 });
 
+/**
+ * Pi's options that always take the next argument as their value. Declaring
+ * them keeps that value away from ampi's own options: in
+ * `--append-system-prompt -v`, `-v` is the prompt, not a version request.
+ */
+const PI_VALUE_OPTIONS = /** @type {const} */ ({
+  provider: { type: "string" },
+  model: { type: "string" },
+  "api-key": { type: "string" },
+  "system-prompt": { type: "string" },
+  "append-system-prompt": { type: "string" },
+  name: { type: "string", short: "n" },
+  session: { type: "string" },
+  "session-id": { type: "string" },
+  fork: { type: "string" },
+  "session-dir": { type: "string" },
+  models: { type: "string" },
+  tools: { type: "string", short: "t" },
+  "exclude-tools": { type: "string" },
+  thinking: { type: "string" },
+  export: { type: "string" },
+  extension: { type: "string", short: "e" },
+  skill: { type: "string" },
+  "prompt-template": { type: "string" },
+  theme: { type: "string" },
+});
+
 const SETTINGS_FILE_ERROR =
   "--settings-file is not supported: Pi reads settings.json from its configuration directory and the project's .pi/ directory. " +
   "Set PI_CODING_AGENT_DIR to use another configuration directory.";
@@ -56,7 +83,13 @@ export function routeAmpiArgv(argv) {
   if (args[0] === "version") return { command: "version", piArgs: [], options, notices: [] };
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options, notices: [] };
 
-  const { tokens } = parseArgs({ args, options: OPTIONS, strict: false, allowPositionals: true, tokens: true });
+  const { tokens } = parseArgs({
+    args,
+    options: { ...PI_VALUE_OPTIONS, ...OPTIONS },
+    strict: false,
+    allowPositionals: true,
+    tokens: true,
+  });
   /** @type {Map<number, number>} */
   const optionsPerArg = new Map();
   for (const token of tokens) {
@@ -189,19 +222,19 @@ Environment variables:
 
 Examples:
 
-Start an interactive session:
+Open a session:
 
   $ ampi
 
-Start an interactive session in high mode:
+Open a session in high mode:
 
   $ ampi -m high
 
-Start an interactive session with a first message:
+Open a session and send a first message:
 
   $ ampi "explain how the build scripts fit together"
 
-Continue the most recent session in this directory:
+Pick up the latest session in this directory:
 
   $ ampi -c
 `;

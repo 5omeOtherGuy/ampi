@@ -40,6 +40,23 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(routeAmpiArgv(["-nm", "low"]).piArgs, ["-nm", "low"]);
   });
 
+  it("passes the value of Pi's value options untouched, even when it looks like an ampi option", () => {
+    for (const argv of [
+      ["--append-system-prompt", "-v"],
+      ["--system-prompt", "--help"],
+      ["--model", "-m"],
+      ["-n", "-l"],
+      ["-e", "-h", "-m", "low"],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi", argv.join(" "));
+      const expected = argv.at(-1) === "low" ? ["-e", "-h", "--ampi-mode", "low"] : argv;
+      assert.deepEqual(route.piArgs, expected, argv.join(" "));
+    }
+    // Without a Pi value option in front, the same arguments are ampi's.
+    assert.equal(routeAmpiArgv(["--verbose", "-v"]).command, "version");
+  });
+
   it("hands everything after -- to Pi without reading it", () => {
     const route = routeAmpiArgv(["-m", "low", "--", "-m", "is", "--help", "text"]);
     assert.equal(route.command, "pi");
