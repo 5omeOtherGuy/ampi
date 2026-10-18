@@ -549,10 +549,29 @@ describe("ampi-threads prompt history in ampi-tui", () => {
   });
 });
 
-/** Let the event loop turn, reading files included, until `done()` holds (at most 1000 turns). */
-async function turnsUntil(done) {
-  for (let turn = 0; turn < 1000 && !done(); turn++) await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(done(), "the condition never held");
+/**
+ * Run `open` and resolve with the overlay it shows in `context`, once the
+ * session files are read however long that takes; a notification before the
+ * overlay opens rejects instead.
+ */
+function overlayOpenedBy(context, open) {
+  const { custom, notify } = context.ctx.ui;
+  const opened = new Promise((resolve, reject) => {
+    const restore = () => Object.assign(context.ctx.ui, { custom, notify });
+    context.ctx.ui.custom = (factory, options) => {
+      restore();
+      const result = custom(factory, options);
+      resolve(context.overlays.at(-1));
+      return result;
+    };
+    context.ctx.ui.notify = (message, level) => {
+      restore();
+      notify(message, level);
+      reject(new Error(`no overlay opened: ${message}`));
+    };
+  });
+  open();
+  return opened;
 }
 
 describe("ampi-threads thread switcher in ampi-tui", () => {
@@ -567,9 +586,8 @@ describe("ampi-threads thread switcher in ampi-tui", () => {
     keys.start(context.ctx, () => undefined);
     try {
       assert.deepEqual(availability("thread.switch", context.ctx), { state: "available" });
-      command("thread.switch").run(context.ctx);
-      await turnsUntil(() => context.overlays.length === 1);
-      const overlay = context.overlays.at(-1);
+      const overlay = await overlayOpenedBy(context, () => command("thread.switch").run(context.ctx));
+      assert.equal(context.overlays.length, 1);
       assert.deepEqual(
         overlay.component.getRows().map((row) => [row.title, row.current]),
         [
@@ -587,9 +605,9 @@ describe("ampi-threads thread switcher in ampi-tui", () => {
       assert.deepEqual(context.switches, [sessions["Fix the imports"].path]);
 
       // Picking the current session switches nowhere.
-      command("thread.switch").run(context.ctx);
-      await turnsUntil(() => context.overlays.length === 2);
-      context.overlays.at(-1).component.handleInput("\r");
+      const again = await overlayOpenedBy(context, () => command("thread.switch").run(context.ctx));
+      assert.equal(context.overlays.length, 2);
+      again.component.handleInput("\r");
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(mock.calls.sendUserMessage.length, 1);
     } finally {
