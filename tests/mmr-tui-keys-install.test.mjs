@@ -7,21 +7,35 @@ after(cleanupLoadedSource);
 
 let createMmrTuiKeys;
 let registry;
+let runtime;
 
 before(async () => {
   ({ createMmrTuiKeys } = await importSource("extensions/ampi-tui/keys/install.ts"));
   registry = await importSource("extensions/ampi-core/command-registry.ts");
+  runtime = await importSource("extensions/ampi-core/runtime.ts");
 });
 
 /**
- * A TUI handle whose focused component is Pi's editor (it has an action map),
- * with scroll calls recorded. Set `editor.autocomplete` to open its
- * autocomplete list.
+ * A TUI handle whose focused component is Pi's editor (it has an action map
+ * and a submit handler), with scroll calls, render requests, submitted text
+ * and the thinking toggle recorded. The toggle flips
+ * `settings.hideThinkingBlock`, as Pi saves it. Set `editor.autocomplete` to
+ * open its autocomplete list.
  */
-function fakeTui({ scrollable = true } = {}) {
+function fakeTui({ scrollable = true } = {}, settings = {}) {
   const calls = [];
   const editor = {
-    actionHandlers: new Map([["app.editor.external", () => calls.push("external editor")]]),
+    actionHandlers: new Map([
+      ["app.editor.external", () => calls.push("external editor")],
+      [
+        "app.thinking.toggle",
+        () => {
+          settings.hideThinkingBlock = !settings.hideThinkingBlock;
+          calls.push("thinking toggle");
+        },
+      ],
+    ]),
+    onSubmit: (text) => calls.push(`submit ${text}`),
     autocomplete: false,
     isShowingAutocomplete() {
       return this.autocomplete;
@@ -32,6 +46,7 @@ function fakeTui({ scrollable = true } = {}) {
     getFocusedComponent() {
       return this.focused;
     },
+    requestRender: () => calls.push("render"),
   };
   if (scrollable) {
     tui.scrollToTop = () => calls.push("top");
@@ -45,7 +60,7 @@ function setup({ settings = {}, idle = true, editorText = "", tuiOptions } = {})
   const timers = [];
   const mock = createMockPi({ settings });
   const context = createMockExtensionContext({ idle, editorText });
-  const handle = fakeTui(tuiOptions);
+  const handle = fakeTui(tuiOptions, settings);
   const keys = createMmrTuiKeys(mock.pi, {
     now: () => time,
     setTimer: (callback, ms) => {
@@ -84,20 +99,31 @@ describe("ampi-tui key installation", () => {
     const t = setup();
     const keysById = Object.fromEntries(registry.getMmrCommands().map((command) => [command.id, command.defaultKey]));
     assert.deepEqual(keysById, {
+      "ampi.palette": "ctrl+o",
+      "prompt.openPalette": "/",
       "thread.interrupt": "esc esc",
       "ampi.quit": "ctrl+c ctrl+c",
       "thread.scrollToTop": "home",
       "thread.scrollToBottom": "end",
       "prompt.openInEditor": "ctrl+g",
       "ampi.showVersion": undefined,
+      "thread.toggleDetails": "alt+t",
+      "ampi.status": undefined,
+      "ampi.changelog": undefined,
+      "ampi.config": undefined,
+      "mode.use.low": undefined,
+      "mode.use.medium": undefined,
+      "mode.use.high": undefined,
+      "mode.use.ultra": undefined,
+      "mode.use.free": undefined,
     });
     t.keys.stop();
     assert.deepEqual(registry.getMmrCommands(), [], "stopping removes them again");
   });
 
-  it("routes every default key through raw input, none through registerShortcut", () => {
+  it("routes the default keys through raw input, except Alt+T, which goes through registerShortcut", () => {
     const t = setup();
-    assert.deepEqual([...t.shortcuts.keys()], [], "the defaults are chords, reserved keys or conditional keys");
+    assert.deepEqual([...t.shortcuts.keys()], ["alt+t"], "the other defaults are chords, reserved keys or conditional keys");
     assert.equal(t.terminalInput.listeners.size, 1);
     assert.equal(t.send("a"), false, "keys that start no chord are left alone");
     assert.equal(t.send("\x07"), true, "ctrl+g is taken from Pi and runs the same editor action");
@@ -244,7 +270,7 @@ describe("ampi-tui key installation", () => {
     t.send("\x11");
     assert.equal(t.lifecycle.shutdown, 1);
 
-    assert.deepEqual([...t.shortcuts.keys()], ["f5"], "an unconditional single key that Pi does not reserve");
+    assert.deepEqual([...t.shortcuts.keys()].sort(), ["alt+t", "f5"], "unconditional single keys that Pi does not reserve");
     assert.equal(t.shortcuts.get("f5").description, "Show the ampi and Pi versions");
     t.shortcuts.get("f5").handler(t.ctx);
     assert.match(t.notifications.at(-1).message, /^ampi \S+ on Pi \d+\.\d+\.\d+/);
@@ -252,7 +278,7 @@ describe("ampi-tui key installation", () => {
 
   it("routes a leader binding through raw input and lists it in the popup", () => {
     const t = setup({ settings: { ampi: { keymap: { "ampi.showVersion": "<leader>v" } } } });
-    assert.deepEqual([...t.shortcuts.keys()], []);
+    assert.deepEqual([...t.shortcuts.keys()], ["alt+t"]);
     t.send("\x18");
     const lines = t.overlays[0].component.render(t.overlays[0].options.overlayOptions().width);
     assert.match(lines[1], /│ v {2}Show the ampi and Pi versions +│/);
@@ -318,5 +344,194 @@ describe("ampi-tui key installation", () => {
     const t = setup();
     t.keys.stop();
     assert.equal(t.terminalInput.listeners.size, 0);
+  });
+});
+
+describe("ampi-tui command palette and details toggle", () => {
+  beforeEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+  afterEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+
+  const ENTER = "\r";
+  const labels = (overlay) => overlay.component.getRows().map((row) => `${row.command.noun} ${row.command.verb}`);
+  /** Type `text` into the open palette, then press Enter. */
+  const pick = (overlay, text) => {
+    for (const character of text) overlay.component.handleInput(character);
+    overlay.component.handleInput(ENTER);
+  };
+  /** Wait for the palette's result to reach the command it picked. */
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  it("opens the palette on Ctrl+O, taking the key from Pi, and lists commands with their keys", () => {
+    const t = setup();
+    assert.equal(t.send("\x0f"), true);
+    assert.equal(t.overlays.length, 1);
+    const overlay = t.overlays[0];
+    assert.equal(overlay.options.overlayOptions.anchor, "center");
+    const rows = labels(overlay);
+    assert.ok(!rows.some((row) => row.includes("open command palette")), "the palette does not list itself");
+    assert.ok(rows.includes("thread toggle details"));
+    assert.ok(rows.includes("pi /model"), "Pi's built-in slash commands are listed under pi");
+    assert.ok(rows.includes("thread interrupt"), "unavailable while idle, but listed");
+    assert.match(overlay.component.render(80).join("\n"), /toggle details +Alt\+T/);
+    assert.match(overlay.component.render(80).join("\n"), /quit +Ctrl\+C Ctrl\+C/);
+  });
+
+  it("shows an overridden key in the key column", () => {
+    const t = setup({ settings: { ampi: { keymap: { "ampi.showVersion": "<leader>v" } } } });
+    t.send("\x0f");
+    assert.match(t.overlays[0].component.render(80).join("\n"), /show version +Ctrl\+X v/);
+  });
+
+  it("opens the palette on / only while the prompt is empty", () => {
+    const t = setup();
+    assert.equal(t.send("/"), true, "the slash is not typed");
+    assert.equal(t.overlays.length, 1);
+    assert.equal(t.overlays[0].component.getQuery(), "");
+    t.overlays[0].component.handleInput("\x1b");
+
+    t.state.editorText = "x";
+    assert.equal(t.send("/"), false, "with text, / is typed as usual");
+    assert.equal(t.overlays.length, 1);
+
+    t.state.editorText = "";
+    t.handle.tui.focused = t.overlays[0].component;
+    assert.equal(t.send("/"), false, "inside the open palette, / goes to its filter");
+  });
+
+  it("runs the picked command after the palette closes, reporting a failure", async () => {
+    const t = setup();
+    t.send("\x0f");
+    pick(t.overlays[0], "show version");
+    await settle();
+    assert.equal(t.overlays[0].closed, true);
+    assert.match(t.notifications.at(-1).message, /^ampi \S+ on Pi/);
+
+    registry.registerMmrCommand({
+      id: "prompt.broken",
+      noun: "prompt",
+      verb: "broken",
+      description: "Broken",
+      run: () => {
+        throw new Error("boom");
+      },
+    });
+    t.send("\x0f");
+    pick(t.overlays[1], "broken");
+    await settle();
+    assert.match(t.notifications.at(-1).message, /prompt\.broken failed: boom/);
+  });
+
+  it("runs a Pi slash command through the prompt's submit path, only from an empty prompt", async () => {
+    const t = setup();
+    t.send("\x0f");
+    pick(t.overlays[0], "/tree");
+    await settle();
+    assert.deepEqual(t.handle.calls, ["submit /tree"]);
+
+    t.state.editorText = "draft";
+    t.send("\x0f");
+    const row = t.overlays[1].component.getRows().find((entry) => entry.command.verb === "/tree");
+    assert.deepEqual({ state: row.state, reason: row.reason }, { state: "unavailable", reason: "the prompt has text" });
+  });
+
+  it("puts a command that takes arguments into the prompt instead of submitting it", async () => {
+    const t = setup();
+    t.pi.registerCommand("review", { description: "Review changes" });
+    t.send("\x0f");
+    pick(t.overlays[0], "/name");
+    await settle();
+    assert.equal(t.state.editorText, "/name ", "Pi's /name needs a name after it");
+    assert.deepEqual(t.handle.calls, ["render"], "the prompt is redrawn and nothing is submitted");
+
+    t.state.editorText = "";
+    t.send("\x0f");
+    pick(t.overlays[1], "/review");
+    await settle();
+    assert.equal(t.state.editorText, "/review ", "extension commands may take arguments");
+    assert.deepEqual(t.handle.calls, ["render", "render"]);
+    assert.deepEqual(t.calls.sendUserMessage, []);
+  });
+
+  it("ranks Pi's built-in commands by Pi's descriptions", () => {
+    const t = setup();
+    t.send("\x0f");
+    for (const character of "session info") t.overlays[0].component.handleInput(character);
+    assert.equal(labels(t.overlays[0])[0], "pi /session");
+  });
+
+  it("lists extension commands under pi, leaving out legacy mmr- aliases and commands ampi rows run", () => {
+    const t = setup();
+    for (const name of ["review", "mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+      t.pi.registerCommand(name, { description: name });
+    }
+    t.send("\x0f");
+    const rows = labels(t.overlays[0]).filter((row) => row.startsWith("pi "));
+    assert.ok(rows.includes("pi /review"));
+    for (const name of ["mmr-status", "ampi-status", "ampi-changelog", "ampi-config", "mode"]) {
+      assert.ok(!rows.includes(`pi /${name}`), name);
+    }
+  });
+
+  it("runs ampi-core's slash commands through Pi's command path, and only when they exist", async () => {
+    const t = setup();
+    t.send("\x0f");
+    const status = t.overlays[0].component.getRows().find((row) => row.command.id === "ampi.status");
+    assert.deepEqual({ state: status.state, reason: status.reason }, { state: "unavailable", reason: "ampi-core is not loaded" });
+    t.overlays[0].component.handleInput("\x1b");
+
+    for (const name of ["ampi-status", "ampi-changelog", "ampi-config", "mode"]) t.pi.registerCommand(name, {});
+    for (const [query, sent] of [
+      ["show status", "/ampi-status"],
+      ["ampi changelog", "/ampi-changelog"],
+      ["ampi configure", "/ampi-config"],
+      ["mode use ultra", "/mode ultra"],
+    ]) {
+      t.send("\x0f");
+      pick(t.overlays.at(-1), query);
+      await settle();
+      assert.deepEqual(t.calls.sendUserMessage.at(-1), { content: sent, options: { expandPromptTemplates: true } }, query);
+    }
+  });
+
+  it("marks the current mode unavailable", () => {
+    const t = setup();
+    t.pi.registerCommand("mode", {});
+    runtime.setMmrModeState({ mode: "high" });
+    t.send("\x0f");
+    const rows = t.overlays[0].component.getRows().filter((row) => row.command.noun === "mode");
+    assert.deepEqual(
+      rows.map((row) => [row.command.verb, row.state, row.reason]),
+      [
+        ["use low", "available", undefined],
+        ["use medium", "available", undefined],
+        ["use ultra", "available", undefined],
+        ["use free", "available", undefined],
+        ["use high", "unavailable", "high is the current mode"],
+      ],
+    );
+  });
+
+  it("toggles tool output and thinking together with Alt+T", () => {
+    const settings = {};
+    const t = setup({ settings });
+    const toggle = () => t.shortcuts.get("alt+t").handler(t.ctx);
+    const state = () => ({ tools: t.state.toolsExpanded, thinkingHidden: settings.hideThinkingBlock === true });
+
+    // Pi starts with tools collapsed and thinking shown: the first press
+    // expands the tools and leaves thinking shown.
+    toggle();
+    assert.deepEqual(state(), { tools: true, thinkingHidden: false });
+    assert.deepEqual(t.handle.calls, []);
+    toggle();
+    assert.deepEqual(state(), { tools: false, thinkingHidden: true });
+    toggle();
+    assert.deepEqual(state(), { tools: true, thinkingHidden: false });
+    assert.deepEqual(t.handle.calls, ["thinking toggle", "thinking toggle"]);
   });
 });

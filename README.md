@@ -109,6 +109,9 @@ Ctrl+C Ctrl+C        # quit; the first Ctrl+C shows what can follow it
 Ctrl+X               # leader key; a popup lists the keys that can follow it
 Home / End           # jump to the start / end of the transcript (empty prompt)
 Ctrl+G               # edit the prompt in your external editor
+Ctrl+O               # command palette: filter, pick and run any command
+/                    # command palette, when the prompt is empty
+Alt+T                # expand or collapse tool output and thinking together
 ```
 
 The chord keys come from `ampi-tui`; rebind them under `ampi.keymap` in Pi settings ([`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md#keys)).

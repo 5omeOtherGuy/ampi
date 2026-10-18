@@ -1,20 +1,33 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { getMmrCommand, getMmrCommands, onMmrCommandsChanged } from "../../ampi-core/command-registry.js";
 import {
+  getMmrCommand,
+  getMmrCommands,
+  type MmrCommandDefinition,
+  onMmrCommandsChanged,
+} from "../../ampi-core/command-registry.js";
+import {
+  formatMmrKeyChord,
   type MmrKeymapConflict,
   type MmrResolvedKeymap,
   parseMmrKeyChord,
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
+import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
-import { registerMmrTuiCommands } from "./commands.js";
+import {
+  createMmrSlashPaletteCommands,
+  MMR_PALETTE_COMMAND_IDS,
+  type MmrTuiCommandHost,
+  registerMmrTuiCommands,
+} from "./commands.js";
 import { decodeMmrTerminalKeys } from "./decode.js";
 import {
   createMmrKeyDispatcher,
+  displayMmrKeyChord,
   formatMmrKeyCombo,
   type MmrKeyAvailability,
   type MmrKeyDispatcher,
@@ -84,6 +97,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   const warned = new Set<string>();
   let hint: { close(): void } | undefined;
   let hintTimer: unknown;
+  let resolved: MmrResolvedKeymap | undefined;
+  const host: MmrTuiCommandHost = { getTui: () => getTui(), pi, openPalette };
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -98,7 +113,11 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
 
   function run(id: string | undefined): void {
     const command = id === undefined ? undefined : getMmrCommand(id);
-    if (!command || !ctx) return;
+    if (command) runCommand(command);
+  }
+
+  function runCommand(command: MmrCommandDefinition): void {
+    if (!ctx) return;
     const current = ctx;
     const report = (error: unknown) =>
       current.ui.notify(`${command.id} failed: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -108,6 +127,26 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     } catch (error) {
       report(error);
     }
+  }
+
+  /** The command's first effective key in display form, as the palette shows it. */
+  function displayKey(id: string): string | undefined {
+    const chord = resolved?.bindings.get(id)?.[0];
+    return chord && resolved ? displayMmrKeyChord(formatMmrKeyChord(chord, { leader: resolved.leader })) : undefined;
+  }
+
+  function openPalette(current: ExtensionContext): void {
+    const items: MmrPaletteItem[] = [
+      ...getMmrCommands()
+        .filter((command) => !MMR_PALETTE_COMMAND_IDS.has(command.id))
+        .map((command) => ({ command, key: displayKey(command.id) })),
+      ...createMmrSlashPaletteCommands(host).map((command) => ({ command })),
+    ];
+    void openMmrPalette(current, items)
+      .then((command) => {
+        if (command) runCommand(command);
+      })
+      .catch(() => {});
   }
 
   function reportUnavailable(id: string): void {
@@ -172,6 +211,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     const defaults = Object.fromEntries(commands.map((command) => [command.id, command.defaultKey ?? null]));
     const settings = readMmrKeymapSettings(readSettings(pi));
     const keymap = resolveMmrKeymap({ defaults, overrides: settings.overrides, leader: settings.leader });
+    resolved = keymap;
 
     const fresh = [...settings.problems, ...keymap.problems, ...keymap.conflicts.map(describeConflict)].filter(
       (message) => !warned.has(message),
@@ -256,7 +296,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     start(nextCtx, nextGetTui) {
       ctx = nextCtx;
       getTui = nextGetTui;
-      unregisterCommands ??= registerMmrTuiCommands({ getTui: () => getTui() });
+      unregisterCommands ??= registerMmrTuiCommands(host);
       rebuild();
       unsubscribeCommands ??= onMmrCommandsChanged(() => rebuild());
       unsubscribeInput?.();

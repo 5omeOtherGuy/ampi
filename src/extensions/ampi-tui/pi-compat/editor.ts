@@ -5,8 +5,9 @@ import type { TUI } from "@earendil-works/pi-tui";
  * that keeps its action handlers (`app.editor.external` and the like) in an
  * `actionHandlers` map; `TUI.getFocusedComponent()` tells whether it has
  * focus. The editor also reports whether its autocomplete list is open and
- * records how many text rows its last render drew. None of this is part of
- * Pi's extension API.
+ * records how many text rows its last render drew, and its `onSubmit`
+ * handler receives what Enter submits. None of this is part of Pi's
+ * extension API.
  */
 
 interface FocusAwareTui {
@@ -68,4 +69,30 @@ export function getMmrEditorRenderedHeight(tui: TUI | undefined): number | undef
   if (typeof rows !== "number") return undefined;
   const autocomplete = typeof editor?.renderedAutocompleteHeight === "number" ? editor.renderedAutocompleteHeight : 0;
   return rows + 2 + autocomplete;
+}
+
+interface SubmittingEditor extends ActionEditor {
+  onSubmit?: (text: string) => unknown;
+}
+
+function submitHandler(tui: TUI | undefined): ((text: string) => unknown) | undefined {
+  const onSubmit = (focusedEditor(tui) as SubmittingEditor | undefined)?.onSubmit;
+  return typeof onSubmit === "function" ? onSubmit : undefined;
+}
+
+/** Whether {@link submitMmrEditorText} can reach the focused editor's submit handler. */
+export function canMmrSubmitEditorText(tui: TUI | undefined): boolean {
+  return submitHandler(tui) !== undefined;
+}
+
+/**
+ * Hand `text` to the focused editor's submit handler, as Enter does. Pi runs
+ * its built-in slash commands only from there. Returns false when the handler
+ * is not reachable.
+ */
+export function submitMmrEditorText(tui: TUI | undefined, text: string): boolean {
+  const onSubmit = submitHandler(tui);
+  if (!onSubmit) return false;
+  void Promise.resolve(onSubmit(text)).catch(() => {});
+  return true;
 }

@@ -130,6 +130,9 @@ export function createMockPi(options = {}) {
       calls.sendUserMessage.push({ content, options: opts });
     },
     registerCommand: (name, command) => commands.set(name, command),
+    // Registered commands as Pi lists them (extension commands only).
+    getCommands: () =>
+      [...commands].map(([name, command]) => ({ name, description: command.description, source: "extension" })),
     registerShortcut: (key, definition) => {
       if (shortcutsThrowOn.has(key)) {
         throw new Error(`mock pi: shortcut already bound: ${key}`);
@@ -176,6 +179,9 @@ export function createMockPi(options = {}) {
  *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`.
  *  - `themeName` (default `undefined`): `ctx.ui.theme.name`, the active theme.
  *  - `themes` (default `{}`): theme objects by name, returned by `ctx.ui.getTheme`.
+ *  - `editorText` (default `""`): what `ui.getEditorText()` returns; change it through `state.editorText`;
+ *    `ui.setEditorText` updates it.
+ *  - `toolsExpanded` (default `false`): what `ui.getToolsExpanded()` returns; `ui.setToolsExpanded` updates `state.toolsExpanded`.
  *
  * Returns the ctx and the recorders it populates:
  *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
@@ -207,7 +213,11 @@ export function createMockExtensionContext(options = {}) {
   const selectCalls = [];
   const themes = options.themes ?? {};
   const compactCalls = [];
-  const state = { idle: options.idle ?? true, editorText: options.editorText ?? "" };
+  const state = {
+    idle: options.idle ?? true,
+    editorText: options.editorText ?? "",
+    toolsExpanded: options.toolsExpanded ?? false,
+  };
   const lifecycle = { abort: 0, shutdown: 0 };
   const inputListeners = new Set();
   const terminalInput = {
@@ -220,7 +230,7 @@ export function createMockExtensionContext(options = {}) {
     },
   };
   const overlays = [];
-  const plainTheme = { fg: (_name, value) => value, bold: (value) => value };
+  const plainTheme = { fg: (_name, value) => value, bold: (value) => value, style: (value) => value, colors: {} };
 
   const ctx = {
     cwd,
@@ -261,6 +271,13 @@ export function createMockExtensionContext(options = {}) {
         return () => inputListeners.delete(listener);
       },
       getEditorText: () => state.editorText,
+      setEditorText: (text) => {
+        state.editorText = text;
+      },
+      getToolsExpanded: () => state.toolsExpanded,
+      setToolsExpanded: (expanded) => {
+        state.toolsExpanded = expanded;
+      },
       custom: (factory, customOptions) =>
         new Promise((resolve) => {
           const record = { options: customOptions, theme: plainTheme, closed: false };
