@@ -12,7 +12,7 @@ import {
 import { classifyMmrWorkerOutcomeForProfile } from "../ampi-core/worker-outcome.js";
 import { getMmrWorkerHost } from "../ampi-core/worker-host.js";
 import { maybeRedact, projectRefFromCwd, redactText } from "./redaction.js";
-import { extractTouchedFilesFromEntries } from "./session-index.js";
+import { extractTouchedFilesFromEntries } from "../ampi-core/session-catalog.js";
 
 export const HISTORY_READER_SUBAGENT_PROFILE = "history-reader";
 // The history-reader subagent runs on a large-context extraction model, so the
@@ -322,7 +322,7 @@ function renderToolArguments(args: unknown): string {
 
 /**
  * Extract the assistant tool-call content blocks from a message using the same
- * `blockRecord.type === "toolCall"` shape detection as `session-index.ts`.
+ * `blockRecord.type === "toolCall"` shape detection as `ampi-core/session-catalog.ts`.
  * Each call's name and rendered arguments are routed through `boundedText`.
  */
 function extractToolCalls(

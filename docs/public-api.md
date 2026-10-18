@@ -400,8 +400,8 @@ packet-byte limit), and the persisted query/index shapes.
 | `MMR_HISTORY_ENABLE_ENV`, `DEFAULT_MMR_HISTORY_MAX_RESULTS`, `MAX_MMR_HISTORY_RESULTS`, `DEFAULT_MMR_HISTORY_MAX_EXCERPT_BYTES` | constants | Env name and limits. |
 | `createFindSessionTool`, `createReadSessionTool`, `registerMmrHistoryTools`, `createDefaultMmrHistoryToolDeps` | functions | Tool factories and default dependency wiring. |
 | `parseSessionQuery`, `tokenizeSessionQuery` | functions | Query DSL parser/tokenizer. |
-| `searchSessions`, `resolveSessionById` | functions | Catalog operations. |
-| `createSessionIndex` | function | Builds the in-memory session index. |
+| `searchSessions`, `resolveSessionById` | functions | Catalog operations. `resolveSessionById` is the core `resolveMmrSessionById`. |
+| `createSessionIndex` | function | Builds the in-memory session index; the same function as the core `createMmrSessionIndex` ([`ampi-core-api.md`](./ampi-core-api.md#session-catalogue)). |
 | `readSessionForGoal`, `formatSessionReadResult` | functions | `read_session` core. |
 | `runHistoryReaderAnalysis`, `buildHistoryReaderSessionPacket`, `selectHistoryReaderWorkerModel` | functions | History-reader worker helpers. |
 | `HISTORY_READER_SUBAGENT_PROFILE`, `HISTORY_READER_WORKER_TOOLS`, `HISTORY_READER_DEFAULT_MODEL_PREFERENCES`, `DEFAULT_HISTORY_READER_PACKET_BYTE_LIMIT` | constants | History-reader worker metadata. |

@@ -577,6 +577,49 @@ Transitions:
 - The force-quit hint expires once an event's `now` (or a `tick`) reaches
   the `expiresAt` given with `quitPressed`.
 
+## Session catalogue
+
+```ts
+import { createMmrPiSessionSource, createMmrSessionIndex, resolveMmrSessionById } from "@skippermissions/ampi";
+import type { MmrSessionIndex, MmrSessionSource } from "@skippermissions/ampi";
+```
+
+A read-only view of the local Pi sessions on disk, for any extension that
+lists, resolves or inspects sessions. It reads through Pi's own
+`SessionManager` and never writes a session file. `ampi-history` reads
+sessions through it. This API is in the Internal tier (see
+[`public-api-surface.md`](./public-api-surface.md)) until the thread
+switcher consumes it. Every name also has an `Ampi*` alias.
+
+- `createMmrPiSessionSource()` returns an `MmrSessionSource`:
+  `listSessions()` calls `SessionManager.listAll()`, which reads every
+  project's session directory under `~/.pi/agent/sessions/` and returns
+  Pi's `SessionInfo` records (id, path, cwd, name, created and modified
+  dates, message count, first message, all message text).
+  `openSession(path)` calls `SessionManager.open(path)`. Tests pass their
+  own `{ listSessions, openSession }` instead.
+- `createMmrSessionIndex(source, { listTtlMs?, now? }?)` caches the listing
+  for `listTtlMs` (10 s by default) and adds two lazy lookups that open a
+  session only when asked, cached per `id|modified|messageCount|path|cwd`:
+  - `getTouchedFiles(info)`: the files named by `read`, `edit`, `write`
+    and `apply_patch` tool calls, lowercased and relative to the session's
+    cwd. Paths outside that cwd, shell output and prose are ignored.
+  - `getMetadata(info)`: providers, models, tool names, labels, and
+    whether the session used tools or hit errors.
+
+  Once the TTL has passed, the next call lists again and keeps the
+  per-session cache only when the listing is unchanged. The index has no
+  filesystem watcher and no state on disk.
+- `dedupeMmrSessionsById(sessions)` keeps one record per session id when a
+  moved file or renamed project directory lists the same session twice:
+  the newest `modified` wins, then the newest `created`, then the lower
+  `path`.
+- `resolveMmrSessionById(source, id, index?)` accepts an exact id, `@id`
+  or an id prefix, and returns `{ info, ambiguous, candidateIds }` or
+  `undefined`. An exact id always wins; a prefix that several sessions
+  share resolves to the first and sets `ambiguous`. With `index`, the
+  cached listing is used.
+
 ## Additional exported helpers
 
 The package root re-exports a few lower-level helpers used by tests,

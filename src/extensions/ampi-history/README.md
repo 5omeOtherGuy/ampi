@@ -94,5 +94,6 @@ Re-exported from `ampi`: `createAmpiHistoryExtension`, `MMR_HISTORY_TOOL_NAMES`,
 ## Developer notes
 
 - `MMR_HISTORY_MODEL_ANALYSIS_ENABLE` is gone. The legacy `threadID` request alias and `analysis` parameter are accepted with a soft deprecation warning in `details.warnings`. `currentProjectOnly: true` is replaced by `scope: "all_sessions"`.
+- Files: `tools.ts` defines the tools; `session-catalog.ts` searches (query DSL, filters, redaction, diagnostics); `query.ts` parses queries; `read-session.ts` and `analysis-worker.ts` read one session; `redaction.ts`, `git-identity.ts`, `config.ts`, `prompts.ts` and `provider.ts` support them. Listing, opening, the evidence index and id resolution come from the core session catalogue (`../ampi-core/session-catalog.ts`); `session-index.ts` keeps the history names for that index.
 - Global enumeration walks `~/.pi/agent/sessions/` behind a 10 s in-process TTL cache; per-session touched-file and metadata enrichment is cached by `id|modified|messageCount|path|cwd`. No persistent on-disk index, no filesystem watchers, no cross-process cache, no workspace state, no network sync. Persistent-index follow-up: [#64](https://github.com/5omeOtherGuy/ampi/issues/64).
 - Tests: `tests/mmr-history*.test.mjs`.
