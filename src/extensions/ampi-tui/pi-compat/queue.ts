@@ -4,14 +4,22 @@
  * `InteractiveMode`. Its `updatePendingMessagesDisplay()` runs on every
  * change of the queue (Pi calls it on each `queue_update` session event, after
  * a dequeue and around compaction) and draws Pi's own list of queued messages
- * above the editor; `getAllQueuedMessages()` reads the queue and
- * `clearAllQueues()` empties it and returns what it held. None of this is part
- * of Pi's extension API.
+ * above the editor; `getAllQueuedMessages()` reads the queue. None of this is
+ * part of Pi's extension API.
  *
  * While a watch is installed, ampi replaces `updatePendingMessagesDisplay`:
  * Pi's own list stays empty and the listener receives the queue instead.
  * When a Pi release changes the class, `probeMmrPiQueue` names the
  * difference, the watch is not installed, and Pi keeps drawing its own list.
+ *
+ * Steering a queued follow-up moves one message inside Pi's session: the
+ * session keeps the texts of the messages the user queued
+ * (`_steeringMessages`, `_followUpMessages`) and announces changes with
+ * `_emitQueueUpdate()`; its agent keeps the messages themselves, images
+ * included, in `steeringQueue` and `followUpQueue`, next to the custom
+ * messages extensions queue with `pi.sendMessage`. Only the user's message
+ * moves, so nothing else in the queue is lost or sent twice.
+ * `probeMmrPiQueueSession` checks that shape on a live session.
  */
 import { InteractiveMode } from "@earendil-works/pi-coding-agent";
 
@@ -23,10 +31,16 @@ export interface MmrPiQueuedMessages {
 
 export interface MmrPiQueueWatch {
   /**
-   * Empty Pi's queue and return what it held. `undefined` until Pi has
-   * reported its queue once since the watch was installed.
+   * Why {@link steerNext} cannot move a message now, or `undefined` when it
+   * can.
    */
-  take(): MmrPiQueuedMessages | undefined;
+  steerBlocked(): string | undefined;
+  /**
+   * Move the next follow-up the user queued to Pi's steering queue, so it
+   * reaches the running turn before its next model call. Returns false when
+   * {@link steerBlocked} names a reason.
+   */
+  steerNext(): boolean;
   /** Give the list back to Pi. */
   stop(): void;
 }
@@ -35,9 +49,25 @@ type QueueLists = { steering: readonly string[]; followUp: readonly string[] };
 
 interface ModeInstance {
   pendingMessagesContainer: { clear(): void };
+  readonly session: unknown;
   getAllQueuedMessages(): QueueLists;
-  clearAllQueues(): QueueLists;
   updatePendingMessagesDisplay(): void;
+}
+
+interface QueuedAgentMessage {
+  readonly role?: unknown;
+  readonly content?: unknown;
+}
+
+interface SessionQueue {
+  _steeringMessages: string[];
+  _followUpMessages: string[];
+  _emitQueueUpdate(): void;
+  readonly agent: {
+    steer(message: QueuedAgentMessage): void;
+    readonly steeringQueue: { messages: QueuedAgentMessage[] };
+    readonly followUpQueue: { messages: QueuedAgentMessage[] };
+  };
 }
 
 interface PatchState {
@@ -55,7 +85,7 @@ type ModePrototype = Record<PropertyKey, unknown> & {
 // copy left on the shared prototype instead of wrapping its own patch.
 const PATCH_KEY = Symbol.for("ampi.tui.queuePatch.v1");
 
-const METHODS = ["updatePendingMessagesDisplay", "getAllQueuedMessages", "clearAllQueues"] as const;
+const METHODS = ["updatePendingMessagesDisplay", "getAllQueuedMessages"] as const;
 
 function copy(lists: QueueLists): MmrPiQueuedMessages {
   return { steering: [...lists.steering], followUp: [...lists.followUp] };
@@ -72,6 +102,58 @@ export function probeMmrPiQueue(target: unknown = InteractiveMode): string | und
     if (typeof proto?.[method] !== "function") return `InteractiveMode.prototype.${method} is missing`;
   }
   return undefined;
+}
+
+/** The text Pi records for a user message it queued: its text parts, joined. */
+function messageText(message: QueuedAgentMessage): string | undefined {
+  if (message.role !== "user") return undefined;
+  if (typeof message.content === "string") return message.content;
+  if (!Array.isArray(message.content)) return undefined;
+  return message.content
+    .filter((part): part is { type: "text"; text: string } => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+}
+
+/**
+ * Check that `session`, a live Pi `AgentSession`, still keeps its queue the
+ * way {@link steerMmrPiFollowUp} relies on. Returns `undefined` when it does,
+ * or a sentence naming what changed.
+ */
+export function probeMmrPiQueueSession(session: unknown): string | undefined {
+  const s = session as Partial<SessionQueue> | null | undefined;
+  if (!Array.isArray(s?._steeringMessages) || !Array.isArray(s?._followUpMessages)) {
+    return "AgentSession no longer keeps the queued texts in _steeringMessages and _followUpMessages";
+  }
+  if (typeof s._emitQueueUpdate !== "function") return "AgentSession._emitQueueUpdate is missing";
+  if (typeof s.agent?.steer !== "function") return "Agent.steer is missing";
+  if (!Array.isArray(s.agent.steeringQueue?.messages) || !Array.isArray(s.agent.followUpQueue?.messages)) {
+    return "Agent no longer keeps queued messages in steeringQueue.messages and followUpQueue.messages";
+  }
+  return undefined;
+}
+
+/**
+ * Move the session's next user follow-up to its steering queue: the message
+ * keeps its images and its place after the messages already steering, and
+ * the session reports the new queue. Custom messages and later follow-ups
+ * stay where they are. Returns false, changing nothing, when there is no
+ * user follow-up or the session's shape has changed.
+ */
+export function steerMmrPiFollowUp(session: unknown): boolean {
+  if (probeMmrPiQueueSession(session) !== undefined) return false;
+  const s = session as SessionQueue;
+  const text = s._followUpMessages[0];
+  if (text === undefined) return false;
+  const queued = s.agent.followUpQueue.messages;
+  const index = queued.findIndex((message) => messageText(message) === text);
+  if (index === -1) return false;
+  const [message] = queued.splice(index, 1);
+  s._followUpMessages.splice(0, 1);
+  s._steeringMessages.push(text);
+  s.agent.steer(message);
+  s._emitQueueUpdate();
+  return true;
 }
 
 /**
@@ -100,14 +182,18 @@ export function watchMmrPiQueue(
       // A failing listener must not break Pi's queue handling.
     }
   };
+  const steerBlocked = (): string | undefined => {
+    const session = proto[PATCH_KEY] === state ? state.mode?.session : undefined;
+    if (session === undefined) return "Pi has not shown ampi its queue yet";
+    const changed = probeMmrPiQueueSession(session);
+    if (changed !== undefined) return "this Pi version does not let ampi move a queued message";
+    // Messages queued during compaction wait in Pi's interactive mode, not in the session.
+    return (session as SessionQueue)._followUpMessages.length === 0 ? "the queued message waits for compaction to finish" : undefined;
+  };
   return {
-    take() {
-      const mode = state.mode;
-      if (!mode || proto[PATCH_KEY] !== state) return undefined;
-      const taken = copy(mode.clearAllQueues());
-      // Pi's session reports its cleared queue before the compaction queue is emptied.
-      mode.updatePendingMessagesDisplay();
-      return taken;
+    steerBlocked,
+    steerNext() {
+      return steerBlocked() === undefined && steerMmrPiFollowUp(state.mode?.session);
     },
     stop() {
       if (proto[PATCH_KEY] !== state) return;

@@ -41,11 +41,13 @@ afterEach(() => {
 
 /**
  * A busy session with the queue installed. `pending` is Pi's queue: Pi adds
- * to it what `sendUserMessage` sends, and its dequeue action puts it all back
- * into the prompt. `watch: false` plays a Pi whose queue ampi cannot read.
+ * to it what `sendUserMessage` sends, its dequeue action puts it all back
+ * into the prompt, and the watch moves the next follow-up to steering.
+ * `pending.blocked` plays a Pi session that cannot move it. `watch: false`
+ * plays a Pi whose queue ampi cannot read.
  */
 function setup({ idle = false, text = "", watch = true } = {}) {
-  const pending = { steering: [], followUp: [] };
+  const pending = { steering: [], followUp: [], blocked: undefined };
   let report = () => {};
   const reportQueue = () => report();
   const mock = createMockPi({
@@ -59,12 +61,12 @@ function setup({ idle = false, text = "", watch = true } = {}) {
   feed.reset(context.ctx);
   const piWatch = {
     stopped: 0,
-    take() {
-      const taken = { steering: [...pending.steering], followUp: [...pending.followUp] };
-      pending.steering = [];
-      pending.followUp = [];
+    steerBlocked: () => pending.blocked,
+    steerNext() {
+      if (pending.blocked !== undefined || pending.followUp.length === 0) return false;
+      pending.steering.push(pending.followUp.shift());
       reportQueue();
-      return taken;
+      return true;
     },
     stop() {
       piWatch.stopped += 1;
@@ -82,7 +84,8 @@ function setup({ idle = false, text = "", watch = true } = {}) {
       },
     ],
   ]);
-  const tui = { getFocusedComponent: () => ({ actionHandlers: actions }), requestRender() {} };
+  const history = [];
+  const tui = { getFocusedComponent: () => ({ actionHandlers: actions, addToHistory: (text) => history.push(text) }), requestRender() {} };
   const queue = createMmrPromptQueue(mock.pi, {
     feed,
     getTui: () => tui,
@@ -103,7 +106,7 @@ function setup({ idle = false, text = "", watch = true } = {}) {
     if (!widget?.content) return [];
     return widget.content(undefined, theme).render(width).map(plain);
   };
-  return { mock, context, feed, queue, pending, actions, piWatch, emit, command, availability, box };
+  return { mock, context, feed, queue, pending, actions, history, piWatch, emit, command, availability, box };
 }
 
 function fixtureText(name, renders) {
@@ -226,6 +229,18 @@ describe("ampi-tui queue commands: availability", () => {
     });
     assert.equal(t.queue.steerNext(), false);
   });
+
+  it("steer gives Pi's reason when Pi cannot move the queued message", () => {
+    const t = setup({ text: "later" });
+    t.command("prompt.queue").run(t.context.ctx);
+    t.pending.blocked = "this Pi version does not let ampi move a queued message";
+    assert.deepEqual(t.availability("prompt.steerQueuedMessage"), {
+      state: "unavailable",
+      reason: "this Pi version does not let ampi move a queued message",
+    });
+    assert.equal(t.queue.steerNext(), false);
+    assert.deepEqual(t.pending.followUp, ["later"], "the message stays queued");
+  });
 });
 
 describe("ampi-tui queue commands: queue, dequeue, steer", () => {
@@ -236,6 +251,7 @@ describe("ampi-tui queue commands: queue, dequeue, steer", () => {
       { content: "update the docs next", options: { deliverAs: "followUp", expandPromptTemplates: true } },
     ]);
     assert.equal(t.context.state.editorText, "", "the prompt is cleared");
+    assert.deepEqual(t.history, ["update the docs next"], "Up recalls it");
     assert.equal(t.context.widgets.get(MMR_QUEUE_WIDGET_ID).options.placement, "aboveEditor");
     assert.match(t.box()[1], /│ queued: update the docs next +│/);
     assert.equal(t.feed.status.hint, "Enter to steer, Backspace to dequeue");
@@ -261,15 +277,8 @@ describe("ampi-tui queue commands: queue, dequeue, steer", () => {
     }
     t.mock.calls.sendUserMessage.length = 0;
     t.command("prompt.steerQueuedMessage").run(t.context.ctx);
-    assert.deepEqual(
-      t.mock.calls.sendUserMessage.map(({ content, options }) => [content, options.deliverAs]),
-      [
-        ["already steering", "steer"],
-        ["first later", "steer"],
-        ["second later", "followUp"],
-        ["third later", "followUp"],
-      ],
-    );
+    assert.deepEqual(t.mock.calls.sendUserMessage, [], "Pi moves the message; nothing is sent again");
+    assert.deepEqual(t.pending.steering, ["already steering", "first later"]);
     const rows = t.box(80);
     assert.match(rows[1], /│ steering: already steering +│/);
     assert.match(rows[2], /│ steering: first later +│/);
@@ -286,7 +295,7 @@ describe("ampi-tui queue commands: queue, dequeue, steer", () => {
     assert.equal(t.queue.steerNext(), false, "not while Pi compacts");
     t.emit("session_compact", { reason: "threshold" });
     assert.equal(t.queue.steerNext(), true);
-    assert.deepEqual(t.mock.calls.sendUserMessage.at(-1), { content: "later", options: { deliverAs: "steer" } });
+    assert.deepEqual(t.pending.steering, ["later"]);
     assert.equal(t.queue.steerNext(), false, "the message already steers");
   });
 

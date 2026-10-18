@@ -5,9 +5,9 @@ import type { TUI } from "@earendil-works/pi-tui";
  * that keeps its action handlers (`app.editor.external` and the like) in an
  * `actionHandlers` map; `TUI.getFocusedComponent()` tells whether it has
  * focus. The editor also reports whether its autocomplete list is open and
- * records how many text rows its last render drew, and its `onSubmit`
- * handler receives what Enter submits. None of this is part of Pi's
- * extension API.
+ * records how many text rows its last render drew, its `onSubmit` handler
+ * receives what Enter submits, and `addToHistory` keeps a prompt for Up to
+ * recall. None of this is part of Pi's extension API.
  */
 
 interface FocusAwareTui {
@@ -69,6 +69,14 @@ export function getMmrEditorRenderedHeight(tui: TUI | undefined): number | undef
   if (typeof rows !== "number") return undefined;
   const autocomplete = typeof editor?.renderedAutocompleteHeight === "number" ? editor.renderedAutocompleteHeight : 0;
   return rows + 2 + autocomplete;
+}
+
+/** Add `text` to the focused editor's history, so Up recalls it. Returns false when the editor is not reachable. */
+export function addMmrEditorHistory(tui: TUI | undefined, text: string): boolean {
+  const editor = focusedEditor(tui) as (ActionEditor & { addToHistory?: (text: string) => void }) | undefined;
+  if (typeof editor?.addToHistory !== "function") return false;
+  editor.addToHistory(text);
+  return true;
 }
 
 interface SubmittingEditor extends ActionEditor {

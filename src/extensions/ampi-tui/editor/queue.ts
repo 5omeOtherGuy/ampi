@@ -6,7 +6,7 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
-import { hasMmrEditorAction, runMmrEditorAction } from "../pi-compat/editor.js";
+import { addMmrEditorHistory, hasMmrEditorAction, runMmrEditorAction } from "../pi-compat/editor.js";
 import { type MmrPiQueuedMessages, type MmrPiQueueWatch, watchMmrPiQueue } from "../pi-compat/queue.js";
 import { MMR_FRAME_MIN_WIDTH, type MmrFrameTheme, renderMmrFrame } from "../ui/frame.js";
 import type { MmrStatusFeed } from "./status-feed.js";
@@ -121,13 +121,7 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
 
   function steerNext(): boolean {
     if (queue.followUp.length === 0 || !ctx || blocked(ctx)) return false;
-    const taken = watch?.take();
-    if (!taken) return false;
-    // Pi takes messages out only all at once; put them back with the next follow-up moved to steer.
-    const [next, ...rest] = taken.followUp;
-    for (const text of [...taken.steering, ...(next === undefined ? [] : [next])]) pi.sendUserMessage(text, { deliverAs: "steer" });
-    for (const text of rest) pi.sendUserMessage(text, { deliverAs: "followUp" });
-    return next !== undefined;
+    return watch?.steerNext() ?? false;
   }
 
   const commands: MmrCommandDefinition[] = [
@@ -145,6 +139,8 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
       run: (current) => {
         const text = current.ui.getEditorText().trim();
         if (!text) return;
+        // Up on an empty prompt recalls it, as after Pi's own follow-up key.
+        addMmrEditorHistory(options.getTui(), text);
         current.ui.setEditorText("");
         // Expanded like a typed prompt, so templates and skills work as they do on Enter.
         pi.sendUserMessage(text, { deliverAs: "followUp", expandPromptTemplates: true });
@@ -174,7 +170,10 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
       availability: (current) => {
         if (!watch) return { state: "unavailable", reason: "this Pi version does not show ampi its queue" };
         if (queue.followUp.length === 0) return NOTHING_QUEUED;
-        return blocked(current) ?? AVAILABLE;
+        const busy = blocked(current);
+        if (busy) return busy;
+        const reason = watch.steerBlocked();
+        return reason === undefined ? AVAILABLE : { state: "unavailable", reason };
       },
       run: () => {
         steerNext();
