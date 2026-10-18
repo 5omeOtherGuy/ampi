@@ -14,6 +14,7 @@ import { analyzeMmrContext, type MmrContextAnalysisInput } from "./context-analy
 import { summarizeMmrThreadCost } from "./cost.js";
 import { createMmrPromptHistoryStore, type MmrPromptHistoryStore } from "./history-store.js";
 import { createMmrThreadIndexStore, type MmrThreadIndexStore, type MmrThreadIndexStoreOptions } from "./index-store.js";
+import { formatMmrThreadMarkdown } from "./markdown.js";
 import { type MmrThreadTitlesOptions, registerMmrThreadTitles } from "./title.js";
 
 export interface MmrThreadsFactoryOverrides {
@@ -78,6 +79,7 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       cost: (current) =>
         summarizeMmrThreadCost(current.sessionManager.getEntries(), (provider, model) => current.modelRegistry.find(provider, model)?.cost),
       analyzeContext: (current) => analyzeMmrContext(contextInput(pi, current)),
+      markdown: (entries, options) => formatMmrThreadMarkdown(entries, options),
     });
     const unregisterCommands = registerMmrThreadCommands(host);
     if (settings.titles) registerMmrThreadTitles({ pi, index: store, loadCoreSettings: overrides.loadCoreSettings });

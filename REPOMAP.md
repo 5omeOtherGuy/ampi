@@ -102,7 +102,7 @@ Important files:
 - `session-catalog.ts` — read-only catalogue of local Pi sessions: listing and opening through Pi's `SessionManager`, one workspace's or every session as Pi's session picker lists them, the cached per-session evidence index, dedupe and id/prefix resolution.
 - `thread-index.ts` — seam for the thread index (per-session archived, labels, colour, pinned, title source): `ampi-threads` registers its store, other extensions read it through `getMmrThreadIndex`; `filterMmrSessionsByArchived` filters catalogue sessions.
 - `prompt-history.ts` — seam for prompt history: `ampi-threads` registers its store, `ampi-tui`'s picker reads it through `getMmrPromptHistory`, per workspace or across all of them.
-- `thread-reports.ts` — seam for the cost and context reports: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge read them through `getMmrThreadReports`.
+- `thread-reports.ts` — seam for the cost and context reports and the Markdown export: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge and `ampi-gui`'s Copy as Markdown read them through `getMmrThreadReports`.
 - `tool-activity.ts` — pure classification of tool calls into activities (verb, object, diff stat, exit code) and the one-phrase summary of a run of them, shared by `ampi-tui`'s tool rows and `ampi-gui`'s transcript.
 - `session-usage.ts` — the usage each session entry records and what it cost (recorded, or priced from the model), shared by `ampi-tui`'s cost gauge and `ampi-threads`' cost report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
@@ -230,12 +230,12 @@ Thread management on top of Pi sessions, on by default (`ampiThreads.enabled: fa
 
 ### `src/extensions/ampi-gui/`
 
-Local web GUI, off by default (`ampiGui.enabled: true` or `AMPI_GUI_ENABLE=true` opts in), only in interactive terminal sessions. Serves a live view of the running session with a composer on `127.0.0.1` and records it in `<agentDir>/data/ampi/live/<pid>.json`; owns no tools.
+Local web GUI, off by default (`ampiGui.enabled: true` or `AMPI_GUI_ENABLE=true` opts in), only in interactive terminal sessions. Serves a live view of the running session with a composer and a session sidebar on `127.0.0.1` and records it in `<agentDir>/data/ampi/live/<pid>.json`; owns no tools.
 
 - `index.ts` (entry point: the gate, the server from `session_start` to `session_shutdown`, the live registry entry, the `Web GUI:` notice and `thread.openInBrowser`), `config.ts` (the `ampiGui.enabled` switch).
-- `server.ts` (`node:http` on a random loopback port: Host, Origin and token checks, the token cookie, `GET /`, `/client/*`, `/api/session`, `/api/transcript`, `/api/events`, and the POST command routes), `commands.ts` (send, dequeue, steer-next, interrupt through `pi.sendUserMessage`, ampi-core's prompt-queue seam and the `prompt.steerQueuedMessage` / `thread.interrupt` commands).
+- `server.ts` (`node:http` on a random loopback port: Host, Origin and token checks, the token cookie, `GET /`, `/client/*`, `/api/session`, `/api/transcript`, `/api/events`, `/api/sessions[/<id>]`, and the POST command routes), `commands.ts` (send, dequeue, steer-next, interrupt through `pi.sendUserMessage`, ampi-core's prompt-queue seam and the `prompt.steerQueuedMessage` / `thread.interrupt` commands; More Actions: Markdown, archive and rename through ampi-core's thread-reports and thread-index seams), `sessions.ts` (the sidebar's groups from ampi-core's session catalogue, the thread index and the live registry; saved sessions parsed read-only).
 - `bridge.ts` (Pi events to numbered client events through `ampi-core/thread-status.ts`, the replay buffer, the transcript snapshot), `view-model.ts` (session messages to transcript items; tool calls labelled with `ampi-core/tool-activity.ts`), `registry.ts` (the live registry files).
-- `client/` (`index.html`, `app.js`, `composer.js` (the composer: keys, queued-message bubbles, send and stop), `markdown.js` (the escaping Markdown renderer), `tokens.css` (design tokens), `app.css`): plain ES modules and CSS, no build step.
+- `client/` (`index.html`, `app.js`, `composer.js` (the composer: keys, queued-message bubbles, send and stop), `sidebar.js` (the session list, search, resizing, Ctrl+B and `/`), `titlebar.js` (More Actions and the rename dialog), `markdown.js` (the escaping Markdown renderer), `tokens.css` (design tokens), `app.css`): plain ES modules and CSS, no build step.
 
 ### `src/extensions/ampi-history/`
 

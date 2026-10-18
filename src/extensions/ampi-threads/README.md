@@ -39,7 +39,7 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | `thread.copyMarkdown` | Command, no key | Copy this session to the clipboard as [Markdown](#markdown-export) |
 | `thread.rename` | Command, no key | Give this session a new [title](#titles) |
 | Generated titles | Event handlers | Name a new session after its first exchange through `ampi-core`'s `title` subagent profile ([Titles](#titles)) |
-| Cost and context reports | Seam | `ampi-core/thread-reports.ts`: the numbers behind `ampi-tui`'s `thread show cost` and `thread analyze context`, and `showCosts` for its cost gauge |
+| Cost and context reports, Markdown export | Seam | `ampi-core/thread-reports.ts`: the numbers behind `ampi-tui`'s `thread show cost` and `thread analyze context`, `showCosts` for its cost gauge, and the Markdown export `ampi-gui`'s Copy as Markdown uses |
 | `/ampi-thread new`, `archive`, `switch <session id>`, `previous`, `next` | Slash command | The route the session-replacing commands and `ampi-tui`'s Switch Thread picker take; you can type it too |
 | Thread index | File | `<agentDir>/data/ampi/threads/index.json` |
 | Prompt history | Files | `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, read by `ampi-tui`'s `prompt.history` (Ctrl+R) |

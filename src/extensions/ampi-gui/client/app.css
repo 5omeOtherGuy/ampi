@@ -55,12 +55,446 @@ button {
   stroke: none;
 }
 
-/* App frame: title bar, scrolling chat, status bar. */
+/* App shell: the session sidebar, then the pane with the title bar, the scrolling chat and the composer. */
 .app {
+  position: relative;
   display: grid;
-  grid-template-rows: var(--ampi-titlebar-height) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   height: 100vh;
   height: 100dvh;
+  background: var(--ampi-shell-bg);
+}
+
+.app[data-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.pane {
+  display: grid;
+  grid-template-rows: var(--ampi-titlebar-height) minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ampi-surface-bg);
+}
+
+.app[data-sidebar="closed"] .sidebar,
+.app[data-sidebar="closed"] .sidebar-resize {
+  display: none;
+}
+
+/* Sidebar */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ampi-shell-bg);
+  color: var(--ampi-shell-fg);
+}
+
+.sidebar-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  height: var(--ampi-titlebar-height);
+  padding: 0 calc(var(--ampi-space) * 2);
+}
+
+.wordmark {
+  color: var(--ampi-fg);
+  font-size: var(--ampi-text-lg);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.sidebar-search {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin: calc(var(--ampi-space) * 1) calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 2);
+  color: var(--ampi-muted-fg);
+}
+
+.sidebar-search .icon {
+  position: absolute;
+  left: 8px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.sidebar-search input {
+  width: 100%;
+  height: 28px;
+  padding: 0 28px 0 28px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-input-bg);
+  color: var(--ampi-fg);
+  font: inherit;
+  outline: none;
+}
+
+.sidebar-search input:focus {
+  border-color: color-mix(in srgb, var(--ampi-fg) 30%, transparent);
+}
+
+.sidebar-search input::placeholder {
+  color: var(--ampi-muted-fg);
+}
+
+.sidebar-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.sidebar-search kbd {
+  position: absolute;
+  right: 6px;
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.sidebar-search input:focus ~ kbd,
+.sidebar-search input:not(:placeholder-shown) ~ kbd {
+  display: none;
+}
+
+.session-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebar-empty {
+  margin: calc(var(--ampi-space) * 4) calc(var(--ampi-space) * 4);
+  color: var(--ampi-muted-fg);
+}
+
+.session-group + .session-group {
+  margin-top: calc(var(--ampi-space) * 2);
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  width: 100%;
+  height: 24px;
+  padding: 0 calc(var(--ampi-space) * 2);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.group-header:hover {
+  color: var(--ampi-fg);
+}
+
+.group-header .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.group-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.group-count {
+  flex: none;
+  font-size: var(--ampi-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-rule {
+  flex: 1 1 auto;
+  min-width: calc(var(--ampi-space) * 2);
+  height: 1px;
+  background: var(--ampi-border-strong);
+}
+
+.group-header .chevron {
+  transform: rotate(0deg);
+}
+
+.group-header[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  height: 32px;
+  padding: 6px 8px;
+  border-radius: var(--ampi-radius-md);
+  color: var(--ampi-shell-fg);
+  text-decoration: none;
+}
+
+.session-row:hover {
+  background: var(--ampi-accent);
+}
+
+.session-row[aria-current="page"] {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+  font-weight: 500;
+}
+
+.session-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.session-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.session-time {
+  flex: none;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.running-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ampi-muted-fg);
+}
+
+/* The drag handle on the sidebar's edge. */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--ampi-sidebar-width) - 2px);
+  z-index: 3;
+  width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resize::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: var(--ampi-border);
+  content: "";
+}
+
+.sidebar-resize:hover::after,
+.sidebar-resize:focus-visible::after,
+.app[data-resizing] .sidebar-resize::after {
+  left: 1px;
+  width: 3px;
+  background: var(--ampi-link);
+}
+
+.sidebar-resize:focus-visible {
+  outline: none;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--ampi-scrim);
+}
+
+/* A session's disc: its colour from the thread index or hashed from its id; a spinner while it works. */
+.disc {
+  --ampi-disc: var(--ampi-thread-gray);
+  flex: none;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ampi-disc);
+}
+
+.disc[data-color="blue"] {
+  --ampi-disc: var(--ampi-thread-blue);
+}
+
+.disc[data-color="purple"] {
+  --ampi-disc: var(--ampi-thread-purple);
+}
+
+.disc[data-color="pink"] {
+  --ampi-disc: var(--ampi-thread-pink);
+}
+
+.disc[data-color="red"] {
+  --ampi-disc: var(--ampi-thread-red);
+}
+
+.disc[data-color="orange"] {
+  --ampi-disc: var(--ampi-thread-orange);
+}
+
+.disc[data-color="yellow"] {
+  --ampi-disc: var(--ampi-thread-yellow);
+}
+
+.disc[data-color="green"] {
+  --ampi-disc: var(--ampi-thread-green);
+}
+
+.disc[data-color="cyan"] {
+  --ampi-disc: var(--ampi-thread-cyan);
+}
+
+.disc[data-busy="true"] {
+  border: 2px solid var(--ampi-disc);
+  border-right-color: transparent;
+  background: transparent;
+  animation: ampi-spin 0.9s linear infinite;
+}
+
+/* Menus, the rename dialog and notices */
+.menu-anchor {
+  position: relative;
+  flex: none;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  padding: calc(var(--ampi-space) * 1);
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xl);
+  background: var(--ampi-popover-bg);
+  color: var(--ampi-fg);
+  box-shadow: var(--ampi-shadow);
+}
+
+.menu [role="menuitem"] {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 calc(var(--ampi-space) * 2);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu [role="menuitem"]:hover,
+.menu [role="menuitem"]:focus {
+  background: var(--ampi-accent);
+  outline: none;
+}
+
+.menu [role="menuitem"][aria-disabled="true"] {
+  color: var(--ampi-muted-fg);
+  cursor: default;
+}
+
+.menu [role="separator"] {
+  height: 1px;
+  margin: calc(var(--ampi-space) * 1) calc(var(--ampi-space) * -1);
+  background: var(--ampi-border-strong);
+}
+
+.dialog {
+  width: min(26rem, 100vw - 2rem);
+  padding: calc(var(--ampi-space) * 4);
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xl);
+  background: var(--ampi-popover-bg);
+  color: var(--ampi-fg);
+  box-shadow: var(--ampi-shadow);
+}
+
+.dialog::backdrop {
+  background: var(--ampi-scrim);
+}
+
+.dialog h2 {
+  margin: 0 0 calc(var(--ampi-space) * 3);
+  font-size: var(--ampi-text-lg);
+  font-weight: 600;
+  line-height: var(--ampi-leading-lg);
+}
+
+.dialog input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-input-bg);
+  color: var(--ampi-fg);
+  font: inherit;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(var(--ampi-space) * 2);
+  margin-top: calc(var(--ampi-space) * 4);
+}
+
+.button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.button.primary {
+  border-color: transparent;
+  background: var(--ampi-primary);
+  color: var(--ampi-primary-fg);
+}
+
+.toast {
+  position: fixed;
+  top: calc(var(--ampi-titlebar-height) + 8px);
+  left: 50%;
+  z-index: 50;
+  max-width: calc(100vw - 2rem);
+  padding: 6px 12px;
+  transform: translateX(-50%);
+  border-radius: var(--ampi-radius-lg);
+  background: var(--ampi-primary);
+  color: var(--ampi-primary-fg);
+  box-shadow: var(--ampi-shadow);
 }
 
 .column {
@@ -139,24 +573,23 @@ button {
   color: var(--ampi-fg);
 }
 
-/* The thread's status disc: a ring when idle, filled and pulsing while the agent works. */
-.thread-disc {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid var(--ampi-muted-fg);
-  border-radius: 50%;
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.app[data-busy="true"] .thread-disc {
-  border-color: var(--ampi-success);
-  background: var(--ampi-success);
-  animation: ampi-pulse 1.4s ease-in-out infinite;
+.icon-button:disabled:hover {
+  background: transparent;
+  color: var(--ampi-muted-fg);
 }
 
-.app[data-phase="error"] .thread-disc {
-  border-color: var(--ampi-danger);
-  background: var(--ampi-danger);
+/* The title bar shows the button that opens the sidebar only while the sidebar is closed. */
+.app[data-sidebar="open"] #sidebar-open {
+  display: none;
+}
+
+.app[data-view="live"][data-phase="error"] #title-disc {
+  --ampi-disc: var(--ampi-danger);
 }
 
 /* Chat */
@@ -490,6 +923,36 @@ details[open] > summary .chevron {
   gap: calc(var(--ampi-space) * 2);
 }
 
+/* In place of the composer while another session is shown read-only. */
+.banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1) calc(var(--ampi-space) * 2);
+  padding: calc(var(--ampi-space) * 3) calc(var(--ampi-space) * 4);
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-composer);
+  background: var(--ampi-card);
+  color: var(--ampi-fg);
+}
+
+.banner .icon {
+  color: var(--ampi-muted-fg);
+}
+
+.banner-link {
+  color: var(--ampi-link);
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.app[data-view="readonly"] .composer,
+.app[data-view="readonly"] .queue,
+.app[data-view="readonly"] .approval-note,
+.app[data-view="readonly"] .composer-notice {
+  display: none;
+}
+
 .jump {
   position: absolute;
   bottom: calc(100% + var(--ampi-space) * 2);
@@ -730,6 +1193,12 @@ details[open] > summary .chevron {
   }
 }
 
+@keyframes ampi-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @keyframes ampi-fade {
   0%,
   100% {
@@ -749,17 +1218,54 @@ details[open] > summary .chevron {
   }
 }
 
-/* Narrow screens: one breakpoint at 768px. */
+/* Wide screens: the open sidebar is a resizable column. */
+@media (min-width: 768px) {
+  .app[data-sidebar="open"] {
+    grid-template-columns: var(--ampi-sidebar-width) minmax(0, 1fr);
+  }
+}
+
+/* Narrow screens (one breakpoint at 768px): the sidebar is a sheet over the page, and the title bar keeps only the session. */
 @media (max-width: 767px) {
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: var(--ampi-sidebar-sheet-width);
+    padding-bottom: env(safe-area-inset-bottom);
+    border-right: 1px solid var(--ampi-border-strong);
+    box-shadow: var(--ampi-shadow);
+  }
+
+  .sidebar-resize {
+    display: none !important;
+  }
+
+  .app[data-sidebar="open"] #sidebar-open {
+    display: inline-grid;
+  }
+
   .titlebar {
+    gap: calc(var(--ampi-space) * 1.5);
+    padding: 0 calc(var(--ampi-space) * 2);
     border-bottom-color: transparent;
   }
 
-  .mode {
-    display: none;
+  .mode,
+  .chip {
+    display: none !important;
   }
 
-  .chip {
-    max-width: 40vw;
+  .session-row,
+  .group-header {
+    min-height: 36px;
+  }
+
+  .banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .banner-link {
+    grid-column: 2;
   }
 }

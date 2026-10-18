@@ -176,14 +176,14 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, and Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |
 | `ampi-threads` | On | Thread index and Amp-compatible archive commands: archive and start a new session, archive and quit, unarchive (`ampiThreads.enabled: false` turns it off) |
-| `ampi-gui` | Off | Opt-in local web GUI: a live view of the running session in your browser, with a composer that steers, queues and interrupts (see [Web GUI](#web-gui)) |
+| `ampi-gui` | Off | Opt-in local web GUI: a live view of the running session in your browser, with a composer that steers, queues and interrupts and a sidebar of your sessions (see [Web GUI](#web-gui)) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |
 
 ### Web GUI
 
-`ampi-gui` shows the running session in a browser: the transcript with rendered Markdown, one line per tool call that expands to its output, and the agent's status as it works. Its composer writes to the same session as the terminal: Enter sends, or steers a running turn; Ctrl+Enter (⌘+Enter) queues a message for after the turn; Esc Esc interrupts. Queued messages show as bubbles you can delete, edit or send now to steer. Tool approvals stay in the terminal.
+`ampi-gui` shows the running session in a browser: the transcript with rendered Markdown, one line per tool call that expands to its output, and the agent's status as it works. Its composer writes to the same session as the terminal: Enter sends, or steers a running turn; Ctrl+Enter (⌘+Enter) queues a message for after the turn; Esc Esc interrupts. Queued messages show as bubbles you can delete, edit or send now to steer. Tool approvals stay in the terminal. A sidebar lists your sessions by project (pinned, recent, inactive and archived), opens any of them read-only, and its More Actions copy a session as Markdown, rename it or archive it.
 
 Turn it on with `AMPI_GUI_ENABLE=true` or `{ "ampiGui": { "enabled": true } }` in a settings file. In an interactive session Pi then prints `Web GUI: http://127.0.0.1:<port>/?t=<token>`; open that link, or run `thread open in browser` from the command palette.
 
