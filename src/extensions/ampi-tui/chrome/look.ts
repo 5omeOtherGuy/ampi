@@ -3,7 +3,7 @@ import { registerMmrChangelogPresenter } from "../../ampi-core/changelog.js";
 import type { MmrTuiSettings } from "../config.js";
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import { keepMmrTuiTheme } from "../theme/select.js";
-import { createMmrTuiMessageStyle } from "../transcript/messages.js";
+import { createMmrTuiMessageStyle, type MmrUserMessageSelected } from "../transcript/messages.js";
 import { buildMmrWelcomeCard, isMmrKeyInput, MmrWelcomeHeader, type MmrWelcomeCard } from "./welcome.js";
 
 export interface MmrTuiLook {
@@ -21,8 +21,12 @@ export interface MmrTuiLook {
  * over ampi-core's new-version notification; with Pi's `quietStartup` it
  * declines, so the notification still shows.
  */
-export function installMmrTuiLook(pi: ExtensionAPI, settings: MmrTuiSettings): MmrTuiLook {
-  const messages = createMmrTuiMessageStyle();
+export function installMmrTuiLook(
+  pi: ExtensionAPI,
+  settings: MmrTuiSettings,
+  isSelectedMessage?: MmrUserMessageSelected,
+): MmrTuiLook {
+  const messages = createMmrTuiMessageStyle(isSelectedMessage);
   let pendingCard: MmrWelcomeCard | undefined;
   let header: MmrWelcomeHeader | undefined;
   let stopListening: (() => void) | undefined;

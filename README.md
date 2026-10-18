@@ -123,6 +123,8 @@ Ctrl+R               # prompt history: filter, pick a prompt you sent before, En
 Ctrl+O               # command palette: filter, pick and run any command
 /                    # command palette, when the prompt is empty
 Alt+T                # expand or collapse tool output and thinking together
+Shift+Tab / Tab      # select your previous / next message (empty prompt); Esc clears the selection
+e                    # edit the selected message: the thread continues from before it on a new branch
 ```
 
 The chord keys come from `ampi-tui`; rebind them under `ampi.keymap` in Pi settings ([`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md#keys)).

@@ -9,7 +9,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { after, before, describe, it } from "node:test";
 import { CustomEditor, createAgentSession, InteractiveMode, SessionManager } from "@earendil-works/pi-coding-agent";
-import { KeybindingsManager, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
+import { KeybindingsManager, ScrollView, TuiAltScreen, TuiMainScreen } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -219,6 +219,25 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.equal(typeof TuiAltScreen.prototype.scrollToBottom, "function");
     assert.ok(scrollCompat.getMmrTranscriptScroller(Object.create(TuiAltScreen.prototype)));
     assert.equal(scrollCompat.getMmrTranscriptScroller(new TuiMainScreen(stubTerminal())), undefined);
+  });
+
+  it("scroll: the fullscreen renderer's scroll view draws the transcript and scrolls to a row", () => {
+    assert.equal(typeof TuiAltScreen.prototype.getPrimaryScrollView, "function", "Pi no longer has getPrimaryScrollView()");
+    for (const member of ["render", "scrollTo"]) assert.equal(typeof ScrollView.prototype[member], "function", `ScrollView.${member}`);
+    for (const getter of ["scrollTop", "viewportHeight"]) {
+      assert.equal(typeof Object.getOwnPropertyDescriptor(ScrollView.prototype, getter)?.get, "function", `ScrollView.${getter}`);
+    }
+    const tui = new TuiAltScreen(stubTerminal());
+    tui.addChild({ render: () => ["one", "two", "three"], invalidate() {} });
+    assert.ok(tui.getPrimaryScrollView() instanceof ScrollView);
+    let seen;
+    const revealed = scrollCompat.revealMmrTranscriptRows(tui, (lines) => {
+      seen = lines;
+      return { start: 1, end: 1 };
+    });
+    assert.equal(revealed, true);
+    assert.deepEqual(seen, ["one", "two", "three"], "the scroll view draws the transcript the TUI holds");
+    assert.equal(scrollCompat.revealMmrTranscriptRows(new TuiMainScreen(stubTerminal()), () => ({ start: 0, end: 0 })), false);
   });
 
   it("reserved keys: the reserved action list matches Pi's", () => {

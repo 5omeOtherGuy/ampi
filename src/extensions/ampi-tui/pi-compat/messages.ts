@@ -10,12 +10,16 @@
  */
 import { UserMessageComponent } from "@earendil-works/pi-coding-agent";
 
-/** Draws one user message: its raw text, the width available, and Pi's left margin setting. */
-export type MmrUserMessageDraw = (text: string, width: number, outputPad: number) => string[];
+/**
+ * Draws one user message: its raw text, the width available, Pi's left margin
+ * setting, and the message's number (see {@link getMmrLatestUserMessageNumber}).
+ */
+export type MmrUserMessageDraw = (text: string, width: number, outputPad: number, number: number) => string[];
 
 interface UserMessageInstance {
   text: unknown;
   outputPad: unknown;
+  [NUMBER_KEY]?: number;
   clear(): void;
   addChild(component: { render(width: number): string[]; invalidate(): void }): void;
 }
@@ -28,11 +32,15 @@ interface PatchState {
 type UserMessagePrototype = Record<PropertyKey, unknown> & {
   rebuild: (this: UserMessageInstance) => void;
   [PATCH_KEY]?: PatchState;
+  [COUNT_KEY]?: number;
 };
 
 // Symbol.for, so a module loaded again by /reload finds the state an earlier
 // copy left on the shared prototype instead of wrapping its own patch.
 const PATCH_KEY = Symbol.for("ampi.tui.userMessagePatch.v1");
+/** Each component's number, and on the prototype the last number given out. */
+const NUMBER_KEY = Symbol.for("ampi.tui.userMessageNumber.v1");
+const COUNT_KEY = Symbol.for("ampi.tui.userMessageCount.v1");
 
 /**
  * Check that `target` still has the shape the patch relies on. Returns
@@ -72,8 +80,12 @@ export function installMmrUserMessageDraw(
   proto.rebuild = function rebuildWithAmpiDraw(this: UserMessageInstance) {
     this.clear();
     const message = this;
+    // The constructor's rebuild numbers the component; later ones (a margin change) keep it.
+    if (!Object.hasOwn(message, NUMBER_KEY)) message[NUMBER_KEY] = proto[COUNT_KEY] = (proto[COUNT_KEY] ?? 0) + 1;
+    const number = message[NUMBER_KEY] ?? 0;
     this.addChild({
-      render: (width) => state.draw(String(message.text), width, typeof message.outputPad === "number" ? message.outputPad : 0),
+      render: (width) =>
+        state.draw(String(message.text), width, typeof message.outputPad === "number" ? message.outputPad : 0, number),
       invalidate() {},
     });
   };
@@ -82,4 +94,17 @@ export function installMmrUserMessageDraw(
     proto.rebuild = state.original;
     delete proto[PATCH_KEY];
   };
+}
+
+/**
+ * The number of the newest user message component built while the draw was
+ * installed, or 0. Numbers count up in the order Pi builds the components.
+ * Pi builds every user message on screen anew whenever it redraws the whole
+ * chat (session switch, tree navigation, reload) and appends one per new
+ * message otherwise, so the newest N numbers are the last N user messages in
+ * the transcript, oldest first.
+ */
+export function getMmrLatestUserMessageNumber(target: unknown = UserMessageComponent): number {
+  const proto = (target as { prototype?: UserMessagePrototype } | undefined)?.prototype;
+  return proto?.[COUNT_KEY] ?? 0;
 }
