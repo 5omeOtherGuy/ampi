@@ -162,7 +162,7 @@ describe("ampi argv router: starting Pi", () => {
   });
 
   it("hands Pi's own commands to Pi untouched, -l included", () => {
-    for (const argv of [["install", "npm:x", "-l"], ["list"], ["config"], ["config", "-l"], ["config", "--help"], ["mcp", "status"], ["update", "--extensions"]]) {
+    for (const argv of [["install", "npm:x", "-l"], ["list"], ["config"], ["config", "-l"], ["config", "--help"], ["auth"], ["update", "--extensions"]]) {
       const route = routeAmpiArgv(argv);
       assert.equal(route.command, "pi-command", argv.join(" "));
       assert.deepEqual(route.piArgs, argv);

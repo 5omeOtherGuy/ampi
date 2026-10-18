@@ -4,7 +4,7 @@ The `ampi` command: Pi with the ampi extensions loaded, plus Amp-compatible shor
 
 Status: released. Versioned on its own, next to [`@skippermissions/ampi`](../../README.md) in the same repository; while it is 0.x, a minor release may contain breaking changes.
 
-`ampi` starts the same interactive Pi session as `pi -e npm:@skippermissions/ampi`, with ampi's modes, tools, workers and terminal layout, and runs single prompts from scripts with `ampi -x`. It exists because a Pi package can only add long `--flags`: options such as `-m high` and `-x`, and commands such as `ampi threads`, need a command of their own. Everything the command does not handle itself goes to Pi unchanged, so Pi's options (`--model`, `-c`, `-r`, `-p`, `-e`) and its own commands (`install`, `list`, `config`, `mcp`, …) keep working.
+`ampi` starts the same interactive Pi session as `pi -e npm:@skippermissions/ampi`, with ampi's modes, tools, workers and terminal layout, and runs single prompts from scripts with `ampi -x`. It exists because a Pi package can only add long `--flags`: options such as `-m high` and `-x`, and commands such as `ampi threads`, need a command of their own. Everything the command does not handle itself goes to Pi unchanged, so Pi's options (`--model`, `-c`, `-r`, `-p`, `-e`) and its own commands (`install`, `list`, `config`, …) keep working; `ampi mcp` adds Amp-compatible spellings on top of Pi's `pi mcp`.
 
 ## Install
 
@@ -366,6 +366,33 @@ ampi skill add https://example.com/team/skills.git//lint --name team-lint
 
 Exit status: `0` on success, `1` when a skill is unknown, a source is invalid, a change is refused or a removal is declined, `2` on a usage error. Skill repositories hosted by a service are not offered.
 
+## MCP servers
+
+`ampi mcp` manages the MCP servers Pi connects to. It keeps them where Pi does: `mcp.json` in Pi's configuration directory for your own servers, and `.pi/mcp.json` in a project for the project's. `add`, `remove`, `list`, `oauth login` and `oauth logout` run Pi's `pi mcp` with the arguments translated; `doctor`, `approve` and `oauth status` are ampi's. Any other subcommand or option goes to `pi mcp` as it is, so every `pi mcp` command line also works as `ampi mcp`.
+
+```bash
+ampi mcp add files -- npx -y @modelcontextprotocol/server-filesystem .   # a local command (stdio)
+ampi mcp add search --env SEARCH_INDEX=./index -- node ./tools/search-mcp.mjs
+ampi mcp add docs https://example.com/mcp --header 'Authorization=Bearer ${DOCS_TOKEN}'
+ampi mcp add tools --workspace -- ./scripts/tools-mcp            # into this project's .pi/mcp.json
+ampi mcp remove search
+ampi mcp list --json
+```
+
+- `add <name> <url>` becomes `pi mcp add <name> --url <url>`; `--header KEY=VALUE` and `--env KEY=VALUE` can be repeated. After `--`, or after a command given without it, everything is the server's command line and is passed on untouched.
+- `--workspace` is Pi's `--local`: `add` and `remove` use the project's `.pi/mcp.json`. Pi's own spellings (`--url`, `-l`, `--local`) and its other `add` options (`--cwd`, `--bearer-token-env-var`, `--oauth-client-id`, `--oauth-client-secret`, `--oauth-callback-port`, `--oauth-client-name`, `--exposure`, `--description`) are accepted as well.
+- `ampi mcp --pi-help` prints Pi's own help for `pi mcp`.
+
+`ampi mcp doctor [name]` runs `pi mcp list --json`, in which Pi connects every enabled server, and prints a table: name, status (`connected`, `needs sign-in`, `failed`, `disabled`, …), transport (`stdio` or `http`), number of tools, and the first line of the error of a server that did not connect. With a name it shows that server only; a name Pi does not know exits `1` and lists the configured ones. The command exits `1` when a server it shows is enabled but not connected, or when Pi skipped an invalid entry. When the project has a `.pi/mcp.json` that Pi ignores because the project is not trusted, it repeats Pi's note.
+
+`ampi mcp approve <name>` trusts the project. Pi does not approve project servers one by one: it reads `.pi/mcp.json` only in a project you trust, and that trust also covers the project's settings, extensions, skills, prompt templates, themes and system-prompt files. So `approve` first checks that `<name>` is defined in this project's `.pi/mcp.json`, then lists every server in that file with its command or URL, and every other project resource that trust enables, and asks before it saves "trusted" for the current directory in Pi's trust store (`trust.json` in Pi's configuration directory), the same record Pi's own trust prompt writes. `--yes` (`-y`) skips the question; without a terminal to ask in, the command refuses unless `--yes` is given. A project that is already trusted (the directory or a parent) is reported and left as it is. Change the decision later with `/trust` in a session. Approve only a project whose files you trust: its servers run with your permissions.
+
+`ampi mcp oauth login <name>` and `oauth logout <name>` are Pi's `pi mcp login` and `logout`: sign in through the browser (`--timeout <seconds>`, default 300) or delete the stored sign-in. `oauth status <name>` prints `signed in`, `needs sign-in` or `not an OAuth server` (a local command, or an HTTP server that sends its own `Authorization` header), read from `pi mcp list`; it exits `1` when the server could not be reached. Client credentials are not given on the command line: `--client-id`, `--client-secret`, `--scopes`, `--auth-url`, `--token-url` and `--server-url` exit `2`, because Pi takes a registered client from the server's `oauth` block in `mcp.json` (`clientId`, `clientSecret`, `scope`, `callbackPort`, `callbackUrl`, `authServerMetadataUrl`). `ampi mcp add <name> <url> --oauth-client-id <id> --oauth-client-secret <secret>` writes the first two.
+
+Servers stored on a hosted service are not available: `ampi mcp remote …` exits `2`.
+
+Exit status: `0` on success; `1` when a server is not connected or unknown, a change is refused or declined, or Pi fails (Pi's own commands exit with Pi's status); `2` on a usage error.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -383,13 +410,13 @@ Project settings count even before you trust the project: once you grant trust, 
 
 ### Pi's own commands
 
-When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)).
+When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)).
 
 ## Compatibility
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands; `mcp add` of a local server at user and project level, `mcp doctor` before and after `mcp approve --yes`, against `/mcp` in the terminal UI).
 
 ## Development
 
