@@ -1,10 +1,12 @@
 # ampi
 
-[![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Pi package](https://img.shields.io/badge/Pi-package-7c3aed)
+A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
 
-> A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
+Status: released. Published on npm as `@skippermissions/ampi` with SemVer versions; while ampi is `0.x`, a minor release may contain breaking changes, listed in [`CHANGELOG.md`](CHANGELOG.md).
+
+[![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@skippermissions/ampi)](https://www.npmjs.com/package/@skippermissions/ampi)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 `ampi` is a Pi Agent extension package. It replaces Pi's default coding posture with a small set of **locked modes** — each a complete bundle of model preferences, thinking policy, tool allowlist, and prompt — and picks which provider and model actually serves each mode by walking an ordered preference list against the models your Pi install has registered. Routing is **rule-based and inspectable**: there is no prompt classifier and no silent model switching. It runs entirely on your own Pi install, subscriptions, API keys, and settings.
 
@@ -19,11 +21,9 @@ The npm package name is `@skippermissions/ampi`; `ampi` is the name you see in c
 - **Subagents and background fleets.** Built-in workers (`finder`, `oracle`, `librarian`, `Task`, `reviewer`) run as separate Pi subprocesses with their own resolved routes; work can be launched in the background with a live TUI task board and `task_poll` / `task_wait` / `task_cancel` controls. Custom Markdown subagents (`sa__*`) can be imported with scoped tools and models.
 - **Opt-in reach.** Web search/page reading, read-only GitHub tools, and prior-session recall are separate extensions, off by default, and gated behind explicit environment flags.
 
-## Requirements
-
-Pi 1.3 or later (Pi 1.x) must already be installed and authenticated with at least one provider. ampi is a Pi extension, not a standalone CLI; it declares Pi's packages (`@earendil-works/pi-coding-agent`, `pi-agent-core`, `pi-tui`) as `^1.3.0` peer dependencies and needs Node.js 22.19+. Pi 0.x is no longer supported; stay on ampi 0.3.x for it.
-
 ## Install
+
+ampi is a Pi extension, not a standalone CLI. It needs Pi 1.3 or later, installed and signed in to at least one provider (see [Compatibility](#compatibility)).
 
 ```bash
 pi install npm:@skippermissions/ampi          # install for your user (recommended)
@@ -108,7 +108,7 @@ Alt+R                # toggle the active mode's thinking preset where supported
 
 ## Providers
 
-ampi routes against whatever providers your Pi install registers. The built-in priority order recognizes ten, grouped so subscriptions win first:
+ampi routes against whatever providers your Pi install registers. The built-in priority order groups them so subscriptions win first:
 
 - **Subscription / OAuth:** `claude-subscription`, `openai-codex`, `github-copilot`
 - **API key:** `anthropic`, `openai`, `azure`
@@ -138,16 +138,16 @@ The package ships as a set of Pi extensions; the network and history ones are of
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |
 
-## Configure your own defaults
+## Configuration
 
 Non-secret settings live in Pi settings files (`~/.pi/agent/settings.json`, `<project>/.pi/settings.json`); secrets go in environment variables. Restart Pi after changing settings or gating env vars.
 
 ```json
 {
   "ampiCore": {
-    "defaultMode": "rush",
+    "defaultMode": "low",
     "modelPreferences": {
-      "deep": [{ "model": "gpt-5.5", "thinkingLevel": "medium" }]
+      "high": [{ "model": "gpt-5.5", "thinkingLevel": "medium" }]
     },
     "subagentModelPreferences": {
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
@@ -167,9 +167,14 @@ export AMPI_GITHUB_TOKEN="ghp_xxx"
 
 Some safety defaults worth knowing: locked modes are fail-closed (no usable model or an empty tool set aborts activation before any change); `free` mode removes only ampi-owned tools; GitHub and search keys are read from the environment, not settings files; `read_web_page` rejects localhost and private/link-local targets; and history hides raw session paths behind opaque refs, with content redaction available via `AMPI_HISTORY_REDACT=true`.
 
-## Status
+## Compatibility
 
-**Pre-1.0 and a work in progress.** ampi is at `0.2.0`, developed against specific Pi releases (see the peer-dependency ranges in `package.json`), and it moves fast. Expect rough edges and breaking changes between versions. The default model IDs track current releases and will change. In-progress and planned work is tracked in [`ROADMAP.md`](ROADMAP.md); recent items include richer fallback-event history in `/ampi-status debug`, more background-widget metadata, a TUI browser for prior sessions and stored research results, and an MCP tool surface with the same gated, self-contained posture. Tests are deterministic and make no live provider calls, so the committed suite does not exercise real network behavior.
+- **Pi:** 1.3 or later within 1.x. The Pi packages (`@earendil-works/pi-coding-agent`, `pi-agent-core`, `pi-tui`) are `^1.3.0` peer dependencies. Pi 0.x is not supported; stay on ampi 0.3.x for it.
+- **Node.js:** 22.19 or later (`engines.node`). CI runs on Node.js 24.x.
+- **Platforms:** CI runs on Linux. macOS and Windows are not tested.
+- **Last verified:** 2026-10-17, with Pi 1.3.0 and Node.js 24.22.0 (`npm run gate` and loading the package with `pi -e`).
+
+Tests are deterministic and make no live provider calls, so the suite does not exercise real network behavior. Default model IDs track current releases and change between versions.
 
 ## Documentation
 
@@ -185,18 +190,17 @@ Some safety defaults worth knowing: locked modes are fail-closed (no usable mode
 ```bash
 git clone https://github.com/5omeOtherGuy/ampi
 cd ampi
-npm install
+npm ci
 pi -e "$PWD" --ampi-mode medium  # run the local checkout
 ```
 
-Checks:
+`npm run gate` runs everything a change must pass (lint, tests, type check, package dry run); CI runs the same command. Run one test file with `npm run test:one -- tests/<file>.test.mjs`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow.
 
-```bash
-npm test          # deterministic; no live provider/API calls
-npm run lint
-npm run check
-npm run pack:dry-run
-```
+## Contributing, support, and security
+
+- Contributions: [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+- Bugs and feature requests: [GitHub issues](https://github.com/5omeOtherGuy/ampi/issues).
+- Vulnerabilities: report privately as described in [`SECURITY.md`](SECURITY.md).
 
 ## License
 
