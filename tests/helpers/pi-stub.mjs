@@ -205,9 +205,9 @@ export function createMockPi(options = {}) {
  * Returns the ctx and the recorders it populates:
  *   `{ ctx, notifications, statuses, footers, headers, widgets, themeChanges,
  *   thinkingLabels, selectCalls, entries, compactCalls, terminalInput, overlays,
- *   editors, workingVisible, lifecycle, state }`.
+ *   editors, workingVisible, titles, lifecycle, state }`.
  *   `editors` records `ui.setEditorComponent` factories, `workingVisible` the
- *   values passed to `ui.setWorkingVisible`. `terminalInput.send(data)` feeds the
+ *   values passed to `ui.setWorkingVisible`, `titles` those passed to `ui.setTitle`. `terminalInput.send(data)` feeds the
  *   listeners registered with `ui.onTerminalInput` and returns true when one consumed it.
  *   `overlays` records `ui.custom` calls as `{ options, component, theme, closed }`;
  *   `lifecycle` counts `abort()` and `shutdown()` calls.
@@ -254,6 +254,7 @@ export function createMockExtensionContext(options = {}) {
   const overlays = [];
   const editors = [];
   const workingVisible = [];
+  const titles = [];
   const plainTheme = { fg: (_name, value) => value, bold: (value) => value, style: (value) => value, colors: {} };
 
   const ctx = {
@@ -309,6 +310,7 @@ export function createMockExtensionContext(options = {}) {
       },
       setEditorComponent: (factory) => editors.push(factory),
       setWorkingVisible: (visible) => workingVisible.push(visible),
+      setTitle: (title) => titles.push(title),
       custom: (factory, customOptions) =>
         new Promise((resolve) => {
           const record = { options: customOptions, theme: plainTheme, closed: false };
@@ -353,6 +355,7 @@ export function createMockExtensionContext(options = {}) {
     overlays,
     editors,
     workingVisible,
+    titles,
     lifecycle,
     state,
   };

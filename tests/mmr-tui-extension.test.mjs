@@ -11,8 +11,10 @@ after(cleanupLoadedSource);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-async function loadExtension(settings) {
+/** `beforeCreate` runs after the source is loaded, e.g. to start mock timers the import must not see. */
+async function loadExtension(settings, beforeCreate) {
   const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
+  beforeCreate?.();
   const mock = createMockPi();
   createMmrTuiExtension({ loadSettings: () => settings })(mock.pi);
   return mock;
@@ -268,6 +270,37 @@ describe("ampi-tui extension", () => {
   }
 });
 
+describe("ampi-tui terminal title wiring", () => {
+  it("titles an interactive session after Pi's own title, follows the turn and clears it at shutdown", async (t) => {
+    const { handlers } = await loadExtension({ enabled: true }, () => t.mock.timers.enable({ apis: ["setTimeout", "Date"] }));
+    const { ctx, titles } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo", sessionName: "Parser rename" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      assert.deepEqual(titles, []);
+      t.mock.timers.tick(250);
+      assert.deepEqual(titles, ["Parser rename - ampi - /work/demo"]);
+      t.mock.timers.tick(1_000);
+      await handlers.get("turn_start")({ type: "turn_start" }, ctx);
+      assert.equal(titles.at(-1), "∼ Parser rename - ampi - /work/demo");
+      t.mock.timers.tick(250);
+      assert.equal(titles.at(-1), "≈ Parser rename - ampi - /work/demo");
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    }
+    assert.equal(titles.at(-1), "");
+  });
+
+  it("leaves the title alone outside the terminal UI", async (t) => {
+    const { handlers } = await loadExtension({ enabled: true }, () => t.mock.timers.enable({ apis: ["setTimeout", "Date"] }));
+    const { ctx, titles } = createMockExtensionContext({ hasUI: false, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    await handlers.get("turn_start")({ type: "turn_start" }, ctx);
+    t.mock.timers.tick(1_000);
+    await handlers.get("session_shutdown")(shutdownEvent, ctx);
+    assert.deepEqual(titles, []);
+  });
+});
+
 describe("ampi-tui settings", () => {
   function withDirs(run) {
     const root = mkdtempSync(path.join(os.tmpdir(), "ampi-tui-settings-"));
@@ -285,7 +318,24 @@ describe("ampi-tui settings", () => {
   it("is on by default", async () => {
     const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
     await withDirs(({ home, cwd }) => {
-      assert.deepEqual(loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }), { enabled: true, quietStartup: false });
+      assert.deepEqual(loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }), {
+        enabled: true,
+        quietStartup: false,
+        notifications: { enabled: true, system: true, sound: false },
+      });
+    });
+  });
+
+  it("reads each ampiTui.notifications switch on its own, the project file winning per key", async () => {
+    const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
+    await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
+      const load = () => loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }).notifications;
+      writeGlobal({ ampiTui: { notifications: { sound: true, system: false } } });
+      assert.deepEqual(load(), { enabled: true, system: false, sound: true });
+      writeProject({ ampi: { tui: { notifications: { system: true, enabled: "no" } } } });
+      assert.deepEqual(load(), { enabled: true, system: true, sound: true }, "a non-boolean value is ignored");
+      writeProject({ ampiTui: { notifications: { enabled: false } } });
+      assert.deepEqual(load(), { enabled: false, system: false, sound: true });
     });
   });
 

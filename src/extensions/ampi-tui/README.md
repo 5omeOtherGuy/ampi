@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; mode dial on Ctrl+S; Alt+T details toggle; shortcuts help on `?` | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
+| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; mode dial on Ctrl+S; Alt+T details toggle; shortcuts help on `?`; terminal title, notifications, quit summary | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; the window title; `/ampi-status` |
 
 ## When to use it
 
@@ -50,6 +50,9 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | Thinking | Transcript | No label when thinking is collapsed |
 | Command palette | Overlay | Lists every command with its key; type to filter, Enter to run |
 | Mode dial | Overlay | Shows the mode with its models, turns it, and lists every mode |
+| Terminal title | Pi `setTitle` | The session title and working directory, with the turn status in front |
+| Notifications | Terminal escape sequence, bell, sound | Tell you when a turn finished or needs you |
+| Quit summary | Normal scrollback | ampi's mark, the session title and the working directory after you quit |
 
 ## Configuration
 
@@ -67,6 +70,22 @@ The nested form `{ "ampi": { "tui": { "enabled": false } } }` is accepted too. S
 | `MMR_TUI_ENABLE` | Legacy name, read when `AMPI_TUI_ENABLE` is unset |
 
 `ampi-tui` also reads Pi's own `quietStartup` from the same files: with `"quietStartup": true` it draws no welcome header (see [Welcome header](#welcome-header)).
+
+Notifications have three switches, shown here with their defaults. Each one can be set on its own, and the project file wins per switch:
+
+```json
+{ "ampiTui": { "notifications": { "enabled": true, "system": true, "sound": false } } }
+```
+
+| Switch | Effect |
+| --- | --- |
+| `enabled` | `false` turns every notification off; the terminal title stays |
+| `system` | The desktop notification through the terminal, or the bell in its place |
+| `sound` | A sound through `paplay`, when it and the freedesktop sound theme are installed |
+
+| Variable | Effect |
+| --- | --- |
+| `AMPI_FORCE_BEL` | `1` rings the terminal bell instead of sending a desktop notification |
 
 The settings are read once when the extension loads. Restart Pi or run `/reload` after changing them.
 
@@ -216,6 +235,46 @@ Ctrl+S opens the mode dial at the right edge, just above the prompt box: 58 colu
 - The dial takes every key while it is open; other keys do nothing.
 - Without ampi-core's `/mode` command, Ctrl+S is left to Pi.
 - While `ampi-tui` is on, ampi-core's own Ctrl+S and Ctrl+Space cycle keys do nothing, so if you unbind or move `mode.toggle` under `ampi.keymap`, Ctrl+S no longer changes the mode.
+### Terminal title, notifications and quit summary
+
+**Terminal title.** The window or tab title names the session and where it runs:
+
+```text
+Parser rename - ampi - /work/repo                        idle
+≈ Parser rename - ampi - /work/repo                      a turn runs
+! Waiting for Approval: Parser rename - ampi - /work/repo
+! Error: Parser rename - ampi - /work/repo               the last response failed
+```
+
+- The title is the session's name (Pi's `/name`), else its first message cut to 40 columns, else `new session`.
+- While a turn runs, the prompt box's wave glyph (`∼ ≈ ≋`) steps in front of it. The title changes at most four times a second, so the glyph steps every 250 ms.
+- When the turn status needs you (`Waiting for Approval`, or `Error` until the next turn starts), a `!` and the status replace the glyph.
+- Pi writes its own title when a session starts and when it is renamed; ampi writes its title again a moment later. When the session ends, Pi's own title comes back.
+
+**Notifications.** When a turn finishes, or starts waiting for an approval, ampi tells the terminal:
+
+| When | Text |
+| --- | --- |
+| A run settles | `ampi is ready` |
+| A run settles after a failed response | `ampi stopped on an error` |
+| The status starts waiting for an approval | `ampi needs your approval` |
+
+- They go out as a desktop notification through the terminal (the OSC 777 escape sequence), which terminals with notification support show. Over SSH (`SSH_CONNECTION` or `SSH_TTY` set), or with `AMPI_FORCE_BEL=1`, the terminal bell rings instead.
+- With `sound: true`, ampi also plays `complete` or `dialog-warning` from the freedesktop sound theme through `paplay`. It starts the player in the background and never waits for it; without `paplay` or the sound files, or over SSH, nothing plays.
+- At most one notification goes out every two seconds. A run you stop yourself (Esc Esc) sends none.
+
+**Quit summary.** After an interactive quit (Ctrl+C Ctrl+C, Ctrl+D or `/quit`), once Pi has handed the terminal back, ampi prints its mark with the session title and the working directory to the normal scrollback. Pi's own resume line follows it:
+
+```text
+   ●  ·  ·
+ •         ·   Parser rename
+•     ●     ·  /work/repo
+ ·         ·
+   ·  ·  ·
+To resume this session: pi --session 01a14e4d-1980-701c-bda9-60d6a935b635
+```
+
+Pi prints the resume line only when the session has been saved, so a session without messages ends with the summary alone. When Pi is stopped by a signal, no summary is printed.
 
 ### What changes compared with Pi's defaults
 
@@ -272,6 +331,9 @@ Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctr
 - Collapsed thinking leaves an empty row where the label used to be, so three blank rows separate your message from the reply.
 - Palettes that give slot 8 the background colour (Solarized Dark, for one) hide Markdown rules, quote bars and code block borders.
 - Pi offers no API to draw user messages, so `ampi-tui` replaces the drawing method of Pi's user message component. When a Pi release changes that component, `ampi-tui` leaves it alone and Pi's own user message box appears.
+- Pi tells extensions nothing about terminal focus, so notifications go out even while you are looking at the terminal. Many terminals show desktop notifications only for unfocused windows.
+- tmux does not forward the OSC 777 notification to the terminal around it. Inside tmux, `AMPI_FORCE_BEL=1` rings the bell instead, which tmux handles as set by its `bell-action` option.
+- Nothing feeds approval requests into the turn status yet, so `Waiting for Approval` and its notification appear only once a permission prompt reports them.
 
 ### What stays on screen
 
@@ -330,6 +392,8 @@ Later releases lock the mode once a thread has messages; the dial then shows the
 - **You want the footer back.** Set `ampiTui.enabled` to `false` and restart Pi or run `/reload`.
 - **A rebinding has no effect.** Check for an `ampi keymap:` warning at session start, then run `/reload`. A binding to a single key that Pi does not reserve is handed to Pi's shortcut list, which Pi reads at session start, so it needs `/reload` even when the warning is absent.
 - **Home and End only move the cursor.** The prompt has text, or Pi runs in regular mode (`tuiMode: "regular"`), where the terminal's own scrollback replaces transcript scrolling.
+- **No notification when a turn finishes.** Check `ampiTui.notifications` (`enabled` and `system`), whether your terminal shows OSC 777 notifications, and whether you run inside tmux (see [Limits](#limits)). Try `AMPI_FORCE_BEL=1` for a bell instead. Notifications closer than two seconds apart are dropped.
+- **The window title does not change.** The terminal, or tmux's `allow-set-title` option, ignores title changes.
 
 ## Public API
 
@@ -338,7 +402,7 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 ## Developer notes
 
 - Manifest: risk class `terminal-ui`, child role `none`. No subagent child keep-set lists it, and child workers never run in the terminal UI.
-- Layout: `index.ts` (entry point), `config.ts` (settings), `chrome/look.ts` (installs the welcome header, message styling and theme), `chrome/welcome.ts` (header component, mark and card), `editor/` (the prompt box), `transcript/messages.ts` (user message drawing, thinking label), `transcript/activity.ts` and `transcript/tool-renderers.ts` (tool rows), `theme/` (`ampi.json` and its session selection), `keys/`, `ui/`, `overlays/`, `pi-compat/`.
+- Layout: `index.ts` (entry point), `config.ts` (settings), `chrome/look.ts` (installs the welcome header, message styling and theme), `chrome/welcome.ts` (header component, mark and card), `chrome/title-notify.ts` (terminal title and notifications), `chrome/quit-summary.ts` (the summary printed after quitting), `editor/` (the prompt box), `transcript/messages.ts` (user message drawing, thinking label), `transcript/activity.ts` and `transcript/tool-renderers.ts` (tool rows), `theme/` (`ampi.json` and its session selection), `keys/`, `ui/`, `overlays/`, `pi-compat/`.
 - `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass), its border slots and the open shortcuts help; `editor/help.ts` builds the help rows from the effective keymap and the command registry and lays them out; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start, feeds it the mode, cost, status, wave glyph and branch, toggles the help and runs the one-time tmux check.
 - `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi, opens the palette and tells the prompt box about the first Esc, the pending quit, the open palette, the help toggle and every other key command (which closes the help).
 - `ui/frame.ts` draws the box overlays share (rounded border, title in the top border, key hints in the bottom border, scrollbar column); `overlays/palette.ts` is the command palette; `overlays/mode-dial.ts` is the mode dial with its list view.
@@ -347,4 +411,4 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 - `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands, the editor's height rule (`editor-height.ts`), transcript scrolling, the reserved shortcut list, raw input, and the user message component. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
 - `pi-compat/messages.ts` patches `UserMessageComponent.prototype.rebuild`. It is installed when the extension loads, because Pi rebuilds the chat on `/reload` before `session_start`, and removed at `session_shutdown`. `probeMmrUserMessageComponent` names any change in the class shape.
 - The theme is applied as a `Theme` object, never by name: `ctx.ui.setTheme("ampi")` would write the user's settings. An empty widget below the editor re-applies it when Pi returns to `system`, using the component `invalidate()` call Pi makes on every theme change.
-- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys, the shortcuts help), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection) and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.
+- Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order, prompt box wiring), `tests/mmr-tui-prompt-box.test.mjs` (render fixtures in `tests/fixtures/mmr-tui-prompt-box/`, geometry, keys, the shortcuts help), `tests/mmr-tui-status-feed.test.mjs`, `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, `tests/mmr-tui-welcome.test.mjs` (layout fixtures in `tests/fixtures/ampi-tui-welcome/`, animation on a fake clock, card from fixture changelogs, `quietStartup`), `tests/mmr-tui-messages.test.mjs` (user message drawing), `tests/mmr-tui-theme.test.mjs` (schema, palette, selection), `tests/mmr-tui-title-notify.test.mjs` (title forms, notification policy and throttles on a fake clock), `tests/mmr-tui-quit-summary.test.mjs` and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner). Refresh the layout fixtures with `PI_MMR_UPDATE_FIXTURES=1`.

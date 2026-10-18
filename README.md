@@ -169,9 +169,12 @@ Non-secret settings live in Pi settings files (`~/.pi/agent/settings.json`, `<pr
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
     }
   },
-  "ampiWeb": { "enabled": true }
+  "ampiWeb": { "enabled": true },
+  "ampiTui": { "notifications": { "sound": true } }
 }
 ```
+
+`ampiTui.notifications` controls what `ampi-tui` sends when a turn finishes or needs you: `enabled` (default `true`), `system` for the desktop notification through the terminal (default `true`; a bell over SSH or with `AMPI_FORCE_BEL=1`), and `sound` for a `paplay` sound (default `false`).
 
 ```bash
 export AMPI_WEB_ENABLE=true

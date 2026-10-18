@@ -109,6 +109,8 @@ The shortcuts help lists the keys in effect, including any you rebound, in the p
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
 
+The terminal title reads `<title> - ampi - <cwd>`, with the wave glyph in front while a turn runs and `! <status>:` when the turn needs you. When a turn finishes or waits for an approval, ampi sends a desktop notification through the terminal (a bell over SSH or with `AMPI_FORCE_BEL=1`). After Ctrl+C Ctrl+C, ampi's mark, the session title and the working directory stay in the scrollback above Pi's resume line.
+
 Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
 
 ```json
@@ -127,9 +129,12 @@ Minimal settings example:
       "finder": [{ "model": "gpt-5.4-mini", "thinkingLevel": "low" }]
     }
   },
-  "ampiWeb": { "enabled": true }
+  "ampiWeb": { "enabled": true },
+  "ampiTui": { "notifications": { "enabled": true, "system": true, "sound": false } }
 }
 ```
+
+`ampiTui.notifications`: `enabled` turns notifications off entirely, `system` the desktop notification (or bell), `sound` a `paplay` sound from the freedesktop theme.
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`ampiCore`) and nested (`ampi.core`) forms are accepted where supported by the owning extension.
 
@@ -158,6 +163,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | One Esc no longer stops a turn | Press Esc twice; or set `"thread.interrupt": null` under `ampi.keymap` |
 | Ctrl+O no longer expands tool output | `ampi-tui` puts the command palette there; Alt+T expands tool output and thinking together |
 | `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette; a command that takes arguments is put into the prompt for you to finish and send. Or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
+| No notification when a turn finishes | Check `ampiTui.notifications`; inside tmux, or in a terminal without OSC 777 notifications, set `AMPI_FORCE_BEL=1` for a bell |
 | Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; bind Pi's `app.message.followUp` to another key in Pi's `keybindings.json` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

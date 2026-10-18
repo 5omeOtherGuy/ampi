@@ -76,6 +76,11 @@ function renderMark(mark: Mark, frame: number, theme: WelcomeTheme): string[] {
   return cells.map((row) => row.join(""));
 }
 
+/** The small mark in the frame its animation rests on (5 rows, 13 columns). */
+export function renderMmrRestingMark(theme: WelcomeTheme): string[] {
+  return renderMark(COMPACT_MARK, MMR_WELCOME_FRAME_COUNT - 1, theme);
+}
+
 /** The changelog item shown in the welcome card. */
 export interface MmrWelcomeCard {
   readonly title: string;
