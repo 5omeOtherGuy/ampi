@@ -71,7 +71,7 @@ const COMMITS = [
   { sha: "a1c0d3e", subject: "init demo", time: new Date(NOW - 3 * DAY) },
 ];
 
-function provider({ commits = COMMITS, base = piFiles() } = {}) {
+function provider({ commits = COMMITS, base = piFiles(), now = () => NOW } = {}) {
   const typed = [];
   let reads = 0;
   const options = {
@@ -79,7 +79,7 @@ function provider({ commits = COMMITS, base = piFiles() } = {}) {
       reads += 1;
       return commits;
     },
-    now: () => NOW,
+    now,
     dim,
     typeKey: (char) => typed.push(char),
   };
@@ -161,6 +161,20 @@ describe("ampi-tui mentions: autocomplete rows", () => {
     assert.deepEqual(typed, [":", "@"]);
   });
 
+  it("shows no rows for an @ request that finishes while the Mention Thread picker is open", async () => {
+    let open = false;
+    let release;
+    const base = { ...piFiles(), getSuggestions: () => new Promise((resolve) => (release = resolve)) };
+    const wrapped = mentions.createMmrMentionProvider(base, { ...provider().options, suppressed: () => open });
+    const pending = suggest(wrapped, "see @");
+    open = true;
+    release({ items: piFiles().rows, prefix: "@" });
+    assert.equal(await pending, null);
+    assert.equal(await suggest(wrapped, "@:"), null, "nor any other @ rows");
+    open = false;
+    assert.equal((await suggest(wrapped, "@:")).items.length, 2);
+  });
+
   it("hands Pi's own rows back to Pi to complete", async () => {
     const { wrapped, base } = provider();
     const applied = wrapped.applyCompletion(["@ma"], 0, 3, base.rows[0], "@ma");
@@ -183,7 +197,7 @@ describe("ampi-tui mentions: commits", () => {
     );
   });
 
-  it("filters by sha prefix or subject as you type, reading git once per @: token", async () => {
+  it("filters by sha prefix or subject as you type, reading git once per open list", async () => {
     const t = provider();
     assert.deepEqual(
       (await suggest(t.wrapped, "@:a1")).items.map((item) => item.value),
@@ -197,6 +211,24 @@ describe("ampi-tui mentions: commits", () => {
     assert.equal(t.reads(), 1);
     await suggest(t.wrapped, "then @:");
     assert.equal(t.reads(), 2, "a new @: token reads again");
+  });
+
+  it("reads git again for the next list at the same place: after a pick, another request or a pause", async () => {
+    let now = NOW;
+    const t = provider({ now: () => now });
+    const [row] = (await suggest(t.wrapped, "@:")).items;
+    t.wrapped.applyCompletion(["@:"], 0, 2, row, "@:");
+    await suggest(t.wrapped, "@:");
+    assert.equal(t.reads(), 2, "a pick ends the list");
+    await suggest(t.wrapped, "@");
+    await suggest(t.wrapped, "@:");
+    assert.equal(t.reads(), 3, "a request for anything but @: ends the list");
+    now += mentions.MMR_COMMIT_MENTION_REUSE_MS;
+    await suggest(t.wrapped, "@:b");
+    assert.equal(t.reads(), 3, "typing within the pause keeps the list");
+    now += mentions.MMR_COMMIT_MENTION_REUSE_MS + 1;
+    await suggest(t.wrapped, "@:");
+    assert.equal(t.reads(), 4, "a longer pause ends the list");
   });
 
   it("shows no rows without commits", async () => {
@@ -247,6 +279,22 @@ describe("ampi-tui mentions: commits", () => {
         ],
       );
       assert.ok(commits.every((commit) => /^[0-9a-f]{7,}$/.test(commit.sha)));
+    });
+
+    it("lists a commit made after the last @: list at the same place in the prompt", async () => {
+      git(root, ["init", "-q"]);
+      git(root, ["commit", "--allow-empty", "-q", "-m", "init demo"], "2026-10-15T12:00:00Z");
+      const wrapped = mentions.createMmrMentionProvider(piFiles(), {
+        ...provider().options,
+        listCommits: () => mentions.readMmrRecentCommits(root),
+      });
+      const first = await suggest(wrapped, "@:");
+      assert.equal(first.items.length, 1);
+      wrapped.applyCompletion(["@:"], 0, 2, first.items[0], "@:");
+      git(root, ["commit", "--allow-empty", "-q", "-m", "Fix the divide helper"], "2026-10-18T11:59:00Z");
+      const second = await suggest(wrapped, "@:");
+      assert.equal(second.items.length, 2);
+      assert.match(second.items[0].label, /^[0-9a-f]{7,} Fix the divide helper {3}<dim>1m ago<\/dim>$/);
     });
 
     it("finds none outside a repository, in one without commits, or without git", async () => {

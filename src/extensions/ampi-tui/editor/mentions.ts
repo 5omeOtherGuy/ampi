@@ -1,6 +1,13 @@
 import { execFile } from "node:child_process";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { type AutocompleteItem, type AutocompleteProvider, decodeKittyPrintable, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  type AutocompleteItem,
+  type AutocompleteProvider,
+  type AutocompleteSuggestions,
+  decodeKittyPrintable,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { formatMmrRelativeTime, openMmrThreadPicker, type MmrThreadPickerSources } from "../overlays/thread-picker.js";
 
 /**
@@ -14,7 +21,8 @@ import { formatMmrRelativeTime, openMmrThreadPicker, type MmrThreadPickerSources
  * - `@:` lists the last {@link MMR_COMMIT_MENTION_LIMIT} commits of the
  *   working directory's repository as `<short sha> <subject>` with a dim
  *   relative time. Typing after `@:` filters them by sha prefix or subject.
- *   Picking one inserts `@:<short sha> `.
+ *   Picking one inserts `@:<short sha> `. Each list reads git afresh, so a
+ *   commit made a moment ago is listed.
  * - `@@` (typing a second `@` right after an `@` that starts a word) opens
  *   the Mention Thread picker; picking a session inserts `@<session id> `,
  *   Esc types the `@` after all.
@@ -27,6 +35,8 @@ import { formatMmrRelativeTime, openMmrThreadPicker, type MmrThreadPickerSources
 export const MMR_COMMIT_MENTION_LIMIT = 30;
 /** How long `git log` may take before `@:` shows no commits. */
 export const MMR_COMMIT_MENTION_TIMEOUT_MS = 1500;
+/** How long an open `@:` list may go without a request before its commits are read again. */
+export const MMR_COMMIT_MENTION_REUSE_MS = 3000;
 /** Widest `<short sha> <subject>` before the subject is cut; the times line up after it. */
 const COMMIT_COLUMN = 60;
 const TIME_GAP = "   ";
@@ -102,6 +112,8 @@ export interface MmrMentionProviderOptions {
   readonly typeKey: (char: string) => void;
   /** Rows the prompt's autocomplete list shows at once; Pi's rows for a bare `@` leave room for the hints. */
   readonly visibleRows?: () => number | undefined;
+  /** True while `@` tokens get no rows, such as while the Mention Thread picker is open. */
+  readonly suppressed?: () => boolean;
 }
 
 type MentionItem = AutocompleteItem & { mention: "hint" | "commit" };
@@ -112,8 +124,10 @@ function isMentionItem(item: AutocompleteItem): item is MentionItem {
 
 /** Wrap Pi's autocomplete provider with the `@:` and `@@` mentions. */
 export function createMmrMentionProvider(base: AutocompleteProvider, options: MmrMentionProviderOptions): AutocompleteProvider {
-  // One `git log` per `@:` token: refilling the rows as you type reuses it.
-  let commits: { key: string; list: Promise<readonly MmrCommit[]> } | undefined;
+  // One `git log` per open `@:` list: refilling the rows as you type reuses
+  // it. A pick, a request for anything but `@:`, or a pause longer than
+  // MMR_COMMIT_MENTION_REUSE_MS ends the list, so the next one reads again.
+  let commits: { key: string; used: number; list: Promise<readonly MmrCommit[]> } | undefined;
 
   function hintItems(token: string): MentionItem[] {
     return MMR_MENTION_HINTS.filter((hint) => hint.value.startsWith(token)).map((hint) => ({
@@ -124,14 +138,18 @@ export function createMmrMentionProvider(base: AutocompleteProvider, options: Mm
   }
 
   async function commitItems(key: string, query: string): Promise<MentionItem[]> {
-    if (commits?.key !== key) commits = { key, list: options.listCommits().catch(() => []) };
+    const now = options.now();
+    if (commits?.key !== key || now - commits.used > MMR_COMMIT_MENTION_REUSE_MS) {
+      commits = { key, used: now, list: options.listCommits().catch(() => []) };
+    } else {
+      commits.used = now;
+    }
     const needle = query.toLowerCase();
     const shown = (await commits.list).filter(
       (commit) => commit.sha.toLowerCase().startsWith(needle) || commit.subject.toLowerCase().includes(needle),
     );
     const heads = shown.map((commit) => truncateToWidth(`${commit.sha} ${commit.subject}`, COMMIT_COLUMN, "…"));
     const column = Math.max(0, ...heads.map((head) => visibleWidth(head)));
-    const now = options.now();
     return shown.map((commit, index) => {
       const head = heads[index] ?? "";
       const pad = " ".repeat(column - visibleWidth(head));
@@ -143,30 +161,45 @@ export function createMmrMentionProvider(base: AutocompleteProvider, options: Mm
     });
   }
 
+  /** The rows for the `@` token `token`; `key` names where it starts, `files` asks Pi for its rows. */
+  async function mentionSuggestions(
+    token: string,
+    key: string,
+    files: () => Promise<AutocompleteSuggestions | null>,
+  ): Promise<AutocompleteSuggestions | null> {
+    if (token.startsWith("@:")) {
+      const items = await commitItems(key, token.slice(2));
+      return items.length > 0 ? { items, prefix: token } : null;
+    }
+    // `@@` itself offers its hint row (Tab opens the picker); text after it
+    // is no file name.
+    if (token.startsWith("@@")) return token === "@@" ? { items: hintItems(token), prefix: token } : null;
+    const piRows = await files();
+    const hints = hintItems(token);
+    if (hints.length === 0) return piRows;
+    // The list opens on its first rows: keep the hints among them. Typing
+    // a name searches Pi's files again.
+    const visible = options.visibleRows?.();
+    const shown = piRows?.items.slice(0, visible === undefined ? undefined : Math.max(1, visible - hints.length)) ?? [];
+    return { items: [...shown, ...hints], prefix: piRows?.prefix ?? token };
+  }
+
   return {
     triggerCharacters: [":"],
     async getSuggestions(lines, cursorLine, cursorCol, request) {
       const before = (lines[cursorLine] ?? "").slice(0, cursorCol);
       const found = mentionToken(before);
+      if (!found?.token.startsWith("@:")) commits = undefined;
       if (!found) return base.getSuggestions(lines, cursorLine, cursorCol, request);
-      const { token, start } = found;
-      if (token.startsWith("@:")) {
-        const items = await commitItems(`${cursorLine}\u0000${before.slice(0, start)}`, token.slice(2));
-        return items.length > 0 ? { items, prefix: token } : null;
-      }
-      // `@@` itself offers its hint row (Tab opens the picker); text after it
-      // is no file name.
-      if (token.startsWith("@@")) return token === "@@" ? { items: hintItems(token), prefix: token } : null;
-      const files = await base.getSuggestions(lines, cursorLine, cursorCol, request);
-      const hints = hintItems(token);
-      if (hints.length === 0) return files;
-      // The list opens on its first rows: keep the hints among them. Typing
-      // a name searches Pi's files again.
-      const visible = options.visibleRows?.();
-      const shown = files?.items.slice(0, visible === undefined ? undefined : Math.max(1, visible - hints.length)) ?? [];
-      return { items: [...shown, ...hints], prefix: files?.prefix ?? token };
+      const result = await mentionSuggestions(found.token, `${cursorLine}\u0000${before.slice(0, found.start)}`, () =>
+        base.getSuggestions(lines, cursorLine, cursorCol, request),
+      );
+      // A request that started before the Mention Thread picker opened
+      // finishes with no list under it.
+      return options.suppressed?.() ? null : result;
     },
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      commits = undefined;
       if (!isMentionItem(item)) return base.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
       const line = lines[cursorLine] ?? "";
       const head = line.slice(0, cursorCol - prefix.length);

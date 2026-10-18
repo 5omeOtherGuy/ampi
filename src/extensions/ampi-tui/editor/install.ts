@@ -224,6 +224,7 @@ export function createMmrPromptBoxInstall(
             requestRender();
           },
           visibleRows: () => box?.getAutocompleteMaxVisible(),
+          suppressed: () => mentionOpen,
         }),
       );
       unsubscribeMode ??= onMmrStateChanged(pi, requestRender);
