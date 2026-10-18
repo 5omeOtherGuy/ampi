@@ -27,6 +27,8 @@ In the interactive TUI, locked modes compact the conversation automatically once
 
 Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` inputs normalize to `low`, `medium`, `high`, and `ultra`.
 
+File editing follows the route, not the mode: `openai`, `openai-codex`, and `azure` routes get `apply_patch` + `write`; every other provider gets `edit` + `write`. `ampiCore.editTools` (`"auto"`, `"patch"`, `"edit"`) forces one family; `/ampi-status` names the active one on its `Edit tools:` line.
+
 ## Workers and subagents
 
 | I need to... | Ask for... | Tool |

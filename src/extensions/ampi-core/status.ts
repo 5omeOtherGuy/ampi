@@ -2,6 +2,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { MmrAutoCompactStatus } from "./auto-compact.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
+import { MMR_EDIT_TOOL_FAMILY_TOOLS } from "./modes.js";
 import { formatMmrCompactTokens } from "./token-format.js";
 import {
   MMR_REQUEST_POLICIES,
@@ -468,6 +469,16 @@ function formatToolDecisions(decisions: MmrToolResolution["decisions"]): string 
   return ["Tool resolution:", ...lines].join("\n");
 }
 
+function formatEditTools(state: MmrModeState): string | undefined {
+  const decision = state.editTools;
+  if (!decision) return undefined;
+  const tools = [...MMR_EDIT_TOOL_FAMILY_TOOLS[decision.family], "write"].join(", ");
+  const reason = decision.source === "setting"
+    ? `ampiCore.editTools is "${decision.family}"`
+    : `auto: ${decision.provider || "no provider"} is ${decision.family === "patch" ? "an" : "not an"} OpenAI-family provider`;
+  return `Edit tools: ${tools} (${reason})`;
+}
+
 function formatFeatureGates(state: MmrModeState): string {
   const decisions = state.resolution.featureGateDecisions;
   if (decisions.length === 0) return "Feature gates: none";
@@ -513,6 +524,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     `Baseline captured: ${formatBaseline(state)}`,
     `Prompt surface: ${state.promptRoute}`,
     `Active tools: ${state.activeTools.join(", ") || "none"}`,
+    formatEditTools(state),
     `Missing tools: ${state.missingTools.join(", ") || "none"}`,
     `Deferred tools: ${state.deferredTools.join(", ") || "none"}`,
     `Gated tools: ${state.gatedTools.join(", ") || "none"}`,

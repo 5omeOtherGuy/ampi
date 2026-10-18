@@ -51,20 +51,20 @@ describe("mmr-core tool registry", () => {
     const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
-    const resolved = registry.resolve(["oracle", "finder", "web_search", "chart"], ["read", "bash"]);
+    const resolved = registry.resolve(["oracle", "finder", "web_search", "task_list"], ["read", "bash"]);
 
     assert.deepEqual(resolved.activeTools, []);
     assert.deepEqual(resolved.missingTools, []);
-    assert.deepEqual([...resolved.deferredTools].sort(), ["chart", "finder", "oracle", "web_search"]);
+    assert.deepEqual([...resolved.deferredTools].sort(), ["finder", "oracle", "task_list", "web_search"]);
 
     const oracleDecision = resolved.decisions.find((d) => d.requested === "oracle");
     assert.equal(oracleDecision.status, "deferred");
     assert.equal(oracleDecision.owner, "ampi-workers");
     assert.match(oracleDecision.diagnostic, /ampi-workers/);
 
-    const chartDecision = resolved.decisions.find((d) => d.requested === "chart");
-    assert.equal(chartDecision.status, "deferred");
-    assert.equal(chartDecision.owner, "ampi-tasks");
+    const taskListDecision = resolved.decisions.find((d) => d.requested === "task_list");
+    assert.equal(taskListDecision.status, "deferred");
+    assert.equal(taskListDecision.owner, "ampi-tasks");
 
     const webDecision = resolved.decisions.find((d) => d.requested === "web_search");
     assert.equal(webDecision.owner, "ampi-web");
@@ -242,22 +242,14 @@ describe("mmr-core tool registry", () => {
     assert.equal(decision.owner, "older-provider");
   });
 
-  it("keeps chart catalog-deferred when ampi-tasks is loaded but that tool has not shipped", async () => {
+  it("reports chart, handoff, and skill as plain missing names: no ampi extension ships them", async () => {
     const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
     const registry = createMmrToolRegistry();
 
-    // Simulate the ampi-tasks provider: it only claims its shipped name
-    // (task_list) and returns undefined for the rest (e.g. chart).
-    registry.registerProvider({
-      name: "ampi-tasks",
-      resolve: (toolName) => (toolName === "task_list" ? { kind: "active" } : undefined),
-    });
-
-    const resolved = registry.resolve(["chart"], ["apply_patch", "task_list"]);
-    for (const decision of resolved.decisions) {
-      assert.equal(decision.status, "deferred", `${decision.requested} must stay catalog-deferred`);
-      assert.equal(decision.owner, "ampi-tasks", `${decision.requested} catalog owner must remain ampi-tasks`);
-    }
+    const resolved = registry.resolve(["chart", "handoff", "skill"], ["read", "task_list"]);
+    assert.deepEqual(resolved.deferredTools, []);
+    assert.deepEqual(resolved.missingTools, ["chart", "handoff", "skill"]);
+    for (const decision of resolved.decisions) assert.equal(decision.owner, "ampi-core");
   });
 
   it("reports a missing decision when a provider claims active but Pi has not registered the tool", async () => {
@@ -293,7 +285,7 @@ describe("mmr-core tool registry - per-mode matrices", () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    const resolved = resolveMmrTools("medium", available);
+    const resolved = resolveMmrTools("medium", available, "edit");
     assert.deepEqual([...resolved.activeTools].sort(), ["bash", "edit", "read", "write"]);
     assert.equal(resolved.activeTools.includes("grep"), false);
     assert.equal(resolved.activeTools.includes("find"), false);
@@ -307,7 +299,7 @@ describe("mmr-core tool registry - per-mode matrices", () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
     const available = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-    const resolved = resolveMmrTools("low", available);
+    const resolved = resolveMmrTools("low", available, "edit");
     assert.equal(resolved.activeTools.includes("grep"), true);
     assert.equal(resolved.activeTools.includes("find"), true);
     assert.equal(resolved.activeTools.includes("read"), true);
@@ -321,10 +313,10 @@ describe("mmr-core tool registry - per-mode matrices", () => {
     const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
 
     for (const mode of ["high", "ultra"]) {
-      const withConcretePatch = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"]);
+      const withConcretePatch = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"], "patch");
       assert.deepEqual([...withConcretePatch.activeTools].sort(), ["apply_patch", "bash", "write"]);
 
-      const fallback = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls"]);
+      const fallback = resolveMmrTools(mode, ["read", "bash", "edit", "write", "grep", "find", "ls"], "patch");
       assert.equal(fallback.activeTools.includes("bash"), true);
       assert.equal(fallback.activeTools.includes("edit"), false);
       assert.equal(fallback.activeTools.includes("write"), true);
@@ -332,7 +324,23 @@ describe("mmr-core tool registry - per-mode matrices", () => {
       assert.equal(fallback.activeTools.includes("read"), false);
       assert.equal(fallback.deferredTools.includes("oracle"), true);
       assert.equal(fallback.deferredTools.includes("finder"), true);
-      assert.equal(fallback.deferredTools.includes("chart"), true);
+    }
+  });
+
+  it("swaps only the file-editing tool between the edit families", async () => {
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/runtime.ts");
+    const available = ["read", "bash", "edit", "write", "grep", "find", "ls", "apply_patch"];
+
+    for (const mode of ["low", "medium", "high", "ultra"]) {
+      const patch = resolveMmrTools(mode, available, "patch");
+      const edit = resolveMmrTools(mode, available, "edit");
+      const neither = resolveMmrTools(mode, available);
+      assert.equal(patch.activeTools.includes("apply_patch") && !patch.activeTools.includes("edit"), true, mode);
+      assert.equal(edit.activeTools.includes("edit") && !edit.activeTools.includes("apply_patch"), true, mode);
+      assert.equal(neither.activeTools.some((tool) => tool === "edit" || tool === "apply_patch"), false, mode);
+      for (const resolved of [patch, edit, neither]) assert.equal(resolved.activeTools.includes("write"), true, mode);
+      const rest = (resolved) => resolved.activeTools.filter((tool) => tool !== "edit" && tool !== "apply_patch");
+      assert.deepEqual(rest(patch), rest(edit), mode);
     }
   });
 });

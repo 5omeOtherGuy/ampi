@@ -146,16 +146,15 @@ describe("ampi-patch apply_patch tool registration", () => {
     assert.equal(decision.owner, "ampi-patch");
   });
 
-  it("deep mode resolves apply_patch to the concrete apply_patch tool, not edit + write", async () => {
+  it("high mode on the patch family resolves apply_patch to the concrete apply_patch tool", async () => {
     const { createMmrToolRegistry } = await importSource("extensions/ampi-core/tool-registry.ts");
-    const { getMmrMode } = await importSource("extensions/ampi-core/modes.ts");
+    const { getMmrModeToolNames } = await importSource("extensions/ampi-core/modes.ts");
     const toolbox = await importSource("extensions/ampi-patch/index.ts");
 
     const registry = createMmrToolRegistry();
     toolbox.registerMmrPatchProviders(registry);
 
-    const deepMode = getMmrMode("high");
-    const resolved = registry.resolve(deepMode.tools, ["bash", "edit", "write", "apply_patch"]);
+    const resolved = registry.resolve(getMmrModeToolNames("high", "patch"), ["bash", "edit", "write", "apply_patch"]);
 
     const applyPatchDecision = resolved.decisions.find((d) => d.requested === "apply_patch");
     assert.ok(applyPatchDecision, "apply_patch must be in deep mode tool decisions");

@@ -50,7 +50,28 @@ Exact-name resolution against Pi's live tool inventory through the tool-provider
 | `deferred` | Recognized name reserved in the status catalog; concrete tool not shipped. |
 | `missing` | No extension claimed the name; Pi has not registered it. |
 
-The status catalog covers `apply_patch`, `task_list`, `web_search`, `read_web_page`, `Task`, `finder`, `oracle`, `librarian`, `find_session`, `read_session`, `handoff`, `chart`, `read_mcp_resource`, `skill` so `/ampi-status` credits the owning extension when a tool is deferred. Sibling extensions claim exact names via `registerMmrToolProvider(...)`; latest-registered wins. Active-tool allowlist enforcement and `tool_call` blocking apply while locked.
+The status catalog covers `apply_patch`, `task_list`, `web_search`, `read_web_page`, `Task`, `finder`, `oracle`, `librarian`, `reviewer`, `start_task`, `task_poll`, `task_wait`, `task_cancel`, `find_session`, `read_session`, `read_mcp_resource` so `/ampi-status` credits the owning extension when a tool is deferred. Sibling extensions claim exact names via `registerMmrToolProvider(...)`; latest-registered wins. Active-tool allowlist enforcement and `tool_call` blocking apply while locked.
+
+### File-editing tools
+
+Every locked mode activates `write` plus one file-editing tool, chosen from the provider of the route the mode resolved:
+
+| Route provider | Editing tools |
+| --- | --- |
+| `openai`, `openai-codex`, `azure` | `apply_patch`, `write` |
+| `anthropic`, `claude-subscription`, and every other provider | `edit`, `write` |
+
+The choice is made again whenever the route changes: on every mode switch, and when a session fallback moves the session to a provider of the other family. `/ampi-status` shows the active pair and the reason on its `Edit tools:` line. To use one family for every route, set `ampiCore.editTools`:
+
+```jsonc
+{
+  "ampiCore": {
+    "editTools": "edit" // "auto" (default) | "patch" | "edit"
+  }
+}
+```
+
+An unknown value is ignored with a settings warning; a project value overrides the global one.
 
 ### Locked-mode extra tools
 
@@ -173,6 +194,7 @@ Locked-mode fields (Free uses a strict subset):
 | `Baseline captured:` | Whether ampi-core has a pre-ampi restore snapshot (no auth detail, never persisted). |
 | `Prompt surface:` | `default` (ampi head replacement) / `passthrough` / `disabled` (Free). |
 | `Active tools:` / `Missing tools:` / `Deferred tools:` / `Gated tools:` / `Disabled tools:` | Outcome of tool resolution per requested tool name. |
+| `Edit tools:` | The file-editing pair in use and why: the route's provider (`auto`) or `ampiCore.editTools`. Runtime-only. |
 | `Tool resolution:` | Each requested tool's provider, status, candidate list, and diagnostic. |
 | `Feature gates:` | Reserved capability gates and resolution. |
 | `Settings files read:` / `Settings warnings:` | Absolute paths that contributed; non-fatal warnings named per file. Runtime-only — not part of `PersistedMmrModeState`. |

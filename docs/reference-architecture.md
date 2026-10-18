@@ -57,7 +57,6 @@ Not implemented yet:
 - non-GitHub repository-provider variants for `librarian`;
 - handoff support and richer session indexing (`ampi-history`);
 - callable skill loading (`ampi-skills`);
-- remaining local-utility tool: `chart` (registry owner `ampi-tasks`);
 - MCP bridging (`ampi-toolbox-mcp`);
 - provider payload rewrites beyond the current mode-owned request policy (`ampi-provider-parity`).
 
@@ -171,13 +170,12 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `read` | Pi (core) | Identity-resolved; always active when Pi exposes it. |
 | `bash` | Pi (core) | Identity-resolved. |
 | `write` | Pi (core) | Identity-resolved. |
-| `edit` | Pi (core) | Identity-resolved. |
+| `edit` | Pi (core) | Identity-resolved. Requested by locked modes on routes outside the OpenAI family (or with `ampiCore.editTools: "edit"`). |
 | `grep` | Pi (core) | Identity-resolved. |
 | `find` | Pi (core) | Identity-resolved. |
 | `ls` | Pi (core) | Identity-resolved. |
-| `apply_patch` | `ampi-patch` | Real tool in `ampi-patch`; deferred when the extension is not loaded. High/Ultra request `apply_patch`, `edit`, and `write` independently. |
+| `apply_patch` | `ampi-patch` | Real tool in `ampi-patch`; deferred when the extension is not loaded. Requested by locked modes on `openai`, `openai-codex`, and `azure` routes (or with `ampiCore.editTools: "patch"`). |
 | `task_list` | `ampi-tasks` | Real tool in `ampi-tasks` (session-local todo); kept available in every enforced mode until each mode explicitly adopts a future `Task` subagent replacement. |
-| `chart` | `ampi-tasks` | Deferred. |
 | `web_search` | `ampi-web` | Active when network is enabled. Uses SearXNG when configured, Brave when keyed, and DuckDuckGo HTML as a no-key fallback. `WebSearchDetails.backend` reports the concrete path. |
 | `read_web_page` | `ampi-web` | Active when network is enabled; uses the custom in-process reader and needs no provider key. |
 | `Task` | `ampi-subagents` | Active in `low`/`medium`/`high`/`ultra`. Mode-derived bounded worker uses `ampi-core`'s `task-subagent` profile. |
@@ -191,10 +189,8 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 | `commit_search` | `ampi-github` | Active when GitHub access is enabled; searches/lists commits. |
 | `diff_github` | `ampi-github` | Active when GitHub access is enabled; compares refs and optional bounded patches. |
 | `list_repositories` | `ampi-github` | Active when GitHub access is enabled; discovers token-accessible and public repositories. |
-| `handoff` | `ampi-history` | Deferred. |
 | `read_session` | `ampi-history` | Active when `AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted); resolves any local Pi session by id; always tries the `history-reader` worker first with opaque project refs and opt-in content redaction, falling back to lexical extraction. |
 | `find_session` | `ampi-history` | Active when `AMPI_HISTORY_ENABLE=true`; enumerates every local Pi session on disk; returns matches with an opaque `projectRef` per session and never raw cwd / file paths. |
-| `skill` | `ampi-skills` | Deferred. |
 | `read_mcp_resource` | `ampi-toolbox-mcp` | Deferred. |
 
 ## `apply_patch` ownership
@@ -208,7 +204,7 @@ All tool names below are concrete Pi tool names. Modes, subagent profiles, custo
 - avoids network access and provider payload mutation;
 - registers itself through `registerMmrToolProvider(...)`. The exact-name status catalog in `ampi-core` credits `ampi-patch` as the owner of `apply_patch` even when extension module caches are isolated, so `/ampi-status` always names the right owning extension.
 
-When `ampi-patch` is not loaded, High/Ultra's `apply_patch` request resolves as `deferred`. Those tiers also request `write` directly, so file-mutation capability is preserved by request structure (not by registry fallback).
+When `ampi-patch` is not loaded, a locked mode's `apply_patch` request on an OpenAI-family route resolves as `deferred`. Every locked mode also requests `write` directly, so file-mutation capability is preserved by request structure (not by registry fallback).
 
 ## Module notes
 

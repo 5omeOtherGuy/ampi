@@ -1,9 +1,10 @@
 import { createMmrFeatureGateRegistry } from "./feature-gates.js";
-import { getMmrMode } from "./modes.js";
+import { getMmrMode, getMmrModeToolNames } from "./modes.js";
 import { createMmrModelPlan } from "./model-resolver.js";
 import type { MmrSubagentPromptRoute } from "./subagent-profiles.js";
 import { createMmrToolRegistry, type MmrToolRegistry } from "./tool-registry.js";
 import type {
+  MmrEditToolFamily,
   MmrFeatureGateDecision,
   MmrFeatureGateProvider,
   MmrFeatureGateRegistry,
@@ -252,7 +253,8 @@ export interface MmrCoreRuntime {
   setMmrSessionIdentity(identity: MmrSessionIdentity | undefined): MmrSessionIdentityWriteResult;
   getPromptRoute(modeKey: MmrModeKey): MmrPromptRoute;
   resolveMmrModel(modeKey: MmrModeKey): MmrModelResolution;
-  resolveMmrTools(modeKey: MmrModeKey, availableTools: readonly string[]): MmrToolResolution;
+  /** Resolve a mode's allowlist; `editToolFamily` adds that family's file-editing tools. */
+  resolveMmrTools(modeKey: MmrModeKey, availableTools: readonly string[], editToolFamily?: MmrEditToolFamily): MmrToolResolution;
   isToolAllowed(toolName: string): boolean;
   registerToolProvider(provider: MmrToolProvider): void;
   getToolRegistry(): MmrToolRegistry;
@@ -350,8 +352,8 @@ export function createMmrCoreRuntime(
       return createMmrModelPlan(getMmrMode(modeKey).modelPreferences);
     },
 
-    resolveMmrTools(modeKey, availableTools) {
-      return toolRegistry.resolve(getMmrMode(modeKey).tools, availableTools);
+    resolveMmrTools(modeKey, availableTools, editToolFamily) {
+      return toolRegistry.resolve(getMmrModeToolNames(modeKey, editToolFamily), availableTools);
     },
 
     isToolAllowed(toolName) {
@@ -631,8 +633,12 @@ export function resolveMmrModel(modeKey: MmrModeKey): MmrModelResolution {
   return runtime.resolveMmrModel(modeKey);
 }
 
-export function resolveMmrTools(modeKey: MmrModeKey, availableTools: readonly string[]): MmrToolResolution {
-  return runtime.resolveMmrTools(modeKey, availableTools);
+export function resolveMmrTools(
+  modeKey: MmrModeKey,
+  availableTools: readonly string[],
+  editToolFamily?: MmrEditToolFamily,
+): MmrToolResolution {
+  return runtime.resolveMmrTools(modeKey, availableTools, editToolFamily);
 }
 
 export function isToolAllowed(toolName: string): boolean {

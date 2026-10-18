@@ -14,6 +14,7 @@ import {
   getMmrSubagentState,
   isMmrManagedModelUpdateActive,
   isToolAllowed,
+  onMmrStateChanged,
   setMmrModeState,
   setMmrSessionIdentity,
   setMmrSubagentState,
@@ -38,7 +39,8 @@ function readPreferredStringFlag(pi: ExtensionAPI, preferred: string, legacy: st
  * registration-order characterization test. Hooks read live controller state
  * via `controller.getActivePolicy()` / `controller.isApplyingMmrMode()` (never
  * a value captured at registration time) and forward mode transitions to the
- * controller.
+ * controller. Afterwards it subscribes the controller's edit-tool refresh to
+ * published mode-state changes.
  */
 export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeController): void {
   function captureSessionIdentity(ctx: ExtensionContext): void {
@@ -282,4 +284,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     if (getMmrSubagentState() || event.aborted) return;
     controller.getAutoCompactor().maybeCompact(ctx, getMmrModeState()?.mode);
   });
+
+  // A route change published outside a mode apply (a session fallback to
+  // another provider) can call for the other edit tool family.
+  onMmrStateChanged(pi, (state) => controller.refreshEditTools(state));
 }

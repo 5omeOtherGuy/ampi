@@ -96,6 +96,8 @@ Mode selection precedence: `--ampi-mode` flag → restored session state → `am
 
 Model IDs above are the shipped defaults; you can override the preference list per mode and per subagent in settings.
 
+The file-editing tool follows the resolved route rather than the mode: OpenAI-family routes (`openai`, `openai-codex`, `azure`) get `apply_patch`, every other route gets Pi's `edit`, and every locked mode keeps `write`. Set `ampiCore.editTools` to `"patch"` or `"edit"` to use one family everywhere; `/ampi-status` shows which is active and why.
+
 Interactive controls:
 
 ```text

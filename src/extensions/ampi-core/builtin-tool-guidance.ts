@@ -58,7 +58,6 @@ const BUILTIN_TOOL_GUIDANCE_BULLETS: Record<BuiltinToolName, readonly string[]> 
   ],
   write: [
     "Use this tool to create a new file that does not yet exist.",
-    "For existing files, prefer `edit` instead—even for extensive changes. Only use write to overwrite an existing file when you are replacing nearly all of its content AND the file is small (under ~250 lines).",
   ],
   grep: [
     "Scope with `path` first; add `glob` when file type matters.",
@@ -69,6 +68,19 @@ const BUILTIN_TOOL_GUIDANCE_BULLETS: Record<BuiltinToolName, readonly string[]> 
     "Use find to find files by name patterns across your codebase. Results are returned in ripgrep's traversal order, not by modification time.",
   ],
 };
+
+/**
+ * The `write` bullet that steers changes to existing files toward the active
+ * editing tool: Pi's `edit`, or `apply_patch` when the locked mode's route
+ * uses the patch family. Omitted when neither is active.
+ */
+function writeExistingFileBullets(active: ReadonlySet<string>): string[] {
+  const editTool = active.has("edit") ? "edit" : active.has("apply_patch") ? "apply_patch" : undefined;
+  if (!editTool) return [];
+  return [
+    `For existing files, prefer \`${editTool}\` instead—even for extensive changes. Only use write to overwrite an existing file when you are replacing nearly all of its content AND the file is small (under ~250 lines).`,
+  ];
+}
 
 export const MMR_BUILTIN_TOOL_GUIDANCE_HEADING = "## Built-in tool guidance";
 
@@ -92,7 +104,9 @@ export function buildBuiltinToolGuidance(
   const groups: string[] = [];
   for (const name of BUILTIN_TOOL_NAMES) {
     if (!active.has(name)) continue;
-    const bullets = BUILTIN_TOOL_GUIDANCE_BULLETS[name];
+    const bullets = name === "write"
+      ? [...BUILTIN_TOOL_GUIDANCE_BULLETS.write, ...writeExistingFileBullets(active)]
+      : BUILTIN_TOOL_GUIDANCE_BULLETS[name];
     const body = bullets.map((b) => `- ${b}`).join("\n");
     groups.push(`${name}:\n${body}`);
   }

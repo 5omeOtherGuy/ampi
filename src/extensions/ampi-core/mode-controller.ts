@@ -3,7 +3,14 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { createMmrAutoCompactor, type MmrAutoCompactor } from "./auto-compact.js";
 import { withMmrModeContextCap } from "./context-cap.js";
 import { getMmrPolicyDiagnostics } from "./diagnostics.js";
-import { DEFAULT_MMR_MODE, getMmrMode, isMmrModeKey, MMR_HOTKEY_MODE_KEYS } from "./modes.js";
+import {
+  DEFAULT_MMR_MODE,
+  getMmrMode,
+  getMmrModeToolNames,
+  isMmrModeKey,
+  MMR_HOTKEY_MODE_KEYS,
+  resolveMmrEditToolFamily,
+} from "./modes.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
 import { resolveAndApplyMmrModel } from "./model-resolver.js";
 import { shouldDropToolForFreeMode } from "./owned-tools.js";
@@ -38,7 +45,17 @@ import { resolveMmrTools as resolveMmrToolNames } from "./tool-registry.js";
 import { loadMmrCoreSettings } from "./settings.js";
 import { AMPI_MODE_STATE_ENTRY, createMmrModeState, findLatestPersistedModeState, toPersistedModeState } from "./state.js";
 import { updateMmrStatus } from "./status.js";
-import type { MmrCoreSettings, MmrLockedModeKey, MmrModeKey, MmrModeSelectionSource, MmrModeState, MmrModelPreference, MmrRejectedModeSource } from "./types.js";
+import type {
+  MmrCoreSettings,
+  MmrEditToolFamilyDecision,
+  MmrEditToolsSetting,
+  MmrLockedModeKey,
+  MmrModeKey,
+  MmrModeSelectionSource,
+  MmrModeState,
+  MmrModelPreference,
+  MmrRejectedModeSource,
+} from "./types.js";
 
 // The picker includes every canonical mode; the cycle drops `free`.
 const CYCLABLE_MMR_MODE_KEYS: MmrModeKey[] = MMR_HOTKEY_MODE_KEYS.filter((mode) => mode !== "free");
@@ -94,6 +111,12 @@ export interface MmrModeController {
     options?: Pick<ApplyModeOptions, "nativeModel" | "nativeThinkingLevel">,
   ): Promise<void>;
   reassertActiveModelInvariants(ctx: ExtensionContext): Promise<void>;
+  /**
+   * Re-resolve the active tools when a published locked-mode state names a
+   * route whose provider calls for another edit tool family (for example
+   * after a session fallback switched providers). No-op otherwise.
+   */
+  refreshEditTools(state: MmrModeState | undefined): void;
   captureBaseline(
     ctx: ExtensionContext,
     options?: { force?: boolean; model?: Parameters<ExtensionAPI["setModel"]>[0]; thinkingLevel?: ThinkingLevel },
@@ -131,6 +154,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let configuredModelPreferences: Partial<Record<MmrModeKey, MmrModelPreference[]>> = {};
   let configuredSubagentModelPreferences: Record<string, MmrModelPreference[]> = {};
   let configuredLockedModeExtraTools: MmrCoreSettings["lockedModeExtraTools"] = {};
+  let configuredEditTools: MmrEditToolsSetting = "auto";
+  // Workspace of the last locked-mode apply; scopes provider extras when the
+  // edit tool family is refreshed outside an apply.
+  let lockedModeCwd: string | undefined;
   let settingsFilesRead: string[] = [];
   let settingsWarnings: string[] = [];
   const autoCompactor = createMmrAutoCompactor({
@@ -217,13 +244,14 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }, rejectedSources);
   }
 
-  function resolveModeToolsWithExtras(
+  function resolveLockedModeTools(
     modeKey: MmrLockedModeKey,
-    baseToolNames: readonly string[],
-    baseResolution: ReturnType<typeof resolveMmrTools>,
+    editTools: MmrEditToolFamilyDecision,
     availableTools: readonly string[],
     cwd: string,
   ): ReturnType<typeof resolveMmrTools> {
+    const baseToolNames = getMmrModeToolNames(modeKey, editTools.family);
+    const baseResolution = resolveMmrTools(modeKey, availableTools, editTools.family);
     const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
       modeKey,
       configuredLockedModeExtraTools,
@@ -377,27 +405,14 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     // Base resolution drives the fail-closed activation check: only the mode's
     // own allowlist may satisfy (or fail) activation. User extras are merged
     // afterward so a typo'd or missing extra can never abort, nor mask a mode
-    // that resolved zero of its own tools.
+    // that resolved zero of its own tools. The check runs before a route is
+    // chosen, so it leaves out the provider-dependent file-editing tool.
     const baseResolution = resolveMmrTools(mode.key, availableTools);
     if (mode.tools.length > 0 && baseResolution.activeTools.length === 0) {
       if (options.notify) ctx.ui.notify(formatZeroToolActivationFailure(mode, baseResolution, previousState), "error");
       updateMmrStatus(ctx, previousState);
       return previousState;
     }
-    // Provider-contributed extras (e.g. ampi-workers enabled custom `sa__*`
-    // subagents scoped to this mode + project) are merged through the same
-    // additive, fail-closed path as settings extras: they never satisfy the
-    // zero-active-tools activation check and a missing name is a no-op. The
-    // reserved `sa__*` namespace is filtered out of the user-controlled
-    // settings extras so a custom subagent can only ever enter a mode through
-    // this scope-aware provider.
-    const toolResolution = resolveModeToolsWithExtras(
-      mode.key as MmrLockedModeKey,
-      mode.tools,
-      baseResolution,
-      availableTools,
-      ctx.cwd,
-    );
 
     applyingMmrMode = true;
     try {
@@ -420,6 +435,17 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         return previousState;
       }
 
+      // The file-editing tools follow the route that was just applied.
+      // Provider-contributed extras (e.g. ampi-workers enabled custom `sa__*`
+      // subagents scoped to this mode + project) are merged through the same
+      // additive, fail-closed path as settings extras: they never satisfy the
+      // zero-active-tools activation check and a missing name is a no-op. The
+      // reserved `sa__*` namespace is filtered out of the user-controlled
+      // settings extras so a custom subagent can only ever enter a mode through
+      // this scope-aware provider.
+      const editTools = resolveMmrEditToolFamily(modelResolution.selectedProvider ?? "", configuredEditTools);
+      const toolResolution = resolveLockedModeTools(mode.key as MmrLockedModeKey, editTools, availableTools, ctx.cwd);
+      lockedModeCwd = ctx.cwd;
       pi.setActiveTools(toolResolution.activeTools);
 
       if (modelResolution.selectedThinkingLevel) {
@@ -454,6 +480,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         rejectedSources: options.rejectedSources,
         modelResolution,
         tools: toolResolution,
+        editTools,
         featureGateDecisions: resolveMmrFeatureGates(mode.featureGates ?? []),
         settingsFilesRead,
         settingsWarnings,
@@ -505,6 +532,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     configuredSubagentModelPreferences = loadedSettings.settings.subagentModelPreferences ?? {};
     configuredLockedModeExtraTools = loadedSettings.settings.lockedModeExtraTools ?? {};
     autoCompactor.setSetting(loadedSettings.settings.autoCompact);
+    configuredEditTools = loadedSettings.settings.editTools ?? "auto";
     settingsFilesRead = [...loadedSettings.filesRead];
     settingsWarnings = [...loadedSettings.warnings];
     notifyWarnings(ctx, loadedSettings.warnings);
@@ -603,6 +631,32 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }
   }
 
+  function refreshEditTools(state: MmrModeState | undefined): void {
+    if (!state?.editTools || state.mode === "free" || !lockedModeCwd || getMmrSubagentState()) return;
+    const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
+    if (editTools.family === state.editTools.family && editTools.provider === state.editTools.provider) return;
+
+    const tools = resolveLockedModeTools(
+      state.mode,
+      editTools,
+      pi.getAllTools().map((tool) => tool.name),
+      lockedModeCwd,
+    );
+    pi.setActiveTools(tools.activeTools);
+    setMmrModeState({
+      ...state,
+      editTools,
+      requestedTools: [...tools.requestedTools],
+      activeTools: [...tools.activeTools],
+      missingTools: [...tools.missingTools],
+      deferredTools: [...tools.deferredTools],
+      gatedTools: [...tools.gatedTools],
+      disabledTools: [...tools.disabledTools],
+      resolution: { ...state.resolution, toolDecisions: tools.decisions.map((decision) => ({ ...decision })) },
+    });
+    publishStateChange();
+  }
+
   async function selectModeFromShortcut(ctx: ExtensionContext): Promise<void> {
     if (ctx.hasUI === false) return;
 
@@ -698,6 +752,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     resolveInitialMode,
     switchLockedModeToFreeForNativeControl,
     reassertActiveModelInvariants,
+    refreshEditTools,
     captureBaseline,
     selectModeFromShortcut,
     cycleModeFromShortcut,

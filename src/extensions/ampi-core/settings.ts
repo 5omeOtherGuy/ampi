@@ -287,6 +287,16 @@ function extractMmrCoreSettings(
     if (autoCompact !== undefined) settings.autoCompact = autoCompact;
   }
 
+  if ("editTools" in raw) {
+    if (raw.editTools === "auto" || raw.editTools === "patch" || raw.editTools === "edit") {
+      settings.editTools = raw.editTools;
+    } else {
+      context.warnings.push(
+        `Ignoring ${rootKey}.editTools in ${context.filePath}: expected "auto", "patch", or "edit".`,
+      );
+    }
+  }
+
   return settings;
 }
 
