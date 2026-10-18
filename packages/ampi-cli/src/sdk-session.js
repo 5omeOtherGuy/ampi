@@ -1,14 +1,16 @@
 // The one way the `ampi` command builds a Pi session through Pi's SDK
 // (docs/sdk.md) instead of Pi's main(). Every command that needs a session
 // in its own process (the `ampi app` worker today; a tools listing and any
-// other SDK user later) calls createAmpiSdkSession, so they all load what an
-// interactive `ampi` loads: Pi's configured packages and extensions, ampi
-// itself unless Pi already loads it, and Pi's built-in codemode, tool_search
-// and MCP extensions, which SDK sessions otherwise leave out. Calls Pi does
-// not document stay in pi-compat.js.
+// other SDK user later) calls createAmpiSdkSession instead of building its
+// own, so they all load what an interactive `ampi` loads: Pi's configured
+// packages and extensions, ampi itself unless Pi already loads it, and Pi's
+// built-in codemode, tool_search and MCP extensions, which SDK sessions
+// otherwise leave out. Pi's CLI also has a llama.cpp provider built in; Pi's
+// SDK does not export it, so these sessions lack it. Calls Pi does not
+// document stay in pi-compat.js.
 import { fileURLToPath } from "node:url";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt } from "./packages.js";
-import { listPiExtensionSources, piSettingsManager } from "./pi-compat.js";
+import { createPiSessionServices, listPiExtensionSources } from "./pi-compat.js";
 
 const PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const CLI_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -77,23 +79,17 @@ export async function createAmpiSdkSession({ cwd, sessionManager, mode, uiContex
 
   /** @param {{ cwd: string, agentDir: string, sessionManager: any, sessionStartEvent?: any }} target */
   const createRuntime = async (target) => {
-    const services = await sdk.createAgentSessionServices({
+    const { services, diagnostics } = await createPiSessionServices(sdk, {
       cwd: target.cwd,
       agentDir: target.agentDir,
-      settingsManager: piSettingsManager(sdk, target.cwd),
-      resourceLoaderOptions: { additionalExtensionPaths, extensionFactories },
+      extensionPaths: additionalExtensionPaths,
+      extensionFactories,
     });
     const created = await sdk.createAgentSessionFromServices({
       services,
       sessionManager: target.sessionManager,
       sessionStartEvent: target.sessionStartEvent,
     });
-    /** @type {{ path: string, error: string }[]} */
-    const errors = services.resourceLoader.getExtensions().errors;
-    const diagnostics = [
-      ...services.diagnostics,
-      ...errors.map(({ path, error }) => ({ type: "error", message: `Failed to load extension "${path}": ${error}` })),
-    ];
     return { ...created, services, diagnostics };
   };
 

@@ -287,7 +287,8 @@ export interface MmrLiveFields {
 
 interface LiveFieldsStore {
   fields: MmrLiveFields;
-  writers: Set<() => void>;
+  /** Each schedules a throttled write, or with `immediate` writes now and resolves once written. */
+  writers: Set<(immediate?: boolean) => unknown>;
 }
 
 // globalThis-anchored so every cache-isolated copy of this module shares one store.
@@ -313,6 +314,15 @@ export function setMmrLiveFields(fields: MmrLiveFields): void {
   const store = liveStore();
   store.fields = { ...store.fields, ...fields };
   for (const schedule of store.writers) schedule();
+}
+
+/**
+ * Write this process's entry now instead of within the write throttle, and
+ * resolve once it is on disk; for a contribution another process must see
+ * before it is told to look, such as the GUI port of a hosted session.
+ */
+export async function flushMmrLiveEntry(): Promise<void> {
+  await Promise.all([...liveStore().writers].map((writer) => writer(true)));
 }
 
 export interface MmrLiveRegistryHooksOptions extends MmrLiveRegistryOptions {
@@ -436,7 +446,13 @@ export function registerMmrLiveRegistry(
     if (`${getMmrModeState()?.mode ?? null}|${status.phase}|${status.label}` !== written) schedule();
   }
 
-  liveStore().writers.add(schedule);
+  liveStore().writers.add((immediate) => {
+    if (!immediate) return schedule();
+    if (!session) return chain;
+    if (timer !== undefined) clearTimer(timer);
+    timer = undefined;
+    return write();
+  });
 
   pi.on("session_start", async (_event, ctx) => {
     const identity = resolveMmrLiveKind(ctx);

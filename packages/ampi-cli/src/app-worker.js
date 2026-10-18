@@ -19,7 +19,13 @@
 //
 // Error codes: `held` (another live process has the file open; `holder` names its kind and pid; exit
 // 3, the file is not opened), `bad-start`, `missing`, `no-ampi`, `ampi-too-old`, `no-gui` and `failed`
-// (exit 1). The worker also stops when the channel closes.
+// (exit 1; also for any error while opening the file or locating ampi). The worker also stops when
+// the channel closes, before it is ready too: a cancelled start never builds a session.
+//
+// The worker binds no command actions, so its session's runtime is never
+// replaced. A worker that binds them (for /new or /resume) has to rebind its
+// activity subscription to the new runtime.session, as Pi's session runtime
+// example does, and report the new GUI port.
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { findLiveOwner, liveRegistryDir } from "./live-registry.js";
@@ -148,6 +154,17 @@ export async function runAppWorker(options) {
   try {
     const message = await started;
     if (message === undefined) return 0;
+    return await serve(message);
+  } catch (error) {
+    return await fail("failed", `Could not start the session: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    channel.off("message", onMessage);
+    channel.off("disconnect", stop);
+    if (runtime !== undefined) await runtime.dispose();
+  }
+
+  /** @param {Record<string, any>} message @returns {Promise<number>} */
+  async function serve(message) {
     const start = parseStart(message);
     if (start === undefined) return await fail("bad-start", "The start message needs a token and either session.path or session.cwd.");
 
@@ -170,6 +187,7 @@ export async function runAppWorker(options) {
     const cwd = sessionManager.getCwd();
 
     const located = await locateAmpi(pi, cwd);
+    if (stopRequested) return 0;
     if (located.ampi === undefined) return await fail("no-ampi", "Cannot find the ampi package this session would load.");
     if (!existsSync(path.join(located.ampi.root, GUI_HOST_SEAM))) {
       return await fail(
@@ -189,11 +207,7 @@ export async function runAppWorker(options) {
     });
     // ampi's extensions read settings relative to the working directory.
     chdir(cwd);
-    try {
-      runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: undefined, connectMcp: true, pi });
-    } catch (error) {
-      return await fail("failed", `Could not start the session: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: undefined, connectMcp: true, pi });
     if (port === undefined) {
       /** @type {string[]} */
       const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);
@@ -210,9 +224,5 @@ export async function runAppWorker(options) {
     await stopped;
     unsubscribe();
     return 0;
-  } finally {
-    channel.off("message", onMessage);
-    channel.off("disconnect", stop);
-    if (runtime !== undefined) await runtime.dispose();
   }
 }

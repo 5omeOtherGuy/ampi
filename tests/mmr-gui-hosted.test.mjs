@@ -34,9 +34,13 @@ afterEach(async () => {
 });
 
 /** Register a session host the way `ampi app --worker` does; returns the ports it was told. */
-async function registerHost() {
+async function registerHost(onReady = () => {}) {
   const ready = [];
-  globalThis[await hostKey()] = { role: "session", token: HOST_TOKEN, ownerPid: OWNER_PID, ready: (info) => ready.push(info) };
+  const record = (info) => {
+    ready.push(info);
+    onReady(info);
+  };
+  globalThis[await hostKey()] = { role: "session", token: HOST_TOKEN, ownerPid: OWNER_PID, ready: record };
   return ready;
 }
 
@@ -100,15 +104,20 @@ describe("ampi-gui in a hosted session", () => {
     await emit("session_shutdown", { reason: "quit" });
   });
 
-  it("records the session as an app-session of the host, with the GUI's port", async () => {
-    const ready = await registerHost();
-    const { emit, entry } = await load({ enabled: true });
+  it("records the session as an app-session of the host, with the GUI's port, before it tells the host", async () => {
+    let atReady;
+    const ready = await registerHost(() => {
+      atReady = JSON.parse(readFileSync(path.join(dir, `${process.pid}.json`), "utf8"));
+    });
+    const { dir, emit, entry } = await load({ enabled: true });
     await emit("session_start", { reason: "startup" });
+    const tokenHash = createHash("sha256").update(HOST_TOKEN).digest("hex");
+    assert.deepEqual(atReady?.gui, { port: ready[0].port, tokenHash }, "the entry has the GUI when ready fires");
     const recorded = await entry();
     assert.equal(recorded.kind, "app-session");
     assert.equal(recorded.ownerPid, OWNER_PID);
     assert.equal(recorded.sessionPath, "/sessions/s-1.jsonl");
-    assert.deepEqual(recorded.gui, { port: ready[0].port, tokenHash: createHash("sha256").update(HOST_TOKEN).digest("hex") });
+    assert.deepEqual(recorded.gui, { port: ready[0].port, tokenHash });
     await emit("session_shutdown", { reason: "quit" });
   });
 

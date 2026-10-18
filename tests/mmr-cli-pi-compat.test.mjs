@@ -10,6 +10,7 @@ import { after, before, describe, it } from "node:test";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
 import {
   createPiModelLookup,
+  createPiSessionServices,
   listPiExtensionSources,
   listPiSessions,
   loadThroughPi,
@@ -330,5 +331,57 @@ describe("Pi calls used by the config commands", () => {
     const read = piSettingsManager(pi, trusted);
     assert.equal(read.isProjectTrusted(), true);
     assert.deepEqual(read.getSettings().ampi, { keymap: { "thread.new": "alt+t" } });
+  });
+});
+
+describe("Pi calls used by SDK sessions", () => {
+  const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, home: process.env.HOME };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-services-"));
+  const agentDir = path.join(dir, "agent");
+  const project = path.join(dir, "project");
+  const good = path.join(dir, "extensions", "good.ts");
+  const broken = path.join(dir, "extensions", "broken.ts");
+
+  before(() => {
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.HOME = path.join(dir, "home");
+    mkdirSync(project, { recursive: true });
+    mkdirSync(path.dirname(good), { recursive: true });
+    writeFileSync(good, "export default function (): void {}\n");
+    writeFileSync(broken, 'export default function (): void {\n  throw new Error("probe extension failed");\n}\n');
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", savedEnv.agentDir],
+      ["HOME", savedEnv.home],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("creates services that load the extra extension paths and factories, with load failures as error diagnostics", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const factoryRan = [];
+    const { services, diagnostics } = await createPiSessionServices(pi, {
+      cwd: project,
+      agentDir,
+      extensionPaths: [good, broken],
+      extensionFactories: [{ name: "probe-factory", factory: () => factoryRan.push(true) }],
+    });
+
+    const loaded = services.resourceLoader.getExtensions().extensions.map((extension) => extension.path);
+    assert.ok(loaded.includes(good), loaded.join(", "));
+    assert.ok(loaded.includes("<inline:probe-factory>"), loaded.join(", "));
+    assert.equal(loaded.includes(broken), false);
+    assert.deepEqual(factoryRan, [true]);
+    const errors = diagnostics.filter((diagnostic) => diagnostic.type === "error").map((diagnostic) => diagnostic.message);
+    assert.equal(errors.length, 1, errors.join("\n"));
+    assert.match(errors[0], /broken\.ts/);
+    assert.match(errors[0], /probe extension failed/);
+    // The services use the settings piSettingsManager reads, project trust included.
+    assert.equal(services.settingsManager.isProjectTrusted(), piSettingsManager(pi, project).isProjectTrusted());
   });
 });

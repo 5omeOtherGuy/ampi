@@ -230,6 +230,44 @@ describe("ampi app worker protocol", () => {
     assert.equal(fakes.calls.disposed, 1);
   });
 
+  it("answers failed and exits 1 when Pi cannot open the session file", async () => {
+    const cwd = tempDir();
+    const file = path.join(cwd, "broken.jsonl");
+    writeFileSync(file, "not json\n");
+    const fakes = createFakes(cwd);
+    fakes.pi.SessionManager.open = () => {
+      throw new Error(`Session file is not a valid pi session: ${file}`);
+    };
+    const channel = createChannel();
+    const exit = startWorker(channel, fakes, path.join(cwd, "live"));
+    channel.emit("message", { type: "start", token: TOKEN, session: { path: file } });
+
+    assert.equal(await exit, 1);
+    assert.equal(channel.sent.length, 1);
+    assert.equal(channel.sent[0].type, "error");
+    assert.equal(channel.sent[0].code, "failed");
+    assert.match(channel.sent[0].message, /not a valid pi session/);
+    assert.deepEqual(fakes.calls.sessions, []);
+  });
+
+  it("builds no session when stop arrives while it locates ampi", async () => {
+    const cwd = tempDir();
+    const fakes = createFakes(cwd);
+    const channel = createChannel();
+    const exit = startWorker(channel, fakes, path.join(cwd, "live"), {
+      locateAmpi: async (...args) => {
+        channel.emit("message", { type: "stop" });
+        return fakes.locateAmpi(...args);
+      },
+    });
+    channel.emit("message", { type: "start", token: TOKEN, session: { cwd } });
+
+    assert.equal(await exit, 0);
+    assert.deepEqual(channel.sent, []);
+    assert.deepEqual(fakes.calls.sessions, []);
+    assert.equal(fakes.calls.disposed, 0);
+  });
+
   it("refuses a malformed start and an ampi without the GUI host seam", async () => {
     const cwd = tempDir();
     const fakes = createFakes(cwd);

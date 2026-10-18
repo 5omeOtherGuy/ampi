@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
 import { getMmrGuiHost } from "../ampi-core/gui-host.js";
-import { readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
+import { flushMmrLiveEntry, readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands } from "./commands.js";
@@ -107,8 +107,12 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       if (!hosted) {
         ctx.ui.notify(`Web GUI: ${url}`, "info");
       } else if (!hostReady) {
-        // The host already holds the token; it builds the link itself.
+        // The host already holds the token; it builds the link itself. The
+        // entry is written first, so a host that reads the registry on ready
+        // finds the GUI there. A host whose runtime can replace the session
+        // (none binds command actions yet) would need each new port too.
         hostReady = true;
+        await flushMmrLiveEntry();
         host.ready({ port: server.port });
       }
     });
