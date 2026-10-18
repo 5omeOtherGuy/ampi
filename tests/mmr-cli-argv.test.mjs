@@ -115,6 +115,46 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("reads --stats, --output-tool and --mcp-config in both spellings and keeps them away from Pi", () => {
+    const plain = routeAmpiArgv(["-x", "go"]).options;
+    assert.deepEqual([plain.stats, plain.outputTool, plain.mcpConfig, plain.pluginReadyTimeout], [false, undefined, undefined, undefined]);
+    const stats = routeAmpiArgv(["-x", "--stats", "go"]);
+    assert.equal(stats.options.stats, true);
+    assert.deepEqual(stats.piArgs, ["go"]);
+    for (const argv of [["--output-tool", "read", "go"], ["--output-tool=read", "go"]]) {
+      const route = routeAmpiArgv(["-x", ...argv]);
+      assert.equal(route.options.outputTool, "read", argv.join(" "));
+      assert.deepEqual(route.piArgs, ["go"], argv.join(" "));
+    }
+    const json = '{"docs": {"url": "https://example.com/mcp"}}';
+    for (const argv of [["--mcp-config", json, "go"], [`--mcp-config=${json}`, "go"], ["--mcp-config", "servers.json", "go"]]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi", argv.join(" "));
+      assert.equal(route.options.mcpConfig, argv[0] === "--mcp-config" ? argv[1] : json, argv.join(" "));
+      assert.deepEqual(route.piArgs, ["go"], argv.join(" "));
+    }
+  });
+
+  it("reads --plugin-ready-timeout bare, with = and with a number of seconds after it, and keeps a message after it", () => {
+    const cases = [
+      [["--plugin-ready-timeout"], 10, []],
+      [["--plugin-ready-timeout=0"], 0, []],
+      [["--plugin-ready-timeout=300", "go"], 300, ["go"]],
+      [["--plugin-ready-timeout", "30", "x"], 30, ["x"]],
+      [["--plugin-ready-timeout", "0", "x"], 0, ["x"]],
+      [["--plugin-ready-timeout", "fix the bug"], 10, ["fix the bug"]],
+      // Not a number of seconds from 0 to 300, so it is the message.
+      [["--plugin-ready-timeout", "301"], 10, ["301"]],
+      [["--plugin-ready-timeout", "--model", "a/b"], 10, ["--model", "a/b"]],
+    ];
+    for (const [argv, seconds, piArgs] of cases) {
+      const route = routeAmpiArgv(["-x", ...argv]);
+      assert.equal(route.command, "pi", argv.join(" "));
+      assert.equal(route.options.pluginReadyTimeout, seconds, argv.join(" "));
+      assert.deepEqual(route.piArgs, piArgs, argv.join(" "));
+    }
+  });
+
   it("maps --pi-help to Pi's own --help", () => {
     const route = routeAmpiArgv(["--pi-help"]);
     assert.equal(route.command, "pi");
@@ -183,12 +223,48 @@ describe("ampi argv router: help, version and errors", () => {
     }
   });
 
+  it("rejects --stats and --output-tool together with stream JSON or with each other", () => {
+    for (const [argv, message] of [
+      [["-x", "--stats", "--stream-json"], "--stats cannot be combined with --stream-json."],
+      [["-x", "--stream-json-thinking", "--stats"], "--stats cannot be combined with --stream-json-thinking."],
+      [["-x", "--output-tool", "bash", "--stream-json"], "--output-tool cannot be combined with --stream-json."],
+      [["-x", "--output-tool=bash", "--stream-json-thinking"], "--output-tool cannot be combined with --stream-json-thinking."],
+      [["-x", "--stats", "--output-tool", "bash"], "--stats cannot be combined with --output-tool."],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "error", argv.join(" "));
+      assert.equal(route.error, message);
+      assert.deepEqual(route.piArgs, []);
+    }
+  });
+
+  it("rejects a --plugin-ready-timeout value outside 0 to 300 seconds", () => {
+    for (const value of ["301", "-1", "", "5s", "1.5", "1000"]) {
+      const route = routeAmpiArgv(["-x", `--plugin-ready-timeout=${value}`, "go"]);
+      assert.equal(route.command, "error", value);
+      assert.equal(route.error, `--plugin-ready-timeout takes whole seconds from 0 to 300, not "${value}".`);
+    }
+    // Followed by -1, which is not a number of seconds, the flag is bare and -1 goes to Pi.
+    const bare = routeAmpiArgv(["-x", "--plugin-ready-timeout", "-1"]);
+    assert.equal(bare.options.pluginReadyTimeout, 10);
+    assert.deepEqual(bare.piArgs, ["-1"]);
+  });
+
+  it("rejects a second --mcp-config", () => {
+    const route = routeAmpiArgv(["--mcp-config", "a.json", "--mcp-config={}"]);
+    assert.equal(route.command, "error");
+    assert.equal(route.error, "--mcp-config can be given only once.");
+  });
+
   it("rejects ampi options that are missing their value", () => {
     for (const [argv, pattern] of [
       [["-m"], /-m needs a mode/],
       [["--mode"], /--mode needs a mode/],
       [["--title"], /--title needs a value/],
       [["-l"], /-l needs a value/],
+      [["-x", "--output-tool"], /--output-tool needs a tool name/],
+      [["-x", "--output-tool="], /--output-tool needs a tool name/],
+      [["--mcp-config"], /--mcp-config needs MCP servers/],
     ]) {
       const route = routeAmpiArgv(argv);
       assert.equal(route.command, "error", argv.join(" "));

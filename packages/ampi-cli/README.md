@@ -43,10 +43,14 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 | `--stream-json` | In execute mode, print the run as JSON records, one per line, instead of the final message. See [Stream JSON](#stream-json). |
 | `--stream-json-thinking` | `--stream-json` with the model's thinking blocks. |
 | `--stream-json-input` | With `--stream-json`, read the messages from stdin as JSON lines and keep the session open until stdin ends. See [Messages on stdin](#messages-on-stdin). |
+| `--stats` | In execute mode, print one JSON line with the run's result, turns, token usage and cost instead of the final message. See [One summary line](#one-summary-line). |
+| `--output-tool <name>` | In execute mode, print the text of the last finished call to that tool instead of the final message. See [One tool's output](#one-tools-output). |
+| `--plugin-ready-timeout [seconds]` | Accepted in execute mode and has no effect: Pi loads every extension before the run starts. |
 | `--timings` | In execute mode, print the startup, turn and total durations to stderr. |
 | `--no-archive-after-execute` | Keep an execute-mode session out of the archive. |
 | `--title <title>` | Name the session; the same as Pi's `--name`. |
 | `-l`, `--label <label>` | Add a label to the session in ampi's thread index. Repeat it for several labels. |
+| `--mcp-config <json\|path>` | Connect MCP servers for this run only. See [MCP servers for one run](#mcp-servers-for-one-run). |
 | `--settings-file <path>` | Rejected: Pi reads its settings from its configuration directory; set `PI_CODING_AGENT_DIR` to use another one. |
 | `-h`, `--help`, `help` | Print ampi's help. |
 | `-V`, `-v`, `--version`, `version` | Print the versions. |
@@ -69,7 +73,42 @@ ampi < prompt.txt > answer.md        # execute mode without -x: input and output
 - **Threads.** A session the run creates is archived in ampi's thread index when the run ends, so it stays out of the way of interactive work; `--no-archive-after-execute` keeps it unarchived. A session continued with `-c`, `-r` or `--session` that already had messages is left as it was. `--title` names the session, and `-l` adds labels to it. Archive and labels need the `ampi-threads` extension, which is on by default; when it is off, labels are reported on stderr as not stored and nothing is archived.
 - **Tools.** Pi does not ask before tool calls, so the agent uses its tools as in an interactive session. Execute mode has no terminal to ask in: an extension that asks you to confirm something gets "no", as in Pi's print mode.
 
-Exit status: `0` when the final message was printed, `1` when the agent or Pi failed (the error is on stderr; an answer cut off at the model's output limit also counts), `2` for a usage error, such as no message in the argument or on stdin. `--timings` and `--no-archive-after-execute` outside execute mode are usage errors too.
+Exit status: `0` when the final message was printed, `1` when the agent or Pi failed (the error is on stderr; an answer cut off at the model's output limit also counts), `2` for a usage error, such as no message in the argument or on stdin. `--timings`, `--no-archive-after-execute`, `--stats`, `--output-tool` and `--plugin-ready-timeout` outside execute mode are usage errors too.
+
+`--plugin-ready-timeout` is accepted for scripts written for other tools and does nothing: Pi has loaded every extension before the run starts. Its value is optional: `--plugin-ready-timeout=N`, or the next argument when that is a whole number from 0 to 300; anything else after it, such as the message, stays an argument. An `=` value outside 0 to 300 is a usage error.
+
+### One summary line
+
+`ampi -x --stats` prints nothing while the run is in progress and one JSON line when it ends, instead of the final message: the fields of the [stream JSON](#stream-json) `result` record (`type`, `subtype`, `is_error`, `duration_ms`, `num_turns`, `result` or `error`, `session_id`, `usage`), plus `total_cost_usd`, the cost of the run's model responses in US dollars as Pi computes it from the model's price. When no response has a cost, for example with a model whose price Pi does not know, `total_cost_usd` is left out rather than written as 0.
+
+```bash
+ampi -x --stats "list the npm scripts" | jq '{num_turns, total_cost_usd}'
+```
+
+The exit status is the same as with `--stream-json`. `--stats` cannot be combined with `--stream-json`, `--stream-json-thinking`, `--output-tool` or Pi's `--mode`.
+
+### One tool's output
+
+`ampi -x --output-tool <name>` prints the result of the last call to the tool with exactly that name that finished during the run, instead of the final message: its text, ending with a newline. Images in the result are left out, with a note on stderr.
+
+```bash
+ampi -x --output-tool bash "run the test suite once" > test-output.txt
+```
+
+Exit status: `0` when that call succeeded; `1` when it failed (its text is still printed), when no call to the tool finished (stdout stays empty and stderr says so), or when the run failed; `2` for a usage error. `--output-tool` cannot be combined with `--stream-json`, `--stream-json-thinking`, `--stats` or Pi's `--mode`.
+
+### MCP servers for one run
+
+`--mcp-config` connects MCP servers for one run, in execute mode or in an interactive session, without changing Pi's `mcp.json` files. The value is JSON when it starts with `{`, and otherwise the path of a JSON file, relative to the working directory. Both Pi's `mcp.json` format (`{"mcpServers": {...}}`) and a bare object of servers by name are accepted; each entry has the fields of an entry in Pi's `mcp.json` (`command`, `args`, `env`, `url`, `headers`, `exposure` and the others).
+
+```bash
+ampi -x --mcp-config '{"docs": {"url": "https://example.com/mcp", "exposure": "direct"}}' "find the setup guide"
+ampi --mcp-config ./ci-servers.json
+```
+
+- **Connection.** The servers are registered with Pi while its extensions load and connect when the session starts, next to the servers from `mcp.json`; they are registered again after `/reload`, `/new` and the other commands that replace the session.
+- **Same name.** A server of the same name in the user's `mcp.json` or the project's `.pi/mcp.json` is the one Pi uses. ampi then says on stderr, or as a notification in the terminal UI, that the flag's entry is not used.
+- **Usage errors.** Exit status `2`, before the run starts, for a file that cannot be read, a value that is not valid JSON or not an object of servers, an entry Pi rejects (it names the problem), a second `--mcp-config`, and `--mcp-config` together with Pi's `--no-mcp`.
 
 ## Stream JSON
 

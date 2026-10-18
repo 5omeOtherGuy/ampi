@@ -41,6 +41,15 @@ Options:
   --stream-json-input
       With --stream-json, read the messages from stdin, one JSON user message per line, and
       print a result record after each run; no message argument
+  --stats
+      In execute mode, print one JSON line at the end instead of the final message: the
+      result, the number of turns, the token usage and, when the model reports it, the cost
+  --output-tool <name>
+      In execute mode, print the text of the last finished call to that tool instead of the
+      final message; exit 1 when that call failed or no call finished
+  --plugin-ready-timeout [seconds]
+      Accepted in execute mode and has no effect: Pi loads every extension before the run
+      starts, so there is nothing to wait for
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute
@@ -49,6 +58,9 @@ Options:
       Name the session (Pi's --name)
   -l, --label <label>
       Add a label to the session in ampi's thread index. Repeat the flag for several labels.
+  --mcp-config <json|path>
+      Connect these MCP servers for this run, given as JSON or a JSON file in the mcpServers
+      format of Pi's mcp.json; a server of the same name in an mcp.json file is used instead
   -h, --help
       Print this help and exit
   -V, -v, --version

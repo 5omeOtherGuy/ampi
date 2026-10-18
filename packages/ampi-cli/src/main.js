@@ -8,8 +8,10 @@ import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
 import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll } from "./execute.js";
+import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
 import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
+import { createStatsOutput, createStreamJsonOutput, createToolOutput } from "./run-output.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
 import { createStreamJsonInputDriver } from "./stream-json-input.js";
 
@@ -92,6 +94,23 @@ async function startPi({ piArgs, options }) {
     process.stderr.write(`ampi: --stream-json replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
     return 2;
   }
+  /** @type {[string, boolean][]} The other execute-mode flags that were given. */
+  const executeFlags = [
+    ["--stats", options.stats],
+    ["--output-tool", options.outputTool !== undefined],
+    ["--plugin-ready-timeout", options.pluginReadyTimeout !== undefined],
+  ];
+  for (const [flag, given] of executeFlags) {
+    if (!given) continue;
+    if (!execute) {
+      process.stderr.write(`ampi: ${flag} needs execute mode (-x).\n`);
+      return 2;
+    }
+    if (parsed.mode !== undefined && flag !== "--plugin-ready-timeout") {
+      process.stderr.write(`ampi: ${flag} replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
+      return 2;
+    }
+  }
   if (options.streamJsonInput && (parsed.messages.length > 0 || parsed.fileArgs.length > 0)) {
     process.stderr.write("ampi: --stream-json-input reads every message from stdin; leave out the message argument.\n");
     return 2;
@@ -101,6 +120,20 @@ async function startPi({ piArgs, options }) {
     return 2;
   }
   const cwd = process.cwd();
+  /** @type {Record<string, unknown> | undefined} */
+  let mcpServers;
+  if (options.mcpConfig !== undefined) {
+    if (parsed.noMcp) {
+      process.stderr.write("ampi: --mcp-config needs Pi's MCP support; leave out --no-mcp.\n");
+      return 2;
+    }
+    const read = readMcpConfigFlag(options.mcpConfig, cwd);
+    if ("error" in read) {
+      process.stderr.write(`ampi: ${read.error}\n`);
+      return 2;
+    }
+    mcpServers = read.servers;
+  }
   const decision = decideAmpiLoad({
     piArgs: args,
     pi: await listPiExtensionSources(pi, cwd),
@@ -139,12 +172,17 @@ async function startPi({ piArgs, options }) {
     timings: execute && options.timings,
   });
   const extensionFactories = [{ name: "ampi-cli", factory: runExtension, hidden: true }];
-  if (!options.streamJson) {
-    await pi.main(args, { extensionFactories });
-    return undefined;
+  if (mcpServers !== undefined) {
+    const factory = createMcpConfigExtension(mcpServers, { agentDir: pi.getAgentDir(), configDirName: pi.CONFIG_DIR_NAME });
+    extensionFactories.push({ name: "ampi-cli-mcp-config", factory, hidden: true });
   }
   if (options.streamJsonInput) return runStreamJsonInput(pi, args, extensionFactories, options.streamJsonThinking);
-  return runStreamJson(pi, args, extensionFactories, options.streamJsonThinking);
+  if (options.streamJson) return runPiJson(pi, args, extensionFactories, options.streamJsonThinking, createStreamJsonOutput);
+  if (options.stats) return runPiJson(pi, args, extensionFactories, false, createStatsOutput);
+  const { outputTool } = options;
+  if (outputTool !== undefined) return runPiJson(pi, args, extensionFactories, false, (encoder) => createToolOutput(outputTool, encoder));
+  await pi.main(args, { extensionFactories });
+  return undefined;
 }
 
 /**
@@ -259,21 +297,24 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
 }
 
 /**
- * Run Pi's JSON mode and print stream JSON records in place of its events.
+ * Run Pi's JSON mode and print what `outputOf` makes of its events in their
+ * place (see run-output.js): stream JSON records, the `--stats` line or the
+ * `--output-tool` result. Every output reads the events through one stream
+ * JSON encoder.
  *
  * @param {any} pi The `@earendil-works/pi-coding-agent` module.
  * @param {string[]} args Pi's arguments for an execute run.
  * @param {{ name: string, factory: (pi: any) => void, hidden: boolean }[]} extensionFactories
- * @param {boolean} thinking
+ * @param {boolean} thinking Whether the encoder keeps thinking blocks.
+ * @param {(encoder: import("./stream-json.js").StreamJsonEncoder) => import("./run-output.js").RunOutput} outputOf
  * @returns {Promise<number>}
  */
-async function runStreamJson(pi, args, extensionFactories, thinking) {
+async function runPiJson(pi, args, extensionFactories, thinking, outputOf) {
   /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
   let runtime;
   const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
-  /** @param {import("./stream-json.js").StreamJsonRecord[]} records */
-  const lines = (records) => records.map((record) => `${JSON.stringify(record)}\n`).join("");
-  const output = capturePiJsonOutput((event) => lines(encoder.push(event)));
+  const runOutput = outputOf(encoder);
+  const output = capturePiJsonOutput((event) => runOutput.push(event));
   try {
     const factory = (/** @type {any} */ api) => {
       runtime = api;
@@ -284,9 +325,10 @@ async function runStreamJson(pi, args, extensionFactories, thinking) {
   }
   // Pi's JSON mode sets a failing exit code only when the run threw; the error is then on stderr.
   const failed = process.exitCode !== undefined && process.exitCode !== 0;
-  const { records, exitCode } = encoder.finish(failed ? "Pi stopped with an error; see stderr." : undefined);
-  await output.write(lines(records));
-  return failed ? Number(process.exitCode) : exitCode;
+  const end = runOutput.finish(failed ? "Pi stopped with an error; see stderr." : undefined);
+  if (end.stderr !== "") process.stderr.write(end.stderr);
+  if (end.stdout !== "") await output.write(end.stdout);
+  return failed ? Number(process.exitCode) : end.exitCode;
 }
 
 /**

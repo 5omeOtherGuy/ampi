@@ -16,6 +16,10 @@ import { parseArgs } from "node:util";
  * @property {boolean} streamJson `--stream-json`: print stream JSON records instead of the final message (execute mode).
  * @property {boolean} streamJsonThinking `--stream-json-thinking`: `--stream-json` with thinking blocks.
  * @property {boolean} streamJsonInput `--stream-json-input`: read the messages from stdin as JSON lines (stream JSON only).
+ * @property {boolean} stats `--stats`: print one JSON line with the run's result and usage (execute mode).
+ * @property {string} [outputTool] `--output-tool`: print the text of the last finished call to this tool (execute mode).
+ * @property {string} [mcpConfig] `--mcp-config`: MCP servers for this run, as JSON or a file path.
+ * @property {number} [pluginReadyTimeout] `--plugin-ready-timeout`, in seconds: accepted in execute mode and not used.
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
@@ -50,6 +54,11 @@ const OPTIONS = /** @type {const} */ ({
   "stream-json": { type: "boolean" },
   "stream-json-thinking": { type: "boolean" },
   "stream-json-input": { type: "boolean" },
+  stats: { type: "boolean" },
+  "output-tool": { type: "string" },
+  "mcp-config": { type: "string" },
+  // Its value is optional, so the router decides whether the next argument is one.
+  "plugin-ready-timeout": { type: "boolean" },
   "settings-file": { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
@@ -83,6 +92,17 @@ const PI_VALUE_OPTIONS = /** @type {const} */ ({
   theme: { type: "string" },
 });
 
+/** The most seconds `--plugin-ready-timeout` takes, and the value of its bare form. */
+const PLUGIN_READY_TIMEOUT_MAX = 300;
+const PLUGIN_READY_TIMEOUT_BARE = 10;
+
+/** @param {string | undefined} text @returns {number | undefined} The seconds, or undefined when `text` is not 0 to 300. */
+const pluginReadyTimeoutOf = (text) => {
+  if (text === undefined || !/^\d{1,3}$/.test(text)) return undefined;
+  const seconds = Number(text);
+  return seconds <= PLUGIN_READY_TIMEOUT_MAX ? seconds : undefined;
+};
+
 const SETTINGS_FILE_ERROR =
   "--settings-file is not supported: Pi reads settings.json from its configuration directory and the project's .pi/ directory. " +
   "Set PI_CODING_AGENT_DIR to use another configuration directory.";
@@ -108,6 +128,7 @@ export function routeAmpiArgv(argv) {
     streamJson: false,
     streamJsonThinking: false,
     streamJsonInput: false,
+    stats: false,
   };
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
@@ -152,6 +173,8 @@ export function routeAmpiArgv(argv) {
   let version = false;
   /** @type {string | undefined} */
   let error;
+  /** @type {string | undefined} The stream JSON flag as given, for the messages about flags it excludes. */
+  let streamJsonFlag;
 
   for (const token of tokens) {
     if (token.kind === "option-terminator") {
@@ -222,17 +245,45 @@ export function routeAmpiArgv(argv) {
         break;
       case "stream-json":
         options.streamJson = true;
+        streamJsonFlag ??= "--stream-json";
         break;
       case "stream-json-thinking":
         options.streamJson = true;
         options.streamJsonThinking = true;
+        streamJsonFlag ??= "--stream-json-thinking";
         break;
       case "stream-json-input":
         options.streamJsonInput = true;
         break;
+      case "stats":
+        options.stats = true;
+        break;
+      case "output-tool":
+        if (value === undefined || value === "") error ??= "--output-tool needs a tool name, for example --output-tool bash.";
+        else options.outputTool = value;
+        break;
+      case "mcp-config":
+        if (options.mcpConfig !== undefined) error ??= "--mcp-config can be given only once.";
+        else if (value === undefined) error ??= "--mcp-config needs MCP servers as JSON or a file path.";
+        else options.mcpConfig = value;
+        break;
+      case "plugin-ready-timeout":
+        if (token.inlineValue) {
+          options.pluginReadyTimeout = pluginReadyTimeoutOf(value);
+          if (options.pluginReadyTimeout === undefined) error ??= `--plugin-ready-timeout takes whole seconds from 0 to ${PLUGIN_READY_TIMEOUT_MAX}, not "${value}".`;
+        } else {
+          // The next argument is the value only when it is a number of seconds; otherwise it stays the message.
+          const next = pluginReadyTimeoutOf(args[token.index + 1]);
+          if (next !== undefined) passed.add(token.index + 1);
+          options.pluginReadyTimeout = next ?? PLUGIN_READY_TIMEOUT_BARE;
+        }
+        break;
     }
   }
   if (options.streamJsonInput && !options.streamJson) error ??= "--stream-json-input needs --stream-json or --stream-json-thinking.";
+  if (options.stats && streamJsonFlag !== undefined) error ??= `--stats cannot be combined with ${streamJsonFlag}.`;
+  if (options.outputTool !== undefined && streamJsonFlag !== undefined) error ??= `--output-tool cannot be combined with ${streamJsonFlag}.`;
+  if (options.stats && options.outputTool !== undefined) error ??= "--stats cannot be combined with --output-tool.";
 
   if (error !== undefined) return { command: "error", piArgs: [], options, error };
   if (help) return { command: "help", piArgs: [], options };
@@ -289,6 +340,15 @@ Options:
   --stream-json-input
       With --stream-json, read the messages from stdin, one JSON user message per line, and
       print a result record after each run; no message argument
+  --stats
+      In execute mode, print one JSON line at the end instead of the final message: the
+      result, the number of turns, the token usage and, when the model reports it, the cost
+  --output-tool <name>
+      In execute mode, print the text of the last finished call to that tool instead of the
+      final message; exit 1 when that call failed or no call finished
+  --plugin-ready-timeout [seconds]
+      Accepted in execute mode and has no effect: Pi loads every extension before the run
+      starts, so there is nothing to wait for
   --timings
       In execute mode, print the startup, turn and total durations to stderr
   --no-archive-after-execute
@@ -297,6 +357,9 @@ Options:
       Name the session (Pi's --name)
   -l, --label <label>
       Add a label to the session in ampi's thread index. Repeat the flag for several labels.
+  --mcp-config <json|path>
+      Connect these MCP servers for this run, given as JSON or a JSON file in the mcpServers
+      format of Pi's mcp.json; a server of the same name in an mcp.json file is used instead
   -h, --help
       Print this help and exit
   -V, -v, --version
