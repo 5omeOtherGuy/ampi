@@ -438,7 +438,7 @@ function formatAutoCompact(status: MmrAutoCompactStatus): string[] {
   );
   if (status.failure) {
     lines.push(
-      `  Auto-compaction backoff: attempt at ${formatMmrCompactTokens(status.failure.tokens)} tokens failed (${status.failure.message}); next try once the context grows past it`,
+      `  Auto-compaction backoff: attempt at ${formatMmrCompactTokens(status.failure.tokens)} tokens failed or was cancelled (${status.failure.message}); next try once the context grows past it`,
     );
   }
   return lines;

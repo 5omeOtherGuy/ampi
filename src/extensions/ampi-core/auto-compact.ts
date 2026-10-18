@@ -16,9 +16,13 @@
  * - one compaction at a time: no new request while an earlier one is running;
  * - backoff after a failure: no retry until the context grows past the token
  *   count of the failed attempt;
- * - `free` mode, subagent workers and one-shot runs (`print`, `json`) never
- *   auto-compact, and neither does a session whose Pi settings turn
- *   `compaction.enabled` off.
+ * - only the interactive TUI auto-compacts: it queues messages sent during a
+ *   compaction and sends them afterwards. `rpc` clients may send their next
+ *   prompt as soon as `agent_settled` arrives, which Pi rejects while a
+ *   compaction runs, so `rpc` is skipped along with one-shot runs (`print`,
+ *   `json`);
+ * - `free` mode, subagent workers and a session whose Pi settings turn
+ *   `compaction.enabled` off never auto-compact.
  *
  * The window is the active model's `contextWindow`, which already carries the
  * mode's context profile cap (Medium's 300k), so the threshold follows the
@@ -119,7 +123,7 @@ export function createMmrAutoCompactor(options: CreateMmrAutoCompactorOptions = 
     },
 
     maybeCompact(ctx, mode) {
-      if (ctx.mode !== "tui" && ctx.mode !== "rpc") return false;
+      if (ctx.mode !== "tui") return false;
       const { threshold } = resolve(mode);
       if (threshold === undefined || running) return false;
 
@@ -143,7 +147,7 @@ export function createMmrAutoCompactor(options: CreateMmrAutoCompactorOptions = 
         },
         onError: (error) => {
           running = false;
-          failure = { at: now().toISOString(), tokens, message: error.message };
+          failure = { at: now().toISOString(), tokens, message: error.message.replace(/\s+/g, " ").trim() };
         },
       });
       return true;

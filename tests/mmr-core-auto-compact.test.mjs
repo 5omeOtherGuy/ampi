@@ -177,10 +177,10 @@ describe("ampi-core auto-compaction", () => {
     assert.equal(json.compactCalls.length, 0);
   });
 
-  it("compacts in rpc sessions", async () => {
+  it("never compacts in rpc sessions, whose clients may prompt right after agent_settled", async () => {
     const session = await startSession({ mode: "rpc" });
     await session.settle(299_000);
-    assert.equal(session.compactCalls.length, 1);
+    assert.equal(session.compactCalls.length, 0);
   });
 
   it("never compacts in a subagent worker, even with a locked mode left in the runtime", async () => {
@@ -207,19 +207,48 @@ describe("ampi-core auto-compaction", () => {
     );
 
     await session.settle(290_000);
-    session.compactCalls[1].onError(new Error("Compaction cancelled"));
+    session.compactCalls[1].onError(new Error("Summary failed:\n  provider said no"));
     assert.match(
       await session.debugStatus(),
-      /^ {2}Auto-compaction backoff: attempt at 290k tokens failed \(Compaction cancelled\); next try once the context grows past it$/m,
+      /^ {2}Auto-compaction backoff: attempt at 290k tokens failed or was cancelled \(Summary failed: provider said no\); next try once the context grows past it$/m,
     );
   });
 
-  it("keeps the default and warns on an invalid ampiCore.autoCompact", async () => {
+  it("reads ampiCore.autoCompact and warns on invalid values, keeping the default", async () => {
     const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
-    writeProjectSettings({ ampiCore: { autoCompact: { threshold: 1.5 } } });
+    const cases = [
+      { settings: { ampiCore: { autoCompact: {} } }, expected: { threshold: 0.9 } },
+      { settings: { ampiCore: { autoCompact: { threshold: 1 } } }, expected: { threshold: 1 } },
+      { settings: { ampi: { core: { autoCompact: false } } }, expected: false },
+      { settings: { ampiCore: { autoCompact: { threshold: 1.5 } } }, warns: true },
+      { settings: { ampiCore: { autoCompact: { threshold: 0 } } }, warns: true },
+      { settings: { ampiCore: { autoCompact: { threshold: -0.1 } } }, warns: true },
+      { settings: { ampiCore: { autoCompact: { threshold: "0.9" } } }, warns: true },
+      { settings: { ampiCore: { autoCompact: true } }, warns: true },
+    ];
+    for (const { settings, expected, warns } of cases) {
+      writeProjectSettings(settings);
+      const loaded = loadMmrCoreSettings(project, path.join(tempRoot, "home"));
+      const label = JSON.stringify(settings);
+      assert.deepEqual(loaded.settings.autoCompact, expected, label);
+      if (warns) {
+        assert.match(loaded.warnings.join("\n"), /Ignoring ampiCore\.autoCompact in .*settings\.json: expected false or/, label);
+      } else {
+        assert.deepEqual(loaded.warnings, [], label);
+      }
+    }
+  });
+
+  it("lets a project ampiCore.autoCompact replace the global one", async () => {
+    const { loadMmrCoreSettings } = await importSource("extensions/ampi-core/settings.ts");
+    mkdirSync(path.join(tempRoot, "home/.pi/agent"), { recursive: true });
+    writeFileSync(
+      path.join(tempRoot, "home/.pi/agent/settings.json"),
+      JSON.stringify({ ampiCore: { autoCompact: false } }),
+    );
+    writeProjectSettings({ ampiCore: { autoCompact: { threshold: 0.75 } } });
 
     const loaded = loadMmrCoreSettings(project, path.join(tempRoot, "home"));
-    assert.equal(loaded.settings.autoCompact, undefined);
-    assert.match(loaded.warnings.join("\n"), /Ignoring ampiCore\.autoCompact in .*settings\.json: expected false or/);
+    assert.deepEqual(loaded.settings.autoCompact, { threshold: 0.75 });
   });
 });

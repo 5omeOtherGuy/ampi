@@ -89,6 +89,7 @@ Locked modes compact the conversation once it fills 90% of the context window. A
 
 - Runs only between runs, never mid-run: `ctx.compact()` aborts an active run first. Pi's own compaction (at `contextWindow - compaction.reserveTokens`) still covers a long run between its turns.
 - One compaction at a time. After a failed or cancelled attempt, ampi waits until the context grows past that attempt's size before trying again.
+- Runs only in the interactive TUI, which holds messages sent during a compaction and sends them once it ends. Skipped in `rpc` sessions, where a client may send its next prompt as soon as `agent_settled` arrives and Pi would reject it while compacting.
 - Skipped in `free`, in subagent workers, in one-shot `print` and `json` runs, after an interrupted run, while the token count is unknown (right after a compaction), and when Pi's `compaction.enabled` is `false`.
 - `/ampi-status debug` shows the threshold (or why it is off), the last auto-compaction (time, tokens before and after, window), and any backoff in effect.
 

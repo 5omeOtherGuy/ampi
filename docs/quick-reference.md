@@ -23,7 +23,7 @@ Ctrl+Shift+S        # mode picker (Alt+M fallback)
 Alt+D               # toggle the active mode's thinking preset (medium, high, ultra)
 ```
 
-Locked modes compact the conversation automatically once a finished run leaves it at 90% of the context window (Medium: 270k of 300k). Set `ampiCore.autoCompact` to `{ "threshold": 0.8 }` to compact earlier or to `false` to leave compaction to Pi; `/ampi-status debug` shows the threshold and the last auto-compaction.
+In the interactive TUI, locked modes compact the conversation automatically once a finished run leaves it at 90% of the context window (Medium: 270k of 300k); `free`, subagent workers and `print`, `json` and `rpc` runs never do. Set `ampiCore.autoCompact` to `{ "threshold": 0.8 }` to compact earlier or to `false` to leave compaction to Pi; `/ampi-status debug` shows the threshold and the last auto-compaction.
 
 Mode source precedence: `--ampi-mode` flag → persisted session → `ampiCore.defaultMode` → `medium`. Legacy `rush`, `smart`, `deep`, and `fable` inputs normalize to `low`, `medium`, `high`, and `ultra`.
 
