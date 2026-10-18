@@ -13,9 +13,9 @@
  * - Stable: supported public API. Removing or renaming a Stable export is
  *   a breaking change — it requires a semver-major bump and a `CHANGELOG.md`
  *   migration note. Covers mode keys/definitions, the model resolver,
- *   routing, feature gates, settings loaders, the `createMmr*Extension`
- *   factories, the public tool `create*`/`register*` functions, and the
- *   public type surface.
+ *   routing, feature gates, settings loaders, the thread status model,
+ *   the `createMmr*Extension` factories, the public tool
+ *   `create*`/`register*` functions, and the public type surface.
  *
  * - Internal / prompt-assembly: exported for cross-extension wiring and
  *   advanced embedders. Not part of the stability promise and may change
@@ -155,6 +155,14 @@ export type {
   MmrKeymapSettings,
   MmrResolvedKeymap,
 } from "./extensions/ampi-core/keymap.js";
+// --- ampi-core: thread status model (Stable) ---
+export { createMmrThreadStatusReducer } from "./extensions/ampi-core/thread-status.js";
+export type {
+  MmrThreadPhase,
+  MmrThreadStatus,
+  MmrThreadStatusEvent,
+  MmrThreadStatusReducer,
+} from "./extensions/ampi-core/thread-status.js";
 // --- ampi-core: prompt assembly & subagent wiring (Internal / prompt-assembly) ---
 export { MMR_PROMPT_LAYER_END, MMR_PROMPT_LAYER_START, buildMmrPromptLayer } from "./extensions/ampi-core/prompt.js";
 export {
@@ -881,6 +889,9 @@ export {
   resolveMmrCapabilityAllowedTools as resolveAmpiCapabilityAllowedTools,
 } from "./extensions/ampi-core/subagent-tool-policy.js";
 export {
+  createMmrThreadStatusReducer as createAmpiThreadStatusReducer,
+} from "./extensions/ampi-core/thread-status.js";
+export {
   createMmrToolRegistry as createAmpiToolRegistry,
   isMmrToolAllowed as isAmpiToolAllowed,
   resolveMmrTools as resolveAmpiToolNames,
@@ -1047,6 +1058,12 @@ export type {
 export type {
   MmrCapabilityProfileKey as AmpiCapabilityProfileKey,
 } from "./extensions/ampi-core/subagent-tool-policy.js";
+export type {
+  MmrThreadPhase as AmpiThreadPhase,
+  MmrThreadStatus as AmpiThreadStatus,
+  MmrThreadStatusEvent as AmpiThreadStatusEvent,
+  MmrThreadStatusReducer as AmpiThreadStatusReducer,
+} from "./extensions/ampi-core/thread-status.js";
 export type {
   MmrActiveToolManifestEntry as AmpiActiveToolManifestEntry,
   MmrCoreSettings as AmpiCoreSettings,

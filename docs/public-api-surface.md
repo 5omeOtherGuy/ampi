@@ -60,6 +60,7 @@ names.
 - Feature gates and settings loaders: `createMmrFeatureGateRegistry`,
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
+- Thread status model: `createMmrThreadStatusReducer` and its types.
 - Extension factories: every `createMmr*Extension` factory.
 - Public tool register/create functions: the `register*`/`create*`
   functions for the `oracle`, `finder`, `librarian`, `history-reader`,

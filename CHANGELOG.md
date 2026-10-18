@@ -21,6 +21,13 @@ The format follows the project [`docs/changelog-template.md`](docs/changelog-tem
   settings: a key string or an array of key strings per command id, `null` to
   unbind, and a `leader` entry (default `ctrl+x`). Nothing is bound or shown
   yet.
+- `ampi-core`: an Amp-compatible turn status model,
+  `createMmrThreadStatusReducer` (alias `createAmpiThreadStatusReducer`),
+  that follows an agent run and reports what the upcoming status line will
+  show: `Thinking`, `Streaming`, `Running Tools`, `Auto-Compacting`,
+  `Waiting for Approval`, `Cancelling` or `Error`, with token counts, the
+  running tool, and the steer, dequeue and force-quit hints. Nothing displays
+  it yet.
 
 ### Changed
 
