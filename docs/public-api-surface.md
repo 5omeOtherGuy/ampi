@@ -57,10 +57,6 @@ names.
 - Model resolver and routing: `selectMmrModelRoute`,
   `resolveAndApplyMmrModel`, `resolveMmrModeSelection`, and the runtime
   resolver/state accessors re-exported from `ampi-core/runtime`.
-- Command registry and keymap: `registerMmrCommand`, `rankMmrCommands`,
-  the other `ampi-core/command-registry` accessors, `parseMmrKeyChord`,
-  `resolveMmrKeymap`, `readMmrKeymapSettings`, `formatMmrKeymapJsonc`, and
-  the other `ampi-core/keymap` helpers.
 - Feature gates and settings loaders: `createMmrFeatureGateRegistry`,
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
@@ -83,6 +79,11 @@ names.
 - Legacy convenience constants such as `ORACLE_DEFAULT_MODEL_PREFERENCES`
   — a frozen, profile-derived list retained for compatibility that has
   no internal runtime consumer.
+- Command registry and keymap: `registerMmrCommand`, `rankMmrCommands`,
+  the other `ampi-core/command-registry` accessors, `parseMmrKeyChord`,
+  `resolveMmrKeymap`, `readMmrKeymapSettings`, `formatMmrKeymapJsonc`, and
+  the other `ampi-core/keymap` helpers. They stay in this tier until the
+  command palette consumes them, so their shape can still change.
 
 ### Test seam
 

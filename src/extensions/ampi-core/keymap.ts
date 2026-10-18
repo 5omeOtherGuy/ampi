@@ -149,8 +149,9 @@ function parseCombo(token: string): MmrKeyCombo | string {
   } else if (FUNCTION_KEY.test(lower)) {
     key = lower;
   } else if ([...keyText].length === 1 && !/\s/.test(keyText)) {
-    key = lower;
-    if (lower !== keyText && modifiers.size === 0) modifiers.add("shift");
+    // A character whose lowercase form is longer (`İ`) stays as written.
+    key = [...lower].length === 1 ? lower : keyText;
+    if (key !== keyText && modifiers.size === 0) modifiers.add("shift");
   } else {
     return `"${keyText}" is not a key name`;
   }
@@ -194,14 +195,22 @@ export function parseMmrKeyChord(text: string): MmrKeyChordParseResult {
   return { leader, combos };
 }
 
+function displayKey(key: string): string {
+  const named = DISPLAY_KEY_NAMES.get(key);
+  if (named) return named;
+  if ([...key].length > 1) return key.toUpperCase();
+  // Capitalise a character only when that reads back as the same key
+  // (`ß` would become `SS`).
+  const upper = key.toUpperCase();
+  return [...upper].length === 1 && upper.toLowerCase() === key ? upper : key;
+}
+
 function formatCombo(combo: MmrKeyCombo, display: boolean): string {
   const parts: string[] = [];
   for (const modifier of MODIFIER_ORDER) {
     if (combo[modifier]) parts.push(display ? DISPLAY_MODIFIER_NAMES[modifier] : modifier);
   }
-  let key = combo.key;
-  if (display) key = DISPLAY_KEY_NAMES.get(key) ?? key.toUpperCase();
-  parts.push(key);
+  parts.push(display ? displayKey(combo.key) : combo.key);
   return parts.join("+");
 }
 
@@ -240,16 +249,17 @@ export interface MmrKeymapSettings {
  * Read the `ampi.keymap` section of a parsed Pi settings object:
  * `{"ampi": {"keymap": {"leader": "ctrl+x", "<commandId>": "<chord>" | ["<chord>", ...] | null}}}`.
  * A missing section yields no overrides; malformed values are skipped and
- * described in `problems`.
+ * described in `problems`, which name `filePath` when it is given.
  */
-export function readMmrKeymapSettings(settings: unknown): MmrKeymapSettings {
+export function readMmrKeymapSettings(settings: unknown, filePath?: string): MmrKeymapSettings {
   const overrides = Object.create(null) as Record<string, MmrKeyBindingValue>;
   const problems: string[] = [];
+  const where = filePath ? ` in ${filePath}` : "";
   const ampi = isRecord(settings) ? settings.ampi : undefined;
   if (!isRecord(ampi) || !("keymap" in ampi)) return { overrides, problems };
   const keymap = ampi.keymap;
   if (!isRecord(keymap)) {
-    problems.push("Ignoring ampi.keymap: expected an object that maps command ids to key strings.");
+    problems.push(`Ignoring ampi.keymap${where}: expected an object that maps command ids to key strings.`);
     return { overrides, problems };
   }
 
@@ -257,7 +267,7 @@ export function readMmrKeymapSettings(settings: unknown): MmrKeymapSettings {
   for (const [id, value] of Object.entries(keymap)) {
     if (id === "leader") {
       if (typeof value === "string") leader = value;
-      else problems.push("Ignoring ampi.keymap.leader: expected a key string.");
+      else problems.push(`Ignoring ampi.keymap.leader${where}: expected a key string.`);
       continue;
     }
     if (value === null || typeof value === "string") {
@@ -265,7 +275,7 @@ export function readMmrKeymapSettings(settings: unknown): MmrKeymapSettings {
     } else if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
       overrides[id] = [...value];
     } else {
-      problems.push(`Ignoring ampi.keymap.${id}: expected a key string, an array of key strings, or null.`);
+      problems.push(`Ignoring ampi.keymap.${id}${where}: expected a key string, an array of key strings, or null.`);
     }
   }
   return { ...(leader !== undefined ? { leader } : {}), overrides, problems };

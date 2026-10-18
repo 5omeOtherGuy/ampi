@@ -40,9 +40,6 @@ export interface MmrCommandsChangedEvent {
 
 export type MmrCommandsChangedListener = (event: MmrCommandsChangedEvent) => void;
 
-/** Name of the command-registry change notification, delivered through `onMmrCommandsChanged`. */
-export const MMR_EVENT_COMMANDS_CHANGED = "mmr-core:commands-changed";
-
 const COMMAND_ID = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
 
 interface CommandStore {
@@ -59,7 +56,14 @@ globalStore[COMMANDS_GLOBAL_KEY] = store;
 
 function notify(change: MmrCommandsChange, id: string): void {
   const event: MmrCommandsChangedEvent = { change, id };
-  for (const listener of [...store.listeners]) listener(event);
+  for (const listener of [...store.listeners]) {
+    // A failing listener must not undo the change for the caller or starve
+    // the listeners after it; errors are dropped, as runtime.ts does for
+    // its providers.
+    try {
+      listener(event);
+    } catch {}
+  }
 }
 
 /**
@@ -102,7 +106,10 @@ export function getMmrCommand(id: string): MmrCommandDefinition | undefined {
   return store.commands.get(id);
 }
 
-/** Listen for registry changes. Returns an unsubscribe function. */
+/**
+ * Listen for registry changes. Returns an unsubscribe function. A listener
+ * that throws is skipped; the change and the other listeners are unaffected.
+ */
 export function onMmrCommandsChanged(listener: MmrCommandsChangedListener): () => void {
   store.listeners.add(listener);
   return () => {
@@ -125,12 +132,12 @@ export interface MmrRankedCommand {
 }
 
 export interface MmrRankCommandsOptions {
-  /** Passed to each command's `availability` check. */
-  readonly ctx: ExtensionContext;
+  /** Passed to each command's `availability` check. Without it, every command counts as available. */
+  readonly ctx?: ExtensionContext;
 }
 
-function evaluateAvailability(command: MmrCommandDefinition, ctx: ExtensionContext): MmrCommandAvailability {
-  if (!command.availability) return { state: "available" };
+function evaluateAvailability(command: MmrCommandDefinition, ctx: ExtensionContext | undefined): MmrCommandAvailability {
+  if (!command.availability || ctx === undefined) return { state: "available" };
   try {
     return command.availability(ctx);
   } catch (error) {
@@ -160,12 +167,13 @@ function scoreCommand(command: MmrCommandDefinition, tokens: readonly string[]):
  * or a keyword. Available commands come first, best match first, ties in
  * registration order; unavailable ones follow in the same order with their
  * reason. Hidden commands are never returned. An empty query keeps
- * registration order.
+ * registration order. Availability is only checked when `options.ctx` is
+ * given.
  */
 export function rankMmrCommands(
   commands: readonly MmrCommandDefinition[],
   query: string,
-  options: MmrRankCommandsOptions,
+  options: MmrRankCommandsOptions = {},
 ): MmrRankedCommand[] {
   const tokens = query.trim().split(/\s+/).filter((token) => token.length > 0);
   const rows: { row: MmrRankedCommand; order: number }[] = [];

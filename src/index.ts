@@ -21,8 +21,9 @@
  *   advanced embedders. Not part of the stability promise and may change
  *   without a major bump. Covers prompt-layer markers/builders, the
  *   prompt-assembly helpers, the planned-tool catalog, the debug-fixture
- *   renderers, and legacy convenience constants such as
- *   `ORACLE_DEFAULT_MODEL_PREFERENCES`.
+ *   renderers, legacy convenience constants such as
+ *   `ORACLE_DEFAULT_MODEL_PREFERENCES`, and the command registry and keymap
+ *   model until the command palette consumes them.
  *
  * - Test seam: exported (or, in a few cases, deliberately NOT re-exported
  *   from this barrel) only for the repo's own tests. Do not depend on these
@@ -115,9 +116,8 @@ export type {
   MmrStateChangedHandler,
 } from "./extensions/ampi-core/runtime.js";
 export { loadMmrCoreSettings } from "./extensions/ampi-core/settings.js";
-// --- ampi-core: command registry & keymap (Stable) ---
+// --- ampi-core: command registry & keymap (Internal / prompt-assembly) ---
 export {
-  MMR_EVENT_COMMANDS_CHANGED,
   getMmrCommand,
   getMmrCommands,
   onMmrCommandsChanged,
@@ -769,7 +769,6 @@ export {
   MMR_BUILTIN_TOOL_GUIDANCE_HEADING as AMPI_BUILTIN_TOOL_GUIDANCE_HEADING,
 } from "./extensions/ampi-core/builtin-tool-guidance.js";
 export {
-  MMR_EVENT_COMMANDS_CHANGED as AMPI_EVENT_COMMANDS_CHANGED,
   getMmrCommand as getAmpiCommand,
   getMmrCommands as getAmpiCommands,
   onMmrCommandsChanged as onAmpiCommandsChanged,

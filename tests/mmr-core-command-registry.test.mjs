@@ -77,6 +77,21 @@ describe("command registry", () => {
     ]);
   });
 
+  it("keeps the change and the remaining listeners when a listener throws", async () => {
+    const { registerMmrCommand, getMmrCommand, onMmrCommandsChanged } = await importSource(REGISTRY_MODULE);
+    const events = [];
+    onMmrCommandsChanged(() => {
+      throw new Error("listener failed");
+    });
+    onMmrCommandsChanged((event) => events.push(event));
+
+    const definition = command("thread.new");
+    registerMmrCommand(definition);
+
+    assert.equal(getMmrCommand("thread.new"), definition);
+    assert.deepEqual(events, [{ change: "registered", id: "thread.new" }]);
+  });
+
   it("is shared across separately loaded module copies", async () => {
     const first = await importSource(REGISTRY_MODULE);
     const second = await importSource(REGISTRY_MODULE);
@@ -89,7 +104,7 @@ describe("command registry", () => {
 
   it("exports the registry and its Ampi aliases from the package root", async () => {
     const root = await importSource("index.ts");
-    assert.equal(root.MMR_EVENT_COMMANDS_CHANGED, "mmr-core:commands-changed");
+    assert.equal("MMR_EVENT_COMMANDS_CHANGED" in root, false);
     assert.equal(root.registerAmpiCommand, root.registerMmrCommand);
     assert.equal(root.rankAmpiCommands, root.rankMmrCommands);
   });
@@ -115,7 +130,7 @@ describe("rankMmrCommands", () => {
     const { rankMmrCommands } = await importSource(REGISTRY_MODULE);
     const commands = [
       command("thread.switch"),
-      command("mcp.info", { availability: () => ({ state: "unavailable", reason: "No MCP servers configured" }) }),
+      command("mcp.info", { availability: () => ({ state: "unavailable", reason: "No servers set up" }) }),
       command("speed.toggleFast", { availability: () => ({ state: "hidden" }) }),
       command("debug.copy"),
       command("ampi.help"),
@@ -126,7 +141,7 @@ describe("rankMmrCommands", () => {
         ["thread.switch", "available", undefined, 0],
         ["debug.copy", "available", undefined, 0],
         ["ampi.help", "available", undefined, 0],
-        ["mcp.info", "unavailable", "No MCP servers configured", 0],
+        ["mcp.info", "unavailable", "No servers set up", 0],
       ],
     );
   });
@@ -170,6 +185,23 @@ describe("rankMmrCommands", () => {
     assert.deepEqual(
       rankMmrCommands(commands, "thread switch", { ctx }).map((row) => row.command.id),
       ["thread.switch"],
+    );
+  });
+
+  it("treats every command as available when no ctx is given", async () => {
+    const { rankMmrCommands } = await importSource(REGISTRY_MODULE);
+    const commands = [
+      command("mcp.info", { availability: () => ({ state: "unavailable", reason: "No servers set up" }) }),
+      command("speed.toggleFast", { availability: () => ({ state: "hidden" }) }),
+      command("thread.switch"),
+    ];
+    assert.deepEqual(
+      rankMmrCommands(commands, "").map((row) => [row.command.id, row.state]),
+      [
+        ["mcp.info", "available"],
+        ["speed.toggleFast", "available"],
+        ["thread.switch", "available"],
+      ],
     );
   });
 

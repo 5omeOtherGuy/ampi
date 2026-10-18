@@ -421,7 +421,10 @@ import type { MmrCommandDefinition, MmrRankedCommand } from "@skippermissions/am
 ```
 
 Palette commands are named actions, separate from Pi slash commands. The
-registry is process-global, so every extension sees the same list.
+registry is process-global, so every extension sees the same list. This
+API and the keymap below are in the Internal tier (see
+[`public-api-surface.md`](./public-api-surface.md)) until the command
+palette consumes them.
 
 - `registerMmrCommand({ id, noun, verb, description, defaultKey?, keywords?, availability?, run })`
   — add a command, or replace the one with the same `id` (it keeps its
@@ -437,14 +440,16 @@ registry is process-global, so every extension sees the same list.
   registration order.
 - `onMmrCommandsChanged(listener)` — called with `{ change, id }`, where
   `change` is `"registered"`, `"replaced"` or `"unregistered"`. Returns an
-  unsubscribe function. `MMR_EVENT_COMMANDS_CHANGED`
-  (`"mmr-core:commands-changed"`) names this notification.
-- `rankMmrCommands(commands, query, { ctx })` — pure palette ranking.
+  unsubscribe function. This is an in-process callback, not a Pi event-bus
+  topic. A listener that throws does not stop the change or the other
+  listeners.
+- `rankMmrCommands(commands, query, { ctx }?)` — pure palette ranking.
   Every query word must fuzzy-match the label, id, description or a
   keyword. Available rows come first (best match, then registration
   order), unavailable rows follow with their `reason`, and hidden rows are
-  dropped. An empty query keeps registration order. An `availability`
-  check that throws counts as unavailable.
+  dropped. An empty query keeps registration order. `availability` runs
+  only when `ctx` is given; without it every command counts as available.
+  An `availability` check that throws counts as unavailable.
 
 ## Keymap
 
@@ -460,8 +465,10 @@ the aliases `option` (alt), `cmd` / `command` (meta) and `mod`, which
 always means `ctrl`. Keys are `esc`, `enter`, `space`, `tab`,
 `backspace`, `delete`, the arrows, `home`, `end`, `pageup`, `pagedown`,
 `f1`–`f12` (plus the aliases `escape`, `return`, `pgup`, `pgdn`) or a
-single character. A lone uppercase letter means shift plus that letter.
-`<leader>` (default `ctrl+x`) may start a chord: `<leader>z`.
+single character. A lone uppercase letter means shift plus that letter;
+next to a modifier, case is ignored, so `alt+Z` means `alt+z`, not
+`alt+shift+z`. `<leader>` (default `ctrl+x`) may start a chord:
+`<leader>z`.
 
 - `parseMmrKeyChord(text)` — returns `{ leader, combos }` or `{ error }`;
   never throws.
@@ -470,13 +477,15 @@ single character. A lone uppercase letter means shift plus that letter.
   Passing `leader` expands `<leader>`.
 - `areMmrKeyChordsEqual(a, b, leader?)` — compare chords, after leader
   expansion when `leader` is given.
-- `readMmrKeymapSettings(settings)` — read `ampi.keymap` from a parsed
-  Pi settings object; returns `{ leader?, overrides, problems }`.
+- `readMmrKeymapSettings(settings, filePath?)` — read `ampi.keymap` from
+  a parsed Pi settings object; returns `{ leader?, overrides, problems }`.
+  Problems name `filePath` when it is given.
 - `resolveMmrKeymap({ defaults, overrides?, leader? })` — merge defaults
   (every known command id, `null` when unbound) with overrides. A string
   replaces the defaults, an array replaces them with every listed chord,
   `null` or `[]` unbinds. Unknown ids and unparsable chords land in
-  `problems`. Returns `bindings` (id → chords), `byChord` (expanded chord
+  `problems`. An override whose chords all fail to parse keeps the
+  default, so `"thread.new": ""` does not unbind; use `null`. Returns `bindings` (id → chords), `byChord` (expanded chord
   → first id), and `conflicts`: `duplicate` when several ids share a
   chord, `prefix` when one chord starts another (`ctrl+c` and
   `ctrl+c ctrl+n`).

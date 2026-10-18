@@ -94,6 +94,7 @@ describe("parseMmrKeyChord", () => {
   it("reads a lone uppercase letter as shift plus the letter", () => {
     assert.equal(canonical("Z"), "shift+z");
     assert.equal(canonical("shift+Z"), "shift+z");
+    assert.equal(canonical("alt+Z"), "alt+z");
     assert.equal(canonical("z"), "z");
     assert.equal(canonical("<leader>Z"), "<leader>shift+z");
   });
@@ -148,10 +149,16 @@ describe("formatMmrKeyChord and areMmrKeyChordsEqual", () => {
   });
 
   it("round-trips the display form", () => {
-    for (const text of ["ctrl+c ctrl+n", "shift+z", "alt+t", "esc esc", "ctrl+shift+pageup"]) {
+    for (const text of ["ctrl+c ctrl+n", "shift+z", "alt+t", "esc esc", "ctrl+shift+pageup", "alt+ß", "ctrl+ı", "ctrl+f5"]) {
       const display = formatMmrKeyChord(parseMmrKeyChord(text), { style: "display" });
       assert.equal(canonical(display), text, display);
     }
+  });
+
+  it("keeps characters whose case mapping changes their length", () => {
+    assert.equal(formatMmrKeyChord(parseMmrKeyChord("alt+ß"), { style: "display" }), "Alt+ß");
+    assert.equal(canonical("İ"), "İ");
+    assert.equal(canonical(canonical("İ")), "İ");
   });
 
   it("compares chords, expanding <leader> when asked", () => {
@@ -213,6 +220,17 @@ describe("readMmrKeymapSettings", () => {
     const result = readMmrKeymapSettings({ ampi: { keymap: { leader: 7 } } });
     assert.equal(result.leader, undefined);
     assert.deepEqual(result.problems, ["Ignoring ampi.keymap.leader: expected a key string."]);
+  });
+
+  it("names the settings file in problems when given", () => {
+    const filePath = "/project/.pi/settings.json";
+    assert.deepEqual(readMmrKeymapSettings({ ampi: { keymap: "x" } }, filePath).problems, [
+      `Ignoring ampi.keymap in ${filePath}: expected an object that maps command ids to key strings.`,
+    ]);
+    assert.deepEqual(readMmrKeymapSettings({ ampi: { keymap: { leader: 7, "thread.new": 1 } } }, filePath).problems, [
+      `Ignoring ampi.keymap.leader in ${filePath}: expected a key string.`,
+      `Ignoring ampi.keymap.thread.new in ${filePath}: expected a key string, an array of key strings, or null.`,
+    ]);
   });
 });
 
@@ -340,6 +358,16 @@ describe("resolveMmrKeymap", () => {
       },
       { kind: "prefix", chord: "ctrl+x", ids: ["thread.new"], longerChord: "ctrl+x z", longerIds: ["prompt.undo"] },
     ]);
+  });
+
+  it("does not report a chord that only shares leading characters with another", () => {
+    const resolved = resolveMmrKeymap({
+      defaults: DEFAULTS,
+      overrides: { "thread.new": "ctrl+shift+x", "thread.interrupt": "a", "prompt.undo": "alt+x" },
+    });
+    // `ctrl+s` starts `ctrl+shift+x` and `a` starts `alt+x` as text, but not as key combos.
+    assert.deepEqual(resolved.problems, []);
+    assert.deepEqual(resolved.conflicts, []);
   });
 });
 
