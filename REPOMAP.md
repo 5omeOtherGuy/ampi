@@ -70,6 +70,10 @@ src/
 
 Package-level public API. It re-exports stable helpers, types, extension factories, tool factories, settings loaders, and constants from shipped extensions. Canonical API catalogs live in [`docs/ampi-core-api.md`](docs/ampi-core-api.md) and [`docs/public-api.md`](docs/public-api.md).
 
+### `src/config-keymap.ts`
+
+ampi's palette commands built without a Pi session (`collectMmrDefaultCommands`) and the keymap in effect for given Pi settings as JSONC. Not one of the package's extensions: its default export is the entry `ampi config keymap` loads through Pi's extension loader, and `tests/mmr-cli-config.test.mjs` checks the list against what `ampi-tui` and `ampi-threads` register in a terminal session.
+
 ### `src/extensions/manifest.ts`
 
 Single source of truth for the registered extension list consumed by `package.json` generation and tests.
@@ -258,6 +262,7 @@ packages/
     src/execute.js   # execute mode (-x): message from argument and stdin, thread options extension
     src/stream-json.js # --stream-json: Pi's JSON events to stream JSON records (pure encoder)
     src/threads.js   # `ampi threads …` and `ampi last` on Pi's session files
+    src/config.js    # `ampi config keymap` and `ampi config edit`
     src/thread-index.js    # the thread index file, read and written outside Pi
     src/thread-markdown.js # a session as Markdown, the layout of ampi-threads' export
     src/pi-compat.js # the undocumented Pi behaviour the command relies on, in one place
@@ -266,7 +271,7 @@ packages/
 
 ### `packages/ampi-cli/`
 
-`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam; with `--stream-json` it runs Pi's JSON mode and prints stream JSON records made from its events instead. `ampi threads` and `ampi last` list, print and change sessions through Pi's `SessionManager` and the thread index file, and open one by starting Pi with `--session`. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
+`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam; with `--stream-json` it runs Pi's JSON mode and prints stream JSON records made from its events instead. `ampi threads` and `ampi last` list, print and change sessions through Pi's `SessionManager` and the thread index file, and open one by starting Pi with `--session`. `ampi config keymap` loads `src/config-keymap.ts` through Pi's extension loader, which builds ampi's palette commands without a session and prints the keymap for Pi's settings; `ampi config edit` opens Pi's settings file in Pi's external editor. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
 
 ## Documentation tree
 

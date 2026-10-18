@@ -8,7 +8,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
-import { listPiExtensionSources, listPiSessions, piAgentDir, setPiSessionName } from "../packages/ampi-cli/src/pi-compat.js";
+import {
+  listPiExtensionSources,
+  listPiSessions,
+  loadThroughPi,
+  piAgentDir,
+  piExternalEditorCommand,
+  piSettingsPath,
+  readPiSettings,
+  setPiSessionName,
+} from "../packages/ampi-cli/src/pi-compat.js";
 
 /** @param {string} file @param {unknown} json */
 const writeJson = (file, json) => {
@@ -154,5 +163,69 @@ describe("Pi session calls used by the thread commands", () => {
     assert.equal(renamed.name, "Parser fix");
     const last = JSON.parse(readFileSync(projectFile, "utf8").trim().split("\n").at(-1));
     assert.deepEqual([last.type, last.name], ["session_info", "Parser fix"]);
+  });
+});
+
+describe("Pi calls used by the config commands", () => {
+  const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, visual: process.env.VISUAL, editor: process.env.EDITOR };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-config-"));
+  const agentDir = path.join(dir, "agent");
+  const project = path.join(dir, "project");
+
+  before(() => {
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    writeJson(path.join(agentDir, "settings.json"), { ampi: { keymap: { "thread.new": "ctrl+t" } } });
+    writeJson(path.join(project, ".pi", "settings.json"), { ampi: { keymap: { "thread.new": "alt+n" } }, externalEditor: "project-editor" });
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", savedEnv.agentDir],
+      ["VISUAL", savedEnv.visual],
+      ["EDITOR", savedEnv.editor],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("loads one TypeScript file through Pi's loader and returns what it emits", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const entry = path.join(dir, "entry.ts");
+    writeFileSync(
+      entry,
+      'export default function (pi: { events: { emit(channel: string, data: unknown): void } }): void {\n  pi.events.emit("probe", { answer: 42 as number });\n}\n',
+    );
+    assert.deepEqual(await loadThroughPi(pi, entry, "probe"), { answer: 42 });
+    await assert.rejects(loadThroughPi(pi, path.join(dir, "missing.ts"), "probe"), /missing\.ts/);
+  });
+
+  it("reads the project's settings and editor only once Pi trusts the project", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    delete process.env.VISUAL;
+    process.env.EDITOR = "env-editor --wait";
+    assert.deepEqual(readPiSettings(pi, project).ampi, { keymap: { "thread.new": "ctrl+t" } });
+    assert.equal(piExternalEditorCommand(pi, project), "env-editor --wait");
+
+    new pi.ProjectTrustStore(agentDir).set(project, true);
+    assert.deepEqual(readPiSettings(pi, project).ampi, { keymap: { "thread.new": "alt+n" } });
+    assert.equal(piExternalEditorCommand(pi, project), "project-editor");
+    process.env.VISUAL = "visual-editor";
+    assert.equal(piExternalEditorCommand(pi, dir), "visual-editor");
+
+    assert.equal(piSettingsPath(pi, project, "user"), path.join(agentDir, "settings.json"));
+    assert.equal(piSettingsPath(pi, project, "project"), path.join(project, ".pi", "settings.json"));
+  });
+
+  it("trusts a project without a stored decision when defaultProjectTrust is always, and a stored no wins", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const other = path.join(dir, "other-project");
+    writeJson(path.join(other, ".pi", "settings.json"), { ampi: { keymap: { "thread.new": "alt+n" } } });
+    writeJson(path.join(agentDir, "settings.json"), { defaultProjectTrust: "always", ampi: { keymap: { "thread.new": "ctrl+t" } } });
+    assert.deepEqual(readPiSettings(pi, other).ampi, { keymap: { "thread.new": "alt+n" } });
+
+    new pi.ProjectTrustStore(agentDir).set(other, false);
+    assert.deepEqual(readPiSettings(pi, other).ampi, { keymap: { "thread.new": "ctrl+t" } });
   });
 });

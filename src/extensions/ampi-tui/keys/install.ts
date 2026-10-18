@@ -103,7 +103,8 @@ export interface MmrTuiKeys {
   keymap(): MmrResolvedKeymap | undefined;
 }
 
-function describeConflict(conflict: MmrKeymapConflict): string {
+/** A keymap conflict as one warning sentence. */
+export function describeMmrKeymapConflict(conflict: MmrKeymapConflict): string {
   if (conflict.kind === "duplicate") {
     return `Key "${conflict.chord}" is bound to ${conflict.ids.join(", ")}; only ${conflict.ids[0]} runs.`;
   }
@@ -467,7 +468,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     const keymap = resolveMmrKeymap({ defaults, overrides: settings.overrides, leader: settings.leader });
     resolved = keymap;
 
-    const fresh = [...settings.problems, ...keymap.problems, ...keymap.conflicts.map(describeConflict)].filter(
+    const fresh = [...settings.problems, ...keymap.problems, ...keymap.conflicts.map(describeMmrKeymapConflict)].filter(
       (message) => !warned.has(message),
     );
     for (const message of fresh) warned.add(message);

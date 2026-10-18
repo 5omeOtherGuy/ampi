@@ -122,7 +122,7 @@ Rebind or unbind any command under `ampi.keymap` in Pi's settings. Each entry ma
 
 Key strings follow `ampi-core`'s keymap grammar ([`docs/ampi-core-api.md`](../../../docs/ampi-core-api.md#keymap)): combos such as `ctrl+c`, chords separated by spaces such as `ctrl+c ctrl+c`, and `<leader>` at the start of a chord. Overrides are read at each session start; run `/reload` after editing them. Unknown command ids, keys that do not parse, two commands on one key, and a key that is also the start of a longer chord are reported once as a warning.
 
-To start from the keys in effect, pick "ampi show keymap" in the command palette: it shows every command id with its key (or `null`) and its description as JSONC, ready to copy under `ampi.keymap`.
+To start from the keys in effect, pick "ampi show keymap" in the command palette: it shows every command id with its key (or `null`) and its description as JSONC, ready to copy under `ampi.keymap`. Outside a session, `ampi config keymap` from the [`ampi` command](../../../packages/ampi-cli/README.md#keymap-and-settings) prints the same list for the current directory.
 
 ## Behavior
 
