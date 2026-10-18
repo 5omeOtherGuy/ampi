@@ -1,0 +1,595 @@
+/* ampi web GUI: layout and components. Tokens live in tokens.css. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ampi-surface-bg);
+  color: var(--ampi-shell-fg);
+  font-family: var(--ampi-font-sans);
+  font-size: var(--ampi-text-base);
+  line-height: var(--ampi-leading-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+::selection {
+  background: var(--ampi-selection);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ampi-link);
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.icon .fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* App frame: title bar, scrolling chat, status bar. */
+.app {
+  display: grid;
+  grid-template-rows: var(--ampi-titlebar-height) minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.column {
+  width: 100%;
+  max-width: var(--ampi-column-max);
+  margin: 0 auto;
+  padding: 0 calc(var(--ampi-space) * 4);
+}
+
+/* Title bar */
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  min-width: 0;
+  padding: 0 calc(var(--ampi-space) * 3);
+  border-bottom: 1px solid var(--ampi-border);
+  background: var(--ampi-surface-bg);
+}
+
+.title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--ampi-text-base);
+  font-weight: 500;
+  line-height: var(--ampi-leading-base);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.titlebar-end {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1);
+  min-width: 0;
+  margin-left: auto;
+}
+
+.chip,
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1);
+  height: var(--ampi-control-size);
+  min-width: 0;
+  padding: 0 calc(var(--ampi-space) * 1.5);
+  border-radius: var(--ampi-radius-xs);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+  white-space: nowrap;
+}
+
+.chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--ampi-control-size);
+  height: var(--ampi-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ampi-radius-xs);
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+/* The thread's status disc: a ring when idle, filled and pulsing while the agent works. */
+.thread-disc {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ampi-muted-fg);
+  border-radius: 50%;
+}
+
+.app[data-busy="true"] .thread-disc {
+  border-color: var(--ampi-success);
+  background: var(--ampi-success);
+  animation: ampi-pulse 1.4s ease-in-out infinite;
+}
+
+.app[data-phase="error"] .thread-disc {
+  border-color: var(--ampi-danger);
+  background: var(--ampi-danger);
+}
+
+/* Chat */
+.chat {
+  position: relative;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ampi-space) * 4);
+  padding: calc(var(--ampi-space) * 6) 0 calc(var(--ampi-space) * 2);
+}
+
+.empty {
+  margin: calc(var(--ampi-space) * 10) 0;
+  color: var(--ampi-muted-fg);
+  text-align: center;
+}
+
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ampi-space) * 2);
+  min-width: 0;
+}
+
+.msg.user {
+  align-items: flex-end;
+}
+
+.bubble {
+  max-width: min(85%, 672px);
+  padding: 8px 12px;
+  border-radius: var(--ampi-radius-bubble);
+  background: var(--ampi-bubble-bg);
+  color: var(--ampi-bubble-fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.attachments {
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+}
+
+/* Assistant prose */
+.prose {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose > :last-child {
+  margin-bottom: 0;
+}
+
+.prose p {
+  margin: 0 0 0.75em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  margin: 1.25em 0 0.5em;
+  color: var(--ampi-fg);
+  font-weight: 600;
+}
+
+.prose h1 {
+  font-size: var(--ampi-text-2xl);
+  line-height: var(--ampi-leading-2xl);
+}
+
+.prose h2 {
+  font-size: var(--ampi-text-xl);
+  line-height: var(--ampi-leading-xl);
+}
+
+.prose h3 {
+  font-size: var(--ampi-text-lg);
+  line-height: var(--ampi-leading-lg);
+}
+
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-size: var(--ampi-text-base);
+  line-height: var(--ampi-leading-base);
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.5em;
+}
+
+.prose li {
+  margin: 0.4em 0;
+  padding-left: calc(var(--ampi-space) * 1);
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin: 0.25em 0 0;
+}
+
+.prose strong {
+  font-weight: 700;
+}
+
+.prose a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose a:hover {
+  color: var(--ampi-link);
+}
+
+.prose blockquote {
+  margin: 0 0 0.75em;
+  padding-left: calc(var(--ampi-space) * 3);
+  border-left: 2px solid var(--ampi-border-strong);
+  color: var(--ampi-muted-fg);
+}
+
+.prose hr {
+  margin: 1.25em 0;
+  border: 0;
+  border-top: 1px solid var(--ampi-border-strong);
+}
+
+.prose code {
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: var(--ampi-muted);
+  font-family: var(--ampi-font-mono);
+  font-size: 0.95em;
+}
+
+.code-card {
+  margin: 0 0 0.75em;
+  overflow: hidden;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-card);
+}
+
+.code-label {
+  padding: 6px 12px 0;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: var(--ampi-leading-xs);
+}
+
+.code-card pre {
+  margin: 0;
+  padding: 8px 12px;
+  overflow-x: auto;
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-sm);
+  line-height: 18px;
+}
+
+.code-card code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.table-wrap {
+  margin: 0 0 0.75em;
+  overflow-x: auto;
+}
+
+.prose table {
+  border-collapse: collapse;
+}
+
+.prose th,
+.prose td {
+  padding: 4px 10px;
+  border: 1px solid var(--ampi-border-strong);
+  text-align: left;
+}
+
+.prose th {
+  font-weight: 600;
+}
+
+.prose .align-center {
+  text-align: center;
+}
+
+.prose .align-right {
+  text-align: right;
+}
+
+/* Tool and thinking rows: one line each, expandable when there is more to see. */
+.row {
+  min-width: 0;
+  color: color-mix(in srgb, var(--ampi-fg) 75%, transparent);
+}
+
+.row > summary,
+.row > .row-line {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--ampi-space) * 1.5);
+  min-width: 0;
+  list-style: none;
+}
+
+.row > summary {
+  cursor: pointer;
+}
+
+.row > summary::-webkit-details-marker {
+  display: none;
+}
+
+.row-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  align-self: center;
+  color: var(--ampi-muted-fg);
+  transition: transform 120ms ease;
+}
+
+details[open] > summary .chevron {
+  transform: rotate(90deg);
+}
+
+.row-line .chevron {
+  visibility: hidden;
+}
+
+.part-muted {
+  color: var(--ampi-muted-fg);
+}
+
+.part-added {
+  color: var(--ampi-success);
+}
+
+.part-removed,
+.part-error {
+  color: var(--ampi-danger);
+}
+
+.row[data-status="running"] .part-verb {
+  animation: ampi-fade 1.6s ease-in-out infinite;
+}
+
+.row[data-status="error"] .part-verb,
+.row[data-status="cancelled"] .part-verb {
+  color: var(--ampi-danger);
+}
+
+.row-body {
+  margin: calc(var(--ampi-space) * 1.5) 0 calc(var(--ampi-space) * 1) 5px;
+  padding-left: calc(var(--ampi-space) * 3);
+  border-left: 1px solid color-mix(in srgb, var(--ampi-border-strong) 70%, transparent);
+}
+
+.tool-output {
+  max-height: 20rem;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-card);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-sm);
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thinking-text {
+  color: var(--ampi-muted-fg);
+  white-space: pre-wrap;
+}
+
+.msg-error {
+  margin: 0;
+  color: var(--ampi-danger);
+}
+
+/* The pulsing dot at the end of the transcript while the agent works. */
+.live-dot {
+  width: 8px;
+  height: 8px;
+  margin: calc(var(--ampi-space) * 1) 0 calc(var(--ampi-space) * 4);
+  border-radius: 50%;
+  background: var(--ampi-fg);
+  animation: ampi-pulse 1.4s ease-in-out infinite;
+}
+
+.jump {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  display: grid;
+  place-items: center;
+  width: var(--ampi-control-size);
+  height: var(--ampi-control-size);
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid var(--ampi-input-border);
+  border-radius: 50%;
+  background: var(--ampi-input-bg);
+  color: var(--ampi-fg);
+  cursor: pointer;
+}
+
+/* Status bar: where the composer will sit, it shows what the agent is doing. */
+.statusbar {
+  padding: calc(var(--ampi-space) * 2) 0 calc(var(--ampi-space) * 3);
+  padding-bottom: max(calc(var(--ampi-space) * 3), env(safe-area-inset-bottom));
+}
+
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-composer);
+  background: var(--ampi-input-bg);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+}
+
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ampi-muted-fg);
+  opacity: 0.5;
+}
+
+.app[data-busy="true"] .status-dot {
+  background: var(--ampi-success);
+  opacity: 1;
+  animation: ampi-pulse 1.4s ease-in-out infinite;
+}
+
+.app[data-phase="error"] .status-dot {
+  background: var(--ampi-danger);
+  opacity: 1;
+}
+
+.app[data-busy="true"] .status-label {
+  color: var(--ampi-fg);
+}
+
+.status-detail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.status-note {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+@keyframes ampi-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes ampi-fade {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Narrow screens: one breakpoint at 768px. */
+@media (max-width: 767px) {
+  .titlebar {
+    border-bottom-color: transparent;
+  }
+
+  .mode {
+    display: none;
+  }
+
+  .chip {
+    max-width: 40vw;
+  }
+}

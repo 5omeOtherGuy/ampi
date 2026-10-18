@@ -31,7 +31,7 @@ import {
   classifyToolCall,
   resultStatus,
   summarizeActivities,
-} from "./activity.js";
+} from "../../ampi-core/tool-activity.js";
 
 type ToolResult = NonNullable<ClassifyOptions["result"]>;
 

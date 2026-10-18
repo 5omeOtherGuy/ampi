@@ -186,6 +186,18 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "src/extensions/ampi-patch/index.ts",
       "src/extensions/ampi-tasks/index.ts",
       "src/extensions/ampi-core/builtin-tool-guidance.ts",
+      "src/extensions/ampi-gui/README.md",
+      "src/extensions/ampi-gui/index.ts",
+      "src/extensions/ampi-gui/config.ts",
+      "src/extensions/ampi-gui/server.ts",
+      "src/extensions/ampi-gui/bridge.ts",
+      "src/extensions/ampi-gui/registry.ts",
+      "src/extensions/ampi-gui/view-model.ts",
+      "src/extensions/ampi-gui/client/index.html",
+      "src/extensions/ampi-gui/client/app.js",
+      "src/extensions/ampi-gui/client/markdown.js",
+      "src/extensions/ampi-gui/client/tokens.css",
+      "src/extensions/ampi-gui/client/app.css",
     ];
     const allFindings = [];
     for (const file of files) {

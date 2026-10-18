@@ -45,7 +45,7 @@ import {
   type TitlePart,
   type TitleRole,
   tokenizeShell,
-} from "./activity.js";
+} from "../../ampi-core/tool-activity.js";
 import { ActivityGroupStore, type GroupAggregate, trackActivityGroups } from "./activity-groups.js";
 
 type CallRenderer = NonNullable<ToolRenderers["renderCall"]>;

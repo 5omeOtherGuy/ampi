@@ -1,0 +1,100 @@
+/*
+ * ampi web GUI design tokens.
+ *
+ * Colours are light-dark() pairs under `color-scheme`, so one declaration
+ * covers both schemes. `html[data-ampi-color-scheme="light"|"dark"]` forces
+ * a scheme; without the attribute (or with "system") the page follows the
+ * operating system.
+ *
+ * Layout has one breakpoint, 768px (48rem), which media queries spell out
+ * because custom properties cannot be used there.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces and text */
+  --ampi-bg: light-dark(#fafaf8, #0b0d0b);
+  --ampi-fg: light-dark(#0b0d0b, #f6fff5);
+  --ampi-shell-bg: light-dark(#e5ebe0, #0b0d0b);
+  --ampi-shell-fg: light-dark(#0b0d0b, #ccccc9);
+  --ampi-surface-bg: light-dark(#f8fcf6, #0c1516);
+  --ampi-border: #878b861f;
+  --ampi-border-strong: #878b8633;
+  --ampi-muted: light-dark(#ebebeb, #878b861a);
+  --ampi-muted-fg: light-dark(#595959, #9ca49c);
+  --ampi-card: light-dark(#0b0d0b05, #f6fff508);
+  --ampi-accent: light-dark(#0b0d0b12, #f6fff512);
+  --ampi-input-bg: light-dark(#fcfcfc, #0b0d0b);
+  --ampi-input-border: light-dark(#0c0e0c26, #f6fff526);
+  --ampi-primary: color-mix(in srgb, var(--ampi-bg) 5%, var(--ampi-fg));
+  --ampi-primary-fg: var(--ampi-bg);
+  --ampi-secondary: light-dark(#d6dcd6, #2f372f);
+
+  /* Status colours */
+  --ampi-warning: light-dark(#a07013, #d6a038);
+  --ampi-danger: light-dark(#c44f4a, #d67670);
+  --ampi-success: light-dark(#2f8052, #54b879);
+  --ampi-link: light-dark(#286bbd, #6ca0e0);
+  --ampi-selection: color-mix(in srgb, var(--ampi-link) 30%, transparent);
+
+  /* User message bubble */
+  --ampi-bubble-bg: light-dark(#e9ede9, #1e1e24);
+  --ampi-bubble-fg: light-dark(#283329, #dce5dc);
+
+  /* Diffs */
+  --ampi-diff-add-bg: light-dark(#e9f5ed, #183323);
+  --ampi-diff-add-fg: light-dark(#2f8052, #4ba86e);
+  --ampi-diff-remove-bg: light-dark(#f8e9e7, #3b2221);
+  --ampi-diff-remove-fg: light-dark(#c44f4a, #d67670);
+  --ampi-diff-meta-fg: light-dark(#a07013, #d6a038);
+
+  /* Syntax */
+  --ampi-syntax-function: light-dark(#149cb8, #75dbf0);
+  --ampi-syntax-keyword: light-dark(#c3227d, #ff7ac6);
+  --ampi-syntax-class: light-dark(#248f3e, #52fa7c);
+  --ampi-syntax-string: light-dark(#8d981b, #f1fa89);
+  --ampi-syntax-comment: light-dark(#7b809d, #626da7);
+  --ampi-syntax-number: light-dark(#5c29a3, #bf95f9);
+
+  /* Type: 13/20 base, xs to 2xl */
+  --ampi-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --ampi-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas, monospace;
+  --ampi-text-xs: 0.6875rem;
+  --ampi-leading-xs: 0.85rem;
+  --ampi-text-sm: 0.75rem;
+  --ampi-leading-sm: 1rem;
+  --ampi-text-base: 0.8125rem;
+  --ampi-leading-base: 1.25rem;
+  --ampi-text-lg: 1rem;
+  --ampi-leading-lg: 1.5rem;
+  --ampi-text-xl: 1.25rem;
+  --ampi-leading-xl: 1.75rem;
+  --ampi-text-2xl: 1.5rem;
+  --ampi-leading-2xl: 2rem;
+
+  /* Radius and spacing */
+  --ampi-radius: 0.5rem;
+  --ampi-radius-xs: calc(var(--ampi-radius) - 6px);
+  --ampi-radius-sm: calc(var(--ampi-radius) - 4px);
+  --ampi-radius-md: calc(var(--ampi-radius) - 2px);
+  --ampi-radius-lg: var(--ampi-radius);
+  --ampi-radius-xl: calc(var(--ampi-radius) + 4px);
+  --ampi-radius-bubble: 12px;
+  --ampi-radius-composer: 16px;
+  --ampi-space: 0.25rem;
+
+  /* Layout */
+  --ampi-titlebar-height: 2.25rem;
+  --ampi-sidebar-width: 16rem;
+  --ampi-column-max: 42rem;
+  --ampi-control-size: 26px;
+}
+
+:root[data-ampi-color-scheme="light"] {
+  color-scheme: light;
+}
+
+:root[data-ampi-color-scheme="dark"] {
+  color-scheme: dark;
+}

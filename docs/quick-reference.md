@@ -86,6 +86,7 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 | Web search/page reads | `AMPI_WEB_ENABLE=true` (legacy `MMR_WEB_ENABLE` still accepted) or `ampiWeb.enabled=true` | `web_search`, `read_web_page` |
 | GitHub repository reads | `AMPI_GITHUB_ENABLE=true` (legacy `MMR_GITHUB_ENABLE` still accepted) | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
 | Prior local Pi sessions | `AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted) | `find_session`, `read_session` |
+| Web GUI for the running session | `AMPI_GUI_ENABLE=true` or `ampiGui.enabled=true` | A `Web GUI: http://127.0.0.1:<port>/?t=<token>` link at session start and the `thread open in browser` command; read-only, local only |
 
 Optional secrets stay in the environment:
 

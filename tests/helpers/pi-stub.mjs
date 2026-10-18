@@ -277,7 +277,10 @@ export function createMockExtensionContext(options = {}) {
       // start; only entries shaped like Pi messages take part, as Pi's converter
       // reads `message.role`.
       buildContextEntries: () => entries.filter((entry) => entry?.type === "message" && typeof entry?.message?.role === "string"),
+      // The entries double as the current branch, root first.
+      getBranch: () => entries,
       getCwd: () => cwd,
+      getSessionFile: () => options.sessionFile,
       getSessionId: () => options.sessionId,
       getSessionName: () => options.sessionName,
     },
