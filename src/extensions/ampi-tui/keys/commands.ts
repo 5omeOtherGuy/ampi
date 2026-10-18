@@ -12,7 +12,7 @@ import {
 import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
 import { getMmrPromptHistory, type MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
-import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
+import { getMmrThreadIndex, MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
 import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
@@ -35,6 +35,8 @@ export interface MmrTuiCommandHost {
   openKeymapJson(ctx: ExtensionContext): void;
   /** Open the prompt history picker. */
   openPromptHistory(ctx: ExtensionContext, history: MmrPromptHistory): void;
+  /** Open the Switch Thread picker. */
+  openThreadSwitcher(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -225,6 +227,19 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         if (!history) throw new Error(HISTORY_MISSING.reason);
         host.openPromptHistory(ctx, history);
       },
+    },
+    {
+      id: "thread.switch",
+      noun: "thread",
+      verb: "switch",
+      description: "Pick another session and switch to it",
+      // The switch runs through ampi-threads' /ampi-thread route; its index
+      // marks the archived sessions the picker hides.
+      availability: (ctx) => {
+        if (ctx.mode !== "tui") return TERMINAL_ONLY;
+        return getMmrThreadIndex() ? AVAILABLE : HISTORY_MISSING;
+      },
+      run: (ctx) => host.openThreadSwitcher(ctx),
     },
     {
       id: "ampi.showVersion",

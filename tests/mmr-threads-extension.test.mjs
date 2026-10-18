@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, beforeEach, describe, it } from "node:test";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
 
@@ -95,10 +96,19 @@ describe("ampi-threads extension", () => {
       "thread.archive": "ctrl+c ctrl+n",
       "thread.unarchive": undefined,
       "thread.archiveAndQuit": "ctrl+c ctrl+e",
+      "thread.switchToPrevious": undefined,
+      "thread.switchToNext": undefined,
     });
     assert.deepEqual(
       registry.getMmrCommands().map((c) => `${c.noun} ${c.verb}`),
-      ["thread new", "thread archive and new", "thread unarchive", "thread archive and quit"],
+      [
+        "thread new",
+        "thread archive and new",
+        "thread unarchive",
+        "thread archive and quit",
+        "thread switch to previous",
+        "thread switch to next",
+      ],
     );
     assert.ok(t.commands.has("ampi-thread"));
     assert.equal(seam.getMmrThreadIndex()?.path, indexFile());
@@ -174,8 +184,11 @@ describe("ampi-threads extension", () => {
 
   it("answers an unknown /ampi-thread action with its usage", async () => {
     const t = await started();
-    await t.commands.get("ampi-thread").handler("delete", t.ctx);
-    assert.deepEqual(t.notifications.at(-1), { message: "Usage: /ampi-thread new | archive", level: "warning" });
+    const usage = { message: "Usage: /ampi-thread new | archive | switch <session id> | previous | next", level: "warning" };
+    for (const args of ["delete", "switch", "switch a b", "new now", "previous 2"]) {
+      await t.commands.get("ampi-thread").handler(args, t.ctx);
+      assert.deepEqual(t.notifications.at(-1), usage, args);
+    }
     assert.equal(t.newSessions.length, 0);
     await t.handlers.get("session_shutdown")(quitEvent, t.ctx);
   });
@@ -240,6 +253,157 @@ describe("ampi-threads extension", () => {
     assert.deepEqual(registry.getMmrCommands(), []);
     assert.equal(seam.getMmrThreadIndex(), undefined);
     assert.equal(historySeam.getMmrPromptHistory(), undefined);
+  });
+});
+
+/** Pi session files with one exchange each, in `dir/sessions`, newest last; returns `{ id, path }` per title. */
+function writeSessions(titles, cwd = "/work/parser") {
+  const sessionDir = path.join(dir, "sessions");
+  const written = {};
+  titles.forEach((title, index) => {
+    const manager = SessionManager.create(cwd, sessionDir);
+    const timestamp = Date.UTC(2026, 9, 18, 9, index);
+    manager.appendMessage({ role: "user", content: title, timestamp });
+    manager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: `Done: ${title}` }],
+      timestamp: timestamp + 1000,
+      api: "faux",
+      provider: "faux",
+      model: "faux-1",
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: "stop",
+    });
+    written[title] = { id: manager.getSessionId(), path: manager.getSessionFile() };
+  });
+  return { sessionDir, sessions: written };
+}
+
+/**
+ * A context in the session `current` of `sessionDir`, with the command-only
+ * `switchSession`, recording its calls; `cancel` makes Pi refuse the switch.
+ */
+function switchContext(sessionDir, current, { entries = [MESSAGE], cancel = false } = {}) {
+  const context = sessionContext({ sessionId: current?.id ?? "unsaved", entries, cwd: "/work/parser" });
+  context.ctx.sessionManager.getSessionFile = () => current?.path ?? path.join(sessionDir, "unsaved.jsonl");
+  context.ctx.sessionManager.getSessionDir = () => sessionDir;
+  context.switches = [];
+  context.ctx.switchSession = async (target) => {
+    context.switches.push(target);
+    return { cancelled: cancel };
+  };
+  return context;
+}
+
+describe("ampi-threads session switching", () => {
+  let history;
+  beforeEach(async () => {
+    history = await importSource("extensions/ampi-threads/switch-history.ts");
+    history.__resetMmrThreadSwitchHistoryForTests();
+  });
+  afterEach(() => history.__resetMmrThreadSwitchHistoryForTests());
+
+  it("switches by id, then back and forth through previous and next, the way a browser's history does", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Parser", "Imports", "Docs"]);
+    const { Parser, Imports, Docs } = sessions;
+    const route = (args, context) => mock.commands.get("ampi-thread").handler(args, context.ctx);
+    const at = (session) => switchContext(sessionDir, session);
+
+    const parser = at(Parser);
+    await mock.handlers.get("session_start")(startEvent, parser.ctx);
+    assert.deepEqual(availability("thread.switchToPrevious", parser.ctx), { state: "unavailable", reason: "no session to go back to" });
+    assert.deepEqual(availability("thread.switchToNext", parser.ctx), { state: "unavailable", reason: "no session to go forward to" });
+    await route("previous", parser);
+    assert.deepEqual(parser.notifications.at(-1), { message: "Nothing to switch to: no session to go back to.", level: "info" });
+    assert.deepEqual(parser.switches, []);
+
+    await route(`switch ${Imports.id}`, parser);
+    assert.deepEqual(parser.switches, [Imports.path], "Pi's switch path, with the session file");
+    await route(`switch ${Docs.id}`, at(Imports));
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [Imports.path, Parser.path], next: [] });
+
+    const docs = at(Docs);
+    assert.deepEqual(availability("thread.switchToPrevious", docs.ctx), { state: "available" });
+    assert.deepEqual(availability("thread.switchToNext", docs.ctx), { state: "unavailable", reason: "no session to go forward to" });
+    command("thread.switchToPrevious").run(docs.ctx);
+    assert.deepEqual(mock.calls.sendUserMessage.at(-1), { content: "/ampi-thread previous", options: { expandPromptTemplates: true } });
+    await route("previous", docs);
+    assert.deepEqual(docs.switches, [Imports.path]);
+
+    const imports = at(Imports);
+    assert.deepEqual(availability("thread.switchToNext", imports.ctx), { state: "available" });
+    await route("previous", imports);
+    assert.deepEqual(imports.switches, [Parser.path]);
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [], next: [Imports.path, Docs.path] });
+
+    const back = at(Parser);
+    command("thread.switchToNext").run(back.ctx);
+    assert.deepEqual(mock.calls.sendUserMessage.at(-1), { content: "/ampi-thread next", options: { expandPromptTemplates: true } });
+    await route("next", back);
+    assert.deepEqual(back.switches, [Imports.path]);
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [Parser.path], next: [Docs.path] });
+
+    // A new switch starts a new branch: there is nothing to go forward to.
+    await route(`switch ${Parser.id}`, at(Imports));
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [Imports.path, Parser.path], next: [] });
+    await mock.handlers.get("session_shutdown")(quitEvent, parser.ctx);
+  });
+
+  it("refuses an unknown id and the current session, and records nothing when Pi cancels the switch", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Parser", "Imports"]);
+    const route = (args, context) => mock.commands.get("ampi-thread").handler(args, context.ctx);
+    const parser = switchContext(sessionDir, sessions.Parser);
+    await mock.handlers.get("session_start")(startEvent, parser.ctx);
+
+    await route("switch 0000", parser);
+    assert.deepEqual(parser.notifications.at(-1), { message: "No session has the id 0000.", level: "warning" });
+    await route(`switch ${sessions.Parser.id}`, parser);
+    assert.deepEqual(parser.notifications.at(-1), { message: "That is the current session.", level: "info" });
+    assert.deepEqual(parser.switches, []);
+
+    const refused = switchContext(sessionDir, sessions.Parser, { cancel: true });
+    await route(`switch ${sessions.Imports.id}`, refused);
+    assert.deepEqual(refused.switches, [sessions.Imports.path]);
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [], next: [] });
+    await mock.handlers.get("session_shutdown")(quitEvent, parser.ctx);
+  });
+
+  it("does not offer an unsaved session to go back to, and forgets a session file that is gone", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Parser", "Imports"]);
+    const route = (args, context) => mock.commands.get("ampi-thread").handler(args, context.ctx);
+    const empty = switchContext(sessionDir, undefined, { entries: [] });
+    await mock.handlers.get("session_start")(startEvent, empty.ctx);
+    await route(`switch ${sessions.Parser.id}`, empty);
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [], next: [] }, "a session without messages has no file to reopen");
+
+    await route(`switch ${sessions.Imports.id}`, switchContext(sessionDir, sessions.Parser));
+    rmSync(sessions.Parser.path);
+    const imports = switchContext(sessionDir, sessions.Imports);
+    await route("previous", imports);
+    assert.deepEqual(imports.switches, [], "Pi would start a new session at a missing path");
+    assert.deepEqual(imports.notifications.at(-1), { message: "That session no longer exists.", level: "warning" });
+    assert.deepEqual(availability("thread.switchToPrevious", imports.ctx), { state: "unavailable", reason: "no session to go back to" });
+    await mock.handlers.get("session_shutdown")(quitEvent, empty.ctx);
+  });
+
+  it("reports a switch Pi could not make", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Parser", "Imports"]);
+    const parser = switchContext(sessionDir, sessions.Parser);
+    await mock.handlers.get("session_start")(startEvent, parser.ctx);
+    parser.ctx.switchSession = async () => {
+      throw new Error("the session's working directory is gone");
+    };
+    await mock.commands.get("ampi-thread").handler(`switch ${sessions.Imports.id}`, parser.ctx);
+    assert.deepEqual(parser.notifications.at(-1), {
+      message: "Could not switch sessions: the session's working directory is gone",
+      level: "error",
+    });
+    assert.deepEqual(history.getMmrThreadSwitchHistory(), { previous: [], next: [] });
+    await mock.handlers.get("session_shutdown")(quitEvent, parser.ctx);
   });
 });
 
@@ -348,6 +512,56 @@ describe("ampi-threads prompt history in ampi-tui", () => {
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(context.state.editorText, "Rename the parser");
       assert.deepEqual(mock.calls.sendUserMessage, [], "nothing is sent");
+    } finally {
+      keys.stop();
+      await mock.handlers.get("session_shutdown")(quitEvent, context.ctx);
+    }
+  });
+});
+
+/** Let the event loop turn, reading files included, until `done()` holds (at most 1000 turns). */
+async function turnsUntil(done) {
+  for (let turn = 0; turn < 1000 && !done(); turn++) await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(done(), "the condition never held");
+}
+
+describe("ampi-threads thread switcher in ampi-tui", () => {
+  it("lists this workspace's sessions from Pi's session files, and Enter switches through /ampi-thread switch", async () => {
+    const mock = await loadExtension();
+    const { sessionDir, sessions } = writeSessions(["Rename the parser", "Fix the imports", "Write the docs"]);
+    writeThreads({ [sessions["Write the docs"].id]: { archived: ARCHIVED_AT } });
+    const context = switchContext(sessionDir, sessions["Rename the parser"]);
+    await mock.handlers.get("session_start")(startEvent, context.ctx);
+    const { createMmrTuiKeys } = await importSource("extensions/ampi-tui/keys/install.ts");
+    const keys = createMmrTuiKeys(mock.pi, { now: () => 0, setTimer: () => ({}), clearTimer: () => {} });
+    keys.start(context.ctx, () => undefined);
+    try {
+      assert.deepEqual(availability("thread.switch", context.ctx), { state: "available" });
+      command("thread.switch").run(context.ctx);
+      await turnsUntil(() => context.overlays.length === 1);
+      const overlay = context.overlays.at(-1);
+      assert.deepEqual(
+        overlay.component.getRows().map((row) => [row.title, row.current]),
+        [
+          ["Rename the parser", true],
+          ["Fix the imports", false],
+        ],
+        "the current session first; the archived one hidden",
+      );
+      overlay.component.handleInput("\x1b[B");
+      overlay.component.handleInput("\r");
+      await new Promise((resolve) => setImmediate(resolve));
+      const sent = `/ampi-thread switch ${sessions["Fix the imports"].id}`;
+      assert.deepEqual(mock.calls.sendUserMessage, [{ content: sent, options: { expandPromptTemplates: true } }]);
+      await mock.commands.get("ampi-thread").handler(sent.slice("/ampi-thread ".length), context.ctx);
+      assert.deepEqual(context.switches, [sessions["Fix the imports"].path]);
+
+      // Picking the current session switches nowhere.
+      command("thread.switch").run(context.ctx);
+      await turnsUntil(() => context.overlays.length === 2);
+      context.overlays.at(-1).component.handleInput("\r");
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(mock.calls.sendUserMessage.length, 1);
     } finally {
       keys.stop();
       await mock.handlers.get("session_shutdown")(quitEvent, context.ctx);

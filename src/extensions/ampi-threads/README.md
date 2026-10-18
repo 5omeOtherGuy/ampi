@@ -1,6 +1,6 @@
 # ampi-threads
 
-Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source), Amp-compatible commands to start, archive and unarchive sessions, and the prompt history behind Ctrl+R.
+Manages threads on top of Pi sessions: an index of per-session metadata (archived, labels, colour, pinned, title source), Amp-compatible commands to start, archive, unarchive and switch sessions, and the prompt history behind Ctrl+R.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../../ROADMAP.md`](../../../ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -8,13 +8,14 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index; the prompt history | none (`ampi-tui` for the keys, palette and prompt history picker) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R |
+| On | `thread.new`, `thread.archive`, `thread.unarchive`, `thread.archiveAndQuit`, `thread.switchToPrevious`, `thread.switchToNext`; Ctrl+C Ctrl+N and Ctrl+C Ctrl+E; the thread index; the prompt history; the switch route | none (`ampi-tui` for the keys, palette, prompt history and thread pickers) | `<agentDir>/data/ampi/threads/index.json` and `history/`; the Ctrl+C popup; Ctrl+R; `thread switch` |
 
 ## When to use it
 
 - You want to put a finished session away: Ctrl+C Ctrl+N archives it and starts a new one, Ctrl+C Ctrl+E archives it and quits.
 - You want Pi to archive every session you quit (`ampiThreads.autoArchiveOnQuit`).
 - You want a prompt you sent before, in this workspace or another: Ctrl+R lists them and puts the one you pick back into the prompt.
+- You want to move between sessions without leaving Pi: `thread switch` in the palette picks one with a preview, and `thread switch to previous` / `to next` go back and forth.
 - You are building on per-session metadata (thread pickers, labels, colours): read and update it through `getMmrThreadIndex()` in `ampi-core`.
 
 ## Status and enablement
@@ -31,11 +32,13 @@ It owns no model-visible tools or feature gates. The index store works in every 
 | `thread.archive` | Command, `ctrl+c ctrl+n` | Archive this session and start a new one |
 | `thread.unarchive` | Command, no key | Take this session out of the archive |
 | `thread.archiveAndQuit` | Command, `ctrl+c ctrl+e` | Archive this session and quit |
-| `/ampi-thread new`, `/ampi-thread archive` | Slash command | The route the session-replacing commands take; you can type it too |
+| `thread.switchToPrevious` | Command, no key | Go back to the session you last switched away from |
+| `thread.switchToNext` | Command, no key | Go forward again after going back |
+| `/ampi-thread new`, `archive`, `switch <session id>`, `previous`, `next` | Slash command | The route the session-replacing commands and `ampi-tui`'s Switch Thread picker take; you can type it too |
 | Thread index | File | `<agentDir>/data/ampi/threads/index.json` |
 | Prompt history | Files | `<agentDir>/data/ampi/threads/history/<workspace key>.jsonl`, read by `ampi-tui`'s `prompt.history` (Ctrl+R) |
 
-The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive` and `thread archive and quit`.
+The palette lists the commands as `thread new`, `thread archive and new`, `thread unarchive`, `thread archive and quit`, `thread switch to previous` and `thread switch to next`. `thread switch`, which opens the picker, comes from `ampi-tui` (see [its README](../ampi-tui/README.md#switch-thread-picker)).
 
 ## Configuration
 
@@ -67,6 +70,17 @@ The settings are read once when the extension loads. Restart Pi or run `/reload`
 - `thread archive and new` starts the new session through Pi's own `newSession`, which first stops a running turn. A notice in the new session confirms the archive.
 - `thread archive and quit` archives the session, then quits the way `ampi.quit` (Ctrl+C Ctrl+C) does. Without `ampi-tui` it stops a running turn and shuts Pi down itself.
 - With `autoArchiveOnQuit`, quitting an interactive session archives it. Switching sessions, `/reload`, and print, JSON or RPC runs (subagent workers included) never archive. An archive date that is already set is kept.
+
+### Switching sessions
+
+`ampi-tui`'s Switch Thread picker lists the sessions and hands the one you pick to `/ampi-thread switch <session id>`, which switches through Pi's own `switchSession`, as `/resume` does.
+
+- The id is looked up among every session Pi lists (all workspaces, or your custom session directory). An unknown id, or the id of the session you are in, gets a notice and changes nothing.
+- Switching to a session started in another working directory moves Pi there, as `/resume` does. Pi refuses when that directory no longer exists; the error is shown as a notice.
+- ampi keeps a switch history for as long as Pi runs, like a browser's back and forward lists. Each switch through `/ampi-thread switch` puts the session you left at the front of the previous list and empties the next list. `thread switch to previous` goes back and puts the session you leave at the front of the next list; `thread switch to next` does the reverse.
+- With nothing to go back to, `thread switch to previous` is unavailable with the reason "no session to go back to"; `thread switch to next` says "no session to go forward to". A session without messages is never added, since Pi has not saved it.
+- A session whose file was deleted is dropped from the history when you try to go to it, with a notice.
+- Switches made with Pi's `/resume` or a new session do not change the history. Quitting Pi forgets it.
 
 ### The thread index
 
@@ -106,6 +120,7 @@ Every prompt you type into the terminal prompt and send is recorded for its work
 - **A warning says the thread index could not be read.** The file was not a valid index. It was moved to the `.corrupt` name in the warning; inspect it by hand and copy back any entries you need.
 - **Archiving fails with "written by a newer ampi".** Another ampi version on this machine uses a newer index format. Update ampi.
 - **Ctrl+R does nothing.** `ampi-threads` is off, and the picker needs it. The palette lists the command as "history (unavailable)" and, when you select it, gives the reason "ampi-threads is not loaded".
+- **`thread switch to previous` is unavailable after a switch.** You switched with Pi's `/resume`, or from a session without messages: neither is recorded. Switch with `thread switch`.
 - **A prompt is missing from Ctrl+R.** It started with `/`, was sent by an extension, repeated the prompt before it, or was sent in another working directory: press Alt+W to show every workspace.
 
 ## Public API
@@ -115,8 +130,9 @@ Stable re-exports from `ampi`: `createMmrThreadsExtension`, `loadMmrThreadsSetti
 ## Developer notes
 
 - Manifest: risk class `local-mutation` (it writes the thread index under the agent directory), child role `none`. No subagent child keep-set lists it.
-- Layout: `index.ts` (entry point: registers the index, prompt history, commands and slash route at load, records prompts from Pi's `input` event, releases everything at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `history-store.ts` (the prompt history files), `commands.ts` (palette commands and the `/ampi-thread` handler).
+- Layout: `index.ts` (entry point: registers the index, prompt history, commands and slash route at load, records prompts from Pi's `input` event, releases everything at `session_shutdown`), `config.ts` (settings), `index-store.ts` (the store), `history-store.ts` (the prompt history files), `commands.ts` (palette commands and the `/ampi-thread` handler), `switch-history.ts` (the per-process switch history behind previous and next).
 - The prompt history picker lives in `ampi-tui`, which may not import this extension. `ampi-threads` registers its history store in `ampi-core/prompt-history.ts` (`registerMmrPromptHistory`), and the picker reads it from there (`getMmrPromptHistory`). The store queues on the same per-path lock as the index store.
-- Only a command handler gets Pi's `newSession`. The palette commands that replace the session therefore send `/ampi-thread …` with `pi.sendUserMessage(…, { expandPromptTemplates: true })`, which Pi runs as an extension command at once, even during a turn.
+- Only a command handler gets Pi's `newSession` and `switchSession`. The palette commands that replace the session, and the Switch Thread picker in `ampi-tui`, therefore send `/ampi-thread …` with `pi.sendUserMessage(…, { expandPromptTemplates: true })`, which Pi runs as an extension command at once, even during a turn.
+- Pi loads the extension afresh for every session it switches to, so the switch history lives on `globalThis` rather than in the extension instance. It records only what the route switched, after Pi reports the switch was made.
 - Command availability is checked synchronously, so it reads the store's last known record (`peek`); `session_start` loads the current session's record.
-- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam), `tests/mmr-threads-history-store.test.mjs` (prompt history files, trimming, workspaces, seam) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, prompt recording, the Ctrl+C popup and Ctrl+R through `ampi-tui`'s dispatcher, settings, load order).
+- Tests: `tests/mmr-threads-index-store.test.mjs` (store, labels, seam), `tests/mmr-threads-history-store.test.mjs` (prompt history files, trimming, workspaces, seam) and `tests/mmr-threads-extension.test.mjs` (commands through the Pi stub, the switch route and history against session files written with Pi's `SessionManager`, prompt recording, the Ctrl+C popup, Ctrl+R and the Switch Thread picker through `ampi-tui`, settings, load order).

@@ -124,6 +124,8 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 
 In the command palette, "ampi help" opens the Help & Keymap screen: every editor key, scrolling key and command with the key in effect (`—` when it has none). "ampi show keymap" shows the keymap in effect as JSONC to copy under `ampi.keymap`. Both scroll with ↑/↓, j/k and PgUp/PgDn; Esc closes them.
 
+To change sessions, run `thread switch` from the palette: it lists this workspace's sessions, newest first, with a preview of the selected one; Enter switches, Alt+W or Ctrl+T shows every workspace's, Alt+A adds archived ones. `thread switch to previous` and `thread switch to next` go back and forth through the sessions you switched between. These need `ampi-threads` and have no default key.
+
 The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.

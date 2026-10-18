@@ -1,0 +1,40 @@
+╭─ [1m[33mSwitch Thread[39m[22m ──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                  │
+│ > [7m [27m                                                     ╭──────────────────────────────────────────────────────╮ │
+│                                                         │                                                      │ │
+│ [48;5;3m  [32m(current) [39m[38;5;0mRename the parser module and upda…[39m [38;5;0m2d ago[39m  [49m │                    Thread Preview                    │ │
+│   untitled                                        now   │                                                      │ │
+│   Parser cleanup                              51m ago   │                                                      │ │
+│   Why does the parser drop trailing comments?  3h ago   │  [32m┃ [39m[3m[32mRename the parser module and update its imports[39m[23m   │ │
+│                                                         │                                                      │ │
+│                                                         │  Renamed [1mparser[22m to [33msyntax[39m.                           │ │
+│                                                         │                                                      │ │
+│                                                         │  - updated four imports                              │ │
+│                                                         │  - kept the old name as an alias                     │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         │                                                      │ │
+│                                                         ╰──────────────────────────────────────────────────────╯ │
+│                                                                                                                  │
+╰────────────────────────────────────────────────── [34mAlt+W/Ctrl+T[39m [2mall workspaces[22m[2m · [22m[34mAlt+A[39m [2mshow archived[22m[2m · [22m[34mEsc[39m [2mclose[22m ─╯

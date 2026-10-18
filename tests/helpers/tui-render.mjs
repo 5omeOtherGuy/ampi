@@ -9,6 +9,8 @@ import { backgroundAnsi, foregroundAnsi, indexedColor, styleTextWithAnsi } from 
 const FOREGROUND = {
   accent: "\x1b[34m",
   warning: "\x1b[33m",
+  success: "\x1b[32m",
+  userMessageText: "\x1b[32m",
   dim: "\x1b[2m",
   scrollbarThumb: "\x1b[38;5;243m",
 };
@@ -16,7 +18,8 @@ const FOREGROUND = {
 /**
  * A theme with the methods ampi-tui components call, mapping each token to a
  * fixed ANSI color in the spirit of the `ampi` theme: `accent` blue,
- * `warning` yellow, `dim` faint, a gray scrollbar.
+ * `warning` yellow, `success` and `userMessageText` green, `dim` faint, a
+ * gray scrollbar.
  */
 export function createAnsiTheme() {
   const tokenAnsi = (token) => {
@@ -27,6 +30,7 @@ export function createAnsiTheme() {
   return {
     fg: (token, text) => (token === "dim" ? `\x1b[2m${text}\x1b[22m` : `${tokenAnsi(token)}${text}\x1b[39m`),
     bold: (text) => `\x1b[1m${text}\x1b[22m`,
+    italic: (text) => `\x1b[3m${text}\x1b[23m`,
     style: (text, { fg, bg, ...attributes } = {}) =>
       styleTextWithAnsi(
         text,

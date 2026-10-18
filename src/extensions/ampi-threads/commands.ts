@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   getMmrCommand,
@@ -6,15 +7,23 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../ampi-core/command-registry.js";
+import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../ampi-core/thread-index.js";
 import type { MmrThreadIndexStore } from "./index-store.js";
+import {
+  forgetMmrThreadSwitchTarget,
+  type MmrThreadSwitchDirection,
+  peekMmrThreadSwitch,
+  recordMmrThreadSwitch,
+} from "./switch-history.js";
 
 /**
  * Thread commands: the palette rows and keys in `ampi-core`'s command
  * registry, and the `/ampi-thread` slash command that runs the actions that
- * replace the session. Only a command handler gets Pi's `newSession`, so
- * the palette rows for those actions send `/ampi-thread …` through Pi's
- * prompt path instead of calling it themselves.
+ * replace the session. Only a command handler gets Pi's `newSession` and
+ * `switchSession`, so the palette rows for those actions, and the thread
+ * picker in `ampi-tui`, send `/ampi-thread …` through Pi's prompt path
+ * instead of calling them themselves.
  */
 
 export interface MmrThreadCommandHost {
@@ -31,6 +40,11 @@ const AVAILABLE: MmrCommandAvailability = { state: "available" };
 const NOTHING_TO_ARCHIVE: MmrCommandAvailability = { state: "hidden" };
 const ALREADY_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is already archived" };
 const NOT_ARCHIVED: MmrCommandAvailability = { state: "unavailable", reason: "this session is not archived" };
+const NO_SWITCH_REASON: Readonly<Record<MmrThreadSwitchDirection, string>> = {
+  previous: "no session to go back to",
+  next: "no session to go forward to",
+};
+const USAGE = `Usage: /${MMR_THREAD_SLASH_COMMAND} new | archive | switch <session id> | previous | next`;
 
 /** Whether the session holds a message. Pi saves a session only once it does, so before that there is nothing to archive. */
 export function hasMmrSessionMessages(ctx: ExtensionContext): boolean {
@@ -69,10 +83,77 @@ function sendThreadAction(host: MmrThreadCommandHost, action: string): void {
   host.pi.sendUserMessage(`/${MMR_THREAD_SLASH_COMMAND} ${action}`, { expandPromptTemplates: true });
 }
 
-/** Handler of `/ampi-thread new` and `/ampi-thread archive`. */
+/** The session file to come back to, or `undefined` while the session is unsaved (no messages) or kept in memory. */
+function reopenableSessionFile(ctx: ExtensionContext): string | undefined {
+  const file = ctx.sessionManager.getSessionFile();
+  return file !== undefined && hasMmrSessionMessages(ctx) ? file : undefined;
+}
+
+function switchAvailability(ctx: ExtensionContext, direction: MmrThreadSwitchDirection): MmrCommandAvailability {
+  return peekMmrThreadSwitch(direction, ctx.sessionManager.getSessionFile()) === undefined
+    ? { state: "unavailable", reason: NO_SWITCH_REASON[direction] }
+    : AVAILABLE;
+}
+
+/** Switch to the session in `target` through Pi, and record the switch once Pi has made it. */
+async function switchToSession(
+  ctx: ExtensionCommandContext,
+  target: string,
+  direction?: MmrThreadSwitchDirection,
+): Promise<void> {
+  // Pi would start a new session at a path that no longer exists.
+  if (!existsSync(target)) {
+    forgetMmrThreadSwitchTarget(target);
+    ctx.ui.notify("That session no longer exists.", "warning");
+    return;
+  }
+  const from = reopenableSessionFile(ctx);
+  try {
+    const result = await ctx.switchSession(target);
+    if (!result.cancelled) recordMmrThreadSwitch(from, target, direction);
+  } catch (error) {
+    ctx.ui.notify(`Could not switch sessions: ${error instanceof Error ? error.message : String(error)}`, "error");
+  }
+}
+
+async function switchById(ctx: ExtensionCommandContext, id: string): Promise<void> {
+  const session = (await listMmrSessionsInScope(ctx.sessionManager, "all")).find((info) => info.id === id);
+  if (!session) {
+    ctx.ui.notify(`No session has the id ${id}.`, "warning");
+    return;
+  }
+  if (session.id === ctx.sessionManager.getSessionId()) {
+    ctx.ui.notify("That is the current session.", "info");
+    return;
+  }
+  await switchToSession(ctx, session.path);
+}
+
+async function switchThroughHistory(ctx: ExtensionCommandContext, direction: MmrThreadSwitchDirection): Promise<void> {
+  const target = peekMmrThreadSwitch(direction, ctx.sessionManager.getSessionFile());
+  if (target === undefined) {
+    ctx.ui.notify(`Nothing to switch to: ${NO_SWITCH_REASON[direction]}.`, "info");
+    return;
+  }
+  await switchToSession(ctx, target, direction);
+}
+
+/** Handler of `/ampi-thread new`, `archive`, `switch <session id>`, `previous` and `next`. */
 export function createMmrThreadSlashHandler(host: MmrThreadCommandHost) {
   return async (args: string, ctx: ExtensionCommandContext): Promise<void> => {
-    const action = args.trim();
+    const [action = "", ...rest] = args.trim().split(/\s+/);
+    if (action === "switch" && rest.length === 1) {
+      await switchById(ctx, rest[0]!);
+      return;
+    }
+    if ((action === "previous" || action === "next") && rest.length === 0) {
+      await switchThroughHistory(ctx, action);
+      return;
+    }
+    if (rest.length > 0) {
+      ctx.ui.notify(USAGE, "warning");
+      return;
+    }
     if (action === "new") {
       await ctx.newSession();
       return;
@@ -91,7 +172,7 @@ export function createMmrThreadSlashHandler(host: MmrThreadCommandHost) {
       });
       return;
     }
-    ctx.ui.notify(`Usage: /${MMR_THREAD_SLASH_COMMAND} new | archive`, "warning");
+    ctx.ui.notify(USAGE, "warning");
   };
 }
 
@@ -135,6 +216,22 @@ export function createMmrThreadCommands(host: MmrThreadCommandHost): MmrCommandD
         await archiveMmrSession(host, ctx);
         await quit(ctx);
       },
+    },
+    {
+      id: "thread.switchToPrevious",
+      noun: "thread",
+      verb: "switch to previous",
+      description: "Go back to the session you switched away from",
+      availability: (ctx) => switchAvailability(ctx, "previous"),
+      run: () => sendThreadAction(host, "previous"),
+    },
+    {
+      id: "thread.switchToNext",
+      noun: "thread",
+      verb: "switch to next",
+      description: "Go forward again after switching to the previous session",
+      availability: (ctx) => switchAvailability(ctx, "next"),
+      run: () => sendThreadAction(host, "next"),
     },
   ];
 }
