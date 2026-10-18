@@ -1,0 +1,12 @@
+╭─ [1m[33mMCP Servers[39m[22m ────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ [1m[33mServers[39m[22m[2m  ·  [22m[2mTools[22m                                                        │
+│                                                                          │
+│ [1mdev-radius[22m  [32mconnected[39m      3 tools  direct    [2m~/.pi/agent/mcp.json[22m       │
+│ [1mdocs[22m        [33mnot connected[39m  0 tools  deferred  [2m.pi/mcp.json override[22m      │
+│ [1mlegacy[22m      [2mdisabled[22m       0 tools  codemode  [2m~/.pi/agent/mcp.json[22m       │
+│ [1mtracker[22m     [32mconnected[39m      1 tool   codemode  [2m~/extensions/tracker/inde[0m…[0m │
+│                                                                          │
+│ [2mRun /mcp to sign in, reconnect, change a server's exposure or turn a[22m     │
+│ [2mserver on or off.[22m                                                        │
+╰───────────────────────────────────────────── [34mTab[39m [2mswitch tab[22m[2m · [22m[34mEsc[39m [2mclose[22m ─╯

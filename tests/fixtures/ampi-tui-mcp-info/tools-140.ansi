@@ -1,0 +1,12 @@
+╭─ [1m[33mMCP Servers[39m[22m ────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│ [2mServers[22m[2m  ·  [22m[1m[33mTools[39m[22m                                                            │
+│                                                                              │
+│ [1mdev-radius[22m                                                                   │
+│   [34mfind_symbol[39m    [2mFind where a symbol is defined.[22m                             │
+│   [34mlist_files[39m     [2mList the files under a directory[22m                            │
+│   [34mopen[39m           [2mOpen a file at a line[22m                                       │
+│                                                                              │
+│ [1mtracker[22m                                                                      │
+│   [34msearch_issues[39m  [2mSearch the issue tracker by text, label or assignee, newes[0m…[0m[22m │
+╰───────────────────────────────────────────────── [34mTab[39m [2mswitch tab[22m[2m · [22m[34mEsc[39m [2mclose[22m ─╯

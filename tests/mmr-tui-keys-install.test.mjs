@@ -140,6 +140,8 @@ describe("ampi-tui key installation", () => {
       "skills.list": undefined,
       "plugins.list": undefined,
       "plugins.reload": undefined,
+      "mcp.info": undefined,
+      "mcp.authenticate": undefined,
       "ampi.help": undefined,
       "ampi.keymapJson": undefined,
       "thread.toggleDetails": "alt+t",
@@ -621,8 +623,13 @@ describe("ampi-tui command palette and details toggle", () => {
     assert.ok(rows.includes("thread toggle details"));
     assert.ok(rows.includes("pi /model"), "Pi's built-in slash commands are listed under pi");
     assert.ok(rows.includes("thread interrupt"), "unavailable while idle, but listed");
+    // The palette draws 15 rows at a time, so filter before asserting a row's key column.
+    for (const character of "toggle details") overlay.component.handleInput(character);
     assert.match(overlay.component.render(80).join("\n"), /toggle details +Alt\+T/);
-    assert.match(overlay.component.render(80).join("\n"), /quit +Ctrl\+C Ctrl\+C/);
+    const again = setup();
+    again.send("\x0f");
+    for (const character of "quit") again.overlays[0].component.handleInput(character);
+    assert.match(again.overlays[0].component.render(80).join("\n"), /quit +Ctrl\+C Ctrl\+C/);
   });
 
   it("shows an overridden key in the key column", () => {

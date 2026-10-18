@@ -155,6 +155,8 @@ Mentions are plain text in your message. The model sees `@:<sha>` and can run gi
 
 `skills list` shows the skills Pi loaded, grouped by where it found them; `extensions list` shows each extension with the slash commands and tools it registered (one that registers neither is not listed); `extensions reload` runs Pi's `/reload`; `ampi show version` shows the ampi, Pi and Node versions. They have no default keys.
 
+`mcp info` shows the MCP servers from your and the project's `mcp.json` and from extensions, with their state, tool count, exposure and source, and on a second tab (Tab switches) the tools of each server; `mcp authenticate` runs Pi's `/mcp`, where you sign in to a server. They have no default keys.
+
 The shortcuts help lists the keys in effect, including any you rebound, in the prompt box above the text. Inside tmux with `extended-keys` off it adds a line saying Shift+Enter needs that option; Alt+Enter works either way.
 
 The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.

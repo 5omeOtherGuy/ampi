@@ -29,6 +29,7 @@ import {
   openMmrVersion,
   readMmrVersionInfo,
 } from "../overlays/info.js";
+import { openMmrMcpInfo, readMmrMcpInfo } from "../overlays/mcp-info.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { createMmrOutline } from "../overlays/outline.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
@@ -178,6 +179,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openSkills: (current) => openReport(() => openMmrSkills(current, buildMmrSkillSections(pi.getCommands(), lastSkills))),
     openExtensions: (current) => openReport(() => openMmrExtensions(current, buildMmrExtensionList(pi.getCommands(), pi.getAllTools()))),
     openVersion: (current) => openReport(() => openMmrVersion(current, readMmrVersionInfo())),
+    openMcpInfo: (current) => openReport(() => openMmrMcpInfo(current, readMmrMcpInfo(pi, current))),
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -343,8 +345,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
 
   /**
    * Open a report overlay (Thread Cost, Analyze Context, Skills,
-   * Extensions, Version), dimming the prompt box while it is open. The
-   * report is made when it opens and does not follow the session afterwards.
+   * Extensions, Version, MCP Servers), dimming the prompt box while it is
+   * open. The report is made when it opens and does not follow the session
+   * afterwards.
    */
   function openReport(open: () => Promise<void>): void {
     options.onPaletteOpen?.(true);
