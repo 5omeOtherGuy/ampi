@@ -253,6 +253,24 @@ export function parseMmrChangelog(markdown: string): ParsedMmrChangelog {
   return { versionedEntries, ...(unreleased ? { unreleased } : {}) };
 }
 
+const RELEASE_DATE_PATTERN = /\b(\d{4}-\d{2}-\d{2})\b/;
+
+/**
+ * The release date (`YYYY-MM-DD`) the changelog heading of `version` carries,
+ * in either heading form; `undefined` when the version has no heading or
+ * its heading no date.
+ */
+export function findMmrChangelogReleaseDate(markdown: string, version: string): string | undefined {
+  for (const line of markdown.replaceAll("\r\n", "\n").split("\n")) {
+    const match = line.match(VERSION_HEADER_PATTERN);
+    if (!match || normalizeVersion(match[1], match[2], match[3]) !== version) continue;
+    // Skip release-please's compare link, `[0.4.0](url)`, so only the date after it counts.
+    const rest = line.slice(match[0].length - (match[0].endsWith("(") ? 1 : 0)).replace(/^\([^)]*\)/, "");
+    return rest.match(RELEASE_DATE_PATTERN)?.[1];
+  }
+  return undefined;
+}
+
 export function getNewVersionedMmrChangelogEntries(
   entries: readonly MmrChangelogEntry[],
   lastSeenVersion: string | undefined,

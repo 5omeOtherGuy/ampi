@@ -1,0 +1,25 @@
+╭─ [1m[33mSkills (7)[39m[22m ─────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ [1mUser[22m                                                                     │
+│   [33mpdf-tools[39m                   [2mExtract text and tables from PDF files. U[0m…[0m[22m │
+│   [33mreview[39m [2magents[22m               [2mReview a diff for correctness, regression[0m…[0m[22m │
+│                                                                          │
+│ [1mProject[22m                                                                  │
+│   [33mlint[39m [2mclaude[22m                 [2mRun the linters the repository uses.[22m       │
+│   [33mrelease-notes[39m               [2mDraft release notes from the pull request[0m…[0m[22m │
+│                                                                          │
+│ [1mPackages[22m                                                                 │
+│   [33mbrave-search[39m [2mnpm:pi-skills[22m  [2mSearch the web and read pages without a b[0m…[0m[22m │
+│                                                                          │
+│ [1mSettings[22m                                                                 │
+│   [33mdeploy[39m [2mcommand only[22m         [2mDeploy the site after the gate passed.[22m     │
+│                                                                          │
+│ [1mTemporary[22m                                                                │
+│   [33mscratch[39m                     [2mA skill tried out for one run.[22m             │
+│                                                                          │
+│ [2mPi looks for skills (a directory with a SKILL.md) in ~/.pi/agent/skills[22m  │
+│ [2mand ~/.agents/skills, in the project's .pi/skills, in .agents/skills[22m     │
+│ [2mfrom the working directory up to the repository root, in the paths of[22m    │
+│ [2mthe skills setting and in Pi packages. Run /reload to pick up a skill[22m    │
+│ [2myou added.[22m                                                               │
+╰────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯

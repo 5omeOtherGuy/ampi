@@ -20,6 +20,15 @@ import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import type { MmrModeKey } from "../../ampi-core/types.js";
 import { pickMmrThreadMention } from "../editor/mentions.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
+import {
+  buildMmrExtensionList,
+  buildMmrSkillSections,
+  type MmrInfoSkill,
+  openMmrExtensions,
+  openMmrSkills,
+  openMmrVersion,
+  readMmrVersionInfo,
+} from "../overlays/info.js";
 import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { createMmrOutline } from "../overlays/outline.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
@@ -151,6 +160,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     offsetY: abovePrompt,
     yields: () => hint !== undefined || (modeDial !== undefined && !modeDial.isClosed()),
   });
+  /** Pi's skill list as of the last turn; it also covers skills while Pi lists no skill commands. */
+  let lastSkills: readonly MmrInfoSkill[] = [];
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
@@ -164,6 +175,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openThreadCost: (current, reports) => openReport(() => openMmrThreadCost(current, reports.cost(current))),
     openContextAnalysis: (current, reports) => openReport(() => openMmrContextAnalysis(current, reports.analyzeContext(current))),
     toggleOutline: (current) => outline.toggle(current),
+    openSkills: (current) => openReport(() => openMmrSkills(current, buildMmrSkillSections(pi.getCommands(), lastSkills))),
+    openExtensions: (current) => openReport(() => openMmrExtensions(current, buildMmrExtensionList(pi.getCommands(), pi.getAllTools()))),
+    openVersion: (current) => openReport(() => openMmrVersion(current, readMmrVersionInfo())),
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -174,6 +188,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     if (event.message.role === "assistant") outline.refresh(eventCtx, event.message);
   });
   pi.on("session_tree", (_event, eventCtx) => outline.refresh(eventCtx));
+  pi.on("before_agent_start", (event) => {
+    lastSkills = [...(event.systemPromptOptions?.skills ?? [])];
+  });
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -325,9 +342,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   }
 
   /**
-   * Open one of ampi-threads' report overlays (Thread Cost, Analyze
-   * Context), dimming the prompt box while it is open. The report is made
-   * when it opens and does not follow the session afterwards.
+   * Open a report overlay (Thread Cost, Analyze Context, Skills,
+   * Extensions, Version), dimming the prompt box while it is open. The
+   * report is made when it opens and does not follow the session afterwards.
    */
   function openReport(open: () => Promise<void>): void {
     options.onPaletteOpen?.(true);

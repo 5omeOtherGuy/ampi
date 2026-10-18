@@ -133,6 +133,9 @@ describe("ampi-tui key installation", () => {
       "thread.analyzeContext": undefined,
       "thread.toggleOutline": undefined,
       "ampi.showVersion": undefined,
+      "skills.list": undefined,
+      "plugins.list": undefined,
+      "plugins.reload": undefined,
       "ampi.help": undefined,
       "ampi.keymapJson": undefined,
       "thread.toggleDetails": "alt+t",
@@ -282,7 +285,7 @@ describe("ampi-tui key installation", () => {
 
     const leader = setup({ settings: { ampi: { keymap: { "ampi.showVersion": "<leader>v" } } } });
     for (const data of ["\x1b[120;5u", "\x1b[120;5:3u", "\x1b[118u", "\x1b[118;1:3u"]) leader.send(data);
-    assert.match(leader.notifications.at(-1).message, /^ampi \S+ on Pi/);
+    assert.match(leader.overlays.at(-1).component.render(80)[0], /─ Version ─/, "the Version dialog opens");
   });
 
   it("lets Esc close the prompt's autocomplete list without interrupting", () => {
@@ -358,7 +361,7 @@ describe("ampi-tui key installation", () => {
     assert.deepEqual([...t.shortcuts.keys()].sort(), ["alt+t", "f5"], "unconditional single keys that Pi does not reserve");
     assert.equal(t.shortcuts.get("f5").description, "Show the ampi and Pi versions");
     t.shortcuts.get("f5").handler(t.ctx);
-    assert.match(t.notifications.at(-1).message, /^ampi \S+ on Pi \d+\.\d+\.\d+/);
+    assert.match(t.overlays.at(-1).component.render(80)[0], /─ Version ─/, "the Version dialog opens");
   });
 
   it("routes a leader binding through raw input and lists it in the popup", () => {
@@ -368,7 +371,7 @@ describe("ampi-tui key installation", () => {
     const lines = t.overlays[0].component.render(t.overlays[0].options.overlayOptions().width);
     assert.match(lines[1], /│ v {2}Show the ampi and Pi versions +│/);
     assert.equal(t.send("v"), true);
-    assert.match(t.notifications.at(-1).message, /^ampi /);
+    assert.match(t.overlays.at(-1).component.render(80)[0], /─ Version ─/, "the Version dialog opens");
   });
 
   it("follows a changed leader", () => {
@@ -646,7 +649,7 @@ describe("ampi-tui command palette and details toggle", () => {
     pick(t.overlays[0], "show version");
     await settle();
     assert.equal(t.overlays[0].closed, true);
-    assert.match(t.notifications.at(-1).message, /^ampi \S+ on Pi/);
+    assert.match(t.overlays.at(-1).component.render(80)[0], /─ Version ─/, "the picked command opened the Version dialog");
 
     registry.registerMmrCommand({
       id: "prompt.broken",
@@ -658,7 +661,7 @@ describe("ampi-tui command palette and details toggle", () => {
       },
     });
     t.send("\x0f");
-    pick(t.overlays[1], "broken");
+    pick(t.overlays.at(-1), "broken");
     await settle();
     assert.match(t.notifications.at(-1).message, /prompt\.broken failed: boom/);
   });

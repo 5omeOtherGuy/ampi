@@ -1,0 +1,23 @@
+╭─ [1m[33mSkills (7)[39m[22m ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                      │
+│ [1mUser[22m                                                                                                                 │
+│   [33mpdf-tools[39m                   [2mExtract text and tables from PDF files. Use when reading, converting or inspecting PD[0m…[0m[22m │
+│   [33mreview[39m [2magents[22m               [2mReview a diff for correctness, regressions and missing tests before it lands.[22m          │
+│                                                                                                                      │
+│ [1mProject[22m                                                                                                              │
+│   [33mlint[39m [2mclaude[22m                 [2mRun the linters the repository uses.[22m                                                   │
+│   [33mrelease-notes[39m               [2mDraft release notes from the pull requests merged since the last tag.[22m                  │
+│                                                                                                                      │
+│ [1mPackages[22m                                                                                                             │
+│   [33mbrave-search[39m [2mnpm:pi-skills[22m  [2mSearch the web and read pages without a browser.[22m                                       │
+│                                                                                                                      │
+│ [1mSettings[22m                                                                                                             │
+│   [33mdeploy[39m [2mcommand only[22m         [2mDeploy the site after the gate passed.[22m                                                 │
+│                                                                                                                      │
+│ [1mTemporary[22m                                                                                                            │
+│   [33mscratch[39m                     [2mA skill tried out for one run.[22m                                                         │
+│                                                                                                                      │
+│ [2mPi looks for skills (a directory with a SKILL.md) in ~/.pi/agent/skills and ~/.agents/skills, in the project's[22m       │
+│ [2m.pi/skills, in .agents/skills from the working directory up to the repository root, in the paths of the skills[22m       │
+│ [2msetting and in Pi packages. Run /reload to pick up a skill you added.[22m                                                │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────── [34mEsc[39m [2mclose[22m ─╯
