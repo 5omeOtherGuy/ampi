@@ -9,7 +9,9 @@ export const MMR_CHANGELOG_STATE_VERSION = 1;
 export const MMR_CHANGELOG_STATE_RELATIVE_PATH = "data/ampi/changelog/state.json";
 
 const PACKAGE_NAME = "ampi";
-const VERSION_HEADER_PATTERN = /^##\s+\[?v?(\d+)\.(\d+)\.(\d+)\]?(?:\s|$)/;
+// Hand-written (`## 0.3.1 — date`, `## [0.3.0] - date`) and release-please
+// (`## [0.4.0](compare-url) (date)`) headings.
+const VERSION_HEADER_PATTERN = /^##\s+\[?v?(\d+)\.(\d+)\.(\d+)\]?(?:\(|\s|$)/;
 const UNRELEASED_HEADER_PATTERN = /^##\s+Unreleased\b/i;
 const AMPI_CHANGELOG_DEBUG_ENV_VAR = "PI_AMPI_CHANGELOG_DEBUG";
 const DEBUG_ENV_VAR = "PI_MMR_CHANGELOG_DEBUG";

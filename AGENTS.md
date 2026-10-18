@@ -8,7 +8,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 - Stage: released (repository standard 2026-10-17)
 - Gate: `npm run gate` (CI job `gate`)
 - Landing: PR, squash-merged on a green gate; agents land: yes
-- Release: release PR prepared by hand (release-please not adopted yet); agents release: no
+- Release: release-please PR; agents release: no
 - Outside issues and PRs: agents triage; outside PRs merge: owner approves
 - Deliberate deviations from the standard:
   - No live tests at all, not even opt-in: the suite is deterministic and never calls a provider or network API.
@@ -47,7 +47,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 5. Merge once the latest `gate` run on the head commit concluded `success` (skipped, cancelled or missing is not green): `gh pr merge <number> --squash --delete-branch --match-head-commit <sha>`. There is no ruleset yet, so do not use `--auto`.
 6. Afterwards: `npm run sync:primary` in the primary checkout, then `npm run cleanup:worktree -- ../ampi-<slug>`.
 
-Record user-visible changes in `CHANGELOG.md` under `## Unreleased`. Never merge a release PR or publish to npm.
+Do not edit `CHANGELOG.md`: release-please writes it from the squash-merged PR titles, so write the title in user-facing words (`feat`, `fix` and `perf` appear in the changelog; a PR body can replace its entries with a `BEGIN_COMMIT_OVERRIDE` … `END_COMMIT_OVERRIDE` block). Never merge the release PR or publish to npm.
 
 ## Rules for this repository
 
