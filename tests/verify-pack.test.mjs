@@ -27,6 +27,12 @@ describe("verify-pack publish guard", () => {
       "node scripts/verify-pack.mjs",
       "package.json must run the pack guard on the prepublishOnly lifecycle.",
     );
+    const cli = JSON.parse(await readFile(path.join(repoRoot, "packages", "ampi-cli", "package.json"), "utf8"));
+    assert.equal(
+      cli.scripts?.prepublishOnly,
+      "node ../../scripts/verify-pack.mjs",
+      "packages/ampi-cli/package.json must run the same pack guard before publishing.",
+    );
   });
 
   it("passes when every packaged file is tracked in git", () => {

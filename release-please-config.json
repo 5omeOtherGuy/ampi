@@ -15,10 +15,17 @@
     { "type": "ci", "section": "CI", "hidden": true },
     { "type": "chore", "section": "Chores", "hidden": true }
   ],
+  "plugins": ["node-workspace"],
   "packages": {
     ".": {
       "package-name": "@skippermissions/ampi",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "exclude-paths": ["packages/ampi-cli"]
+    },
+    "packages/ampi-cli": {
+      "package-name": "@skippermissions/ampi-cli",
+      "component": "ampi-cli",
+      "include-component-in-tag": true
     }
   }
 }

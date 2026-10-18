@@ -7,7 +7,7 @@
     "defaultBranch": "main"
   },
   "files": {
-    "includes": ["src/**/*.ts", "scripts/**/*.mjs", "tests/**/*.mjs"]
+    "includes": ["src/**/*.ts", "scripts/**/*.mjs", "tests/**/*.mjs", "packages/*/bin/*.js", "packages/*/src/**/*.js"]
   },
   "formatter": {
     "enabled": false

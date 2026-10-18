@@ -24,6 +24,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 | --- | --- |
 | `src/extensions/<name>/` | One Pi extension per directory; `package.json` `pi.extensions` lists the registered ones in load order. `ampi-debug` is developer-only and never packed; `ampi-toolbox` is a deprecated shim. |
 | `src/index.ts`, `package.json` `exports` | Public API, including the legacy `mmr-*` subpaths. |
+| `packages/ampi-cli/` | The `@skippermissions/ampi-cli` npm workspace package (the `ampi` command), published and versioned separately. |
 | `tests/*.test.mjs` | `node:test` suites. They load source through `tests/helpers/load-src.mjs`, never from `src/` directly; fixtures are in `tests/fixtures/`. |
 | `docs/` | User and contributor docs (shipped in the package, except `docs/private/`); decisions in `docs/adr/`. |
 | `scripts/gate.sh` | The gate: secret scan, lint, tests, type check, `npm pack --dry-run`. |

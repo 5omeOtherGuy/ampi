@@ -35,6 +35,8 @@ Two import patterns coexist intentionally — see the helper header for details:
   runtime.setMmrSessionIdentity(undefined);
   ```
 
+The `ampi` command in `packages/ampi-cli/` is plain JavaScript, so `tests/mmr-cli-*.test.mjs` import its modules directly and spawn `packages/ampi-cli/bin/ampi.js` only for help, version and usage errors, which never start Pi.
+
 ## Fixtures
 
 - [`fixtures/mmr-core-prompts/`](fixtures/mmr-core-prompts) — prompt assembly baselines.
@@ -43,6 +45,7 @@ Two import patterns coexist intentionally — see the helper header for details:
 - [`fixtures/mmr-tui-tool-rows/`](fixtures/mmr-tui-tool-rows) — transcript tool rows at 80 and 140 columns, collapsed and expanded, as plain text.
 - [`fixtures/mmr-tui-tool-groups/`](fixtures/mmr-tui-tool-groups) — runs of tool calls folded into one summary row at 80 and 140 columns, collapsed and expanded, running and finished, as plain text.
 - [`fixtures/mmr-tui-queue/`](fixtures/mmr-tui-queue) — the box of queued messages above the prompt at 80 and 140 columns, as plain text and with ANSI kept.
+- [`fixtures/ampi-cli/`](fixtures/ampi-cli) — `ampi --help` output.
 
 Update workflow: rerun the relevant fixture test with `PI_MMR_UPDATE_FIXTURES=1` to regenerate snapshots, review the diff before committing. Without that env var, fixture drift fails the test with the offending file path.
 

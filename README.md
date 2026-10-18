@@ -23,7 +23,7 @@ The npm package name is `@skippermissions/ampi`; `ampi` is the name you see in c
 
 ## Install
 
-ampi is a Pi extension, not a standalone CLI. It needs Pi 1.3 or later, installed and signed in to at least one provider (see [Compatibility](#compatibility)).
+ampi is a Pi extension package. It needs Pi 1.3 or later, installed and signed in to at least one provider (see [Compatibility](#compatibility)). The optional `ampi` command below starts Pi with ampi loaded.
 
 ```bash
 pi install npm:@skippermissions/ampi          # install for your user (recommended)
@@ -43,6 +43,18 @@ Prefer git, or want an unreleased commit? Use the git source (pin with `@<ref>`)
 ```bash
 pi install git:github.com/5omeOtherGuy/ampi
 ```
+
+### The `ampi` command
+
+[`@skippermissions/ampi-cli`](packages/ampi-cli/README.md) adds an `ampi` command with Amp-compatible short flags such as `-m high`. It brings its own Pi and ampi and passes every other option to Pi:
+
+```bash
+npm i -g @skippermissions/ampi-cli
+ampi -m high          # same session as: pi -e npm:@skippermissions/ampi --ampi-mode high
+ampi --help
+```
+
+If ampi is also installed as a Pi package, the command uses that copy instead of loading ampi twice.
 
 ## First minutes
 
@@ -218,6 +230,7 @@ git clone https://github.com/5omeOtherGuy/ampi
 cd ampi
 npm ci
 pi -e "$PWD" --ampi-mode medium  # run the local checkout
+node packages/ampi-cli/bin/ampi.js -m medium  # the same through the local ampi command
 ```
 
 `npm run gate` runs everything a change must pass (lint, tests, type check, package dry run); CI runs the same command. Run one test file with `npm run test:one -- tests/<file>.test.mjs`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow.
