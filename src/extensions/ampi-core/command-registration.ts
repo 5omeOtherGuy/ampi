@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runMmrConfigFlow } from "./config-flow.js";
 import { formatMmrModeList, MMR_MODE_KEYS, resolveMmrModeKey } from "./modes.js";
-import { getMmrModeHistory, getMmrModeState } from "./runtime.js";
+import { getMmrModeHistory, getMmrModeState, isMmrModeLocked } from "./runtime.js";
 import { showMmrChangelogCommand } from "./changelog.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
 import { formatMmrStatus } from "./status.js";
@@ -47,7 +47,12 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
         return;
       }
 
-      await controller.applyMode(mode, ctx, { source: "command", persist: true, notify: true });
+      // `/mode` is the explicit way to change a locked session's mode.
+      const overridesLock = isMmrModeLocked() && getMmrModeState()?.mode !== mode;
+      const state = await controller.applyMode(mode, ctx, { source: "command", persist: true, notify: true, overrideModeLock: true });
+      if (overridesLock && state?.mode === mode) {
+        ctx.ui.notify(`/mode overrode the mode lock: this session now runs in ${mode}.`, "info");
+      }
     },
   });
 

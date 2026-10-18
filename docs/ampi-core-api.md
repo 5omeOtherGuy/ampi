@@ -96,6 +96,12 @@ status diagnostics. They show whether ampi-core has a pre-ampi restore
 snapshot and the provider/model id when known. They are not persisted
 and never include auth material.
 
+`MmrModeState.modeLock` is runtime-only as well: `{ enabled, locked, reason? }`.
+`locked` turns true once the session has a user message (unless the
+`ampiCore.modeLock` setting is `false`); a mode control should then show
+the mode read-only instead of changing it. It is never persisted, because
+ampi-core derives it from the session entries at session start.
+
 `setMmrModeState` is intentionally **not** exported from the package
 root. Only the `ampi-core` extension itself updates the runtime state.
 

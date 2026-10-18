@@ -5,6 +5,7 @@ import type {
   MmrEditToolFamilyDecision,
   MmrFeatureGateDecision,
   MmrModeDefinition,
+  MmrModeLock,
   MmrModeResolution,
   MmrModeSelectionSource,
   MmrModeState,
@@ -67,6 +68,8 @@ export function createMmrModeState(args: {
   settingsFilesRead?: readonly string[];
   /** Optional settings-load warnings; rendered by `/ampi-status` only. */
   settingsWarnings?: readonly string[];
+  /** Runtime-only session mode lock; not persisted. */
+  modeLock?: MmrModeLock;
 }): MmrModeState {
   const featureGateDecisions = args.featureGateDecisions
     ? [...args.featureGateDecisions]
@@ -123,6 +126,7 @@ export function createMmrModeState(args: {
     appliedAt: args.appliedAt ?? new Date().toISOString(),
     ...(args.settingsFilesRead ? { settingsFilesRead: [...args.settingsFilesRead] } : {}),
     ...(args.settingsWarnings ? { settingsWarnings: [...args.settingsWarnings] } : {}),
+    ...(args.modeLock ? { modeLock: { ...args.modeLock } } : {}),
   };
 }
 

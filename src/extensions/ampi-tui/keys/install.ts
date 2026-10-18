@@ -225,6 +225,13 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   }
 
   function openModeDial(current: ExtensionContext): void {
+    // The dial switches through /mode, which overrides the lock, so a locked
+    // session refuses here as ampi-core's cycle and picker do.
+    const state = getMmrModeState();
+    if (state?.modeLock?.locked) {
+      current.ui.notify(`Mode stays ${state.mode}: ${state.modeLock.reason}. /mode <key> still switches it.`, "warning");
+      return;
+    }
     if (modeDial && !modeDial.isClosed()) {
       modeDial.turn(1);
       return;

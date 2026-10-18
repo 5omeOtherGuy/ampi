@@ -251,6 +251,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("input", async (_event, ctx) => {
+    // The first user message fixes the session's mode.
+    controller.noteUserMessage();
     // Reassert the active mode's context cap before Pi runs its pre-prompt
     // compaction check, in case a provider (re)registration (e.g. `/login`)
     // transiently re-resolved the active model to its uncapped window. Native

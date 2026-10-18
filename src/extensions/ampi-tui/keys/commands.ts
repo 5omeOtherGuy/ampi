@@ -10,7 +10,7 @@ import {
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
 import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
-import { getMmrModeState } from "../../ampi-core/runtime.js";
+import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
 import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
@@ -280,8 +280,11 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         host,
         `${CORE_SLASH.mode} ${mode}`,
         { id: `mode.use.${mode}`, noun: "mode", verb: `use ${mode}`, description: `Switch to the ${mode} mode` },
-        () =>
-          getMmrModeState()?.mode === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE,
+        () => {
+          // A locked session keeps its mode: the rows leave the palette (`/mode` still overrides).
+          if (isMmrModeLocked()) return { state: "hidden", reason: getMmrModeState()?.modeLock?.reason };
+          return getMmrModeState()?.mode === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE;
+        },
       ),
     ),
   ];
@@ -291,11 +294,11 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
  * Palette rows for Pi's slash commands under the `pi` category: Pi's
  * built-in commands, then extension commands, prompt templates and skills.
  * Legacy `mmr-*` aliases, the core commands that ampi rows already run and
- * `/ampi-thread`, which the thread rows run, are left out. A built-in
- * command that reads no arguments is submitted through the prompt, as
- * typing it and pressing Enter would. Every other command may take
- * arguments, so its row puts `/<name> ` into the prompt for you to finish
- * and send. Both need an empty prompt.
+ * `/ampi-thread`, which the thread rows run, are left out; `/mode` shows
+ * only while the session's mode is locked. A built-in command that reads no
+ * arguments is submitted through the prompt, as typing it and pressing Enter
+ * would. Every other command may take arguments, so its row puts `/<name> `
+ * into the prompt for you to finish and send. Both need an empty prompt.
  */
 export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
   const commands = new Map<string, { description: string; submit: boolean }>(
@@ -306,7 +309,9 @@ export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrComma
   );
   try {
     for (const command of host.pi.getCommands()) {
-      if (!commands.has(command.name) && !command.name.startsWith("mmr-") && !PALETTE_HIDDEN_SLASH_NAMES.has(command.name)) {
+      // `/mode` stays listed: it is the only way to change a locked session's mode.
+      const coveredByAmpiRow = PALETTE_HIDDEN_SLASH_NAMES.has(command.name) && command.name !== CORE_SLASH.mode;
+      if (!commands.has(command.name) && !command.name.startsWith("mmr-") && !coveredByAmpiRow) {
         commands.set(command.name, { description: command.description ?? "Pi command", submit: false });
       }
     }
@@ -317,6 +322,8 @@ export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrComma
     verb: `/${name}`,
     description,
     availability: (ctx: ExtensionContext): MmrCommandAvailability => {
+      // The `mode use` rows run `/mode` until the session's mode is locked.
+      if (name === CORE_SLASH.mode && !isMmrModeLocked()) return { state: "hidden" };
       if (ctx.ui.getEditorText().length > 0) return PROMPT_HAS_TEXT;
       if (submit && !canMmrSubmitEditorText(host.getTui())) {
         return { state: "unavailable", reason: "the prompt is not focused" };

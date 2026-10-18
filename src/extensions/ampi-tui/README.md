@@ -44,8 +44,8 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | `thread.toggleDetails` | Command, `alt+t` | Expand or collapse tool output and thinking together |
 | `prompt.toggleHelp` | Command, `?` on an empty prompt | Show or hide the shortcuts help inside the prompt box |
 | `ampi.status`, `ampi.changelog`, `ampi.config` | Commands, no key | Run `/ampi-status`, `/ampi-changelog` and `/ampi-config` (need `ampi-core`) |
-| `mode.toggle` | Command, `ctrl+s` | Open the mode dial; while it is open, turn it to the next mode (needs `ampi-core`) |
-| `mode.use.low` … `mode.use.free` | Commands, no key | Switch to that mode, as `/mode <key>` does (need `ampi-core`) |
+| `mode.toggle` | Command, `ctrl+s` | Open the mode dial; while it is open, turn it to the next mode (needs `ampi-core`); once the session's mode is locked it says why instead |
+| `mode.use.low` … `mode.use.free` | Commands, no key | Switch to that mode, as `/mode <key>` does (need `ampi-core`); hidden once the session's mode is locked |
 | "then" popup | Overlay | Lists the keys that can follow Ctrl+X, Ctrl+C or any other chord prefix |
 | `ampi` theme | Pi package theme (`theme/ampi.json`) | Amp-compatible colour roles on ANSI palette indices |
 | User messages | Transcript | A bar on every line, raw italic text in the theme's user colour, no background |
@@ -211,7 +211,7 @@ Ctrl+O, or `/` typed into an empty prompt, opens the palette in the middle of th
 - Each row shows a command's category (dim, right-aligned), what it does (bold) and its key at the right edge, using your keymap overrides. Long rows are cut, never wrapped. The list shows 15 rows, with a scrollbar when there are more.
 - Typing filters the list. Rows are ranked by how well they match, best first. Commands that cannot run right now are listed last, marked "(unavailable)"; selecting one shows why under the list. Availability is judged once, when the palette opens.
 - ↑/↓ or Ctrl+P/Ctrl+N move the selection. Enter closes the palette and runs the selected command; Esc closes it without running anything.
-- Every registered ampi command is listed, other than the palette itself. Pi's slash commands are listed under the `pi` category: Pi's built-in commands, then commands from extensions, prompt templates and skills. The legacy `/mmr-*` aliases are left out, and so are the slash commands that an ampi row already runs, such as `/ampi-status` and `/mode`. These rows need an empty prompt.
+- Every registered ampi command is listed, other than the palette itself. Pi's slash commands are listed under the `pi` category: Pi's built-in commands, then commands from extensions, prompt templates and skills. The legacy `/mmr-*` aliases are left out, and so are the slash commands that an ampi row already runs, such as `/ampi-status` and `/mode`. Once the session's mode is locked, the `mode use` rows leave the palette and `pi /mode` takes their place, so the explicit override stays one row away. These rows need an empty prompt.
 - Picking a Pi built-in command that takes no arguments, such as `/tree` or `/session`, runs it as if you had typed it and pressed Enter. Every other `pi` row puts `/<name> ` into the prompt, so you can add arguments (`/name review`, `/compact keep the test plan`) and press Enter; Pi's argument completion works there as usual. This covers `/model`, `/thinking`, `/export`, `/import`, `/bug`, `/name`, `/login`, `/compact` and every extension command, prompt template and skill.
 - `/` opens the palette only while the prompt is empty and focused, so Pi's slash completion no longer opens from an empty prompt. With text in the prompt, `/` is typed as usual. To type slash commands directly instead, unbind it: `{ "ampi": { "keymap": { "prompt.openPalette": null } } }`.
 - Pi draws overlays over the screen as it is, so the transcript behind the palette is not dimmed; the prompt box dims its own frame while the palette is open.
@@ -270,6 +270,7 @@ Ctrl+S opens the mode dial at the right edge, just above the prompt box: 58 colu
 - Tab shows the list of modes instead, `free` last, the current one marked `‣`. ↑/↓ choose a mode and switch to it at once; Tab goes back to the dial.
 - Esc closes the dial. It also closes by itself 2 seconds after the last key.
 - The dial takes every key while it is open; other keys do nothing.
+- Once the session has a message, its mode is locked: Ctrl+S then opens no dial and says why the mode is fixed. `/mode <key>` still switches it.
 - Without ampi-core's `/mode` command, Ctrl+S is left to Pi.
 - While `ampi-tui` is on, ampi-core's own Ctrl+S and Ctrl+Space cycle keys do nothing, so if you unbind or move `mode.toggle` under `ampi.keymap`, Ctrl+S no longer changes the mode.
 ### Terminal title, notifications and quit summary
@@ -417,7 +418,7 @@ Each call's own row is one line: a status glyph, a verb and what the call acted 
 
 ### Planned
 
-Later releases lock the mode once a thread has messages; the dial then shows the mode without changing it. Each change lands behind the same `ampiTui.enabled` switch.
+Later releases open the dial read-only in a locked session, showing the mode and its models without changing them, instead of only saying why the mode is fixed. Each change lands behind the same `ampiTui.enabled` switch.
 
 ## Diagnostics and troubleshooting
 

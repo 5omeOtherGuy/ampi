@@ -19,6 +19,8 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `medium`. The selected mode is persisted as an `ampi-core.mode-state` custom session entry on every explicit change. Legacy names normalize at input boundaries: `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`.
 
+Mode lock: once the session has a user message (counted from the session entries at session start, and on the first `input` event), the mode is fixed. The cycle and picker shortcuts, and `ampi-tui`'s mode dial, then refuse with "the mode is fixed once a session has messages; start a new session to change it", `ampi-tui` hides the palette's `mode.use.*` rows, and `MmrModeState.modeLock` reads `{ enabled: true, locked: true, reason }` (`isMmrModeLocked()` for short). `/mode <key>` is the explicit override and says so when it changes a locked session's mode; native Pi model or thinking changes still release to `free`; the `Alt+D` thinking toggle and a session-fallback route keep the mode and are unaffected. `ampiCore.modeLock: false` turns the lock off.
+
 Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level. While an extension owns ampi's terminal chrome, as `ampi-tui` does by default, both cycle keys do nothing in ampi-core: `ampi-tui` takes `Ctrl+S` for its mode dial. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
@@ -35,7 +37,6 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `lo
 - **Context profiles**: Medium inherits the former Smart 300k total / 172k max-input / 128k max-output safety profile. Low, High, and Ultra use Pi's registered model window. A declared profile caps the active model's `contextWindow` down via a shallow clone at `setModel`; smaller custom windows remain authoritative, `free` is never capped, and the cap is reasserted if provider registration transiently restores the uncapped model object.
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
 - **Footer**: locked modes draw a two-line footer (cwd, branch, session name; token usage, cost, context use, model and mode); `free` restores Pi's footer. While another extension owns ampi's terminal chrome (`registerMmrChromeOwner`, used by [`ampi-tui`](../ampi-tui/README.md)), core leaves the footer slot to it.
-- **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+r` for the in-mode thinking toggle that does not release.
 - **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+d` for the in-mode thinking toggle that does not release.
 
 ### Tool resolution
@@ -185,6 +186,7 @@ Locked-mode fields (Free uses a strict subset):
 | `Mode:` | Display name + key. |
 | `Selected source:` | `flag` / `session` / `settings` / `default` / `native`. |
 | `Rejected sources:` | Sources considered and discarded with reason, or `none`. |
+| `Mode lock:` | `open until the first message`, `locked - <reason>; /mode overrides it`, or `off (ampiCore.modeLock is false)`. Runtime-only. |
 | `Model preference order:` | Ordered preference list attempted (mode defaults merged with settings). |
 | `Resolved model:` | `provider/model thinking:level` actually applied, or `none`. |
 | `Resolved model available:` / `Model applied:` | Whether a candidate matched a registered model / whether Pi accepted it. Can diverge when Pi rejects. |
