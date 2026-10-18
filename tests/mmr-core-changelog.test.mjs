@@ -135,6 +135,12 @@ describe("mmr-core changelog parsing and update display", () => {
     const parsed = parseMmrChangelog([
       "# Changelog",
       "",
+      "## [0.4.0](https://github.com/5omeOtherGuy/ampi/compare/v0.3.0...v0.4.0) (2026-10-18)",
+      "",
+      "### Added",
+      "",
+      "- Fourth update (release-please heading).",
+      "",
       "## [0.3.0] - 2026-05-25",
       "",
       "### Added",
@@ -152,9 +158,10 @@ describe("mmr-core changelog parsing and update display", () => {
       "- ignored",
     ].join("\n"));
 
-    assert.deepEqual(parsed.versionedEntries.map((entry) => entry.version), ["0.3.0", "0.2.0"]);
-    const newer = getNewVersionedMmrChangelogEntries(parsed.versionedEntries, "0.1.0", "0.3.0");
-    assert.deepEqual(newer.map((entry) => entry.version), ["0.3.0", "0.2.0"]);
+    assert.deepEqual(parsed.versionedEntries.map((entry) => entry.version), ["0.4.0", "0.3.0", "0.2.0"]);
+    assert.match(parsed.versionedEntries[0].content, /Fourth update/);
+    const newer = getNewVersionedMmrChangelogEntries(parsed.versionedEntries, "0.2.0", "0.4.0");
+    assert.deepEqual(newer.map((entry) => entry.version), ["0.4.0", "0.3.0"]);
   });
 
   it("shows current version notes on first observation, then only versioned entries newer than the user's last update", async () => {

@@ -45,7 +45,7 @@ Keep the summary imperative and under 72 characters. Add a body when it helps ex
 
 ## Pull request checklist
 
-- Update `CHANGELOG.md` under `## Unreleased` for user-visible or operator-visible changes.
+- Write the PR title in user-facing Conventional Commits form; release-please builds `CHANGELOG.md` from it.
 - Do not commit secrets, local session data, raw provider payloads, credentials, private notes, or exact local-only paths.
 - Keep public text framed in `ampi` terms.
 - Prefer existing helpers and dependencies over new one-off utilities.

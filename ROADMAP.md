@@ -113,12 +113,12 @@ Add the Pi smoke test when extension loading or package metadata changes:
 pi -e "$PWD" --list-models
 ```
 
-Release work should also:
+Releases go through the release-please PR: merging it bumps `package.json`, writes `CHANGELOG.md`, tags `vX.Y.Z` and creates the GitHub Release; publishing runs in the release workflow with npm trusted publishing and provenance.
 
-- Update `CHANGELOG.md` under `Unreleased` and cut a versioned section when tagging.
+When reviewing a release PR:
+
 - Review all public text for repo-owned wording and no secrets/local-only provenance.
 - Confirm `npm run pack:dry-run` contains only intended files.
-- Keep package metadata, changelog, tag, and GitHub Release notes aligned.
 
 ## Public-safety checklist
 

@@ -1,38 +1,23 @@
 ## Summary
 
-- 
-
-## Changelog
+-
 
 <!--
-Add `### <Heading>` + `- ` bullets between the markers below; the `changelog-sync`
-workflow appends them to CHANGELOG.md under `## Unreleased` at PR time. Headings
-must match CHANGELOG.md (Added / Changed / Fixed / Removed / Security /
-Documentation). Leave the block empty, edit `## Unreleased` directly, or apply
-the `skip-changelog` label for a deliberately non-user-visible change.
-See docs/changelog-template.md ("Automated PR-body sync").
+The PR title is the changelog entry: use Conventional Commits in user-facing
+words (`feat: ...`, `fix(ampi-core): ...`). release-please builds CHANGELOG.md
+from it; do not edit CHANGELOG.md by hand.
 -->
-<!-- ampi changelog:start -->
-
-<!-- ampi changelog:end -->
 
 ## Verification
 
-- [ ] `npm test`
-- [ ] `npm run check`
-- [ ] `npm run pack:dry-run` (when package contents, exports, or docs change)
+- [ ] `npm run gate`
 
 ## Linked issues
 
-Closes #
-
-## Follow-up work
-
-- None known.
+Fixes #
 
 ## Checklist
 
-- [ ] I described user-visible changes in the Changelog marker block above (or edited `## Unreleased`), or this change is deliberately non-user-visible.
-- [ ] I used labels that match the change type when practical.
+- [ ] The PR title is a user-facing Conventional Commit, and breaking changes carry `!` and a `BREAKING CHANGE:` footer.
 - [ ] I did not include secrets, private session data, provider payloads, credentials, or local-only notes.
 - [ ] Public-facing text uses `ampi` project terms and is safe to publish.

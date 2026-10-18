@@ -75,7 +75,7 @@
   "scripts": {
     "prepare": "node scripts/install-hooks.mjs",
     "prepublishOnly": "node scripts/verify-pack.mjs",
-    "test": "node scripts/check-changelog.mjs && node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "test:one": "node --test",
     "test:watch": "node --test --watch",
     "test:cov": "PI_MMR_KEEP_PREPARED_SRC=1 node --test --experimental-test-coverage tests/*.test.mjs",
@@ -85,7 +85,6 @@
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "lint:fix": "biome lint --write .",
     "check:unused": "npm run check",
-    "check:changelog": "node scripts/check-changelog.mjs",
     "check:primary-fresh": "bash scripts/check-primary-fresh.sh",
     "sync:primary": "bash scripts/sync-primary.sh",
     "preflight": "bash scripts/worktree-preflight.sh",
