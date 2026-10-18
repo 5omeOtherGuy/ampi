@@ -122,6 +122,34 @@ describe("ampi-gui bridge", () => {
     );
   });
 
+  it("lets an interrupted message, which Pi ends with a new timestamp, take the streamed copy's place", async () => {
+    const { bridge, ctx, fire } = await setup();
+    bridge.start(ctx);
+    const seen = [];
+    bridge.subscribe((event) => seen.push(event));
+    fire("turn_start", {});
+    fire("message_start", { message: user("explain", 10) });
+    const partial = assistant([{ type: "text", text: "Half a" }], 20);
+    fire("message_start", { message: partial });
+    fire("message_update", { message: partial, assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+    fire("message_update", { message: partial, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "Half a" } });
+    const aborted = assistant([{ type: "text", text: "Half a" }], 35, { stopReason: "aborted" });
+    fire("message_end", { message: aborted });
+    const end = seen.at(-1);
+    assert.equal(end.event, "item");
+    assert.equal(end.data.id, "a35");
+    assert.equal(end.data.replaces, "a20");
+    assert.deepEqual(
+      bridge.snapshot().items.map((item) => item.id),
+      ["u10", "a35"],
+      "the snapshot holds the message once",
+    );
+    // A message that ends with its own id replaces nothing.
+    fire("message_start", { message: assistant([], 50) });
+    fire("message_end", { message: assistant([{ type: "text", text: "done" }], 50) });
+    assert.equal(seen.at(-1).data.replaces, undefined);
+  });
+
   it("labels tool calls with activity words and follows them from start to result", async () => {
     const { bridge, ctx, fire } = await setup();
     bridge.start(ctx);
@@ -216,6 +244,42 @@ describe("ampi-gui bridge", () => {
     assert.equal(bridge.status().queued, 1);
     fire("message_start", { message: user("also this", 50) });
     assert.equal(bridge.status().queued, 0);
+  });
+
+  it("mirrors the queue ampi-core's seam publishes, texts and count, and forgets it when the owner leaves", async () => {
+    const { registerMmrPromptQueue } = await importSource("extensions/ampi-core/prompt-queue.ts");
+    const { bridge, ctx, fire } = await setup();
+    bridge.start(ctx);
+    assert.equal(bridge.snapshot().queue, null, "no owner: the texts are unknown");
+    const seen = [];
+    bridge.subscribe((event) => seen.push(event));
+    const owner = registerMmrPromptQueue({ remove: () => false });
+    try {
+      fire("turn_start", {});
+      owner.update({ steering: ["now"], followUp: ["later", "after that"] });
+      assert.deepEqual(seen.at(-1), { id: bridge.lastEventId, event: "queue", data: { steering: ["now"], followUp: ["later", "after that"] } });
+      assert.equal(bridge.status().queued, 3);
+      // The published queue is the count; input events no longer add to it.
+      fire("input", { text: "more", source: "interactive", streamingBehavior: "followUp" });
+      assert.equal(bridge.status().queued, 3);
+      assert.deepEqual(bridge.snapshot().queue, { steering: ["now"], followUp: ["later", "after that"] });
+    } finally {
+      owner.release();
+    }
+    assert.equal(seen.at(-1).event, "queue");
+    assert.equal(seen.at(-1).data, null);
+    assert.equal(bridge.snapshot().queue, null);
+  });
+
+  it("shows an interruption the user asked for as cancelling", async () => {
+    const { bridge, ctx, fire } = await setup();
+    bridge.start(ctx);
+    assert.equal(bridge.context(), ctx);
+    fire("turn_start", {});
+    bridge.interrupted();
+    assert.equal(bridge.status().phase, "cancelling");
+    bridge.stop();
+    assert.equal(bridge.context(), undefined);
   });
 });
 

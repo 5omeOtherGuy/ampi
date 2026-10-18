@@ -6,6 +6,7 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
+import { type MmrPromptQueueRegistration, registerMmrPromptQueue } from "../../ampi-core/prompt-queue.js";
 import { addMmrEditorHistory, hasMmrEditorAction, runMmrEditorAction } from "../pi-compat/editor.js";
 import { type MmrPiQueuedMessages, type MmrPiQueueWatch, watchMmrPiQueue } from "../pi-compat/queue.js";
 import { MMR_FRAME_MIN_WIDTH, type MmrFrameTheme, renderMmrFrame } from "../ui/frame.js";
@@ -33,6 +34,10 @@ import type { MmrStatusFeed } from "./status-feed.js";
  * empty prompt, run Pi's dequeue action, which puts every queued message
  * back into the prompt. Pi's own list of queued messages is not drawn while
  * the box is installed (see `pi-compat/queue.ts`).
+ *
+ * While it can read Pi's queue, it also owns ampi-core's prompt-queue seam
+ * (`ampi-core/prompt-queue.ts`), so the web GUI shows the same messages and
+ * takes one back through the same `pi-compat` layer.
  */
 
 /** Widget key of the queue box. */
@@ -93,6 +98,7 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
   let watch: MmrPiQueueWatch | undefined;
   let queue = empty;
   let unregister: (() => void) | undefined;
+  let published: MmrPromptQueueRegistration | undefined;
 
   function showBox(current: ExtensionContext): void {
     if (queue.steering.length + queue.followUp.length === 0) {
@@ -110,6 +116,7 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
 
   function onQueue(next: MmrPiQueuedMessages): void {
     queue = next;
+    published?.update(next);
     options.feed.followQueue(next.steering.length + next.followUp.length);
     if (ctx) showBox(ctx);
   }
@@ -188,6 +195,10 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
       ctx = nextCtx;
       queue = empty;
       watch ??= (options.watch ?? watchMmrPiQueue)(onQueue);
+      if (watch && !published) {
+        const current = watch;
+        published = registerMmrPromptQueue({ remove: (kind, index, text) => current.remove(kind, index, text) });
+      }
       if (!unregister) {
         for (const command of commands) registerMmrCommand(command);
         unregister = () => {
@@ -198,6 +209,8 @@ export function createMmrPromptQueue(pi: Pick<ExtensionAPI, "sendUserMessage">, 
     stop() {
       watch?.stop();
       watch = undefined;
+      published?.release();
+      published = undefined;
       unregister?.();
       unregister = undefined;
       queue = empty;

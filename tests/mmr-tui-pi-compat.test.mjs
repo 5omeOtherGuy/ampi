@@ -333,6 +333,54 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.equal(InteractiveMode.prototype.updatePendingMessagesDisplay, original, "stop gives Pi its own method back");
   });
 
+  it("queue: removing one queued message takes only it out of a live Pi session", async () => {
+    const offline = process.env.PI_OFFLINE;
+    process.env.PI_OFFLINE = "1";
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ampi-queue-"));
+    const { session } = await createAgentSession({ cwd: dir, agentDir: dir, sessionManager: SessionManager.inMemory(dir), noTools: "all" });
+    const mode = Object.assign(Object.create(InteractiveMode.prototype), {
+      runtimeHost: { session },
+      compactionQueuedMessages: [],
+      pendingMessagesContainer: { clear() {}, addChild() {} },
+    });
+    session.subscribe((event) => {
+      if (event.type === "queue_update") mode.updatePendingMessagesDisplay();
+    });
+    const reports = [];
+    const watch = queueCompat.watchMmrPiQueue((queue) => reports.push(queue));
+    try {
+      assert.equal(queueCompat.probeMmrPiQueueSession(session), undefined, "Pi changed AgentSession; update src/extensions/ampi-tui/pi-compat/queue.ts");
+      await session.steer("steer this");
+      session._isAgentRunActive = true;
+      await session.sendCustomMessage({ customType: "review-note", content: "note", display: true }, { deliverAs: "followUp" });
+      session._isAgentRunActive = false;
+      await session.followUp("same");
+      await session.followUp("other");
+      await session.followUp("same");
+      const marked = session.agent.followUpQueue.messages[3];
+      const queued = () => session.agent.followUpQueue.messages.map((message) => message.customType ?? message.content[0].text);
+
+      assert.equal(watch.remove("followUp", 0, "other"), false, "the text at the index must match");
+      assert.equal(watch.remove("followUp", 5, "same"), false, "an index past the end");
+      assert.equal(watch.remove("followUp", 2, "same"), true);
+      assert.deepEqual(session.getFollowUpMessages(), ["same", "other"]);
+      assert.deepEqual(queued(), ["review-note", "same", "other"], "the custom message and the first equal text stay");
+      assert.equal(session.agent.followUpQueue.messages.includes(marked), false, "the second equal message went");
+      assert.deepEqual(reports.at(-1), { steering: ["steer this"], followUp: ["same", "other"] });
+
+      assert.equal(watch.remove("steering", 0, "steer this"), true);
+      assert.deepEqual(session.getSteeringMessages(), []);
+      assert.equal(session.agent.steeringQueue.messages.length, 0);
+      assert.equal(queueCompat.removeMmrPiQueuedMessage({}, "followUp", 0, "same"), false, "a session of another shape is left alone");
+    } finally {
+      watch?.stop();
+      session.dispose();
+      rmSync(dir, { recursive: true, force: true });
+      if (offline === undefined) delete process.env.PI_OFFLINE;
+      else process.env.PI_OFFLINE = offline;
+    }
+  });
+
   it("reserved keys: ampi combos map to Pi key ids", () => {
     const combo = (key, mods = {}) => ({ key, ctrl: false, alt: false, shift: false, meta: false, ...mods });
     assert.equal(reservedKeys.toMmrPiKeyId(combo("esc")), "escape");

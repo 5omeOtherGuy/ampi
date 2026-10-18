@@ -18,8 +18,9 @@
  * `_emitQueueUpdate()`; its agent keeps the messages themselves, images
  * included, in `steeringQueue` and `followUpQueue`, next to the custom
  * messages extensions queue with `pi.sendMessage`. Only the user's message
- * moves, so nothing else in the queue is lost or sent twice.
- * `probeMmrPiQueueSession` checks that shape on a live session.
+ * moves, so nothing else in the queue is lost or sent twice. Removing one
+ * queued message (`removeMmrPiQueuedMessage`) takes it out of both lists the
+ * same way. `probeMmrPiQueueSession` checks that shape on a live session.
  */
 import { InteractiveMode } from "@earendil-works/pi-coding-agent";
 
@@ -41,6 +42,8 @@ export interface MmrPiQueueWatch {
    * {@link steerBlocked} names a reason.
    */
   steerNext(): boolean;
+  /** Take one queued message out of Pi's queue; see {@link removeMmrPiQueuedMessage}. */
+  remove(kind: "steering" | "followUp", index: number, text: string): boolean;
   /** Give the list back to Pi. */
   stop(): void;
 }
@@ -157,6 +160,30 @@ export function steerMmrPiFollowUp(session: unknown): boolean {
 }
 
 /**
+ * Take one message the user queued out of the session's queue: the
+ * `index`-th text of its steering or follow-up list, which must still read
+ * `text`, together with the agent's copy of that message. The session then
+ * reports the new queue. Returns false, changing nothing, when that message
+ * is no longer there (it started, or the queue changed) or the session's
+ * shape has changed.
+ */
+export function removeMmrPiQueuedMessage(session: unknown, kind: "steering" | "followUp", index: number, text: string): boolean {
+  if (probeMmrPiQueueSession(session) !== undefined) return false;
+  const s = session as SessionQueue;
+  const texts = kind === "steering" ? s._steeringMessages : s._followUpMessages;
+  if (texts[index] !== text) return false;
+  // Equal texts may repeat: the n-th equal text is the n-th equal message.
+  const nth = texts.slice(0, index).filter((queued) => queued === text).length;
+  const messages = (kind === "steering" ? s.agent.steeringQueue : s.agent.followUpQueue).messages;
+  const at = messages.map((message, i) => (messageText(message) === text ? i : -1)).filter((i) => i >= 0)[nth];
+  if (at === undefined) return false;
+  messages.splice(at, 1);
+  texts.splice(index, 1);
+  s._emitQueueUpdate();
+  return true;
+}
+
+/**
  * Report every change of Pi's queue to `listener` instead of drawing Pi's
  * list. Returns `undefined` (and changes nothing) when the class shape no
  * longer matches. Installing again replaces the previous listener.
@@ -194,6 +221,9 @@ export function watchMmrPiQueue(
     steerBlocked,
     steerNext() {
       return steerBlocked() === undefined && steerMmrPiFollowUp(state.mode?.session);
+    },
+    remove(kind, index, text) {
+      return proto[PATCH_KEY] === state && removeMmrPiQueuedMessage(state.mode?.session, kind, index, text);
     },
     stop() {
       if (proto[PATCH_KEY] !== state) return;

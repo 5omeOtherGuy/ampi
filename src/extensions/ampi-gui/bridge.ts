@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMmrPromptQueue, type MmrQueuedPrompts, onMmrPromptQueueChanged } from "../ampi-core/prompt-queue.js";
 import { getMmrModeState, onMmrStateChanged } from "../ampi-core/runtime.js";
 import {
   createMmrThreadStatusReducer,
@@ -35,6 +36,7 @@ import {
  * | `turn_end`                                 | `turn_end`                            |
  * | any change of the thread status            | `status` (phase, label, queue count)  |
  * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
+ * | a change of the prompt queue (ampi-core's seam) | `queue`: the texts, or `null` |
  *
  * Pi's streaming message is one object that the provider keeps filling, so
  * by the time an event is handled it may already hold text from later
@@ -43,7 +45,8 @@ import {
  * shows only the blocks whose start it has seen, in `item` events and in the
  * snapshot alike. A client that applies the deltas after either one ends up
  * with each delta once. The finished message from `message_end` replaces the
- * copy.
+ * copy; when Pi ends a message early (an interrupt) it has a new id, and its
+ * `item` event names the streamed one in `replaces`.
  *
  * It keeps the last {@link MMR_GUI_REPLAY_LIMIT} events, so a client that
  * reconnects with the id of the last event it saw gets what it missed. A
@@ -52,16 +55,19 @@ import {
  * event it includes, so a client can load it and then follow the events
  * after that id without gaps or repeats.
  *
- * The queue count is counted as in the terminal: one more for each input
- * sent while a turn runs, one less for each user message that starts, and
- * checked against `hasPendingMessages()` on every agent event.
+ * The queued messages come from ampi-core's prompt-queue seam, which
+ * `ampi-tui` owns while it can read Pi's queue; their number is then the
+ * queue count. Without an owner the texts are unknown (`null`) and the count
+ * is counted as in the terminal: one more for each input sent while a turn
+ * runs, one less for each user message that starts, and checked against
+ * `hasPendingMessages()` on every agent event.
  */
 
 export const MMR_GUI_REPLAY_LIMIT = 1000;
 
 export interface MmrGuiEvent {
   id: number;
-  event: "status" | "item" | "delta" | "tool" | "turn_end" | "session";
+  event: "status" | "item" | "delta" | "tool" | "turn_end" | "session" | "queue";
   data: unknown;
 }
 
@@ -87,6 +93,8 @@ export interface MmrGuiSnapshot {
   session: MmrGuiSessionInfo;
   status: MmrGuiStatusView;
   items: MmrGuiItem[];
+  /** The queued messages, or `null` when no extension can read Pi's queue. */
+  queue: MmrQueuedPrompts | null;
   /** Id of the last event the snapshot includes. */
   lastEventId: number;
 }
@@ -96,6 +104,10 @@ export interface MmrGuiBridge {
   start(ctx: ExtensionContext): void;
   /** Stop mirroring and drop every listener. */
   stop(): void;
+  /** The context of the mirrored session, between `start` and `stop`. */
+  context(): ExtensionContext | undefined;
+  /** Note that the user asked to interrupt the running turn. */
+  interrupted(): void;
   readonly lastEventId: number;
   session(): MmrGuiSessionInfo;
   status(): MmrGuiStatusView;
@@ -139,6 +151,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   let ctx: ExtensionContext | undefined;
   let reducer: MmrThreadStatusReducer = createMmrThreadStatusReducer();
   let queued = 0;
+  /** Whether the count follows the published queue rather than being counted. */
+  let exact = false;
   let stageBytes = 0;
   let stage: "thinking" | "streaming" | undefined;
   let nextId = 1;
@@ -176,7 +190,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   }
 
   function syncQueue(): void {
-    if (!ctx) return;
+    if (!ctx || exact) return;
     if (!ctx.hasPendingMessages()) setQueued(0);
     else if (queued === 0) setQueued(1);
   }
@@ -240,12 +254,13 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     emit("tool", { itemId, part });
   }
 
-  function upsert(message: unknown): void {
+  /** Send `message` as an item; `replaces` names the item it takes the place of. */
+  function upsert(message: unknown, replaces?: string): void {
     const id = mmrGuiItemId(message);
     if (!id) return;
     live.set(id, message);
     const item = buildItem(message);
-    if (item) emit("item", item);
+    if (item) emit("item", replaces ? { ...item, replaces } : item);
   }
 
   // Events arrive for every run mode; the bridge only acts between start and stop.
@@ -271,7 +286,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       const id = mmrGuiItemId(event.message);
       if (id) streams.set(id, { started: 0, text: new Map() });
     }
-    if (role === "user" && queued > 0) setQueued(queued - 1);
+    if (role === "user" && queued > 0 && !exact) setQueued(queued - 1);
     if (role !== "user" && role !== "assistant") return;
     upsert(event.message);
     if (role === "user" && !titled && !ctx?.sessionManager.getSessionName()) {
@@ -315,8 +330,15 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     if (!active(context)) return;
     if (roleOf(event.message) !== "assistant") return;
     const id = mmrGuiItemId(event.message);
+    // A message Pi ends early, on an interrupt, carries a new timestamp and
+    // so a new id: it takes the place of the copy that streamed.
+    const streamed = [...streams.keys()].find((key) => key !== id);
+    if (streamed) {
+      streams.delete(streamed);
+      live.delete(streamed);
+    }
     if (id) streams.delete(id);
-    upsert(event.message);
+    upsert(event.message, streamed);
   });
   pi.on("tool_execution_start", (event, context) => {
     if (!active(context)) return;
@@ -366,7 +388,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   });
   pi.on("input", (event, context) => {
     if (!active(context)) return;
-    if (event.streamingBehavior) setQueued(queued + 1);
+    if (event.streamingBehavior && !exact) setQueued(queued + 1);
   });
   pi.on("session_info_changed", (_event, context) => {
     if (active(context)) emit("session", sessionInfo());
@@ -375,6 +397,19 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
     if (active(context)) emit("session", sessionInfo());
   });
   let releaseMode: (() => void) | undefined;
+  let releaseQueue: (() => void) | undefined;
+
+  function queueView(): MmrQueuedPrompts | null {
+    return getMmrPromptQueue() ?? null;
+  }
+
+  function followQueue(): void {
+    const queue = queueView();
+    exact = queue !== null;
+    if (queue) setQueued(queue.steering.length + queue.followUp.length);
+    else syncQueue();
+    emit("queue", queue);
+  }
 
   return {
     start(context) {
@@ -388,12 +423,24 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       releaseMode ??= onMmrStateChanged(pi, () => {
         if (ctx) emit("session", sessionInfo());
       });
+      releaseQueue ??= onMmrPromptQueueChanged(() => {
+        if (ctx) followQueue();
+      });
+      const queue = queueView();
+      exact = queue !== null;
+      if (queue) setQueued(queue.steering.length + queue.followUp.length);
     },
     stop() {
       ctx = undefined;
       listeners.clear();
       releaseMode?.();
       releaseMode = undefined;
+      releaseQueue?.();
+      releaseQueue = undefined;
+    },
+    context: () => ctx,
+    interrupted() {
+      if (ctx) apply({ type: "abort" });
     },
     get lastEventId() {
       return nextId - 1;
@@ -422,7 +469,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
         const item = buildItem(message);
         if (item) items.push(item);
       }
-      return { session: sessionInfo(), status: statusView(reducer.status), items, lastEventId: nextId - 1 };
+      return { session: sessionInfo(), status: statusView(reducer.status), items, queue: queueView(), lastEventId: nextId - 1 };
     },
     eventsAfter(id) {
       const last = nextId - 1;

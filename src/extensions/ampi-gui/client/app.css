@@ -477,10 +477,23 @@ details[open] > summary .chevron {
   animation: ampi-pulse 1.4s ease-in-out infinite;
 }
 
+/* Composer area: queued messages, the composer card and its notes, under the chat. */
+.composer-area {
+  padding: calc(var(--ampi-space) * 2) 0 calc(var(--ampi-space) * 3);
+  padding-bottom: max(calc(var(--ampi-space) * 3), env(safe-area-inset-bottom));
+}
+
+.composer-area > .column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ampi-space) * 2);
+}
+
 .jump {
-  position: fixed;
+  position: absolute;
+  bottom: calc(100% + var(--ampi-space) * 2);
   left: 50%;
-  bottom: 76px;
   display: grid;
   place-items: center;
   width: var(--ampi-control-size);
@@ -494,21 +507,141 @@ details[open] > summary .chevron {
   cursor: pointer;
 }
 
-/* Status bar: where the composer will sit, it shows what the agent is doing. */
-.statusbar {
-  padding: calc(var(--ampi-space) * 2) 0 calc(var(--ampi-space) * 3);
-  padding-bottom: max(calc(var(--ampi-space) * 3), env(safe-area-inset-bottom));
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-.status-card {
+.approval-note,
+.composer-notice {
+  margin: 0;
+  padding: 0 calc(var(--ampi-space) * 1);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+}
+
+.approval-note {
+  padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 3);
+  border: 1px solid color-mix(in srgb, var(--ampi-warning) 40%, transparent);
+  border-radius: var(--ampi-radius-lg);
+  background: color-mix(in srgb, var(--ampi-warning) 10%, transparent);
+  color: var(--ampi-fg);
+}
+
+/* Queued messages: bubbles on the right, with their actions. */
+.queue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: calc(var(--ampi-space) * 1.5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queued {
   display: flex;
   align-items: center;
   gap: calc(var(--ampi-space) * 2);
-  min-height: 44px;
-  padding: 10px 14px;
+  max-width: min(85%, 672px);
+  min-width: 0;
+  padding: 4px 4px 4px 12px;
+  border-radius: var(--ampi-radius-bubble);
+  background: var(--ampi-bubble-bg);
+  color: var(--ampi-bubble-fg);
+}
+
+.queued-label {
+  flex: none;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: var(--ampi-leading-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.queued[data-kind="steering"] .queued-label {
+  color: var(--ampi-success);
+}
+
+.queued-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.queued-actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.queued-actions .icon-button {
+  color: var(--ampi-bubble-fg);
+  opacity: 0.7;
+}
+
+.queued-actions .icon-button:hover,
+.queued-actions .icon-button:focus-visible {
+  opacity: 1;
+}
+
+/* The composer card. */
+.composer {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--ampi-input-border);
   border-radius: var(--ampi-radius-composer);
   background: var(--ampi-input-bg);
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--ampi-fg) 30%, transparent);
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  max-height: 240px;
+  margin: 0;
+  padding: 12px 14px 4px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ampi-fg);
+  font: inherit;
+}
+
+.composer textarea::placeholder {
+  color: var(--ampi-muted-fg);
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  padding: 4px 8px 8px;
+}
+
+.composer-bar [aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  min-width: 0;
+  margin-left: auto;
   color: var(--ampi-muted-fg);
   font-size: var(--ampi-text-sm);
   line-height: var(--ampi-leading-sm);
@@ -516,11 +649,15 @@ details[open] > summary .chevron {
 
 .status-dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ampi-muted-fg);
   opacity: 0.5;
+}
+
+.app[data-phase="idle"] .status {
+  visibility: hidden;
 }
 
 .app[data-busy="true"] .status-dot {
@@ -529,8 +666,14 @@ details[open] > summary .chevron {
   animation: ampi-pulse 1.4s ease-in-out infinite;
 }
 
-.app[data-phase="error"] .status-dot {
+.app[data-phase="error"] .status-dot,
+.app[data-phase="disconnected"] .status-dot {
   background: var(--ampi-danger);
+  opacity: 1;
+}
+
+.app[data-phase="waitingApproval"] .status-dot {
+  background: var(--ampi-warning);
   opacity: 1;
 }
 
@@ -545,9 +688,36 @@ details[open] > summary .chevron {
   text-overflow: ellipsis;
 }
 
-.status-note {
-  margin-left: auto;
-  white-space: nowrap;
+/* Send, or stop while a turn runs. */
+.submit {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ampi-control-size);
+  height: var(--ampi-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ampi-primary);
+  color: var(--ampi-primary-fg);
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.submit .icon {
+  grid-area: 1 / 1;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.submit[data-mode="send"] .stop-icon,
+.submit[data-mode="stop"] .send-icon {
+  display: none;
 }
 
 @keyframes ampi-pulse {

@@ -1,6 +1,8 @@
 // The ampi web GUI client: loads the transcript, follows the live event
-// stream and draws both. Plain ES module, no framework.
+// stream and draws both, and sends what the composer writes. Plain ES
+// module, no framework.
 
+import { mountComposer } from "./composer.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,6 +24,28 @@ let lastStatus;
 /** Parts whose text grew since the last frame, as `itemId:index`. */
 const dirty = new Set();
 let frame = 0;
+
+/** POST a command as JSON; resolves `{ ok, body }` and never throws. */
+async function post(route, body) {
+  try {
+    const response = await fetch(`/api/${route}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, body: data };
+  } catch {
+    return { ok: false, body: { error: "Could not reach Pi." } };
+  }
+}
+
+const composer = mountComposer({
+  root: $("composer-area"),
+  post,
+  mac: /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent),
+});
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -68,9 +92,18 @@ function withFollow(update) {
   jump.hidden = atBottom();
 }
 
+/** Whether the reader was at the bottom when the chat last scrolled. */
+let pinned = true;
 chat.addEventListener("scroll", () => {
-  jump.hidden = atBottom();
+  pinned = atBottom();
+  jump.hidden = pinned;
 });
+// The chat shrinks when queued messages or a longer prompt grow the composer,
+// and when the window changes size: keep a reader at the bottom there.
+new ResizeObserver(() => {
+  if (pinned) chat.scrollTop = chat.scrollHeight;
+  jump.hidden = atBottom();
+}).observe(chat);
 jump.addEventListener("click", () => {
   chat.scrollTop = chat.scrollHeight;
   chat.focus({ preventScroll: true });
@@ -193,10 +226,17 @@ function setStatus(status) {
   if (status.detail) details.push(status.detail);
   if (status.queued > 0) details.push(`${status.queued} queued`);
   $("status-detail").textContent = details.join(" · ");
+  composer.setStatus(status);
   drawChrome();
 }
 
 function upsertItem(item) {
+  // A message Pi ended early has a new id: it takes the streamed copy's place.
+  const replaced = item.replaces && transcript.querySelector(`[data-id="${CSS.escape(item.replaces)}"]`);
+  if (replaced) {
+    items.delete(item.replaces);
+    replaced.dataset.id = item.id;
+  }
   items.set(item.id, item);
   drawItem(item);
 }
@@ -208,6 +248,7 @@ function load(snapshot) {
   setSession(snapshot.session);
   for (const item of snapshot.items) upsertItem(item);
   setStatus(snapshot.status);
+  composer.setQueue(snapshot.queue);
 }
 
 const handlers = {
@@ -232,6 +273,7 @@ const handlers = {
     drawPart(item, index);
   },
   turn_end: () => {},
+  queue: (data) => composer.setQueue(data),
 };
 
 function flush() {
@@ -265,13 +307,16 @@ function connect() {
   });
   source.addEventListener("open", () => {
     if (lastStatus) setStatus(lastStatus);
+    composer.setConnected(true);
   });
   source.addEventListener("error", () => {
     // The browser retries on its own; Pi may have quit or switched sessions.
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Waiting for Pi";
     app.dataset.busy = "false";
+    app.dataset.phase = "disconnected";
     liveDot.hidden = true;
+    composer.setConnected(false);
   });
 }
 
@@ -284,6 +329,7 @@ async function start() {
     chat.scrollTop = chat.scrollHeight;
     jump.hidden = true;
     connect();
+    composer.focus();
   } catch {
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Could not reach Pi";

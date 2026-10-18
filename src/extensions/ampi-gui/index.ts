@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
 import { createMmrGuiBridge } from "./bridge.js";
+import { createMmrGuiCommands } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
 import { removeMmrGuiLiveEntry, writeMmrGuiLiveEntry } from "./registry.js";
 import { hashMmrGuiToken, type MmrGuiServer, startMmrGuiServer } from "./server.js";
@@ -44,6 +45,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
     if (!settings.enabled) return;
 
     const bridge = createMmrGuiBridge(pi);
+    const commands = createMmrGuiCommands(pi, bridge);
     const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     const registry = { baseDir: overrides.registryDir };
     let server: MmrGuiServer | undefined;
@@ -59,7 +61,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       const token = overrides.createToken ? overrides.createToken() : randomBytes(32).toString("base64url");
       bridge.start(ctx);
       try {
-        server = await startMmrGuiServer({ bridge, token, clientDir: CLIENT_DIR });
+        server = await startMmrGuiServer({ bridge, commands, token, clientDir: CLIENT_DIR });
       } catch (error) {
         bridge.stop();
         warn(ctx, "could not start the web GUI", error);

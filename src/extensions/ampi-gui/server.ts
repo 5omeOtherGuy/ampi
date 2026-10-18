@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import type { MmrGuiBridge, MmrGuiEvent } from "./bridge.js";
+import type { MmrGuiCommands } from "./commands.js";
 
 /**
  * The local web GUI's HTTP server.
@@ -16,16 +17,22 @@ import type { MmrGuiBridge, MmrGuiEvent } from "./bridge.js";
  * - Every request needs the per-process token. The URL Pi prints carries it
  *   once (`/?t=<token>`); the server answers with an HttpOnly,
  *   SameSite=Strict cookie scoped to this port and redirects to `/`, so the
- *   token leaves the address bar. The token is never logged.
- * - It sends events as `text/event-stream` and will take commands as POST
- *   JSON. It sets no CORS headers, and a strict Content-Security-Policy
- *   allows only its own scripts, styles and connections.
+ *   token leaves the address bar. The token is never logged. A GET without
+ *   it answers 401; a POST without it, or without the server's own
+ *   `Origin`, answers 403.
+ * - It sends events as `text/event-stream` and takes commands as POST JSON
+ *   (`Content-Type: application/json`, at most {@link MAX_BODY_BYTES}) on
+ *   `/api/<command>`; `commands.ts` handles them. It sets no CORS headers,
+ *   and a strict Content-Security-Policy allows only its own scripts, styles
+ *   and connections.
  * - It serves only files inside the client directory, by extension with an
  *   explicit content type.
  */
 
 export interface MmrGuiServerOptions {
   bridge: MmrGuiBridge;
+  /** Handlers of the POST routes, by the name after `/api/`. */
+  commands: MmrGuiCommands;
   token: string;
   /** Directory of the static client files. */
   clientDir: string;
@@ -43,6 +50,9 @@ export interface MmrGuiServer {
 }
 
 const LOOPBACK = "127.0.0.1";
+
+/** Largest command body the server reads. */
+const MAX_BODY_BYTES = 512 * 1024;
 
 const CONTENT_TYPES: Readonly<Record<string, string>> = {
   ".html": "text/html; charset=utf-8",
@@ -102,6 +112,29 @@ function sendJson(res: ServerResponse, status: number, value: unknown): void {
 
 function formatEvent(event: MmrGuiEvent): string {
   return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
+}
+
+/** The request body as JSON, or `undefined` when it is too large or not JSON. */
+function readJson(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      // Past the limit the rest is drained, not kept, so the answer still arrives.
+      if (size <= MAX_BODY_BYTES) chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (size > MAX_BODY_BYTES) return resolve(undefined);
+      const text = Buffer.concat(chunks).toString("utf8");
+      try {
+        resolve(text.trim() === "" ? {} : JSON.parse(text));
+      } catch {
+        resolve(undefined);
+      }
+    });
+    req.on("error", () => resolve(undefined));
+  });
 }
 
 /** The file under `clientDir` for a `/client/...` path, or `undefined` when the path tries to leave it. */
@@ -184,16 +217,31 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
         "Set-Cookie": `${mmrGuiCookieName(port)}=${token}; HttpOnly; SameSite=Strict; Path=/`,
       });
     }
+    if (method === "POST" && !origin) {
+      req.resume();
+      return send(res, 403, "Missing Origin header");
+    }
     if (!sameToken(readCookie(req.headers.cookie, mmrGuiCookieName(port)), token)) {
-      return send(res, 401, "Open the link Pi printed to use this page.");
+      req.resume();
+      // A command without the cookie is a cross-site attempt, not a reader who needs the link.
+      return send(res, method === "POST" ? 403 : 401, "Open the link Pi printed to use this page.");
     }
 
     if (method === "POST") {
-      req.resume();
-      if (!origin) return send(res, 403, "Missing Origin header");
-      if (!rawPath.startsWith("/api/")) return send(res, 404, "Not found");
-      if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) return send(res, 415, "Send JSON");
-      return sendJson(res, 501, { error: "This version of the GUI is read-only." });
+      const name = rawPath.startsWith("/api/") ? rawPath.slice("/api/".length) : "";
+      const command = Object.hasOwn(options.commands, name) ? options.commands[name] : undefined;
+      if (!command) {
+        req.resume();
+        return send(res, 404, "Not found");
+      }
+      if (!/^application\/json\b/.test(req.headers["content-type"] ?? "")) {
+        req.resume();
+        return send(res, 415, "Send JSON");
+      }
+      const body = await readJson(req);
+      if (body === undefined) return sendJson(res, 400, { error: "The request body is not JSON or is too large." });
+      const result = await command(body);
+      return sendJson(res, result.status, result.body);
     }
     if (method !== "GET" && method !== "HEAD") return send(res, 405, "Method not allowed", { Allow: "GET, POST" });
 
