@@ -92,6 +92,7 @@ Important files:
 - `model-resolver.ts` — provider-neutral preference expansion and route selection.
 - `routing.ts` — resolves the active mode from settings and flags.
 - `tool-registry.ts` — exact-name tool provider registry, allowlists, and deferred registrations.
+- `glob.ts` — the shared glob matcher (`*`, `**`, `?`, braces, a safe character-class subset), used for repository paths and tool names.
 - `feature-gates.ts` — feature-gate provider registry for opt-in siblings.
 - `request-policy.ts` — per-mode provider-request and thinking-level policy.
 - `prompt-assembly.ts` — prompt-head rewrite and ampi-authored mode prompts.
@@ -184,7 +185,6 @@ Important files:
 - `index.ts` — Pi extension entry point.
 - `config.ts` — settings/env parsing; tokens are env-only.
 - `client.ts` — read-only GitHub REST client and response bounds.
-- `glob.ts` — glob matching over repository file trees.
 - `tools.ts`, `tool-schemas.ts`, `tool-format.ts` — read-only tool implementations, schemas, and response formatting.
 - `provider.ts`, `tool-ownership.ts` — feature-gate/tool-provider ownership checks and `librarian` gating.
 - `README.md` — tool reference, configuration, safety, and public API.
