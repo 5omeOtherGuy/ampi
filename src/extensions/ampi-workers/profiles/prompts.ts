@@ -290,6 +290,7 @@ export function buildReviewerWorkerSystemPrompt(cwd: string): string {
     "## Guidelines",
     "- Persistence: low. Do not retry failed tool calls more than 2 times. If a tool call fails twice, move on.",
     "- Remember to look at untracked added files.",
+    "- In a Jujutsu repository (one with a `.jj` directory), get the diff from `jj diff --git` instead of the git commands above.",
     "- Prefer the most direct path to completing the review. Batch related file reads into as few turns as possible.",
     "- Do not edit or modify files or run any commands that edit or modify files or git state. This review is strictly read-only.",
     "- Do not re-read files you have already read.",

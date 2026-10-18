@@ -18,7 +18,7 @@ import { isRecord } from "../../ampi-core/internal/json.js";
 import type { MmrWorkerRunEnvelopeV1 } from "../../ampi-core/worker-contract.js";
 import { readWorkerRunEnvelope } from "./worker-run-envelope.js";
 import { stripAgentPrefix, workerRowDetail, type WorkerRowStatus } from "./worker-row.js";
-import type { WorkerRowView } from "./worker-row-lines.js";
+import { readWorkerRowChecks, workerRowChecksTail, type WorkerRowView } from "./worker-row-lines.js";
 import {
   diagnosticMessage,
   statusFromDetails,
@@ -268,12 +268,14 @@ export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal 
     const workerPrompt = prompt ?? unprefixed(operation.collapsed);
     const model = stripProvider(final.reportedModel ?? final.model ?? details.resolvedModel);
     const contextWindow = final.contextWindow ?? details.contextWindow;
+    const checks = readWorkerRowChecks(final.checks);
+    const tail = [details.terminalOutcome === "partial" ? "(partial)" : undefined, workerRowChecksTail(checks)].filter(Boolean).join(" ");
     return {
       surface: "background",
       agent,
       status,
       ...(detail !== undefined ? { detail } : {}),
-      ...(details.terminalOutcome === "partial" ? { tail: "(partial)" } : {}),
+      ...(tail ? { tail } : {}),
       ...(prompt !== undefined ? { prompt } : {}),
       trail: final.trail ?? [],
       ...(workerPrompt !== undefined ? { workerPrompt } : {}),
@@ -286,6 +288,7 @@ export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal 
       usageName: agent,
       // A cancel is not a failure: only a hard `failed` shows its error.
       ...(details.status === "failed" && details.errorMessage ? { diagnostic: details.errorMessage, diagnosticColor: "error" } : {}),
+      ...(checks !== undefined ? { checks } : {}),
     };
   }
 
@@ -296,12 +299,15 @@ export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal 
   const diagnostic = diagnosticMessage(details, coarse);
   const detail = workerRowDetail(input.collapsedBody);
   const variant = toolName === "Task" ? readArg(input.context?.args, "capabilityProfile") : undefined;
+  const checks = readWorkerRowChecks(details?.checks);
+  const tail = workerRowChecksTail(checks);
   return {
     surface: "blocking",
     agent: toolName,
     ...(variant !== undefined ? { variant } : {}),
     status,
     ...(detail !== undefined ? { detail } : {}),
+    ...(tail !== undefined ? { tail } : {}),
     ...(input.expandedBody !== undefined ? { prompt: input.expandedBody } : {}),
     trail: details?.trail ?? [],
     ...(input.trailWorkerPrompt !== undefined ? { workerPrompt: input.trailWorkerPrompt } : {}),
@@ -316,5 +322,6 @@ export function buildWorkerRunFinal(input: WorkerRunFinalInput): WorkerRunFinal 
     // a cancelled run needs no diagnostic, its glyph says it was stopped.
     ...(diagnostic !== undefined && status !== "cancelled" ? { diagnostic, diagnosticColor: status === "error" ? "error" : "warning" } : {}),
     ...(details?.fallbackNotice !== undefined ? { fallbackNotice: details.fallbackNotice } : {}),
+    ...(checks !== undefined ? { checks } : {}),
   };
 }

@@ -8,7 +8,13 @@
 // with `cat <fifo>`, which blocks until something writes the FIFO, then answers
 // "Waited: <output>". A message containing "release <fifo>" writes that FIFO
 // when Pi receives it, before Pi queues the message, so a steering message can
-// end such a wait without any timing. No network, no credentials.
+// end such a wait without any timing. A prompt containing "review with checks"
+// calls `reviewer` on the uncommitted changes and then answers with the
+// headings of its report. A reviewer child (its task text contains "Review the
+// following diff:") answers with a clean report in the reviewer's format, or
+// with one finding at `<path>:1-1` when the task text contains
+// "faux-finding <path>"; a review check whose body says "please fail" fails
+// like any other prompt that does. No network, no credentials.
 import { writeFile } from "node:fs";
 import { fauxAssistantMessage, fauxProvider, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
 
@@ -44,6 +50,24 @@ export default function fauxModel(pi: any): void {
       return fauxAssistantMessage(fauxToolCall("read", { path: read[1] }, { id: `call_read_${context.messages.length}` }), {
         stopReason: "toolUse",
       });
+    }
+    if (prompt.includes("review with checks")) {
+      if (last?.role === "toolResult") {
+        const headings = textOf(last.content).split("\n").filter((line) => line.startsWith("### "));
+        return fauxAssistantMessage(`Review finished.\n${headings.map((line) => `- ${line.slice(4)}`).join("\n")}`);
+      }
+      return fauxAssistantMessage(fauxToolCall("reviewer", { diff_description: "uncommitted changes" }, { id: "call_review" }), {
+        stopReason: "toolUse",
+      });
+    }
+    if (prompt.includes("Review the following diff:")) {
+      const finding = /faux-finding (\S+)/.exec(prompt);
+      if (finding) {
+        return fauxAssistantMessage(
+          `The change needs one fix.\n\nFindings\n- ${finding[1]}:1-1 — severity: medium; type: bug\n  The scripted reviewer flags this line.`,
+        );
+      }
+      return fauxAssistantMessage("The change looks clean.\n\nFindings\n\nNone.");
     }
     const wait = /wait on (\S+)/.exec(prompt);
     if (wait) {

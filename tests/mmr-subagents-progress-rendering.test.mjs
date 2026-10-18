@@ -175,6 +175,31 @@ const ROW_SCENARIOS = [
     }),
   },
   {
+    name: "reviewer done with review checks",
+    tool: "reviewer",
+    args: { diff_description: "uncommitted changes" },
+    result: ok("Main summary: the handler change looks right.\n\n## Checks\n\n### input-validation (packages/api): 2 findings", {
+      status: "success",
+      trail: [
+        toolItem("bash", { command: "git status --porcelain" }),
+        toolItem("read", { path: "packages/api/handler.ts" }),
+        { type: "assistant", text: "Main summary: the handler change looks right." },
+      ],
+      checks: [
+        { name: "house-style", scope: ".", file: ".agents/checks/house-style.md", status: "no-issues", findings: 0 },
+        { name: "input-validation", scope: "packages/api", file: "packages/api/.agents/checks/input-validation.md", status: "findings", findings: 2 },
+        {
+          name: "changelog",
+          scope: ".",
+          file: ".agents/checks/changelog.md",
+          status: "failed",
+          findings: 0,
+          failureReason: "worker exited with code 1: The scripted model failed.",
+        },
+      ],
+    }),
+  },
+  {
     name: "custom subagent done",
     tool: "sa__security_audit",
     args: { task: "Audit the token handling" },
