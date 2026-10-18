@@ -163,6 +163,10 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Keep a script's session unarchived | `ampi -x --no-archive-after-execute "..."` | Sessions created in execute mode are archived in the thread index by default |
 | Name or label the session | `ampi --title "Release check" -l release` | `--title` is Pi's `--name`; labels go to the thread index |
 | Pass a message that looks like an option | `ampi -- -m is a flag` | Everything after `--` goes to Pi as the message |
+| List sessions | `ampi threads` | This directory, archived ones left out; `--all`, `--archived`, `--json`, `--limit <n>` |
+| Reopen a session | `ampi threads continue 019a3c` | An id or its first characters; `ampi last` opens the latest session that is not archived |
+| Print a session | `ampi threads markdown 019a3c` | `threads export` prints JSON with every session entry |
+| Rename, archive, label or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `delete` (asks first; `--yes` skips) |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |
 

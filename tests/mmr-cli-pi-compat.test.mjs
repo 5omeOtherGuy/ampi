@@ -3,12 +3,12 @@
 // them; when a Pi upgrade changes their shape, this test fails here instead of
 // every `ampi` start failing or loading ampi twice.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
-import { listPiExtensionSources } from "../packages/ampi-cli/src/pi-compat.js";
+import { listPiExtensionSources, listPiSessions, piAgentDir, setPiSessionName } from "../packages/ampi-cli/src/pi-compat.js";
 
 /** @param {string} file @param {unknown} json */
 const writeJson = (file, json) => {
@@ -81,5 +81,78 @@ describe("Pi surface used by the ampi command", () => {
 
     const decision = decideAmpiLoad({ piArgs: [], pi: sources, cwd: project, packageNameAt: (start) => readPackageAt(start)?.name });
     assert.equal(decision.load, false);
+  });
+});
+
+describe("Pi session calls used by the thread commands", () => {
+  const savedEnv = process.env.PI_CODING_AGENT_DIR;
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-sessions-"));
+  const agentDir = path.join(dir, "agent");
+  const custom = path.join(dir, "custom");
+  const line = (entry) => `${JSON.stringify(entry)}\n`;
+  // Session files written by hand in the documented format and layout (Pi's docs/session-format.md).
+  const writeSession = (file, id, cwd, prompt, iso) => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      line({ type: "session", version: 3, id, timestamp: iso, cwd }) +
+        line({ type: "message", id: "m1", parentId: null, timestamp: iso, message: { role: "user", content: prompt, timestamp: Date.parse(iso) } }),
+    );
+  };
+  const projectFile = path.join(agentDir, "sessions", "--work-project--", "2026-10-18T09-00-00-000Z_s-project.jsonl");
+  const otherFile = path.join(agentDir, "sessions", "--work-other--", "2026-10-17T09-00-00-000Z_s-other.jsonl");
+  const customFile = path.join(custom, "2026-10-16T09-00-00-000Z_s-custom.jsonl");
+
+  before(() => {
+    writeSession(projectFile, "s-project", "/work/project", "Fix the parser", "2026-10-18T09:00:00.000Z");
+    writeSession(otherFile, "s-other", "/work/other", "Port the docs", "2026-10-17T09:00:00.000Z");
+    writeSession(customFile, "s-custom", "/work/project", "Elsewhere", "2026-10-16T09:00:00.000Z");
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+  });
+
+  after(() => {
+    if (savedEnv === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = savedEnv;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("finds Pi's agent directory, lists sessions with the fields the commands read, and names one", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    assert.equal(piAgentDir(pi), agentDir);
+
+    const [project] = await listPiSessions(pi, { cwd: "/work/project", env: {}, scope: "workspace" });
+    assert.deepEqual(
+      {
+        path: project.path,
+        id: project.id,
+        cwd: project.cwd,
+        name: project.name,
+        created: project.created.toISOString(),
+        modified: project.modified.toISOString(),
+        messageCount: project.messageCount,
+        firstMessage: project.firstMessage,
+      },
+      {
+        path: projectFile,
+        id: "s-project",
+        cwd: "/work/project",
+        name: undefined,
+        created: "2026-10-18T09:00:00.000Z",
+        modified: "2026-10-18T09:00:00.000Z",
+        messageCount: 1,
+        firstMessage: "Fix the parser",
+      },
+    );
+    const ids = async (options) => (await listPiSessions(pi, options)).map((session) => session.id).sort();
+    assert.deepEqual(await ids({ cwd: "/work/project", env: {}, scope: "all" }), ["s-other", "s-project"]);
+    const env = { PI_CODING_AGENT_SESSION_DIR: custom };
+    assert.deepEqual(await ids({ cwd: "/work/project", env, scope: "workspace" }), ["s-custom"]);
+    assert.deepEqual(await ids({ cwd: "/work/project", env, scope: "all" }), ["s-custom"]);
+
+    setPiSessionName(pi, projectFile, "Parser fix");
+    const [renamed] = await listPiSessions(pi, { cwd: "/work/project", env: {}, scope: "workspace" });
+    assert.equal(renamed.name, "Parser fix");
+    const last = JSON.parse(readFileSync(projectFile, "utf8").trim().split("\n").at(-1));
+    assert.deepEqual([last.type, last.name], ["session_info", "Parser fix"]);
   });
 });

@@ -6,6 +6,9 @@ Commands:
 
   help                          Print this help and exit
   version                       Print the ampi-cli, ampi and Pi versions and exit
+  threads [command]             List, open, print, rename, archive, label or delete sessions;
+                                ampi threads --help lists the commands
+  last                          Open the most recent session of this directory that is not archived
 
   Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
   unchanged, without ampi's options.
@@ -81,4 +84,9 @@ Run one message and keep only the final result record of the stream JSON:
 
 Pick up the latest session in this directory:
 
-  $ ampi -c
+  $ ampi last
+
+List this directory's sessions, then open one by the start of its id:
+
+  $ ampi threads
+  $ ampi threads continue 019a3c

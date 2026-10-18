@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "pi" | "pi-command" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "pi" | "pi-command" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -19,6 +19,7 @@ import { parseArgs } from "node:util";
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
  *   ampi, run one of Pi's own commands, or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
+ * @property {string[]} [threadArgs] The command line from `threads` or `last` on, when `command` is `"threads"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
@@ -90,6 +91,7 @@ export function routeAmpiArgv(argv) {
   const options = { labels: [], execute: false, timings: false, archive: true, streamJson: false, streamJsonThinking: false };
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
+  if (args[0] === "threads" || args[0] === "last") return { command: "threads", piArgs: [], options, threadArgs: args };
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options };
 
   const { tokens } = parseArgs({
@@ -213,6 +215,9 @@ Commands:
 
   help                          Print this help and exit
   version                       Print the ampi-cli, ampi and Pi versions and exit
+  threads [command]             List, open, print, rename, archive, label or delete sessions;
+                                ampi threads --help lists the commands
+  last                          Open the most recent session of this directory that is not archived
 
   Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
   unchanged, without ampi's options.
@@ -288,6 +293,11 @@ Run one message and keep only the final result record of the stream JSON:
 
 Pick up the latest session in this directory:
 
-  $ ampi -c
+  $ ampi last
+
+List this directory's sessions, then open one by the start of its id:
+
+  $ ampi threads
+  $ ampi threads continue 019a3c
 `;
 }
