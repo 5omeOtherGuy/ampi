@@ -953,6 +953,94 @@ describe("mmr-history metadata and project filters", () => {
   });
 });
 
+describe("mmr-history thread index filters", () => {
+  const sessions = [
+    sessionInfo({ id: "S-archived", modified: new Date("2026-05-23T00:00:00Z"), allMessagesText: "release notes" }),
+    sessionInfo({ id: "S-pinned", modified: new Date("2026-05-22T00:00:00Z"), allMessagesText: "release plan" }),
+    sessionInfo({ id: "S-entry", modified: new Date("2026-05-21T00:00:00Z"), allMessagesText: "release checklist" }),
+  ];
+  const entries = {
+    "/tmp/session-S-entry.jsonl": [{ type: "label", id: "l1", parentId: null, timestamp: "2026-05-21T00:00:00Z", targetId: "x", label: "checkpoint" }],
+  };
+  const deps = { listSessions: async () => sessions, openSession: (file) => ({ getEntries: () => entries[file] ?? [] }) };
+  const records = {
+    "S-archived": { archived: "2026-05-24T00:00:00.000Z", labels: ["shipped"] },
+    "S-pinned": { pinned: true },
+  };
+
+  async function withThreadIndex(run) {
+    const { registerMmrThreadIndex } = await importSource("extensions/ampi-core/thread-index.ts");
+    const unregister = registerMmrThreadIndex({ list: async () => records, get: async () => undefined, update: async () => undefined });
+    try {
+      return await run();
+    } finally {
+      unregister();
+    }
+  }
+
+  async function search(query) {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
+    return searchSessionsWithDiagnostics(deps, query, { limit: 10 });
+  }
+  const ids = (result) => result.matches.map((match) => match.sessionId);
+  const statusOf = (result, filter) => result.queryDiagnostics.find((d) => d.filter === filter)?.status;
+
+  it("leaves an archived session out for archived:false and finds it without the key", async () => {
+    await withThreadIndex(async () => {
+      const without = await search("release");
+      assert.deepEqual(ids(without), ["S-archived", "S-pinned", "S-entry"]);
+      const unarchived = await search("release archived:false");
+      assert.deepEqual(ids(unarchived), ["S-pinned", "S-entry"]);
+      assert.equal(statusOf(unarchived, "archived:false"), "applied");
+      assert.deepEqual(ids(await search("release archived:true")), ["S-archived"]);
+    });
+  });
+
+  it("matches label: against a label only the index has and one only Pi's entries have", async () => {
+    await withThreadIndex(async () => {
+      assert.deepEqual(ids(await search("label:shipped")), ["S-archived"]);
+      assert.deepEqual(ids(await search("label:checkpoint")), ["S-entry"]);
+    });
+  });
+
+  it("finds pinned sessions with pinned:true", async () => {
+    await withThreadIndex(async () => {
+      assert.deepEqual(ids(await search("pinned:true")), ["S-pinned"]);
+      assert.deepEqual(ids(await search("release pinned:false")), ["S-archived", "S-entry"]);
+    });
+  });
+
+  it("says pinned: and archived: are unavailable without a thread index, and ignores them", async () => {
+    const result = await search("release archived:false pinned:true");
+    assert.deepEqual(ids(result), ["S-archived", "S-pinned", "S-entry"]);
+    const archived = result.queryDiagnostics.find((d) => d.filter === "archived:false");
+    assert.equal(archived?.status, "unavailable");
+    assert.match(archived?.reason ?? "", /thread index/);
+    assert.equal(statusOf(result, "pinned:true"), "unavailable");
+    // Entry labels still answer label: without the index.
+    assert.deepEqual(ids(await search("label:checkpoint")), ["S-entry"]);
+  });
+
+  it("reports commit: as unsupported, the way unknown keys are", async () => {
+    const result = await search("release commit:abc123");
+    assert.equal(statusOf(result, "commit:abc123"), "unsupported");
+    assert.equal(result.matches.length, 3);
+  });
+
+  it("finds the sessions forked from a parent by its id or id prefix", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
+    const family = [
+      sessionInfo({ id: "019a-parent" }),
+      { ...sessionInfo({ id: "019b-child" }), parentSessionPath: "/tmp/session-019a-parent.jsonl" },
+      { ...sessionInfo({ id: "019c-other" }), parentSessionPath: "/tmp/session-019a-gone.jsonl" },
+    ];
+    for (const query of ["parent:019a-parent", "parent:019A"]) {
+      const result = await searchSessionsWithDiagnostics({ listSessions: async () => family }, query, { limit: 10 });
+      assert.deepEqual(ids(result), ["019b-child"], query);
+    }
+  });
+});
+
 describe("mmr-history read_session", () => {
   it("extracts goal-focused excerpts from the active session context", async () => {
     const { SessionManager } = await import("@earendil-works/pi-coding-agent");

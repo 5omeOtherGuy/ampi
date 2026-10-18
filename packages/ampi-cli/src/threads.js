@@ -4,10 +4,11 @@
 // index (thread-index.js). Opening a session in the terminal UI is left to Pi:
 // the commands that do it return the Pi arguments to start with.
 import { randomBytes } from "node:crypto";
-import { readFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import path from "node:path";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { listPiSessions, piAgentDir, setPiSessionName } from "./pi-compat.js";
+import { listPiSessions, loadThroughPi, piAgentDir, setPiSessionName } from "./pi-compat.js";
 import { formatThreadMarkdown } from "./thread-markdown.js";
 import {
   isThreadColor,
@@ -32,6 +33,8 @@ import {
  * @property {(text: string) => void} out Writes to stdout.
  * @property {(text: string) => void} err Writes to stderr.
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
+ * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package
+ *   whose search `threads search` runs: the one Pi loads from its settings, else the CLI's own.
  *
  * @typedef {{ code: number } | { piArgs: string[] }} ThreadsResult Exit with `code`, or start Pi with `piArgs`.
  * @typedef {{ code: number, message?: string } | { piArgs: string[] }} Outcome A result, with an error to print.
@@ -52,7 +55,15 @@ const COMPLETE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const UUID_TIME_MAX = 2 ** 48 - 1;
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename" };
+const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename", find: "search" };
+
+/**
+ * The file in the ampi package whose extension factory hands over the session
+ * search, and the event it uses (`MMR_CLI_THREADS_EVENT` there).
+ */
+const SEARCH_ENTRY = path.join("src", "cli-threads.ts");
+const SEARCH_EVENT = "ampi:cli-threads";
+const SEARCH_LIMIT = 20;
 
 /** Options of each thread command; an id and other arguments are positionals. */
 const OPTIONS = /** @type {const} */ ({
@@ -65,6 +76,7 @@ const OPTIONS = /** @type {const} */ ({
     json: { type: "boolean" },
     limit: { type: "string" },
   },
+  search: { json: { type: "boolean" }, limit: { type: "string", short: "n" } },
   continue: { last: { type: "boolean" } },
   markdown: {},
   export: {},
@@ -96,6 +108,9 @@ Commands:
       --archived                Include archived sessions (--include-archived works too)
       --json                    Print one JSON object per line instead of the table
       --limit <n>               Print at most n sessions
+  search, find <query...>       Search the sessions of every directory, latest update first
+      -n, --limit <n>           Print at most n sessions (default 20)
+      --json                    Print one JSON object per line instead of the table
   continue, c [<id>]            Open the session in the terminal UI; without an id, pick one
       --last                    Open the most recent session, as ampi last does
   markdown, md <id>             Print the session as Markdown
@@ -112,6 +127,13 @@ Commands:
 
   ampi last                     Open the most recent session of this directory that is not archived
 
+A search query is words and "quoted phrases", all of which a session must contain, and
+key:value filters, all of which it must pass: id:, parent:, name:, label:, pinned:true|false,
+archived:true|false, after:, before:, updated_before:, created_after:, created_before:, cwd:,
+project:, repo:, file:, model:, provider:, tool: and has:tools|errors. Dates are YYYY-MM-DD,
+today, yesterday, week, month, or a number of days or weeks such as 7d or 2w. Matching ignores
+case, and archived sessions are included unless archived:false says otherwise.
+
 <id> is a session id or its first characters, as the list prints it. A prefix that more
 than one session shares is refused, with the matching ids.
 
@@ -121,12 +143,13 @@ session in this directory under any complete id no session has yet. Sessions sta
 machine, so threads new has no --visibility: sharing one needs a hosted service.
 
 Exit status: 0 on success, 1 when no session or several match the id or a change fails,
-2 on a usage error.
+2 on a usage error, including a search key or value search cannot use.
 
 Examples:
 
   $ ampi threads list --all --limit 5
   $ ampi threads list --json | jq -r 'select(.messageCount > 10) | .id'
+  $ ampi threads search parser label:docs after:7d
   $ ampi threads continue 019a3c
   $ ampi threads markdown 019a3c > session.md
   $ ampi threads label 019a3c release docs
@@ -408,6 +431,8 @@ async function dispatch(argv, host) {
       return create(host, values, positionals);
     case "list":
       return list(host, values, positionals);
+    case "search":
+      return search(host, values, positionals);
     case "continue":
       if (values.last) return positionals.length === 0 ? continueLast(host) : usage("threads continue --last takes no id.");
       if (positionals.length === 0) return { piArgs: ["--resume"] };
@@ -518,6 +543,104 @@ async function list(host, values, positionals) {
     host.out(values.all ? "No sessions.\n" : "No sessions in this directory. ampi threads list --all lists every directory.\n");
   } else {
     host.out(formatThreadTable(sessions, threads, { now: host.now(), columns: host.columns, archivedColumn: includeArchived }));
+  }
+  return { code: 0 };
+}
+
+/**
+ * @typedef {{ filter: string, kind: "unknown" | "hosted" | "invalid" | "unavailable" }} SearchProblem
+ * @typedef {(input: {
+ *   query: string,
+ *   sessions: PiSessionInfo[],
+ *   threads: Record<string, ThreadRecord> | undefined,
+ *   now: Date,
+ *   limit: number,
+ * }) => Promise<{ matches: { session: PiSessionInfo, matchedTerms: string[] }[], total: number, problems: SearchProblem[] }>} ThreadSearch
+ */
+
+/**
+ * Why search cannot use a filter, for the error or the note it prints.
+ *
+ * @param {SearchProblem} problem
+ */
+function describeSearchProblem({ filter, kind }) {
+  const key = filter.slice(0, filter.indexOf(":") + 1);
+  if (kind === "unknown") return `${key} is not a search key (in ${filter}); to search for that text, quote it: '"${filter}"'.`;
+  if (kind === "hosted") return `${key} needs data that a hosted service keeps; it is not available for local sessions (in ${filter}).`;
+  if (kind === "invalid") {
+    const expected = /^(?:pinned|archived):/i.test(key)
+      ? "true or false"
+      : /^has:/i.test(key)
+        ? "tools or errors"
+        : /^(?:after|since|before|until|(?:modified|updated|created)_(?:after|before)):/i.test(key)
+          ? "a date: YYYY-MM-DD, today, yesterday, week, month, or a count of days or weeks such as 7d or 2w"
+          : undefined;
+    return `${filter} ${filter.endsWith(":") ? "has no value" : "has a value search cannot read"}${expected === undefined ? "" : `; ${key} takes ${expected}`}.`;
+  }
+  if (/^(?:pinned|archived):/i.test(key)) return `${filter} is ignored: the thread index cannot be read.`;
+  if (/^projectRef:/i.test(key)) return `${filter} is ignored: projectRef: refers to find_session results; use cwd: or project:.`;
+  return `${filter} is ignored: it applies to find_session only; search sorts by the latest update and takes --limit.`;
+}
+
+/**
+ * Search the sessions of every directory with the search of the ampi package
+ * in use, loaded through Pi.
+ *
+ * @param {ThreadsHost} host
+ * @param {Record<string, string | boolean | undefined>} values
+ * @param {string[]} positionals
+ * @returns {Promise<Outcome>}
+ */
+async function search(host, values, positionals) {
+  const query = positionals.join(" ").trim();
+  if (!query) return usage("threads search needs a query.");
+  let limit = SEARCH_LIMIT;
+  if (values.limit !== undefined) {
+    limit = Number(values.limit);
+    if (!/^\d+$/.test(String(values.limit)) || limit < 1) return usage(`--limit needs a whole number above 0, not ${values.limit}.`);
+  }
+  const ampi = await host.locateAmpi();
+  const entry = ampi === undefined ? undefined : path.join(ampi.root, SEARCH_ENTRY);
+  if (entry === undefined || !existsSync(entry)) {
+    const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
+    return { code: 1, message: `${which} is too old for threads search; update @skippermissions/ampi (or ampi-cli).` };
+  }
+  /** @type {ThreadSearch | undefined} */
+  let searchThreads;
+  try {
+    const received = /** @type {{ searchThreads?: ThreadSearch } | undefined} */ (await loadThroughPi(host.pi, entry, SEARCH_EVENT));
+    searchThreads = received?.searchThreads;
+  } catch (error) {
+    return { code: 1, message: `could not load ampi's session search: ${messageOf(error)}` };
+  }
+  if (typeof searchThreads !== "function") return { code: 1, message: "could not load ampi's session search: the ampi package did not provide it." };
+
+  /** @type {Record<string, ThreadRecord> | undefined} */
+  let threads;
+  try {
+    threads = readThreadIndex(indexFileOf(host));
+  } catch (error) {
+    host.err(`ampi: ${messageOf(error)}\n`);
+  }
+  const sessions = await listSessions(host, "all");
+  const result = await searchThreads({ query, sessions, threads, now: new Date(host.now()), limit });
+  const errors = result.problems.filter((problem) => problem.kind !== "unavailable");
+  if (errors.length > 0) return usage(errors.map(describeSearchProblem).join("\n"));
+  for (const problem of result.problems) host.err(`ampi: ${describeSearchProblem(problem)}\n`);
+
+  const index = threads ?? {};
+  if (values.json) {
+    for (const { session, matchedTerms } of result.matches) {
+      host.out(`${JSON.stringify({ ...describeSession(session, recordOf(index, session.id)), matchedTerms })}\n`);
+    }
+  } else if (result.matches.length === 0) {
+    host.out("No sessions match.\n");
+  } else {
+    const shown = result.matches.map((match) => match.session);
+    host.out(formatThreadTable(shown, index, { now: host.now(), columns: host.columns, archivedColumn: true }));
+  }
+  if (result.total > result.matches.length) {
+    host.err(`ampi: showing ${result.matches.length} of ${result.total} matching sessions; --limit shows more.\n`);
   }
   return { code: 0 };
 }

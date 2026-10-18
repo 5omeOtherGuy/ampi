@@ -6,6 +6,8 @@ import {
   type MmrSessionMetadata as SessionMetadata,
   type MmrSessionSource,
 } from "../ampi-core/session-catalog.js";
+import { matchesMmrThreadIndexFilters, resolveParentSessionId } from "../ampi-core/session-query.js";
+import { getMmrThreadIndex, type MmrThreadRecord } from "../ampi-core/thread-index.js";
 import { createGitIdentityResolver, matchesRepoToken, type GitIdentityResolver, type RepoIdentity } from "./git-identity.js";
 import { includesCaseInsensitive, parseSessionQuery, type SessionQuery } from "./query.js";
 import { maybeRedact, projectRefFromCwd } from "./redaction.js";
@@ -39,7 +41,7 @@ export interface SessionSearchMatch {
   unsupportedFilters: string[];
 }
 
-export type QueryDiagnosticStatus = "applied" | "unsupported" | "non_applicable" | "invalid";
+export type QueryDiagnosticStatus = "applied" | "unsupported" | "non_applicable" | "invalid" | "unavailable";
 
 export interface QueryDiagnostic {
   filter: string;
@@ -73,9 +75,13 @@ function buildPreview(info: SessionInfo, query: SessionQuery, redactionEnabled: 
   return maybeRedact(raw, redactionEnabled);
 }
 
-function matchesLexical(info: SessionInfo, query: SessionQuery): string[] | undefined {
+function matchesLexical(info: SessionInfo, query: SessionQuery, idsByPath: ReadonlyMap<string, string>): string[] | undefined {
   if (query.id && !includesCaseInsensitive(info.id, query.id)) return undefined;
   if (query.name && !includesCaseInsensitive(info.name ?? "", query.name)) return undefined;
+  if (query.parent) {
+    const parentId = resolveParentSessionId(info.parentSessionPath, idsByPath);
+    if (!parentId?.toLowerCase().startsWith(query.parent.toLowerCase())) return undefined;
+  }
   if (query.modifiedAfter && info.modified < query.modifiedAfter) return undefined;
   if (query.modifiedBefore && info.modified > query.modifiedBefore) return undefined;
   if (query.createdAfter && info.created < query.createdAfter) return undefined;
@@ -116,7 +122,6 @@ function matchesMetadata(metadata: SessionMetadata, query: SessionQuery): boolea
   if (!matchesSetValues(metadata.providers, query.provider)) return false;
   if (!matchesSetValues(metadata.models, query.model)) return false;
   if (!matchesSetValues(metadata.tools, query.tool)) return false;
-  if (!matchesSetValues(metadata.labels, query.label)) return false;
   for (const token of query.has) {
     if (token === "tools" && !metadata.hasTools) return false;
     if (token === "errors" && !metadata.hasErrors) return false;
@@ -125,11 +130,11 @@ function matchesMetadata(metadata: SessionMetadata, query: SessionQuery): boolea
 }
 
 function hasMetadataFilters(query: SessionQuery): boolean {
-  return query.provider.length > 0 || query.model.length > 0 || query.tool.length > 0 || query.label.length > 0 || query.has.length > 0;
+  return query.provider.length > 0 || query.model.length > 0 || query.tool.length > 0 || query.has.length > 0;
 }
 
 function metadataDiagnosticFilter(filter: string): boolean {
-  return filter.startsWith("provider:") || filter.startsWith("model:") || filter.startsWith("tool:") || filter.startsWith("label:") || filter.startsWith("has:");
+  return filter.startsWith("provider:") || filter.startsWith("model:") || filter.startsWith("tool:") || filter.startsWith("has:");
 }
 
 function buildQueryDiagnostics(query: SessionQuery, redactionEnabled: boolean): QueryDiagnostic[] {
@@ -187,16 +192,26 @@ function defaultIndexFromCatalogDeps(deps: Pick<SessionCatalogDeps, "listSession
   });
 }
 
-function promoteToNonApplicable(
+function reclassifyApplied(
   diagnostics: QueryDiagnostic[],
   predicate: (entry: QueryDiagnostic) => boolean,
   reason: string,
+  status: QueryDiagnosticStatus = "non_applicable",
 ): void {
   for (const entry of diagnostics) {
     if (entry.status === "applied" && predicate(entry)) {
-      entry.status = "non_applicable";
+      entry.status = status;
       entry.reason = reason;
     }
+  }
+}
+
+/** The registered thread index's records, or `undefined` when there is none or it cannot be read. */
+async function readThreadIndexRecords(): Promise<Readonly<Record<string, MmrThreadRecord>> | undefined> {
+  try {
+    return await getMmrThreadIndex()?.list();
+  } catch {
+    return undefined;
   }
 }
 
@@ -260,9 +275,11 @@ export async function searchSessionsWithDiagnostics(
     index ?? (deps.openSession ? defaultIndexFromCatalogDeps(deps as SessionCatalogDeps) : undefined);
   const rawSessions = effectiveIndex ? await effectiveIndex.list() : await deps.listSessions();
   const sessions = dedupeMmrSessionsById(rawSessions);
+  // `parent:` resolves a session's parent file to the id of the session there.
+  const idsByPath = new Map(rawSessions.map((info) => [info.path, info.id]));
 
   const lexical = sessions
-    .map((info) => ({ info, matchedTerms: matchesLexical(info, query) }))
+    .map((info) => ({ info, matchedTerms: matchesLexical(info, query, idsByPath) }))
     .filter((entry): entry is { info: SessionInfo; matchedTerms: string[] } => entry.matchedTerms !== undefined);
 
   let filtered = lexical;
@@ -293,7 +310,7 @@ export async function searchSessionsWithDiagnostics(
     );
     const anyIdentity = repoChecks.some((check) => check.identity !== undefined);
     if (!anyIdentity) {
-      promoteToNonApplicable(
+      reclassifyApplied(
         diagnostics,
         (entry) => entry.filter.startsWith("repo:"),
         "no candidate sessions have a resolvable repo identity",
@@ -306,7 +323,7 @@ export async function searchSessionsWithDiagnostics(
   if (query.file.length > 0) {
     if (!effectiveIndex) {
       // Cannot evaluate file: without an index. Fail closed, non_applicable.
-      promoteToNonApplicable(
+      reclassifyApplied(
         diagnostics,
         (entry) => entry.filter.startsWith("file:"),
         "no session index available to evaluate file: filter",
@@ -321,7 +338,7 @@ export async function searchSessionsWithDiagnostics(
     );
     const anyTouched = fileChecks.some((check) => check.touched.size > 0);
     if (!anyTouched) {
-      promoteToNonApplicable(
+      reclassifyApplied(
         diagnostics,
         (entry) => entry.filter.startsWith("file:"),
         "no candidate sessions carry structured tool-call evidence",
@@ -333,7 +350,7 @@ export async function searchSessionsWithDiagnostics(
 
   if (hasMetadataFilters(query)) {
     if (!effectiveIndex) {
-      promoteToNonApplicable(
+      reclassifyApplied(
         diagnostics,
         (entry) => metadataDiagnosticFilter(entry.filter),
         "no session index available to evaluate metadata filters",
@@ -350,7 +367,7 @@ export async function searchSessionsWithDiagnostics(
       (check) => check.metadata.providers.size > 0 || check.metadata.models.size > 0 || check.metadata.tools.size > 0 || check.metadata.labels.size > 0 || check.metadata.hasTools || check.metadata.hasErrors,
     );
     if (!anyMetadata) {
-      promoteToNonApplicable(
+      reclassifyApplied(
         diagnostics,
         (entry) => metadataDiagnosticFilter(entry.filter),
         "no candidate sessions carry structured metadata for these filters",
@@ -358,6 +375,39 @@ export async function searchSessionsWithDiagnostics(
       return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
     }
     filtered = metadataChecks.filter((check) => check.matched).map((check) => check.entry);
+  }
+
+  // `label:`, `pinned:` and `archived:` read the thread index ampi-threads
+  // registers; `label:` also matches Pi's own entry labels.
+  if (query.label.length > 0 || query.pinned !== undefined || query.archived !== undefined) {
+    const records = await readThreadIndexRecords();
+    let indexQuery = query;
+    if (!records) {
+      reclassifyApplied(
+        diagnostics,
+        (entry) => entry.filter.startsWith("pinned:") || entry.filter.startsWith("archived:"),
+        "no thread index is available: ampi-threads is off or its index cannot be read",
+        "unavailable",
+      );
+      indexQuery = { ...query, pinned: undefined, archived: undefined };
+      if (query.label.length > 0 && !effectiveIndex) {
+        reclassifyApplied(
+          diagnostics,
+          (entry) => entry.filter.startsWith("label:"),
+          "no session index or thread index available to evaluate label: filter",
+        );
+        return { matches: [], queryDiagnostics: diagnostics, totalCount: 0, offset: requestedOffset, hasMore: false };
+      }
+    }
+    const indexChecks = await Promise.all(
+      filtered.map(async (entry) => {
+        const record = records && Object.hasOwn(records, entry.info.id) ? records[entry.info.id] : undefined;
+        const entryLabels = query.label.length > 0 && effectiveIndex ? [...(await effectiveIndex.getMetadata(entry.info)).labels] : [];
+        const labels = [...(record?.labels ?? []), ...entryLabels];
+        return { entry, matched: matchesMmrThreadIndexFilters(indexQuery, { ...record, labels }) };
+      }),
+    );
+    filtered = indexChecks.filter((check) => check.matched).map((check) => check.entry);
   }
 
   const sorted = filtered.sort((a, b) => {

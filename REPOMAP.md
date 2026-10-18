@@ -76,6 +76,10 @@ Package-level public API. It re-exports stable helpers, types, extension factori
 
 ampi's palette commands built without a Pi session (`collectMmrDefaultCommands`) and the keymap in effect for given Pi settings as JSONC. Not one of the package's extensions: its default export is the entry `ampi config keymap` loads through Pi's extension loader, and `tests/mmr-cli-config.test.mjs` checks the list against what `ampi-tui` and `ampi-threads` register in a terminal session.
 
+### `src/cli-threads.ts`
+
+The session search behind `ampi threads search` (`searchMmrThreads`): it evaluates a query from `ampi-core/session-query.ts` on Pi's session list and the thread index records the command reads, without redaction. Not one of the package's extensions: its default export is the entry the command loads through Pi's extension loader, on the event channel `ampi:cli-threads`.
+
 ### `src/extensions/manifest.ts`
 
 Single source of truth for the registered extension list consumed by `package.json` generation and tests.
@@ -102,6 +106,7 @@ Important files:
 - `command-registration.ts` — slash commands, shortcuts, and thinking toggles.
 - `command-registry.ts`, `keymap.ts` — palette command registry with ranking, and the key-string grammar, `ampi.keymap` overrides, and conflict report.
 - `session-catalog.ts` — read-only catalogue of local Pi sessions: listing and opening through Pi's `SessionManager`, one workspace's or every session as Pi's session picker lists them, the cached per-session evidence index, dedupe and id/prefix resolution.
+- `session-query.ts` — the session search language shared by `find_session` and `ampi threads search`: tokenizing, `key:value` filters with relative dates, keys that need hosted data, and `matchesMmrThreadIndexFilters` for `label:`, `pinned:` and `archived:` on a thread index record.
 - `thread-index.ts` — seam for the thread index (per-session archived, labels, colour, pinned, title source): `ampi-threads` registers its store, other extensions read it through `getMmrThreadIndex`; `filterMmrSessionsByArchived` filters catalogue sessions.
 - `prompt-history.ts` — seam for prompt history: `ampi-threads` registers its store, `ampi-tui`'s picker reads it through `getMmrPromptHistory`, per workspace or across all of them.
 - `thread-reports.ts` — seam for the cost and context reports and the Markdown export: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge and `ampi-gui`'s Copy as Markdown read them through `getMmrThreadReports`.
@@ -259,7 +264,7 @@ Opt-in global local Pi session lookup (`AMPI_HISTORY_ENABLE=true`, legacy `MMR_H
 Important files:
 
 - `index.ts`, `tools.ts` — extension entry point and Pi tool definitions.
-- `session-catalog.ts`, `query.ts` — session search with redaction, `repo:`/`file:`/metadata filters and diagnostics, and query parsing. Listing, the evidence index and id resolution come from `ampi-core/session-catalog.ts`.
+- `session-catalog.ts`, `query.ts` — session search with redaction, `repo:`/`file:`/metadata/thread index filters and diagnostics; `query.ts` re-exports the parser from `ampi-core/session-query.ts`. Listing, the evidence index and id resolution come from `ampi-core/session-catalog.ts`.
 - `session-index.ts` — the history names (`createSessionIndex`, `SessionIndex`, …) for the core session index.
 - `read-session.ts`, `analysis-worker.ts` — lexical extraction and optional `history-reader` worker analysis.
 - `prompts.ts` — `history-reader` worker prompts.
@@ -297,7 +302,7 @@ packages/
 
 ### `packages/ampi-cli/`
 
-`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam; with `--stream-json` it runs Pi's JSON mode and prints stream JSON records made from its events instead. `ampi threads` and `ampi last` list, print and change sessions through Pi's `SessionManager` and the thread index file, and open one by starting Pi with `--session`; `threads new` prints a new UUID version 7 session id, which `threads continue` opens through Pi's `--session-id`. `ampi config keymap` loads `src/config-keymap.ts` through Pi's extension loader, which builds ampi's palette commands without a session and prints the keymap for Pi's settings; `ampi config edit` opens Pi's settings file in Pi's external editor. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
+`@skippermissions/ampi-cli`, the `ampi` command. Plain JavaScript with JSDoc types, no build step. It depends on `@earendil-works/pi-coding-agent` and `@skippermissions/ampi`, handles its own options (`-m`, `-x`, `--title`, `-l`, `version`, `--help`) and hands everything else to Pi's `main()`, adding ampi's package with `-e` unless Pi already loads it from its settings or a `-e` argument. Execute mode runs Pi's print mode with an inline extension that writes labels and the archive date to the thread index through `ampi-core`'s seam; with `--stream-json` it runs Pi's JSON mode and prints stream JSON records made from its events instead. `ampi threads` and `ampi last` list, print and change sessions through Pi's `SessionManager` and the thread index file, and open one by starting Pi with `--session`; `threads new` prints a new UUID version 7 session id, which `threads continue` opens through Pi's `--session-id`; `threads search` loads `src/cli-threads.ts` through Pi's extension loader and searches every directory's sessions. `ampi config keymap` loads `src/config-keymap.ts` through Pi's extension loader, which builds ampi's palette commands without a session and prints the keymap for Pi's settings; `ampi config edit` opens Pi's settings file in Pi's external editor. Tests: `tests/mmr-cli-*.test.mjs`. See its [`README.md`](packages/ampi-cli/README.md).
 
 ## Documentation tree
 

@@ -47,23 +47,25 @@ The tool description tells the model that a `@<session-id>` in your message, as 
 
 `find_session` accepts:
 
-- bare keywords / quoted phrases;
-- `id:<prefix>`, `name:<text>`;
-- date filters: `after:` / `since:` / `before:` / `until:` (modified time), plus `modified_after:`, `modified_before:`, `created_after:`, `created_before:`. Values accept `YYYY-MM-DD`, `7d`, `2w`, `today`, `yesterday`, `week`, and `month`;
+- bare keywords / quoted phrases (a quoted phrase is always text, even when it contains a colon, as in `"Error: ENOENT"`; so is a word ending in a colon that is not a key, such as `TypeError:`, while a key with no value, such as `archived:`, is reported `invalid`);
+- `id:<prefix>`, `name:<text>`, `parent:<id-or-prefix>` (sessions forked from that session);
+- date filters: `after:` / `since:` / `before:` / `until:` / `updated_before:` (modified time), plus `modified_after:`, `modified_before:`, `created_after:`, `created_before:`. Values accept `YYYY-MM-DD`, `7d`, `2w`, `today`, `yesterday`, `week`, and `month`;
 - `file:<partial-path>` — per-session match against that session's own cwd-relative structured tool-call evidence (`read`, `edit`, `write`, `apply_patch`). Bash output, prose, and `grep`/`find` search-directory args are never inspected;
 - `repo:<host/owner/repo | owner/repo | stripped remote URL>` — each session's own canonicalized git remote;
 - `project:<cwd-substring-or-projectRef>`, `cwd:<cwd-substring>`, `projectRef:<opaque-ref>` — matched internally, while raw project roots stay hidden from results;
-- structured metadata filters: `provider:<value>`, `model:<value>`, `tool:<name>`, `label:<value>`, `has:tools`, `has:errors`;
+- structured metadata filters: `provider:<value>`, `model:<value>`, `tool:<name>`, `has:tools`, `has:errors`;
+- thread index filters: `label:<value>` (a label from the thread index or a Pi label entry), `pinned:true|false`, `archived:true|false`. They read the thread index that `ampi-threads` registers in `ampi-core`; with `ampi-threads` off, `label:` still matches Pi's entry labels, and `pinned:` and `archived:` are reported `unavailable` and ignored;
 - pagination/sorting: `offset:<n>`, `sort:modified`, `sort:created`.
 
-Case-insensitive; repeated filters combine with implicit AND. Each result carries per-filter `queryDiagnostics`:
+The parser lives in `ampi-core` (`session-query.ts`), shared with `ampi threads search`; `query.ts` here re-exports it. Case-insensitive; repeated filters combine with implicit AND. Each result carries per-filter `queryDiagnostics`:
 
 | Status | Meaning |
 | --- | --- |
 | `applied` | Evaluated against session data. |
-| `unsupported` | Syntax recognized but not implemented (`ref:`, `author:`, `task:`, …). |
+| `unsupported` | An unknown key (`ref:`, `task:`, …) or one whose data only a hosted service has (`commit:`, `pr:`, `author:`). |
 | `non_applicable` | Implemented but no candidate session can be evaluated (e.g. `repo:` with no resolvable remotes). Returns zero matches plus the diagnostic; never silently broadens. |
-| `invalid` | A date/offset/sort/has filter value did not parse. The filter is ignored and the token is surfaced as `Invalid filters ignored: …` instead of being dropped silently. |
+| `unavailable` | `pinned:` or `archived:` while no thread index is registered (`ampi-threads` off) or it cannot be read. The filter is ignored. |
+| `invalid` | A date/offset/sort/has/boolean filter value did not parse. The filter is ignored and the token is surfaced as `Invalid filters ignored: …` instead of being dropped silently. |
 
 ### Worker-first read with lexical fallback
 
