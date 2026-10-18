@@ -1,0 +1,91 @@
+=== finished group · collapsed ===
+
+ ✓ Read 1 file, ran 1 command, ran 1 search, edited 1 file (+2 -1) ▸
+=== finished group · expanded ===
+
+ ✓ Read 1 file, ran 1 command, ran 1 search, edited 1 file (+2 -1) ▾
+   ✓ Read src/retry.ts L1-40
+
+   $ npm test -- --grep retry
+     ok 1 - retries three times
+     ok 2 - waits between tries
+
+   ✓ Grep src "delayMs"
+     src/retry.ts:3:const delayMs = 250;
+
+   ✓ Edited src/retry.ts +2 -1
+     1    import { load } from './load.js';
+     2 -  const retries = 1;
+     2 +  const retries = 3;
+     3 +  const delayMs = 250;
+=== running group · collapsed ===
+
+ ⠋ Read 1 file, running 1 command, ran 1 search, edited 1 file (+2 -1) ▸
+=== running group · expanded ===
+
+ ⠋ Read 1 file, running 1 command, ran 1 search, edited 1 file (+2 -1) ▾
+   ✓ Read src/retry.ts L1-40
+
+   ⠋ npm test -- --grep retry
+
+   ✓ Grep src "delayMs"
+     src/retry.ts:3:const delayMs = 250;
+
+   ✓ Edited src/retry.ts +2 -1
+     1    import { load } from './load.js';
+     2 -  const retries = 1;
+     2 +  const retries = 3;
+     3 +  const delayMs = 250;
+=== group with a failed command · collapsed ===
+
+ ✓ Ran 2 commands ▸
+=== group with a failed command · expanded ===
+
+ ✓ Ran 2 commands ▾
+   $ npm test -- --grep retry
+     ok 1 - retries three times
+     ok 2 - waits between tries
+
+   $ npm run lint (exit code: 1)
+     src/retry.ts:3 unused variable
+=== group of one call · collapsed ===
+
+ ✓ Ran 1 search ▸
+=== group of one call · expanded ===
+
+ ✓ Ran 1 search ▾
+   ✓ Grep src "delayMs"
+     src/retry.ts:3:const delayMs = 250;
+=== summary longer than the row · collapsed ===
+
+ ✓ Read 1 file, ran 1 command, ran 1 search, changed 2 files (+5 -1), ran 1 web search, ran 1 tool ▸
+=== summary longer than the row · expanded ===
+
+ ✓ Read 1 file, ran 1 command, ran 1 search, changed 2 files (+5 -1), ran 1 web search, ran 1 tool ▾
+   ✓ Read src/retry.ts L1-40
+
+   $ npm test -- --grep retry
+     ok 1 - retries three times
+     ok 2 - waits between tries
+
+   ✓ Grep src "delayMs"
+     src/retry.ts:3:const delayMs = 250;
+
+   ✓ Edited src/retry.ts +2 -1
+     1    import { load } from './load.js';
+     2 -  const retries = 1;
+     2 +  const retries = 3;
+     3 +  const delayMs = 250;
+
+   ✓ Created docs/retry.md +3
+     1 +  # Retry
+     2 +  
+     3 +  Three tries, 250 ms apart.
+
+   ✓ Searched the web · exponential backoff jitter
+     query: exponential backoff jitter
+     ok
+
+   ✓ Ran docs/search · retry policy
+     query: retry policy
+     ok

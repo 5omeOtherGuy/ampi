@@ -11,6 +11,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 | On | Footer-free terminal layout; one-line tool rows; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End | Interactive Pi session | No footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 | On | Footer-free terminal layout; welcome header, message styling, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End | Interactive Pi session | Welcome header at startup; no footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 | On | Footer-free terminal layout; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; Alt+T details toggle | Interactive Pi session | No footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
+| On | Footer-free terminal layout; one summary row per run of tool calls; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End | Interactive Pi session | No footer row below the editor; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 
 ## When to use it
 
@@ -32,7 +33,7 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | --- | --- | --- |
 | Header | Pi header slot | Welcome screen: ampi's animated mark, "Welcome to ampi", key hints and the changelog card |
 | Footer | Pi footer slot | Replaced with an empty component, so no row is drawn below the editor |
-| Tool rows | Pi tool renderer | One line per tool call, and a card per call when tool output is expanded |
+| Tool rows | Pi tool renderer | One summary line per run of tool calls, and a row and card per call when tool output is expanded |
 | `thread.interrupt` | Command, `esc esc` | Stop the running turn |
 | `ampi.quit` | Command, `ctrl+c ctrl+c` | Quit Pi, stopping a running turn first |
 | `thread.scrollToTop`, `thread.scrollToBottom` | Commands, `home` / `end` | Jump to the start or end of the transcript while the prompt is empty |
@@ -185,7 +186,20 @@ Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctr
 
 ### Transcript tool rows
 
-Every tool call in the transcript is drawn as one line: a status glyph, a verb and what the call acted on.
+A run of consecutive tool calls is folded into one summary line, with a count per kind of work and the diff stat of the edits:
+
+```text
+ ✓ Read 1 file, ran 1 command, ran 1 search, edited 1 file (+2 -1) ▸
+```
+
+- A run ends where the transcript shows something else between two calls: an assistant message with text, a user message (a steered message too), a summary or a custom message. Thinking, failed calls and a change of kind do not end it, so one run can span several assistant messages.
+- Subagent calls (`oracle`, `librarian`, `finder`, `Task`, `reviewer`, `start_task`) are never grouped: each keeps its own row and splits the run around it.
+- The summary is in the present tense with a spinner while any call of the run is still running (`⠋ Read 1 file, running 1 command ▸`). Its glyph stays `✓` when a call failed; only that call's row shows the failure. A cancelled call turns the glyph to `⊘` and adds `(N cancelled)`.
+- A run of one call gets a summary line too (`✓ Ran 1 command ▸`).
+- `▸` marks a collapsed run. Expanding tool output (Pi's Ctrl+O) turns it into `▾` and draws every call below the summary, indented by two columns, with the rows and cards described below. Pi puts a blank line between two calls' rows there. Clicking a summary line, in terminals where Pi receives mouse clicks, expands or collapses that run alone.
+- Runs are rebuilt from the session when it starts, is resumed or reloaded, is compacted or moves to another branch. Pi's HTML export keeps one row per call.
+
+Each call's own row is one line: a status glyph, a verb and what the call acted on.
 
 ```text
  ✓ Read src/index.ts L1-120
@@ -212,6 +226,7 @@ Every tool call in the transcript is drawn as one line: a status glyph, a verb a
 Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a command palette on Ctrl+O, a mode picker, grouped tool rows and a welcome header. Each lands behind the same `ampiTui.enabled` switch.
 Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a command palette on Ctrl+O and a mode picker. Each lands behind the same `ampiTui.enabled` switch.
 Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a mode picker, compact tool rows and a welcome header. Each lands behind the same `ampiTui.enabled` switch.
+Later releases move that information into the borders of the prompt box, let Esc clear the prompt, and add a command palette on Ctrl+O, a mode picker and a welcome header. Each lands behind the same `ampiTui.enabled` switch.
 
 ## Diagnostics and troubleshooting
 
@@ -245,3 +260,4 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
 - `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, transcript scrolling, the reserved shortcut list, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.
 - Tests: `tests/mmr-tui-extension.test.mjs` (enablement, run modes, settings, load order), `tests/mmr-tui-key-decode.test.mjs`, `tests/mmr-tui-key-dispatcher.test.mjs`, `tests/mmr-tui-keys-install.test.mjs` (also the palette and details commands), `tests/mmr-tui-frame.test.mjs`, `tests/mmr-tui-palette.test.mjs`, `tests/mmr-tui-pi-compat.test.mjs`, and `tests/mmr-core-status.test.mjs` (ampi-core yields the footer to a chrome owner).
+- Tool rows: `transcript/activity.ts` classifies a call (pure, no Pi imports) and `summarizeActivities` folds a run of calls into one phrase; `transcript/activity-groups.ts` keeps the runs, fed by Pi's message and tool events and rebuilt from the session's context entries, because a renderer sees only its own call; `transcript/tool-renderers.ts` draws rows and cards through one `pi.registerToolRenderer` resolver. The first call of a run draws the summary, and the others render no lines, which Pi draws with no height and no spacer. Tests: `tests/mmr-tui-activity.test.mjs`, `tests/mmr-tui-activity-groups.test.mjs`, `tests/mmr-tui-tool-renderers.test.mjs` and `tests/mmr-tui-tool-groups.test.mjs`, whose 80- and 140-column fixtures in `tests/fixtures/mmr-tui-tool-rows/` and `tests/fixtures/mmr-tui-tool-groups/` are refreshed with `PI_MMR_UPDATE_FIXTURES=1`.

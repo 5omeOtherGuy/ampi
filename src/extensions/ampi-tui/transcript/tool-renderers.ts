@@ -10,6 +10,12 @@
  * renderers (ampi's subagents and task list, other extensions' tools) keep
  * their own card when expanded and only get the one-line row.
  *
+ * A run of consecutive calls (see `activity-groups.ts`) folds into one
+ * summary row ("✓ Ran 3 commands, read 4 files ▸") drawn by the run's first
+ * call; the other calls draw nothing, so Pi leaves no gap for them. Expanded,
+ * the summary row ends in "▾" and every call draws its row and card below it,
+ * indented by two columns.
+ *
  * Rows draw their own framing (`renderShell: "self"`), use theme colours
  * for text only and never a background.
  */
@@ -23,7 +29,7 @@ import type {
   ToolRendererResolver,
   ToolRenderers,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, getCapabilities, hyperlink, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type Component, getCapabilities, hyperlink, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import {
   type Activity,
   type ActivityStatus,
@@ -31,12 +37,14 @@ import {
   classifyToolCall,
   diffStatParts,
   displayPath,
+  resultStatus,
   resultText,
   splitLeadingCd,
   type TitlePart,
   type TitleRole,
   tokenizeShell,
 } from "./activity.js";
+import { ActivityGroupStore, type GroupAggregate, trackActivityGroups } from "./activity-groups.js";
 
 type CallRenderer = NonNullable<ToolRenderers["renderCall"]>;
 type ResultRenderer = NonNullable<ToolRenderers["renderResult"]>;
@@ -51,6 +59,8 @@ const SPINNER_INTERVAL_MS = 80;
 export const CARD_OUTPUT_LINES = 15;
 /** Diff lines an expanded edit card shows before "… N more lines". */
 export const CARD_DIFF_LINES = 60;
+/** Columns an expanded group indents its calls by, under the summary row. */
+const GROUP_INDENT = 2;
 
 /** Tools whose expanded card ampi draws itself. Others keep their own renderers when expanded. */
 const OWN_CARDS = new Set(["bash", "read", "edit", "write", "grep", "find", "ls", "apply_patch"]);
@@ -132,16 +142,9 @@ function syncSpinner(state: RowState, context: RenderContext, running: boolean):
   }
 }
 
-function isCancelledText(value: string): boolean {
-  const last = value.trim().split("\n").at(-1) ?? "";
-  return /\b(aborted|cancell?ed)\b/i.test(last);
-}
-
 /** Running while the result is partial; cancelled when an error result reports an abort. */
 export function rowStatus(context: Pick<RenderContext, "isPartial" | "isError">, result?: ToolResult): ActivityStatus {
-  if (context.isPartial) return "running";
-  if (!context.isError) return "done";
-  return isCancelledText(resultText(result)) ? "cancelled" : "error";
+  return context.isPartial ? "running" : resultStatus(context.isError, result);
 }
 
 // ---------------------------------------------------------------------------
@@ -457,18 +460,74 @@ function renderBody(row: Row, width: number): string[] {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Groups
+// ---------------------------------------------------------------------------
+
+interface GroupPlace {
+  /** The group's expansion, which its first row decides. */
+  expanded: boolean;
+  /** Only on the first row of a group, which draws the summary. */
+  aggregate?: GroupAggregate;
+}
+
+/** Where a row sits in its group; undefined for rows drawn on their own. */
+function groupPlace(groups: ActivityGroupStore | undefined, context: RenderContext, state: RowState): GroupPlace | undefined {
+  if (!groups || state.snapshot) return undefined;
+  groups.attach(context.toolCallId, context.invalidate);
+  const position = groups.lookup(context.toolCallId);
+  if (!position) return undefined;
+  if (position.index > 0) return { expanded: position.group.calls[0]?.expanded ?? context.expanded };
+  groups.setExpanded(context.toolCallId, context.expanded);
+  return { expanded: context.expanded, aggregate: groups.aggregate(position.group) };
+}
+
+/** The summary row animates while any call of its group runs; a later row only shows its own spinner once expanded. */
+function groupSpinner(place: GroupPlace, context: RenderContext): boolean {
+  return place.aggregate ? place.aggregate.live : place.expanded && context.executionStarted && context.isPartial;
+}
+
+/** A call drawn inside an expanded group: indented under the summary row. */
+function groupChild(context: RenderContext): RenderContext {
+  return { ...context, expanded: true, outputPad: context.outputPad + GROUP_INDENT };
+}
+
+/** `✓ Ran 3 commands, read 4 files ▸`: the phrase in the title colour, its commas and parentheses muted. */
+function summaryLine(
+  aggregate: GroupAggregate,
+  expanded: boolean,
+  context: RenderContext,
+  state: RowState,
+  theme: RenderTheme,
+  width: number,
+): string {
+  const lead = `${" ".repeat(context.outputPad)}${glyph(aggregate.status, state.frame, theme)} `;
+  // Cut the phrase rather than the arrow.
+  const phrase = truncateToWidth(aggregate.summary, Math.max(1, width - visibleWidth(lead) - 2), "…");
+  const styled = phrase
+    .split(/(, | \(|\))/)
+    .map((piece, i) => (piece === "" ? "" : theme.fg(i % 2 === 1 ? "muted" : "toolTitle", piece)))
+    .join("");
+  return clip(`${lead}${styled} ${theme.fg("muted", expanded ? "▾" : "▸")}`, width);
+}
+
 export interface ToolRendererOptions {
   /** Home directory shown as `~`. Default: the user's home. */
   home?: string;
+  /** Groups of consecutive calls. Without one, every call draws its own row. */
+  groups?: ActivityGroupStore;
 }
 
 /**
  * Resolver for `pi.registerToolRenderer`: one-line rows for every tool, and
  * ampi's own expanded cards for Pi's built-in tools, `apply_patch`, MCP tools
- * and tools without renderers of their own.
+ * and tools without renderers of their own. With a group store, a run of
+ * calls folds into one summary row drawn by its first call; the later calls
+ * draw nothing until the group is expanded.
  */
 export function createToolRendererResolver(options: ToolRendererOptions = {}): ToolRendererResolver {
   const home = options.home ?? homedir();
+  const { groups } = options;
   return (toolName, next) => {
     const own = OWN_CARDS.has(toolName) || toolName.startsWith("mcp__");
     const fallback = own ? undefined : next();
@@ -477,6 +536,20 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
       // A snapshot's call comes before its result, so its status is unknown here:
       // the result side draws its title instead.
       if (state.snapshot) return EMPTY;
+      const place = groupPlace(groups, context, state);
+      if (place) {
+        syncSpinner(state, context, groupSpinner(place, context));
+        const { aggregate } = place;
+        const summary = (width: number) => (aggregate ? [summaryLine(aggregate, place.expanded, context, state, theme, width)] : []);
+        if (!place.expanded) return aggregate ? new LazyLines(summary) : EMPTY;
+        const child = groupChild(context);
+        if (fallback?.renderCall) {
+          const card = fallback.renderCall(args, theme, child);
+          return aggregate ? new LazyLines((width) => [...summary(width), ...card.render(width)]) : card;
+        }
+        const row: Row = { toolName, args, context: child, theme, state, home };
+        return new LazyLines((width) => [...summary(width), ...renderHeader(row, width)]);
+      }
       syncSpinner(state, context, context.executionStarted && context.isPartial);
       if (context.expanded && fallback?.renderCall) return fallback.renderCall(args, theme, context);
       const row: Row = { toolName, args, context, theme, state, home };
@@ -485,6 +558,15 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
     const renderResult: ResultRenderer = (result, renderOptions, theme, context) => {
       const state = rowState(context);
       state.result = result;
+      const place = groupPlace(groups, context, state);
+      if (place) {
+        syncSpinner(state, context, groupSpinner(place, context));
+        if (!place.expanded) return EMPTY;
+        const child = groupChild(context);
+        if (fallback?.renderResult) return fallback.renderResult(result, { ...renderOptions, expanded: true }, theme, child);
+        const row: Row = { toolName, args: context.args, context: child, theme, state, home };
+        return new LazyLines((width) => renderBody(row, width));
+      }
       syncSpinner(state, context, !state.snapshot && context.executionStarted && renderOptions.isPartial);
       const row: Row = { toolName, args: context.args, context, theme, state, home };
       const header = (width: number) => (state.snapshot ? renderHeader(row, width) : []);
@@ -496,7 +578,9 @@ export function createToolRendererResolver(options: ToolRendererOptions = {}): T
   };
 }
 
-/** Draw every tool call in the transcript as an ampi row. */
-export function installToolRenderers(pi: Pick<ExtensionAPI, "registerToolRenderer">, options?: ToolRendererOptions): void {
-  pi.registerToolRenderer(createToolRendererResolver(options));
+/** Draw every tool call in the transcript as an ampi row, with runs of calls folded into one summary row. */
+export function installToolRenderers(pi: Pick<ExtensionAPI, "registerToolRenderer" | "on">, options?: ToolRendererOptions): void {
+  const groups = new ActivityGroupStore();
+  trackActivityGroups(pi, groups);
+  pi.registerToolRenderer(createToolRendererResolver({ ...options, groups }));
 }
