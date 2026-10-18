@@ -1,8 +1,10 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
 import { installMmrTuiLook } from "./chrome/look.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
+import { createMmrPromptBoxInstall } from "./editor/install.js";
+import { createMmrStatusFeed } from "./editor/status-feed.js";
 import { createMmrTuiKeys } from "./keys/install.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
 
@@ -25,8 +27,17 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
 
     let releaseChrome: (() => void) | undefined;
     let tui: TUI | undefined;
-    const keys = createMmrTuiKeys(pi);
+    let footerData: ReadonlyFooterDataProvider | undefined;
     const look = installMmrTuiLook(pi, settings);
+    const feed = createMmrStatusFeed(pi, { onChange: () => promptBox.statusChanged() });
+    const promptBox = createMmrPromptBoxInstall(pi, feed);
+    const keys = createMmrTuiKeys(pi, {
+      editorHeight: () => promptBox.renderedHeight(),
+      onEscapePending: () => promptBox.clearPrompt(),
+      onQuitPending: (until) => feed.setQuitHint(until),
+      onInterrupt: () => feed.abort(),
+      onPaletteOpen: (open) => promptBox.setOverlayOpen(open),
+    });
 
     pi.on("session_start", (_event, ctx) => {
       // Only the interactive terminal has chrome to own. Print, JSON and RPC
@@ -35,22 +46,31 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       releaseChrome ??= registerMmrChromeOwner(MMR_TUI_CHROME_OWNER);
       // The single-screen layout has no footer: an empty component removes
       // Pi's footer and replaces ampi-core's, which now yields to this owner.
-      // The factory is also where Pi hands over its TUI handle.
-      ctx.ui.setFooter((footerTui) => {
+      // The factory is also where Pi hands over its TUI handle and the git
+      // branch the prompt box shows.
+      ctx.ui.setFooter((footerTui, _theme, data) => {
         tui = footerTui;
-        return { render: () => [], invalidate() {} };
+        footerData = data;
+        const unsubscribe = data.onBranchChange(() => footerTui.requestRender());
+        return { render: () => [], invalidate() {}, dispose: unsubscribe };
       });
-      keys.start(ctx, () => tui);
+      // The theme and header go first, so the prompt box draws in the ampi
+      // theme from its first frame and the welcome card's key listener sees
+      // keys the dispatcher consumes.
       look.start(ctx);
+      feed.reset(ctx);
+      promptBox.start(ctx, () => footerData);
+      keys.start(ctx, () => tui);
     });
 
     pi.on("session_shutdown", () => {
       keys.stop();
+      promptBox.stop();
+      look.stop();
       // Release the seam so a reload with ampi-tui disabled hands the footer
       // back to ampi-core, which sets it again on the next session start.
       releaseChrome?.();
       releaseChrome = undefined;
-      look.stop();
     });
   };
 }

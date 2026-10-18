@@ -104,7 +104,9 @@ Interactive controls:
 Ctrl+Shift+S         # mode picker (Alt+M fallback)
 Ctrl+S               # cycle low → medium → high → ultra (Ctrl+Space: deprecated alias)
 Alt+D                # toggle the active mode's thinking preset where supported
+Esc                  # clear the prompt
 Esc Esc              # stop the running turn (one Esc no longer does)
+Alt+Enter            # new line in the prompt (no longer queues a follow-up)
 Ctrl+C Ctrl+C        # quit; the first Ctrl+C shows what can follow it
 Ctrl+X               # leader key; a popup lists the keys that can follow it
 Home / End           # jump to the start / end of the transcript (empty prompt)
@@ -144,7 +146,7 @@ The package ships as a set of Pi extensions; the network and history ones are of
 | `ampi-tasks` | On | Session-local `task_list` planning widget |
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
-| `ampi-tui` | On | Terminal look and keys for interactive sessions; removes the footer and adds Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |
+| `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, and Amp-compatible chords (`ampiTui.enabled: false` restores Pi's) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |

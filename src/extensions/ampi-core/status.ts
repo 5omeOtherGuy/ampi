@@ -154,7 +154,7 @@ interface MmrAssistantUsage {
  * assistant message with a usage block, replacing what was a chain of
  * `as Record<string, unknown>` casts at the read site.
  */
-function readAssistantUsage(entry: unknown): MmrAssistantUsage | undefined {
+export function readAssistantUsage(entry: unknown): MmrAssistantUsage | undefined {
   if (typeof entry !== "object" || entry === null) return undefined;
   const record = entry as Record<string, unknown>;
   if (record.type !== "message") return undefined;

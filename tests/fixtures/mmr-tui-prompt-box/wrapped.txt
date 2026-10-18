@@ -1,0 +1,29 @@
+# wrapped
+
+## 80x24
+╭───────────────────────────────────────────────────────────────────── medium ─╮
+│ A long request that keeps going A long request that keeps going A long       │
+│ request that keeps going A long request that keeps going A long request      │
+│ that keeps going A long request that keeps going A long request that keeps   │
+│ going.                                                                       │
+╰────────────────────────────────────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭───────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m A long request that keeps going A long request that keeps going A long       \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m request that keeps going A long request that keeps going A long request      \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m that keeps going A long request that keeps going A long request that keeps   \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m going.\u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                                                      \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰────────────────────────────────────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"
+
+## 140x44
+╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── medium ─╮
+│ A long request that keeps going A long request that keeps going A long request that keeps going A long request that keeps going A long   │
+│ request that keeps going A long request that keeps going A long request that keeps going.                                                │
+│                                                                                                                                          │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── /work/demo (main) ─╯
+
+"\u001b[38;5;244m╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;2;61;255;166mmedium\u001b[39m\u001b[38;5;244m ─╮\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m A long request that keeps going A long request that keeps going A long request that keeps going A long request that keeps going A long   \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m request that keeps going A long request that keeps going A long request that keeps going.\u001b_pi:fc\u0007 \u001b_pi:/fc\u0007                                               \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m│\u001b[39m                                                                                                                                          \u001b[38;5;244m│\u001b[39m"
+"\u001b[38;5;244m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── \u001b[39m\u001b[38;5;242m/work/demo (main)\u001b[39m\u001b[38;5;244m ─╯\u001b[39m"

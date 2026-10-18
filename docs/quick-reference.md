@@ -86,7 +86,11 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 
 | Key | Does | Notes |
 | --- | --- | --- |
-| `Esc Esc` | Stop the running turn | Two presses within 0.5 s; when nothing runs, Esc is Pi's |
+| `Esc` | Clear the prompt | While a turn runs, the first Esc of `Esc Esc` also clears it; on an empty prompt with nothing running, Esc is Pi's |
+| `Esc Esc` | Stop the running turn | Two presses within 0.5 s |
+| `Enter` | Send the prompt | While a turn runs, the message steers it |
+| `Alt+Enter`, `Shift+Enter`, `Ctrl+J` | New line | Alt+Enter no longer queues a follow-up |
+| `Backspace` on an empty prompt | Take queued messages back into the prompt | Only while messages are queued |
 | `Ctrl+C Ctrl+C` | Quit | The first press shows the popup and keeps the prompt |
 | `Ctrl+X` | Leader | Bindings written `<leader>z` mean Ctrl+X, then Z |
 | `Home` / `End` | Jump to the start / end of the transcript | Only with an empty prompt, in Pi's fullscreen mode |
@@ -94,6 +98,8 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Ctrl+O` | Open the command palette | Type to filter, ↑/↓ to move, Enter to run, Esc to close; Pi's slash commands are listed under `pi` |
 | `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
 | `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
+
+The prompt box shows the session's state in its borders: the mode and the session cost at the top right, the turn status and key hints at the bottom left, the working directory and git branch at the bottom right.
 
 Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
 
@@ -144,5 +150,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | One Esc no longer stops a turn | Press Esc twice; or set `"thread.interrupt": null` under `ampi.keymap` |
 | Ctrl+O no longer expands tool output | `ampi-tui` puts the command palette there; Alt+T expands tool output and thinking together |
 | `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette; a command that takes arguments is put into the prompt for you to finish and send. Or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
+| Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; bind Pi's `app.message.followUp` to another key in Pi's `keybindings.json` |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

@@ -46,7 +46,7 @@ import { fitMmrText, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFrame, ren
  * - Availability is checked once, when the palette opens, so a command that
  *   needs the prompt focused is judged before the palette takes focus.
  * - Pi draws overlays over the screen as it is; the palette cannot dim the
- *   transcript and prompt behind it.
+ *   transcript behind it. The prompt box dims its own frame while it is open.
  */
 
 export interface MmrPaletteItem {
