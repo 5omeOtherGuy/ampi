@@ -1,9 +1,12 @@
 // The ampi web GUI client: loads the transcript, follows the live event
-// stream and draws both, and sends what the composer writes. Plain ES
+// stream and draws both, and sends what the composer writes. The sidebar
+// lists the other sessions; opening one shows it read-only. Plain ES
 // module, no framework.
 
 import { mountComposer } from "./composer.js";
 import { escapeHtml, renderMarkdown } from "./markdown.js";
+import { mountSidebar, paintDisc } from "./sidebar.js";
+import { mountTitlebar } from "./titlebar.js";
 
 const $ = (id) => document.getElementById(id);
 const app = document.querySelector(".app");
@@ -24,6 +27,12 @@ let lastStatus;
 /** Parts whose text grew since the last frame, as `itemId:index`. */
 const dirty = new Set();
 let frame = 0;
+/** The session this process runs, as the snapshot and `session` events name it. */
+let liveSession = { id: "", title: "", cwd: "", mode: null };
+/** The saved session shown read-only (GET /api/sessions/<id>), or `null` while the page shows the live one. */
+let viewing = null;
+/** The last GET /api/sessions answer. */
+let sessionList = { currentId: null, groups: [], actions: { archive: false, markdown: false } };
 
 /** POST a command as JSON; resolves `{ ok, body }` and never throws. */
 async function post(route, body) {
@@ -41,11 +50,22 @@ async function post(route, body) {
   }
 }
 
-const composer = mountComposer({
-  root: $("composer-area"),
-  post,
-  mac: /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent),
-});
+const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const composer = mountComposer({ root: $("composer-area"), post, mac });
+const sidebar = mountSidebar({ app, mac });
+
+let toastTimer = 0;
+function notify(text) {
+  const toast = $("toast");
+  toast.textContent = text;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 4000);
+}
+
+const titlebar = mountTitlebar({ post, notify, onChanged: () => refreshSessions() });
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -170,18 +190,21 @@ function itemNode(item) {
 }
 
 function drawItem(item) {
+  // Live items keep arriving while another session is shown; they are drawn on the way back.
+  if (viewing) return;
   itemNode(item).innerHTML = itemHtml(item);
 }
 
 function drawPart(item, index) {
+  if (viewing) return;
   const node = itemNode(item).querySelector(`[data-part="${index}"]`);
   if (node) node.innerHTML = partHtml(item, item.parts[index], index);
   else drawItem(item);
 }
 
 function drawChrome() {
-  empty.hidden = items.size > 0;
-  liveDot.hidden = !busy;
+  empty.hidden = (viewing ? viewing.items.length : items.size) > 0;
+  liveDot.hidden = !busy || Boolean(viewing);
 }
 
 transcript.addEventListener(
@@ -203,16 +226,33 @@ function setPhaseLabel(text) {
   if ($("status-label").textContent !== text) $("status-label").textContent = text;
 }
 
-function setSession(session) {
-  $("title").textContent = session.title || "New thread";
-  document.title = `${session.title || "New thread"} · ampi`;
+/** Draw the title bar for the session the page shows. */
+function drawTitle() {
+  const session = viewing ? viewing.session : liveSession;
+  const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === session.id);
+  const title = session.title || "New thread";
+  $("title").textContent = title;
+  document.title = `${title} · ampi`;
   const cwd = session.cwd || "";
   $("cwd").textContent = cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
   $("cwd-chip").title = cwd;
+  $("cwd-chip").setAttribute("aria-label", `Working directory ${cwd}`);
   $("cwd-chip").hidden = cwd === "";
   $("mode").textContent = session.mode ?? "";
   $("mode").hidden = !session.mode;
   $("mode").setAttribute("aria-label", session.mode ? `Mode ${session.mode}` : "Mode");
+  const disc = $("title-disc");
+  paintDisc(disc, session.id, row?.color ?? null);
+  disc.dataset.busy = String(busy && !viewing);
+  titlebar.setTarget(
+    session.id ? { id: session.id, title, archived: row?.archived ?? false, live: !viewing, actions: sessionList.actions } : null,
+  );
+  sidebar.select(session.id);
+}
+
+function setSession(session) {
+  liveSession = session;
+  drawTitle();
 }
 
 function setStatus(status) {
@@ -227,15 +267,17 @@ function setStatus(status) {
   if (status.queued > 0) details.push(`${status.queued} queued`);
   $("status-detail").textContent = details.join(" · ");
   composer.setStatus(status);
+  sidebar.setBusy(status.busy);
+  $("title-disc").dataset.busy = String(status.busy && !viewing);
   drawChrome();
 }
 
 function upsertItem(item) {
   // A message Pi ended early has a new id: it takes the streamed copy's place.
-  const replaced = item.replaces && transcript.querySelector(`[data-id="${CSS.escape(item.replaces)}"]`);
-  if (replaced) {
+  if (item.replaces) {
     items.delete(item.replaces);
-    replaced.dataset.id = item.id;
+    const replaced = !viewing && transcript.querySelector(`[data-id="${CSS.escape(item.replaces)}"]`);
+    if (replaced) replaced.dataset.id = item.id;
   }
   items.set(item.id, item);
   drawItem(item);
@@ -243,7 +285,7 @@ function upsertItem(item) {
 
 function load(snapshot) {
   items.clear();
-  transcript.replaceChildren();
+  if (!viewing) transcript.replaceChildren();
   lastEventId = snapshot.lastEventId;
   setSession(snapshot.session);
   for (const item of snapshot.items) upsertItem(item);
@@ -253,7 +295,10 @@ function load(snapshot) {
 
 const handlers = {
   status: (data) => setStatus(data),
-  session: (data) => setSession(data),
+  session: (data) => {
+    setSession(data);
+    refreshSessions();
+  },
   item: (data) => upsertItem(data),
   delta: (data) => {
     const item = items.get(data.itemId);
@@ -272,7 +317,7 @@ const handlers = {
     item.parts[index] = data.part;
     drawPart(item, index);
   },
-  turn_end: () => {},
+  turn_end: () => refreshSessions(),
   queue: (data) => composer.setQueue(data),
 };
 
@@ -320,6 +365,107 @@ function connect() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Sessions: the sidebar's list, and other sessions shown read-only
+
+let listing;
+let listAgain = false;
+
+/** Reload the sidebar; calls while a request runs fold into one more. */
+async function refreshSessions() {
+  if (listing) {
+    listAgain = true;
+    return listing;
+  }
+  listing = (async () => {
+    try {
+      const response = await fetch("/api/sessions", { credentials: "same-origin" });
+      if (!response.ok) return;
+      sessionList = await response.json();
+      sidebar.setData(sessionList);
+      drawTitle();
+    } catch {
+      // The live view keeps working; the next refresh tries again.
+    } finally {
+      listing = undefined;
+      if (listAgain) {
+        listAgain = false;
+        refreshSessions();
+      }
+    }
+  })();
+  return listing;
+}
+
+/** The session id in the address (`#/s/<id>`), or `null` for the live session. */
+function routeId() {
+  const match = /^#\/s\/([^/]+)$/.exec(location.hash);
+  if (!match) return null;
+  const id = decodeURIComponent(match[1]);
+  return id === liveSession.id ? null : id;
+}
+
+function showLive() {
+  if (!viewing) return;
+  viewing = null;
+  app.dataset.view = "live";
+  composer.setEnabled(true);
+  $("readonly-banner").hidden = true;
+  transcript.replaceChildren();
+  for (const item of items.values()) drawItem(item);
+  drawTitle();
+  drawChrome();
+  chat.scrollTop = chat.scrollHeight;
+  composer.focus();
+}
+
+async function showSession(id) {
+  let view;
+  try {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+    view = response.ok ? await response.json() : undefined;
+  } catch {}
+  // The address may have moved on while the session loaded.
+  if (routeId() !== id) return;
+  if (!view) {
+    notify("That session is not listed any more.");
+    location.hash = "";
+    return;
+  }
+  viewing = view;
+  app.dataset.view = "readonly";
+  composer.setEnabled(false);
+  $("readonly-text").textContent = view.row.elsewhere
+    ? "Another terminal runs this session: continue it there."
+    : "This session is read-only here: open it in the terminal to continue.";
+  $("readonly-banner").hidden = false;
+  transcript.replaceChildren();
+  for (const item of view.items) {
+    const node = document.createElement("article");
+    node.className = `msg ${item.type}`;
+    node.dataset.id = item.id;
+    node.setAttribute("aria-label", item.type === "user" ? "You" : "Assistant");
+    node.innerHTML = itemHtml(item);
+    transcript.append(node);
+  }
+  drawTitle();
+  drawChrome();
+  chat.scrollTop = 0;
+  jump.hidden = atBottom();
+  chat.focus({ preventScroll: true });
+}
+
+function route() {
+  const id = routeId();
+  if (id) showSession(id);
+  else showLive();
+}
+
+window.addEventListener("hashchange", route);
+window.addEventListener("focus", () => refreshSessions());
+// Relative times and other terminals' sessions change while the page is open.
+setInterval(() => refreshSessions(), 60_000);
+
 async function start() {
   try {
     const response = await fetch("/api/transcript", { credentials: "same-origin" });
@@ -330,6 +476,8 @@ async function start() {
     jump.hidden = true;
     connect();
     composer.focus();
+    refreshSessions();
+    if (routeId()) route();
   } catch {
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Could not reach Pi";

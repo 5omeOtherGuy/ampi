@@ -22,7 +22,7 @@ Quick links for navigating the repository.
 - [`src/extensions/ampi-history/README.md`](src/extensions/ampi-history/README.md) — opt-in local session lookup, query DSL, redaction, and worker-backed reading.
 - [`src/extensions/ampi-tui/README.md`](src/extensions/ampi-tui/README.md) — terminal look and keys for interactive sessions: Amp-compatible prompt box and chords, no footer, welcome header, message styling, tool rows, `ampi` theme.
 - [`src/extensions/ampi-threads/README.md`](src/extensions/ampi-threads/README.md) — thread index (archived, labels, colour, pinned) and the Amp-compatible archive commands.
-- [`src/extensions/ampi-gui/README.md`](src/extensions/ampi-gui/README.md) — opt-in local web GUI: live transcript, composer (send, steer, queue, interrupt), live registry, security model.
+- [`src/extensions/ampi-gui/README.md`](src/extensions/ampi-gui/README.md) — opt-in local web GUI: session sidebar, live transcript, composer (send, steer, queue, interrupt), More Actions, live registry, security model.
 
 The following extensions were split out of `ampi-toolbox` / `ampi-workers`; their dedicated READMEs are pending, so use the source entry point for now:
 

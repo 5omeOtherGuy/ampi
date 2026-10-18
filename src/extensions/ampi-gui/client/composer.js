@@ -37,6 +37,16 @@ export function createEscapeChord(now = () => Date.now(), windowMs = ESCAPE_CHOR
 }
 
 /**
+ * Whether a key press counts toward Esc Esc: an Escape nothing else took,
+ * while the live session's turn runs and its composer can be used. An Escape
+ * that closes a dialog, and any Escape while another session or the sidebar
+ * sheet covers the composer, does not count.
+ */
+export function escapeCounts(event, { busy, usable }) {
+  return event.key === "Escape" && !event.defaultPrevented && busy && usable && !event.target?.closest?.("dialog[open]");
+}
+
+/**
  * The `/api/send` body for `text`: a new prompt when idle; while a turn runs,
  * a steering message, or a follow-up for `queue`. `null` when there is
  * nothing to send.
@@ -98,6 +108,8 @@ export function mountComposer({ root, post, mac = false, now }) {
   let busy = false;
   let queued = 0;
   let connected = false;
+  /** False while the page shows another session read-only. */
+  let enabled = true;
   /** Sends run one after another, in the order they were typed. */
   let sends = Promise.resolve();
 
@@ -163,8 +175,9 @@ export function mountComposer({ root, post, mac = false, now }) {
     refresh();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented) return;
-    if (!busy) {
+    if (event.key !== "Escape") return;
+    // The sidebar sheet makes the page around the composer inert.
+    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") })) {
       chord.reset();
       return;
     }
@@ -246,6 +259,11 @@ export function mountComposer({ root, post, mac = false, now }) {
     setConnected(value) {
       connected = value;
       refresh();
+    },
+    /** Hidden behind another session's read-only view, Esc Esc must not interrupt the live turn. */
+    setEnabled(value) {
+      enabled = value;
+      chord.reset();
     },
     focus() {
       field.focus({ preventScroll: true });

@@ -1,7 +1,8 @@
 // ampi-gui HTTP server: Host, Origin and token checks, the static file
-// policy, the JSON endpoints, the composer's command endpoints and the event
-// stream with reconnect replay. Everything runs against a real server on
-// 127.0.0.1 with a random port; Pi is the test stub.
+// policy, the JSON endpoints, the session list and its More Actions, the
+// composer's command endpoints and the event stream with reconnect replay.
+// Everything runs against a real server on 127.0.0.1 with a random port; Pi
+// is the test stub, and the session catalogue and thread index are fixtures.
 
 import assert from "node:assert/strict";
 import { request } from "node:http";
@@ -22,6 +23,61 @@ let mock;
 let context;
 let registry;
 let promptQueue;
+/** The fixture thread index, by session id, and the registrations to undo. */
+const threads = {};
+const unregister = [];
+let reportsRegistration;
+const renamed = [];
+const NOW = "2026-10-18T12:00:00.000Z";
+
+/** A small saved session file: a header, a prompt, a reply and the mode it ran in. */
+const SAVED_FILE = [
+  { type: "session", version: 3, id: "s-saved", timestamp: "2026-10-18T09:00:00.000Z", cwd: "/work/lib" },
+  { type: "message", id: "e1", parentId: null, timestamp: "2026-10-18T09:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "Saved prompt" }], timestamp: 1 } },
+  { type: "message", id: "e2", parentId: "e1", timestamp: "2026-10-18T09:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Saved reply" }], timestamp: 2, stopReason: "stop" } },
+  { type: "custom", id: "e3", parentId: "e2", timestamp: "2026-10-18T09:00:03.000Z", customType: "ampi-core.mode-state", data: { version: 1, mode: "high", model: "faux/faux-1" } },
+]
+  .map((entry) => JSON.stringify(entry))
+  .join("\n");
+
+const savedInfo = {
+  path: "/sessions/s-saved.jsonl",
+  id: "s-saved",
+  cwd: "/work/lib",
+  created: new Date("2026-10-18T09:00:00.000Z"),
+  modified: new Date("2026-10-18T09:00:02.000Z"),
+  messageCount: 2,
+  firstMessage: "Saved prompt",
+  allMessagesText: "",
+};
+
+/** An in-memory thread index with the store's patch rules: `null` removes a field. */
+const fakeIndex = {
+  list: async () => structuredClone(threads),
+  get: async (id) => threads[id],
+  update: async (id, patch) => {
+    const next = { ...threads[id] };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) delete next[key];
+      else if (value !== undefined) next[key] = value;
+    }
+    if (Object.keys(next).length === 0) delete threads[id];
+    else threads[id] = next;
+    return threads[id];
+  },
+};
+
+/** Stand-in for ampi-threads' formatter: the title, the mode when given and every entry's text. */
+const fakeReports = {
+  cost: () => ({}),
+  analyzeContext: () => ({}),
+  markdown: (entries, options = {}) =>
+    [
+      `# ${options.title ?? "Untitled"}`,
+      ...(options.mode ? [`Mode: ${options.mode}`] : []),
+      ...entries.map((entry) => entry.message?.content?.[0]?.text ?? `(${entry.type})`),
+    ].join("\n"),
+};
 
 function send(options) {
   const { method = "GET", path: target = "/", headers = {}, body } = options;
@@ -82,17 +138,34 @@ before(async () => {
   const { startMmrGuiServer } = await importSource("extensions/ampi-gui/server.ts");
   const { createMmrGuiBridge } = await importSource("extensions/ampi-gui/bridge.ts");
   const { createMmrGuiCommands } = await importSource("extensions/ampi-gui/commands.ts");
+  const { createMmrGuiSessions } = await importSource("extensions/ampi-gui/sessions.ts");
+  const { registerMmrThreadIndex } = await importSource("extensions/ampi-core/thread-index.ts");
+  const { registerMmrThreadReports } = await importSource("extensions/ampi-core/thread-reports.ts");
   registry = await importSource("extensions/ampi-core/command-registry.ts");
   promptQueue = await importSource("extensions/ampi-core/prompt-queue.ts");
+  unregister.push(registerMmrThreadIndex(fakeIndex));
+  reportsRegistration = registerMmrThreadReports(fakeReports);
   mock = createMockPi();
+  mock.pi.setSessionName = (name) => renamed.push(name);
   context = createMockExtensionContext({ cwd: "/work/app", sessionId: "s-1", sessionName: "Server test" });
   const { ctx } = context;
+  ctx.sessionManager.getHeader = () => ({ type: "session", version: 3, id: "s-1", timestamp: NOW, cwd: "/work/app" });
   const bridge = createMmrGuiBridge(mock.pi, { replayLimit: 4 });
   bridge.start(ctx);
   fire = (name, event = { name }) => mock.handlers.get(name)({ type: name, ...event }, ctx);
+  const sessions = createMmrGuiSessions({
+    source: { listSessions: async () => [savedInfo] },
+    current: () => bridge.session(),
+    readText: async (file) => {
+      assert.equal(file, savedInfo.path);
+      return SAVED_FILE;
+    },
+    now: () => Date.parse(NOW),
+  });
   server = await startMmrGuiServer({
     bridge,
-    commands: createMmrGuiCommands(mock.pi, bridge),
+    commands: createMmrGuiCommands(mock.pi, bridge, sessions, { now: () => NOW }),
+    sessions,
     token: TOKEN,
     clientDir: path.join(getPreparedSourceRoot(), "extensions/ampi-gui/client"),
   });
@@ -101,6 +174,8 @@ before(async () => {
 
 after(async () => {
   await server?.close();
+  for (const undo of unregister) undo();
+  reportsRegistration?.();
 });
 
 describe("ampi-gui server: request policy", () => {
@@ -127,7 +202,7 @@ describe("ampi-gui server: request policy", () => {
   });
 
   it("requires the token on every route", async () => {
-    for (const target of ["/", "/api/session", "/api/transcript", "/api/events", "/client/app.js"]) {
+    for (const target of ["/", "/api/session", "/api/transcript", "/api/events", "/api/sessions", "/api/sessions/s-saved", "/client/app.js"]) {
       assert.equal((await send({ path: target })).status, 401, target);
       assert.equal((await send({ path: target, headers: { Cookie: `ampi_gui_${port}=wrong` } })).status, 401, target);
       assert.equal((await send({ path: target, headers: { Cookie: `ampi_gui_1=${TOKEN}` } })).status, 401, `${target}: another port's cookie`);
@@ -168,6 +243,11 @@ describe("ampi-gui server: static files", () => {
     const css = await send({ path: "/client/tokens.css", headers: cookie() });
     assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
     assert.match(css.body, /--ampi-bg: light-dark\(/);
+    for (const file of ["sidebar.js", "titlebar.js"]) {
+      const res = await send({ path: `/client/${file}`, headers: cookie() });
+      assert.equal(res.status, 200, file);
+      assert.equal(res.headers["content-type"], "text/javascript; charset=utf-8", file);
+    }
   });
 
   it("refuses paths that leave the client directory", async () => {
@@ -352,6 +432,87 @@ describe("ampi-gui server: composer commands", () => {
       registry.unregisterMmrCommand("thread.interrupt");
       setBusy(false);
     }
+  });
+});
+
+describe("ampi-gui server: sessions", () => {
+  it("lists the sessions for the sidebar, the live one marked", async () => {
+    const res = await send({ path: "/api/sessions", headers: cookie() });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers["content-type"], "application/json; charset=utf-8");
+    const list = JSON.parse(res.body);
+    assert.equal(list.currentId, "s-1");
+    assert.deepEqual(list.actions, { archive: true, markdown: true });
+    assert.deepEqual(
+      list.groups.map((group) => [group.id, group.sessions.map((row) => [row.id, row.title, row.live])]),
+      [
+        ["project:/work/app", [["s-1", "Server test", true]]],
+        ["project:/work/lib", [["s-saved", "Saved prompt", false]]],
+      ],
+    );
+  });
+
+  it("shows a saved session read-only, and answers 404 for any other id", async () => {
+    const res = await send({ path: "/api/sessions/s-saved", headers: cookie() });
+    assert.equal(res.status, 200);
+    const view = JSON.parse(res.body);
+    assert.equal(view.session.title, "Saved prompt");
+    assert.equal(view.row.live, false);
+    assert.deepEqual(
+      view.items.map((item) => item.type),
+      ["user", "assistant"],
+    );
+    for (const target of ["/api/sessions/unknown", "/api/sessions/s-saved/x", "/api/sessions/..%2fs-saved", "/api/sessions/"]) {
+      assert.equal((await send({ path: target, headers: cookie() })).status, 404, target);
+    }
+  });
+});
+
+describe("ampi-gui server: More Actions", () => {
+  it("copies the live or a saved session as Markdown through ampi-threads' formatter", async () => {
+    const live = await command("markdown", { sessionId: "s-1" });
+    assert.equal(live.status, 200);
+    assert.equal(live.json.markdown, "# Server test\n(session)");
+    const saved = await command("markdown", { sessionId: "s-saved" });
+    assert.equal(saved.json.markdown, "# Untitled\nMode: high\n(session)\nSaved prompt\nSaved reply\n(custom)", "the mode the saved session last ran in");
+    assert.equal((await command("markdown", { sessionId: "unknown" })).status, 404);
+    assert.equal((await command("markdown", {})).status, 400);
+    reportsRegistration();
+    const without = await command("markdown", { sessionId: "s-1" });
+    assert.equal(without.status, 409);
+    assert.match(without.json.error, /ampi-threads/);
+    const { registerMmrThreadReports } = await importSource("extensions/ampi-core/thread-reports.ts");
+    reportsRegistration = registerMmrThreadReports(fakeReports);
+  });
+
+  it("archives and unarchives any listed session through the thread index", async () => {
+    const archived = await command("archive", { sessionId: "s-saved", archived: true });
+    assert.equal(archived.status, 200);
+    assert.deepEqual(threads["s-saved"], { archived: NOW });
+    const list = JSON.parse((await send({ path: "/api/sessions", headers: cookie() })).body);
+    assert.deepEqual(
+      list.groups.map((group) => group.id),
+      ["project:/work/app", "archived"],
+    );
+    assert.equal((await command("archive", { sessionId: "s-saved", archived: false })).status, 200);
+    assert.equal(threads["s-saved"], undefined, "the record is gone once nothing is left in it");
+    assert.equal((await command("archive", { sessionId: "s-saved", archived: "yes" })).status, 400);
+    assert.equal((await command("archive", { sessionId: "unknown", archived: true })).status, 404);
+    assert.equal((await command("archive", { sessionId: "s-saved", archived: true }, { Origin: "http://attacker.example" })).status, 403);
+    assert.equal(threads["s-saved"], undefined);
+  });
+
+  it("renames only the session this process runs, as the user's title", async () => {
+    const res = await command("rename", { sessionId: "s-1", name: "  Parser   review " });
+    assert.equal(res.status, 200);
+    assert.deepEqual(renamed, ["Parser review"]);
+    assert.equal(threads["s-1"].titleSource, "user");
+    const other = await command("rename", { sessionId: "s-saved", name: "Other" });
+    assert.equal(other.status, 409, "another session's file is written only where it runs");
+    assert.equal((await command("rename", { sessionId: "s-1", name: "   " })).status, 400);
+    assert.equal((await command("rename", { sessionId: "s-1", name: "x".repeat(201) })).status, 400);
+    assert.equal((await command("rename", { name: "No id" })).status, 400);
+    assert.deepEqual(renamed, ["Parser review"]);
   });
 });
 

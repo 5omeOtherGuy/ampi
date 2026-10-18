@@ -4,11 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
+import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
-import { removeMmrGuiLiveEntry, writeMmrGuiLiveEntry } from "./registry.js";
+import { readMmrGuiLiveEntries, removeMmrGuiLiveEntry, writeMmrGuiLiveEntry } from "./registry.js";
 import { hashMmrGuiToken, type MmrGuiServer, startMmrGuiServer } from "./server.js";
+import { createMmrGuiSessions } from "./sessions.js";
 
 /** Palette command that opens the running session in the browser. */
 export const MMR_GUI_OPEN_COMMAND_ID = "thread.openInBrowser";
@@ -45,9 +47,23 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
     if (!settings.enabled) return;
 
     const bridge = createMmrGuiBridge(pi);
-    const commands = createMmrGuiCommands(pi, bridge);
-    const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     const registry = { baseDir: overrides.registryDir };
+    const sessions = createMmrGuiSessions({
+      // Every saved session, from the session directory this Pi uses (a custom one included).
+      source: {
+        listSessions: async () => {
+          const ctx = bridge.context();
+          return ctx ? listMmrSessionsInScope(ctx.sessionManager, "all") : [];
+        },
+      },
+      current: () => (bridge.context() ? bridge.session() : undefined),
+      elsewhere: async () =>
+        (await readMmrGuiLiveEntries(registry))
+          .filter((entry) => entry.pid !== process.pid && entry.sessionPath !== null)
+          .map((entry) => entry.sessionPath as string),
+    });
+    const commands = createMmrGuiCommands(pi, bridge, sessions);
+    const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     let server: MmrGuiServer | undefined;
 
     function warn(ctx: ExtensionContext, what: string, error: unknown): void {
@@ -61,7 +77,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       const token = overrides.createToken ? overrides.createToken() : randomBytes(32).toString("base64url");
       bridge.start(ctx);
       try {
-        server = await startMmrGuiServer({ bridge, commands, token, clientDir: CLIENT_DIR });
+        server = await startMmrGuiServer({ bridge, commands, sessions, token, clientDir: CLIENT_DIR });
       } catch (error) {
         bridge.stop();
         warn(ctx, "could not start the web GUI", error);

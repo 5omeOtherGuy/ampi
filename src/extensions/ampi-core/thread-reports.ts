@@ -1,13 +1,14 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /**
- * Core-owned seam for reports about the current session: what it cost and
- * what fills its context window.
+ * Core-owned seam for reports about the current session: what it cost,
+ * what fills its context window, and the session as Markdown.
  *
  * `ampi-threads` computes them and registers itself here at load; `ampi-tui`
  * shows them in its Thread Cost and Analyze Context overlays, and reads
- * `showCosts` for its cost gauge, without importing `ampi-threads`. When
- * `ampi-threads` is disabled nothing is registered: the overlays are
+ * `showCosts` for its cost gauge, and `ampi-gui` copies sessions as
+ * Markdown, without importing `ampi-threads`. When `ampi-threads` is
+ * disabled nothing is registered: the overlays and the GUI's copy are
  * unavailable and the gauge shows.
  *
  * globalThis-anchored so registrations survive Pi's cache-isolated module
@@ -75,6 +76,11 @@ export interface MmrThreadReports {
   cost(ctx: ExtensionContext): MmrThreadCostReport;
   /** What fills the current session's context window. */
   analyzeContext(ctx: ExtensionContext): MmrContextAnalysis;
+  /**
+   * A session as Markdown, the same text as `thread copy markdown`.
+   * `entries` are the session header followed by the branch to export.
+   */
+  markdown(entries: readonly unknown[], options?: { readonly title?: string; readonly mode?: string }): string;
 }
 
 const THREAD_REPORTS_GLOBAL_KEY = "__pi_ampi_thread_reports_v1__";

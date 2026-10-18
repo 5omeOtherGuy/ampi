@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import path from "node:path";
 import type { MmrGuiBridge, MmrGuiEvent } from "./bridge.js";
 import type { MmrGuiCommands } from "./commands.js";
+import type { MmrGuiSessions } from "./sessions.js";
 
 /**
  * The local web GUI's HTTP server.
@@ -27,12 +28,16 @@ import type { MmrGuiCommands } from "./commands.js";
  *   and connections.
  * - It serves only files inside the client directory, by extension with an
  *   explicit content type.
+ * - `GET /api/sessions` lists the sessions for the sidebar and
+ *   `GET /api/sessions/<id>` reads one read-only; neither writes anything.
  */
 
 export interface MmrGuiServerOptions {
   bridge: MmrGuiBridge;
   /** Handlers of the POST routes, by the name after `/api/`. */
   commands: MmrGuiCommands;
+  /** The sidebar's session list and the read-only views of other sessions. */
+  sessions: Pick<MmrGuiSessions, "list" | "view">;
   token: string;
   /** Directory of the static client files. */
   clientDir: string;
@@ -254,6 +259,13 @@ export async function startMmrGuiServer(options: MmrGuiServerOptions): Promise<M
     if (rawPath === "/api/session") return sendJson(res, 200, { ...bridge.session(), status: bridge.status() });
     if (rawPath === "/api/transcript") return sendJson(res, 200, bridge.snapshot());
     if (rawPath === "/api/events") return serveEvents(req, res, url);
+    if (rawPath === "/api/sessions") return sendJson(res, 200, await options.sessions.list());
+    if (rawPath.startsWith("/api/sessions/")) {
+      const id = rawPath.slice("/api/sessions/".length);
+      // Pi's session ids are UUIDs; anything else names no session.
+      const view = /^[A-Za-z0-9_-]{1,128}$/.test(id) ? await options.sessions.view(id) : undefined;
+      return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
+    }
     return send(res, 404, "Not found");
   }
 

@@ -10,57 +10,102 @@
     <script type="module" src="/client/app.js"></script>
   </head>
   <body>
-    <div class="app" data-phase="idle">
-      <header class="titlebar">
-        <span class="thread-disc" aria-hidden="true"></span>
-        <h1 class="title" id="title">Loading…</h1>
-        <div class="titlebar-end">
-          <span class="chip" id="cwd-chip" role="group" aria-label="Working directory" hidden>
-            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/></svg>
-            <span id="cwd"></span>
-          </span>
-          <span class="mode" id="mode" hidden></span>
-          <button class="icon-button" id="scheme" type="button" aria-label="Color scheme: system" title="Color scheme: system">
-            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path class="fill" d="M8 2.25a5.75 5.75 0 0 1 0 11.5z"/></svg>
+    <div class="app" data-phase="idle" data-view="live" data-sidebar="closed">
+      <nav class="sidebar" id="sidebar" aria-label="Sessions">
+        <div class="sidebar-header">
+          <button class="icon-button" id="sidebar-close" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Hide sidebar" title="Hide sidebar">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.25" width="12.5" height="11.5" rx="1.5"/><path d="M6 2.25v11.5"/></svg>
           </button>
+          <span class="wordmark">ampi</span>
         </div>
-      </header>
-      <main class="chat" id="chat" tabindex="-1" aria-label="Transcript">
-        <div class="column">
-          <div class="transcript" id="transcript" aria-live="off"></div>
-          <div class="live-dot" id="live-dot" aria-hidden="true" hidden></div>
-          <p class="empty" id="empty" hidden>No messages yet. Write one below, or in the terminal.</p>
+        <div class="sidebar-search">
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+          <input id="session-search" type="search" placeholder="Search sessions" aria-label="Search sessions" aria-keyshortcuts="/" autocomplete="off" spellcheck="false">
+          <kbd aria-hidden="true">/</kbd>
         </div>
-      </main>
-      <footer class="composer-area" id="composer-area">
-        <div class="column">
-          <button class="jump" id="jump" type="button" aria-label="Jump to bottom" title="Jump to bottom" hidden>
-            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
+        <div class="session-list" id="session-list"></div>
+        <p class="sidebar-empty" id="sidebar-empty" hidden></p>
+      </nav>
+      <div class="sidebar-resize" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Resize sidebar" tabindex="0"></div>
+      <div class="scrim" id="scrim" hidden></div>
+      <div class="pane">
+        <header class="titlebar">
+          <button class="icon-button" id="sidebar-open" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Show sidebar" title="Show sidebar">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.25" width="12.5" height="11.5" rx="1.5"/><path d="M6 2.25v11.5"/></svg>
           </button>
-          <p class="approval-note" id="approval-note" role="status" hidden>A tool call is waiting for your approval. Answer it in the terminal.</p>
-          <ul class="queue" id="queue" aria-label="Queued messages" hidden></ul>
-          <div class="composer" role="region" aria-label="Message composer">
-            <label class="visually-hidden" for="prompt">Message</label>
-            <textarea id="prompt" rows="2" placeholder="Write a message" autocomplete="off" spellcheck="true"></textarea>
-            <div class="composer-bar">
-              <button class="icon-button" id="attach" type="button" aria-disabled="true" aria-label="Attach files (not available yet)" title="Attachments are not available in the web GUI yet">
-                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 7.5 8 12.75a3.18 3.18 0 0 1-4.5-4.5l5.5-5.5a2.12 2.12 0 0 1 3 3l-5.5 5.5a1.06 1.06 0 0 1-1.5-1.5L10 4.75"/></svg>
-              </button>
-              <div class="status" id="status">
-                <span class="status-dot" aria-hidden="true"></span>
-                <!-- Only the phase is announced; the token count changes with every delta. -->
-                <span class="status-label" id="status-label" role="status">Connecting</span>
-                <span class="status-detail" id="status-detail"></span>
-              </div>
-              <button class="submit" id="submit" type="button" data-mode="send" aria-label="Send (Enter)" title="Send (Enter)" disabled>
-                <svg class="icon send-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
-                <svg class="icon stop-icon" viewBox="0 0 16 16" aria-hidden="true"><rect class="fill" x="4.5" y="4.5" width="7" height="7" rx="1"/></svg>
-              </button>
-            </div>
+          <span class="disc" id="title-disc" aria-hidden="true"></span>
+          <h1 class="title" id="title">Loading…</h1>
+          <div class="menu-anchor">
+            <button class="icon-button" id="more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="more-menu" aria-label="More actions" title="More actions" disabled>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle class="fill" cx="3.5" cy="8" r="1.1"/><circle class="fill" cx="8" cy="8" r="1.1"/><circle class="fill" cx="12.5" cy="8" r="1.1"/></svg>
+            </button>
+            <div class="menu" id="more-menu" role="menu" aria-label="More actions" hidden></div>
           </div>
-          <p class="composer-notice" id="composer-notice" role="status" hidden></p>
-        </div>
-      </footer>
+          <div class="titlebar-end">
+            <span class="chip" id="cwd-chip" role="group" aria-label="Working directory" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/></svg>
+              <span id="cwd"></span>
+            </span>
+            <span class="mode" id="mode" hidden></span>
+            <button class="icon-button" id="scheme" type="button" aria-label="Color scheme: system" title="Color scheme: system">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path class="fill" d="M8 2.25a5.75 5.75 0 0 1 0 11.5z"/></svg>
+            </button>
+          </div>
+        </header>
+        <main class="chat" id="chat" tabindex="-1" aria-label="Transcript">
+          <div class="column">
+            <div class="transcript" id="transcript" aria-live="off"></div>
+            <div class="live-dot" id="live-dot" aria-hidden="true" hidden></div>
+            <p class="empty" id="empty" hidden>No messages yet. Write one below, or in the terminal.</p>
+          </div>
+        </main>
+        <footer class="composer-area" id="composer-area">
+          <div class="column">
+            <button class="jump" id="jump" type="button" aria-label="Jump to bottom" title="Jump to bottom" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
+            </button>
+            <p class="approval-note" id="approval-note" role="status" hidden>A tool call is waiting for your approval. Answer it in the terminal.</p>
+            <ul class="queue" id="queue" aria-label="Queued messages" hidden></ul>
+            <div class="banner" id="readonly-banner" role="status" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.25" y="7" width="9.5" height="6.75" rx="1.25"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+              <span id="readonly-text"></span>
+              <a class="banner-link" href="#">Back to this terminal's session</a>
+            </div>
+            <div class="composer" role="region" aria-label="Message composer">
+              <label class="visually-hidden" for="prompt">Message</label>
+              <textarea id="prompt" rows="2" placeholder="Write a message" autocomplete="off" spellcheck="true"></textarea>
+              <div class="composer-bar">
+                <button class="icon-button" id="attach" type="button" aria-disabled="true" aria-label="Attach files (not available yet)" title="Attachments are not available in the web GUI yet">
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 7.5 8 12.75a3.18 3.18 0 0 1-4.5-4.5l5.5-5.5a2.12 2.12 0 0 1 3 3l-5.5 5.5a1.06 1.06 0 0 1-1.5-1.5L10 4.75"/></svg>
+                </button>
+                <div class="status" id="status">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  <!-- Only the phase is announced; the token count changes with every delta. -->
+                  <span class="status-label" id="status-label" role="status">Connecting</span>
+                  <span class="status-detail" id="status-detail"></span>
+                </div>
+                <button class="submit" id="submit" type="button" data-mode="send" aria-label="Send (Enter)" title="Send (Enter)" disabled>
+                  <svg class="icon send-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg>
+                  <svg class="icon stop-icon" viewBox="0 0 16 16" aria-hidden="true"><rect class="fill" x="4.5" y="4.5" width="7" height="7" rx="1"/></svg>
+                </button>
+              </div>
+            </div>
+            <p class="composer-notice" id="composer-notice" role="status" hidden></p>
+          </div>
+        </footer>
+      </div>
+      <dialog class="dialog" id="rename-dialog" aria-labelledby="rename-heading">
+        <form method="dialog">
+          <h2 id="rename-heading">Rename session</h2>
+          <label class="visually-hidden" for="rename-input">Session title</label>
+          <input id="rename-input" name="name" type="text" maxlength="200" autocomplete="off" required>
+          <div class="dialog-actions">
+            <button class="button" type="submit" value="cancel" formnovalidate>Cancel</button>
+            <button class="button primary" type="submit" value="save">Rename</button>
+          </div>
+        </form>
+      </dialog>
+      <div class="toast" id="toast" role="status" hidden></div>
     </div>
   </body>
 </html>

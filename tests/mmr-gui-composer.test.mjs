@@ -40,6 +40,18 @@ describe("ampi-gui composer keys", () => {
     chord.reset();
     assert.equal(chord.press(), false, "reset forgets the first press");
   });
+
+  it("counts Escape toward Esc Esc only while the live composer is usable", async () => {
+    const { escapeCounts } = await load();
+    const inside = (selector) => ({ closest: (query) => (query === selector ? {} : null) });
+    const live = { busy: true, usable: true };
+    assert.equal(escapeCounts(key("Escape", { target: inside("") }), live), true);
+    assert.equal(escapeCounts(key("Escape"), { busy: true, usable: false }), false, "another session is shown, or the sidebar sheet covers the page");
+    assert.equal(escapeCounts(key("Escape"), { busy: false, usable: true }), false, "no turn to interrupt");
+    assert.equal(escapeCounts(key("Escape", { target: inside("dialog[open]") }), live), false, "this Escape closes a dialog");
+    assert.equal(escapeCounts(key("Escape", { defaultPrevented: true }), live), false, "a field or menu took it");
+    assert.equal(escapeCounts(key("Enter"), live), false);
+  });
 });
 
 describe("ampi-gui composer requests and view", () => {

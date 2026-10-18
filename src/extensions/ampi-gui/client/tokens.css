@@ -38,6 +38,22 @@
   --ampi-link: light-dark(#286bbd, #6ca0e0);
   --ampi-selection: color-mix(in srgb, var(--ampi-link) 30%, transparent);
 
+  /* Session discs: the thread index's colour names */
+  --ampi-thread-blue: light-dark(#2f6fbf, #6ca0e0);
+  --ampi-thread-purple: light-dark(#7a4fc0, #a98be6);
+  --ampi-thread-pink: light-dark(#c0407f, #ea86b7);
+  --ampi-thread-red: light-dark(#c44f4a, #d67670);
+  --ampi-thread-orange: light-dark(#bf661c, #e3924d);
+  --ampi-thread-yellow: light-dark(#a3850f, #d8bb45);
+  --ampi-thread-green: light-dark(#2f8052, #54b879);
+  --ampi-thread-cyan: light-dark(#1b7d86, #4cb6c0);
+  --ampi-thread-gray: light-dark(#7b807b, #8f968f);
+
+  /* Menus, dialogs and the sheet's scrim */
+  --ampi-popover-bg: light-dark(#fcfcfc, #111513);
+  --ampi-shadow: 0 8px 24px light-dark(#0b0d0b1f, #00000080);
+  --ampi-scrim: light-dark(#0b0d0b59, #000000a6);
+
   /* User message bubble */
   --ampi-bubble-bg: light-dark(#e9ede9, #1e1e24);
   --ampi-bubble-fg: light-dark(#283329, #dce5dc);
@@ -87,6 +103,7 @@
   /* Layout */
   --ampi-titlebar-height: 2.25rem;
   --ampi-sidebar-width: 16rem;
+  --ampi-sidebar-sheet-width: min(85vw, 20rem);
   --ampi-column-max: 42rem;
   --ampi-control-size: 26px;
 }
