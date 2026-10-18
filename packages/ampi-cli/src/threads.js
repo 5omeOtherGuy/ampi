@@ -73,6 +73,18 @@ const IMPORTED_LABEL = "imported";
 /** An ISO 8601 date, or a date and time with an optional offset. */
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
 
+/**
+ * Whether the `YYYY-MM-DD` that starts `text` is a day of the calendar:
+ * `Date.parse` takes 2026-02-30 for 2 March.
+ *
+ * @param {string} text
+ */
+function isCalendarDate(text) {
+  const [year, month, day] = text.slice(0, 10).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 /** Options of each thread command; an id and other arguments are positionals. */
 const OPTIONS = /** @type {const} */ ({
   // --visibility is accepted only to refuse it with a reason.
@@ -166,8 +178,8 @@ machine, so threads new has no --visibility: sharing one needs a hosted service.
 context counts tokens at four characters to a token, from the system prompt and tools Pi
 recorded in the session and the messages it would send now. Costs are what the provider
 reported, or the tokens at the model's list price in Pi's model catalogue; a model with
-neither is unknown and left out of the totals. Times are ISO 8601, such as 2026-10-01 or
-2026-10-01T09:30:00Z.
+neither is unknown and left out of the totals. Times are ISO 8601, such as 2026-10-01
+(midnight UTC) or 2026-10-01T09:30:00Z; a time without Z or an offset is local time.
 
 Exit status: 0 on success, 1 when no session or several match the id or a change fails,
 2 on a usage error, including a search key or value search cannot use, a malformed time or
@@ -777,7 +789,8 @@ function readRange(values) {
   for (const name of /** @type {const} */ (["start", "end"])) {
     const given = values[name];
     if (given === undefined) continue;
-    const time = ISO_TIME.test(String(given)) ? Date.parse(String(given)) : Number.NaN;
+    const text = String(given);
+    const time = ISO_TIME.test(text) && isCalendarDate(text) ? Date.parse(text) : Number.NaN;
     if (!Number.isFinite(time)) return usage(`--${name} needs an ISO 8601 time such as 2026-10-01 or 2026-10-01T09:30:00Z, not ${given}.`);
     range[name] = new Date(time);
   }

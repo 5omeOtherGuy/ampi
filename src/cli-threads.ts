@@ -174,7 +174,7 @@ export interface MmrThreadContextJson {
   readonly freeSpace: number | null;
   readonly compactionCount: number;
   readonly toolCounts: { builtin: number; mcp: number; total: number };
-  /** Tokens counted at the last response and estimated for the messages after it, when one recorded usage since the latest compaction. */
+  /** Tokens counted at the last response and estimated for the messages after it, when one recorded usage after the latest compaction or context edit. */
   readonly measuredTokens?: number;
   /** `false` when the branch holds no system message yet: the prompt and tool sections are then 0. */
   readonly systemPromptRecorded?: false;
@@ -192,13 +192,18 @@ function currentBranch(entries: readonly SessionEntry[]): SessionEntry[] {
 }
 
 const hasContextUsage = (message: AgentMessage): message is Extract<AgentMessage, { role: "assistant" }> =>
-  message.role === "assistant" && message.stopReason !== "aborted" && message.stopReason !== "error" && calculateContextTokens(message.usage) > 0;
+  message.role === "assistant" &&
+  message.stopReason !== "aborted" &&
+  message.stopReason !== "error" &&
+  message.usage !== undefined &&
+  calculateContextTokens(message.usage) > 0;
 
 /**
  * The context tokens Pi reports for a branch, as its `getContextUsage()`
  * counts them: the last response's usage plus estimates for the messages
- * after it. `undefined` when no response recorded usage since the latest
- * compaction or context edit.
+ * after it. `undefined` when no response recorded usage, or a compaction or
+ * context edit came after the last one that did: Pi then has no count after
+ * a compaction, and only an estimate of the whole context after an edit.
  */
 function measuredContextTokens(branch: readonly SessionEntry[]): number | undefined {
   const projection = buildSessionProjection([...branch]);

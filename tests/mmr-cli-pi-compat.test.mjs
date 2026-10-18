@@ -172,6 +172,24 @@ describe("Pi session calls used by the thread commands", () => {
       readPiSessionEntries(pi, otherFile).map((entry) => [entry.type, entry.id, entry.parentId, entry.message?.content]),
       [["message", "m1", null, "Port the docs"]],
     );
+    // An older file version is migrated in memory and never written back.
+    const legacyFile = path.join(dir, "legacy", "2026-10-15T09-00-00-000Z_s-legacy.jsonl");
+    mkdirSync(path.dirname(legacyFile), { recursive: true });
+    const legacy =
+      line({ type: "session", version: 2, id: "s-legacy", timestamp: "2026-10-15T09:00:00.000Z", cwd: "/work/project" }) +
+      line({
+        type: "message",
+        id: "m1",
+        parentId: null,
+        timestamp: "2026-10-15T09:00:00.000Z",
+        message: { role: "hookMessage", customType: "note", content: "Old note", display: true, timestamp: 0 },
+      });
+    writeFileSync(legacyFile, legacy);
+    assert.deepEqual(
+      readPiSessionEntries(pi, legacyFile).map((entry) => [entry.type, entry.id, entry.message?.role]),
+      [["message", "m1", "custom"]],
+    );
+    assert.equal(readFileSync(legacyFile, "utf8"), legacy);
   });
 });
 
@@ -202,14 +220,14 @@ describe("Pi's model registry, as the cost and context reports read it", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("finds bundled and models.json models with their name, window and price, without touching credentials", async () => {
+  it("finds built-in and models.json models with their name, window and price, without touching credentials", async () => {
     const pi = await import("@earendil-works/pi-coding-agent");
     const lookup = await createPiModelLookup(pi);
-    const bundled = lookup("anthropic", "claude-sonnet-4-5");
-    assert.equal(typeof bundled?.name, "string");
-    assert.ok(bundled.contextWindow > 0);
-    assert.deepEqual(Object.keys(bundled.cost).sort(), ["cacheRead", "cacheWrite", "input", "output"]);
-    assert.ok(bundled.cost.input > 0);
+    const builtIn = lookup("anthropic", "claude-sonnet-4-5");
+    assert.equal(typeof builtIn?.name, "string");
+    assert.ok(builtIn.contextWindow > 0);
+    assert.deepEqual(Object.keys(builtIn.cost).sort(), ["cacheRead", "cacheWrite", "input", "output"]);
+    assert.ok(builtIn.cost.input > 0);
     // A model without a price gets Pi's all-zero price.
     assert.deepEqual(lookup("local", "coder"), { name: "Local Coder", contextWindow: 32000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } });
     assert.equal(lookup("acme", "nothing"), undefined);

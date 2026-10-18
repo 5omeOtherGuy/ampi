@@ -23,6 +23,10 @@ const BARE = "019a0000-0000-7000-8000-00000000000b";
 const TINY = "019a0000-0000-7000-8000-00000000000c";
 const IMPORTED = "019a0000-0000-7000-8000-00000000000d";
 const OLD = "019a0000-0000-7000-8000-00000000000e";
+// Sessions from August, before every range the usage tests count.
+const SWITCHED = "019a0000-0000-7000-8000-00000000000f";
+const MODEL_ONLY = "019a0000-0000-7000-8000-000000000010";
+const EDITED = "019a0000-0000-7000-8000-000000000011";
 const BULK = Array.from({ length: 11 }, (_, index) => `019b0000-0000-7000-8000-0000000000${String(index + 1).padStart(2, "0")}`);
 
 const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, sessionDir: process.env.PI_CODING_AGENT_SESSION_DIR };
@@ -129,7 +133,7 @@ before(() => {
       ],
       ["2026-10-17T09:01:01.000Z", message(result("c1", "read", "r".repeat(120)))],
       ["2026-10-17T09:01:02.000Z", message(result("c2", "read", "r".repeat(40)))],
-      // Priced by Pi's bundled catalogue at $3 in, $15 out, $0.30 cache read per million:
+      // Priced by Pi's built-in catalogue at $3 in, $15 out, $0.30 cache read per million:
       // (2000 × 3 + 100 × 15 + 1000 × 0.3) / 1e6 = $0.0078.
       ["2026-10-17T09:02:00.000Z", reply("anthropic", "claude-sonnet-4-5", [text("b".repeat(40)), call("c3", "bash", { command: "ls" })], usage(2000, 100, 1000))],
       ["2026-10-17T09:02:01.000Z", message(result("c3", "bash", "ok"))],
@@ -166,6 +170,27 @@ before(() => {
     session(other, OLD, [
       ["2026-09-18T09:59:59.000Z", message({ role: "user", content: "Too old" })],
       ["2026-09-18T09:59:59.999Z", reply("acme", "recorded", [text("Done.")], usage(9999, 9999, 0, 9.99))],
+    ]);
+
+    // A reply that recorded no usage, then a switch to the 300-token model: 16 + 8 + 12 characters, 4 + 2 + 3 tokens.
+    session(demo, SWITCHED, [
+      ["2026-08-01T09:00:00.000Z", message({ role: "user", content: "w".repeat(16) })],
+      ["2026-08-01T09:01:00.000Z", reply("acme", "mystery", [text("z".repeat(8))], usage(100, 10, 0))],
+      ["2026-08-01T09:02:00.000Z", reply("acme", "mystery", [text("n".repeat(12))], undefined)],
+      ["2026-08-01T09:03:00.000Z", (manager) => manager.appendModelChange("tiny", "small")],
+    ]);
+
+    // No response yet, only a chosen model: 20 characters, 5 tokens.
+    session(demo, MODEL_ONLY, [
+      ["2026-08-02T09:00:00.000Z", message({ role: "user", content: "m".repeat(20) })],
+      ["2026-08-02T09:00:01.000Z", (manager) => manager.appendModelChange("tiny", "small")],
+    ]);
+
+    // The prompt is edited after the reply: 4 characters instead of 16, so 1 + 2 tokens.
+    session(demo, EDITED, [
+      ["2026-08-03T09:00:00.000Z", message({ role: "user", content: "e".repeat(16) })],
+      ["2026-08-03T09:01:00.000Z", reply("acme", "mystery", [text("f".repeat(8))], usage(100, 10, 0))],
+      ["2026-08-03T09:02:00.000Z", (manager, ids) => manager.appendContextEdit(ids[0], { content: "g".repeat(4) })],
     ]);
 
     // Bulk session k (1 to 11) cost $0.0k recorded, for 10k input and k output tokens.
@@ -231,7 +256,7 @@ describe("ampi threads context", () => {
     assert.deepEqual(report, {
       threadID: MAIN,
       scope: "current-context",
-      // The last response's model, which Pi's bundled catalogue knows.
+      // The last response's model, which Pi's built-in catalogue knows.
       model: "anthropic/claude-sonnet-4-5",
       modelDisplayName: "Claude Sonnet 4.5 (latest)",
       maxContextTokens: 200000,
@@ -305,6 +330,46 @@ describe("ampi threads context", () => {
     assert.equal(report.totalTokens, 318);
     assert.equal(report.freeSpace, 0);
     assert.equal(report.measuredTokens, 317);
+  });
+
+  it("takes the model chosen after the last reply, or before any, and counts replies that recorded no usage", async () => {
+    const switched = (await json(["threads", "context", SWITCHED])).report;
+    assert.deepEqual(
+      {
+        model: switched.model,
+        modelDisplayName: switched.modelDisplayName,
+        maxContextTokens: switched.maxContextTokens,
+        messages: switched.sections.at(-1),
+        totalTokens: switched.totalTokens,
+        freeSpace: switched.freeSpace,
+        measuredTokens: switched.measuredTokens,
+      },
+      {
+        model: "tiny/small",
+        modelDisplayName: "Tiny Small",
+        maxContextTokens: 300,
+        // 9 / 300 = 3%.
+        messages: { id: "messages", name: "Messages", tokens: 9, percentage: 3 },
+        totalTokens: 9,
+        freeSpace: 291,
+        // The first reply's 100 + 10, and 3 estimated for the reply without usage.
+        measuredTokens: 113,
+      },
+    );
+
+    const chosen = (await json(["threads", "context", MODEL_ONLY])).report;
+    assert.deepEqual(
+      [chosen.model, chosen.modelDisplayName, chosen.maxContextTokens, chosen.sections.at(-1), chosen.freeSpace, "measuredTokens" in chosen],
+      // 5 / 300 = 1.67% rounds up.
+      ["tiny/small", "Tiny Small", 300, { id: "messages", name: "Messages", tokens: 5, percentage: 1.7 }, 295, false],
+    );
+  });
+
+  it("leaves measuredTokens out when the context was edited after the last reply", async () => {
+    const { report } = await json(["threads", "context", EDITED]);
+    assert.equal(report.model, "acme/mystery");
+    assert.equal(report.totalTokens, 3);
+    assert.equal("measuredTokens" in report, false);
   });
 
   it("exits 1 for an unknown id and 2 without one", async () => {
@@ -393,6 +458,8 @@ describe("ampi threads usage", () => {
       [["--start", "yesterday"], "--start needs an ISO 8601 time such as 2026-10-01 or 2026-10-01T09:30:00Z, not yesterday."],
       [["--end", "2026-13-01"], "--end needs an ISO 8601 time such as 2026-10-01 or 2026-10-01T09:30:00Z, not 2026-13-01."],
       [["--start", "2026-10-17T10:00:00Z", "--end", "2026-10-17T09:00:00Z"], "--start is after --end."],
+      // Not a day of the calendar, though Date.parse would take it for 2 March.
+      [["--start", "2026-02-30", "--end", "2026-03-01"], "--start needs an ISO 8601 time such as 2026-10-01 or 2026-10-01T09:30:00Z, not 2026-02-30."],
     ]) {
       const { result: outcome, err } = await run(["threads", "usage", MAIN, ...args]);
       assert.deepEqual(outcome, { code: 2 }, args.join(" "));
