@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type ExtensionContext, VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { resolveMmrPackageRoot } from "../../ampi-core/changelog.js";
 import {
@@ -9,18 +9,31 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
-import { hasMmrEditorAction, runMmrEditorAction } from "../pi-compat/editor.js";
+import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
+import { getMmrModeState } from "../../ampi-core/runtime.js";
+import { canMmrSubmitEditorText, hasMmrEditorAction, runMmrEditorAction, submitMmrEditorText } from "../pi-compat/editor.js";
 import { getMmrTranscriptScroller } from "../pi-compat/scroll.js";
+import { MMR_PI_BUILTIN_SLASH_COMMANDS } from "../pi-compat/slash-commands.js";
 
 /** Commands `ampi-tui` registers in ampi-core's command registry. */
 
 export interface MmrTuiCommandHost {
   /** The TUI handle, once Pi has handed one to a component factory. */
   getTui(): TUI | undefined;
+  /** Pi's extension API: slash commands and settings. */
+  readonly pi: Pick<ExtensionAPI, "getCommands" | "getSettings" | "sendUserMessage">;
+  /** Open the command palette. */
+  openPalette(ctx: ExtensionContext): void;
 }
+
+/** Commands that open the palette; the palette does not list them. */
+export const MMR_PALETTE_COMMAND_IDS: ReadonlySet<string> = new Set(["ampi.palette", "prompt.openPalette"]);
 
 const AVAILABLE: MmrCommandAvailability = { state: "available" };
 const EXTERNAL_EDITOR_ACTION = "app.editor.external";
+const THINKING_TOGGLE_ACTION = "app.thinking.toggle";
+const PROMPT_HAS_TEXT: MmrCommandAvailability = { state: "unavailable", reason: "the prompt has text" };
+const CORE_MISSING: MmrCommandAvailability = { state: "unavailable", reason: "ampi-core is not loaded" };
 
 function readAmpiVersion(): string | undefined {
   const root = resolveMmrPackageRoot();
@@ -42,8 +55,68 @@ function scrollAvailability(host: MmrTuiCommandHost, ctx: ExtensionContext): Mmr
   return AVAILABLE;
 }
 
+function hasSlashCommand(host: MmrTuiCommandHost, name: string): boolean {
+  try {
+    return host.pi.getCommands().some((command) => command.name === name);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A command that runs an ampi-core slash command through Pi's command path,
+ * so it gets the same command context as typing it. Unavailable when the
+ * slash command is not registered, because Pi would otherwise send the text
+ * to the model as a prompt.
+ */
+function coreSlashCommand(
+  host: MmrTuiCommandHost,
+  slash: string,
+  definition: Omit<MmrCommandDefinition, "run" | "availability">,
+  available: () => MmrCommandAvailability = () => AVAILABLE,
+): MmrCommandDefinition {
+  const name = slash.split(" ")[0];
+  return {
+    ...definition,
+    availability: () => (hasSlashCommand(host, name) ? available() : CORE_MISSING),
+    run: () => host.pi.sendUserMessage(`/${slash}`, { expandPromptTemplates: true }),
+  };
+}
+
+/**
+ * Pi's thinking blocks are hidden when `hideThinkingBlock` is set; Pi's
+ * toggle saves the new value to its global settings. A project settings file
+ * that sets `hideThinkingBlock` wins over that saved value, so there the
+ * reading stays fixed and Alt+T can leave thinking out of step with the tools.
+ */
+function thinkingHidden(host: MmrTuiCommandHost): boolean {
+  try {
+    return host.pi.getSettings().hideThinkingBlock === true;
+  } catch {
+    return false;
+  }
+}
+
 export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
   return [
+    {
+      id: "ampi.palette",
+      noun: "ampi",
+      verb: "open command palette",
+      description: "Open the command palette",
+      defaultKey: "ctrl+o",
+      run: (ctx) => host.openPalette(ctx),
+    },
+    {
+      id: "prompt.openPalette",
+      noun: "prompt",
+      verb: "open command palette",
+      description: "Open the command palette when / is typed into an empty prompt",
+      defaultKey: "/",
+      // With text in the prompt, / is typed as usual.
+      availability: (ctx) => (ctx.ui.getEditorText().length > 0 ? PROMPT_HAS_TEXT : AVAILABLE),
+      run: (ctx) => host.openPalette(ctx),
+    },
     {
       id: "thread.interrupt",
       noun: "thread",
@@ -105,7 +178,79 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       description: "Show the ampi and Pi versions",
       run: (ctx) => ctx.ui.notify(`ampi ${readAmpiVersion() ?? "(unknown version)"} on Pi ${PI_VERSION}`, "info"),
     },
+    {
+      id: "thread.toggleDetails",
+      noun: "thread",
+      verb: "toggle details",
+      description: "Expand or collapse tool output and thinking together",
+      defaultKey: "alt+t",
+      run: (ctx) => {
+        const expand = !ctx.ui.getToolsExpanded();
+        ctx.ui.setToolsExpanded(expand);
+        // Pi keeps thinking visibility separately; bring it in line, so one
+        // key shows or hides every detail of the transcript.
+        if (thinkingHidden(host) === expand) runMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
+      },
+    },
+    coreSlashCommand(host, "ampi-status", {
+      id: "ampi.status",
+      noun: "ampi",
+      verb: "show status",
+      description: "Show the current mode, model and tools, as /ampi-status does",
+    }),
+    coreSlashCommand(host, "ampi-changelog", {
+      id: "ampi.changelog",
+      noun: "ampi",
+      verb: "show changelog",
+      description: "Show what changed in recent ampi releases",
+    }),
+    coreSlashCommand(host, "ampi-config", {
+      id: "ampi.config",
+      noun: "ampi",
+      verb: "configure",
+      description: "Pick the models for modes and subagents, or set up ampi-web",
+    }),
+    ...MMR_MODE_KEYS.map((mode) =>
+      coreSlashCommand(
+        host,
+        `mode ${mode}`,
+        { id: `mode.use.${mode}`, noun: "mode", verb: `use ${mode}`, description: `Switch to the ${mode} mode` },
+        () =>
+          getMmrModeState()?.mode === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE,
+      ),
+    ),
   ];
+}
+
+/**
+ * Palette rows for Pi's slash commands under the `pi` category: Pi's
+ * built-in commands, then extension commands, prompt templates and skills.
+ * Legacy `mmr-*` aliases are left out. A row submits `/<name>` through the
+ * prompt, as typing it would, so it needs an empty, focused prompt.
+ */
+export function createMmrSlashPaletteCommands(host: MmrTuiCommandHost): MmrCommandDefinition[] {
+  const names = new Map<string, string>(MMR_PI_BUILTIN_SLASH_COMMANDS.map((name) => [name, "Pi built-in command"]));
+  try {
+    for (const command of host.pi.getCommands()) {
+      if (!names.has(command.name) && !command.name.startsWith("mmr-")) {
+        names.set(command.name, command.description ?? "Pi command");
+      }
+    }
+  } catch {}
+  return [...names].map(([name, description]) => ({
+    id: `pi.${name}`,
+    noun: "pi",
+    verb: `/${name}`,
+    description,
+    availability: (ctx: ExtensionContext): MmrCommandAvailability => {
+      if (ctx.ui.getEditorText().length > 0) return PROMPT_HAS_TEXT;
+      if (!canMmrSubmitEditorText(host.getTui())) return { state: "unavailable", reason: "the prompt is not focused" };
+      return AVAILABLE;
+    },
+    run: () => {
+      if (!submitMmrEditorText(host.getTui(), `/${name}`)) throw new Error("the prompt is not focused");
+    },
+  }));
 }
 
 /** Register the `ampi-tui` commands. Returns a function that unregisters them. */

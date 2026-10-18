@@ -91,6 +91,9 @@ Amp-compatible keys from `ampi-tui` in interactive sessions. After the first key
 | `Ctrl+X` | Leader | Bindings written `<leader>z` mean Ctrl+X, then Z |
 | `Home` / `End` | Jump to the start / end of the transcript | Only with an empty prompt, in Pi's fullscreen mode |
 | `Ctrl+G` | Edit the prompt in your external editor | Pi's action, now a command |
+| `Ctrl+O` | Open the command palette | Type to filter, ↑/↓ to move, Enter to run, Esc to close; Pi's slash commands are listed under `pi` |
+| `/` | Open the command palette | Only on an empty prompt; with text, `/` is typed as usual |
+| `Alt+T` | Expand or collapse tool output and thinking together | Replaces Pi's Ctrl+O for tool output |
 
 Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader` moves the leader), then `/reload`:
 
@@ -139,5 +142,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | No footer below the editor | `ampi-tui` removes it by default; set `ampiTui.enabled: false` (or `AMPI_TUI_ENABLE=false`) and restart Pi to restore it |
 | Ctrl+C no longer clears the prompt | `ampi-tui` uses Ctrl+C Ctrl+C to quit; clear with Ctrl+U, or set `"ampi.quit": null` under `ampi.keymap` to give Ctrl+C back to Pi |
 | One Esc no longer stops a turn | Press Esc twice; or set `"thread.interrupt": null` under `ampi.keymap` |
+| Ctrl+O no longer expands tool output | `ampi-tui` puts the command palette there; Alt+T expands tool output and thinking together |
+| `/` on an empty prompt opens the palette instead of slash completion | Pick the command under `pi` in the palette, or set `"prompt.openPalette": null` under `ampi.keymap` to type slash commands directly |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).

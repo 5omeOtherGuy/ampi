@@ -19,8 +19,10 @@ let reservedKeys;
 let terminalInput;
 let messages;
 let keymap;
+let slashCommands;
 
 before(async () => {
+  slashCommands = await importSource("extensions/ampi-tui/pi-compat/slash-commands.ts");
   editorCompat = await importSource("extensions/ampi-tui/pi-compat/editor.ts");
   scrollCompat = await importSource("extensions/ampi-tui/pi-compat/scroll.ts");
   reservedKeys = await importSource("extensions/ampi-tui/pi-compat/reserved-keys.ts");
@@ -116,6 +118,43 @@ describe("ampi-tui Pi compatibility probes", () => {
     assert.ok(editorCompat.getMmrEditorRenderedHeight(tui) >= 5, "a 300-column line wraps at 80 columns");
     tui.setFocus({ handleInput() {}, render: () => [], invalidate() {} });
     assert.equal(editorCompat.getMmrEditorRenderedHeight(tui), undefined);
+  });
+
+  it("editor: Enter hands the prompt text to the editor's onSubmit handler, which the adapter can call", () => {
+    const tui = new TuiMainScreen(stubTerminal());
+    const editor = new CustomEditor(tui, editorTheme, new KeybindingsManager({}));
+    const submitted = [];
+    editor.onSubmit = (text) => submitted.push(text);
+    tui.setFocus(editor);
+    editor.setText("typed");
+    editor.handleInput("\r");
+    assert.deepEqual(submitted, ["typed"], "Pi's editor submits through onSubmit");
+    assert.equal(editorCompat.canMmrSubmitEditorText(tui), true);
+    assert.equal(editorCompat.submitMmrEditorText(tui, "/tree"), true);
+    assert.deepEqual(submitted, ["typed", "/tree"]);
+
+    tui.setFocus({ handleInput() {}, render: () => [], invalidate() {} });
+    assert.equal(editorCompat.canMmrSubmitEditorText(tui), false);
+    assert.equal(editorCompat.submitMmrEditorText(tui, "/tree"), false);
+  });
+
+  it("editor: Pi's interactive mode runs slash commands from onSubmit and toggles thinking through an editor action", () => {
+    const source = readFileSync(path.join(piDist(), "modes/interactive/interactive-mode.js"), "utf8");
+    assert.match(source, /defaultEditor\.onSubmit = async \(text\) => \{[\s\S]{0,400}text === "\/settings"/, "onSubmit handles built-in commands");
+    assert.match(source, /onAction\("app\.thinking\.toggle", \(\) => this\.toggleThinkingBlockVisibility\(\)\)/);
+    assert.match(
+      source,
+      /toggleThinkingBlockVisibility\(\) \{\s*this\.hideThinkingBlock = !this\.hideThinkingBlock;\s*this\.settingsManager\.setHideThinkingBlock\(this\.hideThinkingBlock\);/,
+      "the toggle saves hideThinkingBlock, which pi.getSettings() reports",
+    );
+  });
+
+  it("slash commands: the built-in command list matches Pi's", async () => {
+    const { BUILTIN_SLASH_COMMANDS } = await import(pathToFileURL(path.join(piDist(), "core/slash-commands.js")).href);
+    assert.deepEqual(
+      [...slashCommands.MMR_PI_BUILTIN_SLASH_COMMANDS],
+      BUILTIN_SLASH_COMMANDS.map((command) => command.name),
+    );
   });
 
   it("scroll: only Pi's fullscreen renderer can scroll the transcript", () => {

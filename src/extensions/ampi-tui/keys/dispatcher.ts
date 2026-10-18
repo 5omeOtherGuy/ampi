@@ -109,11 +109,12 @@ function buildTable(keymap: Pick<MmrResolvedKeymap, "byChord" | "leader">): Tabl
 }
 
 /**
- * Display form for hint rows. A plain character stays as typed (`v`, not
+ * Display form of a canonical chord, for hint rows and the command palette's
+ * key column. A plain character stays as typed (`v`, not
  * `V`, which would read as Shift+V); everything else uses the keymap's
  * display form (`Ctrl+C`, `Shift+Z`, `Esc`).
  */
-function displayChord(canonical: string): string {
+export function displayMmrKeyChord(canonical: string): string {
   const parsed = parseMmrKeyChord(canonical);
   if ("error" in parsed) return canonical;
   return parsed.combos
@@ -155,8 +156,8 @@ export function createMmrKeyDispatcher(options: MmrKeyDispatcherOptions): MmrKey
     const rows = (table.continuations.get(prefix) ?? [])
       .filter(({ id }) => availability(id) !== "hidden")
       .sort((a, b) => (a.rest < b.rest ? -1 : a.rest > b.rest ? 1 : 0))
-      .map(({ rest, id }) => ({ key: displayChord(rest), description: options.describe?.(id) ?? id, id }));
-    options.onHint({ prefix: displayChord(prefix), rows, deadline });
+      .map(({ rest, id }) => ({ key: displayMmrKeyChord(rest), description: options.describe?.(id) ?? id, id }));
+    options.onHint({ prefix: displayMmrKeyChord(prefix), rows, deadline });
   }
 
   function complete(id: string): boolean {
