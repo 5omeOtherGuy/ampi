@@ -95,9 +95,11 @@ export type MmrThreadStatusEvent = MmrThreadStatusEventBase &
     /**
      * Pi `message_update` for the assistant message. `content` is the kind of
      * delta (`thinking_*` -> `thinking`, `text_*` -> `text`, `toolcall_*` ->
-     * `toolCall`). `outputTokens` is the running output count from the
-     * partial message's usage, when the provider reports it; omit it when it
-     * is unknown rather than counting chunks.
+     * `toolCall`). `outputTokens` is the running count of tokens streamed in
+     * the current stage. Providers do not update a partial message's usage
+     * while it streams, so callers estimate it from the streamed deltas; the
+     * status shows it only once it is above zero. Omitted, the last count
+     * stays.
      */
     | { type: "messageUpdate"; content: "text" | "thinking" | "toolCall"; outputTokens?: number }
     /** Pi `tool_execution_start`. */
@@ -288,7 +290,7 @@ function expireQuitHint(state: ThreadState, now: number | undefined): ThreadStat
 function deriveStatus(state: ThreadState): MmrThreadStatus {
   const phase = phaseOf(state);
   let detail = "";
-  if ((phase === "thinking" || phase === "streaming") && state.outputTokens !== undefined) {
+  if ((phase === "thinking" || phase === "streaming") && state.outputTokens !== undefined && state.outputTokens > 0) {
     detail = `${formatMmrCompactTokens(state.outputTokens)} tok`;
   } else if (phase === "runningTools") {
     // The oldest running tool is the one the user has waited on longest.

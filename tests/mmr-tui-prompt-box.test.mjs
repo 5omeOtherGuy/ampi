@@ -163,6 +163,15 @@ describe("ampi-tui prompt box: render fixtures", () => {
     for (const { width, lines } of renders) assert.equal(visibleWidth(lines.at(-1)), width);
     assertFixture("narrow", renders);
   });
+
+  it("drops the frame below 4 columns and shows only the text", () => {
+    const { editor } = makeBox({ text: "ab" });
+    const lines = editor.render(3);
+    assert.ok(lines.length > 0);
+    assert.equal(editor.renderedHeight(), lines.length);
+    assert.equal(lines.map(plain).join("").replace(/ /g, ""), "ab", "text rows only: no border or marker");
+    for (const row of lines) assert.ok(visibleWidth(row) <= 3, JSON.stringify(row));
+  });
 });
 
 describe("ampi-tui prompt box: geometry", () => {
@@ -243,6 +252,21 @@ describe("ampi-tui prompt box: geometry", () => {
     assert.ok(lines[0].includes("\x1b[38;2;61;255;166mmedium\x1b[39m"));
   });
 
+  it("draws the frame in Pi's border colour while the prompt is a `!` shell command", () => {
+    const shell = (text) => `\x1b[35m${text}\x1b[39m`;
+    const render = (text) => {
+      const { editor } = makeBox({ text });
+      editor.borderColor = shell; // as Pi sets it for a `!` prompt
+      return editor.render(80);
+    };
+    const bash = render("  !ls");
+    for (const index of [0, 1, bash.length - 1]) assert.ok(bash[index].startsWith("\x1b[35m"), `row ${index}`);
+    assert.ok(!bash[0].includes("\x1b[38;5;244m"), "no theme border token");
+    assert.ok(bash[0].includes("\x1b[38;2;61;255;166mmedium"), "the mode keeps its colour");
+    assert.ok(bash.at(-1).includes("\x1b[38;5;242m/work/demo (main)"), "the path stays dim");
+    assert.ok(render("ls !")[0].startsWith("\x1b[38;5;244m"), "only a leading `!` counts");
+  });
+
   it("steps the wave glyph only while a turn runs", () => {
     const busy = status({ type: "turnStart" });
     const glyphs = [0, 1, 2, 3].map((waveFrame) => plain(makeBox({ slots: { status: busy, waveFrame } }).editor.render(80).at(-1))[2]);
@@ -313,6 +337,16 @@ describe("ampi-tui prompt box: keys", () => {
     editor.setText("");
     editor.handleInput("\x7f");
     assert.equal(dequeued, 1, "nothing queued: nothing to take back");
+  });
+
+  it("pages by the box's visible rows on PageUp", () => {
+    // 44 rows: the box shows 14 text rows, so PageUp from line 30 lands on line 16
+    // (Pi's own rule for a 44-row terminal would page by 13, to line 17).
+    const { editor } = makeBox({ rows: 44, text: lines30 });
+    editor.render(140);
+    editor.handleInput("\x1b[5~");
+    editor.handleInput("X");
+    assert.equal(editor.getText().split("\n")[15].includes("X"), true, editor.getText().split("\n").slice(14, 17).join(" | "));
   });
 
   it("keeps one column of padding when Pi copies its editor's padding", () => {

@@ -53,9 +53,10 @@ function setup() {
 }
 
 const assistant = (usage) => ({ role: "assistant", content: [], usage });
-const update = (deltaType, output) => ({
-  message: assistant(output === undefined ? undefined : { output }),
-  assistantMessageEvent: { type: deltaType },
+// The provider's partial usage stays at 1 throughout, as Anthropic's does until the message ends.
+const update = (deltaType, delta) => ({
+  message: assistant({ output: 1 }),
+  assistantMessageEvent: delta === undefined ? { type: deltaType } : { type: deltaType, delta },
 });
 
 describe("ampi-tui status feed", () => {
@@ -64,9 +65,9 @@ describe("ampi-tui status feed", () => {
     assert.deepEqual(t.view(), ["", "", ""]);
     t.emit("turn_start", { turnIndex: 0, timestamp: 0 });
     assert.deepEqual(t.view(), ["Sending", "", "Enter to steer"]);
-    t.emit("message_update", update("thinking_delta", 23));
+    t.emit("message_update", update("thinking_delta", "x".repeat(92)));
     assert.deepEqual(t.view(), ["Thinking", "23 tok", "Enter to steer"]);
-    t.emit("message_update", update("text_delta", 1500));
+    t.emit("message_update", update("text_delta", "y".repeat(6000)));
     assert.deepEqual(t.view(), ["Streaming", "1.5k tok", "Enter to steer"]);
     t.emit("message_update", update("start"));
     assert.equal(t.feed.status.label, "Streaming", "events without content change nothing");
@@ -78,6 +79,27 @@ describe("ampi-tui status feed", () => {
     t.emit("agent_settled", { aborted: false });
     assert.deepEqual(t.view(), ["", "", ""]);
     assert.equal(t.feed.status.busy, false);
+  });
+
+  it("counts the tokens streamed in the current stage, four UTF-8 bytes to a token", () => {
+    const t = setup();
+    t.emit("turn_start");
+    t.emit("message_start", { message: assistant({ output: 1 }) });
+    t.emit("message_update", update("thinking_start"));
+    assert.deepEqual(t.view(), ["Thinking", "", "Enter to steer"], "no count before anything streamed");
+    t.emit("message_update", update("thinking_delta", "a"));
+    assert.equal(t.feed.status.detail, "1 tok", "a started token counts");
+    t.emit("message_update", update("thinking_delta", "€".repeat(13)));
+    assert.equal(t.feed.status.detail, "10 tok", "1 + 39 bytes, not 14 characters");
+    t.emit("message_update", update("text_start"));
+    assert.deepEqual(t.view(), ["Streaming", "", "Enter to steer"], "a new stage starts from zero");
+    t.emit("message_update", update("text_delta", "12345678"));
+    assert.equal(t.feed.status.detail, "2 tok");
+    t.emit("message_update", update("toolcall_delta", '{"a":'));
+    assert.equal(t.feed.status.detail, "4 tok", "tool call arguments stream in the same stage as text");
+    t.emit("message_start", { message: assistant({ output: 1 }) });
+    t.emit("message_update", update("text_delta", "abcd"));
+    assert.equal(t.feed.status.detail, "1 tok", "the next assistant message counts afresh");
   });
 
   it("reports only visible changes", () => {
@@ -144,6 +166,26 @@ describe("ampi-tui status feed", () => {
     t.feed.refreshQueue();
     assert.equal(t.feed.status.queued, 0);
     assert.equal(t.feed.status.hint, "Enter to steer");
+  });
+
+  it("follows queue changes it did not see on the next agent event", () => {
+    const t = setup();
+    t.emit("turn_start");
+    t.emit("input", { text: "queued", source: "interactive", streamingBehavior: "steer" });
+    t.state.pendingMessages = true;
+    t.emit("message_update", update("text_delta", "abcd"));
+    assert.equal(t.feed.status.queued, 1);
+    // Pi's own dequeue key takes the message back without an event for it.
+    t.state.pendingMessages = false;
+    t.emit("message_update", update("text_delta", "abcd"));
+    assert.equal(t.feed.status.hint, "Enter to steer", "streaming output clears a stale dequeue hint");
+    // A message Pi queued without the feed counting it.
+    t.state.pendingMessages = true;
+    t.emit("tool_execution_start", { toolCallId: "c1", toolName: "bash", args: {} });
+    assert.equal(t.feed.status.queued, 1);
+    t.state.pendingMessages = false;
+    t.emit("tool_execution_end", { toolCallId: "c1", toolName: "bash", result: {}, isError: false });
+    assert.equal(t.feed.status.queued, 0);
   });
 
   it("shows the force-quit hint until the quit chord ends", () => {

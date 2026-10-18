@@ -251,18 +251,32 @@ export class MmrPromptBox extends CustomEditor {
     return BOTTOM_MARK;
   }
 
-  override render(width: number): string[] {
-    if (width < 4) return super.render(width);
-    const slots = this.host.slots();
-    const theme = this.host.theme();
+  /** Run `action` while Pi's editor sees the box's maximum text rows (for its scrolling and page keys). */
+  private withBoxRows<T>(action: () => T): T {
     const tui = this.tui;
     this.tui = mmrTuiWithEditorMaxLines(tui, mmrPromptBoxMaxRows(tui.terminal.rows));
-    let lines: string[];
     try {
-      lines = super.render(width - 2);
+      return action();
     } finally {
       this.tui = tui;
     }
+  }
+
+  override render(width: number): string[] {
+    if (width < 4) {
+      // No room for a frame: the text rows and any autocomplete list alone.
+      const out = super.render(width).filter((row, index) => index > 0 && row !== BOTTOM_MARK);
+      this.height = out.length;
+      return out;
+    }
+    const slots = this.host.slots();
+    const hostTheme = this.host.theme();
+    // Pi colours its editor border for a `!` shell command; the frame keeps that cue.
+    const bashMode = this.getText().trimStart().startsWith("!");
+    const theme: MmrPromptBoxTheme = bashMode
+      ? { fg: (token, text) => (token === "border" ? this.borderColor(text) : hostTheme.fg(token, text)) }
+      : hostTheme;
+    const lines = this.withBoxRows(() => super.render(width - 2));
     const bottom = lines.indexOf(BOTTOM_MARK);
     const text = lines.slice(1, bottom);
     const autocomplete = lines.slice(bottom + 1);
@@ -305,6 +319,6 @@ export class MmrPromptBox extends CustomEditor {
         return;
       }
     }
-    super.handleInput(data);
+    this.withBoxRows(() => super.handleInput(data));
   }
 }

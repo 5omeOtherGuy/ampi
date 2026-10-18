@@ -102,9 +102,10 @@ The prompt sits in a rounded box across the full width of the terminal, at the b
 ```
 
 - **Top border, right: cost and mode.** The active ampi mode in its colour (`low` yellow, `medium` green, `high` blue, `ultra` violet; `free` in the border colour), and before it the cost of the session so far. A new session shows no cost; during its first turn the cost reads `$····` until the first response arrives. Below one cent it has three decimals (`$0.003`), above it two.
-- **Bottom border, left: turn status.** While a turn runs, an animated wave glyph, the status (`Sending`, `Thinking`, `Streaming`, `Running Tools`, `Auto-Compacting`, `Waiting for Approval`, `Cancelling`, or `Error` after a failed response), a detail such as the output tokens so far (`23 tok`) or the running tool, and a key hint: `Enter to steer`, or `Enter to steer, Backspace to dequeue` while messages are queued. After the first Ctrl+C it shows `ctrl+c again to force quit`.
+- **Bottom border, left: turn status.** While a turn runs, an animated wave glyph, the status (`Sending`, `Thinking`, `Streaming`, `Running Tools`, `Auto-Compacting`, `Waiting for Approval`, `Cancelling`, or `Error` after a failed response), a detail such as the tokens streamed so far in this stage (`23 tok`, estimated at four bytes a token) or the running tool, and a key hint: `Enter to steer`, or `Enter to steer, Backspace to dequeue` while messages are queued. After the first Ctrl+C it shows `ctrl+c again to force quit`.
 - **Bottom border, right: where you are.** The working directory, with the git branch in parentheses. When the border gets crowded the path is shortened from the left (`…/repo (main)`) and then left out; the status keeps its room.
 - **Text.** One column of padding inside the frame. The box keeps three text rows when empty and grows with its content up to a third of the terminal height (8 rows in a 24-row terminal, 14 in a 44-row one); after that the text scrolls with the cursor. Text wraps as in Pi's editor. In terminals under 15 rows Pi's own minimum of 5 rows applies.
+- **Shell commands.** While the prompt starts with `!`, the frame takes Pi's shell-command colour, as Pi's editor border does.
 - **Overlays.** While the command palette is open, the frame is drawn dim. Pi's own dialogs and selectors leave it as it is.
 
 The model, token totals and context use that Pi's footer showed are not on screen; `/ampi-status` reports the mode and model.
@@ -181,7 +182,7 @@ Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctr
 - Follow-up messages: Alt+Enter no longer queues one. Bind Pi's `app.message.followUp` to another key in Pi's `keybindings.json` to keep follow-ups on a key; Enter while a turn runs still steers it.
 - Pi's own key hints still describe Pi's keys: the hint line under the startup header ("escape interrupt", "ctrl+c/ctrl+d clear/exit", "ctrl+o more"), "Press ctrl+o to show full startup help" and the "ctrl+o to expand" note on collapsed tool output. Where they name Ctrl+O, press Alt+T instead: it expands tool output, thinking and the full startup help.
 - When nothing is running, Pi's double Esc on an empty prompt opens the session tree. Set Pi's `doubleEscapeAction` to `"none"` to turn that off.
-- To keep a Pi key, unbind the ampi command that takes it: `"ampi.quit": null` gives Ctrl+C back to Pi, `"thread.interrupt": null` brings back the single-Esc interrupt. Copying with Ctrl+X needs the leader moved elsewhere, or Pi's `app.message.copy` bound to another key in Pi's `keybindings.json`.
+- To keep a Pi key, unbind the ampi command that takes it: `"ampi.quit": null` gives Ctrl+C back to Pi, `"thread.interrupt": null` brings back Pi's Esc interrupt (Esc still clears a non-empty prompt first). Copying with Ctrl+X needs the leader moved elsewhere, or Pi's `app.message.copy` bound to another key in Pi's `keybindings.json`.
 
 ### Welcome header
 

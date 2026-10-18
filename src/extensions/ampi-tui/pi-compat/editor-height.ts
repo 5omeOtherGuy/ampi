@@ -10,7 +10,9 @@ import type { TUI } from "@earendil-works/pi-tui";
  * To show a different maximum while keeping Pi's wrapping, cursor and
  * scrolling, the prompt box hands `Editor.render` a view of the TUI whose
  * terminal reports a height for which Pi's rule yields the wanted count.
- * Pi's floor of 5 rows still applies.
+ * Pi's PageUp and PageDown use the same rule for their page size, so the box
+ * hands the view to `Editor.handleInput` too. Pi's floor of 5 rows still
+ * applies.
  */
 
 /** Pi's minimum for its maximum number of text rows. */
