@@ -2,6 +2,7 @@ import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-wor
 import { type EditorTheme, matchesKey, type TUI, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
 import type { MmrThreadStatus } from "../../ampi-core/thread-status.js";
 import { mmrTuiWithEditorMaxLines } from "../pi-compat/editor-height.js";
+import { type MmrShortcutHelp, renderMmrShortcutHelp } from "./help.js";
 
 /**
  * The prompt box: Pi's prompt editor inside a rounded frame whose borders
@@ -24,11 +25,15 @@ import { mmrTuiWithEditorMaxLines } from "../pi-compat/editor-height.js";
  *   status keeps its room.
  * - The text area keeps at least 3 rows, grows with its content up to a
  *   third of the terminal height, then scrolls with the cursor.
+ * - The shortcuts help, while open, sits above the text with a rule under
+ *   it. The box grows by its height; when that would pass the maximum, the
+ *   text area shrinks to one row and the help drops its note, then rows.
  *
  * Text editing, wrapping, scrolling, autocomplete and Pi's app keys come
  * from Pi's `CustomEditor`. The box adds Alt+Enter for a newline, Esc to
- * clear the prompt, and Backspace on an empty prompt to take queued
- * messages back.
+ * clear the prompt (or close the help), and Backspace on an empty prompt to
+ * take queued messages back. Any key that reaches the box closes the help;
+ * one that is not Esc then does what it always does.
  */
 
 /** Truecolor of each mode label. Other modes (`free`, unknown keys) use the border colour. */
@@ -79,6 +84,8 @@ export interface MmrPromptBoxHost {
   theme(): MmrPromptBoxTheme;
   /** Called after Backspace took the queued messages back into the prompt. */
   dequeued?(): void;
+  /** What the shortcuts help lists; read on each render while it is open. */
+  help?(): MmrShortcutHelp;
 }
 
 type Token = "border" | "dim" | "muted" | "accent" | "error" | "warning";
@@ -228,6 +235,8 @@ export class MmrPromptBox extends CustomEditor {
   private readonly host: MmrPromptBoxHost;
   private textRows = 0;
   private innerRows = MMR_PROMPT_BOX_MIN_ROWS;
+  private helpRows = 0;
+  private helpOpen = false;
   private height = 0;
 
   constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager, host: MmrPromptBoxHost) {
@@ -238,9 +247,18 @@ export class MmrPromptBox extends CustomEditor {
   /** The box keeps its one-column padding; Pi copies its own editor's padding onto a new editor. */
   override setPaddingX(_padding: number): void {}
 
-  /** Rows the last render drew: frame, text rows and an open autocomplete list. */
+  /** Rows the last render drew: frame, help, text rows and an open autocomplete list. */
   renderedHeight(): number {
     return this.height;
+  }
+
+  isHelpOpen(): boolean {
+    return this.helpOpen;
+  }
+
+  /** Open or close the shortcuts help. The caller redraws. */
+  setHelpOpen(open: boolean): void {
+    this.helpOpen = open;
   }
 
   protected override renderTopBorder(): string {
@@ -266,6 +284,7 @@ export class MmrPromptBox extends CustomEditor {
     if (width < 4) {
       // No room for a frame: the text rows and any autocomplete list alone.
       const out = super.render(width).filter((row, index) => index > 0 && row !== BOTTOM_MARK);
+      this.helpRows = 0;
       this.height = out.length;
       return out;
     }
@@ -281,11 +300,18 @@ export class MmrPromptBox extends CustomEditor {
     const text = lines.slice(1, bottom);
     const autocomplete = lines.slice(bottom + 1);
     this.textRows = text.length;
-    this.innerRows = Math.max(MMR_PROMPT_BOX_MIN_ROWS, text.length);
+    // The help belongs to an empty prompt: text set from elsewhere (the
+    // external editor, a dequeue) closes it.
+    if (this.helpOpen && this.getText().length > 0) this.helpOpen = false;
+    const maxRows = mmrPromptBoxMaxRows(this.tui.terminal.rows);
+    const help = this.helpOpen && this.host.help ? renderMmrShortcutHelp(this.host.help(), width - 4, theme, maxRows - 1) : [];
+    this.helpRows = help.length;
+    this.innerRows = Math.max(text.length, Math.min(MMR_PROMPT_BOX_MIN_ROWS, maxRows - help.length));
 
     const side = paint([line("│")], theme, slots.overlay);
     const blank = " ".repeat(width - 2);
     const out = [renderMmrPromptBoxTopBorder(width, slots, theme)];
+    for (const row of help) out.push(`${side} ${row} ${side}`);
     for (let row = 0; row < this.innerRows; row++) out.push(`${side}${text[row] ?? blank}${side}`);
     out.push(renderMmrPromptBoxBottomBorder(width, slots, theme));
     for (const row of autocomplete) out.push(` ${row} `);
@@ -294,13 +320,18 @@ export class MmrPromptBox extends CustomEditor {
   }
 
   override handleMouse(event: TuiMouseEvent) {
-    // Pi's editor counts rows from its own top border and has no side borders
-    // or padding rows; the autocomplete list sits below the padding rows.
-    const y = event.y > this.innerRows ? event.y - (this.innerRows - this.textRows) : event.y;
+    // Pi's editor counts rows from its own top border and has no side borders,
+    // help or padding rows; the autocomplete list sits below the padding rows.
+    let y = event.y - this.helpRows;
+    if (y > this.innerRows) y -= this.innerRows - this.textRows;
     return super.handleMouse({ ...event, x: event.x - 1, y, width: event.width - 2 });
   }
 
   override handleInput(data: string): void {
+    if (this.helpOpen) {
+      this.helpOpen = false;
+      if (matchesKey(data, "escape")) return;
+    }
     // Pi queues a follow-up message on Alt+Enter; the box inserts a newline,
     // like Shift+Enter and Ctrl+J.
     if (matchesKey(data, "alt+enter")) {

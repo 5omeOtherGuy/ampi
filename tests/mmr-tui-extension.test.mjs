@@ -201,6 +201,45 @@ describe("ampi-tui extension", () => {
     }
   });
 
+  it("opens the shortcuts help on ? in an empty prompt, listing the session's keys, and closes it on Esc", async () => {
+    // Outside tmux the help asks nothing of tmux.
+    const tmux = process.env.TMUX;
+    delete process.env.TMUX;
+    const { handlers } = await loadExtension({ enabled: true });
+    const { ctx, footers, editors, terminalInput, overlays, state } = createMockExtensionContext({ hasUI: true, cwd: "/work/demo" });
+    await handlers.get("session_start")(startEvent, ctx);
+    try {
+      const tui = fakeTui();
+      footers[0](tui, undefined, fakeFooterData(undefined).data);
+      const box = editors[0](tui, editorTheme, new KeybindingsManager({}));
+      tui.setFocus(box);
+      assert.equal(terminalInput.send("?"), true);
+      const lines = box.render(80).map(stripTerminalSequences);
+      assert.match(lines[1], /^│ Alt\+Enter newline +@ mention files +│$/, "no mode keys without ampi-core");
+      assert.match(lines[2], /^│ Ctrl\+X leader key +Ctrl\+O open command palette +│$/);
+      assert.match(lines[5], /^│ Ctrl\+G open in editor +Alt\+T toggle details +│$/);
+      assert.match(lines[6], /^│ \? toggle shortcuts help +│$/);
+      assert.equal(lines[7], `│ ${"─".repeat(76)} │`);
+
+      box.handleInput("\x1b");
+      assert.equal(box.render(80).length, 5);
+
+      // A key that runs another command closes the help: / opens the palette.
+      assert.equal(terminalInput.send("?"), true);
+      assert.equal(terminalInput.send("/"), true);
+      assert.equal(overlays.at(-1).options.overlayOptions.anchor, "center", "/ opened the palette");
+      assert.equal(box.render(80).length, 5, "the help closed behind it");
+      overlays.at(-1).component.handleInput("\x1b");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      state.editorText = "why";
+      assert.equal(terminalInput.send("?"), false, "with text, ? is typed");
+    } finally {
+      await handlers.get("session_shutdown")(shutdownEvent, ctx);
+      if (tmux !== undefined) process.env.TMUX = tmux;
+    }
+  });
+
   it("does nothing at all when disabled", async () => {
     const { handlers } = await loadExtension({ enabled: false });
     assert.deepEqual([...handlers.keys()], []);

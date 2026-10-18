@@ -26,7 +26,12 @@ export interface MmrTuiCommandHost {
   openPalette(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
+  /** Open or close the shortcuts help in the prompt box. */
+  toggleHelp?(): void;
 }
+
+/** The command `?` runs: open or close the shortcuts help. */
+export const MMR_HELP_COMMAND_ID = "prompt.toggleHelp";
 
 /** Commands that open the palette; the palette does not list them. */
 export const MMR_PALETTE_COMMAND_IDS: ReadonlySet<string> = new Set(["ampi.palette", "prompt.openPalette"]);
@@ -200,6 +205,17 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         // key shows or hides every detail of the transcript.
         if (thinkingHidden(host) === expand) runMmrEditorAction(host.getTui(), THINKING_TOGGLE_ACTION);
       },
+    },
+    {
+      id: MMR_HELP_COMMAND_ID,
+      noun: "prompt",
+      verb: "toggle shortcuts help",
+      description: "Show or hide the shortcuts help in the prompt box",
+      defaultKey: "?",
+      keywords: ["shortcuts", "keys"],
+      // With text in the prompt, ? is typed as usual.
+      availability: (ctx) => (ctx.ui.getEditorText().length > 0 ? PROMPT_HAS_TEXT : AVAILABLE),
+      run: () => host.toggleHelp?.(),
     },
     coreSlashCommand(host, CORE_SLASH.status, {
       id: "ampi.status",

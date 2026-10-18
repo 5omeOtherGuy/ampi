@@ -1,8 +1,11 @@
 import type { ExtensionAPI, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
+import { getMmrCommands } from "../ampi-core/command-registry.js";
+import { getMmrModeState } from "../ampi-core/runtime.js";
 import { installMmrTuiLook } from "./chrome/look.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
+import { buildMmrShortcutHelpEntries } from "./editor/help.js";
 import { createMmrPromptBoxInstall } from "./editor/install.js";
 import { createMmrStatusFeed } from "./editor/status-feed.js";
 import { createMmrTuiKeys } from "./keys/install.js";
@@ -30,13 +33,18 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     let footerData: ReadonlyFooterDataProvider | undefined;
     const look = installMmrTuiLook(pi, settings);
     const feed = createMmrStatusFeed(pi, { onChange: () => promptBox.statusChanged() });
-    const promptBox = createMmrPromptBoxInstall(pi, feed);
+    const promptBox = createMmrPromptBoxInstall(pi, feed, {
+      helpEntries: () =>
+        buildMmrShortcutHelpEntries({ keymap: keys.keymap(), commands: getMmrCommands(), modeKeys: getMmrModeState() !== undefined }),
+    });
     const keys = createMmrTuiKeys(pi, {
       editorHeight: () => promptBox.renderedHeight(),
       onEscapePending: () => promptBox.clearPrompt(),
       onQuitPending: (until) => feed.setQuitHint(until),
       onInterrupt: () => feed.abort(),
       onPaletteOpen: (open) => promptBox.setOverlayOpen(open),
+      onToggleHelp: () => promptBox.toggleHelp(),
+      onKeyCommand: () => promptBox.closeHelp(),
     });
 
     pi.on("session_start", (_event, ctx) => {

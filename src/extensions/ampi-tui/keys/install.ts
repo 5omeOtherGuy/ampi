@@ -20,6 +20,7 @@ import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserv
 import { subscribeMmrTerminalInput } from "../pi-compat/terminal-input.js";
 import {
   createMmrSlashPaletteCommands,
+  MMR_HELP_COMMAND_ID,
   MMR_PALETTE_COMMAND_IDS,
   type MmrTuiCommandHost,
   registerMmrTuiCommands,
@@ -67,12 +68,18 @@ export interface MmrTuiKeysOptions {
   readonly onInterrupt?: () => void;
   /** The command palette opened (`true`) or closed (`false`); the prompt box dims its frame meanwhile. */
   readonly onPaletteOpen?: (open: boolean) => void;
+  /** The `prompt.toggleHelp` command ran. */
+  readonly onToggleHelp?: () => void;
+  /** A key is about to run a command other than `prompt.toggleHelp`; the prompt box closes its help. */
+  readonly onKeyCommand?: () => void;
 }
 
 export interface MmrTuiKeys {
   /** Install for a TUI session. Safe to call again on the next session start. */
   start(ctx: ExtensionContext, getTui: () => TUI | undefined): void;
   stop(): void;
+  /** The keymap in effect, once started. */
+  keymap(): MmrResolvedKeymap | undefined;
 }
 
 function describeConflict(conflict: MmrKeymapConflict): string {
@@ -109,7 +116,13 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let hintTimer: unknown;
   let resolved: MmrResolvedKeymap | undefined;
   let quitPending = false;
-  const host: MmrTuiCommandHost = { getTui: () => getTui(), pi, openPalette, onInterrupt: options.onInterrupt };
+  const host: MmrTuiCommandHost = {
+    getTui: () => getTui(),
+    pi,
+    openPalette,
+    onInterrupt: options.onInterrupt,
+    toggleHelp: options.onToggleHelp,
+  };
 
   function availability(id: string): MmrKeyAvailability {
     const command = getMmrCommand(id);
@@ -124,7 +137,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
 
   function run(id: string | undefined): void {
     const command = id === undefined ? undefined : getMmrCommand(id);
-    if (command) runCommand(command);
+    if (!command) return;
+    if (command.id !== MMR_HELP_COMMAND_ID) options.onKeyCommand?.();
+    runCommand(command);
   }
 
   function runCommand(command: MmrCommandDefinition): void {
@@ -343,7 +358,9 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       unregisterCommands?.();
       unregisterCommands = undefined;
       dispatcher = undefined;
+      resolved = undefined;
       ctx = undefined;
     },
+    keymap: () => resolved,
   };
 }
