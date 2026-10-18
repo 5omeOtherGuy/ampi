@@ -3,18 +3,20 @@
 // them; when a Pi upgrade changes their shape, this test fails here instead of
 // every `ampi` start failing or loading ampi twice.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
 import {
+  createPiModelLookup,
   listPiExtensionSources,
   listPiSessions,
   loadThroughPi,
   piAgentDir,
   piExternalEditorCommand,
   piSettingsPath,
+  readPiSessionEntries,
   readPiSettings,
   setPiSessionName,
 } from "../packages/ampi-cli/src/pi-compat.js";
@@ -164,6 +166,55 @@ describe("Pi session calls used by the thread commands", () => {
     assert.equal(renamed.name, "Parser fix");
     const last = JSON.parse(readFileSync(projectFile, "utf8").trim().split("\n").at(-1));
     assert.deepEqual([last.type, last.name], ["session_info", "Parser fix"]);
+
+    // The entries without the header, as the reports read them.
+    assert.deepEqual(
+      readPiSessionEntries(pi, otherFile).map((entry) => [entry.type, entry.id, entry.parentId, entry.message?.content]),
+      [["message", "m1", null, "Port the docs"]],
+    );
+  });
+});
+
+describe("Pi's model registry, as the cost and context reports read it", () => {
+  const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, offline: process.env.PI_OFFLINE };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-models-"));
+  const agentDir = path.join(dir, "agent");
+
+  before(() => {
+    writeJson(path.join(agentDir, "models.json"), {
+      providers: {
+        local: { baseUrl: "http://127.0.0.1:9/v1", api: "openai-completions", models: [{ id: "coder", name: "Local Coder", contextWindow: 32000 }] },
+      },
+    });
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    // The registry must stay offline whether or not PI_OFFLINE is set.
+    delete process.env.PI_OFFLINE;
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", savedEnv.agentDir],
+      ["PI_OFFLINE", savedEnv.offline],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("finds bundled and models.json models with their name, window and price, without touching credentials", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const lookup = await createPiModelLookup(pi);
+    const bundled = lookup("anthropic", "claude-sonnet-4-5");
+    assert.equal(typeof bundled?.name, "string");
+    assert.ok(bundled.contextWindow > 0);
+    assert.deepEqual(Object.keys(bundled.cost).sort(), ["cacheRead", "cacheWrite", "input", "output"]);
+    assert.ok(bundled.cost.input > 0);
+    // A model without a price gets Pi's all-zero price.
+    assert.deepEqual(lookup("local", "coder"), { name: "Local Coder", contextWindow: 32000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } });
+    assert.equal(lookup("acme", "nothing"), undefined);
+    // Pi writes an empty auth.json when it opens its credential store; the registry never opens it.
+    assert.deepEqual(readdirSync(agentDir), ["models.json"]);
   });
 });
 

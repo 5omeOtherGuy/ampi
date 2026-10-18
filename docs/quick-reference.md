@@ -185,6 +185,9 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Search sessions | `ampi threads search parser label:docs after:7d` | Every directory, latest update first; words, `"phrases"` and keys such as `id:`, `parent:`, `label:`, `pinned:`, `archived:`, `repo:`, `cwd:`, `model:`; `-n <n>` (default 20), `--json` |
 | Reopen a session | `ampi threads continue 019a3c` | An id or its first characters; `ampi last` opens the latest session that is not archived |
 | Print a session | `ampi threads markdown 019a3c` | `threads export` prints JSON with every session entry |
+| See what fills a session's context | `ampi threads context 019a3c` | JSON: tokens and share of the window per section, total, free space, compactions, tool counts |
+| See what a session cost | `ampi threads usage 019a3c` | Total in the gauge's format; `--details` adds tokens and cost per model and tool calls; `--start`, `--end` (ISO 8601), `--json` |
+| See what all sessions cost | `ampi usage` | Every directory, the last 30 days by default; `--details` adds the per-model table and the ten most expensive sessions; `--start`, `--end`, `--json`. Local totals only: no account or credits |
 | Rename, archive, label, color or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `color <id> <color>` (a name, `#rrggbb` or `none`), `delete` (asks first; `--yes` skips) |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |

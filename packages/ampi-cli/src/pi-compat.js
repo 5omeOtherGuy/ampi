@@ -79,6 +79,55 @@ export function setPiSessionName(pi, file, name) {
 }
 
 /**
+ * A session's entries without its header, as Pi reads them: older file
+ * versions are migrated first.
+ *
+ * @param {any} pi
+ * @param {string} file
+ * @returns {unknown[]}
+ */
+export function readPiSessionEntries(pi, file) {
+  return pi.SessionManager.open(file).getEntries();
+}
+
+/**
+ * @typedef {object} PiModelInfo What the commands read of a model in Pi's registry.
+ * @property {string} [name] Display name.
+ * @property {number} [contextWindow] Tokens.
+ * @property {{ input: number, output: number, cacheRead: number, cacheWrite: number }} [cost] Dollars per
+ *   million tokens; all zero when Pi has no price.
+ */
+
+/** A credential store that holds nothing, so building the registry never reads or writes credentials. */
+const NO_CREDENTIALS = {
+  read: async () => undefined,
+  list: async () => [],
+  modify: async () => undefined,
+  delete: async () => {},
+};
+
+/**
+ * Look models up in Pi's model registry: its bundled catalogue and the
+ * models of `models.json` in Pi's configuration directory. Offline whatever
+ * PI_OFFLINE says: the registry is built without credentials, without a
+ * catalogue refresh and without network access, so nothing authenticates or
+ * calls a model. Models that only an extension registers, or only a
+ * refreshed catalogue lists, are unknown here.
+ *
+ * @param {any} pi
+ * @returns {Promise<(provider: string, model: string) => PiModelInfo | undefined>}
+ */
+export async function createPiModelLookup(pi) {
+  const runtime = await pi.ModelRuntime.create({ credentials: NO_CREDENTIALS, allowModelNetwork: false, refreshOnCreate: false });
+  const registry = new pi.ModelRegistry(runtime);
+  return (provider, model) => {
+    /** @type {{ name?: string, contextWindow?: number, cost?: PiModelInfo["cost"] } | undefined} */
+    const found = registry.find(provider, model);
+    return found === undefined ? undefined : { name: found.name, contextWindow: found.contextWindow, cost: found.cost };
+  };
+}
+
+/**
  * @typedef {object} PiExtensionSources
  * @property {{ path: string, source: string }[]} enabled Extension entries Pi loads from its user and
  *   project settings (`packages` and `extensions`) and its extension directories.

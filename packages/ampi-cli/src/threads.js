@@ -1,4 +1,4 @@
-// `ampi threads …` and `ampi last`: Amp-compatible thread commands on Pi's
+// `ampi threads …`, `ampi last` and `ampi usage`: Amp-compatible thread commands on Pi's
 // session files. Sessions are listed and renamed through Pi (pi-compat.js);
 // archive dates, labels, colors and the title source live in ampi's thread
 // index (thread-index.js). Opening a session in the terminal UI is left to Pi:
@@ -8,7 +8,7 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { listPiSessions, loadThroughPi, piAgentDir, setPiSessionName } from "./pi-compat.js";
+import { createPiModelLookup, listPiSessions, loadThroughPi, piAgentDir, readPiSessionEntries, setPiSessionName } from "./pi-compat.js";
 import { formatThreadMarkdown } from "./thread-markdown.js";
 import {
   isThreadColor,
@@ -55,15 +55,23 @@ const COMPLETE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const UUID_TIME_MAX = 2 ** 48 - 1;
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename", find: "search" };
+const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename", find: "search", "analyze-context": "context" };
 
 /**
  * The file in the ampi package whose extension factory hands over the session
- * search, and the event it uses (`MMR_CLI_THREADS_EVENT` there).
+ * search and the reports, and the event it uses (`MMR_CLI_THREADS_EVENT` there).
  */
-const SEARCH_ENTRY = path.join("src", "cli-threads.ts");
-const SEARCH_EVENT = "ampi:cli-threads";
+const CLI_THREADS_ENTRY = path.join("src", "cli-threads.ts");
+const CLI_THREADS_EVENT = "ampi:cli-threads";
 const SEARCH_LIMIT = 20;
+/** Days `ampi usage` covers without --start. */
+const USAGE_DAYS = 30;
+/** Sessions `ampi usage --details` lists. */
+const USAGE_TOP_SESSIONS = 10;
+/** The thread index label of sessions imported from elsewhere, whose costs are unknown. */
+const IMPORTED_LABEL = "imported";
+/** An ISO 8601 date, or a date and time with an optional offset. */
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?$/;
 
 /** Options of each thread command; an id and other arguments are positionals. */
 const OPTIONS = /** @type {const} */ ({
@@ -77,6 +85,8 @@ const OPTIONS = /** @type {const} */ ({
     limit: { type: "string" },
   },
   search: { json: { type: "boolean" }, limit: { type: "string", short: "n" } },
+  context: {},
+  usage: { details: { type: "boolean" }, start: { type: "string" }, end: { type: "string" }, json: { type: "boolean" } },
   continue: { last: { type: "boolean" } },
   markdown: {},
   export: {},
@@ -115,6 +125,12 @@ Commands:
       --last                    Open the most recent session, as ampi last does
   markdown, md <id>             Print the session as Markdown
   export <id>                   Print the session and its entries as JSON
+  context, analyze-context <id> Print what fills the session's context window, as JSON
+  usage <id>                    Print the session's cost
+      --details                 Add tokens and cost per model, and tool calls per tool
+      --start <time>            Count only what happened at or after this ISO 8601 time
+      --end <time>              Count only what happened before this ISO 8601 time
+      --json                    Print JSON instead
   rename, r <id> <title>        Rename the session (Pi's session name)
   archive <id>                  Archive the session
       --unarchive               Take it out of the archive instead
@@ -126,6 +142,11 @@ Commands:
       -y, --yes                 Delete without asking
 
   ampi last                     Open the most recent session of this directory that is not archived
+  ampi usage                    Print the cost and tokens of every session of the last 30 days
+      --details                 Add tokens and cost per model, and the ten most expensive sessions
+      --start <time>            Count from this time on (default: 30 days before --end)
+      --end <time>              Count up to, not including, this time (default: now)
+      --json                    Print JSON instead
 
 A search query is words and "quoted phrases", all of which a session must contain, and
 key:value filters, all of which it must pass: id:, parent:, name:, label:, pinned:true|false,
@@ -142,8 +163,15 @@ or send that message with ampi -x --session-id <id> "message". threads continue 
 session in this directory under any complete id no session has yet. Sessions stay on this
 machine, so threads new has no --visibility: sharing one needs a hosted service.
 
+context counts tokens at four characters to a token, from the system prompt and tools Pi
+recorded in the session and the messages it would send now. Costs are what the provider
+reported, or the tokens at the model's list price in Pi's model catalogue; a model with
+neither is unknown and left out of the totals. Times are ISO 8601, such as 2026-10-01 or
+2026-10-01T09:30:00Z.
+
 Exit status: 0 on success, 1 when no session or several match the id or a change fails,
-2 on a usage error, including a search key or value search cannot use.
+2 on a usage error, including a search key or value search cannot use, a malformed time or
+a --start after --end.
 
 Examples:
 
@@ -152,6 +180,9 @@ Examples:
   $ ampi threads search parser label:docs after:7d
   $ ampi threads continue 019a3c
   $ ampi threads markdown 019a3c > session.md
+  $ ampi threads context 019a3c | jq '.sections[] | {name, tokens}'
+  $ ampi threads usage 019a3c --details --start 2026-10-01
+  $ ampi usage --details
   $ ampi threads label 019a3c release docs
   $ ampi threads color 019a3c green
   $ id=$(ampi threads new) && ampi -x --session-id "$id" "summarize the README"
@@ -410,6 +441,17 @@ async function dispatch(argv, host) {
     if (rest.length > 0) return usage(`last takes no arguments, not ${rest[0]}.`);
     return continueLast(host);
   }
+  if (command === "usage") {
+    /** @type {{ values: Record<string, string | boolean | undefined>, positionals: string[] }} */
+    let parsed;
+    try {
+      parsed = /** @type {any} */ (parseArgs({ args: [...rest], options: OPTIONS.usage, allowPositionals: true, strict: true }));
+    } catch (error) {
+      return usage(`usage: ${messageOf(error)}`);
+    }
+    if (parsed.positionals.length > 0) return usage(`usage takes no arguments, not ${parsed.positionals[0]}; ampi threads usage <id> reports one session.`);
+    return usageOfAll(host, parsed.values);
+  }
   // `ampi threads` and `ampi threads --json` list, as `ampi threads list` does.
   const implicitList = rest.length === 0 || rest[0].startsWith("-");
   const named = implicitList ? "list" : rest[0];
@@ -450,6 +492,12 @@ async function dispatch(argv, host) {
         }
         return { code: 0 };
       });
+    case "context":
+      if (positionals.length !== 1) return usage("threads context takes one session id.");
+      return context(host, positionals[0]);
+    case "usage":
+      if (positionals.length !== 1) return usage("threads usage takes one session id.");
+      return usageOfThread(host, positionals[0], values);
     case "rename":
       return rename(host, positionals);
     case "archive":
@@ -583,6 +631,55 @@ function describeSearchProblem({ filter, kind }) {
 }
 
 /**
+ * @typedef {import("./pi-compat.js").PiModelInfo} PiModelInfo
+ * @typedef {(provider: string, model: string) => PiModelInfo | undefined} ModelLookup
+ * @typedef {{ start?: Date, end?: Date }} UsageRange `start` included, `end` excluded.
+ * @typedef {{ model: string, cost: number | null, inputTokens: number, outputTokens: number,
+ *   cacheReadInputTokens: number, cacheCreationInputTokens: number }} UsageModel
+ * @typedef {{ threadID: string, title: string, start: string | null, end: string | null, cost: number | null,
+ *   unknownCostModels: number, models: UsageModel[], toolCalls: Record<string, number> }} ThreadUsage
+ * @typedef {{ threadID: string, title: string, cwd: string, cost: number | null }} UsageSession
+ * @typedef {{ start: string, end: string, cost: number | null, unknownCostModels: number, sessionCount: number,
+ *   inputTokens: number, outputTokens: number, cacheReadInputTokens: number, cacheCreationInputTokens: number,
+ *   models: UsageModel[], sessions: UsageSession[] }} Usage
+ *
+ * @typedef {object} CliThreads What src/cli-threads.ts in the ampi package hands over.
+ * @property {ThreadSearch} searchThreads
+ * @property {(id: string, entries: unknown[], models: ModelLookup) => Record<string, unknown> & { systemPromptRecorded?: false }} reportThreadContext
+ * @property {(session: { id: string, title: string, entries: unknown[] }, range: UsageRange, models: ModelLookup) => ThreadUsage} reportThreadUsage
+ * @property {(sessions: { id: string, title: string, cwd: string, entries: unknown[], imported: boolean }[],
+ *   range: Required<UsageRange>, models: ModelLookup) => Usage} reportUsage
+ * @property {(cost: number) => string} formatCost The prompt box gauge's cost format.
+ */
+
+/**
+ * Load the functions `names` of the ampi package in use (`host.locateAmpi`)
+ * through Pi. A package without them is too old for `command`.
+ *
+ * @template {keyof CliThreads} K
+ * @param {ThreadsHost} host
+ * @param {K[]} names
+ * @param {string} command
+ * @returns {Promise<{ functions: Pick<CliThreads, K> } | { code: number, message: string }>}
+ */
+async function loadCliThreads(host, names, command) {
+  const ampi = await host.locateAmpi();
+  const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
+  const tooOld = { code: 1, message: `${which} is too old for ${command}; update @skippermissions/ampi (or ampi-cli).` };
+  const entry = ampi === undefined ? undefined : path.join(ampi.root, CLI_THREADS_ENTRY);
+  if (entry === undefined || !existsSync(entry)) return tooOld;
+  /** @type {Partial<CliThreads> | undefined} */
+  let received;
+  try {
+    received = /** @type {Partial<CliThreads> | undefined} */ (await loadThroughPi(host.pi, entry, CLI_THREADS_EVENT));
+  } catch (error) {
+    return { code: 1, message: `could not load ampi's ${command}: ${messageOf(error)}` };
+  }
+  if (names.some((name) => typeof received?.[name] !== "function")) return tooOld;
+  return { functions: /** @type {Pick<CliThreads, K>} */ (received) };
+}
+
+/**
  * Search the sessions of every directory with the search of the ampi package
  * in use, loaded through Pi.
  *
@@ -599,21 +696,9 @@ async function search(host, values, positionals) {
     limit = Number(values.limit);
     if (!/^\d+$/.test(String(values.limit)) || limit < 1) return usage(`--limit needs a whole number above 0, not ${values.limit}.`);
   }
-  const ampi = await host.locateAmpi();
-  const entry = ampi === undefined ? undefined : path.join(ampi.root, SEARCH_ENTRY);
-  if (entry === undefined || !existsSync(entry)) {
-    const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
-    return { code: 1, message: `${which} is too old for threads search; update @skippermissions/ampi (or ampi-cli).` };
-  }
-  /** @type {ThreadSearch | undefined} */
-  let searchThreads;
-  try {
-    const received = /** @type {{ searchThreads?: ThreadSearch } | undefined} */ (await loadThroughPi(host.pi, entry, SEARCH_EVENT));
-    searchThreads = received?.searchThreads;
-  } catch (error) {
-    return { code: 1, message: `could not load ampi's session search: ${messageOf(error)}` };
-  }
-  if (typeof searchThreads !== "function") return { code: 1, message: "could not load ampi's session search: the ampi package did not provide it." };
+  const loaded = await loadCliThreads(host, ["searchThreads"], "threads search");
+  if (!("functions" in loaded)) return loaded;
+  const { searchThreads } = loaded.functions;
 
   /** @type {Record<string, ThreadRecord> | undefined} */
   let threads;
@@ -642,6 +727,200 @@ async function search(host, values, positionals) {
   if (result.total > result.matches.length) {
     host.err(`ampi: showing ${result.matches.length} of ${result.total} matching sessions; --limit shows more.\n`);
   }
+  return { code: 0 };
+}
+
+/**
+ * Pi's model registry for the reports; a registry that cannot be built is reported, and every model is then unknown.
+ *
+ * @param {ThreadsHost} host
+ * @returns {Promise<ModelLookup>}
+ */
+async function modelLookup(host) {
+  try {
+    return await createPiModelLookup(host.pi);
+  } catch (error) {
+    host.err(`ampi: could not read Pi's model catalogue, so no model has a price or context window: ${messageOf(error)}\n`);
+    return () => undefined;
+  }
+}
+
+/**
+ * Print what fills the session's context window, as JSON.
+ *
+ * @param {ThreadsHost} host
+ * @param {string} query
+ * @returns {Promise<Outcome>}
+ */
+async function context(host, query) {
+  const loaded = await loadCliThreads(host, ["reportThreadContext"], "threads context");
+  if (!("functions" in loaded)) return loaded;
+  return withSession(host, query, async (session) => {
+    const report = loaded.functions.reportThreadContext(session.id, readPiSessionEntries(host.pi, session.path), await modelLookup(host));
+    if (report.systemPromptRecorded === false) {
+      host.err("ampi: the session records no system prompt yet (Pi records it with the first request), so the prompt and tool sections are 0.\n");
+    }
+    host.out(`${JSON.stringify(report, null, 2)}\n`);
+    return { code: 0 };
+  });
+}
+
+/**
+ * Read `--start` and `--end`.
+ *
+ * @param {Record<string, string | boolean | undefined>} values
+ * @returns {{ start?: Date, end?: Date } | { code: number, message: string }}
+ */
+function readRange(values) {
+  /** @type {{ start?: Date, end?: Date }} */
+  const range = {};
+  for (const name of /** @type {const} */ (["start", "end"])) {
+    const given = values[name];
+    if (given === undefined) continue;
+    const time = ISO_TIME.test(String(given)) ? Date.parse(String(given)) : Number.NaN;
+    if (!Number.isFinite(time)) return usage(`--${name} needs an ISO 8601 time such as 2026-10-01 or 2026-10-01T09:30:00Z, not ${given}.`);
+    range[name] = new Date(time);
+  }
+  if (range.start && range.end && range.start > range.end) return usage("--start is after --end.");
+  return range;
+}
+
+/** @param {number} count */
+const models = (count) => `${count} ${count === 1 ? "model" : "models"}`;
+
+/**
+ * The total as the Thread Cost overlay shows it: unknown when no model has a
+ * cost, else the known cost and how many models it leaves out.
+ *
+ * @param {number | null} cost
+ * @param {number} unknown
+ * @param {(cost: number) => string} formatCost
+ */
+function formatTotal(cost, unknown, formatCost) {
+  if (cost === null) return "Total: unknown (no model has a price)";
+  return `Total: ${formatCost(cost)}${unknown > 0 ? `, not counting ${models(unknown)} without a price` : ""}`;
+}
+
+/**
+ * Lines of a table: a header, a rule, and the rows, with the columns in
+ * `right` aligned to the right.
+ *
+ * @param {string[]} header
+ * @param {string[][]} rows
+ * @param {Set<number>} right
+ */
+function formatColumns(header, rows, right) {
+  const widths = header.map((name, column) => Math.max(visibleWidth(name), ...rows.map((row) => visibleWidth(row[column]))));
+  /** @param {string[]} cells */
+  const line = (cells) =>
+    cells
+      .map((cell, column) => (right.has(column) ? " ".repeat(widths[column] - visibleWidth(cell)) + cell : padEnd(cell, widths[column])))
+      .join(GAP)
+      .trimEnd();
+  return [line(header), widths.map((width) => "─".repeat(width)).join(GAP), ...rows.map(line)];
+}
+
+/**
+ * The per-model table of `--details`.
+ *
+ * @param {UsageModel[]} rows
+ * @param {(cost: number) => string} formatCost
+ */
+function formatModelTable(rows, formatCost) {
+  const cells = rows.map((row) => [
+    row.model,
+    String(row.inputTokens),
+    String(row.outputTokens),
+    String(row.cacheReadInputTokens),
+    String(row.cacheCreationInputTokens),
+    row.cost === null ? "unknown" : formatCost(row.cost),
+  ]);
+  return formatColumns(["Model", "Input", "Output", "Cache read", "Cache write", "Cost"], cells, new Set([1, 2, 3, 4, 5]));
+}
+
+/**
+ * Print a session's cost, counting what happened in the range.
+ *
+ * @param {ThreadsHost} host
+ * @param {string} query
+ * @param {Record<string, string | boolean | undefined>} values
+ * @returns {Promise<Outcome>}
+ */
+async function usageOfThread(host, query, values) {
+  const range = readRange(values);
+  if ("code" in range) return range;
+  const loaded = await loadCliThreads(host, ["reportThreadUsage", "formatCost"], "threads usage");
+  if (!("functions" in loaded)) return loaded;
+  const { reportThreadUsage, formatCost } = loaded.functions;
+  return withSession(host, query, async (session) => {
+    const entries = readPiSessionEntries(host.pi, session.path);
+    const report = reportThreadUsage({ id: session.id, title: threadTitle(session), entries }, range, await modelLookup(host));
+    if (values.json) {
+      host.out(`${JSON.stringify(report, null, 2)}\n`);
+      return { code: 0 };
+    }
+    const lines = [report.title];
+    if (report.start !== null || report.end !== null) lines.push(`From ${report.start ?? "the start"} until ${report.end ?? "now"}`);
+    lines.push(formatTotal(report.cost, report.unknownCostModels, formatCost));
+    if (values.details) {
+      lines.push("", ...(report.models.length > 0 ? formatModelTable(report.models, formatCost) : ["No model usage."]));
+      const tools = Object.entries(report.toolCalls).sort(([a, x], [b, y]) => y - x || a.localeCompare(b));
+      lines.push("", tools.length > 0 ? "Tool calls:" : "Tool calls: none");
+      if (tools.length > 0) lines.push(...formatColumns(["Tool", "Calls"], tools.map(([name, count]) => [name, String(count)]), new Set([1])));
+    }
+    host.out(`${lines.join("\n")}\n`);
+    return { code: 0 };
+  });
+}
+
+/**
+ * Print the cost and tokens of every session on this machine in the range:
+ * the 30 days up to `--end` (default now) unless `--start` says otherwise.
+ *
+ * @param {ThreadsHost} host
+ * @param {Record<string, string | boolean | undefined>} values
+ * @returns {Promise<Outcome>}
+ */
+async function usageOfAll(host, values) {
+  const given = readRange(values);
+  if ("code" in given) return given;
+  const end = given.end ?? new Date(host.now());
+  const start = given.start ?? new Date(end.getTime() - USAGE_DAYS * 24 * 60 * 60 * 1000);
+  if (start > end) return usage("--start is after --end.");
+  const loaded = await loadCliThreads(host, ["reportUsage", "formatCost"], "usage");
+  if (!("functions" in loaded)) return loaded;
+  const { reportUsage, formatCost } = loaded.functions;
+  const threads = readIndexForListing(host);
+  const sessions = (await listSessions(host, "all")).map((session) => ({
+    id: session.id,
+    title: threadTitle(session),
+    cwd: session.cwd,
+    entries: readPiSessionEntries(host.pi, session.path),
+    imported: recordOf(threads, session.id)?.labels?.includes(IMPORTED_LABEL) === true,
+  }));
+  const report = reportUsage(sessions, { start, end }, await modelLookup(host));
+  if (values.json) {
+    host.out(`${JSON.stringify(report, null, 2)}\n`);
+    return { code: 0 };
+  }
+  const lines = [
+    `Usage from ${report.start} until ${report.end}`,
+    formatTotal(report.cost, report.unknownCostModels, formatCost),
+    `Sessions: ${report.sessionCount}`,
+    `Tokens: ${report.inputTokens} input, ${report.outputTokens} output, ${report.cacheReadInputTokens} cache read, ${report.cacheCreationInputTokens} cache write`,
+    "ampi keeps no account and no credits: these costs are what the providers reported, or the tokens at the models' list prices where they reported none.",
+  ];
+  if (values.details && report.sessions.length > 0) {
+    const top = report.sessions.slice(0, USAGE_TOP_SESSIONS).map((session) => [
+      session.threadID,
+      cut(session.title, 40),
+      session.cost === null ? "unknown" : formatCost(session.cost),
+      session.cwd,
+    ]);
+    lines.push("", ...formatModelTable(report.models, formatCost));
+    lines.push("", "Most expensive sessions:", ...formatColumns(["ID", "Title", "Cost", "Directory"], top, new Set([2])));
+  }
+  host.out(`${lines.join("\n")}\n`);
   return { code: 0 };
 }
 

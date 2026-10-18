@@ -9,7 +9,7 @@ after(cleanupLoadedSource);
 let summarizeMmrThreadCost;
 
 before(async () => {
-  ({ summarizeMmrThreadCost } = await importSource("extensions/ampi-threads/cost.ts"));
+  ({ summarizeMmrThreadCost } = await importSource("extensions/ampi-core/thread-reports.ts"));
 });
 
 /** Dollars per million tokens. `acme/local` has the all-zero price Pi gives a model without one. */
