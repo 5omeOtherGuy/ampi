@@ -663,8 +663,8 @@ Pi prints the resume line only when the session has been saved, so a session wit
 A short tour of ampi in seven stages, drawn over the whole terminal: a welcome, five numbered topics (modes, sessions, steering and queueing, subagents, the palette and keys) and a closing stage on rebinding keys. Every title, sentence and the art are ampi's own.
 
 - Each stage shows ampi's mark in its own colour, cycling through the mode label colours, with the title in that colour, two or three centred lines, `n/5` on the numbered stages and a key hint at the bottom.
-- Space, Enter, → and l go to the next stage; ←, h and Backspace go back. Esc closes it from any stage; on the last stage Enter closes it (`Enter to start`), while Space and → stay put, so pressing Space through the tour stops there.
-- Keys named in the text are the keys in effect, including your `ampi.keymap` overrides; a command without a key is named as the palette lists it.
+- Space, Enter, → and l go to the next stage; ←, h and Backspace go back. Esc closes it from any stage (Ctrl+C too, as in Pi's selectors); on the last stage Enter closes it (`Enter to start`), while Space and → stay put, so pressing Space through the tour stops there.
+- Keys named in the text are the keys in effect, including your `ampi.keymap` overrides; a command without a key is named in quotes, as the palette lists it.
 - The mark plays on each stage for about nine seconds and rests. With animations off (see [Configuration](#configuration)) it rests on its first frame.
 - Below 32 rows (an 80x24 terminal, say) the mark shrinks and blank rows go; below 60 columns or 16 rows only the text shows.
 - It opens by itself once per user: at the first start of a new interactive session, unless Pi's `quietStartup` is `true` or `ampiTui.intro` is `false`. A resumed session or one with messages never opens it, and print, JSON and RPC runs and subagent workers never do. When it closes, however it closes, ampi records that in `<agentDir>/data/ampi/tui/intro.json` (`{ "version": 1, "seenAt": … }`). A record ampi cannot read counts as seen and is left as it is; delete it to see the intro again on the next start.

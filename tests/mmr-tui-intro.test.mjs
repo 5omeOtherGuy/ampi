@@ -69,6 +69,7 @@ const KEYS = {
   space: " ",
   enter: "\r",
   esc: "\x1b",
+  ctrlC: "\x03",
   right: "\x1b[C",
   left: "\x1b[D",
   backspace: "\x7f",
@@ -168,7 +169,7 @@ describe("ampi-tui intro navigation", () => {
     assert.equal(closes(), 0);
   });
 
-  it("closes with Esc from a middle stage and with Enter on the last one, but not with Space or →", () => {
+  it("closes with Esc or Ctrl+C from a middle stage and with Enter on the last one, but not with Space or →", () => {
     const middle = component();
     for (let i = 0; i < 3; i++) middle.instance.handleInput(KEYS.space);
     assert.equal(middle.instance.stage, 3);
@@ -177,6 +178,11 @@ describe("ampi-tui intro navigation", () => {
     assert.equal(middle.instance.isClosed, true);
     middle.instance.handleInput(KEYS.space);
     assert.equal(middle.instance.stage, 3, "keys after closing are ignored");
+
+    const cancelled = component();
+    cancelled.instance.handleInput(KEYS.space);
+    cancelled.instance.handleInput(KEYS.ctrlC);
+    assert.equal(cancelled.closes(), 1, "Ctrl+C, Pi's other cancel key, closes it too");
 
     const last = component();
     for (let i = 0; i < 10; i++) last.instance.handleInput(KEYS.space);
@@ -223,11 +229,11 @@ describe("ampi-tui intro key names", () => {
     register("thread.switch", "thread", "switch");
     register("prompt.queue", "prompt", "queue message");
     const names = intro.createMmrIntroKeyNames(keymap({ "thread.archive": null }));
-    assert.equal(names("thread.switch"), "thread switch");
-    assert.equal(names("prompt.queue"), "prompt queue message");
+    assert.equal(names("thread.switch"), '"thread switch"');
+    assert.equal(names("prompt.queue"), '"prompt queue message"');
     assert.equal(names("thread.archive"), "thread.archive", "unbound and not registered");
     register("thread.archive", "thread", "archive and new");
-    assert.equal(names("thread.archive"), "thread archive and new");
+    assert.equal(names("thread.archive"), '"thread archive and new"');
   });
 
   it("paints keys in the key colour and the title and mark in the stage's mode colour, cycling low to ultra", async () => {

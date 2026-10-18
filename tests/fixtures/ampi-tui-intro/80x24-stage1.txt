@@ -12,7 +12,7 @@
                               Choose a mode first
           low, medium, high and ultra trade speed for depth and cost.
              Ctrl+S turns the mode dial before your first message;
-            from then on the session keeps the mode it started with.
+          by default the session then keeps the mode it started with.
 
 
 

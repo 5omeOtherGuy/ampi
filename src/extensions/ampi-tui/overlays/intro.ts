@@ -1,5 +1,5 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, isKeyRelease, matchesKey, rgbColor, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type Component, getKeybindings, isKeyRelease, matchesKey, rgbColor, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { isMmrAnimationDisabled } from "../../ampi-core/animation.js";
 import { getMmrCommand } from "../../ampi-core/command-registry.js";
 import { formatMmrKeyChord, type MmrResolvedKeymap } from "../../ampi-core/keymap.js";
@@ -35,10 +35,12 @@ import { displayMmrKeyChord, formatMmrKeyCombo } from "../keys/dispatcher.js";
  * ```
  *
  * - Space, Enter, → and l go to the next stage; ←, h and Backspace go back.
- *   Esc closes from any stage, Enter closes from the last one. Space does
- *   not close the last stage, so a quick run of Spaces stops on it.
+ *   Esc (Pi's cancel keys, so Ctrl+C too) closes from any stage, Enter closes
+ *   from the last one. Space does not close the last stage, so a quick run of
+ *   Spaces stops on it.
  * - Key names in the text come from the keymap in effect, overrides
- *   included. A command without a key shows its palette name instead.
+ *   included. A command without a key is named by its palette entry, in
+ *   quotes.
  * - The mark plays {@link MMR_WELCOME_FRAME_COUNT} frames on each stage and
  *   rests; with animations off it rests on its first frame and no timer runs.
  * - From 32 rows and 60 columns the mark is drawn large; from 16 rows the
@@ -63,7 +65,7 @@ export const MMR_INTRO_STAGES: readonly MmrIntroStage[] = [
     lines: [
       "low, medium, high and ultra trade speed for depth and cost.",
       "{mode.toggle} turns the mode dial before your first message;",
-      "from then on the session keeps the mode it started with.",
+      "by default the session then keeps the mode it started with.",
     ],
   },
   {
@@ -85,7 +87,7 @@ export const MMR_INTRO_STAGES: readonly MmrIntroStage[] = [
   {
     title: "Call in a subagent",
     lines: [
-      "oracle reviews plans, librarian reads other repositories,",
+      "oracle reviews plans, librarian (with ampi-github on) reads other repositories,",
       "finder searches this one and Task takes a bounded job of its own.",
       "Name the one you want in your message and the agent hands it over.",
     ],
@@ -123,8 +125,8 @@ export type MmrIntroKeyName = (id: string) => string;
 
 /**
  * Key names from the keymap in effect: a command's first key in display
- * form, or its palette name (noun and verb) when it has no key, or the id
- * when no such command is registered. Without a keymap, the defaults.
+ * form, or its palette name (noun and verb) in quotes when it has no key, or
+ * the id when no such command is registered. Without a keymap, the defaults.
  */
 export function createMmrIntroKeyNames(keymap: MmrResolvedKeymap | undefined): MmrIntroKeyName {
   return (id) => {
@@ -133,7 +135,7 @@ export function createMmrIntroKeyNames(keymap: MmrResolvedKeymap | undefined): M
     const chord = keymap?.bindings.get(id)?.[0];
     if (chord && keymap) return displayMmrKeyChord(formatMmrKeyChord(chord, { leader: keymap.leader }));
     if (!keymap && typeof command?.defaultKey === "string") return displayMmrKeyChord(command.defaultKey);
-    return command ? `${command.noun} ${command.verb}` : id;
+    return command ? `"${command.noun} ${command.verb}"` : id;
   };
 }
 
@@ -294,7 +296,7 @@ export class MmrIntro implements Component {
 
   handleInput(data: string): void {
     if (this.closed || isKeyRelease(data)) return;
-    if (matchesKey(data, "escape")) this.close();
+    if (getKeybindings().matches(data, "tui.select.cancel")) this.close();
     else if (matchesKey(data, "enter") || matchesKey(data, "return")) this.advance(true);
     else if (matchesKey(data, "space") || matchesKey(data, "right") || matchesKey(data, "l")) this.advance();
     else if (matchesKey(data, "left") || matchesKey(data, "h") || matchesKey(data, "backspace")) this.back();
