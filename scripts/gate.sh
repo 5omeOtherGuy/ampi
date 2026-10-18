@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Single pre-PR gate: run the three required checks (tests, typecheck,
-# package dry-run) with one combined, quiet-on-success output instead of
-# three separate verbose command blocks.
+# Single pre-PR gate: run every required check (secret scan, lint, tests,
+# typecheck, package dry-run) with one combined, quiet-on-success output
+# instead of separate verbose command blocks.
 #
 # On success: one summary line. On the first failure: the failing step's
 # captured output is printed and the gate stops with that step's exit code.
@@ -9,8 +9,8 @@
 # Usage: npm run gate   (or  bash scripts/gate.sh)
 #   -v / --verbose   stream each step's output live instead of buffering
 #
-# Steps mirror AGENTS.md "Per-task steps": npm run lint, npm test,
-# npm run check, npm run pack:dry-run.
+# Steps mirror AGENTS.md "Per-task steps": npm run scan:secrets,
+# npm run lint, npm test, npm run check, npm run pack:dry-run.
 
 set -uo pipefail
 
@@ -56,10 +56,11 @@ run_step() {
   return "$code"
 }
 
+run_step "secrets (npm run scan:secrets)" npm run scan:secrets || exit $?
 run_step "lint (npm run lint)"        npm run lint        || exit $?
 run_step "test (npm test)"            npm test            || exit $?
 run_step "check (npm run check)"      npm run check       || exit $?
 run_step "pack (npm run pack:dry-run)" npm run pack:dry-run || exit $?
 
-printf 'gate: PASS — lint OK, test OK, check OK, pack:dry-run OK\n'
+printf 'gate: PASS — secrets OK, lint OK, test OK, check OK, pack:dry-run OK\n'
 exit 0

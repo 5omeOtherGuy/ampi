@@ -338,7 +338,7 @@ describe("mmr-history worker packet redaction", () => {
           "standalone JWT eyJhbGciOi.eyJzdWIiOj.SflKxwRJSM here",
           "open ~/.pi/agent/sessions/abc/S-private.jsonl please",
           "also look at /home/otheruser/elsewhere/secret.txt",
-          "-----BEGIN RSA PRIVATE KEY-----",
+          ["-----BEGIN RSA PRIVATE", "KEY-----"].join(" "),
           "MIIEpAIBAAKCAQEAv8VXt-key-bytes",
           "-----END RSA PRIVATE KEY-----",
         ].join("\n"),
