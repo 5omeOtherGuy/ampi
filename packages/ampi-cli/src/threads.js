@@ -351,7 +351,7 @@ export function describeSession(session, record) {
  * @param {string} text
  * @param {number} width
  */
-function cut(text, width) {
+export function cut(text, width) {
   if (visibleWidth(text) <= width) return text;
   let kept = "";
   let used = 0;

@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "config" | "pi" | "pi-command" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "config" | "pi" | "pi-command" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -23,6 +23,7 @@ import { parseArgs } from "node:util";
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
+ * @property {string[]} [toolsArgs] The command line after `tools` (or `tool`), when `command` is `"tools"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
@@ -107,6 +108,7 @@ export function routeAmpiArgv(argv) {
   if (args[0] === "help") return { command: "help", piArgs: [], options };
   if (args[0] === "version") return { command: "version", piArgs: [], options };
   if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], options, threadArgs: args };
+  if (args[0] === "tools" || args[0] === "tool") return { command: "tools", piArgs: [], options, toolsArgs: args.slice(1) };
   // Started only by `ampi app`, which talks to it over the IPC channel.
   if (args.length === 2 && args[0] === "app" && args[1] === "--worker") return { command: "app-worker", piArgs: [], options };
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
@@ -245,6 +247,8 @@ Commands:
   last                          Open the most recent session of this directory that is not archived
   usage                         Print the cost and tokens of every session of the last 30 days;
                                 ampi threads --help lists its options
+  tools list|show [--mode <m>]  Print the tools a session declares to the model in a mode, or one
+                                tool's description and parameters; ampi tools --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
 

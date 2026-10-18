@@ -11,6 +11,8 @@ Commands:
   last                          Open the most recent session of this directory that is not archived
   usage                         Print the cost and tokens of every session of the last 30 days;
                                 ampi threads --help lists its options
+  tools list|show [--mode <m>]  Print the tools a session declares to the model in a mode, or one
+                                tool's description and parameters; ampi tools --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
 

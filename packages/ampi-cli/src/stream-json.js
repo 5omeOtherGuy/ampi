@@ -15,7 +15,7 @@
  * `src/extensions/ampi-core/runtime.ts`). ampi ships TypeScript that only Pi's
  * loader can import, so the command reads the registration directly.
  */
-const AMPI_CORE_RUNTIME_GLOBAL_KEY = "__pi_ampi_core_runtime_v2__";
+export const AMPI_CORE_RUNTIME_GLOBAL_KEY = "__pi_ampi_core_runtime_v2__";
 
 /** Pi's assistant `stopReason` values that have a stream JSON `stop_reason`; the others map to null. */
 const STOP_REASONS = /** @type {Record<string, string>} */ ({ stop: "end_turn", length: "max_tokens", toolUse: "tool_use" });
