@@ -14,6 +14,7 @@ import {
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
+import { type MmrModeDial, openMmrModeDial } from "../overlays/mode-dial.js";
 import { type MmrPaletteItem, openMmrPalette } from "../overlays/palette.js";
 import { getMmrEditorRenderedHeight, isMmrEditorFocused, isMmrEditorShowingAutocomplete } from "../pi-compat/editor.js";
 import { MMR_PI_RESERVED_SHORTCUT_KEYS, toMmrPiKeyId } from "../pi-compat/reserved-keys.js";
@@ -116,10 +117,12 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let hintTimer: unknown;
   let resolved: MmrResolvedKeymap | undefined;
   let quitPending = false;
+  let modeDial: MmrModeDial | undefined;
   const host: MmrTuiCommandHost = {
     getTui: () => getTui(),
     pi,
     openPalette,
+    openModeDial,
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };
@@ -177,6 +180,36 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
       .catch(() => {});
   }
 
+  /**
+   * Offset that puts an overlay anchored at the bottom on the row above the
+   * prompt box. Without a rendered height, count the prompt's text lines
+   * plus two borders.
+   */
+  function abovePrompt(): number {
+    return -(
+      options.editorHeight?.() ??
+      getMmrEditorRenderedHeight(getTui()) ??
+      (ctx?.ui.getEditorText().split("\n").length ?? 1) + 2
+    );
+  }
+
+  function openModeDial(current: ExtensionContext): void {
+    if (modeDial && !modeDial.isClosed()) {
+      modeDial.turn(1);
+      return;
+    }
+    void openMmrModeDial(current, {
+      // The same path as typing /mode: applied, persisted and reported by ampi-core.
+      apply: (mode) => pi.sendUserMessage(`/mode ${mode}`, { expandPromptTemplates: true }),
+      setTimer,
+      clearTimer,
+      offsetY: abovePrompt,
+      onOpen: (dial) => {
+        modeDial = dial;
+      },
+    }).catch(() => {});
+  }
+
   function reportUnavailable(id: string): void {
     const command = getMmrCommand(id);
     if (!command || !ctx) return;
@@ -229,13 +262,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
             anchor: "bottom-right",
             // Pi narrows an overlay to the terminal width; the popup truncates its rows.
             width: MMR_HINT_POPUP_WIDTH,
-            // Sit on the row above the prompt box. Without a rendered height,
-            // count its text lines plus two borders.
-            offsetY: -(
-              options.editorHeight?.() ??
-              getMmrEditorRenderedHeight(getTui()) ??
-              ui.getEditorText().split("\n").length + 2
-            ),
+            offsetY: abovePrompt(),
             nonCapturing: true,
           }),
         },
@@ -351,6 +378,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     stop() {
       dispatcher?.cancel();
       closeHint();
+      modeDial?.close();
+      modeDial = undefined;
       unsubscribeInput?.();
       unsubscribeInput = undefined;
       unsubscribeCommands?.();

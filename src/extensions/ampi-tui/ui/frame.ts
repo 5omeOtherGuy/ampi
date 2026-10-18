@@ -6,7 +6,7 @@ import { sliceByColumn, truncateToWidth, visibleWidth } from "@earendil-works/pi
  *
  * ```
  * ╭─ Title ────────────────────────╮
- * │                                │  one blank row of top padding
+ * │                                │  one blank row of top padding (optional)
  * │ content                       █│  the column before the right border
  * │ content                        │  is a gutter: a scrollbar or a space
  * ╰────────── Esc close · ↑↓ move ─╯
@@ -36,6 +36,8 @@ export interface MmrFrameContent {
   readonly lines: readonly string[];
   /** One cell per content line for the gutter column, such as a scrollbar; a space where missing. */
   readonly gutter?: readonly string[];
+  /** Draw the blank row under the top border. Defaults to true. */
+  readonly topPadding?: boolean;
 }
 
 /** Narrowest box the frame draws; a smaller width is widened to this. */
@@ -96,7 +98,8 @@ export function renderMmrFrame(content: MmrFrameContent, width: number, theme: M
     return `│ ${truncateToWidth(line, inner, "…", true)}${gutter}│`;
   });
 
-  return [`╭─${top}╮`, `│${" ".repeat(total - 2)}│`, ...body, bottom];
+  const padding = content.topPadding === false ? [] : [`│${" ".repeat(total - 2)}│`];
+  return [`╭─${top}╮`, ...padding, ...body, bottom];
 }
 
 export interface MmrScrollbarInput {

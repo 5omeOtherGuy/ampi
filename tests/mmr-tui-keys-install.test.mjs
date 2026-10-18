@@ -113,6 +113,7 @@ describe("ampi-tui key installation", () => {
       "ampi.status": undefined,
       "ampi.changelog": undefined,
       "ampi.config": undefined,
+      "mode.toggle": "ctrl+s",
       "mode.use.low": undefined,
       "mode.use.medium": undefined,
       "mode.use.high": undefined,
@@ -404,6 +405,52 @@ describe("ampi-tui key installation", () => {
   });
 });
 
+describe("ampi-tui mode dial key", () => {
+  beforeEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+  afterEach(() => {
+    registry.__resetMmrCommandsForTests();
+    runtime.setMmrModeState(undefined);
+  });
+
+  it("takes Ctrl+S through raw input, ahead of Pi's and ampi-core's bindings, and opens the dial once above the prompt", () => {
+    const t = setup();
+    t.pi.registerCommand("mode", {});
+    runtime.setMmrModeState({ mode: "medium" });
+    assert.equal(t.shortcuts.has("ctrl+s"), false, "no registerShortcut for ctrl+s");
+    assert.equal(t.send("\x13"), true);
+    assert.equal(t.overlays.length, 1);
+    const overlay = t.overlays[0];
+    const placement = overlay.options.overlayOptions();
+    assert.deepEqual(placement, { anchor: "bottom-right", width: 58, margin: { left: 4 }, offsetY: -3 });
+    assert.equal(overlay.component.getMode(), "medium");
+    assert.deepEqual(t.calls.sendUserMessage, [], "opening changes nothing");
+
+    // Keys reach the open dial; each turn goes through /mode.
+    overlay.component.handleInput("\x13");
+    assert.deepEqual(t.calls.sendUserMessage.at(-1), { content: "/mode high", options: { expandPromptTemplates: true } });
+    // The command running again (from the palette, say) turns the open dial instead of opening a second one.
+    assert.equal(t.send("\x13"), true);
+    assert.equal(t.overlays.length, 1);
+    assert.equal(t.calls.sendUserMessage.at(-1).content, "/mode ultra");
+
+    t.advance(2000);
+    assert.equal(overlay.closed, true, "the dial closes itself after 2 s");
+    t.send("\x13");
+    assert.equal(t.overlays.length, 2, "the next Ctrl+S opens a new dial");
+    t.keys.stop();
+    assert.equal(t.overlays[1].closed, true, "stopping closes an open dial");
+  });
+
+  it("leaves Ctrl+S to Pi when ampi-core's /mode is missing", () => {
+    const t = setup();
+    assert.equal(t.send("\x13"), false);
+    assert.equal(t.overlays.length, 0);
+  });
+});
+
 describe("ampi-tui command palette and details toggle", () => {
   beforeEach(() => {
     registry.__resetMmrCommandsForTests();
@@ -561,7 +608,7 @@ describe("ampi-tui command palette and details toggle", () => {
     t.pi.registerCommand("mode", {});
     runtime.setMmrModeState({ mode: "high" });
     t.send("\x0f");
-    const rows = t.overlays[0].component.getRows().filter((row) => row.command.noun === "mode");
+    const rows = t.overlays[0].component.getRows().filter((row) => row.command.id.startsWith("mode.use."));
     assert.deepEqual(
       rows.map((row) => [row.command.verb, row.state, row.reason]),
       [

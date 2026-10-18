@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; Alt+T details toggle; shortcuts help on `?` | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
+| On | Prompt box with mode, cost, turn status and path in its borders; welcome header, message styling, grouped tool rows, `ampi` theme; Ctrl+X leader, Esc Esc, Ctrl+C Ctrl+C, Home/End; command palette on Ctrl+O and `/`; mode dial on Ctrl+S; Alt+T details toggle; shortcuts help on `?` | Interactive Pi session | Welcome header at startup; rounded prompt box at the bottom, no footer; a "then" popup after Ctrl+X or Ctrl+C; `/ampi-status` |
 
 ## When to use it
 
@@ -42,12 +42,14 @@ It acts only in interactive terminal sessions. Print, JSON and RPC runs, subagen
 | `thread.toggleDetails` | Command, `alt+t` | Expand or collapse tool output and thinking together |
 | `prompt.toggleHelp` | Command, `?` on an empty prompt | Show or hide the shortcuts help inside the prompt box |
 | `ampi.status`, `ampi.changelog`, `ampi.config` | Commands, no key | Run `/ampi-status`, `/ampi-changelog` and `/ampi-config` (need `ampi-core`) |
+| `mode.toggle` | Command, `ctrl+s` | Open the mode dial; while it is open, turn it to the next mode (needs `ampi-core`) |
 | `mode.use.low` … `mode.use.free` | Commands, no key | Switch to that mode, as `/mode <key>` does (need `ampi-core`) |
 | "then" popup | Overlay | Lists the keys that can follow Ctrl+X, Ctrl+C or any other chord prefix |
 | `ampi` theme | Pi package theme (`theme/ampi.json`) | Amp-compatible colour roles on ANSI palette indices |
 | User messages | Transcript | A bar on every line, raw italic text in the theme's user colour, no background |
 | Thinking | Transcript | No label when thinking is collapsed |
 | Command palette | Overlay | Lists every command with its key; type to filter, Enter to run |
+| Mode dial | Overlay | Shows the mode with its models, turns it, and lists every mode |
 
 ## Configuration
 
@@ -85,7 +87,7 @@ Key strings follow `ampi-core`'s keymap grammar ([`docs/ampi-core-api.md`](../..
 - At session start, `ampi-tui` claims ampi's terminal chrome through ampi-core's chrome-owner seam, installs an empty footer, and replaces Pi's editor with the prompt box.
 - While it holds the claim, ampi-core stops drawing its two-line footer in locked modes and no longer brings Pi's footer back in `free` mode.
 - ampi-core hands its new-version changelog notice to `ampi-tui`, which shows it as the welcome card instead of a notification. With `quietStartup: true`, or outside the terminal UI, the notification shows as before.
-- Mode switching, mode state and `/ampi-status` work as before.
+- Mode switching, mode state and `/ampi-status` work as before, except for ampi-core's own cycle keys: Ctrl+S opens the [mode dial](#mode-dial) instead, and the deprecated Ctrl+Space does nothing while `ampi-tui` is on.
 - The prompt box reads the active mode from ampi-core and shows the turn status through ampi-core's thread status model.
 - Everything is released when the session shuts down, and the commands are unregistered. If you turn `ampi-tui` off and reload, ampi-core's footer and notification return, Pi's header, editor and keys come back and user messages are drawn by Pi again.
 - Turned off, `ampi-tui` registers nothing at all, and the session looks and behaves as it did before this extension existed.
@@ -129,7 +131,7 @@ Type `?` into an empty prompt to list the main keys inside the prompt box, above
 ╰────────────────────────────────────────────────────────── /work/repo (main) ─╯
 ```
 
-- **What it lists.** ampi-core's mode keys (when ampi-core is loaded), the newline key, Pi's `@` file mention, the leader, then every command that has a key, in the order the commands were registered, with the key in effect: a binding moved under `ampi.keymap` shows its new key, an unbound command is left out, and the help's own `?` comes last. A command with several keys lists them joined by `or` (`? or F1`). Two commands of one kind with one key each, whose names differ only in the last word, share a row (`Home/End scroll to top/bottom`).
+- **What it lists.** The mode keys when ampi-core is loaded (the [mode dial](#mode-dial)'s key, which follows `mode.toggle` under `ampi.keymap`, and Alt+D), the newline key, Pi's `@` file mention, the leader, then every command that has a key, in the order the commands were registered, with the key in effect: a binding moved under `ampi.keymap` shows its new key, an unbound command is left out, and the help's own `?` comes last. A command with several keys lists them joined by `or` (`? or F1`). Two commands of one kind with one key each, whose names differ only in the last word, share a row (`Home/End scroll to top/bottom`).
 - **Layout.** Two columns, the second starting 34 columns from the box's left edge, when every entry fits; otherwise one column, with entries cut to the width.
 - **Inside tmux.** When tmux's `extended-keys` option is off, a dim line under the rows says that Shift+Enter needs it and that Alt+Enter works without it. ampi asks tmux once, the first time the help opens.
 - **Height.** The box grows by the help. When that would pass a third of the terminal height, the text area shrinks to one row, then the tmux line goes, then entries from the end, except the help's own `?` row, which stays as the last one shown so the help always says how to close it; the rule always stays. In an 80x24 terminal the help has room for six rows, so the last entry before `?` (Alt+T with the default commands) is left out.
@@ -189,6 +191,31 @@ Ctrl+O, or `/` typed into an empty prompt, opens the palette in the middle of th
 - `/` opens the palette only while the prompt is empty and focused, so Pi's slash completion no longer opens from an empty prompt. With text in the prompt, `/` is typed as usual. To type slash commands directly instead, unbind it: `{ "ampi": { "keymap": { "prompt.openPalette": null } } }`.
 - Pi draws overlays over the screen as it is, so the transcript behind the palette is not dimmed; the prompt box dims its own frame while the palette is open.
 
+### Mode dial
+
+Ctrl+S opens the mode dial at the right edge, just above the prompt box: 58 columns wide, or the terminal width less four.
+
+```text
+╭────────────────────────────────────────────────────────╮
+│ •••••••••••••••••••··································· │
+│ low             medium           high            ultra │
+│                                                        │
+│ Agent:  openai-codex/gpt-5.6-sol · medium              │
+│ Oracle: openai-codex/gpt-5.6-sol · high                │
+│                                                        │
+│ Balanced default for everyday coding                   │
+╰──── ctrl+s/→ next · ← previous · tab list · esc close ─╯
+```
+
+- The bar fills up to the mode, in its colour: one dot for `low`, a third for `medium`, two thirds for `high`, all of it for `ultra`. Under it, the current mode's name is bold in that colour. In `free` the bar shows one dot in the default colour and no name is highlighted.
+- `Agent:` names the provider, model and thinking level the mode runs; `Oracle:` the ones the oracle subagent uses. They come from ampi-core's model routing, with your `ampiCore` model overrides, and read "not available" when no registered, signed-in model matches. In `free`, `Agent:` names Pi's current model.
+- The first Ctrl+S only shows the dial. Each further Ctrl+S, or →, turns it to the next mode: `medium` → `high` → `ultra` → `low` → `medium`. ← turns it back. From `free`, either direction goes to `medium`.
+- Each turn switches the mode at once through `/mode`, so it is saved with the session, the prompt box's label changes with it, and ampi-core reports the switch in the transcript as `/mode` does.
+- Tab shows the list of modes instead, `free` last, the current one marked `‣`. ↑/↓ choose a mode and switch to it at once; Tab goes back to the dial.
+- Esc closes the dial. It also closes by itself 2 seconds after the last key.
+- The dial takes every key while it is open; other keys do nothing.
+- Without ampi-core's `/mode` command, Ctrl+S is left to Pi.
+
 ### What changes compared with Pi's defaults
 
 | Key | Pi | With `ampi-tui` |
@@ -205,6 +232,7 @@ Ctrl+O, or `/` typed into an empty prompt, opens the palette in the middle of th
 | `/` on an empty prompt | Types `/` and opens slash-command completion | Opens the command palette |
 | Alt+T | Nothing | Expands or collapses tool output and thinking together |
 | `?` on an empty prompt | Types `?` | Shows or hides the shortcuts help |
+| Ctrl+S | Nothing in the prompt (ampi-core makes it cycle the mode) | Opens the mode dial |
 
 Everything else keeps Pi's binding, including Ctrl+T (thinking blocks only), Ctrl+D (quit on an empty prompt) and Ctrl+Home / Ctrl+End (transcript scrolling).
 
@@ -289,7 +317,7 @@ Each call's own row is one line: a status glyph, a verb and what the call acted 
 
 ### Planned
 
-Later releases add a mode picker. Each lands behind the same `ampiTui.enabled` switch.
+Later releases lock the mode once a thread has messages; the dial then shows the mode without changing it. Each change lands behind the same `ampiTui.enabled` switch.
 
 ## Diagnostics and troubleshooting
 
@@ -312,7 +340,7 @@ Stable re-exports from `ampi`: `createMmrTuiExtension`, `loadMmrTuiSettings` and
 - Layout: `index.ts` (entry point), `config.ts` (settings), `chrome/look.ts` (installs the welcome header, message styling and theme), `chrome/welcome.ts` (header component, mark and card), `editor/` (the prompt box), `transcript/messages.ts` (user message drawing, thinking label), `transcript/activity.ts` and `transcript/tool-renderers.ts` (tool rows), `theme/` (`ampi.json` and its session selection), `keys/`, `ui/`, `overlays/`, `pi-compat/`.
 - `editor/prompt-box.ts` draws the prompt box (a `CustomEditor` subclass), its border slots and the open shortcuts help; `editor/help.ts` builds the help rows from the effective keymap and the command registry and lays them out; `editor/status-feed.ts` maps Pi's agent events onto ampi-core's thread status reducer; `editor/install.ts` installs the box at session start, feeds it the mode, cost, status, wave glyph and branch, toggles the help and runs the one-time tmux check.
 - `keys/decode.ts` turns terminal input into keymap combos; `keys/dispatcher.ts` is the pure chord state machine; `keys/hint-popup.ts` draws the popup; `keys/commands.ts` defines the commands; `keys/install.ts` wires them into Pi, opens the palette and tells the prompt box about the first Esc, the pending quit, the open palette, the help toggle and every other key command (which closes the help).
-- `ui/frame.ts` draws the box overlays share (rounded border, title in the top border, key hints in the bottom border, scrollbar column); `overlays/palette.ts` is the command palette.
+- `ui/frame.ts` draws the box overlays share (rounded border, title in the top border, key hints in the bottom border, scrollbar column); `overlays/palette.ts` is the command palette; `overlays/mode-dial.ts` is the mode dial with its list view.
 - Routing: a binding goes through `pi.registerShortcut` only when it is a single key that Pi does not reserve, starts no longer chord, and belongs to a command without an availability check. Everything else goes through Pi's raw terminal input, so a key whose command is unavailable still reaches the editor.
 - Tool rows: `transcript/activity.ts` classifies a call (pure, no Pi imports) and `summarizeActivities` folds a run of calls into one phrase; `transcript/activity-groups.ts` keeps the runs, fed by Pi's message and tool events and rebuilt from the session's context entries, because a renderer sees only its own call; `transcript/tool-renderers.ts` draws rows and cards through one `pi.registerToolRenderer` resolver. The first call of a run draws the summary, and the others render no lines, which Pi draws with no height and no spacer. Tests: `tests/mmr-tui-activity.test.mjs`, `tests/mmr-tui-activity-groups.test.mjs`, `tests/mmr-tui-tool-renderers.test.mjs` and `tests/mmr-tui-tool-groups.test.mjs`, whose 80- and 140-column fixtures in `tests/fixtures/mmr-tui-tool-rows/` and `tests/fixtures/mmr-tui-tool-groups/` are refreshed with `PI_MMR_UPDATE_FIXTURES=1`.
 - `pi-compat/` is the only place that touches Pi runtime surface outside the extension API: the focused editor with its action handlers, autocomplete state and rendered height, the editor's submit handler (the only path that runs Pi's built-in slash commands) and the list of those commands, the editor's height rule (`editor-height.ts`), transcript scrolling, the reserved shortcut list, raw input, and the user message component. `tests/mmr-tui-pi-compat.test.mjs` probes each against the installed Pi and fails when Pi changes shape.

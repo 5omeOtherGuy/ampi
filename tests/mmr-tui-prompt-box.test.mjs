@@ -398,10 +398,15 @@ describe("ampi-tui prompt box: shortcuts help", () => {
         "ampi.palette": null,
         "thread.scrollToTop": ["home", "ctrl+up"],
         "prompt.toggleHelp": ["?", "f1"],
+        "mode.toggle": "alt+m",
       },
       leader: "alt+x",
     });
     // Keys of one command are joined with "or"; a command with two keys shares no row.
+    // The mode dial's key is listed once, as the first mode key, and only with ampi-core.
+    const withCore = rows(help.buildMmrShortcutHelpEntries({ keymap, commands, modeKeys: true }));
+    assert.deepEqual(withCore.slice(0, 2), ["Alt+M switch modes", "Alt+D toggle thinking"]);
+    assert.equal(withCore.filter((row) => row.startsWith("Alt+M ")).length, 1);
     assert.deepEqual(rows(help.buildMmrShortcutHelpEntries({ keymap, commands, modeKeys: false })), [
       "Alt+Enter newline",
       "@ mention files",

@@ -24,6 +24,8 @@ export interface MmrTuiCommandHost {
   readonly pi: Pick<ExtensionAPI, "getCommands" | "getSettings" | "sendUserMessage">;
   /** Open the command palette. */
   openPalette(ctx: ExtensionContext): void;
+  /** Open the mode dial, or turn it when it is already open. */
+  openModeDial(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -32,6 +34,9 @@ export interface MmrTuiCommandHost {
 
 /** The command `?` runs: open or close the shortcuts help. */
 export const MMR_HELP_COMMAND_ID = "prompt.toggleHelp";
+
+/** The command Ctrl+S runs: open or turn the mode dial. */
+export const MMR_MODE_DIAL_COMMAND_ID = "mode.toggle";
 
 /** Commands that open the palette; the palette does not list them. */
 export const MMR_PALETTE_COMMAND_IDS: ReadonlySet<string> = new Set(["ampi.palette", "prompt.openPalette"]);
@@ -235,6 +240,19 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       verb: "configure",
       description: "Pick the models for modes and subagents, or set up ampi-web",
     }),
+    {
+      id: MMR_MODE_DIAL_COMMAND_ID,
+      noun: "mode",
+      verb: "switch",
+      description: "Show the mode dial; each further press turns it to the next mode",
+      defaultKey: "ctrl+s",
+      keywords: ["dial"],
+      // The dial switches modes through /mode. Having an availability check
+      // also sends the key through raw input, ahead of the Ctrl+S bindings
+      // of Pi and ampi-core.
+      availability: () => (hasSlashCommand(host, CORE_SLASH.mode) ? AVAILABLE : CORE_MISSING),
+      run: (ctx) => host.openModeDial(ctx),
+    },
     ...MMR_MODE_KEYS.map((mode) =>
       coreSlashCommand(
         host,

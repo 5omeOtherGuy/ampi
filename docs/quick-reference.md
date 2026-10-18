@@ -17,7 +17,8 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 /mode high         # switch mode
 /ampi-status        # concise locked-mode status
 /ampi-status debug  # model preference candidates, tool resolution, policy details
-Ctrl+S              # cycle low → medium → high → ultra (Ctrl+Space: deprecated alias)
+Ctrl+S              # mode dial: further presses or ←/→ turn low → medium → high → ultra; Tab lists all modes
+                    # (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
 Ctrl+Shift+S        # mode picker (Alt+M fallback)
 Alt+D               # toggle the active mode's thinking preset (medium, high, ultra)
 ```
