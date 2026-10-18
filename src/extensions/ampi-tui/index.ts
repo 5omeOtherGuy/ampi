@@ -4,6 +4,8 @@ import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
 import { getMmrCommands } from "../ampi-core/command-registry.js";
 import { getMmrModeState } from "../ampi-core/runtime.js";
 import { installMmrTuiLook } from "./chrome/look.js";
+import { printMmrQuitSummary } from "./chrome/quit-summary.js";
+import { createMmrTitleNotify } from "./chrome/title-notify.js";
 import { loadMmrTuiSettings, type MmrTuiSettings } from "./config.js";
 import { buildMmrShortcutHelpEntries } from "./editor/help.js";
 import { createMmrPromptBoxInstall } from "./editor/install.js";
@@ -32,11 +34,17 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
     let tui: TUI | undefined;
     let footerData: ReadonlyFooterDataProvider | undefined;
     const look = installMmrTuiLook(pi, settings);
-    const feed = createMmrStatusFeed(pi, { onChange: () => promptBox.statusChanged() });
+    const feed = createMmrStatusFeed(pi, {
+      onChange: () => {
+        promptBox.statusChanged();
+        titleNotify.statusChanged();
+      },
+    });
     const promptBox = createMmrPromptBoxInstall(pi, feed, {
       helpEntries: () =>
         buildMmrShortcutHelpEntries({ keymap: keys.keymap(), commands: getMmrCommands(), modeKeys: getMmrModeState() !== undefined }),
     });
+    const titleNotify = createMmrTitleNotify(pi, feed, { settings: settings.notifications });
     const keys = createMmrTuiKeys(pi, {
       editorHeight: () => promptBox.renderedHeight(),
       onEscapePending: () => promptBox.clearPrompt(),
@@ -69,12 +77,16 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       feed.reset(ctx);
       promptBox.start(ctx, () => footerData);
       keys.start(ctx, () => tui);
+      titleNotify.start(ctx);
     });
 
-    pi.on("session_shutdown", () => {
+    pi.on("session_shutdown", (event, ctx) => {
       keys.stop();
       promptBox.stop();
       look.stop();
+      titleNotify.stop();
+      // On quit Pi has left its UI by now and prints its resume line next.
+      if (releaseChrome && event.reason === "quit") printMmrQuitSummary(ctx);
       // Release the seam so a reload with ampi-tui disabled hands the footer
       // back to ampi-core, which sets it again on the next session start.
       releaseChrome?.();
