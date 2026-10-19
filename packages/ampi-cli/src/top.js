@@ -54,7 +54,7 @@ import { cut, padEnd } from "./threads.js";
  */
 
 const USAGE_HINT = "Run ampi top --help for its options.";
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   json: { type: "boolean" },
   "stream-jsonl": { type: "boolean" },
   help: { type: "boolean", short: "h" },

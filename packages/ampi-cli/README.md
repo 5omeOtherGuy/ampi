@@ -653,7 +653,7 @@ The script holds no list of commands: on every Tab it runs the hidden `ampi __co
 | Skill names | `skill info`, `skill remove` | The skills `ampi skill list` shows |
 | MCP server names | `mcp remove`, `doctor`, `approve`, `oauth login\|logout\|status` | `mcp.json` in Pi's configuration directory and this project's `.pi/mcp.json`, read without connecting |
 
-Also fixed lists: `--log-level`, Pi's `--thinking` and `--tui-mode`, and the shells after `completions`. Completing a session id or a skill name starts Pi to list them; everything else reads only ampi's own files and never loads Pi. Aliases (`ls`, `find`, `rm`, …) are offered only when no command name matches what is typed, and resolve like their command. Short options are offered after a lone `-` or `-` and a letter, long names after `--`.
+Also fixed lists: `--log-level`, Pi's `--thinking` and `--tui-mode`, `review --thinking`, and the shells after `completions`. Completing a session id or a skill name starts Pi to list them; everything else reads only ampi's own files and never loads Pi. Aliases (`ls`, `find`, `rm`, …) are offered only when no command name matches what is typed, and resolve like their command. Short options are offered after a lone `-` or `-` and a letter, long names after `--`.
 
 Exit status of `ampi completions`: `0` with the script on stdout, `2` on a usage error, such as an unknown shell.
 

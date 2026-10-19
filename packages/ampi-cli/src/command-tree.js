@@ -88,6 +88,14 @@ const THINKING = {
   choices: ["off", "minimal", "low", "medium", "high", "xhigh", "max"].map((level) => ({ value: level, description: "Thinking level" })),
 };
 
+/** The thinking levels `ampi review --thinking` takes. */
+const REVIEW_THINKING = {
+  choices: [
+    { value: "low", description: "The review's default" },
+    { value: "high", description: "Deeper reasoning" },
+  ],
+};
+
 /** Pi's `--tui-mode` values, from Pi's docs/cli.md. */
 const TUI_MODE = {
   choices: [
@@ -401,6 +409,21 @@ export const COMMAND_TREE = deepFreeze(
       THREADS,
       command("last", "Open the latest session here that is not archived"),
       command("usage", "Print the cost of every session of the last 30 days", { options: USAGE_OPTIONS }),
+      command("review", "Review a diff once with the reviewer and the review checks", {
+        args: [rest("description")],
+        options: [
+          valued("--files", "Focus the review on this file", { short: ["-f"], kind: "file", repeat: true }),
+          valued("--instructions", "More instructions for the reviewer", { short: ["-i"] }),
+          valued("--check-scope", "Run only the checks in this directory or below", { short: ["-s"], kind: "directory" }),
+          valued("--check-filter", "Run only the check of this name", { short: ["-c"], repeat: true }),
+          option("--checks-only", "Run only the checks, without the main review"),
+          json("Print the JSON document instead of the report"),
+          valued("--thinking", "The reviewer's thinking level", { kind: REVIEW_THINKING }),
+          valued("--title", "Name the review's thread"),
+          valued("--label", "Add a label to the thread", { short: ["-l"], repeat: true }),
+          option("--no-archive-after-execute", "Keep the thread out of the archive"),
+        ],
+      }),
       command("tools", "Print the tools a session declares in a mode", {
         aliases: ["tool"],
         optionsBeforeCommand: true,
@@ -422,6 +445,9 @@ export const COMMAND_TREE = deepFreeze(
       }),
       command("app", "Serve every session from one local web page", {
         options: [option("--open", "Open the page in a browser"), option("--worker", "Started by ampi app only", { hidden: true })],
+      }),
+      command("top", "Show the ampi sessions running on this machine", {
+        options: [json("Print the list once as JSON"), option("--stream-jsonl", "Print a JSON line now and on every change")],
       }),
       command("doctor", "Check what ampi needs and say how to fix it", { options: [json()] }),
       command("update", "Update the ampi command", {

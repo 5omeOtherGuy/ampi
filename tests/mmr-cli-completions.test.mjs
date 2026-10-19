@@ -40,9 +40,11 @@ import { OPTIONS as DEV_KEYS_OPTIONS } from "../packages/ampi-cli/src/dev-keys.j
 import { OPTIONS as DOCTOR_OPTIONS } from "../packages/ampi-cli/src/doctor.js";
 import { AGENT_ALIASES, AGENTS, DETECT_OPTIONS, formatImportHelp, IMPORT_OPTIONS } from "../packages/ampi-cli/src/import/index.js";
 import { ADD_VALUE_OPTIONS, formatMcpHelp } from "../packages/ampi-cli/src/mcp.js";
+import { OPTIONS as REVIEW_OPTIONS } from "../packages/ampi-cli/src/review.js";
 import { ALIASES as SKILL_ALIASES, COMMANDS as SKILL_COMMANDS, OPTIONS as SKILL_OPTIONS, formatSkillHelp } from "../packages/ampi-cli/src/skill.js";
 import { ALIASES as THREAD_ALIASES, OPTIONS as THREAD_OPTIONS } from "../packages/ampi-cli/src/threads.js";
 import { ALIASES as TOOL_ALIASES, OPTIONS as TOOL_OPTIONS, formatToolsHelp } from "../packages/ampi-cli/src/tools.js";
+import { OPTIONS as TOP_OPTIONS } from "../packages/ampi-cli/src/top.js";
 import { OPTIONS as UPDATE_OPTIONS } from "../packages/ampi-cli/src/update.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -99,9 +101,36 @@ describe("ampi completion resolver", () => {
     assert.deepEqual(values(await complete("ampi thr")), ["threads"]);
   });
 
+  it("completes review and top and their options", async () => {
+    assert.deepEqual(values(await complete("ampi rev")), ["review"]);
+    assert.deepEqual(values(await complete("ampi review -")), [
+      "-f",
+      "--files",
+      "-i",
+      "--instructions",
+      "-s",
+      "--check-scope",
+      "-c",
+      "--check-filter",
+      "--checks-only",
+      "--json",
+      "--thinking",
+      "--title",
+      "-l",
+      "--label",
+      "--no-archive-after-execute",
+      "-h",
+      "--help",
+    ]);
+    assert.deepEqual(values(await complete("ampi review --thinking ")), ["low", "high"]);
+    assert.deepEqual(await complete("ampi review -f "), { path: "file", prefix: "" });
+    assert.deepEqual(await complete("ampi review --check-scope "), { path: "directory", prefix: "" });
+    assert.deepEqual(values(await complete("ampi top -")), ["--json", "--stream-jsonl", "-h", "--help"]);
+  });
+
   it("offers the commands for an empty word, without the hidden __complete or any alias", async () => {
     const offered = values(await complete("ampi "));
-    for (const name of ["help", "version", "threads", "last", "usage", "tools", "skill", "mcp", "config", "app", "doctor", "update", "dev", "completions"]) {
+    for (const name of ["help", "version", "threads", "last", "usage", "review", "tools", "skill", "mcp", "config", "app", "top", "doctor", "update", "dev", "completions"]) {
       assert.ok(offered.includes(name), `${name} is offered`);
     }
     for (const name of ["install", "remove", "uninstall", "list", "auth"]) assert.ok(offered.includes(name), `Pi's ${name} is offered`);
@@ -438,6 +467,8 @@ function findTreeDrift(tree) {
   compareCommands(["config"], Object.keys(CONFIG_OPTIONS));
   for (const [name, table] of Object.entries(CONFIG_OPTIONS)) compareTable(["config", name], table);
   compareTable(["doctor"], DOCTOR_OPTIONS);
+  compareTable(["review"], REVIEW_OPTIONS);
+  compareTable(["top"], TOP_OPTIONS);
   compareTable(["update"], UPDATE_OPTIONS);
   compareTable(["dev", "keys"], DEV_KEYS_OPTIONS);
   compareTable(["completions"], COMPLETIONS_OPTIONS);

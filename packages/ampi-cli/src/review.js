@@ -68,7 +68,7 @@ const REQUEST_FLAG = "ampi-review-request";
 /** The file that holds `/ampi-review-run` in an ampi that has it. */
 const REVIEW_RUN_ENTRY = path.join("src", "extensions", "ampi-workers", "builtin-workers", "review-run.ts");
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   files: { type: "string", short: "f", multiple: true },
   instructions: { type: "string", short: "i" },
   "check-scope": { type: "string", short: "s" },
