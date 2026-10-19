@@ -44,7 +44,7 @@ import { createPiInputSplitter, loadThroughPi, readPiSettings } from "./pi-compa
 const DEV_KEYS_ENTRY = path.join("src", "cli-dev-keys.ts");
 const DEV_KEYS_EVENT = "ampi:cli-dev-keys";
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   raw: { type: "boolean" },
   "no-keymap": { type: "boolean" },
   help: { type: "boolean", short: "h" },

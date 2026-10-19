@@ -42,7 +42,7 @@ import { cut } from "./threads.js";
 const USAGE_HINT = "Run ampi mcp --help for the options.";
 
 /** Options of `pi mcp add` that take the next argument as their value. */
-const ADD_VALUE_OPTIONS = new Set([
+export const ADD_VALUE_OPTIONS = new Set([
   "url",
   "env",
   "cwd",

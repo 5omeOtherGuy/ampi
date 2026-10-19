@@ -38,6 +38,7 @@ ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options to
 ampi doctor              # check Node.js, Pi, ampi, rg, fd, git, credentials and data files
 ampi update              # update ampi-cli, with its Pi and ampi, to the latest version
 ampi version             # ampi-cli, ampi and Pi versions
+ampi completions bash    # a completion script for bash, zsh, fish or pwsh
 ampi --help              # all options
 ampi --pi-help           # Pi's own options, including the flags ampi's extensions add
 ```
@@ -630,6 +631,33 @@ The command runs `npm` from PATH (Pi's `npmCommand` setting is not used) and ign
 Pi's update arguments still go to Pi's own `update` command unchanged: `ampi update --extensions` updates Pi's packages, `ampi update npm:<package>` one of them, and `--models`, `--all`, `--self`, `--force`, `self` and `pi` keep Pi's meaning (`ampi up` with them is passed on as `update`). Mixing them with `--target-version` or `--porcelain` is a usage error. `ampi update` without arguments is how the Pi that comes with ampi-cli gets updated: Pi's own self-update (`--self`, `--all`, `--force`, `self`, `pi`) under a global ampi-cli runs `npm install -g @earendil-works/pi-coding-agent`, which installs a second, separate Pi.
 
 Exit status: `0` when ampi-cli was updated or needs no update, `1` when it cannot be updated here or npm fails, `2` on a usage error.
+
+## Completions
+
+`ampi completions <shell>` prints a completion script for `bash`, `zsh`, `fish` or `pwsh` (PowerShell). It completes ampi's commands, subcommands and options with their aliases, Pi's top-level options, the names of Pi's own commands (nothing after them), and the values ampi knows; files and directories get the shell's own path completion, and a message gets nothing. zsh, fish and PowerShell show a short description next to each candidate.
+
+| Shell | Load it with |
+| --- | --- |
+| bash | `source <(ampi completions bash)` in `~/.bashrc` |
+| zsh | `ampi completions zsh > ~/.zsh/completions/_ampi`, with that directory on `fpath` before `compinit` in `~/.zshrc`; or `source <(ampi completions zsh)` in `~/.zshrc` after `compinit` |
+| fish | `ampi completions fish > ~/.config/fish/completions/ampi.fish` |
+| PowerShell | `ampi completions pwsh \| Out-String \| Invoke-Expression` in `$PROFILE` |
+
+The script holds no list of commands: on every Tab it runs the hidden `ampi __complete <shell> -- <words...>` with the words typed so far, so it never needs regenerating when ampi gains a command, and it runs the `ampi` on PATH, so it keeps working after `ampi update`. `ampi __complete` always exits `0` and prints nothing on stderr; a value it cannot list is not offered.
+
+| Value | Offered after | From |
+| --- | --- | --- |
+| Modes | `-m`, `--mode`, `tools -m` | `low`, `medium`, `high`, `ultra`, `free`; `--mode` adds Pi's `text`, `json`, `rpc` |
+| Colours | `threads color <id>` | The thread colours and `none` |
+| Session ids | Thread commands that take an id, Pi's `--session` and `--fork` | This directory's sessions, archived ones included, newest first, with their titles |
+| Skill names | `skill info`, `skill remove` | The skills `ampi skill list` shows |
+| MCP server names | `mcp remove`, `doctor`, `approve`, `oauth login\|logout\|status` | `mcp.json` in Pi's configuration directory and this project's `.pi/mcp.json`, read without connecting |
+
+Also fixed lists: `--log-level`, Pi's `--thinking` and `--tui-mode`, and the shells after `completions`. Completing a session id or a skill name starts Pi to list them; everything else reads only ampi's own files and never loads Pi. Aliases (`ls`, `find`, `rm`, …) are offered only when no command name matches what is typed, and resolve like their command. Short options are offered after a lone `-` or `-` and a letter, long names after `--`.
+
+Exit status of `ampi completions`: `0` with the script on stdout, `2` on a usage error, such as an unknown shell.
+
+Contributors: a new command or option goes into `src/command-tree.js` too; the drift test in `tests/mmr-cli-completions.test.mjs` fails the gate until it is there.
 
 ## Behavior
 

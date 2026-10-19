@@ -47,9 +47,9 @@ import { cut } from "./threads.js";
 const USAGE_HINT = "Run ampi skill --help for the options.";
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list", rm: "remove" };
+export const ALIASES = { ls: "list", rm: "remove" };
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   json: { type: "boolean" },
   global: { type: "boolean" },
   target: { type: "string" },
@@ -60,7 +60,7 @@ const OPTIONS = /** @type {const} */ ({
 });
 
 /** @type {Record<string, { args: number, options: string[] }>} */
-const COMMANDS = {
+export const COMMANDS = {
   list: { args: 0, options: ["json"] },
   info: { args: 1, options: ["json"] },
   add: { args: 1, options: ["global", "target", "overwrite", "name"] },

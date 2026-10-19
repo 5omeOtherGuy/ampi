@@ -37,6 +37,10 @@ import { OPENCODE_AGENT, OPENCODE_SESSION_ID, openCodeDir, openOpenCode } from "
  */
 
 const USAGE_HINT = "Run ampi threads import --help for the agents and options.";
+
+/** Other spellings of the agents' import commands. */
+export const AGENT_ALIASES = Object.freeze({ "claude-code": "claude" });
+
 /** The version of the `ampi-import` entry's fields. */
 const IMPORT_FORMAT_VERSION = 1;
 /** Days `--all` looks back without `--max-age`. */
@@ -56,7 +60,7 @@ const homeOf = (env) => env.HOME || homedir();
  *
  * @type {Record<string, ImportAgent>}
  */
-const AGENTS = {
+export const AGENTS = {
   claude: {
     agent: CLAUDE_CODE_AGENT,
     name: "Claude Code",
@@ -89,8 +93,8 @@ const AGENTS = {
   },
 };
 
-const DETECT_OPTIONS = /** @type {const} */ ({ json: { type: "boolean" } });
-const IMPORT_OPTIONS = /** @type {const} */ ({
+export const DETECT_OPTIONS = /** @type {const} */ ({ json: { type: "boolean" } });
+export const IMPORT_OPTIONS = /** @type {const} */ ({
   all: { type: "boolean" },
   "max-age": { type: "string" },
   limit: { type: "string" },
@@ -181,7 +185,7 @@ export async function runImportCommand(argv, host) {
     host.log.error(`${message}\n${USAGE_HINT}`);
     return { code: 2 };
   };
-  const sub = command === "claude-code" ? "claude" : command;
+  const sub = Object.hasOwn(AGENT_ALIASES, command) ? AGENT_ALIASES[/** @type {keyof typeof AGENT_ALIASES} */ (command)] : command;
   const agent = Object.hasOwn(AGENTS, sub) ? AGENTS[sub] : undefined;
   if (sub !== "detect" && agent === undefined) return usage(`unknown import command ${command}.`);
   const options = agent === undefined ? DETECT_OPTIONS : { ...IMPORT_OPTIONS, [agent.dirOption]: { type: "string" } };

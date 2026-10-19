@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "completions" | "complete" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -42,31 +42,78 @@ import { isLogLevel } from "./log.js";
  * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
  * @property {string[]} [reviewArgs] The command line after `review`, when `command` is `"review"`.
  * @property {string[]} [updateArgs] The command line after `update` (or `up`), when `command` is `"update"`.
+ * @property {string[]} [completionsArgs] The command line after `completions`, when `command` is `"completions"`.
+ * @property {string[]} [completeArgs] The command line after `__complete`, when `command` is `"complete"` (hidden:
+ *   the completion scripts call it on every Tab).
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  * @property {string} [usageHint] The help to point to after `error`, when it is not `ampi --help`.
  */
 
 /** Values of Pi's own `--mode` (output format); these keep Pi's meaning. */
-const PI_OUTPUT_MODES = new Set(["text", "json", "rpc"]);
+export const PI_OUTPUT_MODES = new Set(["text", "json", "rpc"]);
+
+/** @param {string[]} names @returns {readonly string[]} */
+const aliasList = (...names) => Object.freeze(names);
+
+/**
+ * ampi's top-level commands, each with its aliases. The router takes a first
+ * word for one of these commands only through this list, so every command it
+ * routes is here; the completion tree in command-tree.js is checked against it.
+ * `config` is ampi's only before a word in CONFIG_COMMANDS, `dev` only before
+ * one in DEV_COMMANDS, and `__complete` is hidden: the completion scripts call it.
+ */
+export const AMPI_COMMANDS = Object.freeze({
+  help: aliasList(),
+  version: aliasList(),
+  threads: aliasList(),
+  last: aliasList(),
+  usage: aliasList(),
+  tools: aliasList("tool"),
+  app: aliasList(),
+  top: aliasList(),
+  skill: aliasList("skills"),
+  mcp: aliasList(),
+  doctor: aliasList(),
+  review: aliasList(),
+  update: aliasList("up"),
+  config: aliasList(),
+  dev: aliasList(),
+  completions: aliasList(),
+  __complete: aliasList(),
+});
+
+/**
+ * The command a first word names, through its name or an alias.
+ *
+ * @param {string | undefined} word
+ * @returns {keyof typeof AMPI_COMMANDS | undefined}
+ */
+function ampiCommandOf(word) {
+  if (word === undefined) return undefined;
+  for (const [name, aliases] of Object.entries(AMPI_COMMANDS)) {
+    if (word === name || aliases.includes(word)) return /** @type {keyof typeof AMPI_COMMANDS} */ (name);
+  }
+  return undefined;
+}
 
 /**
  * Pi's own commands. Pi recognises them only as the first argument and rejects options it does not know.
  * `update` is Pi's only with Pi's update arguments (see routeUpdate).
  */
-const PI_COMMANDS = new Set(["install", "remove", "uninstall", "list", "config", "auth"]);
+export const PI_COMMANDS = new Set(["install", "remove", "uninstall", "list", "config", "auth"]);
 
 /** The options of ampi's own `update`; `-h` and `--help` belong to whichever update runs. */
 const UPDATE_OPTIONS = new Set(["--target-version", "--porcelain"]);
 const UPDATE_HELP_FLAGS = new Set(["-h", "--help"]);
 
 /** The `config` subcommands ampi runs itself. */
-const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
+export const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
 
 /** The developer commands, `ampi dev <command>`. */
-const DEV_COMMANDS = new Set(["keys"]);
+export const DEV_COMMANDS = new Set(["keys"]);
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
   fast: { type: "boolean" },
   title: { type: "string" },
@@ -93,14 +140,14 @@ const OPTIONS = /** @type {const} */ ({
 });
 
 /** ampi's options that may also come before a command, as in `ampi --log-level debug threads list`. */
-const GLOBAL_OPTIONS = new Set(["log-level", "log-file", "color", "no-color"]);
+export const GLOBAL_OPTIONS = new Set(["log-level", "log-file", "color", "no-color"]);
 
 /**
  * Pi's options that always take the next argument as their value. Declaring
  * them keeps that value away from ampi's own options: in
  * `--append-system-prompt -v`, `-v` is the prompt, not a version request.
  */
-const PI_VALUE_OPTIONS = /** @type {const} */ ({
+export const PI_VALUE_OPTIONS = /** @type {const} */ ({
   provider: { type: "string" },
   model: { type: "string" },
   "api-key": { type: "string" },
@@ -120,6 +167,40 @@ const PI_VALUE_OPTIONS = /** @type {const} */ ({
   skill: { type: "string" },
   "prompt-template": { type: "string" },
   theme: { type: "string" },
+});
+
+/**
+ * Pi's other top-level options, as Pi's docs/cli.md lists them: the router
+ * does not read them, so they reach Pi unchanged, and only the completion
+ * tree uses this list. `value` says whether the option takes the next
+ * argument (`optional` when it may). Several short spellings have more than
+ * one letter (`-nbt`), which parseArgs cannot declare; `exclude-tools` is in
+ * PI_VALUE_OPTIONS, and its short spelling `-xt` is here. Compare this list
+ * with Pi's docs/cli.md after a Pi update.
+ *
+ * @type {Readonly<Record<string, Readonly<{ value: boolean | "optional", short?: readonly string[] }>>>}
+ */
+export const PI_OTHER_OPTIONS = Object.freeze({
+  continue: { value: false, short: ["c"] },
+  resume: { value: false, short: ["r"] },
+  print: { value: false, short: ["p"] },
+  "no-session": { value: false },
+  "list-models": { value: "optional" },
+  "use-theme": { value: true },
+  "tui-mode": { value: true },
+  "exclude-tools": { value: true, short: ["xt"] },
+  "no-builtin-tools": { value: false, short: ["nbt"] },
+  "no-tools": { value: false, short: ["nt"] },
+  "no-extensions": { value: false, short: ["ne"] },
+  "no-mcp": { value: false },
+  "no-skills": { value: false, short: ["ns"] },
+  "no-prompt-templates": { value: false, short: ["np"] },
+  "no-themes": { value: false },
+  "no-context-files": { value: false, short: ["nc"] },
+  verbose: { value: false },
+  approve: { value: false, short: ["a"] },
+  "no-approve": { value: false, short: ["na"] },
+  offline: { value: false },
 });
 
 /** The most seconds `--plugin-ready-timeout` takes, and the value of its bare form. */
@@ -184,26 +265,47 @@ function countLeadingGlobalOptions(args) {
  * @returns {Omit<AmpiRoute, "options"> | undefined}
  */
 function routeCommand(args) {
-  if (args[0] === "help") return { command: "help", piArgs: [] };
-  if (args[0] === "version") return { command: "version", piArgs: [] };
-  if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], threadArgs: args };
-  if (args[0] === "tools" || args[0] === "tool") return { command: "tools", piArgs: [], toolsArgs: args.slice(1) };
-  if (args[0] === "app") {
-    // `--worker` is started only by `ampi app`, which talks to it over the IPC channel.
-    if (args.length === 2 && args[1] === "--worker") return { command: "app-worker", piArgs: [] };
-    if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], open: args.length === 2 };
-    return { command: "error", piArgs: [], error: "ampi app takes only --open." };
+  switch (ampiCommandOf(args[0])) {
+    case "help":
+      return { command: "help", piArgs: [] };
+    case "version":
+      return { command: "version", piArgs: [] };
+    case "threads":
+    case "last":
+    case "usage":
+      return { command: "threads", piArgs: [], threadArgs: args };
+    case "tools":
+      return { command: "tools", piArgs: [], toolsArgs: args.slice(1) };
+    case "app":
+      // `--worker` is started only by `ampi app`, which talks to it over the IPC channel.
+      if (args.length === 2 && args[1] === "--worker") return { command: "app-worker", piArgs: [] };
+      if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], open: args.length === 2 };
+      return { command: "error", piArgs: [], error: "ampi app takes only --open." };
+    case "top":
+      return { command: "top", piArgs: [], topArgs: args.slice(1) };
+    case "skill":
+      return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
+    case "mcp":
+      return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
+    case "doctor":
+      return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
+    case "review":
+      return { command: "review", piArgs: [], reviewArgs: args.slice(1) };
+    case "update":
+      return routeUpdate(args.slice(1));
+    case "config":
+      // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
+      if (CONFIG_COMMANDS.has(args[1] ?? "")) return { command: "config", piArgs: [], configArgs: args.slice(1) };
+      break;
+    case "dev":
+      // `dev keys` is ampi's; `ampi dev` followed by anything else is a message for Pi.
+      if (DEV_COMMANDS.has(args[1] ?? "")) return { command: "dev", piArgs: [], devArgs: args.slice(1) };
+      break;
+    case "completions":
+      return { command: "completions", piArgs: [], completionsArgs: args.slice(1) };
+    case "__complete":
+      return { command: "complete", piArgs: [], completeArgs: args.slice(1) };
   }
-  if (args[0] === "top") return { command: "top", piArgs: [], topArgs: args.slice(1) };
-  if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
-  if (args[0] === "mcp") return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
-  if (args[0] === "doctor") return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
-  if (args[0] === "review") return { command: "review", piArgs: [], reviewArgs: args.slice(1) };
-  if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1));
-  // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
-  if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) return { command: "config", piArgs: [], configArgs: args.slice(1) };
-  // `dev keys` is ampi's; `ampi dev` followed by anything else is a message for Pi.
-  if (args[0] === "dev" && DEV_COMMANDS.has(args[1] ?? "")) return { command: "dev", piArgs: [], devArgs: args.slice(1) };
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args };
   return undefined;
 }
@@ -467,6 +569,9 @@ Commands:
   update, up [--target-version <v>] [--porcelain]
                                 Update the ampi command (an npm install -g) to the latest or
                                 the given version; ampi update --help has more
+  completions <shell>           Print a script that completes ampi's commands and options in
+                                bash, zsh, fish or pwsh; ampi completions --help shows how to
+                                load it
 
   Pi's own commands (install, remove, uninstall, list, config, auth) run unchanged,
   without ampi's options; config keymap and config edit are ampi's. update goes to Pi's

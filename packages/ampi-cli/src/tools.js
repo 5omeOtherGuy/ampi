@@ -45,9 +45,9 @@ const MODE_ALIASES = { rush: "low", smart: "medium", deep: "high", fable: "ultra
 const SOURCE_ORDER = ["built-in", "ampi", "extension", "mcp"];
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list" };
+export const ALIASES = { ls: "list" };
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   json: { type: "boolean" },
   mode: { type: "string", short: "m" },
   help: { type: "boolean", short: "h" },

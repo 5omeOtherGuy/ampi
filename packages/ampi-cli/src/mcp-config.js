@@ -62,7 +62,7 @@ const sameServerKey = (/** @type {string} */ name) => name.replaceAll("-", "_");
  * @param {boolean} project
  * @returns {string[]}
  */
-function definedServers(file, project) {
+export function definedServers(file, project) {
   try {
     const servers = JSON.parse(readFileSync(file, "utf8"))?.mcpServers;
     if (!isRecord(servers)) return [];
