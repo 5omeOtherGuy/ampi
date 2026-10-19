@@ -41,13 +41,19 @@ function normalizeTool(tool) {
 function makePi(options = {}) {
   const tools = [];
   const handlers = new Map();
+  const commands = new Map();
+  const flags = new Map();
   const externalTools = (options.externalTools ?? []).map(normalizeTool);
   const activeTools = options.activeTools ?? externalTools.map((tool) => tool.name);
   return {
     tools,
     handlers,
+    commands,
+    flags,
     pi: {
       registerTool: (definition) => tools.push(definition),
+      registerCommand: (name, command) => commands.set(name, command),
+      registerFlag: (name, flag) => flags.set(name, flag),
       on: (name, handler) => handlers.set(name, handler),
       getActiveTools: () => [...activeTools],
       getAllTools: () => [...externalTools, ...tools].map((tool) => ({ ...tool })),
@@ -210,9 +216,11 @@ describe("mmr-subagents package wiring", () => {
 describe("mmr-subagents extension factory", () => {
   it("registers the finder, oracle, Task, librarian, reviewer, and view_media Pi tools plus the read-result normalizer", async () => {
     const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
-    const { pi, tools, handlers } = makePi();
+    const { pi, tools, handlers, commands, flags } = makePi();
     createMmrWorkersExtension()(pi);
     const names = tools.map((tool) => tool.name).sort();
+    assert.deepEqual([...commands.keys()], ["ampi-review-run"], "the command ampi review runs");
+    assert.deepEqual([...flags.keys()], ["ampi-review-request", "ampi-review-output"]);
     assert.deepEqual(
       names,
       ["Task", "finder", "librarian", "oracle", "reviewer", "start_task", "task_cancel", "task_poll", "task_wait", "view_media"],

@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -38,6 +38,7 @@ import { isLogLevel } from "./log.js";
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
  * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
  * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
+ * @property {string[]} [reviewArgs] The command line after `review`, when `command` is `"review"`.
  * @property {string[]} [updateArgs] The command line after `update` (or `up`), when `command` is `"update"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
@@ -194,6 +195,7 @@ function routeCommand(args) {
   if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
   if (args[0] === "mcp") return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
   if (args[0] === "doctor") return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
+  if (args[0] === "review") return { command: "review", piArgs: [], reviewArgs: args.slice(1) };
   if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1));
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) return { command: "config", piArgs: [], configArgs: args.slice(1) };
@@ -440,6 +442,9 @@ Commands:
   last                          Open the most recent session of this directory that is not archived
   usage                         Print the cost and tokens of every session of the last 30 days;
                                 ampi threads --help lists its options
+  review [description...]       Review a diff once with the reviewer and the review checks, print
+                                the report or a JSON document and record it as a thread;
+                                ampi review --help has more
   tools list|show [--mode <m>]  Print the tools a session declares to the model in a mode, or one
                                 tool's description and parameters; ampi tools --help has more
   skill list|info|add|remove    List the skills Pi loads, show one, install skills from a directory
@@ -565,6 +570,10 @@ Run one message and print the answer:
 Send a diff with a request, and save the answer:
 
   $ git diff | ampi -x "review this change" > review.md
+
+Review the uncommitted changes and keep the findings as JSON:
+
+  $ ampi review --json > review.json
 
 Run one message and keep only the final result record of the stream JSON:
 

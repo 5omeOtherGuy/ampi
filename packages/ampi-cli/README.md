@@ -28,6 +28,7 @@ ampi usage               # cost and tokens of the last 30 days
 ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
 ampi tools list -m high  # the tools a high mode session declares to the model
+ampi review              # review the uncommitted changes with the reviewer and the review checks
 ampi app --open          # every session on this machine in one web page
 ampi skill list          # the skills Pi loads in this directory
 ampi skill add ./skills  # install skills into this project's .agents/skills
@@ -176,6 +177,70 @@ printf '%s\n' '{"type":"user","message":{"role":"user","content":"list files"}}'
 - **Invalid lines.** A line that is not such a message stops reading: the run in progress finishes, then an `error_during_execution` result names the line and the problem (for example `stdin line 2: not valid JSON`).
 - **Exit status.** `0` when every run succeeded; `1` when a run failed, a line was invalid or Pi stopped before it had handled every message; `2` for a usage error, which prints no records: `--stream-json-input` without `--stream-json` or `--stream-json-thinking`, together with a message argument, with stdin as a terminal, or stdin ending before the first message.
 - **Extension dialogs.** Nobody can answer a dialog during such a run, so ampi cancels every dialog an extension opens: a confirmation counts as "no".
+
+## Review
+
+`ampi review` runs ampi's `reviewer` worker once on a diff, from a shell, a script or a CI job: the main review and every [review check](../../src/extensions/ampi-workers/README.md#review-checks) under `.agents/checks/` that applies to the change. It prints the report, or a JSON document with the parsed findings, records the review as a thread and exits with a status a script can act on. No model turn of a session is involved: the only model calls are the reviewer's own runs.
+
+```bash
+ampi review                                        # the uncommitted changes
+ampi review the changes on this branch since main  # any description the reviewer can turn into a diff
+ampi review --json -f src/parser.ts -i "focus on error handling" > review.json
+ampi review --checks-only -c naming -l ci
+```
+
+The words after `review` are the diff description, joined with single spaces; the reviewer works out the diff from it, as the `reviewer` tool does in a session; nothing is read from stdin, so `git diff | ampi review` reviews the uncommitted changes, not the piped text. Without one, the uncommitted changes are reviewed (the reviewer is asked for `uncommitted changes`, which the JSON document reports as `diff`). `ampi -- review …` still starts a session with the words as its first message.
+
+| Option | What it does |
+| --- | --- |
+| `-f`, `--files <file>` | Focus the review on this file. Repeat it for several. |
+| `-i`, `--instructions <text>` | More instructions for the reviewer, such as what to focus on. |
+| `-s`, `--check-scope <dir>` | Run only the checks defined in this directory (relative to the working directory) or below it. |
+| `-c`, `--check-filter <name>` | Run only this check (its front-matter name or file stem). Repeat it for several. |
+| `--checks-only` | Run only the checks, without the main review. |
+| `--json` | Print the JSON document instead of the report. |
+| `--thinking low\|high` | The reviewer's thinking level for this review; `low` by default. |
+| `--title <title>` | Name the review's thread. |
+| `-l`, `--label <label>` | Add a label to the thread in ampi's thread index. Repeat it for several. |
+| `--no-archive-after-execute` | Keep the thread out of the archive. |
+
+- **Model route.** The reviewer runs on its own route: `ampiCore.subagentModelPreferences.reviewer` in the settings (see [subagent profiles](../../src/extensions/ampi-core/README.md#subagent-profiles); `/ampi-config` sets it), else the reviewer profile's default model. Without a route, every run fails and the command exits 1, naming the reason. Pi also needs a model of its own to start, as for any run, but the review sends it nothing.
+- **Thinking.** `--thinking` sets the thinking level of every reviewer run of this review, the checks' included. The default, `low`, is below the reviewer profile's `medium` and replaces any level set in `ampiCore.subagentModelPreferences.reviewer`, so a review from a script stays quick; `--thinking high` asks for a deeper one.
+- **Text output.** The report, ending with a newline: the main review, then, when checks ran, a `## Checks` section with a `### <name> (<scope>): <outcome>` heading per check and its report below it. With `--checks-only` the report starts at `## Checks`. Nothing else goes to stdout; Pi's own lines and ampi's diagnostics go to stderr. When the main review failed and a check answered, the report is printed and one line on stderr names the main review's failure.
+- **Thread.** Every review that ran is recorded as a new session of the working directory: the request (the description and the options given) as the user's message, the report as the assistant's, so `ampi threads markdown <id>` prints it. The thread is named `Review: <description>`, or by `--title`. It is archived like an execute-mode session unless `--no-archive-after-execute` is given; `-l` labels it. A review that failed records nothing.
+- **ampi version.** The ampi that Pi loads must have the review command; an older one gets `ampi <version> is too old for review` and exit status 1.
+
+### The JSON document
+
+`ampi review --json` prints one JSON object, two-space indented and ending with a newline, with these keys in this order. Its JSON Schema is [`tests/fixtures/ampi-cli/review.schema.json`](../../tests/fixtures/ampi-cli/review.schema.json).
+
+```json
+{
+  "diff": "uncommitted changes",
+  "summary": "The change needs one fix.",
+  "findings": [
+    { "file": "src/a.ts", "startLine": 12, "endLine": 14, "severity": "high", "type": "bug", "text": "The loop stops one item early." },
+    { "file": "src/a.ts", "startLine": 3, "endLine": 3, "severity": "low", "type": "suggested_edit", "text": "Name the flag after what it does.", "check": "naming" }
+  ],
+  "checks": [{ "name": "naming", "path": ".agents/checks/naming.md", "scope": ".", "status": "findings", "findings": 1 }],
+  "report": "The change needs one fix.\n\nFindings\n- src/a.ts:12-14 — severity: high; type: bug\n…"
+}
+```
+
+| Key | Value |
+| --- | --- |
+| `diff` | The diff description the reviewer received. |
+| `summary` | The main report's text before its `Findings` heading, trimmed; `""` with `--checks-only`, when the main review failed, or for a report without such a heading or a finding line. |
+| `findings` | The findings of the main review, then those of each check in check order. |
+| `checks` | One entry per check that ran, in report order. |
+| `report` | Exactly the text `ampi review` prints without `--json`. |
+
+- **A finding.** `file`, `startLine` and `endLine` from its location (`0`, `0` for a deleted file; a `<path>:<line>` location has the same start and end); `severity`, one of `critical`, `high`, `medium`, `low`, or `null`; `type`, one of `bug`, `suggested_edit`, `compliment`, `non_actionable`, or `null`; `text`, the rest of the location line after severity and type and the lines below it up to the next finding or heading, trimmed; `check`, the check's name, only for a check's finding.
+- **How findings are read.** A finding is a line that starts with `<path>:<start>-<end>` or `<path>:<line>`, after a list marker, emphasis or backticks, below the report's first `Findings` heading line (anywhere when it has none). Severity and type may come in either order and form (`severity: medium; type: bug`, `**High** bug`, `low · compliment`). A location without a line number is not a finding; text in other shapes stays only in `report`.
+- **A check.** `name`; `path`, the check file relative to the repository root; `scope`, the directory that holds its `.agents` (`.` for the root); `status`; `findings`, the number of its findings in the document; `error`, why it failed, only when it failed.
+- **`status`.** `findings` when findings were read from its report; `no-issues` when none were, which says only that no finding line was found, not that the check passed (its report may describe a problem in another shape); `failed` when the check's run failed.
+
+Exit status: `0` when the review ran, with or without findings (at least one of its runs answered); `1` when it failed: every run failed, an unknown `--check-filter` name or `--checks-only` with no check that applies (both known only once the repository is read), a `--check-scope` outside the repository, or Pi stopping before the review ran; one line `ampi: review failed: <reason>` follows whatever Pi printed. `2` for a usage error, such as an unknown option or `--thinking medium`.
 
 ## Threads
 

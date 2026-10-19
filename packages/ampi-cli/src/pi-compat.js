@@ -7,6 +7,9 @@
 // RPC mode reads process.stdin and exits the process itself, so the spawn
 // tests in tests/mmr-cli-stream-json-input.test.mjs are the probe for
 // feedPiRpcInput, exitWithCodeAfterPiRpc and capturePiJsonOutput in RPC mode.
+// `ampi review` (review.js) relies on Pi's print mode running an extension
+// command with no model turn, and on how it fails on an unknown flag; spawn
+// tests in tests/mmr-cli-pi-compat.test.mjs probe both.
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -75,6 +78,8 @@ export async function listPiSessions(pi, { cwd, env, scope }) {
  * @property {(message: object) => string} appendMessage Appends a user, assistant or tool result message.
  * @property {(name: string) => string} appendSessionInfo Names the session.
  * @property {(customType: string, data: unknown) => string} appendCustomEntry
+ * @property {(customType: string, content: string, display: boolean, details: unknown) => string} appendCustomMessageEntry
+ *   Appends an extension message (a `custom_message` entry), shown in the session when `display` is true.
  */
 
 /**

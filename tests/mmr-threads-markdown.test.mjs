@@ -51,7 +51,7 @@ describe("thread Markdown", () => {
 
   it("renders the branch that ends with the last entry, so a list already cut to one branch renders the same", () => {
     const entries = readEntries();
-    const branchIds = new Set(["e01", "e02", "e03", "e04", "e05", "e06", "e07", "e08", "e09", "e10", "e11", "e14", "e15", "e16", "e17"]);
+    const branchIds = new Set(["e01", "e02", "e03", "e04", "e05", "e06", "e07", "e08", "e09", "e10", "e11", "e14", "e15", "e16", "e17", "e18", "e19"]);
     const branch = entries.filter((entry) => entry.type === "session" || branchIds.has(entry.id));
     assert.equal(formatMmrThreadMarkdown(branch), formatMmrThreadMarkdown(entries));
     assert.ok(!formatMmrThreadMarkdown(entries).includes("Also update the docs."), "the abandoned branch is left out");

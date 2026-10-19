@@ -93,7 +93,13 @@ and `worker-usage-format.ts`. Implementation lives in themed subdirectories:
   binding registry, invocation/outcome helpers, and worker-model fallback.
 - `profiles/` — built-in worker prompt builders (`prompts.ts`).
 - `builtin-workers/` — the concrete `finder`, `oracle`, `librarian`,
-  `reviewer`, `view_media`, and `Task` tools.
+  `reviewer`, `view_media`, and `Task` tools, and `review-run.ts`, the
+  `/ampi-review-run` command `ampi review` runs in Pi's print mode: it
+  reads the request file named by `--ampi-review-request`, runs the reviewer
+  pipeline through the same run preparer as the tool, and writes the outcome
+  to the file named by `--ampi-review-output`. Typed in a session without
+  those flags it only says what runs it; Pi lists it with the other slash
+  commands, and the command palette under `pi`.
 - `background/` — async-task registry, tools, schemas, formatting,
   projection, delivery, and dispatch.
 - `rendering/` — one-line worker rows and their trail, the inline
@@ -197,6 +203,7 @@ handler and the input it trusts.
 - **Runs.** Each check child uses the `reviewer` profile, model preferences, fallback and system prompt; only its task text differs (the diff description, the check and its scope, the changed files under that scope when known, and its description and body). At most 4 reviewer children run at once, the main review included. Cancelling the call cancels the running children and never starts the pending ones. `background: true` runs the whole set as one background task.
 - **Results.** The main report comes first, then a `Checks` section with a heading per check, `<name> (<scope>): N findings`, `0 counted findings (see report)` or `failed: <reason>`, each answering check's full report below its heading, then the front-matter warnings. The count only labels the heading: a finding is a line of the check's report, after its `Findings` heading when it has one, that starts with a `<file path>:<startLine>-<endLine>` or `<file path>:<line>` location, compliments included. Findings in other shapes (a table row, a labelled location) are not counted, so a zero count never claims the check passed; the report below it says. The call fails only when every run failed. `details.checks` lists each check's `name`, `scope`, `file`, `status` (`no-issues`, meaning no counted finding, `findings`, `failed`), `findings`, `failureReason`, `warning` and `changedFiles`; `details.mainReview` holds the main review's outcome or `skipped`. While the call runs, progress is re-sent whenever a check starts or settles. The worker row stays one line, with `(N checks)` after the request, and lists each check with its outcome when expanded.
 - **Empty descriptions.** `reviewer` still rejects an empty `diff_description`; the plain functions in `review/checks.ts` read an empty description as the uncommitted changes, for callers outside the tool.
+- **From the shell.** [`ampi review`](../../../packages/ampi-cli/README.md#review) runs the main review and the checks once, with no session model turn, and prints the report or a JSON document whose findings `review/findings.ts` parses with the same location and `Findings`-heading rules as the count (`countAmpiReviewFindings` counts what `parseAmpiReviewFindings` reads).
 
 ### Custom Markdown subagents
 

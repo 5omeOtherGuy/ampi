@@ -23,6 +23,7 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
+import { parseAmpiReviewFindings } from "./findings.js";
 
 /** Result of one synchronous command. `exitCode` is non-zero (or -1) when the command could not run. */
 export interface AmpiReviewCommandResult {
@@ -597,10 +598,6 @@ export function planAmpiReviewChecks(input: PlanAmpiReviewChecksInput): AmpiRevi
 // Findings
 // ---------------------------------------------------------------------------
 
-/** A line that starts (after list markers, emphasis or backticks) with `<path>:<start>-<end>` or `<path>:<line>`. */
-const FINDING_LINE = /^\s*(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+)?[*_`]*[^\s:`*]+:\d+(?:-\d+)?\b/;
-const FINDINGS_HEADING = /^\s*(?:#{1,6}\s*)?[*_]*findings[*_]*\s*:?\s*[*_]*\s*$/i;
-
 /**
  * Outcome label of a check that answered without a counted finding. The
  * counter only knows the entry shapes it recognizes, so this label never
@@ -616,11 +613,9 @@ export const AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL = "0 counted findings (see re
  * location quoted in the summary is not a finding. Every entry counts,
  * compliments included. Findings in other shapes (a table row, a labelled
  * location) are not counted, which is why a zero count is reported as
- * {@link AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL}.
+ * {@link AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL}. The lines counted are the
+ * findings {@link parseAmpiReviewFindings} reads.
  */
 export function countAmpiReviewFindings(report: string): number {
-  const lines = report.replace(/\r\n?/g, "\n").split("\n");
-  const heading = lines.findIndex((line) => FINDINGS_HEADING.test(line));
-  const body = heading === -1 ? lines : lines.slice(heading + 1);
-  return body.filter((line) => FINDING_LINE.test(line)).length;
+  return parseAmpiReviewFindings(report).length;
 }

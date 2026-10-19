@@ -80,3 +80,15 @@ Thanks! Name this one.
 ## Assistant
 
 Done.
+
+Two names could be clearer.
+
+Findings
+- `src/reader.ts:1-1` — severity: low; type: suggested_edit
+  Name the export `read`.
+
+## Checks
+
+### naming (repository root): 0 counted findings (see report)
+
+Nothing to report.

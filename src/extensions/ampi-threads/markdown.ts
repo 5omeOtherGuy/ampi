@@ -42,7 +42,9 @@ import { findLatestPersistedModeState } from "../ampi-core/state.js";
  *   results belong to the assistant's part; a shell command run with `!` to
  *   the user's.
  * - Text is copied as it is. Thinking, images, system prompts, extension
- *   messages and summaries are left out; an image is noted as `(image)`.
+ *   messages and summaries are left out; an image is noted as `(image)`. A
+ *   review `ampi review` recorded (an `ampi-review` extension message) is
+ *   the exception: its report is the assistant's.
  * - Fences are longer than any run of backticks inside them.
  *
  * Pure: no files, no clock. The future `ampi` command line uses it on
@@ -63,6 +65,8 @@ export interface MmrThreadMarkdownOptions {
 const UNTITLED = "Untitled";
 /** A title taken from the first prompt is cut to this many characters. */
 const TITLE_MAX = 80;
+/** The extension message `ampi review` records its report in. */
+const REVIEW_MESSAGE_TYPE = "ampi-review";
 
 type Speaker = "User" | "Assistant";
 
@@ -73,6 +77,8 @@ interface Entry {
   readonly timestamp?: unknown;
   readonly name?: unknown;
   readonly message?: unknown;
+  readonly customType?: unknown;
+  readonly content?: unknown;
 }
 
 function asEntry(value: unknown): Entry {
@@ -155,6 +161,16 @@ function renderMessage(message: Record<string, unknown>): { speaker: Speaker; pa
   }
 }
 
+/** The parts a message entry, or an `ampi review` report, adds. */
+function renderEntry(entry: Entry): { speaker: Speaker; parts: string[] } | undefined {
+  if (entry.type === "message") return renderMessage(asRecord(entry.message));
+  if (entry.type === "custom_message" && entry.customType === REVIEW_MESSAGE_TYPE) {
+    const text = blocksText(entry.content).trim();
+    return text ? { speaker: "Assistant", parts: [text] } : undefined;
+  }
+  return undefined;
+}
+
 function firstPrompt(entries: readonly Entry[]): string | undefined {
   for (const entry of entries) {
     const message = asRecord(entry.message);
@@ -194,8 +210,7 @@ export function formatMmrThreadMarkdown(entries: readonly unknown[], options: Mm
   const out = ["---", ...front.flatMap(([key, value]) => (value === undefined ? [] : [`${key}: ${JSON.stringify(value)}`])), "---", "", `# ${title}`];
   let speaker: Speaker | undefined;
   for (const entry of branch) {
-    if (entry.type !== "message") continue;
-    const rendered = renderMessage(asRecord(entry.message));
+    const rendered = renderEntry(entry);
     if (!rendered) continue;
     if (rendered.speaker !== speaker) {
       speaker = rendered.speaker;

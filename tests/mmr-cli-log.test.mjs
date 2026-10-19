@@ -265,6 +265,7 @@ const STDERR_ALLOWED = [
   { file: "main.js", line: "createInterface({ input: process.stdin, output: process.stderr })", reason: "the yes/no question of threads delete" },
   { file: "pi-compat.js", line: "process.stderr.write(`", reason: "a line Pi wrote to stdout that is not JSON, passed on" },
   { file: "main.js", line: "piStderr: (text) => process.stderr.write(text)", reason: "Pi's own stderr from a pi mcp command, passed on" },
+  { file: "main.js", line: "err: (text) => void process.stderr.write(text)", reason: "Pi's own output from the ampi review run, passed on" },
   { file: "main.js", line: "const writeProgress = (text) => process.stderr.write(text)", reason: "skill add's Cloning line, update's install line and npm's output: progress at every level" },
 ];
 
