@@ -244,7 +244,7 @@ describe("Pi surface used by ampi doctor", () => {
       [JSON.stringify({ [parent]: true, [canonical]: false }), false, true],
       [JSON.stringify({ [parent]: false, [canonical]: true }), true, true],
       [JSON.stringify({ [canonical]: null, [path.join(canonical, "vendor")]: true }), false, true],
-      // Pi's store refuses these; the read-only listing treats them as no decision.
+      // Pi's store refuses these; the read-only listing treats them as untrusted.
       ["{", false, false],
       ["[]", false, false],
     ];

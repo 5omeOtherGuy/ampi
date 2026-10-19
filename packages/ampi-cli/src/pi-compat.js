@@ -497,10 +497,12 @@ function readPiTrustDecision(trustPath, cwd) {
   let stored;
   try {
     stored = JSON.parse(readFileSync(trustPath, "utf8").replace(/^\uFEFF/, ""));
-  } catch {
-    return null;
+  } catch (error) {
+    // No file is no decision; a file Pi's own store would refuse counts as
+    // untrusted, so a broken file never lets a project's settings through.
+    return /** @type {NodeJS.ErrnoException} */ (error).code === "ENOENT" ? null : false;
   }
-  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return null;
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return false;
   const decisions = /** @type {Record<string, unknown>} */ (stored);
   let dir = path.resolve(cwd);
   try {
