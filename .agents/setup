@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Orb and agent setup for ampi. Idempotent and non-interactive: checks the
-# Node.js toolchain, installs the locked dependencies, enables .githooks, and
-# reports which credentials are present without printing them.
+# Node.js toolchain (in an Amp orb, installs the CI gate's Node.js major),
+# installs the locked dependencies, enables .githooks, and reports which
+# credentials are present without printing them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,6 +10,46 @@ cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then
   echo "setup: Node.js is missing; install Node.js 22.19 or later" >&2
   exit 1
+fi
+# In an Amp orb, run the same Node.js major as the CI gate job (24.x): the
+# orb image may ship another major. Elsewhere, any supported version works.
+gate_node_major=24
+if [ -n "${AMP_ORB:-}" ] && [ "$(node -p 'process.versions.node.split(".")[0]')" != "$gate_node_major" ]; then
+  case "$(uname -m)" in
+    x86_64) node_arch=x64 ;;
+    aarch64 | arm64) node_arch=arm64 ;;
+    *)
+      echo "setup: no Node.js $gate_node_major build for $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+  sudo=sudo
+  [ "$(id -u)" = 0 ] && sudo=
+  node_dist="https://nodejs.org/dist/latest-v$gate_node_major.x"
+  node_tmp=$(mktemp -d)
+  trap 'rm -rf "$node_tmp"' EXIT
+  curl -fsSL "$node_dist/SHASUMS256.txt" -o "$node_tmp/SHASUMS256.txt"
+  node_tarball=$(grep -oE "node-v$gate_node_major\.[0-9]+\.[0-9]+-linux-$node_arch\.tar\.xz" "$node_tmp/SHASUMS256.txt" | head -n 1)
+  curl -fsSL "$node_dist/$node_tarball" -o "$node_tmp/$node_tarball"
+  (cd "$node_tmp" && grep " $node_tarball\$" SHASUMS256.txt | sha256sum -c --quiet -)
+  # Install beside the image's Node.js and point /usr/local/bin at it. The
+  # image's own node binary is kept as node-<version>, and its npm tree under
+  # /usr/local/lib stays untouched.
+  $sudo rm -rf "/opt/node-v$gate_node_major"
+  $sudo mkdir -p "/opt/node-v$gate_node_major"
+  $sudo tar -xJf "$node_tmp/$node_tarball" -C "/opt/node-v$gate_node_major" --strip-components=1 --no-same-owner
+  if [ -f /usr/local/bin/node ] && [ ! -L /usr/local/bin/node ]; then
+    $sudo mv /usr/local/bin/node "/usr/local/bin/node-$(/usr/local/bin/node -v)"
+  fi
+  for bin in node npm npx; do
+    $sudo ln -sfn "/opt/node-v$gate_node_major/bin/$bin" "/usr/local/bin/$bin"
+  done
+  hash -r
+  if [ "$(node -p 'process.versions.node.split(".")[0]')" != "$gate_node_major" ]; then
+    echo "setup: installed Node.js $gate_node_major, but $(command -v node) is $(node -v)" >&2
+    exit 1
+  fi
+  echo "setup: installed Node.js $(node -v) for the orb"
 fi
 if ! node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 19) ? 0 : 1)'; then
   echo "setup: Node.js $(node -v) is too old; ampi needs 22.19 or later" >&2
