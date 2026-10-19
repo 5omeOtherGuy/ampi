@@ -1,0 +1,16 @@
+{
+  "id": "prt_0b2c3d4e5f6a0202",
+  "sessionID": "ses_0b2c3d4e5f6aJsonStore01",
+  "messageID": "msg_0b2c3d4e5f6a0002",
+  "type": "tool",
+  "callID": "call_grep_1",
+  "tool": "grep",
+  "state": {
+    "status": "completed",
+    "input": { "pattern": "loadConfig" },
+    "output": "src/config.ts:1:export function loadConfig() {}",
+    "title": "loadConfig",
+    "metadata": {},
+    "time": { "start": 1787209209500, "end": 1787209209600 }
+  }
+}

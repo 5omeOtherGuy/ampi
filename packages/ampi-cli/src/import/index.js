@@ -11,15 +11,29 @@ import { parseArgs } from "node:util";
 import { createPiSessionWriter, piAgentDir } from "../pi-compat.js";
 import { readThreadIndex, threadIndexPath, updateThreadRecord, validateThreadLabels } from "../thread-index.js";
 import { CLAUDE_CODE_AGENT, CLAUDE_SESSION_ID, claudeCodeDir, convertClaudeCodeSession, listClaudeCodeSessions } from "./claude-code.js";
+import { CODEX_AGENT, CODEX_SESSION_ID, codexSessionsDir, convertCodexSession, listCodexSessions } from "./codex.js";
 import { importKey, importLedgerPath, readImportLedger, writeImportLedger } from "./ledger.js";
+import { OPENCODE_AGENT, OPENCODE_SESSION_ID, openCodeDir, openOpenCode } from "./opencode.js";
 
 /**
  * @typedef {import("../threads.js").ThreadsHost} ThreadsHost
- * @typedef {import("./claude-code.js").SourceSession} SourceSession
+ * @typedef {import("./messages.js").SourceSession} SourceSession
+ * @typedef {import("./messages.js").Conversion} Conversion
  * @typedef {import("./ledger.js").ImportRecord} ImportRecord
  *
  * @typedef {{ type: "imported" | "skipped" | "failed", agent: string, sourceId: string, sessionId?: string,
  *   messages?: number, reason?: string }} ImportEvent One line of `--json` output.
+ *
+ * @typedef {object} ImportAgent An agent whose conversations `ampi threads import` reads.
+ * @property {string} agent Its name in the import records, the labels and the output.
+ * @property {string} name Its name in sentences.
+ * @property {string} dirOption The option naming its directory.
+ * @property {(env: NodeJS.ProcessEnv) => string} defaultDir Its directory without that option.
+ * @property {(dir: string) => string} where Where its conversations are in that directory; detect prints it.
+ * @property {RegExp} idPattern
+ * @property {string} idHint What an id is, for the usage error.
+ * @property {(dir: string, host: ThreadsHost) => Promise<{ sessions: SourceSession[], convert: (source: SourceSession) => Conversion, close?: () => void }>} open
+ *   Lists its conversations and converts one.
  */
 
 const USAGE_HINT = "Run ampi threads import --help for the agents and options.";
@@ -38,27 +52,51 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
 const homeOf = (env) => env.HOME || homedir();
 
 /**
- * The agents `detect` reports, with where each keeps its conversations.
+ * The agents, by their import command; `detect` reports them in this order.
  *
- * @type {{ agent: string, location: (env: NodeJS.ProcessEnv) => string }[]}
+ * @type {Record<string, ImportAgent>}
  */
-const AGENTS = [
-  { agent: CLAUDE_CODE_AGENT, location: (env) => path.join(claudeCodeDir(env, homeOf(env)), "projects") },
-  { agent: "codex", location: (env) => path.join(env.CODEX_HOME || path.join(homeOf(env), ".codex"), "sessions") },
-  { agent: "opencode", location: (env) => path.join(env.XDG_DATA_HOME || path.join(homeOf(env), ".local", "share"), "opencode") },
-];
-
-const OPTIONS = /** @type {const} */ ({
-  detect: { json: { type: "boolean" } },
+const AGENTS = {
   claude: {
-    all: { type: "boolean" },
-    "max-age": { type: "string" },
-    limit: { type: "string" },
-    "dry-run": { type: "boolean" },
-    reimport: { type: "boolean" },
-    json: { type: "boolean" },
-    "claude-dir": { type: "string" },
+    agent: CLAUDE_CODE_AGENT,
+    name: "Claude Code",
+    dirOption: "claude-dir",
+    defaultDir: (env) => claudeCodeDir(env, homeOf(env)),
+    where: (dir) => path.join(dir, "projects"),
+    idPattern: CLAUDE_SESSION_ID,
+    idHint: "a Claude Code session id: give the session file's name without .jsonl",
+    open: async (dir) => ({ sessions: listClaudeCodeSessions(dir), convert: (source) => convertClaudeCodeSession(readFileSync(source.file, "utf8")) }),
   },
+  codex: {
+    agent: CODEX_AGENT,
+    name: "Codex",
+    dirOption: "codex-dir",
+    defaultDir: (env) => codexSessionsDir(env, homeOf(env)),
+    where: (dir) => dir,
+    idPattern: CODEX_SESSION_ID,
+    idHint: "a Codex session id: give the id that ends the rollout file's name",
+    open: async (dir) => ({ sessions: listCodexSessions(dir), convert: (source) => convertCodexSession(readFileSync(source.file, "utf8")) }),
+  },
+  opencode: {
+    agent: OPENCODE_AGENT,
+    name: "OpenCode",
+    dirOption: "opencode-dir",
+    defaultDir: (env) => openCodeDir(env, homeOf(env)),
+    where: (dir) => dir,
+    idPattern: OPENCODE_SESSION_ID,
+    idHint: "an OpenCode session id: give an id that starts with ses_",
+    open: (dir, host) => openOpenCode(dir, host.loadSqlite),
+  },
+};
+
+const DETECT_OPTIONS = /** @type {const} */ ({ json: { type: "boolean" } });
+const IMPORT_OPTIONS = /** @type {const} */ ({
+  all: { type: "boolean" },
+  "max-age": { type: "string" },
+  limit: { type: "string" },
+  "dry-run": { type: "boolean" },
+  reimport: { type: "boolean" },
+  json: { type: "boolean" },
 });
 
 /**
@@ -70,7 +108,7 @@ export function formatImportHelp() {
   return `ampi threads import: copy other coding agents' conversations on this machine into read-only sessions
 
 Usage: ampi threads import detect [--json]
-       ampi threads import claude [ids...] [--all] [options]
+       ampi threads import claude|codex|opencode [ids...] [--all] [options]
 
 Commands:
 
@@ -78,7 +116,20 @@ Commands:
                                 exists; reads no conversation
       --json                    Print {"agents": [{"agent", "path", "found"}]} instead
   claude, claude-code [ids...]  Import Claude Code sessions: the ids are their file names
-      --all                     Import every session updated within --max-age days, newest first
+      --claude-dir <path>       Claude Code's configuration directory (default $CLAUDE_CONFIG_DIR,
+                                else ~/.claude)
+  codex [ids...]                Import Codex sessions: the ids end their rollout file names
+      --codex-dir <path>        Codex's sessions directory (default $CODEX_HOME/sessions, else
+                                ~/.codex/sessions)
+  opencode [ids...]             Import OpenCode sessions: the ids start with ses_. Its database
+                                needs Node.js 22.19 or later; older JSON storage is read too
+      --opencode-dir <path>     OpenCode's data directory (default $XDG_DATA_HOME/opencode, else
+                                ~/.local/share/opencode)
+
+Options of claude, codex and opencode:
+
+      --all                     Import every session updated within --max-age days, newest first;
+                                helper agents' sessions are left out
       --max-age <days>          With --all: how many days back to look (default 30; 0 for no limit)
       --limit <n>               With --all: import at most n sessions
       --dry-run                 Read and convert the sessions, print what would be imported, and
@@ -86,17 +137,14 @@ Commands:
       --reimport                Import sessions again that were imported before, replacing their
                                 sessions under the same ids
       --json                    Print one JSON object per line instead
-      --claude-dir <path>       Claude Code's configuration directory (default $CLAUDE_CONFIG_DIR,
-                                else ~/.claude)
-  codex, opencode               Not supported yet
 
 Each conversation becomes a session in the directory it ran in, named with the title the
 agent recorded, else after its first prompt. Messages keep their times, tool calls and
 results; assistant messages keep the agent's model and token counts, and their cost is
-unknown. Imported sessions are labelled imported and claude-code, and they are read-only:
-read them with ampi threads markdown, or mention one with @@ in a new session. ampi keeps a
-record of what it imported in Pi's configuration directory (data/ampi/imports.json) and skips
-those conversations unless --reimport is given.
+unknown. Imported sessions are labelled imported and the agent (claude-code, codex or
+opencode), and they are read-only: read them with ampi threads markdown, or mention one with
+@@ in a new session. ampi keeps a record of what it imported in Pi's configuration directory
+(data/ampi/imports.json) and skips those conversations unless --reimport is given.
 
 Exit status: 0 when every conversation was imported or skipped, 1 when one failed or an id
 was not found, 2 on a usage error.
@@ -106,6 +154,8 @@ Examples:
   $ ampi threads import detect
   $ ampi threads import claude --all --max-age 7 --dry-run
   $ ampi threads import claude 3f2c9a7e-1b4d-4e8a-9c3f-5d6e7f8a9b0c
+  $ ampi threads import codex --all --limit 10
+  $ ampi threads import opencode ses_4f1a2b3c4d5eAbCdEfGhIjKlMn
   $ ampi threads import claude --all --json | jq -c 'select(.type == "failed")'
 `;
 }
@@ -131,25 +181,26 @@ export async function runImportCommand(argv, host) {
     host.err(`ampi: ${message}\n${USAGE_HINT}\n`);
     return { code: 2 };
   };
-  if (command === "codex" || command === "opencode") return usage(`threads import ${command} is not supported yet.`);
   const sub = command === "claude-code" ? "claude" : command;
-  if (sub !== "detect" && sub !== "claude") return usage(`unknown import command ${command}.`);
+  const agent = Object.hasOwn(AGENTS, sub) ? AGENTS[sub] : undefined;
+  if (sub !== "detect" && agent === undefined) return usage(`unknown import command ${command}.`);
+  const options = agent === undefined ? DETECT_OPTIONS : { ...IMPORT_OPTIONS, [agent.dirOption]: { type: "string" } };
   /** @type {{ values: Record<string, string | boolean | undefined>, positionals: string[] }} */
   let parsed;
   try {
-    parsed = /** @type {any} */ (parseArgs({ args: [...args], options: OPTIONS[sub], allowPositionals: true, strict: true }));
+    parsed = /** @type {any} */ (parseArgs({ args: [...args], options: /** @type {any} */ (options), allowPositionals: true, strict: true }));
   } catch (error) {
     return usage(`threads import ${sub}: ${messageOf(error)}`);
   }
-  if (sub === "detect") {
+  if (agent === undefined) {
     if (parsed.positionals.length > 0) return usage(`threads import detect takes no arguments, not ${parsed.positionals[0]}.`);
     detect(host, parsed.values.json === true);
     return { code: 0 };
   }
-  const plan = planClaude(parsed.values, parsed.positionals);
+  const plan = planImport(sub, agent, parsed.values, parsed.positionals);
   if ("message" in plan) return usage(plan.message);
   try {
-    return importClaude(host, plan);
+    return await importSessions(host, agent, plan);
   } catch (error) {
     host.err(`ampi: ${messageOf(error)}\n`);
     return { code: 1 };
@@ -163,8 +214,8 @@ export async function runImportCommand(argv, host) {
  * @param {boolean} json
  */
 function detect(host, json) {
-  const agents = AGENTS.map(({ agent, location }) => {
-    const found = location(host.env);
+  const agents = Object.values(AGENTS).map(({ agent, defaultDir, where }) => {
+    const found = where(defaultDir(host.env));
     return { agent, path: found, found: existsSync(found) };
   });
   if (json) {
@@ -177,7 +228,7 @@ function detect(host, json) {
 }
 
 /**
- * @typedef {object} ClaudePlan
+ * @typedef {object} ImportPlan
  * @property {string[]} ids
  * @property {boolean} all
  * @property {number} maxAge Days; 0 for no limit.
@@ -189,16 +240,18 @@ function detect(host, json) {
  */
 
 /**
+ * @param {string} command
+ * @param {ImportAgent} agent
  * @param {Record<string, string | boolean | undefined>} values
  * @param {string[]} ids
- * @returns {ClaudePlan | { message: string }}
+ * @returns {ImportPlan | { message: string }}
  */
-function planClaude(values, ids) {
+function planImport(command, agent, values, ids) {
   const all = values.all === true;
-  if (!all && ids.length === 0) return { message: "threads import claude needs session ids or --all." };
-  if (all && ids.length > 0) return { message: "threads import claude takes session ids or --all, not both." };
-  const bad = ids.find((id) => !CLAUDE_SESSION_ID.test(id));
-  if (bad !== undefined) return { message: `${JSON.stringify(bad)} is not a Claude Code session id: give the session file's name without .jsonl.` };
+  if (!all && ids.length === 0) return { message: `threads import ${command} needs session ids or --all.` };
+  if (all && ids.length > 0) return { message: `threads import ${command} takes session ids or --all, not both.` };
+  const bad = ids.find((id) => !agent.idPattern.test(id));
+  if (bad !== undefined) return { message: `${JSON.stringify(bad)} is not ${agent.idHint}.` };
   for (const name of ["max-age", "limit"]) {
     if (values[name] !== undefined && !all) return { message: `--${name} works only with --all.` };
   }
@@ -214,21 +267,38 @@ function planClaude(values, ids) {
     dryRun: values["dry-run"] === true,
     reimport: values.reimport === true,
     json: values.json === true,
-    dir: typeof values["claude-dir"] === "string" ? values["claude-dir"] : undefined,
+    dir: typeof values[agent.dirOption] === "string" ? String(values[agent.dirOption]) : undefined,
   };
 }
 
 /**
- * Import Claude Code sessions, one at a time; each written session is
+ * Import an agent's conversations, one at a time; each written session is
  * recorded in the ledger before the next is read.
  *
  * @param {ThreadsHost} host
- * @param {ClaudePlan} plan
+ * @param {ImportAgent} source
+ * @param {ImportPlan} plan
+ * @returns {Promise<{ code: number }>}
+ */
+async function importSessions(host, source, plan) {
+  const dir = path.resolve(host.cwd, plan.dir ?? source.defaultDir(host.env));
+  const reader = await source.open(dir, host);
+  try {
+    return importFrom(host, source, plan, dir, reader);
+  } finally {
+    reader.close?.();
+  }
+}
+
+/**
+ * @param {ThreadsHost} host
+ * @param {ImportAgent} source
+ * @param {ImportPlan} plan
+ * @param {string} dir
+ * @param {Awaited<ReturnType<ImportAgent["open"]>>} reader
  * @returns {{ code: number }}
  */
-function importClaude(host, plan) {
-  const agent = CLAUDE_CODE_AGENT;
-  const dir = path.resolve(host.cwd, plan.dir ?? claudeCodeDir(host.env, homeOf(host.env)));
+function importFrom(host, { agent, name, where }, plan, dir, reader) {
   const agentDir = piAgentDir(host.pi);
   const ledgerFile = importLedgerPath(agentDir);
   const ledger = readImportLedger(ledgerFile);
@@ -251,25 +321,25 @@ function importClaude(host, plan) {
     }
   };
 
-  const available = listClaudeCodeSessions(dir);
+  const available = reader.sessions;
   /** @type {SourceSession[]} */
   let sources;
   if (plan.all) {
     const since = plan.maxAge === 0 ? Number.NEGATIVE_INFINITY : host.now() - plan.maxAge * DAY;
     sources = available
-      .filter((source) => source.modified.getTime() >= since)
+      .filter((source) => source.subagent !== true && source.modified.getTime() >= since)
       .sort((a, b) => b.modified.getTime() - a.modified.getTime() || a.id.localeCompare(b.id));
     if (sources.length === 0 && !plan.json) {
       const within = plan.maxAge === 0 ? "" : ` updated in the last ${plan.maxAge} ${plan.maxAge === 1 ? "day" : "days"}`;
-      host.out(`No Claude Code sessions${within} in ${path.join(dir, "projects")}.\n`);
+      host.out(`No ${name} sessions${within} in ${where(dir)}.\n`);
     }
   } else {
     sources = [];
     for (const id of plan.ids) {
       const found = available.filter((source) => source.id === id);
       if (found.length === 1) sources.push(found[0]);
-      else if (found.length === 0) report({ type: "failed", agent, sourceId: id, reason: `no Claude Code session has this id in ${path.join(dir, "projects")}` });
-      else report({ type: "failed", agent, sourceId: id, reason: `${found.length} Claude Code sessions have this id: ${found.map((source) => source.file).join(", ")}` });
+      else if (found.length === 0) report({ type: "failed", agent, sourceId: id, reason: `no ${name} session has this id in ${where(dir)}` });
+      else report({ type: "failed", agent, sourceId: id, reason: `${found.length} ${name} sessions have this id: ${found.map((source) => source.file).join(", ")}` });
     }
   }
 
@@ -286,7 +356,7 @@ function importClaude(host, plan) {
     if (attempted >= plan.limit) break;
     attempted += 1;
     try {
-      const conversion = convertClaudeCodeSession(readFileSync(source.file, "utf8"));
+      const conversion = reader.convert(source);
       if (!conversion.messages.some((message) => message.role === "user" || message.role === "assistant")) {
         report({ type: "skipped", agent, sourceId: source.id, reason: "it holds no messages to import" });
         continue;
@@ -324,7 +394,7 @@ function importClaude(host, plan) {
   if (plan.json) {
     host.out(`${JSON.stringify({ type: "summary", agent, ...counts, ...(plan.dryRun ? { dryRun: true } : {}) })}\n`);
   } else {
-    const summary = `Claude Code: ${counts.imported} ${plan.dryRun ? "to import" : "imported"}, ${counts.skipped} skipped, ${counts.failed} failed.`;
+    const summary = `${name}: ${counts.imported} ${plan.dryRun ? "to import" : "imported"}, ${counts.skipped} skipped, ${counts.failed} failed.`;
     host.out(`${summary}${plan.dryRun ? " Nothing was written (--dry-run)." : ""}\n`);
   }
   return { code: counts.failed > 0 ? 1 : 0 };
