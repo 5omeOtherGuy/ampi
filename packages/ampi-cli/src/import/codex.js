@@ -6,7 +6,7 @@
 // lines are the conversation (messages, reasoning, tool calls and their
 // outputs) and `event_msg` lines are events, among them a turn's start and
 // end and the token counts.
-import { readdirSync, statSync } from "node:fs";
+import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 import { IMPORT_API, importedUsage, isObject, tokenCount, userContent } from "./messages.js";
 
@@ -41,8 +41,53 @@ export function codexSessionsDir(env, home) {
 }
 
 /**
+ * The first line of a file, read in chunks so the rest of a long rollout is
+ * never loaded; "" when the file cannot be read.
+ *
+ * @param {string} file
+ */
+function firstLine(file) {
+  /** @type {number | undefined} */
+  let fd;
+  try {
+    fd = openSync(file, "r");
+    const chunk = Buffer.alloc(64 * 1024);
+    /** @type {Buffer[]} */
+    const read = [];
+    for (;;) {
+      const bytes = readSync(fd, chunk, 0, chunk.length, null);
+      if (bytes === 0) break;
+      const end = chunk.subarray(0, bytes).indexOf(10);
+      read.push(Buffer.from(chunk.subarray(0, end === -1 ? bytes : end)));
+      if (end !== -1) break;
+    }
+    return Buffer.concat(read).toString("utf8");
+  } catch {
+    return "";
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Whether a helper agent ran the rollout: Codex records the `source` of a
+ * review, a compaction, a thread another thread spawned and similar runs as
+ * an object with a `subagent` key in the `session_meta` that opens the file.
+ *
+ * @param {string} file
+ */
+function isHelperRollout(file) {
+  try {
+    const entry = JSON.parse(firstLine(file));
+    return isObject(entry) && entry.type === "session_meta" && isObject(entry.payload) && isObject(entry.payload.source) && "subagent" in entry.payload.source;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Every rollout file below `dir`, up to the day folders, with the id its name
- * ends with. A missing directory has none.
+ * ends with, and whether a helper agent ran it. A missing directory has none.
  *
  * @param {string} dir Codex's sessions directory.
  * @returns {SourceSession[]}
@@ -65,7 +110,7 @@ export function listCodexSessions(dir) {
       const id = ROLLOUT_FILE.exec(entry.name)?.[1];
       if (!entry.isFile() || id === undefined) continue;
       const stats = statSync(file, { throwIfNoEntry: false });
-      if (stats?.isFile()) sessions.push({ id, file, modified: stats.mtime });
+      if (stats?.isFile()) sessions.push({ id, file, modified: stats.mtime, ...(isHelperRollout(file) ? { subagent: true } : {}) });
     }
   };
   visit(dir, 0);

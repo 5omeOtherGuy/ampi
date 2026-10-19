@@ -18,7 +18,7 @@ import * as pi from "@earendil-works/pi-coding-agent";
 import { convertClaudeCodeSession } from "../packages/ampi-cli/src/import/claude-code.js";
 import { convertCodexSession } from "../packages/ampi-cli/src/import/codex.js";
 import { formatImportHelp } from "../packages/ampi-cli/src/import/index.js";
-import { loadNodeSqlite, openOpenCode } from "../packages/ampi-cli/src/import/opencode.js";
+import { convertOpenCodeSession, loadNodeSqlite, openOpenCode } from "../packages/ampi-cli/src/import/opencode.js";
 import { formatThreadsHelp, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -124,6 +124,8 @@ const OTHER_MESSAGES = [
 
 const CODEX_DEMO = "0199d2a4-6b1c-7e3f-9a50-2c4d6e8f0a1b";
 const CODEX_OTHER = "0199a0b1-c2d3-7e4f-8a9b-0c1d2e3f4a5b";
+/** A review Codex ran as a helper agent, a day before NOW. */
+const CODEX_REVIEW = "0199e8f0-1a2b-7c3d-8e4f-5a6b7c8d9e0f";
 const PATCH = "*** Begin Patch\n*** Update File: src/health.ts\n@@\n-  return config.get('db');\n+  return config.get('db') ?? 'ok';\n*** End Patch\n";
 
 /**
@@ -200,7 +202,7 @@ const OPENCODE_DEMO_MESSAGES = [
     "toolUse",
   ),
   toolResult("toolu_c", "edit", [text("Edit applied successfully.")], OPENCODE_REPLY),
-  openCodeReply([text("Done: the header has a dark mode toggle.")], "claude-sonnet-4-5", OPENCODE_REPLY, usage(900, 120, 4000, 300, 5320), "stop"),
+  openCodeReply([text("Done: the header has a dark mode toggle.")], "claude-sonnet-4-5", OPENCODE_REPLY, usage(900, 150, 4000, 300, 5350), "stop"),
 ];
 
 /** The JSON storage fixture as Pi messages. */
@@ -295,7 +297,8 @@ let setups = 0;
  * A home, an agent directory Pi is pointed at, and copies of the fixture
  * sessions in a Claude Code directory and a Codex sessions directory: the
  * /work/demo and /work/api sessions changed exactly 30 days before NOW, the
- * /work/other and /work/notes ones a second earlier. The OpenCode directory
+ * /work/other and /work/notes ones a second earlier, and a Codex review a
+ * helper agent ran a day before NOW. The OpenCode directory
  * holds the JSON storage fixture; `openCode()` adds the database.
  */
 function setup() {
@@ -315,6 +318,8 @@ function setup() {
   const codexOtherFile = path.join(codexDir, "2026", "09", "02", `rollout-2026-09-02T14-30-00-${CODEX_OTHER}.jsonl`);
   for (const file of [demoFile, codexDemoFile]) utimesSync(file, new Date(NOW - 30 * DAY), new Date(NOW - 30 * DAY));
   for (const file of [otherFile, codexOtherFile]) utimesSync(file, new Date(NOW - 30 * DAY - 1000), new Date(NOW - 30 * DAY - 1000));
+  const codexReviewFile = path.join(codexDir, "2026", "10", "17", `rollout-2026-10-17T16-00-00-${CODEX_REVIEW}.jsonl`);
+  utimesSync(codexReviewFile, new Date(NOW - DAY), new Date(NOW - DAY));
   const openCode = () => buildOpenCodeDatabase(path.join(openCodeDir, "opencode.db"));
   process.env.PI_CODING_AGENT_DIR = agentDir;
   delete process.env.PI_CODING_AGENT_SESSION_DIR;
@@ -484,6 +489,12 @@ describe("OpenCode sessions as Pi messages", () => {
   it("reads sessions from the database and the older JSON storage, with their directories, titles and update times", async () => {
     const t = setup();
     await t.openCode();
+    // An older copy of the database session in the JSON storage, which the database's copy replaces.
+    const storage = path.join(t.openCodeDir, "storage");
+    for (const folder of ["session/4f1e2d3c", `message/${OPENCODE_DEMO}`, "part/msg_0b2c3d4e5f6a0901"]) mkdirSync(path.join(storage, folder), { recursive: true });
+    writeFileSync(path.join(storage, "session", "4f1e2d3c", `${OPENCODE_DEMO}.json`), JSON.stringify({ id: OPENCODE_DEMO, directory: "/work/stale", title: "A stale copy", time: { created: NOW - 40 * DAY, updated: NOW - 40 * DAY } }));
+    writeFileSync(path.join(storage, "message", OPENCODE_DEMO, "msg_0b2c3d4e5f6a0901.json"), JSON.stringify({ id: "msg_0b2c3d4e5f6a0901", role: "user", time: { created: NOW - 40 * DAY } }));
+    writeFileSync(path.join(storage, "part", "msg_0b2c3d4e5f6a0901", "prt_0b2c3d4e5f6a0901.json"), JSON.stringify({ id: "prt_0b2c3d4e5f6a0901", type: "text", text: "The stale prompt" }));
     const source = await openOpenCode(t.openCodeDir);
     try {
       const database = path.join(t.openCodeDir, "opencode.db");
@@ -512,6 +523,57 @@ describe("OpenCode sessions as Pi messages", () => {
     } finally {
       source.close();
     }
+  });
+});
+
+describe("OpenCode tool parts", () => {
+  it("turns a tool the session stopped before it finished into an interrupted error", () => {
+    const tool = (callID, status) => ({ type: "tool", callID, tool: "bash", state: { status, input: { command: "npm test" } } });
+    const { messages } = convertOpenCodeSession({ directory: "/w", title: "t" }, [
+      { info: { role: "assistant", time: { created: 5 }, modelID: "m" }, parts: [tool("call_p", "pending"), tool("call_r", "running")] },
+    ]);
+    assert.deepEqual(
+      messages.filter((message) => message.role === "toolResult").map(({ toolCallId, content, isError }) => ({ toolCallId, content, isError })),
+      [
+        { toolCallId: "call_p", content: [text("(interrupted)")], isError: true },
+        { toolCallId: "call_r", content: [text("(interrupted)")], isError: true },
+      ],
+    );
+  });
+});
+
+describe("loading node:sqlite", () => {
+  it("keeps SQLite's experimental warning away and lets other warnings through", async () => {
+    const emitted = [];
+    const original = process.emitWarning;
+    process.emitWarning = (warning, type) => emitted.push([String(warning), type]);
+    try {
+      const module = await loadNodeSqlite(async () => {
+        process.emitWarning("SQLite is an experimental feature and might change at any time", "ExperimentalWarning");
+        process.emitWarning("Another feature is experimental", "ExperimentalWarning");
+        process.emitWarning("SQLite says something else", "DeprecationWarning");
+        return { loaded: true };
+      });
+      assert.deepEqual(module, { loaded: true });
+      assert.deepEqual(emitted, [
+        ["Another feature is experimental", "ExperimentalWarning"],
+        ["SQLite says something else", "DeprecationWarning"],
+      ]);
+      // The filter is gone once the module is loaded.
+      process.emitWarning("SQLite is an experimental feature and might change at any time", "ExperimentalWarning");
+      assert.equal(emitted.length, 3);
+    } finally {
+      process.emitWarning = original;
+    }
+  });
+
+  it("names the Node.js version only when the module is missing, and otherwise the reason it failed", async () => {
+    await assert.rejects(
+      loadNodeSqlite(async () => {
+        throw new Error("SQLite is disabled in this build");
+      }),
+      { message: "cannot load node:sqlite to read OpenCode's database: SQLite is disabled in this build" },
+    );
   });
 });
 
@@ -824,6 +886,7 @@ describe("ampi threads import codex", () => {
     const demo = t.ledger().imports[`codex:${CODEX_DEMO}`];
     assert.equal(first.out, `Imported ${CODEX_DEMO} as ${demo.sessionId} (10 messages)\nCodex: 1 imported, 0 skipped, 0 failed.\n`);
     assert.equal(t.ledger().imports[`codex:${CODEX_OTHER}`], undefined, "a second older than 30 days is left out");
+    assert.equal(t.ledger().imports[`codex:${CODEX_REVIEW}`], undefined, "a helper agent's review is left out");
 
     assert.deepEqual(t.entriesOf(demo.sessionPath), [
       importEntry("codex", CODEX_DEMO, t.codexDemoFile, NOW - 30 * DAY, "2026-10-12T08:00:02.000Z"),
@@ -850,6 +913,11 @@ describe("ampi threads import codex", () => {
     const markdown = await run(["threads", "markdown", other.sessionId]);
     assert.equal(markdown.result.code, 0);
     assert.match(markdown.out, /\n## User\n\nSummarize the README\n\n## Assistant\n\n\*\*Tool Use:\*\* `read_file`\n/);
+
+    // A helper agent's rollout imports by its id.
+    const review = await importCodex(t, [CODEX_REVIEW, "--json"]);
+    assert.equal(review.result.code, 0, review.err);
+    assert.deepEqual(jsonLines(review.out).at(-1), { type: "summary", agent: "codex", imported: 1, skipped: 0, failed: 0 });
   });
 
   it("skips what it imported before and imports it again under the same id with --reimport", async () => {

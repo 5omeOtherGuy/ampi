@@ -62,8 +62,14 @@ export async function loadNodeSqlite(load = () => import("node:sqlite")) {
   process.emitWarning = quiet;
   try {
     return await load();
-  } catch {
-    throw new Error(`reading OpenCode's database needs Node.js ${SQLITE_NODE} or later, which includes node:sqlite; this is Node.js ${process.version}.`);
+  } catch (error) {
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    const [needMajor, needMinor] = SQLITE_NODE.split(".").map(Number);
+    const tooOld = major < needMajor || (major === needMajor && minor < needMinor);
+    if (tooOld || /** @type {any} */ (error)?.code === "ERR_UNKNOWN_BUILTIN_MODULE") {
+      throw new Error(`reading OpenCode's database needs Node.js ${SQLITE_NODE} or later, which includes node:sqlite; this is Node.js ${process.version}.`);
+    }
+    throw new Error(`cannot load node:sqlite to read OpenCode's database: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     process.emitWarning = emitWarning;
   }
@@ -98,6 +104,10 @@ function openDatabase(sqlite, file) {
   let db;
   try {
     db = new sqlite.DatabaseSync(file, { readOnly: true });
+    // The tables of OpenCode's released versions. Its development branch
+    // renames `session` to `session_v2` and keeps messages in
+    // `session_message`; once a release ships that, these queries fail with
+    // "no such table" and need to read the new tables too.
     const rows = db.prepare("SELECT id, directory, title, parent_id, time_updated FROM session").all();
     const sessions = new Map();
     for (const row of rows) {
@@ -200,14 +210,15 @@ function fileText(part) {
 }
 
 /**
- * Pi's usage from an OpenCode assistant message's tokens.
+ * Pi's usage from an OpenCode assistant message's tokens. OpenCode counts
+ * reasoning apart from the output; Pi's output includes it.
  *
  * @param {unknown} tokens
  */
 function convertUsage(tokens) {
   const source = isObject(tokens) ? tokens : {};
   const cache = isObject(source.cache) ? source.cache : {};
-  return importedUsage({ input: tokenCount(source.input), output: tokenCount(source.output), cacheRead: tokenCount(cache.read), cacheWrite: tokenCount(cache.write) });
+  return importedUsage({ input: tokenCount(source.input), output: tokenCount(source.output) + tokenCount(source.reasoning), cacheRead: tokenCount(cache.read), cacheWrite: tokenCount(cache.write) });
 }
 
 /**
@@ -215,8 +226,10 @@ function convertUsage(tokens) {
  * parts become text and reasoning parts thinking; text OpenCode added itself
  * (synthetic or ignored parts) is left out. A file part becomes the text
  * "(file <path>)". A tool part becomes a tool call in the assistant message
- * and a tool result after it, an error when the tool failed; text after a
- * tool part starts a new assistant message, so each result follows its call.
+ * and a tool result after it, an error when the tool failed, and the error
+ * "(interrupted)" when the session stopped before the tool finished; text
+ * after a tool part starts a new assistant message, so each result follows
+ * its call.
  * The message's tokens go to its last part. Other parts are bookkeeping.
  *
  * @param {OpenCodeSession} session
@@ -260,8 +273,8 @@ export function convertOpenCodeSession(session, messages) {
       else if (part.type === "file") add(fileText(part));
       else if (part.type === "tool" && typeof part.callID === "string" && typeof part.tool === "string") {
         const state = isObject(part.state) ? part.state : {};
-        const failed = state.status === "error";
-        const output = failed ? state.error : state.output;
+        const failed = state.status !== "completed";
+        const output = state.status === "error" ? state.error : state.status === "completed" ? state.output : "(interrupted)";
         add({ type: "toolCall", id: part.callID, name: part.tool, arguments: isObject(state.input) ? state.input : {} });
         results.push({
           role: "toolResult",
