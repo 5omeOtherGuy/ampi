@@ -7,7 +7,11 @@
 // every session has its own address, `/s/<id>`, and its own routes under
 // `/s/<id>/api/`; a session the app runs is live, the others are read from
 // their files (see app-mode.js).
+//
+// Both serve the Activity page at `/feed` (activity.js), and the Search
+// Threads dialog (thread-search.js) opens over any page.
 
+import { feedPath, mountActivity, parseFeedSearch } from "./activity.js";
 import {
   APP_LIST_REFRESH_MS,
   appPath,
@@ -28,6 +32,7 @@ import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
 import { createPrefs } from "./prefs.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
+import { mountThreadSearch } from "./thread-search.js";
 import { mountTitlebar } from "./titlebar.js";
 import {
   CHEVRON,
@@ -77,6 +82,8 @@ let shownId = null;
 let access = "live";
 /** App mode: the hub's state for the session shown held or dormant: who holds it, with its pid and GUI. */
 let shownState = null;
+/** Whether the page shows Activity (`/feed`) in place of a session. */
+let feedShown = false;
 
 /** POST a command as JSON; resolves `{ ok, status, body }` (status 0 when Pi was not reached) and never throws. */
 async function postTo(url, body) {
@@ -156,6 +163,17 @@ const titlebar = mountTitlebar({
   onDeleted: (id) => sessionDeleted(id),
   pageUrl: (id) => sessionPageUrl(location.href, { app: appMode, id, liveId: liveSession.id }),
 });
+/** The address of session `id`'s page, for links in Activity and Search Threads. */
+const sessionHref = (id) => sessionPageUrl(location.href, { app: appMode, id, liveId: liveSession.id });
+const activity = mountActivity({
+  root: $("feed"),
+  prefs,
+  notify,
+  onFilters: (next, options) => showFeedRoute(next, options),
+  onOpen: (id) => openSessionPage(id),
+  sessionHref,
+});
+const threadSearch = mountThreadSearch({ dialog: $("search-dialog"), onOpen: (id) => openSessionPage(id), sessionHref });
 // Extensions' questions in a session ampi app runs; the session that asked answers them.
 const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: postTo, answerUrl: () => `${base}dialog`, notify });
 
@@ -339,8 +357,17 @@ function setPhaseLabel(text) {
   if ($("status-label").textContent !== text) $("status-label").textContent = text;
 }
 
-/** Draw the title bar for the session the page shows. */
+/** Draw the title bar for the session the page shows, or for Activity. */
 function drawTitle() {
+  if (feedShown) {
+    $("title").textContent = "Activity";
+    document.title = "Activity · ampi";
+    $("cwd-chip").hidden = true;
+    $("mode").hidden = true;
+    titlebar.setTarget(null);
+    sidebar.select(null);
+    return;
+  }
   const session = viewing ? viewing.session : liveSession;
   const row = sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === session.id);
   const title = appMode && !shownId ? "ampi app" : session.title || "New thread";
@@ -572,6 +599,7 @@ async function refreshSessions() {
       sessionList = await response.json();
       sidebar.setData(sessionList);
       drawTitle();
+      if (feedShown) activity.refresh();
       if (appMode) followHost();
     } catch {
       // The live view keeps working; the next refresh tries again.
@@ -604,7 +632,7 @@ function listedRow(id) {
  * activity, so the row is marked read here instead of reloading the list.
  */
 async function markRead(id) {
-  if (!id || document.visibilityState !== "visible") return;
+  if (!id || feedShown || document.visibilityState !== "visible") return;
   if (listing) await listing;
   const row = listedRow(id);
   if (!row || row.messageCount === 0) return;
@@ -700,7 +728,8 @@ function route() {
 }
 
 window.addEventListener("hashchange", () => {
-  if (!appMode) route();
+  // On Activity the address is `/feed`; a fragment there names no session.
+  if (!appMode && !feedShown) route();
 });
 window.addEventListener("focus", () => refreshSessions());
 // Relative times and other terminals' sessions change while the page is open.
@@ -836,6 +865,7 @@ function showHome() {
 }
 
 function showRoute(id) {
+  hideFeed();
   if (id) openSession(id);
   else showHome();
 }
@@ -848,7 +878,77 @@ function navigate(id, { replace = false } = {}) {
 }
 
 window.addEventListener("popstate", (event) => {
-  if (appMode) showRoute(routeFromHistory(event.state, location.pathname));
+  if (location.pathname === "/feed") showFeed(parseFeedSearch(location.search, activity.defaults()));
+  else if (appMode) showRoute(routeFromHistory(event.state, location.pathname));
+  else if (feedShown) {
+    hideFeed();
+    route();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Activity (`/feed`) and Search Threads
+
+/** Show Activity with `filters` and put them in the address; Back returns to the filters before. */
+function showFeedRoute(filters, { replace = false } = {}) {
+  const url = feedPath(filters, activity.defaults());
+  const same = location.pathname === "/feed" && `${location.pathname}${location.search}` === url;
+  if (replace || same) history.replaceState({ ampiFeed: true }, "", url);
+  else history.pushState({ ampiFeed: true }, "", url);
+  showFeed(filters);
+}
+
+/** Show Activity in place of the session: in ampi app the session's stream closes, on a terminal's page it keeps running. */
+function showFeed(filters) {
+  if (!feedShown) {
+    feedShown = true;
+    if (appMode) showHome();
+    app.dataset.page = "feed";
+    $("feed").hidden = false;
+    $("copy-link").hidden = false;
+    $("activity-tile").setAttribute("aria-current", "page");
+    sidebar.closeSheet();
+    drawTitle();
+  }
+  activity.show(filters);
+}
+
+function hideFeed() {
+  if (!feedShown) return;
+  feedShown = false;
+  activity.hide();
+  delete app.dataset.page;
+  $("feed").hidden = true;
+  $("copy-link").hidden = true;
+  $("activity-tile").removeAttribute("aria-current");
+}
+
+/** Show session `id` (`null`: ampi app's home page, or this terminal's session), from Activity, Search Threads or the sidebar. */
+function openSessionPage(id) {
+  if (appMode) return navigate(id);
+  const hash = id && id !== liveSession.id ? `#/s/${encodeURIComponent(id)}` : "";
+  if (feedShown) {
+    history.pushState(null, "", `/${hash}`);
+    hideFeed();
+    route();
+    drawTitle();
+  } else location.hash = hash;
+}
+
+$("search-threads").addEventListener("click", () => threadSearch.open());
+$("copy-link").addEventListener("click", () => ui.copyUrl());
+$("activity-tile").addEventListener("click", (event) => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  ui.openActivity();
+});
+
+$("session-list").addEventListener("click", (event) => {
+  // On a terminal's own page rows link to `#/s/<id>`, which would stay on `/feed`.
+  const row = !appMode && feedShown && event.target.closest?.("a.session-row");
+  if (!row || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  openSessionPage(row.dataset.id);
 });
 
 $("session-list").addEventListener("click", (event) => {
@@ -878,7 +978,8 @@ async function startApp() {
   refresher.start();
   new EventSource("/api/events").addEventListener("sessions", () => refreshSessions());
   refreshSessions();
-  navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true });
+  if (location.pathname === "/feed") showFeedRoute(parseFeedSearch(location.search, activity.defaults()), { replace: true });
+  else navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -887,8 +988,8 @@ async function startApp() {
 
 const commands = createCommandRegistry(DEFAULT_COMMANDS);
 const keys = createKeyDispatcher({ commands: () => commands.list(), mac });
-/** A session page, not ampi app's home page. */
-const onThreadPage = () => !appMode || shownId !== null;
+/** A session page, not ampi app's home page or Activity. */
+const onThreadPage = () => !feedShown && (!appMode || shownId !== null);
 const keymap = mountKeymap({ dialog: $("keymap-dialog"), groups: () => keymapGroups(commands.list(), { threadPage: onThreadPage(), mac }) });
 
 /** The actions menu's target for a listed session: the title bar's when it is the one shown. */
@@ -920,9 +1021,13 @@ function moveMessage(step, userOnly) {
 const ui = {
   goHome() {
     if (appMode) {
-      if (shownId !== null) navigate(null);
-    } else location.hash = "";
+      if (shownId !== null || feedShown) navigate(null);
+    } else openSessionPage(null);
   },
+  openActivity() {
+    if (!feedShown) showFeedRoute(parseFeedSearch("", activity.defaults()));
+  },
+  searchThreads: () => threadSearch.open(),
   back: () => history.back(),
   forward: () => history.forward(),
   focusTitleBar() {
@@ -1011,7 +1116,8 @@ async function start() {
     connect();
     composer.focus();
     refreshSessions();
-    if (routeId()) route();
+    if (location.pathname === "/feed") showFeedRoute(parseFeedSearch(location.search, activity.defaults()), { replace: true });
+    else if (routeId()) route();
     else markRead(liveSession.id);
   } catch {
     setPhaseLabel("Disconnected");

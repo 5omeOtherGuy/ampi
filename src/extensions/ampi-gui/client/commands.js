@@ -113,6 +113,22 @@ export const DEFAULT_COMMANDS = [
     run: (state) => state.ui.forward(),
   },
   {
+    id: "open-activity",
+    title: "Open Activity",
+    section: "Navigation",
+    keys: [],
+    description: "Every session active in a time window, by day, with filters for status, project and a search",
+    run: (state) => state.ui.openActivity(),
+  },
+  {
+    id: "search-threads",
+    title: "Search threads",
+    section: "Global",
+    keys: ["mod+shift+k"],
+    description: "Find a session by words, labels, project or state, and open it",
+    run: (state) => state.ui.searchThreads(),
+  },
+  {
     id: "focus-title-bar",
     title: "Focus title bar",
     section: "Global",

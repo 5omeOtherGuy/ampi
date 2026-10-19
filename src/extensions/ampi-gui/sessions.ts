@@ -164,8 +164,8 @@ function indexFields(record: MmrThreadRecord | undefined, modified: number) {
   };
 }
 
-/** The sidebar's groups for a catalogue listing and the thread index; see the module comment. */
-export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup[] {
+/** Every listed session's row, newest activity first, the live session included. */
+export function buildMmrGuiSessionRows(input: MmrGuiGroupInput): MmrGuiSessionRow[] {
   const { current, threads, now } = input;
   const elsewhere = new Set([...(input.elsewhere ?? [])].map((file) => path.resolve(file)));
   const hosts = input.hosts && new Map([...input.hosts].map(([file, host]) => [path.resolve(file), host]));
@@ -200,8 +200,15 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
       elsewhere: false,
     });
   }
-  rows.sort(byActivity);
+  return rows.sort(byActivity);
+}
 
+/** The sidebar's groups for a catalogue listing and the thread index; see the module comment. */
+export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup[] {
+  return groupMmrGuiRows(buildMmrGuiSessionRows(input), input);
+}
+
+function groupMmrGuiRows(rows: readonly MmrGuiSessionRow[], { now, home }: Pick<MmrGuiGroupInput, "now" | "home">): MmrGuiSessionGroup[] {
   const pinned: MmrGuiSessionRow[] = [];
   const inactive: MmrGuiSessionRow[] = [];
   const snoozed: MmrGuiSessionRow[] = [];
@@ -222,7 +229,7 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
   if (pinned.length > 0) groups.push({ id: "pinned", kind: "pinned", label: "Pinned", sessions: pinned });
   // Rows are sorted already, so each project's first row is its newest and Map order follows it.
   for (const [cwd, sessions] of projects) {
-    groups.push({ id: `project:${cwd}`, kind: "project", label: mmrGuiProjectLabel(cwd, input.home), cwd, sessions });
+    groups.push({ id: `project:${cwd}`, kind: "project", label: mmrGuiProjectLabel(cwd, home), cwd, sessions });
   }
   if (inactive.length > 0) groups.push({ id: "inactive-72h", kind: "inactive", label: "Inactive Last 72h", sessions: inactive });
   if (snoozed.length > 0) groups.push({ id: "snoozed", kind: "snoozed", label: "Snoozed", sessions: snoozed });
@@ -279,8 +286,19 @@ export interface MmrGuiSessionsOptions {
   home?: string;
 }
 
+/** A listed session's row with the text that search matches and previews. */
+export interface MmrGuiSearchableRow {
+  row: MmrGuiSessionRow;
+  /** Pi's session name, when it has one. */
+  name?: string;
+  /** The first message, empty for a session Pi has not saved yet. */
+  firstMessage: string;
+}
+
 export interface MmrGuiSessions {
   list(): Promise<MmrGuiSessionList>;
+  /** Every row with its text, newest first, and the clock the rows were built with (epoch ms). */
+  searchable(): Promise<{ now: number; rows: MmrGuiSearchableRow[] }>;
   /** A session's catalogue record, by exact id. */
   find(id: string): Promise<SessionInfo | undefined>;
   /** A saved session's file as text. */
@@ -316,14 +334,21 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
     }
   }
 
-  async function groups(): Promise<MmrGuiSessionGroup[]> {
+  async function rows(): Promise<{ sessions: SessionInfo[]; rows: MmrGuiSessionRow[]; now: number }> {
     const [sessions, records, elsewhere, hosts] = await Promise.all([
       catalogue(),
       threads(),
       options.elsewhere?.().catch(() => []) ?? [],
       options.hosts?.().catch(() => new Map<string, MmrGuiRowHost>()),
     ]);
-    return groupMmrGuiSessions({ sessions, threads: records, current: options.current(), elsewhere: new Set(elsewhere), hosts, now: now(), home });
+    const at = now();
+    const input = { sessions, threads: records, current: options.current(), elsewhere: new Set(elsewhere), hosts, now: at, home };
+    return { sessions, rows: buildMmrGuiSessionRows(input), now: at };
+  }
+
+  async function groups(): Promise<MmrGuiSessionGroup[]> {
+    const listed = await rows();
+    return groupMmrGuiRows(listed.rows, { now: listed.now, home });
   }
 
   const sessions: MmrGuiSessions = {
@@ -337,6 +362,17 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
           markdown: getMmrThreadReports()?.markdown !== undefined,
           cost: getMmrThreadReports()?.showCosts === true,
         },
+      };
+    },
+    async searchable() {
+      const listed = await rows();
+      const infos = new Map(listed.sessions.map((info) => [info.id, info]));
+      return {
+        now: listed.now,
+        rows: listed.rows.map((row) => {
+          const info = infos.get(row.id);
+          return { row, ...(info?.name ? { name: info.name } : {}), firstMessage: info?.firstMessage ?? "" };
+        }),
       };
     },
     async find(id) {

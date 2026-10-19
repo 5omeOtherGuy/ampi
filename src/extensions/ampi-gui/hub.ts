@@ -22,6 +22,7 @@ import {
   readMmrGuiBody,
   send,
   sendJson,
+  sendMmrGuiActivity,
   sendMmrGuiExport,
   startMmrGuiHttpServer,
   viewMmrGuiSession,
@@ -36,11 +37,12 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *
  * | Route | Answer |
  * | --- | --- |
- * | `GET /`, `GET /s/<id>` | the page |
+ * | `GET /`, `GET /feed`, `GET /s/<id>` | the page |
  * | `GET /api/app` | `{ app: true }`; a session server answers 404, which is how the page tells the two apart |
  * | `GET /api/events` | an event stream with `sessions` (no `id`, data `{}`) each time a worker starts or stops, so the page reads the list again |
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
  * | `GET /api/export` | as on a session server, for any session |
+ * | `GET /api/feed`, `GET /api/search` | Activity and Search Threads, as on a session server, over the hub's rows |
  * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
  * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for another holder; a session nothing runs is renamed in its file |
  * | `POST /api/delete` | 409 for a session a worker runs or is starting; otherwise as on a session server |
@@ -100,8 +102,8 @@ export interface MmrGuiHubOptions {
   clientDir: string;
   /** Starts a worker for a saved session (the hub host's `startSession`). */
   startSession(request: MmrGuiHubStartRequest): Promise<MmrGuiHubSession>;
-  /** The session list (rows with `host`), its read-only views, the catalogue and the saved entries. */
-  sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read">;
+  /** The session list (rows with `host`), its read-only views, the catalogue, the saved entries and the rows Activity and search filter. */
+  sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read" | "searchable">;
   /** The session server's commands; the hub serves the More Actions (`MMR_GUI_SESSION_ACTIONS`) from them. */
   commands: MmrGuiCommands;
   /** `GET /api/export`, as on a session server. */
@@ -519,6 +521,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
     }
     if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
+    if (rawPath === "/api/feed" || rawPath === "/api/search") return sendMmrGuiActivity(res, rawPath, request.url, sessions);
     return send(res, 404, "Not found");
   }
 

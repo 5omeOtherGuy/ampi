@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
+import { buildMmrGuiFeed, parseMmrGuiFeedRequest, parseMmrGuiSearchRequest, searchMmrGuiSessions } from "./activity.js";
 import type { MmrGuiBridge } from "./bridge.js";
 import type { MmrGuiCommands, MmrGuiExporter } from "./commands.js";
 import type { MmrGuiSessions } from "./sessions.js";
@@ -32,6 +33,9 @@ import type { MmrGuiSessions } from "./sessions.js";
  *   `GET /api/sessions/<id>` reads one read-only; neither writes anything.
  *   `GET /api/export?sessionId=<id>&format=markdown|json` answers a
  *   session as a file to download (`Content-Disposition: attachment`).
+ * - `GET /feed` is the page too, showing the Activity page;
+ *   `GET /api/feed` and `GET /api/search` answer it and the Search Threads
+ *   dialog (`activity.ts`), read-only.
  */
 
 export interface MmrGuiServerOptions {
@@ -40,8 +44,8 @@ export interface MmrGuiServerOptions {
   commands: MmrGuiCommands;
   /** `GET /api/export`: a session as a Markdown or JSON file. */
   exportSession: MmrGuiExporter;
-  /** The sidebar's session list and the read-only views of other sessions. */
-  sessions: Pick<MmrGuiSessions, "list" | "view">;
+  /** The sidebar's session list, the read-only views of other sessions, and the rows Activity and search filter. */
+  sessions: Pick<MmrGuiSessions, "list" | "view" | "searchable">;
   token: string;
   /** Directory of the static client files. */
   clientDir: string;
@@ -124,6 +128,24 @@ export async function sendMmrGuiExport(res: ServerResponse, url: URL, exportSess
   });
 }
 
+/**
+ * Answer `GET /api/feed` (the Activity page) and `GET /api/search` (Search
+ * Threads) from the listed rows: 400 with an `error` for a parameter that
+ * does not parse.
+ */
+export async function sendMmrGuiActivity(res: ServerResponse, rawPath: "/api/feed" | "/api/search", url: URL, sessions: Pick<MmrGuiSessions, "searchable">): Promise<void> {
+  if (rawPath === "/api/feed") {
+    const request = parseMmrGuiFeedRequest(url.searchParams);
+    if (!request.ok) return sendJson(res, 400, { error: request.error });
+    const { now, rows } = await sessions.searchable();
+    return sendJson(res, 200, buildMmrGuiFeed(rows, request.value, { now }));
+  }
+  const request = parseMmrGuiSearchRequest(url.searchParams);
+  if (!request.ok) return sendJson(res, 400, { error: request.error });
+  const { now, rows } = await sessions.searchable();
+  return sendJson(res, 200, searchMmrGuiSessions(rows, request.value, { now }));
+}
+
 /** One event-stream event; the hub's own events have no `id`, so they leave the replay position alone. */
 export function formatMmrGuiEvent(event: { id?: number; event: string; data: unknown }): string {
   if (event.id === undefined) return `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
@@ -196,7 +218,7 @@ export interface MmrGuiHttpServerOptions {
   /**
    * Answer a request the policy let through: a POST with the server's own
    * `Origin` and the token cookie, or a GET or HEAD with the cookie that is
-   * not `/` or a client file.
+   * not `/`, `/feed` or a client file.
    */
   route(request: MmrGuiRequest): Promise<void>;
 }
@@ -266,7 +288,7 @@ export async function startMmrGuiHttpServer(options: MmrGuiHttpServerOptions): P
 
     const servePage = () => serveFile(res, path.join(clientDir, "index.html"));
     if (method !== "POST") {
-      if (rawPath === "/") return servePage();
+      if (rawPath === "/" || rawPath === "/feed") return servePage();
       if (rawPath.startsWith("/client/")) {
         const file = clientFile(clientDir, rawPath.slice("/client/".length));
         if (!file) return send(res, 400, "Bad path");
@@ -367,6 +389,7 @@ export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiS
       return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
     }
     if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
+    if (rawPath === "/api/feed" || rawPath === "/api/search") return sendMmrGuiActivity(res, rawPath, request.url, options.sessions);
     return send(res, 404, "Not found");
   }
 

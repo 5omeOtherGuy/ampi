@@ -17,6 +17,9 @@
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.25" width="12.5" height="11.5" rx="1.5"/><path d="M6 2.25v11.5"/></svg>
           </button>
           <span class="wordmark">ampi</span>
+          <button class="icon-button sidebar-header-end" id="search-threads" type="button" aria-haspopup="dialog" aria-controls="search-dialog" aria-label="Search threads" title="Search threads">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+          </button>
         </div>
         <div class="sidebar-search">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
@@ -25,6 +28,12 @@
         </div>
         <div class="session-list" id="session-list"></div>
         <p class="sidebar-empty" id="sidebar-empty" hidden></p>
+        <div class="sidebar-footer">
+          <a class="footer-tile" id="activity-tile" href="/feed">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 8.5h2.5l2-5 3.5 9 2-4h2.5"/></svg>
+            <span>Activity</span>
+          </a>
+        </div>
         <div class="menu" id="row-menu" role="menu" aria-label="Session actions" hidden></div>
       </nav>
       <div class="sidebar-resize" id="sidebar-resize" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Resize sidebar" tabindex="0"></div>
@@ -48,6 +57,9 @@
               <span id="cwd"></span>
             </span>
             <span class="mode" id="mode" hidden></span>
+            <button class="icon-button" id="copy-link" type="button" aria-label="Copy link" title="Copy link" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M7 9a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9 7a2.6 2.6 0 0 0-3.7 0L2.9 9.4a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>
+            </button>
             <button class="icon-button" id="scheme" type="button" aria-label="Color scheme: system" title="Color scheme: system">
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path class="fill" d="M8 2.25a5.75 5.75 0 0 1 0 11.5z"/></svg>
             </button>
@@ -59,6 +71,38 @@
             <div class="live-dot" id="live-dot" aria-hidden="true" hidden></div>
             <p class="empty" id="empty" hidden>No messages yet. Write one below, or in the terminal.</p>
           </div>
+        </main>
+        <main class="feed" id="feed" aria-label="Activity" hidden>
+          <div class="feed-layout">
+            <div class="feed-filters" role="group" aria-label="Filters">
+              <section class="feed-filter">
+                <h2 class="feed-label"><label for="feed-q">Search</label></h2>
+                <div class="feed-search">
+                  <input id="feed-q" type="search" autocomplete="off" spellcheck="false" placeholder="label:docs is:live">
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+                </div>
+              </section>
+              <section class="feed-filter">
+                <h2 class="feed-label" id="feed-time-label">Time</h2>
+                <div class="feed-card" id="feed-time" role="group" aria-labelledby="feed-time-label"></div>
+              </section>
+              <section class="feed-filter">
+                <h2 class="feed-label" id="feed-status-label">Status</h2>
+                <div class="feed-card" id="feed-status" role="group" aria-labelledby="feed-status-label"></div>
+              </section>
+              <section class="feed-filter">
+                <h2 class="feed-label" id="feed-projects-label">Projects</h2>
+                <div class="feed-card feed-projects" id="feed-projects" role="group" aria-labelledby="feed-projects-label"></div>
+              </section>
+            </div>
+            <section class="feed-results" aria-labelledby="feed-threads-label">
+              <h2 class="feed-label" id="feed-threads-label">Threads</h2>
+              <p class="feed-note" id="feed-note" role="status" hidden></p>
+              <div id="feed-days"></div>
+              <p class="feed-empty" id="feed-empty" hidden>No sessions match these filters.</p>
+            </section>
+          </div>
+          <div class="menu feed-menu" id="feed-menu" role="menu" aria-label="Default filter" hidden></div>
         </main>
         <footer class="composer-area" id="composer-area">
           <div class="column">
@@ -112,6 +156,22 @@
       <dialog class="dialog" id="action-dialog" aria-labelledby="action-dialog-title"></dialog>
       <dialog class="dialog ask-dialog" id="ask-dialog" aria-labelledby="ask-title"></dialog>
       <dialog class="dialog keymap-dialog" id="keymap-dialog" aria-labelledby="keymap-title"></dialog>
+      <dialog class="dialog search-dialog" id="search-dialog" aria-label="Search threads">
+        <div class="search-head">
+          <button class="search-close" id="search-close" type="button">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+            Close
+          </button>
+          <a class="search-syntax" id="search-syntax" target="_blank" rel="noopener noreferrer">Search syntax</a>
+        </div>
+        <input class="search-input" id="search-input" type="text" role="combobox" aria-label="Search threads" aria-controls="search-results" aria-expanded="true" aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Words, &quot;phrases&quot;, label:, project:, is:live">
+        <div class="search-body">
+          <h2 class="search-label" id="search-results-label">Threads</h2>
+          <p class="search-note" id="search-note" role="status" hidden></p>
+          <div class="search-results" id="search-results" role="listbox" aria-labelledby="search-results-label"></div>
+          <p class="search-empty" id="search-empty" hidden>No sessions match.</p>
+        </div>
+      </dialog>
       <div class="toast" id="toast" role="status" hidden></div>
     </div>
   </body>
