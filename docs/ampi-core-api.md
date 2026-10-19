@@ -683,11 +683,11 @@ re-exported from the package root. `classifyMmrGuardedFile(raw, style, env)`
 resolves a tool's path argument (`style` `pi` as Pi's `edit` and `write` do,
 `plain` as `apply_patch` and `painter` do; `resolveMmrToolPath` returns just
 that path) and returns its first matching category `{ key, description }`
-with the lexical path, the real path of its nearest existing ancestor and
-the forms that are guarded, or `undefined`. `env` injects the home, platform,
-temp, working and agent directories, the environment and `realpath`, so the
-macOS and Windows rules run on any platform. `findMmrGuardedFiles(toolName,
-input, allowlist, env)` lists the guarded files a call changes that an
+with the lexical path, the path with its links followed (dangling ones
+included) and the forms that are guarded, or `undefined`. `env` injects the
+home, platform, temp, working and agent directories, the environment,
+`realpath` and `readlink`, so the macOS and Windows rules run on any
+platform. `findMmrGuardedFiles(toolName, input, allowlist, env)` lists the guarded files a call changes that an
 allowlist parsed by `parseMmrGuardedFilesAllowlist` does not cover. The patch
 path reader `patchTextPaths(patchText)` in `tool-activity.ts` returns every
 path an `apply_patch` text adds, updates or deletes, a move's source and

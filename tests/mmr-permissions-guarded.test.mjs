@@ -57,6 +57,7 @@ const LINUX = {
   agentDir: "/data/agent",
   env: {},
   realpath: nothingExists,
+  readlink: nothingExists,
 };
 
 const MACOS = {
@@ -70,6 +71,7 @@ const MACOS = {
     ["/private", "/private/var", "/private/var/folders", "/private/var/folders/xx", "/private/var/folders/xx/T", "/private/var/db", "/private/etc", "/Users", "/Users/u"],
     { "/var": "/private/var", "/etc": "/private/etc" },
   ),
+  readlink: nothingExists,
 };
 
 const WINDOWS = {
@@ -80,6 +82,7 @@ const WINDOWS = {
   agentDir: "C:\\Users\\u\\.pi\\agent",
   env: { SystemRoot: "C:\\Windows", APPDATA: "C:\\Users\\u\\AppData\\Roaming", localappdata: "D:\\Local" },
   realpath: nothingExists,
+  readlink: nothingExists,
 };
 
 /** [path as the tool gets it, path style, environment, expected category key or null]. */
@@ -212,6 +215,52 @@ describe("ampi-permissions guarded files: classification", () => {
     assert.deepEqual(file.guardedForms, [file.realPath]);
     assert.equal(guarded.classifyMmrGuardedFile("notes.txt", "pi", env), undefined);
   });
+
+  it("follows a dangling link to the file a write through it would create", () => {
+    const root = realpathSync(tempDir("ampi-guarded-"));
+    const home = path.join(root, "home");
+    const project = path.join(root, "project");
+    mkdirSync(path.join(home, ".ssh"), { recursive: true });
+    mkdirSync(path.join(project, ".git", "hooks"), { recursive: true });
+    mkdirSync(path.join(project, "sub"));
+    symlinkSync(path.join(".git", "hooks", "pre-commit"), path.join(project, "notes.txt"));
+    symlinkSync(path.join(home, ".ssh", "authorized_keys"), path.join(project, "keys.txt"));
+    symlinkSync("notes.txt", path.join(project, "chain.txt"));
+    symlinkSync(path.join(home, ".ssh", "new"), path.join(project, "later"));
+    // Relative to the folder the link really is in, not to the path it was reached by.
+    symlinkSync(path.join("..", "..", "home", ".ssh", "rc"), path.join(project, "sub", "hook"));
+    symlinkSync(path.join(project, "sub"), path.join(root, "view"));
+    const env = { platform: "linux", homeDir: home, cwd: project, tempDir: path.join(root, "tmp"), agentDir: path.join(root, "agent"), env: {} };
+    const cases = [
+      ["notes.txt", "git", path.join(project, ".git", "hooks", "pre-commit")],
+      ["keys.txt", "ssh", path.join(home, ".ssh", "authorized_keys")],
+      ["chain.txt", "git", path.join(project, ".git", "hooks", "pre-commit")],
+      ["later/id_ed25519", "ssh", path.join(home, ".ssh", "new", "id_ed25519")],
+      [path.join(root, "view", "hook"), "ssh", path.join(home, ".ssh", "rc")],
+    ];
+    for (const [raw, category, real] of cases) {
+      const file = guarded.classifyMmrGuardedFile(raw, "pi", env);
+      assert.equal(file?.category.key, category, raw);
+      assert.equal(file.realPath, real, raw);
+      assert.deepEqual(file.guardedForms, [real], raw);
+    }
+  });
+
+  it("guards a link that cannot be followed", () => {
+    const project = realpathSync(tempDir("ampi-guarded-"));
+    symlinkSync("loop", path.join(project, "loop"));
+    symlinkSync("b", path.join(project, "a"));
+    symlinkSync("a", path.join(project, "b"));
+    const env = { ...LINUX, cwd: project, realpath: undefined, readlink: undefined };
+    for (const raw of ["loop", "loop/x", "a"]) {
+      const file = guarded.classifyMmrGuardedFile(raw, "plain", env);
+      assert.equal(file?.category.key, "unresolved-link", raw);
+      assert.equal(file.realPath, undefined, raw);
+      assert.deepEqual(file.guardedForms, [path.join(project, raw)], raw);
+    }
+    const chain = { ...LINUX, cwd: "/p", realpath: (p) => (p === "/p" ? p : nothingExists()), readlink: (p) => `${p}x` };
+    assert.equal(guarded.classifyMmrGuardedFile("l", "plain", chain)?.category.key, "unresolved-link", "too many links in a row");
+  });
 });
 
 describe("ampi-permissions guarded files: patch paths", () => {
@@ -263,6 +312,15 @@ describe("ampi-permissions guarded files: the dialog", () => {
     assert.deepEqual(t.selects[0].title.split("\n"), ["Guarded File Modification", "Tool: write", ".env (environment file)"]);
     const events = t.bus.emitted.filter((entry) => entry.name === modules.runtime.MMR_EVENT_APPROVAL).map((entry) => entry.data.phase);
     assert.deepEqual(events, ["request", "answer"]);
+  });
+
+  it("asks before write follows a dangling link into .git, naming where it leads", async () => {
+    const cwd = realpathSync(tempDir());
+    mkdirSync(path.join(cwd, ".git", "hooks"), { recursive: true });
+    symlinkSync(path.join(".git", "hooks", "pre-commit"), path.join(cwd, "notes.txt"));
+    const t = await setupPermissions(modules, { user: ON, cwd, answers: ["Reject"] });
+    assert.equal((await t.call("write", { path: "notes.txt", content: "#!/bin/sh\n" })).block, true);
+    assert.equal(t.selects[0].title.split("\n")[2], `notes.txt → ${path.join(".git", "hooks", "pre-commit")} (Git internals)`);
   });
 
   it("blocks with the category and the path on Reject, and when the dialog is closed", async () => {

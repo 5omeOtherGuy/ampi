@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { readlinkSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,10 +14,11 @@ import { patchTextPaths } from "./tool-activity.js";
  * changes a file there, even when a rule allows the tool.
  *
  * Unlike the rule engine in `permissions.ts`, this module reads the
- * filesystem: it follows symbolic links with `realpath`, so a link that
- * points into `~/.ssh` is caught. Everything it reads from the machine (home,
- * platform, temp directory, cwd, Pi's agent directory, environment variables,
- * `realpath`) can be injected, so Windows and macOS cases run anywhere.
+ * filesystem: it follows symbolic links with `realpath`, and `readlink` for
+ * links whose target does not exist yet, so a link that points into `~/.ssh`
+ * is caught. Everything it reads from the machine (home, platform, temp
+ * directory, cwd, Pi's agent directory, environment variables, `realpath`,
+ * `readlink`) can be injected, so Windows and macOS cases run anywhere.
  */
 
 export interface MmrGuardedFileCategory {
@@ -40,6 +41,8 @@ export interface MmrGuardedFilesEnvironment {
   readonly env?: Readonly<Record<string, string | undefined>>;
   /** Sync `realpath`; throws for a path that does not exist. */
   readonly realpath?: (filePath: string) => string;
+  /** Sync `readlink`; throws for a path that is not a symbolic link. */
+  readonly readlink?: (filePath: string) => string;
 }
 
 /**
@@ -55,7 +58,7 @@ export interface MmrGuardedFile {
   readonly category: MmrGuardedFileCategory;
   /** The absolute path, resolved without following links. */
   readonly path: string;
-  /** The path with its nearest existing ancestor's links followed, when that differs from `path`. */
+  /** The path with its links followed, dangling ones included, when that differs from `path`. */
   readonly realPath?: string;
   /** The forms (`path`, `realPath`) that are guarded on their own. */
   readonly guardedForms: readonly string[];
@@ -71,6 +74,7 @@ export const MMR_GUARDED_FILE_CATEGORIES = Object.freeze({
   database: Object.freeze({ key: "database", description: "database file" }),
   homeConfig: Object.freeze({ key: "home-config", description: "configuration in the home directory" }),
   system: Object.freeze({ key: "system", description: "system directory" }),
+  link: Object.freeze({ key: "unresolved-link", description: "link that cannot be followed" }),
 } satisfies Record<string, MmrGuardedFileCategory>);
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
@@ -79,6 +83,8 @@ const ENV_TEMPLATES: ReadonlySet<string> = new Set([".env.example", ".env.sample
 const DATABASE = /\.(db|sqlite|sqlite3)$/;
 const UNIX_SYSTEM_ROOTS = ["/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot", "/var", "/opt"];
 const MACOS_SYSTEM_ROOTS = ["/private/etc", "/private/var", "/System", "/Library", "/Applications"];
+/** Links followed in a row before a path counts as one that cannot be followed, as Linux's own limit. */
+const MAX_LINKS = 40;
 
 interface Resolved {
   readonly platform: NodeJS.Platform;
@@ -87,6 +93,7 @@ interface Resolved {
   readonly home: string;
   readonly cwd: string;
   readonly realpath: (filePath: string) => string;
+  readonly readlink: (filePath: string) => string;
   /** Comparison keys of each anchor, in its given and its real form. */
   readonly homes: readonly string[];
   readonly agentDirs: readonly string[];
@@ -108,11 +115,15 @@ function resolveEnvironment(environment: MmrGuardedFilesEnvironment): Resolved {
   const p = platform === "win32" ? path.win32 : path.posix;
   const fold = platform === "darwin" || platform === "win32";
   const realpath = environment.realpath ?? ((filePath: string) => realpathSync(filePath));
+  const readlink = environment.readlink ?? ((filePath: string) => readlinkSync(filePath));
   const home = p.resolve(environment.homeDir ?? homedir());
   const cwd = p.resolve(environment.cwd ?? process.cwd());
   const env = environment.env ?? process.env;
-  const base: Omit<Resolved, "homes" | "agentDirs" | "cwds" | "temps" | "systemRoots"> = { platform, path: p, fold, home, cwd, realpath };
-  const anchor = (dir: string) => forms(base, p.resolve(dir)).map((form) => key(base, form));
+  const base: Omit<Resolved, "homes" | "agentDirs" | "cwds" | "temps" | "systemRoots"> = { platform, path: p, fold, home, cwd, realpath, readlink };
+  const anchor = (dir: string) => {
+    const resolved = p.resolve(dir);
+    return [...new Set([resolved, realForm(base, resolved) ?? resolved])].map((form) => key(base, form));
+  };
 
   let roots: string[];
   if (platform === "win32") {
@@ -164,21 +175,44 @@ function isStrictlyUnder(candidate: string, root: string): boolean {
   return candidate !== root && isUnder(candidate, root);
 }
 
-/** The path itself and, when it differs, the real path of its nearest existing ancestor joined with the rest. */
-function forms(env: Pick<Resolved, "path" | "realpath">, filePath: string): string[] {
+/**
+ * The path with its links followed: the real path of its nearest existing
+ * ancestor joined with the rest, where a dangling link on the way is read and
+ * its target followed the same way, since a write through it creates that
+ * target. `undefined` for a link that cannot be followed: a loop, more than
+ * `MAX_LINKS` links in a row, or one whose folder or target cannot be read.
+ */
+function realForm(env: Pick<Resolved, "path" | "realpath" | "readlink">, filePath: string, links = 0): string | undefined {
   const p = env.path;
   const rest: string[] = [];
   let current = filePath;
   for (;;) {
     try {
-      const real = p.join(env.realpath(current), ...rest.reverse());
-      return real === filePath ? [filePath] : [filePath, real];
+      return p.join(env.realpath(current), ...rest.reverse());
     } catch {
-      const parent = p.dirname(current);
-      if (parent === current) return [filePath];
-      rest.push(p.basename(current));
-      current = parent;
+      // Missing, or a link that does not lead anywhere yet.
     }
+    let target: string | undefined;
+    try {
+      target = env.readlink(current);
+    } catch {
+      // Not a link: walk up to its folder.
+    }
+    if (target !== undefined) {
+      if (links >= MAX_LINKS) return undefined;
+      let folder: string;
+      try {
+        folder = env.realpath(p.dirname(current));
+      } catch {
+        return undefined;
+      }
+      const real = realForm(env, p.resolve(folder, target), links + 1);
+      return real === undefined ? undefined : p.join(real, ...rest.reverse());
+    }
+    const parent = p.dirname(current);
+    if (parent === current) return p.join(current, ...rest.reverse());
+    rest.push(p.basename(current));
+    current = parent;
   }
 }
 
@@ -271,9 +305,14 @@ function resolveWith(env: Resolved, raw: string, style: MmrGuardedPathStyle): st
 }
 
 function classifyWith(env: Resolved, raw: string, style: MmrGuardedPathStyle): MmrGuardedFile | undefined {
-  const resolved = resolveWith(env, raw, style);
-  const [lexical, real] = forms(env, resolved) as [string, string | undefined];
-  const checked = [lexical, real].flatMap((form) => (form === undefined ? [] : [{ form, category: categoryOf(env, key(env, form)) }]));
+  const lexical = resolveWith(env, raw, style);
+  const followed = realForm(env, lexical);
+  const real = followed === lexical ? undefined : followed;
+  // A link that cannot be followed may lead anywhere, so it is guarded itself.
+  const checked = [
+    { form: lexical, category: categoryOf(env, key(env, lexical)) ?? (followed === undefined ? MMR_GUARDED_FILE_CATEGORIES.link : undefined) },
+    ...(real === undefined ? [] : [{ form: real, category: categoryOf(env, key(env, real)) }]),
+  ];
   const guarded = checked.filter((entry) => entry.category !== undefined);
   if (guarded.length === 0) return undefined;
   // Categories are checked in their order over both forms: the first wins.
