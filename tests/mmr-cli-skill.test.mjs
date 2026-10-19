@@ -90,6 +90,9 @@ async function run(args, { cwd, agentDir, skills = [], readSkills, tempRoot = tm
     out: (text) => {
       out += text;
     },
+    progress: (text) => {
+      err += text;
+    },
     log: createLogger({
       stderr: (text) => {
         err += text;
@@ -420,6 +423,7 @@ describe("ampi skill add: git sources", { skip: gitMissing ? "git is not install
   it("clones a file:// URL with a subpath, copies the skill without .git, and removes the clone", async () => {
     const result = await run(["add", `file://${bare}//skills/review`, "--global"], { cwd: project, agentDir, tempRoot, gitEnv });
     assert.equal(result.code, 0, result.err);
+    assert.equal(result.err, `Cloning file://${bare}…\n`);
     const installed = path.join(agentDir, "skills", "review");
     assert.deepEqual(readdirSync(installed).sort(), ["SKILL.md", "checklist.md"]);
     assert.deepEqual(readdirSync(tempRoot), []);

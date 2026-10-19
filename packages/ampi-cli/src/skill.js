@@ -36,6 +36,7 @@ import { cut } from "./threads.js";
  * @property {boolean} interactive Whether a question can be answered (stdin is a terminal).
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {(text: string) => void} out Writes to stdout.
+ * @property {(text: string) => void} progress Writes a progress line, such as `Cloning <url>…`, to stderr at every log level.
  * @property {import("./log.js").Logger} log For the command's diagnostics.
  *
  * @typedef {{ kind: "local", path: string } | { kind: "git", url: string, subpath: string } | { kind: "error", error: string }} SkillSourceSpec
@@ -613,7 +614,7 @@ async function add(host, source, options) {
   const temp = mkdtempSync(path.join(host.tempRoot, "ampi-skill-"));
   try {
     const clone = path.join(temp, "repo");
-    host.log.info(`cloning ${spec.url}…`);
+    host.progress(`Cloning ${spec.url}…\n`);
     const result = host.git(["clone", "--depth", "1", "--quiet", "--no-tags", "--", spec.url, clone]);
     if (result.error?.code === "ENOENT") return fail("git is not installed, and a git source needs it.");
     if (result.error !== undefined || result.status !== 0) {

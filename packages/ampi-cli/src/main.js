@@ -485,6 +485,8 @@ export async function runAmpi(argv) {
         interactive: process.stdin.isTTY === true,
         confirm,
         out: (text) => process.stdout.write(text),
+        // "Cloning <url>…", progress the user sees whatever the log level: not a diagnostic.
+        progress: (text) => process.stderr.write(text),
         log,
       });
     }

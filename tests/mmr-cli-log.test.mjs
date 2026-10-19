@@ -253,6 +253,7 @@ const STDERR_ALLOWED = [
   { file: "main.js", line: "createInterface({ input: process.stdin, output: process.stderr })", reason: "the yes/no question of threads delete" },
   { file: "pi-compat.js", line: "process.stderr.write(`", reason: "a line Pi wrote to stdout that is not JSON, passed on" },
   { file: "main.js", line: "piStderr: (text) => process.stderr.write(text)", reason: "Pi's own stderr from a pi mcp command, passed on" },
+  { file: "main.js", line: "progress: (text) => process.stderr.write(text)", reason: "the Cloning line of skill add, progress at every level" },
 ];
 
 describe("ampi diagnostics guard", () => {
