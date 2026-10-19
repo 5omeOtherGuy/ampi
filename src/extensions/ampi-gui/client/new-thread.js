@@ -101,12 +101,15 @@ export function directoryPillDetail(directory) {
 }
 
 /**
- * The composer's directory once the hub created `worktree` (`{ path, branch }`)
- * for a thread in `from`: that worktree, named as `from` was (its folder
- * repeats the slug the branch shows), with its branch on the pill.
+ * The composer's directory once the hub created `worktree` (`{ path, branch }`):
+ * that worktree, with its branch on the pill, named after the main checkout
+ * whose `<name>-worktrees` folder holds it (its own folder repeats the slug
+ * the branch shows), or after its own folder elsewhere.
  */
-export function directoryAfterWorktree(worktree, from = null) {
-  const label = from?.label ?? worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
+export function directoryAfterWorktree(worktree) {
+  const parts = worktree.path.split(/[\\/]/).filter(Boolean);
+  const parent = parts.at(-2) ?? "";
+  const label = parent.length > "-worktrees".length && parent.endsWith("-worktrees") ? parent.slice(0, -"-worktrees".length) : (parts.at(-1) ?? worktree.path);
   return { path: worktree.path, label, git: true, branch: worktree.branch, worktree: false, createdBranch: worktree.branch };
 }
 
@@ -557,7 +560,7 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
     state = newThreadTransition(state, { type: "created", sessionId: result.body.sessionId });
     const { effect } = state;
     const { worktree } = result.body;
-    if (worktree) directory = directoryAfterWorktree(worktree, directory);
+    if (worktree) directory = directoryAfterWorktree(worktree);
     reset(effect.reset);
     if (result.body.warning) notify(result.body.warning, "warning");
     if (effect.open) return openThread(effect.open);

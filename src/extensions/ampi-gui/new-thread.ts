@@ -234,11 +234,24 @@ export function mmrGuiWorktreeSlug(prompt: string, suffix: string = randomBytes(
 export type MmrGuiExecFile = (
   file: string,
   args: readonly string[],
-  options: { timeout: number; windowsHide: boolean },
+  options: { timeout: number; windowsHide: boolean; env: NodeJS.ProcessEnv },
 ) => Promise<{ stdout: string; stderr: string }>;
 
 const execFileText = promisify(execFile);
 const runFile: MmrGuiExecFile = (file, args, options) => execFileText(file, [...args], { ...options, encoding: "utf8" });
+
+/**
+ * Variables that point `git` at a repository; `-C` does not override them, so
+ * a hub started from a Git hook would otherwise act on that hook's repository.
+ */
+const GIT_REPOSITORY_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
+
+/** The hub's environment without {@link GIT_REPOSITORY_ENV}, so `git -C <cwd>` finds the checkout of `cwd`. */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of GIT_REPOSITORY_ENV) delete env[name];
+  return env;
+}
 
 export type MmrGuiWorktreeResult = { ok: true; path: string; branch: string } | { ok: false; status: number; body: { error: string } };
 
@@ -256,7 +269,9 @@ function gitMessage(error: unknown): string {
  * current `HEAD`, on a new branch `ampi/<slug>`, at
  * `<parent of the main checkout>/<its name>-worktrees/<slug>`. Runs `git`
  * twice through `execFile` with fixed arguments: `rev-parse` to find the
- * checkout (400 outside one), then `worktree add` (409 with git's message
+ * checkout (400 outside one, with git's message when it refuses the
+ * directory for another reason; 409 for a git older than 2.31, which does
+ * not know `--path-format`), then `worktree add` (409 with git's message
  * when it fails). ampi never removes the worktrees it creates.
  */
 export async function createMmrGuiWorktree(
@@ -264,17 +279,26 @@ export async function createMmrGuiWorktree(
   prompt: string,
   { run = runFile, suffix }: { run?: MmrGuiExecFile; suffix?: string } = {},
 ): Promise<MmrGuiWorktreeResult> {
-  const options = { timeout: MMR_GUI_WORKTREE_TIMEOUT_MS, windowsHide: true };
-  let top: string;
-  let common: string;
+  const options = { timeout: MMR_GUI_WORKTREE_TIMEOUT_MS, windowsHide: true, env: gitEnv() };
+  const notCheckout = `${cwd} is not in a Git checkout, so it has no worktrees.`;
+  let lines: string[];
   try {
     const { stdout } = await run("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], options);
-    [top = "", common = ""] = stdout.split("\n").map((line) => line.trim());
+    lines = stdout.replace(/\r?\n$/, "").split(/\r?\n/);
   } catch (error) {
-    if ((error as { code?: unknown }).code === "ENOENT") return { ok: false, status: 409, body: { error: "New Worktree needs git, and git is not on PATH." } };
-    return { ok: false, status: 400, body: { error: `${cwd} is not in a Git checkout, so it has no worktrees.` } };
+    const failure = error as { code?: unknown; killed?: boolean };
+    if (failure.code === "ENOENT") return { ok: false, status: 409, body: { error: "New Worktree needs git, and git is not on PATH." } };
+    const message = gitMessage(error);
+    if (failure.killed) return { ok: false, status: 409, body: { error: message } };
+    if (/not a git repository/i.test(message)) return { ok: false, status: 400, body: { error: notCheckout } };
+    return { ok: false, status: 400, body: { error: `${cwd} cannot have worktrees: ${message}` } };
   }
-  if (top === "") return { ok: false, status: 400, body: { error: `${cwd} is not in a Git checkout, so it has no worktrees.` } };
+  if (lines[0] === "") return { ok: false, status: 400, body: { error: notCheckout } };
+  // A git older than 2.31 echoes the `--path-format` it does not know and prints relative paths.
+  const [top = "", common = ""] = lines;
+  if (lines.length !== 2 || !path.isAbsolute(top) || !path.isAbsolute(common)) {
+    return { ok: false, status: 409, body: { error: "New Worktree needs git 2.31 or later." } };
+  }
   // Worktrees of a worktree go beside the main checkout's, which owns the shared Git directory.
   const root = path.basename(common) === ".git" ? path.dirname(common) : top;
   const slug = mmrGuiWorktreeSlug(prompt, suffix);
