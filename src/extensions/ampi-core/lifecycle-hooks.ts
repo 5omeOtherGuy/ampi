@@ -140,10 +140,13 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // Pi always provides isProjectTrusted; a host without it counts as trusted.
     const projectTrusted = typeof ctx.isProjectTrusted === "function" ? ctx.isProjectTrusted() : true;
     const loadedSettings = loadMmrCoreSettings(ctx.cwd).settings;
+    // `ampi --fast` passes `--ampi-fast=true`; Pi turns a boolean flag's
+    // value into true, and a host that hands over the raw value passes "true".
+    const fastFlag = pi.getFlag(MMR_FAST_FLAG);
     const speed = resolveMmrSessionSpeed({
       // Some hosts' session managers have no branch view; they get the setting.
       entries: ctx.sessionManager.getBranch?.() ?? [],
-      flag: pi.getFlag(MMR_FAST_FLAG) === true,
+      flag: fastFlag === true || fastFlag === "true",
       setting: projectTrusted ? loadedSettings.speed : loadedSettings.speedByScope?.user,
     });
     changeMmrSpeed(pi, speed, ctx.model);

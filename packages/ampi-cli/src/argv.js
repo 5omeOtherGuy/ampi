@@ -8,7 +8,7 @@ import { isLogLevel } from "./log.js";
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
- * @property {boolean} fast `--fast`: start the session at fast speed, forwarded as `--ampi-fast`.
+ * @property {boolean} fast `--fast`: start the session at fast speed, forwarded as `--ampi-fast=true`.
  * @property {string} [title] `--title`, forwarded as Pi's `--name`.
  * @property {string[]} labels `-l`/`--label` values, stored in the thread index once the session starts.
  * @property {boolean} execute `-x`/`--execute`: run one prompt and print the final assistant message.
@@ -402,7 +402,10 @@ function readOptions(args) {
         }
         break;
       case "fast":
-        if (!options.fast) piArgs.push("--ampi-fast");
+        // With its value attached: Pi reads the flags before it loads the
+        // extensions, so a bare `--ampi-fast` would take the next word, the
+        // message for example, as its value.
+        if (!options.fast) piArgs.push("--ampi-fast=true");
         options.fast = true;
         break;
       case "title":
