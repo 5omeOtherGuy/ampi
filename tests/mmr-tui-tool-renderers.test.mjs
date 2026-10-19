@@ -317,6 +317,34 @@ describe("ampi-tui tool rows", () => {
     assert.deepEqual(row(byName["painter error"]), ["", " ✗ Painted A lighthouse icon"]);
   });
 
+  it("drops terminal control sequences from the prompt, references and saved path on painter's card", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    const title = "\u001b]0;owned\u0007";
+    const clear = "\u001b[2J";
+    const lines = renderCase(
+      resolver,
+      {
+        tool: "painter",
+        args: { prompt: `A lighthouse${clear} icon`, reference_images: [`design/${title}sketch.png`] },
+        result: {
+          content: [{ type: "text", text: "Saved the image." }],
+          details: { path: `${CWD}/assets/${title}icon${clear}.png`, model: "fakeimg/img-1" },
+        },
+      },
+      true,
+      140,
+    );
+    // The card's lines, after the blank line and the title.
+    const card = lines.slice(2).join("\n");
+    assert.ok(!card.includes("\u001b]0;") && !card.includes(clear), JSON.stringify(card));
+    assert.deepEqual(lines.slice(2).map(stripAnsi), [
+      "   Prompt: A lighthouse icon",
+      "   References: design/sketch.png",
+      "   Saved to: assets/icon.png",
+    ]);
+  });
+
   it("cuts long rows to the width with an ellipsis", async () => {
     const { createToolRendererResolver } = await load();
     const resolver = createToolRendererResolver({ home: HOME });

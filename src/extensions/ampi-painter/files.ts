@@ -48,6 +48,7 @@ export async function readMmrPainterReferences(paths: readonly string[], cwd: st
   const blocks: ImageContent[] = [];
   for (const given of paths) {
     if (typeof given !== "string" || given.trim() === "") throw new Error("reference_images holds an empty path.");
+    // Any file the user can read: absolute paths, `../` and symlinks may lead outside the working directory.
     const file = path.resolve(cwd, given);
     const info = await stat(file).catch((error: unknown) => {
       const code = errorCode(error);
@@ -147,6 +148,8 @@ export interface MmrPainterStoreOptions {
   now?: () => number;
   /** The random part of a temporary file's name. */
   randomId?: () => string;
+  /** Hard-links the temporary file to its name; default `fs.promises.link`. */
+  link?: (existing: string, created: string) => Promise<void>;
 }
 
 /** A folder name for a session id: kept as is when it is filesystem-safe, else its unsafe characters replaced. */
@@ -161,11 +164,14 @@ function sessionFolder(sessionId: string | undefined): string {
  * session's images from 1 in this process. Each image is written to a
  * temporary file first and then hard-linked to its name, which fails
  * rather than replaces when the name is taken, so two calls in the same
- * millisecond never overwrite each other: a taken name moves `n` on.
+ * millisecond never overwrite each other: a taken name moves `n` on. Where
+ * the filesystem has no hard links, the image is written to its name
+ * directly, still only as a new file.
  */
 export function createMmrPainterStore(options: MmrPainterStoreOptions = {}) {
   const now = options.now ?? Date.now;
   const randomId = options.randomId ?? (() => randomBytes(8).toString("hex"));
+  const linkFile = options.link ?? link;
   const counts = new Map<string, number>();
   // Temporary names stay apart within this process even when the random part repeats.
   let temps = 0;
@@ -186,7 +192,12 @@ export function createMmrPainterStore(options: MmrPainterStoreOptions = {}) {
           counts.set(folder, n);
           const file = path.join(dir, `${stamp}-${n}.${ext}`);
           try {
-            await link(temp, file);
+            try {
+              await linkFile(temp, file);
+            } catch (error) {
+              if (errorCode(error) === "EEXIST") throw error;
+              await writeFile(file, data, { flag: "wx" });
+            }
             return file;
           } catch (error) {
             if (errorCode(error) !== "EEXIST") throw error;

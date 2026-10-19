@@ -95,13 +95,21 @@ export function createMmrPainterExtension(overrides: MmrPainterFactoryOverrides 
     const registry = overrides.modelRegistry ?? ((ctx: ExtensionContext): MmrPainterModelRegistry => ctx.modelRegistry);
     // Only the latest check may write its answer, when two overlap.
     let latestCheck = 0;
+    // After session_shutdown Pi may have replaced or reloaded the session, which makes `pi` stale.
+    let shutDown = false;
     const chooseModel = async (ctx: ExtensionContext): Promise<MmrPainterModelChoice> => {
       const check = ++latestCheck;
       const next = await selectMmrPainterModel(registry(ctx), settings);
       if (check === latestCheck && !sameMmrPainterChoice(choice, next)) {
         choice = next;
         // ampi-core resolved the mode's tools before this answer existed.
-        notifyMmrToolRulesChanged(pi);
+        if (!shutDown) {
+          try {
+            notifyMmrToolRulesChanged(pi);
+          } catch {
+            // A stale extension API throws; the next session checks again.
+          }
+        }
       }
       return next;
     };
@@ -112,7 +120,11 @@ export function createMmrPainterExtension(overrides: MmrPainterFactoryOverrides 
     // Pi has no event for a new provider or a finished login: a new session
     // or a model switch is when painter looks again.
     pi.on("session_start", async (_event, ctx) => {
+      shutDown = false;
       await chooseModel(ctx);
+    });
+    pi.on("session_shutdown", () => {
+      shutDown = true;
     });
     pi.on("model_select", async (_event, ctx) => {
       await chooseModel(ctx);

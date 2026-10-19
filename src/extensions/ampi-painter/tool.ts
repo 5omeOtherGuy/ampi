@@ -25,7 +25,7 @@ export const PAINTER_PARAMS = Type.Object(
       Type.Array(Type.String(), {
         maxItems: MMR_PAINTER_MAX_REFERENCES,
         description:
-          "Up to 3 image files, relative to the working directory or absolute, that the model edits or takes after. PNG, JPEG, WebP or GIF, 10 MiB each.",
+          "Up to 3 image files, relative to the working directory or absolute, that the model edits or takes after. Any file the user can read, also outside the working directory. PNG, JPEG, WebP or GIF, 10 MiB each.",
       }),
     ),
     background: Type.Optional(

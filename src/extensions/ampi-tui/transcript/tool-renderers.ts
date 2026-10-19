@@ -468,7 +468,7 @@ function painterCardBody(row: Row, indent: string, width: number, failure: boole
     : [];
   if (references.length > 0) lines.push(...field("References", references.map((entry) => show(cleanText(entry))).join(", ")));
   const saved = record(state.result?.details).path;
-  if (typeof saved === "string" && !failure) lines.push(...field("Saved to", show(saved)));
+  if (typeof saved === "string" && !failure) lines.push(...field("Saved to", show(cleanText(saved))));
   if (failure) lines.push(...errorLines());
   return lines;
 }

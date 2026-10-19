@@ -29,7 +29,7 @@ Once on, `painter` is `active` in the `low`, `medium`, `high` and `ultra` modes 
 | `painter` | `prompt`, `reference_images?`, `background?`, `output_path?` | Make or edit one image, save it, return it |
 
 - `prompt`: what to draw, or for an edit what to change and what to keep. Must not be empty.
-- `reference_images`: up to three image files, relative to the working directory or absolute. The model edits them or takes their style, layout or content, as the prompt says.
+- `reference_images`: up to three image files, relative to the working directory or absolute, also outside it (see [Safety and privacy](#safety-and-privacy)). The model edits them or takes their style, layout or content, as the prompt says.
 - `background`: `transparent`, `opaque` or `auto` (the default). `transparent` and `opaque` add one sentence asking for that background to the prompt; `auto` adds nothing.
 - `output_path`: where to save the image (see [Where images go](#where-images-go)).
 
@@ -99,6 +99,7 @@ Every refusal is a tool error that names the path and the rule.
 ## Safety and privacy
 
 - The prompt and the reference images go to the chosen image model's provider.
+- Reference images may be any file the user can read: absolute paths, `../` paths and symlinks may lead outside the working directory, and `painter` does not restrict them. Only their count, size and format are checked.
 - Nothing is redacted from the prompt or the images.
 - `output_path` outside the working directory, into a missing folder or onto an existing entry is refused.
 - Images saved without `output_path` stay under Pi's agent directory, one folder per session; `ampi-painter` deletes none of them.

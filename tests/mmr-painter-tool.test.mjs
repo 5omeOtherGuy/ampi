@@ -105,7 +105,7 @@ afterEach(() => {
 /** Load ampi-painter into a mocked Pi; `start()` runs its session_start, `call()` the tool. */
 async function load({ enabled = true, model, registry = fakeRegistry({ available: [imageModel("fakeimg", "img-1")] }).registry, sessionId = "session-1" } = {}) {
   const { createMmrPainterExtension } = await importSource("extensions/ampi-painter/index.ts");
-  const { pi, tools, handlers } = createMockPi();
+  const { pi, tools, handlers, emits } = createMockPi();
   createMmrPainterExtension({
     loadSettings: () => ({ enabled, ...(model ? { model } : {}) }),
     modelRegistry: () => registry,
@@ -114,7 +114,7 @@ async function load({ enabled = true, model, registry = fakeRegistry({ available
   const { ctx } = createMockExtensionContext({ cwd, sessionId });
   const start = () => handlers.get("session_start")?.({ type: "session_start", reason: "startup" }, ctx);
   const call = (params, signal) => tools.get("painter").execute("painter-call", params, signal, undefined, ctx);
-  return { pi, tools, handlers, start, call };
+  return { pi, tools, handlers, emits, start, call };
 }
 
 async function painterDecision() {
@@ -260,6 +260,40 @@ describe("ampi-painter model choice and gating", () => {
   });
 });
 
+describe("ampi-painter after the session ends", () => {
+  it("asks for no tool refresh when a model check ends after session_shutdown, and never fails on a stale Pi", async () => {
+    const runtime = await importRuntime();
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { registry } = fakeRegistry({ available: [imageModel("fakeimg", "img-1")] });
+    const listAvailable = registry.getAvailableOfType;
+    registry.getAvailableOfType = async (type) => {
+      await held;
+      return listAvailable(type);
+    };
+    const { handlers, emits, start } = await load({ registry });
+    const checking = start();
+    await handlers.get("session_shutdown")({ type: "session_shutdown" });
+    release();
+    await checking;
+    assert.deepEqual(emits.filter((emit) => emit.name === runtime.MMR_EVENT_TOOL_RULES_CHANGED), []);
+    assert.equal((await painterDecision()).status, "active", "the answer is kept for the tool provider");
+
+    // A Pi that went stale before session_shutdown reached painter throws on emit.
+    const stale = await load();
+    const attempts = [];
+    stale.pi.events.emit = (name) => {
+      attempts.push(name);
+      throw new Error("This extension ctx is stale after session replacement or reload.");
+    };
+    await stale.start();
+    assert.deepEqual(attempts, [runtime.MMR_EVENT_TOOL_RULES_CHANGED]);
+    assert.equal((await stale.call({ prompt: "x" })).details.model, "fakeimg/img-1");
+  });
+});
+
 describe("ampi-painter with ampi-core: the first turn's tools", () => {
   const CODEX_SOL = { provider: "openai-codex", id: "gpt-5.6-sol", contextWindow: 400000 };
   let previousHome;
@@ -390,6 +424,40 @@ describe("ampi-painter with ampi-core: the first turn's tools", () => {
     await handlers.get("input")({ type: "input", text: "second", source: "interactive" }, ctx);
     assert.equal(calls.setActiveTools.at(-1).includes("painter"), true);
     assert.ok(runtime.getMmrModeState().activeTools.includes("painter"));
+  });
+
+  it("resolves the tools again on a tool-rules change, except in free mode and in a subagent worker", async () => {
+    const core = (await importSource("extensions/ampi-core/index.ts")).default;
+    const runtime = await importRuntime();
+    const { pi, calls, commands, handlers } = createMockPi({ allTools: ["read", "bash", "write", "apply_patch", "painter"].map((name) => ({ name })) });
+    const listeners = new Map();
+    pi.events = {
+      emit: (name, data) => {
+        for (const listener of [...(listeners.get(name) ?? [])]) listener(data);
+      },
+      on: (name, listener) => {
+        listeners.set(name, [...(listeners.get(name) ?? []), listener]);
+        return () => {};
+      },
+    };
+    core(pi);
+    const { ctx } = createMockExtensionContext({ cwd, models: [CODEX_SOL], authenticated: true });
+    await handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
+    /** How many times ampi-core set the active tools for one tool-rules change. */
+    const setsOnChange = () => {
+      const before = calls.setActiveTools.length;
+      pi.events.emit(runtime.MMR_EVENT_TOOL_RULES_CHANGED, undefined);
+      return calls.setActiveTools.length - before;
+    };
+    assert.equal(setsOnChange(), 1, "a locked mode resolves its tools again");
+
+    runtime.setMmrSubagentState({ profile: "finder", provider: "openai-codex", model: "gpt-5.5", activeTools: ["read"] });
+    assert.equal(setsOnChange(), 0, "a subagent worker keeps its tools");
+    runtime.setMmrSubagentState(undefined);
+
+    await commands.get("mode").handler("free", ctx);
+    assert.equal(runtime.getMmrModeState().mode, "free");
+    assert.equal(setsOnChange(), 0, "free mode keeps its tools");
   });
 
   it("keeps painter gated when no image model is usable", async () => {
@@ -534,6 +602,26 @@ describe("ampi-painter saving", () => {
     assert.deepEqual(readdirSync(path.join(dataDir, "session-1")).sort(), names);
   });
 
+  it("writes the image to its numbered name where the filesystem has no hard links, never over a file", async () => {
+    const { createMmrPainterStore } = await importSource("extensions/ampi-painter/files.ts");
+    const folder = path.join(dataDir, "session-1");
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, `${STAMP}-1.png`), "keep me");
+    const store = createMmrPainterStore({
+      baseDir: dataDir,
+      now: () => NOW,
+      randomId: () => "r",
+      link: async (existing, created) => {
+        throw Object.assign(new Error(`EPERM: operation not permitted, link '${existing}' -> '${created}'`), { code: "EPERM" });
+      },
+    });
+    const saved = await store.save("session-1", PIXEL, "image/png");
+    assert.equal(saved, path.join(folder, `${STAMP}-2.png`));
+    assert.deepEqual(readFileSync(saved), PIXEL);
+    assert.equal(readFileSync(path.join(folder, `${STAMP}-1.png`), "utf8"), "keep me");
+    assert.deepEqual(readdirSync(folder).sort(), [`${STAMP}-1.png`, `${STAMP}-2.png`], "no temporary file is left");
+  });
+
   it("saves to output_path inside the working directory", async () => {
     mkdirSync(path.join(cwd, "out"));
     const { call } = await load();
@@ -580,6 +668,33 @@ describe("ampi-painter saving", () => {
     assert.deepEqual(readdirSync(path.join(root, "outside")), []);
     assert.equal(existsSync(path.join(root, "x.png")), false);
     assert.equal(calls.length, 0);
+  });
+
+  it("checks output_path again before the write, so a folder swapped for a symlink meanwhile cannot lead outside", async () => {
+    mkdirSync(path.join(cwd, "out"));
+    mkdirSync(path.join(root, "outside"));
+    const { registry, calls } = fakeRegistry({
+      available: [imageModel("fakeimg", "img-1")],
+      answer: (model) => {
+        rmSync(path.join(cwd, "out"), { recursive: true });
+        symlinkSync(path.join(root, "outside"), path.join(cwd, "out"));
+        return {
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          output: [{ type: "image", data: PIXEL.toString("base64"), mimeType: "image/png" }],
+          stopReason: "stop",
+          timestamp: NOW,
+        };
+      },
+    });
+    const { call } = await load({ registry });
+    await assert.rejects(call({ prompt: "x", output_path: "out/x.png" }), {
+      message: `output_path out/x.png is outside the working directory ${cwd}; painter saves only inside it.`,
+    });
+    assert.equal(calls.length, 1, "the first check passed and the model ran");
+    assert.deepEqual(readdirSync(path.join(root, "outside")), []);
+    assert.equal(existsSync(dataDir), false);
   });
 
   it("keeps the given name when the format differs and says which format it is", async () => {
