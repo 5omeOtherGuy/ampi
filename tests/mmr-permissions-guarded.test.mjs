@@ -180,6 +180,16 @@ const TABLE = [
   ["//?/c:/windows/x", "plain", WINDOWS, "system"],
   ["\\\\.\\C:\\Users\\u\\.ssh\\config", "plain", WINDOWS, "ssh"],
   ["\\\\?\\UNC\\srv\\home\\u\\.ssh\\config", "plain", { ...WINDOWS, homeDir: "\\\\srv\\home\\u" }, "ssh"],
+  ["\\\\?\\C:\\work\\app\\notes.txt", "plain", WINDOWS, null],
+  ["\\\\?\\UNC\\srv\\share\\notes.txt", "plain", WINDOWS, null],
+  // Device paths that name no drive or share may lead anywhere.
+  ["\\\\.\\GLOBALROOT\\Device\\HarddiskVolume1\\work\\notes.txt", "plain", WINDOWS, "unresolved-link"],
+  ["\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\work\\notes.txt", "plain", WINDOWS, "unresolved-link"],
+  ["\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\work\\notes.txt", "plain", WINDOWS, "unresolved-link"],
+  ["//./globalroot/device/harddiskvolume1/notes.txt", "pi", WINDOWS, "unresolved-link"],
+  ["\\\\.\\pipe\\notes", "plain", WINDOWS, "unresolved-link"],
+  ["\\\\.\\C:", "plain", WINDOWS, "unresolved-link"],
+  ["\\\\.\\GLOBALROOT\\notes.txt", "plain", LINUX, null],
   ["C:\\Windows\\x", "plain", { ...WINDOWS, env: {} }, "system"],
   ["E:\\Windows\\x", "plain", { ...WINDOWS, env: { windir: "E:\\Windows" } }, "system"],
   // Pi's own path rules for edit and write.
@@ -314,6 +324,15 @@ describe("ampi-permissions guarded files: classification", () => {
     symlinkSync("missing", path.join(project, "l30"));
     const env = { ...LINUX, cwd: project, realpath: undefined, readlink: undefined };
     assert.equal(guarded.classifyMmrGuardedFile("l0/x", "plain", env)?.category.key, "unresolved-link");
+  });
+
+  it("guards a Windows link that leads to a device path", () => {
+    const volume = "\\\\?\\Volume{01234567-89ab-cdef-0123-456789abcdef}\\";
+    const env = { ...WINDOWS, realpath: (p) => (p.toLowerCase().startsWith("c:\\work\\app\\mnt") ? `${volume}${p.slice(16)}` : nothingExists()) };
+    const file = guarded.classifyMmrGuardedFile("mnt\\notes.txt", "plain", env);
+    assert.equal(file?.category.key, "unresolved-link");
+    assert.equal(file.realPath, `${volume}notes.txt`);
+    assert.deepEqual(file.guardedForms, [file.realPath]);
   });
 
   it("guards a link that cannot be followed", () => {

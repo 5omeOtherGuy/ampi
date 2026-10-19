@@ -75,7 +75,7 @@ export const MMR_GUARDED_FILE_CATEGORIES = Object.freeze({
   database: Object.freeze({ key: "database", description: "database file" }),
   homeConfig: Object.freeze({ key: "home-config", description: "configuration in the home directory" }),
   system: Object.freeze({ key: "system", description: "system directory" }),
-  link: Object.freeze({ key: "unresolved-link", description: "link that cannot be followed" }),
+  link: Object.freeze({ key: "unresolved-link", description: "link or device path that cannot be followed" }),
 } satisfies Record<string, MmrGuardedFileCategory>);
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
@@ -156,6 +156,17 @@ function resolveEnvironment(environment: MmrGuardedFilesEnvironment): Resolved {
  */
 function foldCase(text: string): string {
   return text.toUpperCase().toLowerCase();
+}
+
+/**
+ * A Windows device namespace path that names no drive or share, such as
+ * `\\.\GLOBALROOT\...`, `\\?\Volume{...}\...`, `\\.\pipe\...` or the volume
+ * `\\.\C:` itself: no rule here can tell what it leads to.
+ */
+function isDeviceNamespace(env: Pick<Resolved, "platform">, filePath: string): boolean {
+  if (env.platform !== "win32") return false;
+  const device = /^[\\/]{2}[?.][\\/](.*)$/s.exec(filePath);
+  return device !== null && !/^([a-z]:|UNC)[\\/]/i.test(device[1] as string);
 }
 
 /** A Windows path without its `\\?\` or `\\.\` prefix (`\\?\UNC\` becomes `\\`), so it compares as the path Windows opens. */
@@ -371,10 +382,14 @@ function classifyWith(env: Resolved, raw: string, style: MmrGuardedPathStyle): M
   const lexical = resolveWith(env, raw, style);
   const followed = realForm(env, lexical);
   const real = followed === lexical ? undefined : followed;
-  // A link that cannot be followed may lead anywhere, so it is guarded itself.
+  // A link that cannot be followed, or a device path, may lead anywhere, so it is guarded itself.
+  const unresolved = (form: string) => (isDeviceNamespace(env, form) ? MMR_GUARDED_FILE_CATEGORIES.link : undefined);
   const checked = [
-    { form: lexical, category: categoryOf(env, key(env, lexical)) ?? (followed === undefined ? MMR_GUARDED_FILE_CATEGORIES.link : undefined) },
-    ...(real === undefined ? [] : [{ form: real, category: categoryOf(env, key(env, real)) }]),
+    {
+      form: lexical,
+      category: categoryOf(env, key(env, lexical)) ?? (followed === undefined ? MMR_GUARDED_FILE_CATEGORIES.link : unresolved(lexical)),
+    },
+    ...(real === undefined ? [] : [{ form: real, category: categoryOf(env, key(env, real)) ?? unresolved(real) }]),
   ];
   const guarded = checked.filter((entry) => entry.category !== undefined);
   if (guarded.length === 0) return undefined;

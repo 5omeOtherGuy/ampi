@@ -174,7 +174,7 @@ The categories, checked in this order (the first match names the path):
 | Database file | Names ending in `.db`, `.sqlite` or `.sqlite3` |
 | Configuration in the home directory | `~/.<name>` (`~/.bashrc`, `~/.npmrc`), `~/.config/**`, `~/Library/**` on macOS |
 | System directory | See below |
-| Link that cannot be followed | A symbolic link in a loop, more than 40 links to follow for one path, or a link whose folder cannot be resolved |
+| Link or device path that cannot be followed | A symbolic link in a loop, more than 40 links to follow for one path, or a link whose folder cannot be resolved; on Windows also a device path that names no drive or share (`\\.\GLOBALROOT\...`, `\\?\Volume{...}\...`, `\\.\C:`) |
 
 System directories are `/etc`, `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/boot`, `/var` and `/opt`; on macOS also `/private/etc`, `/private/var`, `/System`, `/Library` and `/Applications`; on Windows the Windows directory, both Program Files directories and AppData (`APPDATA`, `LOCALAPPDATA`, `~\AppData`). Two places inside them do not ask, for that category only:
 
