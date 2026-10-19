@@ -23,8 +23,10 @@
 // focused in the sidebar), `sessionList` (the last GET /api/sessions
 // answer), `shownId` (the shown session's id), `interruptible`, `writable`,
 // `promptEmpty`, `promptFocused`, `modes` (`{ locked }` while the shown
-// session is live with an ampi mode, else `null`) and `ui`, the page's
-// actions. The registry
+// session is live with an ampi mode, else `null`), `userMessages` (how many
+// messages you wrote in the session shown), `selection` (text is selected in
+// the transcript), `linkBlocked` (why a link to it cannot be made here, or
+// `null`) and `ui`, the page's actions. The registry
 // is pure: tests load it in Node.
 
 import { parseChord } from "./keys.js";
@@ -381,6 +383,57 @@ export const DEFAULT_COMMANDS = [
       return state.modes.locked ? unavailable("The mode is locked once the session has a message. Change Mode… in the palette overrides it.") : AVAILABLE;
     },
     run: (state) => state.ui.openModePicker(),
+  },
+  {
+    id: "toggle-outline",
+    title: "Toggle conversation outline",
+    section: "Thread",
+    keys: ["o"],
+    palette: { title: "Toggle Conversation Outline" },
+    description: "List the messages you wrote in this session, and scroll to the one you pick",
+    when: (state) => (!state.threadPage ? HIDDEN : state.userMessages >= 2 ? AVAILABLE : unavailable("The outline needs two or more of your messages")),
+    run: (state) => state.ui.toggleOutline(),
+  },
+  // With text selected in the transcript (`selection`) and focus outside the prompt and other fields.
+  {
+    id: "reply-to-selection",
+    title: "Reply quoting the selection",
+    section: "Thread",
+    keys: ["r"],
+    palette: false,
+    description: "Quote the selected text in the prompt as a Markdown block quote, after what the prompt holds",
+    when: (state) => (!state.selection ? HIDDEN : state.writable ? AVAILABLE : unavailable("This session is read-only here")),
+    run: (state) => state.ui.replyToSelection(),
+  },
+  {
+    id: "copy-selection-markdown",
+    title: "Copy selection as Markdown",
+    section: "Thread",
+    keys: ["c"],
+    palette: false,
+    description: "Copy the selected text as Markdown: the messages' own source when whole parts are selected",
+    when: (state) => (state.selection ? AVAILABLE : HIDDEN),
+    run: (state) => state.ui.copySelectionMarkdown(),
+  },
+  {
+    id: "copy-selection-styled",
+    title: "Copy selection with styling",
+    section: "Thread",
+    keys: ["s"],
+    palette: false,
+    description: "Copy the selected text as rich text, with plain text beside it",
+    when: (state) => (state.selection ? AVAILABLE : HIDDEN),
+    run: (state) => state.ui.copySelectionStyled(),
+  },
+  {
+    id: "copy-selection-link",
+    title: "Copy link to selection",
+    section: "Thread",
+    keys: ["l"],
+    palette: false,
+    description: "Copy a link to the message the selection starts in that highlights the selected text",
+    when: (state) => (!state.selection ? HIDDEN : state.linkBlocked ? unavailable(state.linkBlocked) : AVAILABLE),
+    run: (state) => state.ui.copySelectionLink(),
   },
   // More Actions, for the session focused in the sidebar, else the one shown.
   sessionCommand("thread.copyMarkdown", "Copy as Markdown", "markdown", "Copy the session to the clipboard as Markdown", {

@@ -73,7 +73,8 @@ The settings are read once when the extension loads. Restart Pi or run `/reload`
 - A 36 px title bar with the session's disc, its title (its name, or the first line of its first prompt), [More Actions](#more-actions) (`…`), the working directory, the ampi mode as a button in the mode's colour that opens the [mode picker](#mode-picker) (a [registered mode](../ampi-core/README.md#registered-modes) by its label; a session read from its file by its key, not clickable), and a button that cycles the colour scheme (system, light, dark; remembered in this browser).
 - The transcript in a centred column up to 672 px wide, or the whole pane with Full Width. Your prompts are bubbles on the right. The assistant's replies are prose with rendered Markdown (headings, lists, tables, code cards, links). Thinking is a collapsed "Thinking" line. See [Work groups](#work-groups) for tool calls.
 - The composer at the bottom: a text area, a paperclip (attachments are not available yet; it says so), the agent's status (Sending, Thinking, Streaming, Running Tools, Auto-Compacting, Waiting for Approval, Cancelling or Error, with the streamed-token count or the tool name and the number of queued messages) and a round send button that turns into a stop square while a turn runs and nothing is typed. A pulsing dot ends the transcript while the agent works.
-- The transcript follows new output while you are at the bottom, also when the composer grows or the window changes size. Scroll up and it stays put; the round button above the composer (or End) jumps back down.
+- The transcript follows new output while you are at the bottom, also when the composer grows or the window changes size. Scroll up and it stays put; the round arrow button at the bottom right of the column, above the composer (or End), jumps back down. A dot on it (and "new messages below" in its label) says a message arrived or changed below while you were away; reaching the bottom clears it. See [Outline and selection actions](#outline-and-selection-actions) for the button beside it.
+- Toasts appear at the top centre of the chat column, under the title bar.
 - Below 768 px the layout narrows to one column: the sidebar becomes a sheet over the page (opened from the title bar, closed with Esc, a tap outside it or by choosing a session), and the title bar keeps only the sidebar button, the session's disc and title, More Actions, the mode button and the colour scheme.
 
 ### More Actions
@@ -195,6 +196,16 @@ Text typed here goes to the same Pi session as the terminal, the way the termina
 
 - Queued-message bubbles and steering a queued message need `ampi-tui`, which reads Pi's queue. Without it, the composer still sends, steers, queues and interrupts, and the status shows how many messages are queued.
 
+### Outline and selection actions
+
+- **Outline.** Once a session holds two or more of your messages, a round list button sits beside the jump button. It (or `o`) opens a menu of your messages, oldest first: the first line of each, cut with an ellipsis, and how long ago you sent it. Messages in view read at full strength, the others muted. Up and Down move through the menu, Home and End go to its ends, Enter (or a click) scrolls to that message and focuses it, and Esc or a click outside closes the menu and returns focus to the button.
+- **Selection actions.** Select text in the transcript and press a key, with focus outside the prompt and other fields and no modifier held; a chip under the end of the selection (`r reply · c copy · s styled · l link`) offers the same to the mouse and touch, and every copy confirms with a toast:
+  - `r` puts the selection in the prompt as a Markdown block quote followed by a blank line, after what the prompt already holds, with the cursor after the quote. A read-only session has no reply.
+  - `c` copies it as Markdown: the message's own Markdown source when the selection covers whole messages or whole parts of one, else the selected piece converted (paragraphs, headings, nested lists with their numbers, fenced code with its language, inline code, emphasis, links, block quotes and tables as pipe rows).
+  - `s` copies it with its styling, as HTML with plain text beside it; a browser that cannot write rich text to the clipboard gets the plain text and a toast saying the styling was left out.
+  - `l` copies a link: this page's address without its query (so without the access token), `#m-<message id>` for the message the selection starts in, and a text fragment naming the selection's first and last words, which Chromium-based browsers highlight. Opening the link scrolls to that message and focuses it, opening the work fold that hides it.
+- **What a link reaches.** A link works only while the GUI server that served the page runs (it listens on a new port each session) and only in a browser that holds the page's cookie, which the link Pi printed sets. On a terminal's own page, `l` is not offered for another session shown read-only, whose address is `#/s/<id>`; `ampi app` gives every session an address of its own, where it works.
+
 ### Keyboard
 
 The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctrl elsewhere; the overlay names the keys as your platform does. Plain keys (letters, `/`, `?`, arrows) do nothing while you type in a field; keys with Ctrl, Alt or ⌘ work there too, and so does Esc Esc. A modal (a question, Rename, the Keymap overlay, Search Threads, the command palette) keeps every key to itself. Two-key sequences (`g g`, Esc Esc) take the second key within 1.5 seconds.
@@ -223,6 +234,8 @@ The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctr
 | Shift+Up / Shift+Down | As above | The same over every message |
 | Ctrl+Shift+A | A session page you can write to | Close the sidebar sheet and focus the prompt |
 | Ctrl+S | The prompt, before the session's mode is locked | Open the [mode picker](#mode-picker); once the mode is locked it says so instead. Elsewhere Ctrl+S is the browser's |
+| `o` | A session page with two or more of your messages | Open or close the [outline](#outline-and-selection-actions) |
+| `r` / `c` / `s` / `l` | Text selected in the transcript | Reply quoting it, copy it as Markdown, copy it with styling, copy a link to it (see [Outline and selection actions](#outline-and-selection-actions)) |
 
 A key whose command cannot run now (archiving an archived session, focusing the prompt of a read-only one) says why in a toast when it holds Ctrl, Alt or ⌘; a plain key is left to the browser.
 

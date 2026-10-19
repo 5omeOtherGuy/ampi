@@ -109,9 +109,18 @@
         </main>
         <footer class="composer-area" id="composer-area">
           <div class="column">
-            <button class="jump" id="jump" type="button" aria-label="Jump to bottom" title="Jump to bottom" hidden>
-              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></svg>
-            </button>
+            <div class="floating-controls">
+              <div class="outline-anchor">
+                <button class="outline-button" id="outline" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="outline-menu" aria-label="Open conversation outline" aria-keyshortcuts="o" title="Conversation outline (o)" hidden>
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4h7.5M6 8h7.5M6 12h5"/><circle class="fill" cx="3" cy="4" r=".9"/><circle class="fill" cx="3" cy="8" r=".9"/><circle class="fill" cx="3" cy="12" r=".9"/></svg>
+                </button>
+                <div class="menu outline-menu" id="outline-menu" role="menu" aria-label="Your messages" hidden></div>
+              </div>
+              <button class="jump" id="jump" type="button" aria-label="Jump to bottom" title="Jump to bottom" hidden>
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.75v9.5M4.25 8.75 8 12.5l3.75-3.75"/></svg>
+                <span class="jump-dot" aria-hidden="true"></span>
+              </button>
+            </div>
             <p class="approval-note" id="approval-note" role="status" hidden>A tool call is waiting for your approval. Answer it in the terminal.</p>
             <ul class="queue" id="queue" aria-label="Queued messages" hidden></ul>
             <div class="banner" id="readonly-banner" role="status" hidden>
@@ -206,6 +215,7 @@
         </div>
       </dialog>
       <div class="toast" id="toast" role="status" hidden></div>
+      <div class="selection-chip" id="selection-chip" role="toolbar" aria-label="Selection actions" hidden></div>
     </div>
   </body>
 </html>

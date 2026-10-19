@@ -891,6 +891,8 @@ button {
   top: calc(var(--ampi-titlebar-height) + 8px);
   left: 50%;
   z-index: 50;
+  /* Its own width, not the half of the window right of `left`. */
+  width: max-content;
   max-width: calc(100vw - 2rem);
   padding: 6px 12px;
   max-height: 50vh;
@@ -1570,21 +1572,155 @@ details[open] > summary .chevron {
   opacity: 0.6;
 }
 
-.jump {
+/* The outline and jump buttons: the bottom right of the column, above the composer. */
+.floating-controls {
   position: absolute;
+  right: calc(var(--ampi-space) * 4);
   bottom: calc(100% + var(--ampi-space) * 2);
-  left: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+}
+
+/* The outline opens from the controls' right edge, so it stays inside the column on a phone. */
+.outline-anchor {
+  display: flex;
+}
+
+.outline-button,
+.jump {
+  position: relative;
   display: grid;
   place-items: center;
   width: var(--ampi-control-size);
   height: var(--ampi-control-size);
   padding: 0;
-  transform: translateX(-50%);
   border: 1px solid var(--ampi-input-border);
   border-radius: 50%;
   background: var(--ampi-input-bg);
   color: var(--ampi-fg);
   cursor: pointer;
+}
+
+.outline-button {
+  width: 28px;
+  height: 28px;
+  color: var(--ampi-muted-fg);
+}
+
+.outline-button:hover,
+.outline-button[aria-expanded="true"],
+.jump:hover {
+  background: var(--ampi-muted);
+  color: var(--ampi-fg);
+}
+
+.outline-button[hidden],
+.jump[hidden] {
+  display: none;
+}
+
+/* New output arrived below while the reader was scrolled up. */
+.jump-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--ampi-bg);
+  border-radius: 50%;
+  background: var(--ampi-link);
+}
+
+.jump[data-unread="true"] .jump-dot {
+  display: block;
+}
+
+/* The outline: your messages, oldest first; those in view at full strength. */
+.menu.outline-menu {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: auto;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: min(60dvh, 420px);
+}
+
+.outline-menu [role="menuitem"] {
+  justify-content: space-between;
+  gap: calc(var(--ampi-space) * 3);
+  height: 32px;
+  color: var(--ampi-muted-fg);
+}
+
+.outline-menu [role="menuitem"][data-in-view="true"] {
+  color: var(--ampi-fg);
+}
+
+.outline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-age {
+  flex: none;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+/* Selection actions, under the end of a transcript selection. */
+.selection-chip {
+  position: fixed;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 0.5);
+  padding: 2px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-lg);
+  background: var(--ampi-popover-bg);
+  color: var(--ampi-muted-fg);
+  box-shadow: var(--ampi-shadow);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.selection-chip[hidden] {
+  display: none;
+}
+
+.selection-chip button {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1);
+  height: 24px;
+  padding: 0 calc(var(--ampi-space) * 1.5);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-fg);
+  cursor: pointer;
+}
+
+.selection-chip button:hover {
+  background: var(--ampi-accent);
+}
+
+.selection-chip kbd {
+  min-width: 16px;
+  padding: 0 3px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  text-align: center;
 }
 
 .visually-hidden {
@@ -1947,6 +2083,12 @@ details[open] > summary .chevron {
 @media (min-width: 768px) {
   .app[data-sidebar="open"] {
     grid-template-columns: var(--ampi-sidebar-width) minmax(0, 1fr);
+  }
+
+  /* Toasts sit over the centre of the chat column, right of the sidebar. */
+  .app[data-sidebar="open"] .toast {
+    left: calc(50% + var(--ampi-sidebar-width) / 2);
+    max-width: calc(100vw - var(--ampi-sidebar-width) - 2rem);
   }
 }
 

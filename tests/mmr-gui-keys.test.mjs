@@ -368,6 +368,32 @@ describe("ampi-gui commands", () => {
     ]);
     assert.equal(get("focus-prompt").when({ threadPage: true, writable: false }).reason, "This session is read-only here");
   });
+
+  it("offers the selection keys only with text selected, and the outline only for two or more of your messages", async () => {
+    const { DEFAULT_COMMANDS } = await commandsModule();
+    const get = (id) => DEFAULT_COMMANDS.find((entry) => entry.id === id);
+    const selectionIds = ["reply-to-selection", "copy-selection-markdown", "copy-selection-styled", "copy-selection-link"];
+    assert.deepEqual(
+      selectionIds.map((id) => get(id).keys),
+      [["r"], ["c"], ["s"], ["l"]],
+    );
+    const selected = { selection: true, writable: true, linkBlocked: null };
+    for (const id of selectionIds) {
+      assert.equal(get(id).when({ ...selected, selection: false }).state, "hidden", `${id} without a selection`);
+      assert.equal(get(id).when(selected).state, "available", id);
+      assert.equal(get(id).palette, false, `${id} stays out of the palette, which would take the selection`);
+    }
+    assert.equal(get("reply-to-selection").when({ ...selected, writable: false }).state, "unavailable");
+    assert.equal(get("copy-selection-link").when({ ...selected, linkBlocked: "Not here" }).reason, "Not here");
+    const outline = get("toggle-outline");
+    assert.equal(outline.when({ threadPage: true, userMessages: 1 }).state, "unavailable");
+    assert.equal(outline.when({ threadPage: true, userMessages: 2 }).state, "available");
+    assert.equal(outline.when({ threadPage: false, userMessages: 3 }).state, "hidden");
+    const ran = [];
+    const ui = Object.fromEntries(["toggleOutline", "replyToSelection", "copySelectionMarkdown", "copySelectionStyled", "copySelectionLink"].map((name) => [name, () => ran.push(name)]));
+    for (const id of ["toggle-outline", ...selectionIds]) get(id).run({ ui });
+    assert.deepEqual(ran, ["toggleOutline", "replyToSelection", "copySelectionMarkdown", "copySelectionStyled", "copySelectionLink"]);
+  });
 });
 
 describe("ampi-gui keymap overlay", () => {
