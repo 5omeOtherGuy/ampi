@@ -300,11 +300,15 @@ describe("ampi stream JSON: the command", { concurrency: true }, () => {
   /**
    * Run the command with piped stdin and stdout in its own home, agent
    * directory and project. The project's settings route low mode to the
-   * scripted model, so ampi applies the mode.
+   * scripted model, so ampi applies the mode. The stored credential makes Pi
+   * count the scripted provider as signed in the moment it is registered;
+   * without one, that waits for an availability check Pi runs in the
+   * background, which can still be pending when ampi picks the mode's model.
    */
   const runAmpi = (args) => {
     const root = path.join(dir, String(++runs));
     for (const sub of ["home", "agent", "project/.pi"]) mkdirSync(path.join(root, sub), { recursive: true });
+    writeFileSync(path.join(root, "agent", "auth.json"), JSON.stringify({ faux: { type: "api_key", key: "scripted" } }));
     const project = path.join(root, "project");
     writeFileSync(path.join(project, ".pi", "settings.json"), JSON.stringify({ ampiCore: { modelPreferences: { low: ["faux/faux-1"] } } }));
     writeFileSync(path.join(project, "notes.md"), "");

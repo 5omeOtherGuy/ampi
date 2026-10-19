@@ -270,7 +270,10 @@ describe("ampi tools: the command", { concurrency: true }, () => {
   /**
    * Run the command in its own home, agent directory and project. The user
    * settings load the scripted model and a one-tool extension file, and route
-   * every locked mode to the scripted model.
+   * every locked mode to the scripted model. The stored credential makes Pi
+   * count the scripted provider as signed in the moment it is registered;
+   * without one, that waits for an availability check Pi runs in the
+   * background, which can still be pending when ampi picks the mode's model.
    *
    * @param {string[]} args
    * @param {{ defaultMode?: string, path?: string }} [options]
@@ -299,6 +302,7 @@ describe("ampi tools: the command", { concurrency: true }, () => {
     const preferences = Object.fromEntries(modes.map((mode) => [mode, ["faux/faux-1"]]));
     const ampiCore = { modelPreferences: preferences, ...(options.defaultMode ? { defaultMode: options.defaultMode } : {}) };
     write(path.join(agent, "settings.json"), JSON.stringify({ packages: [fauxModel], extensions: [extension], ampiCore }));
+    write(path.join(agent, "auth.json"), JSON.stringify({ faux: { type: "api_key", key: "scripted" } }));
     write(path.join(project, "notes.md"), "");
     const guardLog = path.join(root, "guard.jsonl");
     const env = {
