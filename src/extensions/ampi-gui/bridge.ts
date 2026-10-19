@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { MmrGuiDialogAnswer, MmrGuiDialogOptions, MmrGuiDialogRequest } from "../ampi-core/gui-host.js";
 import { getMmrPromptQueue, type MmrQueuedPrompts, onMmrPromptQueueChanged } from "../ampi-core/prompt-queue.js";
 import { getMmrModeState, onMmrApproval, onMmrStateChanged } from "../ampi-core/runtime.js";
 import {
@@ -8,6 +9,7 @@ import {
   type MmrThreadStatusEvent,
   type MmrThreadStatusReducer,
 } from "../ampi-core/thread-status.js";
+import { createMmrGuiDialogQueue, type MmrGuiDialog, type MmrGuiDialogCloser } from "./dialogs.js";
 import {
   buildMmrGuiGroups,
   buildMmrGuiItem,
@@ -41,6 +43,8 @@ import {
  * | any change of the thread status            | `status` (phase, label, queue count)  |
  * | `session_info_changed`, `model_select`, mode change, first prompt | `session` |
  * | a change of the prompt queue (ampi-core's seam) | `queue`: the texts, or `null` |
+ * | an extension's `ctx.ui` question, hosted sessions only (`ask`) | `dialog`, then `dialog_closed` (see `dialogs.ts`) |
+ * | an extension's `ctx.ui.notify`, hosted sessions only (`notice`) | `notice`: `{ message, level }` |
  *
  * Pi's streaming message is one object that the provider keeps filling, so
  * by the time an event is handled it may already hold text from later
@@ -76,7 +80,7 @@ export const MMR_GUI_REPLAY_LIMIT = 1000;
 
 export interface MmrGuiEvent {
   id: number;
-  event: "status" | "item" | "delta" | "tool" | "groups" | "turn_end" | "session" | "queue";
+  event: "status" | "item" | "delta" | "tool" | "groups" | "turn_end" | "session" | "queue" | "dialog" | "dialog_closed" | "notice";
   data: unknown;
 }
 
@@ -106,13 +110,16 @@ export interface MmrGuiSnapshot {
   groups: MmrGuiGroup[];
   /** The queued messages, or `null` when no extension can read Pi's queue. */
   queue: MmrQueuedPrompts | null;
+  /** The open questions the page answers, or `null` when extensions ask in the terminal. */
+  dialogs: MmrGuiDialog[] | null;
   /** Id of the last event the snapshot includes. */
   lastEventId: number;
 }
 
 export interface MmrGuiBridge {
   /** Start mirroring this session. Events before the first `start` are ignored. */
-  start(ctx: ExtensionContext): void;
+  /** Start mirroring this session; with `dialogs`, extensions' questions are asked on the page (a session `ampi app` hosts). */
+  start(ctx: ExtensionContext, options?: { dialogs?: boolean }): void;
   /** Stop mirroring and drop every listener. */
   stop(): void;
   /** The context of the mirrored session, between `start` and `stop`. */
@@ -127,12 +134,25 @@ export interface MmrGuiBridge {
   eventsAfter(id: number): MmrGuiEvent[] | undefined;
   /** Call `listener` with every new event. Returns the unsubscribe function. */
   subscribe(listener: (event: MmrGuiEvent) => void): () => void;
+  /** Ask the page; resolves cancelled at once when the bridge was not started with `dialogs`. See `dialogs.ts`. */
+  ask(request: MmrGuiDialogRequest, options?: MmrGuiDialogOptions): Promise<MmrGuiDialogAnswer>;
+  /** The page's answer to an open question. */
+  answerDialog(id: string, answer: { cancelled: true } | { value: unknown }): "answered" | "unknown" | "invalid";
+  /** Cancel every open question; returns how many there were. */
+  cancelDialogs(by: MmrGuiDialogCloser): number;
+  /** Show an extension's notification on the page (a `notice` event). */
+  notice(message: string, level: "info" | "warning" | "error"): void;
+  /** A page opened the event stream; call the returned function when it closes. */
+  watch(): () => void;
 }
 
 export interface MmrGuiBridgeOptions {
   now?: () => number;
   home?: string;
   replayLimit?: number;
+  /** Timers of the dialogs' timeouts and of the unattended cancel; default `setTimeout`, unref'd. */
+  setTimer?: (callback: () => unknown, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
 }
 
 type Content = "text" | "thinking" | "toolCall";
@@ -159,6 +179,20 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   const now = options.now ?? Date.now;
   const home = options.home ?? homedir();
   const replayLimit = options.replayLimit ?? MMR_GUI_REPLAY_LIMIT;
+  const dialogs = createMmrGuiDialogQueue({
+    emit: (event, data) => emit(event, data),
+    now,
+    setTimer:
+      options.setTimer ??
+      ((callback, ms) => {
+        const handle = setTimeout(callback, ms);
+        handle.unref();
+        return handle;
+      }),
+    clearTimer: options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)),
+  });
+  /** Whether the page answers extensions' questions (a hosted session). */
+  let asksPage = false;
   let ctx: ExtensionContext | undefined;
   let reducer: MmrThreadStatusReducer = createMmrThreadStatusReducer();
   let queued = 0;
@@ -464,8 +498,9 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
   }
 
   return {
-    start(context) {
+    start(context, startOptions = {}) {
       ctx = context;
+      asksPage = startOptions.dialogs === true;
       reducer = createMmrThreadStatusReducer();
       queued = 0;
       titled = false;
@@ -488,6 +523,9 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       if (queue) setQueued(queue.steering.length + queue.followUp.length);
     },
     stop() {
+      // An extension still waiting for an answer gets a cancel, and the pages hear of it.
+      dialogs.cancelAll("shutdown");
+      asksPage = false;
       ctx = undefined;
       listeners.clear();
       releaseMode?.();
@@ -521,7 +559,15 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
         }
       }
       const groups = buildMmrGuiGroups(messages, results, { cwd: ctx?.cwd, home, pending });
-      return { session: sessionInfo(), status: statusView(reducer.status), items, groups, queue: queueView(), lastEventId: nextId - 1 };
+      return {
+        session: sessionInfo(),
+        status: statusView(reducer.status),
+        items,
+        groups,
+        queue: queueView(),
+        dialogs: asksPage ? dialogs.pending() : null,
+        lastEventId: nextId - 1,
+      };
     },
     eventsAfter(id) {
       const last = nextId - 1;
@@ -532,6 +578,16 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       if (id < first - 1) return undefined;
       return buffer.filter((event) => event.id > id);
     },
+    ask(request, dialogOptions) {
+      if (!ctx || !asksPage) return Promise.resolve({ cancelled: true });
+      return dialogs.ask(request, dialogOptions);
+    },
+    answerDialog: (id, answer) => dialogs.answer(id, answer),
+    cancelDialogs: (by) => dialogs.cancelAll(by),
+    notice(message, level) {
+      if (ctx) emit("notice", { message, level });
+    },
+    watch: () => dialogs.watch(),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

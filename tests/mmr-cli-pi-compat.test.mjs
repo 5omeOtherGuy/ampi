@@ -31,6 +31,7 @@ import {
   piMcpUsesOAuth,
   piProjectMcpPath,
   piSettingsPath,
+  piTheme,
   piToolOrigin,
   readPiProjectTrust,
   readPiSessionEntries,
@@ -548,6 +549,13 @@ describe("Pi calls used by SDK sessions", () => {
     assert.match(errors[0], /probe extension failed/);
     // The services use the settings piSettingsManager reads, project trust included.
     assert.equal(services.settingsManager.isProjectTrusted(), piSettingsManager(pi, project).isProjectTrusted());
+  });
+
+  it("finds the theme Pi's initTheme sets, for the worker's ctx.ui.theme", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    pi.initTheme("dark");
+    assert.ok(piTheme() instanceof pi.Theme);
+    assert.equal(typeof (/** @type {any} */ (piTheme()).fg), "function");
   });
 });
 

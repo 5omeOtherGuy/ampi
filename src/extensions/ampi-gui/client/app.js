@@ -20,6 +20,7 @@ import {
   sessionBase,
 } from "./app-mode.js";
 import { mountComposer } from "./composer.js";
+import { mountDialogs } from "./dialogs.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountTitlebar } from "./titlebar.js";
 import {
@@ -71,7 +72,7 @@ let access = "live";
 /** App mode: the hub's state for the session shown held or dormant: who holds it, with its pid and GUI. */
 let shownState = null;
 
-/** POST a command as JSON; resolves `{ ok, body }` and never throws. */
+/** POST a command as JSON; resolves `{ ok, status, body }` (status 0 when Pi was not reached) and never throws. */
 async function postTo(url, body) {
   try {
     const response = await fetch(url, {
@@ -81,9 +82,9 @@ async function postTo(url, body) {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    return { ok: response.ok, body: data };
+    return { ok: response.ok, status: response.status, body: data };
   } catch {
-    return { ok: false, body: { error: "Could not reach Pi." } };
+    return { ok: false, status: 0, body: { error: "Could not reach Pi." } };
   }
 }
 
@@ -121,9 +122,11 @@ const composer = mountComposer({ root: $("composer-area"), post: composerPost, m
 const sidebar = mountSidebar({ app, mac });
 
 let toastTimer = 0;
-function notify(text) {
+/** A toast at the top centre; `level` is an extension's notify type (`info`, `warning` or `error`). */
+function notify(text, level = "info") {
   const toast = $("toast");
   toast.textContent = text;
+  toast.dataset.level = level;
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
@@ -132,6 +135,8 @@ function notify(text) {
 }
 
 const titlebar = mountTitlebar({ post, notify, onChanged: () => refreshSessions() });
+// Extensions' questions in a session ampi app runs; the shown session's routes answer them.
+const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: (route, body) => postTo(`${base}${route}`, body), notify });
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -391,6 +396,9 @@ function load(snapshot) {
   setStatus(snapshot.status);
   if (!viewing) drawFolds();
   composer.setQueue(snapshot.queue);
+  // `null`: the session's extensions ask in its terminal.
+  composer.setPromptsHere(Array.isArray(snapshot.dialogs));
+  dialogs.load(snapshot.dialogs);
 }
 
 const handlers = {
@@ -442,6 +450,9 @@ const handlers = {
   },
   turn_end: () => refreshSessions(),
   queue: (data) => composer.setQueue(data),
+  dialog: (data) => dialogs.add(data),
+  dialog_closed: (data) => dialogs.closed(data),
+  notice: (data) => notify(data.message, data.level),
 };
 
 function flush() {
@@ -631,6 +642,8 @@ function setAccess(next, banner = {}) {
   composer.setEnabled(next === "live" || next === "dormant");
   composer.setLocked(banner.reason ?? null);
   if (next !== "live") {
+    // Only the session the page follows live asks here.
+    dialogs.load(null);
     busy = false;
     composer.setQueue(null);
     composer.setStatus({ busy: false, phase: "idle" });

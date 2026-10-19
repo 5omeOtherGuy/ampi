@@ -14,7 +14,8 @@
  * With a session host registered:
  * - ampi-gui serves the session in Pi's `rpc` mode too, with the host's
  *   token, whatever `ampiGui.enabled` says, and calls `ready` with its port
- *   once instead of printing a link;
+ *   once instead of printing a link, and sets the record's `dialog` and
+ *   `notice`, through which the worker's `ctx.ui` asks the page;
  * - ampi-core's live registry records the session as `app-session` with the
  *   host's pid as `ownerPid`.
  *
@@ -28,6 +29,29 @@
 // process reads the record the host wrote.
 export const MMR_GUI_HOST_GLOBAL_KEY = "__pi_ampi_gui_host_v1__";
 
+/** A question an extension asks through `ctx.ui` in a hosted session. */
+export interface MmrGuiDialogRequest {
+  kind: "select" | "confirm" | "input" | "editor";
+  title: string;
+  /** confirm's message. */
+  message?: string;
+  /** select's choices. */
+  options?: string[];
+  /** input's placeholder. */
+  placeholder?: string;
+  /** editor's prefilled text. */
+  initial?: string;
+}
+
+/** Pi's dialog options, passed on as the extension gave them. */
+export interface MmrGuiDialogOptions {
+  timeout?: number;
+  signal?: AbortSignal;
+}
+
+/** The page's answer: a choice or text (`true`/`false` for confirm), or a cancel. */
+export type MmrGuiDialogAnswer = { value: string | boolean } | { cancelled: true };
+
 /** A process that runs one session for `ampi app`. */
 export interface MmrGuiSessionHost {
   role: "session";
@@ -37,6 +61,14 @@ export interface MmrGuiSessionHost {
   ownerPid: number;
   /** Called once, when the GUI server listens. */
   ready(info: { port: number }): void;
+  /**
+   * Set by ampi-gui at `session_start`: the session's `ctx.ui` dialogs
+   * (select, confirm, input, editor) are asked on the page through it.
+   * Until it is set, the worker answers every dialog as cancelled.
+   */
+  dialog?: (request: MmrGuiDialogRequest, options: MmrGuiDialogOptions) => Promise<MmrGuiDialogAnswer>;
+  /** Set by ampi-gui at `session_start`: `ctx.ui.notify` shows a toast on the page through it. */
+  notice?: (message: string, level: "info" | "warning" | "error") => void;
 }
 
 /** What `startSession` opens: a saved session file, or a new session in a directory. */

@@ -18,7 +18,8 @@ import type { MmrGuiSessions } from "./sessions.js";
  * | `/api/send`        | `{ text, deliverAs? }`        | idle: a new prompt; busy: steers the turn (`"steer"`, the default) or waits for it to end (`"followUp"`), through `pi.sendUserMessage` |
  * | `/api/dequeue`     | `{ kind, index, text }`       | takes one queued message back, through ampi-core's prompt-queue seam |
  * | `/api/steer-next`  | `{}`                          | runs the `prompt.steerQueuedMessage` command |
- * | `/api/interrupt`   | `{}`                          | runs the `thread.interrupt` command, or `ctx.abort()` without it |
+ * | `/api/interrupt`   | `{}`                          | cancels the open questions, then runs the `thread.interrupt` command, or `ctx.abort()` without it |
+ * | `/api/dialog`      | `{ id, value }` or `{ id, cancelled: true }` | answers an extension's open question (a session `ampi app` hosts); the first answer wins, any later one answers 409 |
  *
  * And the title bar's More Actions, for any listed session:
  *
@@ -165,10 +166,21 @@ export function createMmrGuiCommands(
       if (availability.state !== "available") return conflict(availability.reason ?? "No queued message can steer now.");
       return Promise.resolve(command.run(ctx)).then(() => ok());
     },
+    dialog(body) {
+      const { id, value, cancelled } = record(body);
+      if (typeof id !== "string" || id === "") return invalid("Name the question by its id.");
+      if (cancelled !== true && value === undefined) return invalid("Send a value, or cancelled: true.");
+      const result = bridge.answerDialog(id, cancelled === true ? { cancelled: true } : { value });
+      if (result === "unknown") return conflict("That question is no longer open.");
+      if (result === "invalid") return invalid("That answer does not fit the question.");
+      return ok();
+    },
     interrupt() {
       const ctx = bridge.context();
       if (!ctx) return conflict("The session has ended.");
-      if (ctx.isIdle()) return conflict("Nothing is running.");
+      // A tool that waits for an answer is refused rather than left waiting.
+      const cancelled = bridge.cancelDialogs("interrupt");
+      if (ctx.isIdle()) return cancelled > 0 ? ok() : conflict("Nothing is running.");
       bridge.interrupted();
       // The terminal's own command, so its status shows the interruption too.
       const command = getMmrCommand(INTERRUPT_COMMAND_ID);
