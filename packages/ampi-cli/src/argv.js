@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "config" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -31,6 +31,7 @@ import { parseArgs } from "node:util";
  * @property {string[]} [toolsArgs] The command line after `tools` (or `tool`), when `command` is `"tools"`.
  * @property {boolean} [open] `ampi app --open`: open the page in a browser.
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
+ * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
@@ -39,7 +40,7 @@ import { parseArgs } from "node:util";
 const PI_OUTPUT_MODES = new Set(["text", "json", "rpc"]);
 
 /** Pi's own commands. Pi recognises them only as the first argument and rejects options it does not know. */
-const PI_COMMANDS = new Set(["install", "remove", "uninstall", "update", "list", "config", "auth", "mcp"]);
+const PI_COMMANDS = new Set(["install", "remove", "uninstall", "update", "list", "config", "auth"]);
 
 /** The `config` subcommands ampi runs itself. */
 const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
@@ -142,6 +143,7 @@ export function routeAmpiArgv(argv) {
     return { command: "error", piArgs: [], options, error: "ampi app takes only --open." };
   }
   if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], options, skillArgs: args.slice(1) };
+  if (args[0] === "mcp") return { command: "mcp", piArgs: [], options, mcpArgs: args.slice(1) };
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
     return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
@@ -316,13 +318,15 @@ Commands:
                                 tool's description and parameters; ampi tools --help has more
   skill list|info|add|remove    List the skills Pi loads, show one, install skills from a directory
                                 or git repository, or remove one; ampi skill --help has more
+  mcp [command]                 Add, list, check and remove MCP servers, trust a project's servers
+                                and sign in to them; ampi mcp --help lists the commands
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, and continue those nothing else has open
 
-  Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
-  unchanged, without ampi's options; config keymap and config edit are ampi's.
+  Pi's own commands (install, remove, uninstall, update, list, config, auth) run unchanged,
+  without ampi's options; config keymap and config edit are ampi's.
 
 Options:
 

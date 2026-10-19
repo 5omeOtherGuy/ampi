@@ -32,6 +32,17 @@ function formatVersions() {
   ].join("\n");
 }
 
+const MISSING_PI_BIN = `cannot find Pi's executable in ${PI_PACKAGE_NAME}; reinstall @skippermissions/ampi-cli.`;
+
+/** @returns {string | undefined} Pi's executable script, from its package manifest. */
+function piExecutable() {
+  const pi = resolveInstalledPackage(PI_PACKAGE_NAME);
+  if (pi === undefined) return undefined;
+  const manifest = JSON.parse(readFileSync(path.join(pi.root, "package.json"), "utf8"));
+  const entry = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.pi;
+  return typeof entry === "string" ? path.join(pi.root, entry) : undefined;
+}
+
 /**
  * Run one of Pi's own commands through Pi's own executable, so it gets the
  * same process setup (proxy settings, warnings) as `pi <command>`.
@@ -40,16 +51,9 @@ function formatVersions() {
  * @returns {number}
  */
 function runPiCommand(args) {
-  const pi = resolveInstalledPackage(PI_PACKAGE_NAME);
-  /** @type {string | undefined} */
-  let bin;
-  if (pi !== undefined) {
-    const manifest = JSON.parse(readFileSync(path.join(pi.root, "package.json"), "utf8"));
-    const entry = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.pi;
-    if (typeof entry === "string") bin = path.join(pi.root, entry);
-  }
+  const bin = piExecutable();
   if (bin === undefined) {
-    process.stderr.write(`ampi: cannot find Pi's executable in ${PI_PACKAGE_NAME}; reinstall @skippermissions/ampi-cli.\n`);
+    process.stderr.write(`ampi: ${MISSING_PI_BIN}\n`);
     return 1;
   }
   const result = spawnSync(process.execPath, [bin, ...args], { stdio: "inherit" });
@@ -389,6 +393,25 @@ export async function runAmpi(argv) {
           return { status: result.status, stderr: result.stderr ?? "", error: result.error };
         },
         tempRoot: os.tmpdir(),
+        columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
+        interactive: process.stdin.isTTY === true,
+        confirm,
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
+    case "mcp": {
+      const { runMcpCommand } = await import("./mcp.js");
+      return runMcpCommand(route.mcpArgs ?? [], {
+        loadPi: () => import(PI_PACKAGE_NAME),
+        cwd: process.cwd(),
+        runPi: (args) => runPiCommand(["mcp", ...args]),
+        capturePi: (args) => {
+          const bin = piExecutable();
+          if (bin === undefined) return { status: null, stdout: "", stderr: "", error: new Error(MISSING_PI_BIN) };
+          const result = spawnSync(process.execPath, [bin, "mcp", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 });
+          return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "", error: result.error };
+        },
         columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
         interactive: process.stdin.isTTY === true,
         confirm,

@@ -7,7 +7,7 @@
 // RPC mode reads process.stdin and exits the process itself, so the spawn
 // tests in tests/mmr-cli-stream-json-input.test.mjs are the probe for
 // feedPiRpcInput, exitWithCodeAfterPiRpc and capturePiJsonOutput in RPC mode.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -528,4 +528,151 @@ export function listPiMcpServers(pi, cwd) {
     }
   }
   return [...servers].filter(([, config]) => config.enabled !== false).map(([name]) => name);
+}
+
+/**
+ * @typedef {object} PiMcpServerReport One server of `pi mcp list --json`, as the mcp commands read it.
+ * @property {string} name
+ * @property {string} scope `global` (Pi's configuration directory) or `project`.
+ * @property {string} source The `mcp.json` file the server's configuration comes from.
+ * @property {boolean} enabled
+ * @property {"stdio" | "http"} kind How Pi talks to the server: a local command or a streamable HTTP URL.
+ * @property {string} transport The command line, or the URL.
+ * @property {string} state `connected`, `needs-auth`, `failed`, `disabled` or another connection state.
+ * @property {string[]} tools The names of the server's tools, once connected.
+ * @property {string} [error] Why the server is not connected.
+ *
+ * @typedef {object} PiMcpList What `pi mcp list --json` prints.
+ * @property {PiMcpServerReport[]} servers
+ * @property {string[]} errors Invalid entries Pi skipped.
+ * @property {string} [note] Pi's note that the project's `mcp.json` is ignored because the project is not trusted.
+ */
+
+/**
+ * Read the output of `pi mcp list --json`, in which Pi has connected every
+ * enabled server. Throws when the text is not that shape.
+ *
+ * @param {string} text
+ * @returns {PiMcpList}
+ */
+export function parsePiMcpList(text) {
+  const parsed = JSON.parse(text);
+  if (parsed === null || typeof parsed !== "object" || !Array.isArray(parsed.servers) || !Array.isArray(parsed.errors)) {
+    throw new Error("expected { servers: [...], errors: [...] }");
+  }
+  const servers = parsed.servers.map((/** @type {any} */ server) => {
+    if (typeof server?.name !== "string" || typeof server.state !== "string" || typeof server.transport !== "string" || !Array.isArray(server.tools)) {
+      throw new Error("expected each server to have a name, a state, a transport and tools");
+    }
+    return {
+      name: server.name,
+      scope: String(server.scope ?? "global"),
+      source: String(server.source ?? ""),
+      enabled: server.enabled !== false,
+      // Pi describes an HTTP server by its URL and a stdio server by its command line.
+      kind: /** @type {"stdio" | "http"} */ (/^https?:\/\//i.test(server.transport) ? "http" : "stdio"),
+      transport: server.transport,
+      state: server.state,
+      tools: server.tools.map(String),
+      ...(typeof server.error === "string" ? { error: server.error } : {}),
+    };
+  });
+  return { servers, errors: parsed.errors.map(String), ...(typeof parsed.note === "string" ? { note: parsed.note } : {}) };
+}
+
+/**
+ * Whether Pi signs in to the server with OAuth: an HTTP server whose
+ * configuration (in the file `pi mcp list` names as its source) sets neither
+ * an `Authorization` header nor `auth`. A configuration that cannot be read
+ * counts as OAuth, as Pi's default for HTTP servers. The probe in
+ * tests/mmr-cli-pi-compat.test.mjs checks this against `pi mcp logout`.
+ *
+ * @param {PiMcpServerReport} server
+ * @returns {boolean}
+ */
+export function piMcpUsesOAuth(server) {
+  if (server.kind !== "http") return false;
+  /** @type {any} */
+  let config;
+  try {
+    config = JSON.parse(readFileSync(server.source, "utf8")).mcpServers?.[server.name];
+  } catch {
+    return true;
+  }
+  if (config === null || typeof config !== "object") return true;
+  if (config.auth !== undefined) return false;
+  const headers = config.headers !== null && typeof config.headers === "object" ? Object.keys(config.headers) : [];
+  return !headers.some((header) => header.toLowerCase() === "authorization");
+}
+
+/**
+ * The project's MCP configuration file, `.pi/mcp.json` in `cwd`.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {string}
+ */
+export function piProjectMcpPath(pi, cwd) {
+  return path.join(cwd, pi.CONFIG_DIR_NAME, "mcp.json");
+}
+
+/**
+ * The saved project-trust decision that applies to `cwd`: the closest one
+ * for it or a parent directory in Pi's trust store, and the directory it was
+ * saved for. `decision` is null when there is none.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {{ decision: boolean | null, path?: string }}
+ */
+export function readPiProjectTrust(pi, cwd) {
+  /** @type {{ path: string, decision: boolean } | null} */
+  const entry = new pi.ProjectTrustStore(pi.getAgentDir()).getEntry(cwd);
+  return entry === null ? { decision: null } : { decision: entry.decision, path: entry.path };
+}
+
+/**
+ * Save "trusted" for `cwd` in Pi's trust store: the record Pi's own trust
+ * prompt writes when you choose to trust a folder.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ */
+export function trustPiProject(pi, cwd) {
+  new pi.ProjectTrustStore(pi.getAgentDir()).set(cwd, true);
+}
+
+/** The entries of a project's `.pi` directory that Pi loads only in a trusted project (Pi's docs/security.md). */
+const PI_TRUST_RESOURCES = ["settings.json", "mcp.json", "extensions", "skills", "prompts", "themes", "SYSTEM.md", "APPEND_SYSTEM.md"];
+
+/**
+ * The project resources in `cwd` that Pi loads only once the project is
+ * trusted: the entries of its `.pi` directory, and `.agents/skills` in `cwd`
+ * and its parents (except `~/.agents/skills`, which is the user's). The list
+ * is non-empty exactly when Pi's `hasTrustRequiringProjectResources` is true;
+ * the probe in tests/mmr-cli-pi-compat.test.mjs checks each entry.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {string[]}
+ */
+export function listPiTrustResources(pi, cwd) {
+  /** @param {string} dir Pi compares real paths. */
+  const canonical = (dir) => {
+    try {
+      return realpathSync(dir);
+    } catch {
+      return path.resolve(dir);
+    }
+  };
+  const start = canonical(cwd);
+  const configDir = path.join(start, pi.CONFIG_DIR_NAME);
+  const found = PI_TRUST_RESOURCES.map((entry) => path.join(configDir, entry)).filter((file) => existsSync(file));
+  const userSkills = path.join(canonical(process.env.HOME || homedir()), ".agents", "skills");
+  for (let dir = start; ; dir = path.dirname(dir)) {
+    const skills = path.join(dir, ".agents", "skills");
+    if (skills !== userSkills && existsSync(skills)) found.push(skills);
+    if (path.dirname(dir) === dir) break;
+  }
+  return found;
 }

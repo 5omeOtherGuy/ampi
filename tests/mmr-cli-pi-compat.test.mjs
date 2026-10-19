@@ -3,7 +3,8 @@
 // them; when a Pi upgrade changes their shape, this test fails here instead of
 // every `ampi` start failing or loading ampi twice.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -16,17 +17,23 @@ import {
   listPiExtensionSources,
   listPiMcpServers,
   listPiSessions,
+  listPiTrustResources,
   loadThroughPi,
   parsePiFrontmatter,
+  parsePiMcpList,
   piAgentDir,
   piExternalEditorCommand,
   piSettingsManager,
+  piMcpUsesOAuth,
+  piProjectMcpPath,
   piSettingsPath,
   piToolOrigin,
+  readPiProjectTrust,
   readPiSessionEntries,
   readPiSessionSkills,
   readPiSettings,
   setPiSessionName,
+  trustPiProject,
 } from "../packages/ampi-cli/src/pi-compat.js";
 import { createAmpiSdkSession } from "../packages/ampi-cli/src/sdk-session.js";
 import { createSessionId } from "../packages/ampi-cli/src/threads.js";
@@ -582,5 +589,119 @@ describe("Pi calls used by the skill commands", () => {
     assert.deepEqual(parsePiFrontmatter(pi, "---\nname: a\nmetadata:\n  team: x\n---\nBody\n"), { name: "a", metadata: { team: "x" } });
     assert.deepEqual(parsePiFrontmatter(pi, "No frontmatter\n"), {});
     assert.throws(() => parsePiFrontmatter(pi, "---\nname: [unclosed\n---\n"));
+  });
+});
+
+describe("Pi's MCP list and project trust, as the mcp commands use them", () => {
+  const saved = { agentDir: process.env.PI_CODING_AGENT_DIR, home: process.env.HOME, offline: process.env.PI_OFFLINE };
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-mcp-")));
+  const agentDir = path.join(dir, "agent");
+  const home = path.join(dir, "home");
+  const project = path.join(dir, "project");
+  const echoServer = path.join(import.meta.dirname, "fixtures", "ampi-cli", "mcp-echo-server.mjs");
+  const piRoot = path.join(import.meta.dirname, "..", "node_modules", "@earendil-works", "pi-coding-agent");
+  const piBin = path.join(piRoot, JSON.parse(readFileSync(path.join(piRoot, "package.json"), "utf8")).bin.pi);
+  /** @param {string[]} args @param {string} [cwd] */
+  const piMcp = (args, cwd = project) =>
+    spawnSync(process.execPath, [piBin, "mcp", ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" } });
+
+  before(() => {
+    writeJson(path.join(agentDir, "mcp.json"), {
+      mcpServers: {
+        echo: { command: process.execPath, args: [echoServer] },
+        off: { command: process.execPath, enabled: false },
+        // HTTP servers are never connected here: `pi mcp logout` only reads their configuration.
+        open: { url: "https://open.example/mcp", enabled: false },
+        keyed: { url: "https://keyed.example/mcp", headers: { Authorization: "Bearer x" }, enabled: false },
+      },
+    });
+    writeJson(path.join(project, ".pi", "mcp.json"), { mcpServers: { local: { command: process.execPath, args: [echoServer] } } });
+    mkdirSync(home, { recursive: true });
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.HOME = home;
+    process.env.PI_OFFLINE = "1";
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", saved.agentDir],
+      ["HOME", saved.home],
+      ["PI_OFFLINE", saved.offline],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads the list JSON Pi prints: servers with state, transport and tools, errors, and the untrusted-project note", () => {
+    const result = piMcp(["list", "--json"]);
+    assert.equal(result.status, 0, result.stderr);
+    const raw = JSON.parse(result.stdout);
+    for (const key of ["name", "scope", "source", "enabled", "transport", "state", "tools"]) assert.ok(key in raw.servers[0], key);
+    const list = parsePiMcpList(result.stdout);
+    assert.deepEqual(
+      list.servers.map(({ name, scope, enabled, kind, state, tools }) => ({ name, scope, enabled, kind, state, tools })),
+      [
+        { name: "echo", scope: "global", enabled: true, kind: "stdio", state: "connected", tools: ["echo"] },
+        { name: "off", scope: "global", enabled: false, kind: "stdio", state: "disabled", tools: [] },
+        { name: "open", scope: "global", enabled: false, kind: "http", state: "disabled", tools: [] },
+        { name: "keyed", scope: "global", enabled: false, kind: "http", state: "disabled", tools: [] },
+      ],
+    );
+    assert.equal(list.servers[0].source, path.join(agentDir, "mcp.json"));
+    assert.deepEqual(list.errors, []);
+    assert.match(list.note ?? "", /mcp\.json is ignored because the project is not trusted/);
+    assert.throws(() => parsePiMcpList('{"servers": {}}'));
+  });
+
+  it("tells OAuth servers apart as pi mcp logout does", () => {
+    const list = parsePiMcpList(piMcp(["list", "--json"]).stdout);
+    for (const server of list.servers) {
+      const logout = piMcp(["logout", server.name]);
+      const piSaysOAuth = logout.status === 0 && /No stored credentials/.test(logout.stdout);
+      // Either answer, never another: a change in Pi's wording fails here.
+      assert.ok(piSaysOAuth || (logout.status === 1 && /does not use OAuth/.test(logout.stderr)), `${server.name}: ${logout.stdout}${logout.stderr}`);
+      assert.equal(piMcpUsesOAuth(server), piSaysOAuth, `${server.name}: ${logout.stdout}${logout.stderr}`);
+    }
+    assert.deepEqual(list.servers.filter(piMcpUsesOAuth).map((server) => server.name), ["open"]);
+  });
+
+  it("saves trust as Pi's trust prompt does, and reads the closest saved decision", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    assert.equal(piProjectMcpPath(pi, project), path.join(project, ".pi", "mcp.json"));
+    assert.deepEqual(readPiProjectTrust(pi, project), { decision: null });
+    new pi.ProjectTrustStore(agentDir).set(dir, false);
+    assert.deepEqual(readPiProjectTrust(pi, project), { decision: false, path: dir });
+    trustPiProject(pi, project);
+    assert.deepEqual(readPiProjectTrust(pi, project), { decision: true, path: project });
+    assert.deepEqual(JSON.parse(readFileSync(path.join(agentDir, "trust.json"), "utf8")), { [dir]: false, [project]: true });
+    // `pi mcp list` now reads the project's servers.
+    const list = parsePiMcpList(piMcp(["list", "--json"]).stdout);
+    assert.equal(list.note, undefined);
+    assert.deepEqual(list.servers.find((server) => server.name === "local")?.state, "connected");
+  });
+
+  it("lists exactly the project resources that make Pi ask for trust", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const entries = ["settings.json", "mcp.json", "extensions", "skills", "prompts", "themes", "SYSTEM.md", "APPEND_SYSTEM.md"];
+    for (const [index, entry] of entries.entries()) {
+      const cwd = path.join(dir, `trust-${index}`);
+      mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+      assert.equal(pi.hasTrustRequiringProjectResources(cwd), false, entry);
+      assert.deepEqual(listPiTrustResources(pi, cwd), [], entry);
+      writeFileSync(path.join(cwd, ".pi", entry), "");
+      assert.equal(pi.hasTrustRequiringProjectResources(cwd), true, entry);
+      assert.deepEqual(listPiTrustResources(pi, cwd), [path.join(cwd, ".pi", entry)], entry);
+    }
+    // .agents/skills counts in the directory and its parents, but not the user's own.
+    const nested = path.join(dir, "outer", "inner");
+    mkdirSync(path.join(dir, "outer", ".agents", "skills"), { recursive: true });
+    mkdirSync(nested, { recursive: true });
+    assert.equal(pi.hasTrustRequiringProjectResources(nested), true);
+    assert.deepEqual(listPiTrustResources(pi, nested), [path.join(dir, "outer", ".agents", "skills")]);
+    mkdirSync(path.join(home, ".agents", "skills"), { recursive: true });
+    assert.equal(pi.hasTrustRequiringProjectResources(home), false);
+    assert.deepEqual(listPiTrustResources(pi, home), []);
   });
 });

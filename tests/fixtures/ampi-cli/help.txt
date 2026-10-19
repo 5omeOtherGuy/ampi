@@ -15,13 +15,15 @@ Commands:
                                 tool's description and parameters; ampi tools --help has more
   skill list|info|add|remove    List the skills Pi loads, show one, install skills from a directory
                                 or git repository, or remove one; ampi skill --help has more
+  mcp [command]                 Add, list, check and remove MCP servers, trust a project's servers
+                                and sign in to them; ampi mcp --help lists the commands
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, and continue those nothing else has open
 
-  Pi's own commands (install, remove, uninstall, update, list, config, auth, mcp) run
-  unchanged, without ampi's options; config keymap and config edit are ampi's.
+  Pi's own commands (install, remove, uninstall, update, list, config, auth) run unchanged,
+  without ampi's options; config keymap and config edit are ampi's.
 
 Options:
 
