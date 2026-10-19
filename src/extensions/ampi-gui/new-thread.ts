@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { MmrLiveEntry } from "../ampi-core/live-registry.js";
+import { checkMmrThreadLabels, MMR_THREAD_LABEL_MAX_LENGTH, MMR_THREAD_LABELS_MAX } from "../ampi-core/thread-index.js";
 import { MMR_GUI_MAX_PROMPT_LENGTH } from "./commands.js";
 import type { MmrGuiModes } from "./modes.js";
 import { mmrGuiProjectLabel, type MmrGuiSessionRow } from "./sessions.js";
@@ -10,17 +11,12 @@ import { mmrGuiProjectLabel, type MmrGuiSessionRow } from "./sessions.js";
  *
  * | Route | Answer |
  * | --- | --- |
- * | `GET /api/directories?q=` | `{ directories, typed }`: the working directories of the catalogued sessions and of the live processes, most recently used first, each `{ path, label, git, branch, lastUsed, sessions }`; `q` keeps those whose path or name holds every word of it. `typed` is the directory `q` names when it is an absolute or `~` path to a directory not listed, else `null` |
+ * | `GET /api/directories?q=` | `{ directories, typed }`: the working directories of the catalogued sessions and of the live processes, most recently used first, each `{ path, label, git, branch, lastUsed, sessions }`; `q` keeps those whose path or name holds every word of it. `typed` is the directory `q` names when it is an absolute path, `~` or `~/…`, to a directory not listed, else `null` (`~name` searches for `name`) |
  * | `POST /api/threads` | `{ prompt, cwd, mode?, labels? }` checked by {@link parseMmrGuiNewThread}; see `hub.ts` |
  *
  * Git is read from the files, never by running `git`: the `.git` directory
  * or file of the directory or its nearest parent, and its `HEAD`.
  */
-
-/** A thread label, as the thread index takes it: lowercase letters, digits and hyphens. */
-const LABEL = /^[a-z0-9-]+$/;
-const LABEL_MAX_LENGTH = 32;
-const LABELS_MAX = 20;
 
 /** The most directories `GET /api/directories` lists. */
 export const MMR_GUI_DIRECTORY_LIMIT = 50;
@@ -66,17 +62,15 @@ function record(body: unknown): Record<string, unknown> {
 
 const invalid = (error: string): MmrGuiNewThreadCheck => ({ ok: false, status: 400, body: { error } });
 
-/** Labels as the thread index takes them, without duplicates, or the reason they are refused. */
+/** Labels as the thread index takes them (`checkMmrThreadLabels`), without duplicates, or the reason they are refused. */
 export function checkMmrGuiLabels(labels: unknown): string[] | string {
   if (labels === undefined || labels === null) return [];
-  if (!Array.isArray(labels)) return "labels must be a list of strings.";
-  const unique: string[] = [];
-  for (const label of labels) {
-    if (typeof label !== "string" || !LABEL.test(label)) return `${JSON.stringify(label)} is not a label: use lowercase letters, digits and hyphens.`;
-    if (label.length > LABEL_MAX_LENGTH) return `A label has at most ${LABEL_MAX_LENGTH} characters.`;
-    if (!unique.includes(label)) unique.push(label);
-  }
-  return unique.length > LABELS_MAX ? `A thread takes at most ${LABELS_MAX} labels.` : unique;
+  const checked = checkMmrThreadLabels(labels);
+  if (checked.ok) return checked.labels;
+  if (checked.problem === "list") return "labels must be a list of strings.";
+  if (checked.problem === "characters") return `${JSON.stringify(checked.label)} is not a label: use lowercase letters, digits and hyphens.`;
+  if (checked.problem === "length") return `A label has at most ${MMR_THREAD_LABEL_MAX_LENGTH} characters.`;
+  return `A thread takes at most ${MMR_THREAD_LABELS_MAX} labels.`;
 }
 
 /**
@@ -166,8 +160,9 @@ export async function listMmrGuiDirectories(input: MmrGuiDirectoryInput): Promis
   for (const entry of input.live) if (entry.kind !== "app") note(entry.cwd, entry.sessionId, entry.updatedAt);
 
   const query = (input.query ?? "").trim();
-  const typedPath = query.startsWith("/") || query.startsWith("~") ? path.resolve(expandMmrGuiHome(query, home)) : undefined;
-  const words = (typedPath ?? query).toLowerCase().split(/\s+/).filter(Boolean);
+  // Only `~` and `~/…` name the home directory; `~name` searches for `name`.
+  const typedPath = query.startsWith("/") || query === "~" || query.startsWith("~/") ? path.resolve(expandMmrGuiHome(query, home)) : undefined;
+  const words = (typedPath ?? query.replace(/^~/, "")).toLowerCase().split(/\s+/).filter(Boolean);
   const describe = async (dir: string, lastUsed: string | null, sessions: number): Promise<MmrGuiDirectory> => ({
     path: dir,
     label: mmrGuiProjectLabel(dir, home),

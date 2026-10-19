@@ -32,6 +32,36 @@ export interface MmrThreadRecord {
   readonly readAt?: string;
 }
 
+export const MMR_THREAD_LABELS_MAX = 20;
+export const MMR_THREAD_LABEL_MAX_LENGTH = 32;
+const LABEL = /^[a-z0-9-]+$/;
+
+/** A label list without duplicates, in order, or the first rule it breaks. */
+export type MmrThreadLabelsCheck =
+  | { ok: true; labels: string[] }
+  | { ok: false; problem: "list" }
+  | { ok: false; problem: "characters"; label: unknown }
+  | { ok: false; problem: "length"; label: string }
+  | { ok: false; problem: "count"; count: number };
+
+/**
+ * The thread index's label rules, for the index and for every caller that
+ * checks labels before handing them to it: a list of 1 to
+ * {@link MMR_THREAD_LABEL_MAX_LENGTH} lowercase letters, digits or hyphens,
+ * at most {@link MMR_THREAD_LABELS_MAX} different ones per session. Each
+ * caller words the problem its own way.
+ */
+export function checkMmrThreadLabels(labels: unknown): MmrThreadLabelsCheck {
+  if (!Array.isArray(labels)) return { ok: false, problem: "list" };
+  const unique: string[] = [];
+  for (const label of labels) {
+    if (typeof label !== "string" || !LABEL.test(label)) return { ok: false, problem: "characters", label };
+    if (label.length > MMR_THREAD_LABEL_MAX_LENGTH) return { ok: false, problem: "length", label };
+    if (!unique.includes(label)) unique.push(label);
+  }
+  return unique.length > MMR_THREAD_LABELS_MAX ? { ok: false, problem: "count", count: unique.length } : { ok: true, labels: unique };
+}
+
 /** Whether a session is snoozed: it has a snooze date and its last activity (epoch ms) is not newer. */
 export function isMmrThreadSnoozed(record: MmrThreadRecord | undefined, lastActivity: number): boolean {
   if (record?.snoozed === undefined) return false;

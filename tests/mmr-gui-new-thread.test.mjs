@@ -116,6 +116,37 @@ describe("ampi-gui new thread: the request", () => {
     await refused({ labels: ["a".repeat(33)] }, 400, /at most 32 characters/);
     await refused({ labels: Array.from({ length: 21 }, (_, index) => `l${index}`) }, 400, /at most 20 labels/);
   });
+
+  it("accepts and refuses the same labels as the thread index", async () => {
+    const { validateMmrThreadLabels } = await importSource("extensions/ampi-threads/index-store.ts");
+    const indexTakes = (labels) => {
+      try {
+        return validateMmrThreadLabels(labels);
+      } catch {
+        return "refused";
+      }
+    };
+    const guiTakes = (labels) => {
+      const checked = newThread.checkMmrGuiLabels(labels);
+      return typeof checked === "string" ? "refused" : checked;
+    };
+    for (const labels of [
+      ["a", "b-2", "a"],
+      ["UPPER"],
+      ["with space"],
+      ["x".repeat(32)],
+      ["x".repeat(33)],
+      [""],
+      [7],
+      Array.from({ length: 20 }, (_, index) => `l${index}`),
+      Array.from({ length: 21 }, (_, index) => `l${index}`),
+      // Duplicates count once, so 21 entries with one repeated fit.
+      [...Array.from({ length: 20 }, (_, index) => `l${index}`), "l0"],
+      "not-a-list",
+    ]) {
+      assert.deepEqual(guiTakes(labels), indexTakes(labels), JSON.stringify(labels));
+    }
+  });
 });
 
 describe("ampi-gui new thread: the directories", () => {
@@ -174,9 +205,39 @@ describe("ampi-gui new thread: the directories", () => {
     assert.equal(listed.typed, null);
     assert.equal(listed.directories[0].path, repo);
     assert.equal((await list(`${root}/missing`)).typed, null, "a path that is not a directory is not offered");
+    // `~name` is no path (it would resolve against the hub's working directory): it searches for the name.
+    const tilde = await newThread.listMmrGuiDirectories({ rows, live: entries, query: "~live-only", home, pathKind: async () => "directory", gitHead: async () => ({ git: false, branch: null }) });
+    assert.equal(tilde.typed, null);
+    assert.deepEqual(tilde.directories.map((entry) => entry.path), [live]);
     assert.equal((await list(path.join(plain, "..", "plain"))).directories[0].path, plain, "a typed path is resolved");
   });
 });
+
+/** The hub's `GET /api/events` stream: `count()` is how many `sessions` events arrived, `next(n)` waits for the n-th. */
+function openEvents(port, headers) {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: "127.0.0.1", port, path: "/api/events", headers, setHost: false, agent: false }, (res) => {
+      let text = "";
+      const waiters = [];
+      const count = () => text.match(/event: sessions/g)?.length ?? 0;
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        text += chunk;
+        for (const waiter of waiters.splice(0)) {
+          if (count() >= waiter.n) waiter.done();
+          else waiters.push(waiter);
+        }
+      });
+      resolve({
+        count,
+        next: (n) => (count() >= n ? Promise.resolve() : new Promise((done) => waiters.push({ n, done }))),
+        close: () => req.destroy(),
+      });
+    });
+    req.on("error", (error) => (error.code === "ECONNRESET" ? undefined : reject(error)));
+    req.end();
+  });
+}
 
 /** A worker stand-in: records every request and answers `/api/send` with `sendStatus`. */
 async function startRecorder({ sendStatus = 200 } = {}) {
@@ -228,6 +289,7 @@ async function startHub({ recorder, index = true, start } = {}) {
   const starts = [];
   const stops = [];
   const exits = [];
+  const activity = [];
   const startSession =
     start ??
     (async (startRequest) => {
@@ -242,7 +304,7 @@ async function startHub({ recorder, index = true, start } = {}) {
           stops.push("s-new");
         },
         onExit: (listener) => exits.push(listener),
-        onActivity: () => {},
+        onActivity: (listener) => activity.push(listener),
       };
     });
   const timers = new Set();
@@ -272,7 +334,15 @@ async function startHub({ recorder, index = true, start } = {}) {
   const post = (target, body, extra = {}) =>
     send(port, { method: "POST", target, headers: headers({ Origin: `http://127.0.0.1:${port}`, "Content-Type": "application/json", ...extra }), body: JSON.stringify(body) });
   const get = (target, extra = {}) => send(port, { target, headers: headers(extra) });
-  return { hub, port, repo, root, post, get, headers, starts, stops, labels, timers, listed: () => listed, close: () => hub.close() };
+  /** The worker reports its agent `busy` or `idle`. */
+  const report = (state) => {
+    for (const listener of activity) listener(state);
+  };
+  /** The worker process exits. */
+  const exit = () => {
+    for (const listener of exits) listener();
+  };
+  return { hub, port, repo, root, post, get, headers, starts, stops, labels, timers, report, exit, listed: () => listed, close: () => hub.close() };
 }
 
 describe("ampi-gui new thread: the hub", () => {
@@ -310,6 +380,42 @@ describe("ampi-gui new thread: the hub", () => {
       assert.deepEqual(app.starts[1], { cwd: app.repo });
       assert.equal(app.labels.length, 1);
     } finally {
+      await app.close();
+      await recorder.close();
+    }
+  });
+
+  it("tells the pages to read the list again when the new thread's first turn starts and settles, as Pi saves its file only then", { timeout: 10_000 }, async () => {
+    const recorder = await startRecorder();
+    const app = await startHub({ recorder });
+    const stream = await openEvents(app.port, app.headers());
+    try {
+      assert.equal((await app.post("/api/threads", { prompt: "In the background", cwd: app.repo })).status, 200);
+      await stream.next(1);
+      // The page reads the list before Pi saved the file; the hub keeps that list until it is told otherwise.
+      await app.get("/api/sessions");
+      const before = app.listed();
+      await app.get("/api/sessions");
+      assert.equal(app.listed(), before, "the list is cached");
+
+      app.report("busy");
+      await stream.next(2);
+      await app.get("/api/sessions");
+      assert.equal(app.listed(), before + 1, "the first turn's start reads the catalogue again");
+      app.report("idle");
+      await stream.next(3);
+      await app.get("/api/sessions");
+      assert.equal(app.listed(), before + 2, "and so does its end, when the file is saved for sure");
+
+      // Later turns change nothing: the next event is the worker's exit.
+      app.report("busy");
+      app.report("idle");
+      app.exit();
+      await stream.next(4);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(stream.count(), 4);
+    } finally {
+      stream.close();
       await app.close();
       await recorder.close();
     }
@@ -525,6 +631,65 @@ describe("ampi-gui new thread: the composer's pure parts", () => {
       background: { open: null, toast: "s-9", reset: ["prompt"] },
       another: { open: null, toast: "s-9", reset: ["prompt", "labels", "mode", "from"] },
     });
+  });
+
+  it("ignores only the click that ends a long press on the send button, however that press ended", async () => {
+    const { LONG_PRESS_MS, wireLongPress } = await client();
+    const timers = new Set();
+    const fire = (ms) => {
+      for (const timer of [...timers].filter((entry) => entry.ms === ms)) {
+        timers.delete(timer);
+        timer.callback();
+      }
+    };
+    const button = new EventTarget();
+    const calls = [];
+    wireLongPress(
+      button,
+      { onPress: () => calls.push("press"), onLongPress: () => calls.push("long") },
+      {
+        setTimer: (callback, ms) => {
+          const timer = { callback, ms };
+          timers.add(timer);
+          return timer;
+        },
+        clearTimer: (timer) => timers.delete(timer),
+      },
+    );
+    const dispatch = (type, fields = {}) => button.dispatchEvent(Object.assign(new Event(type), fields));
+    const longPress = () => {
+      dispatch("pointerdown", { button: 0 });
+      fire(LONG_PRESS_MS);
+    };
+
+    dispatch("pointerdown", { button: 0 });
+    dispatch("pointerup");
+    dispatch("click");
+    assert.deepEqual(calls.splice(0), ["press"], "a short press");
+
+    longPress();
+    dispatch("pointerup");
+    dispatch("click");
+    assert.deepEqual(calls.splice(0), ["long"], "a long press released on the button: its click is ignored");
+    fire(0);
+    dispatch("click");
+    assert.deepEqual(calls.splice(0), ["press"], "and the next keyboard activation is not");
+
+    // Released off the button: no pointerup and no click reach it.
+    longPress();
+    dispatch("pointerleave");
+    dispatch("blur");
+    dispatch("click");
+    assert.deepEqual(calls.splice(0), ["long", "press"], "the menu took the focus, so the next activation counts");
+
+    longPress();
+    dispatch("pointercancel");
+    dispatch("click");
+    assert.deepEqual(calls.splice(0), ["long", "press"], "a cancelled press");
+
+    dispatch("pointerdown", { button: 2 });
+    fire(LONG_PRESS_MS);
+    assert.deepEqual(calls, [], "only the primary button presses long");
   });
 
   it("builds the request only with a prompt and a directory, sending the mode only when there is one", async () => {

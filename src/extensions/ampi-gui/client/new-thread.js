@@ -271,6 +271,44 @@ function mountPlacePicker(dialog, mac) {
   };
 }
 
+/**
+ * A primary-button press on `button` held {@link LONG_PRESS_MS} calls
+ * `onLongPress`, and the click that ends it on the button is ignored; any
+ * other click, a keyboard activation included, calls `onPress`. A long press
+ * released off the button sends no click, so the ignoring also ends with the
+ * pointer's cancel or the button's blur, and just after its release.
+ * Returns the function that cancels a press in progress.
+ */
+export function wireLongPress(button, { onPress, onLongPress }, { setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  let timer;
+  let held = false;
+  const endPress = () => clearTimer(timer);
+  const release = () => {
+    endPress();
+    held = false;
+  };
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    held = false;
+    timer = setTimer(() => {
+      held = true;
+      onLongPress();
+    }, LONG_PRESS_MS);
+  });
+  button.addEventListener("pointerleave", endPress);
+  // The click that ends a long press on the button comes right after its pointerup.
+  button.addEventListener("pointerup", () => {
+    endPress();
+    if (held) setTimer(() => (held = false), 0);
+  });
+  for (const name of ["pointercancel", "blur"]) button.addEventListener(name, release);
+  button.addEventListener("click", () => {
+    if (held) held = false;
+    else onPress();
+  });
+  return endPress;
+}
+
 /** Wire a menu of buttons (`[role=menuitem]`) to the button that opens it: arrows move, Esc and a click outside close. */
 function mountMenu(menu, opener, onChoose) {
   const items = () => [...menu.querySelectorAll('[role="menuitem"]')];
@@ -576,24 +614,11 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
   optionsButton.addEventListener("click", () => optionsMenu.toggle());
 
   // A long press, a right click, or Down on the send button opens its menu; a short press creates.
-  let pressTimer = 0;
-  let pressed = false;
-  const endPress = () => clearTimeout(pressTimer);
-  submit.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    pressed = false;
-    pressTimer = setTimeout(() => {
-      pressed = true;
-      sendMenu.open();
-    }, LONG_PRESS_MS);
-  });
-  for (const name of ["pointerup", "pointerleave", "pointercancel"]) submit.addEventListener(name, endPress);
-  submit.addEventListener("click", () => {
-    if (pressed) {
-      pressed = false;
-      return;
-    }
-    if (!sendMenu.isOpen()) create("open");
+  const endPress = wireLongPress(submit, {
+    onLongPress: () => sendMenu.open(),
+    onPress: () => {
+      if (!sendMenu.isOpen()) create("open");
+    },
   });
   submit.addEventListener("contextmenu", (event) => {
     event.preventDefault();

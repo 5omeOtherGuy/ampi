@@ -84,7 +84,9 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *
  * A new thread (`POST /api/threads`) is hosted from the start: its worker
  * creates the session file and is its only writer, so its routes are
- * forwarded before the catalogue lists it. The hub writes only the labels,
+ * forwarded before the catalogue lists it. Pi saves the file only with the
+ * first message, so the pages are told to read the list again when its first
+ * turn starts and when it settles. The hub writes only the labels,
  * to the thread index. When the worker does not take the first message, the
  * hub stops it and answers that refusal; a start that outlasts
  * {@link MMR_GUI_HUB_START_TIMEOUT_MS} answers 504 and its worker is
@@ -545,6 +547,15 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       clearTimer(timer);
     }
     const worker = adopt(session, session.sessionId);
+    // Pi saves the file with the first message, after adopt() told the pages: tell them again
+    // when the first turn starts and when it settles, so a thread nobody opened shows in the list.
+    let relisted = 0;
+    session.onActivity(() => {
+      if (relisted >= 2 || workers.get(worker.id) !== worker) return;
+      relisted++;
+      sessions.invalidate();
+      announce();
+    });
     const sent = await postToMmrGui(session.port, session.token, "send", { text: prompt });
     if (sent.status !== 200) {
       // Nothing was saved without a message: the empty session goes with its worker.
