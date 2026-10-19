@@ -31,6 +31,7 @@ ampi tools list -m high  # the tools a high mode session declares to the model
 ampi app --open          # every session on this machine in one web page
 ampi skill list          # the skills Pi loads in this directory
 ampi skill add ./skills  # install skills into this project's .agents/skills
+ampi dev keys            # what ampi reads for each key press, and the command it maps to
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
 ampi doctor              # check Node.js, Pi, ampi, rg, fd, git, credentials and data files
 ampi update              # update ampi-cli, with its Pi and ampi, to the latest version
@@ -549,6 +550,50 @@ When the first argument is one of Pi's commands (`install`, `remove`, `uninstall
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
 - **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands; `mcp add` of a local server at user and project level, `mcp doctor` before and after `mcp approve --yes`, against `/mcp` in the terminal UI). On 2026-10-19, with the same versions: `doctor` and `doctor --json` piped and in a terminal, with `rg` missing and then in Pi's bin directory; `update`, `update --porcelain` and `update --target-version` against a stand-in npm, from a copy installed in a stand-in global directory and from a source checkout; `update --extensions`, `update --all` and `update --all --force` reaching Pi's update; `threads import` from Claude Code, Codex and OpenCode directories, OpenCode's database and its JSON storage, then `threads list`, `threads markdown` and an imported session in the terminal UI.
+
+## Developer commands
+
+### ampi dev keys
+
+When a key does nothing in ampi's terminal UI, `ampi dev keys` shows where it got lost: whether the terminal sent something unexpected, whether ampi's key parser read it as another key, or whether the keymap binds nothing there. It puts the terminal into the input mode the terminal UI uses (raw mode, bracketed paste, and the kitty keyboard protocol or xterm's modifyOtherKeys when the terminal supports them) and prints one JSON line for each key sequence it receives. It never runs a command and needs no model, session or credentials.
+
+```bash
+ampi dev keys
+```
+
+```text
+{"keys":["ctrl+s"],"event":"press","command":"mode.toggle","pending":null}
+{"keys":["ctrl+x"],"event":"press","command":null,"pending":"ctrl+x"}
+{"keys":["t"],"event":"press","command":null,"pending":null}
+{"keys":["esc","esc"],"event":"press","command":"thread.interrupt","pending":null}
+```
+
+- `keys`: the keys ampi read, in the keymap's spelling (`ctrl+x`, `alt+t`, `shift+z`, `esc`); two when a double Esc arrives as one sequence.
+- `event`: `press`, `repeat` or `release`. Only terminals that speak the kitty keyboard protocol report repeats and releases. A release never runs a command and leaves a pending prefix as it was.
+- `command`: the command id the keymap runs on this key, or `null`.
+- `pending`: the leader or chord prefix the keymap waits on after this key (`ctrl+x`, `ctrl+c`, `esc`), or `null`.
+- `{"keys":[],"paste":true}`: a bracketed paste; its text is not printed.
+- `{"keys":[],"unknown":true}`: input that is not a key ampi knows, such as Insert or a mouse report.
+
+A paste or unknown input cancels a pending prefix, as in a session. `--raw` adds `"raw"` to every line: the sequence as the terminal sent it, as a JSON string, so control characters show as `\u001b` and the like (and a paste's text is shown). `--no-keymap` prints only `keys` and `event`; the keymap is not read and its problems are not reported.
+
+The keymap is the one [`ampi config keymap`](#keymap-and-settings) prints, from the same settings, and its problems go to stderr in the same form. Two simplifications apply: every command counts as available, and the prompt as focused. A lone Esc therefore shows `"pending":"esc"`, as it does while a turn runs (when nothing runs, Esc reaches the prompt instead). A key the terminal UI hands to Pi's shortcut list rather than reading it itself is reported with its command id all the same: the line says what ampi binds the key to, not how the session dispatches it. With ampi-tui turned off the keymap is still reported, so a binding can be checked before turning it on, and stderr says that none of the keys are bound.
+
+To quit, press Ctrl+C twice within a second, or Ctrl+D. Both lines are printed first, and the second Ctrl+C shows `ampi.quit`, the command the same keys run in a session. A key between the two presses starts the count again.
+
+When stdin is not a terminal, `ampi dev keys` reads it instead, splits it into key sequences as the terminal UI does, prints a line for each, and exits at its end; the exit keys work there too. That replays recorded input exactly, for example the `raw` fields of an earlier run:
+
+```bash
+ampi dev keys --raw          # in a terminal; copy the lines into keys.jsonl
+jq -j .raw keys.jsonl | ampi dev keys
+printf '\x18t' | ampi dev keys
+```
+
+When stdin is a terminal, stdout must be the same terminal, because the input mode is switched with sequences written to stdout; `ampi dev keys > keys.jsonl` is refused with a usage error.
+
+Exit status: `0` on the exit keys or at the end of the input, `1` when the ampi in use is too old to have the key reader or it fails to load, `2` on a usage error.
+
+A key that never shows up, or shows up as another key, is changed or held back by the terminal or a multiplexer before ampi sees it. Pi's own documentation, in the `docs/` directory of the installed `@earendil-works/pi-coding-agent` package, covers which terminals send what: `keybindings.md`, `terminal-setup.md` and `tmux.md`. tmux, for one, forwards modified keys only with its `extended-keys` option on.
 
 ## Development
 
