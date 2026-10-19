@@ -78,7 +78,7 @@ The saved path is in the text block on purpose: `ampi -x --output-tool painter` 
 ### Where images go
 
 - With `output_path`: the path resolved against the working directory.
-- Without it: `<agent dir>/data/ampi/painter/<session id>/<timestamp>-<n>.<ext>`, where the agent directory is Pi's (`~/.pi/agent`, or `PI_CODING_AGENT_DIR`), `n` counts the session's images from 1 and the extension follows the image's format (`png`, `jpg`, `webp`, `gif`). The file is written to a temporary name in the same folder and renamed into place.
+- Without it: `<agent dir>/data/ampi/painter/<session id>/<timestamp>-<n>.<ext>`, where the agent directory is Pi's (`~/.pi/agent`, or `PI_CODING_AGENT_DIR`), `n` counts the session's images from 1 and the extension follows the image's format (`png`, `jpg`, `webp`, `gif`). The file is written to a temporary name in the same folder, then linked to its final name, which never replaces a file: calls that finish in the same millisecond get the next `n`.
 
 ### The `output_path` rule
 
@@ -124,5 +124,5 @@ Stable re-exports from `ampi`: `createMmrPainterExtension`, `loadMmrPainterSetti
 ## Developer notes
 
 - `index.ts` registers the tool, the tool provider, the feature-gate provider and the model checks; `config.ts` loads settings; `model.ts` chooses the model; `files.ts` checks reference images and `output_path` and saves images; `tool.ts` holds the tool definition and its descriptions (a public-safety lint surface).
-- `MMR_EVENT_TOOL_RULES_CHANGED` (`notifyMmrToolRulesChanged` in `ampi-core/runtime.ts`) is how a tool provider tells ampi-core its answer changed; ampi-core resolves the locked mode's tools again, after a mode apply in progress ends.
+- `MMR_EVENT_TOOL_RULES_CHANGED` (`notifyMmrToolRulesChanged` in `ampi-core/runtime.ts`) is how a tool provider tells ampi-core its answer changed; ampi-core resolves the locked mode's tools again, after a mode apply in progress ends; one that arrives during a managed model update (a session fallback) runs with the next state change or user input.
 - Tests: `tests/mmr-painter-tool.test.mjs` uses a fake model registry, temporary folders, an injected clock and data folder, and `tests/fixtures/ampi-painter/pixel.png`. Transcript rows: `tests/mmr-tui-activity.test.mjs` and the `mmr-tui-tool-rows` fixtures.

@@ -126,6 +126,8 @@ export function createMmrPainterTool(deps: MmrPainterToolDeps): ToolDefinition {
       const data = Buffer.from(image.data, "base64");
       let saved: string;
       if (target !== undefined && outputPath !== undefined) {
+        // The folder may have changed while the image was made: check again before writing.
+        await checkMmrPainterOutputPath(outputPath, ctx.cwd);
         await writeMmrPainterOutput(target, data, outputPath);
         saved = target;
       } else {

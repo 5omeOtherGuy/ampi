@@ -355,6 +355,43 @@ describe("ampi-painter with ampi-core: the first turn's tools", () => {
     assert.ok(runtime.getMmrModeState().activeTools.includes("painter"));
   });
 
+  it("runs a refresh asked for during a managed model update at the next user input", async () => {
+    const core = (await importSource("extensions/ampi-core/index.ts")).default;
+    const runtime = await importRuntime();
+    const { pi, calls, handlers } = createMockPi({ allTools: ["read", "bash", "write", "apply_patch", "painter"].map((name) => ({ name })) });
+    const listeners = new Map();
+    pi.events = {
+      emit: (name, data) => {
+        for (const listener of [...(listeners.get(name) ?? [])]) listener(data);
+      },
+      on: (name, listener) => {
+        listeners.set(name, [...(listeners.get(name) ?? []), listener]);
+        return () => {};
+      },
+    };
+    let ready = false;
+    runtime.registerMmrToolProvider({
+      name: "test-painter",
+      resolve: (name) => (name === "painter" ? (ready ? { kind: "active" } : { kind: "gated", gate: "ampi-painter", reason: "not yet" }) : undefined),
+    });
+    core(pi);
+    // A window under the mode's cap, so the input handler has no model to re-cap.
+    const { ctx } = createMockExtensionContext({ cwd, models: [{ ...CODEX_SOL, contextWindow: 200000 }], authenticated: true });
+    await handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
+    assert.equal(calls.setActiveTools.at(-1).includes("painter"), false);
+    // The first message publishes the mode lock, a state change of its own; later ones do not.
+    await handlers.get("input")({ type: "input", text: "first", source: "interactive" }, ctx);
+    // Like a session fallback's model switch, during which painter's check answers.
+    await runtime.runMmrManagedModelUpdate(async () => {
+      ready = true;
+      runtime.notifyMmrToolRulesChanged(pi);
+    });
+    assert.equal(calls.setActiveTools.at(-1).includes("painter"), false, "held back during the update");
+    await handlers.get("input")({ type: "input", text: "second", source: "interactive" }, ctx);
+    assert.equal(calls.setActiveTools.at(-1).includes("painter"), true);
+    assert.ok(runtime.getMmrModeState().activeTools.includes("painter"));
+  });
+
   it("keeps painter gated when no image model is usable", async () => {
     const { active, state, status } = await startSession([]);
     assert.equal(active.includes("painter"), false);
@@ -489,6 +526,14 @@ describe("ampi-painter saving", () => {
     assert.deepEqual(readFileSync(second.details.path), PIXEL);
   });
 
+  it("gives calls that save in the same millisecond different numbers", async () => {
+    const { call } = await load({ sessionId: "session-1" });
+    const results = await Promise.all(["one", "two", "three", "four"].map((prompt) => call({ prompt })));
+    const names = results.map((result) => path.basename(result.details.path)).sort();
+    assert.deepEqual(names, [1, 2, 3, 4].map((n) => `${STAMP}-${n}.png`));
+    assert.deepEqual(readdirSync(path.join(dataDir, "session-1")).sort(), names);
+  });
+
   it("saves to output_path inside the working directory", async () => {
     mkdirSync(path.join(cwd, "out"));
     const { call } = await load();
@@ -496,6 +541,9 @@ describe("ampi-painter saving", () => {
     const target = path.join(cwd, "out/sq.png");
     assert.equal(result.details.path, target);
     assert.deepEqual(readFileSync(target), PIXEL);
+    // A folder whose name only starts with two dots is still inside.
+    mkdirSync(path.join(cwd, "..cache"));
+    assert.equal((await call({ prompt: "x", output_path: "..cache/x.png" })).details.path, path.join(cwd, "..cache/x.png"));
     assert.equal(existsSync(dataDir), false, "nothing goes to the data directory");
   });
 

@@ -149,6 +149,8 @@ export interface MmrModeController {
    * mode apply in progress to end. No-op in `free` and in subagent workers.
    */
   refreshModeTools(): void;
+  /** Run a refresh that was held back, if any. ampi-core calls it on every user input. */
+  flushToolRefresh(): void;
   captureBaseline(
     ctx: ExtensionContext,
     options?: { force?: boolean; model?: Parameters<ExtensionAPI["setModel"]>[0]; thinkingLevel?: ThinkingLevel },
@@ -763,7 +765,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
 
   function refreshEditTools(state: MmrModeState | undefined): void {
     // A refresh held back during a managed model update runs with the next
-    // state change; it covers the edit tool family too.
+    // state change or user input; it covers the edit tool family too.
     if (toolRefreshPending && !applyingMmrMode && !isMmrManagedModelUpdateActive()) {
       refreshModeTools();
       return;
@@ -785,6 +787,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     if (!state?.editTools || state.mode === "free" || !lockedModeCwd || getMmrSubagentState()) return;
     const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
     reapplyLockedModeTools(state as MmrModeState & { mode: MmrLockedModeKey }, editTools, lockedModeCwd);
+  }
+
+  function flushToolRefresh(): void {
+    if (toolRefreshPending) refreshModeTools();
   }
 
   /** Clear the apply guard, then run a tool refresh that arrived during the apply. */
@@ -895,6 +901,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     reassertActiveModelInvariants,
     refreshEditTools,
     refreshModeTools,
+    flushToolRefresh,
     captureBaseline,
     selectModeFromShortcut,
     cycleModeFromShortcut,

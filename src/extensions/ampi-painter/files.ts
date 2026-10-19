@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { lstat, mkdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, readFile, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import { detectSupportedImageMimeTypeFromFile, getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -69,7 +69,7 @@ export async function readMmrPainterReferences(paths: readonly string[], cwd: st
 
 function inside(dir: string, root: string): boolean {
   const relative = path.relative(root, dir);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
 /** The nearest ancestor of `target` that exists. */
@@ -158,13 +158,17 @@ function sessionFolder(sessionId: string | undefined): string {
 /**
  * Images saved without `output_path`:
  * `<baseDir>/<session id>/<timestamp>-<n>.<ext>`, where `n` counts the
- * session's images from 1 in this process. Each write goes to a temporary
- * file first and is renamed into place; a name already taken moves `n` on.
+ * session's images from 1 in this process. Each image is written to a
+ * temporary file first and then hard-linked to its name, which fails
+ * rather than replaces when the name is taken, so two calls in the same
+ * millisecond never overwrite each other: a taken name moves `n` on.
  */
 export function createMmrPainterStore(options: MmrPainterStoreOptions = {}) {
   const now = options.now ?? Date.now;
   const randomId = options.randomId ?? (() => randomBytes(8).toString("hex"));
   const counts = new Map<string, number>();
+  // Temporary names stay apart within this process even when the random part repeats.
+  let temps = 0;
   return {
     async save(sessionId: string | undefined, data: Buffer, mimeType: string): Promise<string> {
       const baseDir = options.baseDir ?? resolveDefaultMmrPainterDataDir();
@@ -173,22 +177,24 @@ export function createMmrPainterStore(options: MmrPainterStoreOptions = {}) {
       await mkdir(dir, { recursive: true });
       const stamp = new Date(now()).toISOString().replace(/[:.]/g, "-");
       const ext = mmrPainterExtension(mimeType);
-      let n = counts.get(folder) ?? 0;
-      let file: string;
-      do {
-        n += 1;
-        file = path.join(dir, `${stamp}-${n}.${ext}`);
-      } while (await lstat(file).then(() => true, () => false));
-      counts.set(folder, n);
-      const temp = path.join(dir, `.${path.basename(file)}.${process.pid}.${randomId()}.tmp`);
+      const temp = path.join(dir, `.${stamp}.${process.pid}.${++temps}.${randomId()}.tmp`);
+      await writeFile(temp, data, { flag: "wx" });
       try {
-        await writeFile(temp, data, { flag: "wx" });
-        await rename(temp, file);
-      } catch (error) {
+        for (;;) {
+          // Taken before any await, so calls running side by side get different numbers.
+          const n = (counts.get(folder) ?? 0) + 1;
+          counts.set(folder, n);
+          const file = path.join(dir, `${stamp}-${n}.${ext}`);
+          try {
+            await link(temp, file);
+            return file;
+          } catch (error) {
+            if (errorCode(error) !== "EEXIST") throw error;
+          }
+        }
+      } finally {
         await unlink(temp).catch(() => {});
-        throw error;
       }
-      return file;
     },
   };
 }

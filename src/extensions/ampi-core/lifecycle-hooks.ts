@@ -306,6 +306,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     if (refuseMmrImportedSessionInput(ctx)) return { action: "handled" };
     // The first user message fixes the session's mode.
     controller.noteUserMessage();
+    // A tool refresh held back by a managed model update (a session fallback
+    // applied at session start) runs before the turn's tools are read.
+    controller.flushToolRefresh();
     // Reassert the active mode's context cap before Pi runs its pre-prompt
     // compaction check, in case a provider (re)registration (e.g. `/login`)
     // transiently re-resolved the active model to its uncapped window. Native
