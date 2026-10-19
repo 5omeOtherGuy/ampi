@@ -146,6 +146,10 @@ const TABLE = [
   ["/Users/u/Library/Preferences/x.plist", "plain", MACOS, "home-config"],
   ["/Applications/App.app/Contents/Info.plist", "plain", MACOS, "system"],
   ["/Users/u/app/README.md", "plain", MACOS, null],
+  // Case folds through upper case, as the filesystems compare names.
+  ["/Users/u/.\u017Fsh/config", "plain", MACOS, "ssh"],
+  ["/Users/u/.\u212Aube/config", "plain", MACOS, "cloud-credentials"],
+  ["/home/u/.\u017Fsh/config", "plain", LINUX, null],
   // A project inside a system directory.
   ["/var/www/site/index.html", "plain", { ...LINUX, cwd: "/var/www/site" }, null],
   ["/var/www/site/.env", "plain", { ...LINUX, cwd: "/var/www/site" }, "env-file"],
@@ -170,6 +174,12 @@ const TABLE = [
   [".git.\\config", "plain", WINDOWS, "git"],
   ["src\\main.ts", "plain", WINDOWS, null],
   ["/c/Windows/x", "pi", WINDOWS, "system"],
+  ["C:\\Users\\u\\.\u017Fsh\\config", "plain", WINDOWS, "ssh"],
+  // Device prefixes name the same files.
+  ["\\\\?\\C:\\Windows\\System32\\x", "plain", WINDOWS, "system"],
+  ["//?/c:/windows/x", "plain", WINDOWS, "system"],
+  ["\\\\.\\C:\\Users\\u\\.ssh\\config", "plain", WINDOWS, "ssh"],
+  ["\\\\?\\UNC\\srv\\home\\u\\.ssh\\config", "plain", { ...WINDOWS, homeDir: "\\\\srv\\home\\u" }, "ssh"],
   ["C:\\Windows\\x", "plain", { ...WINDOWS, env: {} }, "system"],
   ["E:\\Windows\\x", "plain", { ...WINDOWS, env: { windir: "E:\\Windows" } }, "system"],
   // Pi's own path rules for edit and write.
@@ -188,6 +198,14 @@ describe("ampi-permissions guarded files: classification", () => {
       assert.equal(file?.category.key ?? null, expected);
     });
   }
+
+  it("compares allowlist entries with the same case folding and without device prefixes", () => {
+    const write = (filePath) => ["write", { path: filePath }];
+    assert.deepEqual(guarded.findMmrGuardedFiles(...write("/Users/u/.ssh/config"), [{ path: "/Users/u/.\u017FSH/CONFIG" }], MACOS), []);
+    assert.deepEqual(guarded.findMmrGuardedFiles(...write("C:\\Users\\u\\.ssh\\config"), [{ path: "\\\\?\\C:\\Users\\u\\.ssh\\config" }], WINDOWS), []);
+    assert.deepEqual(guarded.findMmrGuardedFiles(...write("C:\\Users\\u\\.ssh\\config"), ["//./c:/users/u/.ssh/**"], WINDOWS), []);
+    assert.equal(guarded.findMmrGuardedFiles(...write("C:\\Users\\u\\.ssh\\config"), ["//./c:/users/u/.git/**"], WINDOWS).length, 1);
+  });
 
   it("resolves edit and write paths as Pi does, and patch and painter paths plainly", () => {
     assert.equal(guarded.resolveMmrToolPath("@.env", "pi", LINUX), "/home/u/projects/app/.env");

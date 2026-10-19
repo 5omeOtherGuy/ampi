@@ -181,7 +181,7 @@ System directories are `/etc`, `/usr`, `/bin`, `/sbin`, `/lib`, `/lib64`, `/boot
 - The temp directory, so temporary files (under `/var/folders` on macOS, `AppData\Local\Temp` on Windows) do not ask on every write.
 - The session's working directory, so a project in `/var/www/site` or `/opt/app` is edited as usual. Its `.env`, `.git` and `.pi` still ask through their own categories. A working directory that is a filesystem root or a system directory itself, or that holds one, exempts nothing.
 
-Each path is checked as written (made absolute) and with its symbolic links followed; either one being guarded makes it guarded, so a link into `~/.ssh` asks, and so does `/etc` reached as `/private/etc`. A link whose target does not exist yet is followed too, because a write through it creates that target: a `notes.txt` that links to `.git/hooks/pre-commit` asks as Git internals. On macOS and Windows names compare case-insensitively.
+Each path is checked as written (made absolute) and with its symbolic links followed; either one being guarded makes it guarded, so a link into `~/.ssh` asks, and so does `/etc` reached as `/private/etc`. A link whose target does not exist yet is followed too, because a write through it creates that target: a `notes.txt` that links to `.git/hooks/pre-commit` asks as Git internals. On macOS and Windows names compare case-insensitively, and on Windows a `\\?\`, `\\.\` or `\\?\UNC\` prefix names the same path as one without it.
 
 The dialog lists the tool and each guarded path with its category; a patch that touches several guarded paths asks once for all of them:
 

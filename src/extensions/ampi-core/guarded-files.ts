@@ -39,7 +39,7 @@ export interface MmrGuardedFilesEnvironment {
   readonly agentDir?: string;
   /** Read for the Windows directories (`SystemRoot`, `ProgramFiles`, `APPDATA`, ...). */
   readonly env?: Readonly<Record<string, string | undefined>>;
-  /** Sync `realpath`; throws for a path that does not exist. */
+  /** Sync `realpath` (`fs.realpathSync.native`, which gives the on-disk case); throws for a path that does not exist. */
   readonly realpath?: (filePath: string) => string;
   /** Sync `readlink`; throws for a path that is not a symbolic link. */
   readonly readlink?: (filePath: string) => string;
@@ -114,7 +114,7 @@ function resolveEnvironment(environment: MmrGuardedFilesEnvironment): Resolved {
   const platform = environment.platform ?? process.platform;
   const p = platform === "win32" ? path.win32 : path.posix;
   const fold = platform === "darwin" || platform === "win32";
-  const realpath = environment.realpath ?? ((filePath: string) => realpathSync(filePath));
+  const realpath = environment.realpath ?? ((filePath: string) => realpathSync.native(filePath));
   const readlink = environment.readlink ?? ((filePath: string) => readlinkSync(filePath));
   const home = p.resolve(environment.homeDir ?? homedir());
   const cwd = p.resolve(environment.cwd ?? process.cwd());
@@ -149,13 +149,29 @@ function resolveEnvironment(environment: MmrGuardedFilesEnvironment): Resolved {
 }
 
 /**
+ * Case folding close to how the macOS and Windows filesystems compare names:
+ * through upper case first, so `ſ` (U+017F) folds to `s` as `S` does, and
+ * the Kelvin sign to `k`.
+ */
+function foldCase(text: string): string {
+  return text.toUpperCase().toLowerCase();
+}
+
+/** A Windows path without its `\\?\` or `\\.\` prefix (`\\?\UNC\` becomes `\\`), so it compares as the path Windows opens. */
+function withoutDevicePrefix(text: string): string {
+  return text.replace(/^[\\/]{2}[?.][\\/](UNC[\\/])?/i, (_match, unc: string | undefined) => (unc ? "\\\\" : ""));
+}
+
+/**
  * The comparison key of an absolute path: `/` as the separator, case folded
- * on macOS and Windows, and on Windows each name without the trailing dots
- * and spaces and the `:stream` suffix that Windows ignores when it opens a file.
+ * on macOS and Windows, and on Windows without a device prefix and each name
+ * without the trailing dots and spaces and the `:stream` suffix that Windows
+ * ignores when it opens a file.
  */
 function key(env: Pick<Resolved, "platform" | "fold">, filePath: string): string {
   let text = filePath;
   if (env.platform === "win32") {
+    text = withoutDevicePrefix(text);
     const root = path.win32.parse(text).root;
     const rest = text
       .slice(root.length)
@@ -163,7 +179,7 @@ function key(env: Pick<Resolved, "platform" | "fold">, filePath: string): string
       .map((name) => name.replace(/:.*$/, "").replace(/[. ]+$/, ""));
     text = `${root.replaceAll("\\", "/")}${rest.join("/").replace(/\/+$/, "")}`;
   }
-  return env.fold ? text.toLowerCase() : text;
+  return env.fold ? foldCase(text) : text;
 }
 
 function isUnder(candidate: string, root: string): boolean {
@@ -238,7 +254,7 @@ function categoryOf(env: Resolved, candidate: string): MmrGuardedFileCategory | 
   const c = MMR_GUARDED_FILE_CATEGORIES;
   const parts = names(candidate);
   const base = parts.at(-1) ?? "";
-  const fold = (text: string) => (env.fold ? text.toLowerCase() : text);
+  const fold = (text: string) => (env.fold ? foldCase(text) : text);
   if (underAny(candidate, env.homes, fold(".ssh"))) return c.ssh;
   if (underAny(candidate, env.homes, fold(".gnupg"))) return c.gnupg;
   if (ENV_FILE.test(base) && !ENV_TEMPLATES.has(base)) return c.envFile;
@@ -376,8 +392,8 @@ export function findMmrGuardedFiles(
 }
 
 function allowlistKey(env: Pick<Resolved, "platform" | "fold">, text: string): string {
-  const slashed = env.platform === "win32" ? text.replaceAll("\\", "/") : text;
-  return env.fold ? slashed.toLowerCase() : slashed;
+  const slashed = env.platform === "win32" ? withoutDevicePrefix(text).replaceAll("\\", "/") : text;
+  return env.fold ? foldCase(slashed) : slashed;
 }
 
 function allowlistEntryMatches(env: Resolved, entry: MmrGuardedFilesAllowlistEntry, filePath: string): boolean {
