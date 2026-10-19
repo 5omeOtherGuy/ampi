@@ -529,7 +529,7 @@ The command's diagnostics are the `ampi: …` lines it writes about itself, at f
 
 With `--log-file`, the lines are appended to the file instead of stderr, one per line: an ISO 8601 time, the level and the message, with line breaks written as `\n`. A new file is created with mode `0600`. Errors also go to stderr, so a failing command is never silent. If the file cannot be written, the command says so once on stderr and writes the rest there.
 
-The logger does not touch output you asked for (help, versions, the results of `threads`, `usage`, `tools`, `skill`, `mcp` and `config`, the `--timings` line, the `[y/N]` question of `threads delete`), nor anything Pi writes itself: Pi's own warnings, errors and terminal UI are not filtered and do not go to the log file.
+The logger does not touch output you asked for (help, versions, the results of `threads`, `usage`, `tools`, `skill`, `mcp` and `config`, the `--timings` line, the `[y/N]` question of `threads delete`, the `Cloning <url>…` line of `skill add`), nor anything Pi writes itself: Pi's own warnings, errors and terminal UI are not filtered and do not go to the log file.
 
 The logging and colour options also work in front of a command, as in `ampi --log-level debug threads list`; after `threads`, `usage`, `last`, `tools`, `skill`, `mcp`, `config` or one of Pi's commands, the rest of the command line belongs to that command.
 
