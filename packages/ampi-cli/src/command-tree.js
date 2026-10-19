@@ -225,12 +225,21 @@ const THREADS = command("threads", "Create, list, open, print, change, delete or
   ],
 });
 
-/** `tools` reads its options anywhere on its command line; they are listed on each subcommand. */
+/** `tools` reads its options anywhere on its command line, before the subcommand too; they are listed on it and on each subcommand. */
 const TOOLS_OPTIONS = () => [json(), valued("--mode", "The ampi mode to start", { short: ["-m"], kind: "mode" })];
 
 const SKILL = command("skill", "List, show, install or remove the skills Pi loads", {
   aliases: ["skills"],
   optionsBeforeCommand: true,
+  // `skill` reads every option of its table before the subcommand too; the subcommand decides which it accepts.
+  options: [
+    json(),
+    option("--global", "Pi's user skills directory (add, remove)"),
+    valued("--target", "This skills directory (add, remove)", { kind: "directory" }),
+    option("--overwrite", "Replace an installed skill of the same name (add)"),
+    valued("--name", "Install the only skill under this name (add)"),
+    option("--yes", "Delete without asking (remove)", { short: ["-y"] }),
+  ],
   commands: [
     command("list", "Print the skills a session here loads", { aliases: ["ls"], options: [json()] }),
     command("info", "Print one skill's source, frontmatter and files", { args: [arg("name", "skill")], options: [json()] }),
@@ -395,6 +404,7 @@ export const COMMAND_TREE = deepFreeze(
       command("tools", "Print the tools a session declares in a mode", {
         aliases: ["tool"],
         optionsBeforeCommand: true,
+        options: TOOLS_OPTIONS(),
         commands: [
           command("list", "Print the active tools", { aliases: ["ls"], options: TOOLS_OPTIONS() }),
           command("show", "Print one tool's description and parameters", { args: [arg("tool")], options: TOOLS_OPTIONS() }),
