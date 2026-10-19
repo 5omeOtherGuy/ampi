@@ -575,7 +575,9 @@ function overlayOpenedBy(context, open) {
 }
 
 describe("ampi-threads thread switcher in ampi-tui", () => {
-  it("lists this workspace's sessions from Pi's session files, and Enter switches through /ampi-thread switch", async () => {
+  // The overlay wait above is unbounded, so a picker that returns without
+  // opening anything would hang; the timeout turns that into a failure.
+  it("lists this workspace's sessions from Pi's session files, and Enter switches through /ampi-thread switch", { timeout: 120_000 }, async () => {
     const mock = await loadExtension();
     const { sessionDir, sessions } = writeSessions(["Rename the parser", "Fix the imports", "Write the docs"]);
     writeThreads({ [sessions["Write the docs"].id]: { archived: ARCHIVED_AT } });
