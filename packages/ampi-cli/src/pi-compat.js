@@ -253,7 +253,8 @@ function readOnlyPiSettingsManager(pi, cwd, { projectTrusted } = {}) {
       fn(current);
     },
   };
-  const trusted = projectTrusted ?? piProjectTrusted(pi, cwd, () => pi.SettingsManager.fromStorage(storage, { projectTrusted: false }));
+  const trusted =
+    projectTrusted ?? piProjectTrusted(pi, cwd, () => pi.SettingsManager.fromStorage(storage, { projectTrusted: false }), { readOnly: true });
   return pi.SettingsManager.fromStorage(storage, { projectTrusted: trusted });
 }
 
@@ -459,18 +460,61 @@ export function capturePiJsonOutput(convert) {
  * a project's settings takes this decision, so an untrusted project's
  * settings never reach the command.
  *
+ * With `readOnly`, the trust file is read without the lock Pi's trust store
+ * takes, and a missing or unreadable file counts as no decision.
+ *
  * @param {any} pi
  * @param {string} cwd
  * @param {() => any} userSettings A `SettingsManager` that reads only the user settings, made when needed.
+ * @param {{ readOnly?: boolean }} [options]
  * @returns {boolean}
  */
-function piProjectTrusted(pi, cwd, userSettings) {
+function piProjectTrusted(pi, cwd, userSettings, { readOnly = false } = {}) {
   if (!pi.hasTrustRequiringProjectResources(cwd)) return true;
-  const store = new pi.ProjectTrustStore(pi.getAgentDir());
-  // Without a trust file there is no decision; reading one would first create Pi's configuration directory.
+  const agentDir = pi.getAgentDir();
+  const trustPath = path.join(agentDir, "trust.json");
   /** @type {boolean | null} */
-  const decision = existsSync(store.trustPath) ? store.get(cwd) : null;
+  let decision = null;
+  if (readOnly) decision = readPiTrustDecision(trustPath, cwd);
+  // Without a trust file there is no decision; reading one would first create Pi's configuration directory.
+  else if (existsSync(trustPath)) decision = new pi.ProjectTrustStore(agentDir).get(cwd);
   return decision ?? userSettings().getDefaultProjectTrust() === "always";
+}
+
+/**
+ * The trust decision Pi's trust file holds for `cwd` or its closest parent
+ * directory, matched as Pi's trust store matches it: keys are canonical
+ * (symlink-free) absolute paths, and only `true` or `false` decides. Reads
+ * the file without taking Pi's lock; a missing or unreadable file is no
+ * decision.
+ *
+ * @param {string} trustPath
+ * @param {string} cwd
+ * @returns {boolean | null}
+ */
+function readPiTrustDecision(trustPath, cwd) {
+  /** @type {unknown} */
+  let stored;
+  try {
+    stored = JSON.parse(readFileSync(trustPath, "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return null;
+  const decisions = /** @type {Record<string, unknown>} */ (stored);
+  let dir = path.resolve(cwd);
+  try {
+    dir = realpathSync(dir);
+  } catch {
+    // Pi keeps the resolved path when it cannot be canonicalized.
+  }
+  for (;;) {
+    const decision = decisions[dir];
+    if (decision === true || decision === false) return decision;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
 /**
