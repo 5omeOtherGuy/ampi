@@ -26,7 +26,7 @@ import { loadThroughPi, piExternalEditorCommand, piSettingsPath, readPiSettings 
 const KEYMAP_ENTRY = path.join("src", "config-keymap.ts");
 const KEYMAP_EVENT = "ampi:config-keymap";
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   keymap: {},
   edit: { global: { type: "boolean" }, workspace: { type: "boolean" } },
 });

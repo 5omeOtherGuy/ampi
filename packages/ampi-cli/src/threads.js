@@ -62,7 +62,7 @@ const COMPLETE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const UUID_TIME_MAX = 2 ** 48 - 1;
 
 /** @type {Record<string, string>} */
-const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename", find: "search", "analyze-context": "context" };
+export const ALIASES = { ls: "list", l: "list", n: "new", c: "continue", md: "markdown", r: "rename", find: "search", "analyze-context": "context" };
 
 /**
  * The file in the ampi package whose extension factory hands over the session
@@ -93,7 +93,7 @@ function isCalendarDate(text) {
 }
 
 /** Options of each thread command; an id and other arguments are positionals. */
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   // --visibility is accepted only to refuse it with a reason.
   new: { json: { type: "boolean" }, visibility: { type: "string" } },
   list: {

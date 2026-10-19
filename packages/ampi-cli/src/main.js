@@ -389,6 +389,8 @@ async function runPiJson(pi, args, extensionFactories, thinking, outputOf, log) 
  */
 export async function runAmpi(argv) {
   const route = routeAmpiArgv(argv);
+  // Before the log settings: a completion never fails and never writes to stderr, whatever the environment.
+  if (route.command === "complete") return runCompletion(route.completeArgs ?? []);
   const settings = readLogSettings(route.options, process.env, process.cwd());
   const log = createLogger(settings);
   const error = route.error ?? settings.error;
@@ -531,6 +533,10 @@ export async function runAmpi(argv) {
         log,
       });
     }
+    case "completions": {
+      const { runCompletionsCommand } = await import("./completions.js");
+      return runCompletionsCommand(route.completionsArgs ?? [], { out: (text) => process.stdout.write(text), log });
+    }
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
       const cwd = process.cwd();
@@ -612,6 +618,33 @@ function runAmpiChild(args, { cwd, env, forward }) {
     };
     child.on("error", (error) => settle({ status: null, stderr, error }));
     child.on("close", (status) => settle({ status, stderr }));
+  });
+}
+
+/**
+ * Answer a completion script: `ampi __complete <shell> -- <words...>`. The
+ * shell would print anything on stderr over the command line being edited,
+ * so stderr is silenced, Pi included when a session id or skill name loads
+ * it; a value that cannot be listed is not offered. An error nothing handles,
+ * such as a promise Pi leaves rejected, ends the process with exit 0 once
+ * stdout is flushed instead of printing a stack trace.
+ *
+ * @param {string[]} args The command line after `__complete`.
+ * @returns {Promise<number>}
+ */
+async function runCompletion(args) {
+  process.stderr.write = /** @type {typeof process.stderr.write} */ (() => true);
+  const quit = () => process.stdout.write("", () => process.exit(0));
+  process.on("uncaughtException", quit);
+  process.on("unhandledRejection", quit);
+  // Listing sessions or skills never installs packages or refreshes model catalogues.
+  process.env.PI_OFFLINE = "1";
+  // A shell that stops reading early closes the pipe.
+  process.stdout.on("error", () => {});
+  const { createCompletionProviders, runCompleteCommand } = await import("./completions.js");
+  return runCompleteCommand(args, {
+    out: (text) => process.stdout.write(text),
+    providers: createCompletionProviders({ cwd: process.cwd(), env: process.env }),
   });
 }
 

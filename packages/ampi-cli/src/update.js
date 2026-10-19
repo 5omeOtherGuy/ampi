@@ -34,7 +34,7 @@ const USAGE_HINT = "Run ampi update --help for the options.";
 /** The last lines of npm's stderr a failed install shows. */
 const STDERR_TAIL_LINES = 10;
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   "target-version": { type: "string" },
   porcelain: { type: "boolean" },
   help: { type: "boolean", short: "h" },

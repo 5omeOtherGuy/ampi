@@ -3,7 +3,7 @@
 // JavaScript, imported directly.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
+import { AMPI_COMMANDS, PI_COMMANDS, routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
 
 describe("ampi argv router: starting Pi", () => {
   it("starts Pi with no arguments when given none", () => {
@@ -286,6 +286,51 @@ describe("ampi argv router: starting Pi", () => {
       assert.equal(route.command, "pi", argv.join(" "));
       assert.deepEqual(route.piArgs, argv);
     }
+  });
+
+  it("routes completions and the hidden __complete with the rest of the command line", () => {
+    const completions = routeAmpiArgv(["completions", "bash"]);
+    assert.equal(completions.command, "completions");
+    assert.deepEqual(completions.completionsArgs, ["bash"]);
+    assert.deepEqual(completions.piArgs, []);
+    const complete = routeAmpiArgv(["__complete", "bash", "--", "ampi", ""]);
+    assert.equal(complete.command, "complete");
+    assert.deepEqual(complete.completeArgs, ["bash", "--", "ampi", ""]);
+    assert.equal(routeAmpiArgv(["--log-level", "debug", "completions", "zsh"]).command, "completions");
+    // Only as the first word: elsewhere it is part of the message.
+    assert.deepEqual(routeAmpiArgv(["fix", "__complete"]).piArgs, ["fix", "__complete"]);
+  });
+
+  it("routes exactly the commands and aliases in the exported command list", () => {
+    const expected = {
+      help: "help",
+      version: "version",
+      threads: "threads",
+      last: "threads",
+      usage: "threads",
+      tools: "tools",
+      tool: "tools",
+      app: "app",
+      top: "top",
+      skill: "skill",
+      skills: "skill",
+      mcp: "mcp",
+      doctor: "doctor",
+      review: "review",
+      update: "update",
+      up: "update",
+      config: "pi-command",
+      dev: "pi",
+      completions: "completions",
+      __complete: "complete",
+    };
+    const listed = Object.entries(AMPI_COMMANDS).flatMap(([name, aliases]) => [name, ...aliases]);
+    assert.deepEqual(listed.sort(), Object.keys(expected).sort());
+    for (const [word, command] of Object.entries(expected)) assert.equal(routeAmpiArgv([word]).command, command, word);
+    assert.equal(routeAmpiArgv(["config", "keymap"]).command, "config");
+    assert.equal(routeAmpiArgv(["dev", "keys"]).command, "dev");
+    for (const word of PI_COMMANDS) assert.equal(routeAmpiArgv([word, "x"]).command, "pi-command", word);
+    for (const word of ["thread", "complete", "completion", "Help"]) assert.equal(routeAmpiArgv([word]).command, "pi", word);
   });
 });
 

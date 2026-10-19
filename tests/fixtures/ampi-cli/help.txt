@@ -33,6 +33,9 @@ Commands:
   update, up [--target-version <v>] [--porcelain]
                                 Update the ampi command (an npm install -g) to the latest or
                                 the given version; ampi update --help has more
+  completions <shell>           Print a script that completes ampi's commands and options in
+                                bash, zsh, fish or pwsh; ampi completions --help shows how to
+                                load it
 
   Pi's own commands (install, remove, uninstall, list, config, auth) run unchanged,
   without ampi's options; config keymap and config edit are ampi's. update goes to Pi's

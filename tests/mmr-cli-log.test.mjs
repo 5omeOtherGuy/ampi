@@ -267,6 +267,7 @@ const STDERR_ALLOWED = [
   { file: "main.js", line: "piStderr: (text) => process.stderr.write(text)", reason: "Pi's own stderr from a pi mcp command, passed on" },
   { file: "main.js", line: "err: (text) => void process.stderr.write(text)", reason: "Pi's own output from the ampi review run, passed on" },
   { file: "main.js", line: "const writeProgress = (text) => process.stderr.write(text)", reason: "skill add's Cloning line, update's install line and npm's output: progress at every level" },
+  { file: "main.js", line: "process.stderr.write = ", reason: "ampi __complete writes nothing to stderr, Pi's lines included: the shell would print them over the command line" },
 ];
 
 describe("ampi diagnostics guard", () => {

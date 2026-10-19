@@ -85,7 +85,7 @@ import { satisfiesRange } from "./versions.js";
 
 const USAGE_HINT = "Run ampi doctor --help for the options.";
 
-const OPTIONS = /** @type {const} */ ({
+export const OPTIONS = /** @type {const} */ ({
   json: { type: "boolean" },
   help: { type: "boolean", short: "h" },
 });
