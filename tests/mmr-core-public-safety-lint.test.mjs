@@ -259,6 +259,8 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "tests/mmr-cli-skill.test.mjs",
       "tests/fixtures/ampi-cli/offline-guard.mjs",
       "src/extensions/ampi-workers/builtin-workers/reviewer.ts",
+      "src/extensions/ampi-workers/builtin-workers/view-media.ts",
+      "src/extensions/ampi-workers/profiles/prompts.ts",
       "src/extensions/ampi-workers/review/checks.ts",
       "src/extensions/ampi-workers/README.md",
       "tests/mmr-workers-review-checks.test.mjs",

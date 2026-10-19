@@ -20,12 +20,13 @@ function defaultExists(candidate) {
 }
 
 describe("mmr-subagents child-extension-scope: keep map", () => {
-  it("declares the four built-in spawned profiles with mmr-core always present", async () => {
+  it("declares the five built-in spawned profiles with mmr-core always present", async () => {
     const mod = await importSource(MODULE);
     const map = mod.MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS;
     assert.deepEqual([...map.finder], ["ampi-core"]);
     assert.deepEqual([...map.oracle], ["ampi-core", "ampi-web", "ampi-history"]);
     assert.deepEqual([...map.librarian], ["ampi-core", "ampi-github"]);
+    assert.deepEqual([...map.media], ["ampi-core"]);
     assert.deepEqual([...map["task-subagent"]], ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks"]);
     for (const names of Object.values(map)) {
       assert.ok([...names].includes("ampi-core"), "every profile keeps ampi-core");

@@ -69,7 +69,7 @@ describe("mmr-subagents tool provider", () => {
     const provider = createMmrSubagentsToolProvider();
     assert.deepEqual(
       [...MMR_SUBAGENTS_OWNED_TOOLS].sort(),
-      ["Task", "finder", "librarian", "oracle", "reviewer"],
+      ["Task", "finder", "librarian", "oracle", "reviewer", "view_media"],
     );
     for (const unowned of [
       "Read",
@@ -113,8 +113,8 @@ describe("mmr-subagents tool provider", () => {
 
   it("returns active rules for shipped capabilities including librarian", async () => {
     const { createMmrSubagentsToolProvider } = await importSource("extensions/ampi-workers/provider.ts");
-    const provider = createMmrSubagentsToolProvider({ finder: true, oracle: true, Task: true, librarian: true });
-    for (const logical of ["finder", "oracle", "Task", "librarian"]) {
+    const provider = createMmrSubagentsToolProvider({ finder: true, oracle: true, Task: true, librarian: true, viewMedia: true });
+    for (const logical of ["finder", "oracle", "Task", "librarian", "view_media"]) {
       assert.deepEqual(provider.resolve(logical), { kind: "active" }, `${logical} must resolve active`);
     }
   });

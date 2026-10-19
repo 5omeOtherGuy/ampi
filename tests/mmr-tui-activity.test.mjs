@@ -316,7 +316,7 @@ describe("ampi-tui activity: tool calls", () => {
 
   it("marks ampi-workers' tools and custom subagents as subagents, which draw their own rows", async () => {
     const mod = await load();
-    for (const name of ["finder", "oracle", "librarian", "reviewer", "Task", "start_task", "task_poll", "task_wait", "task_cancel", "sa__security_audit"]) {
+    for (const name of ["finder", "oracle", "librarian", "reviewer", "view_media", "Task", "start_task", "task_poll", "task_wait", "task_cancel", "sa__security_audit"]) {
       assert.equal(mod.classifyToolCall(name, {}, options).kind, "subagent", name);
     }
     assert.equal(mod.classifyToolCall("task_list", {}, options).kind, "tool");

@@ -201,6 +201,7 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
       "oracle",
       "librarian",
       "reviewer",
+      "view_media",
       "Task",
       "start_task",
       "task_poll",

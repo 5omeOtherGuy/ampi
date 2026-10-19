@@ -25,6 +25,7 @@ const PHRASES: Record<string, readonly [present: string, past: string]> = {
   oracle: ["Consulting oracle", "Consulted oracle"],
   librarian: ["Researching with librarian", "Researched with librarian"],
   reviewer: ["Reviewing changes", "Reviewed changes"],
+  view_media: ["Viewing media", "Viewed media"],
 };
 
 /** Prefix of custom Markdown subagent tool names (`sa__<name>`). */

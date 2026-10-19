@@ -53,6 +53,12 @@ export interface MmrModelPreference {
   thinkingLevel?: ThinkingLevel;
 }
 
+/**
+ * An input kind a worker can require of its model, named after Pi's
+ * `ModelInputModality`. Only `image` for now: every model takes text.
+ */
+export type MmrModelInputKind = "image";
+
 /** File-editing tools a locked mode adds beside `write`: `apply_patch` (`patch`) or Pi's `edit` (`edit`). */
 export type MmrEditToolFamily = "patch" | "edit";
 

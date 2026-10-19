@@ -1,10 +1,12 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { MmrModelCandidateResolution, MmrModelPreference, MmrModelResolution } from "./types.js";
+import type { MmrModelCandidateResolution, MmrModelInputKind, MmrModelPreference, MmrModelResolution } from "./types.js";
 import { isMmrSubscriptionProvider } from "./provider-constants.js";
 
 export interface MmrRegisteredModelLike {
   provider: string;
   id: string;
+  /** Input kinds the model accepts (Pi's `Model.input`); a model without the array is treated as text only. */
+  input?: readonly string[];
 }
 
 export interface MmrModelRegistryLike<TModel extends MmrRegisteredModelLike = MmrRegisteredModelLike> {
@@ -25,6 +27,13 @@ export interface SelectMmrModelRouteArgs<TModel extends MmrRegisteredModelLike =
   modelPreferences: readonly MmrModelPreference[];
   modeThinkingLevel?: ThinkingLevel;
   registry: MmrModelRegistryLike<TModel>;
+  /**
+   * Input kinds the selected model must accept (a subagent profile's
+   * `requiredInput`). A registered, authenticated candidate that lacks one
+   * is skipped with a reason such as `no image input`. Omitted or empty,
+   * every candidate is judged as before.
+   */
+  requiredInput?: readonly MmrModelInputKind[];
 }
 
 /**
@@ -199,6 +208,20 @@ function getProvidersForPreference<TModel extends MmrRegisteredModelLike>(
   return { providers: sorted, error: registeredProbe.error };
 }
 
+/**
+ * The required input kinds a registered model does not list in its `input`
+ * array, in the order they were required. A model without the array lacks
+ * every kind.
+ */
+export function listMissingMmrModelInput(
+  model: Pick<MmrRegisteredModelLike, "input">,
+  requiredInput: readonly MmrModelInputKind[] | undefined,
+): MmrModelInputKind[] {
+  if (!requiredInput || requiredInput.length === 0) return [];
+  const input = Array.isArray(model.input) ? model.input : [];
+  return requiredInput.filter((kind) => !input.includes(kind));
+}
+
 function candidateReason(candidate: Pick<MmrModelCandidateResolution, "registered" | "authenticated" | "attempted" | "applied" | "reason">): string {
   if (candidate.reason) return candidate.reason;
   if (!candidate.registered) return "not registered";
@@ -245,6 +268,7 @@ function enumerateCandidates<TModel extends MmrRegisteredModelLike>(
   normalizedPreferences: readonly MmrModelPreference[],
   registry: MmrModelRegistryLike<TModel>,
   modeThinkingLevel: ThinkingLevel | undefined,
+  requiredInput?: readonly MmrModelInputKind[],
 ): { candidates: MmrModelCandidateResolution[]; registeredModels: Map<number, TModel> } {
   const candidates: MmrModelCandidateResolution[] = [];
   const registeredModels = new Map<number, TModel>();
@@ -267,9 +291,11 @@ function enumerateCandidates<TModel extends MmrRegisteredModelLike>(
       // the enumeration error from getAll() only when no per-route probe error
       // is available.
       const probeError = authProbe.error ?? subscriptionProbe.error ?? enumerationError;
+      const missingInput = registeredModel ? listMissingMmrModelInput(registeredModel, requiredInput) : [];
       let reason: string | undefined;
       if (!registeredModel) reason = probeError ? `not registered (${probeError})` : "not registered";
       else if (!authProbe.value) reason = probeError ?? "registered but not authenticated";
+      else if (missingInput.length > 0) reason = `no ${missingInput.join(" or ")} input`;
       const candidate: MmrModelCandidateResolution = {
         requestedModel: preference.model,
         provider,
@@ -283,7 +309,8 @@ function enumerateCandidates<TModel extends MmrRegisteredModelLike>(
         reason,
       };
       const index = candidates.push(candidate) - 1;
-      if (registeredModel) registeredModels.set(index, registeredModel);
+      // Only a candidate with every required input kind can be selected.
+      if (registeredModel && missingInput.length === 0) registeredModels.set(index, registeredModel);
     }
   }
 
@@ -295,14 +322,20 @@ function enumerateCandidates<TModel extends MmrRegisteredModelLike>(
  * preference list. Worker-tool / subagent extensions use this to plan a route
  * without applying it through Pi's `setModel`.
  *
- * The first registered+authenticated candidate wins. Use `candidates` for
- * diagnostics (which routes were skipped and why).
+ * The first registered+authenticated candidate that accepts every
+ * `requiredInput` kind wins. Use `candidates` for diagnostics (which routes
+ * were skipped and why).
  */
 export function selectMmrModelRoute<TModel extends MmrRegisteredModelLike>(
   args: SelectMmrModelRouteArgs<TModel>,
 ): MmrModelRouteSelection<TModel> {
   const normalizedPreferences = normalizePreferences(args.modelPreferences);
-  const { candidates, registeredModels } = enumerateCandidates(normalizedPreferences, args.registry, args.modeThinkingLevel);
+  const { candidates, registeredModels } = enumerateCandidates(
+    normalizedPreferences,
+    args.registry,
+    args.modeThinkingLevel,
+    args.requiredInput,
+  );
 
   for (const [index, candidate] of candidates.entries()) {
     const registeredModel = registeredModels.get(index);

@@ -1,7 +1,7 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { MMR_MODES } from "./modes.js";
 import { MMR_SUBAGENT_SHARED_DENY_TOOLS } from "./subagent-tool-policy.js";
-import type { MmrModeKey, MmrModelPreference } from "./types.js";
+import type { MmrModeKey, MmrModelInputKind, MmrModelPreference } from "./types.js";
 
 /**
  * Subagent prompt-assembly route.
@@ -126,6 +126,15 @@ export interface MmrSubagentProfile {
   /** Optional maximum inference turns for future in-process runners. */
   readonly maxTurns?: number;
   /**
+   * Input kinds the worker's model must accept, e.g. `["image"]` for a
+   * worker that reads images. The resolver skips every route whose
+   * registered model does not list each kind in its `input` (a model
+   * without the array counts as text only), on parent spawn, child
+   * activation and a settings override alike. Omitted, any model may run
+   * the worker.
+   */
+  readonly requiredInput?: readonly MmrModelInputKind[];
+  /**
    * Optional nonzero-exit output policy; see
    * {@link MmrSubagentPartialOutputPolicy}. Omitted profiles default to
    * `"fail-on-nonzero"`; only `task-subagent` declares
@@ -137,8 +146,9 @@ export interface MmrSubagentProfile {
    * Defaults to `true` when omitted for built-in and generic runtime profiles.
    * Profiles that require explicit background opt-in, such as custom Markdown
    * subagents, declare this field on every registered profile. `oracle`
-   * (always blocking by contract) and `history-reader` (an internal extraction
-   * worker, not a public background agent) declare `false`.
+   * and `media` (always blocking by contract) and `history-reader` (an
+   * internal extraction worker, not a public background agent) declare
+   * `false`.
    */
   readonly backgroundable?: boolean;
   /**
@@ -354,6 +364,34 @@ const MMR_SUBAGENT_PROFILE_TABLE: Record<string, MmrSubagentProfile> = {
     maxTurns: 24,
     promptRoute: "standalone",
     promptBuilder: "reviewer",
+    allowMcp: false,
+    allowToolbox: false,
+    enforceLockedMode: false,
+    persistSubagentState: false,
+  } satisfies MmrSubagentProfile),
+
+  media: deepFreeze({
+    name: "media",
+    displayName: "View Media",
+    // Finder's fast routes, in its order, kept where Pi's model catalogue
+    // lists image input for the model: claude-haiku-4-5, gpt-5.4-mini and
+    // gemini-3.5-flash all do. The antigravity route is registered by
+    // another provider extension, so its input is only known at run time;
+    // `requiredInput` re-checks every route against the registry then.
+    modelPreferences: [
+      { model: "gemini-3.5-flash", providers: ["antigravity"] },
+      { model: "gpt-5.4-mini" },
+      { model: "claude-haiku-4-5" },
+    ],
+    thinkingLevel: "low",
+    // Pi's `read` sends image files to the model as attachments.
+    tools: ["read"],
+    maxTurns: 3,
+    requiredInput: ["image"],
+    // Answers inline for the caller, which waits on what the images show.
+    backgroundable: false,
+    promptRoute: "standalone",
+    promptBuilder: "media",
     allowMcp: false,
     allowToolbox: false,
     enforceLockedMode: false,

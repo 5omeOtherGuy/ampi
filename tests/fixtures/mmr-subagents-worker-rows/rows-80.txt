@@ -98,6 +98,31 @@
 
    ### input-validation (packages/api): 2 findings
    3 turns ↑12k ↓1.8k 3.5%/400k                          gpt-5.4-mini • reviewer
+=== view_media running · collapsed ===
+
+ ⠋ Viewing media · Quote the error text in the dialog
+=== view_media running · expanded ===
+
+ ⠋ Viewing media · Quote the error text in the dialog
+   ✓ read /work/repo/shots/error.png
+   ⠋ read /work/repo/shots/after.png
+=== view_media done · collapsed ===
+
+ ✓ Viewed media · Quote the error text in the dialog
+=== view_media done · expanded ===
+
+ ✓ Viewed media · Quote the error text in the dialog
+   ✓ read /work/repo/shots/error.png
+   The dialog reads "Disk full: free 2 GB to continue."
+   3 turns ↑12k ↓1.8k 3.5%/400k                        gpt-5.4-mini • view_media
+=== view_media refused before spawning · collapsed ===
+
+ ✗ Viewed media · Summarise the report
+=== view_media refused before spawning · expanded ===
+
+ ✗ Viewed media · Summarise the report
+   view_media: report.pdf is not an image it can read.
+   view_media: report.pdf is not an image it can read.
 === custom subagent done · collapsed ===
 
  ✓ Subagent (security_audit) finished · Audit the token handling

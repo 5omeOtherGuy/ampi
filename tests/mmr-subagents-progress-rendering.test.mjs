@@ -200,6 +200,36 @@ const ROW_SCENARIOS = [
     }),
   },
   {
+    name: "view_media running",
+    tool: "view_media",
+    args: { paths: ["shots/error.png", "shots/after.png"], objective: "Quote the error text in the dialog" },
+    result: { content: [{ type: "text", text: "" }], details: { usage: USAGE, trail: [
+      { type: "user", text: "Objective: Quote the error text in the dialog\n\nImages to read (absolute paths, with the type detected from their content):\n1. /work/repo/shots/error.png (image/png)\n2. /work/repo/shots/after.png (image/png)" },
+      toolItem("read", { path: "/work/repo/shots/error.png" }),
+      toolItem("read", { path: "/work/repo/shots/after.png" }, "running"),
+    ] } },
+    isPartial: true,
+  },
+  {
+    name: "view_media done",
+    tool: "view_media",
+    args: { paths: ["shots/error.png"], objective: "Quote the error text in the dialog" },
+    result: ok("The dialog reads \"Disk full: free 2 GB to continue.\"", { status: "success", trail: [
+      toolItem("read", { path: "/work/repo/shots/error.png" }),
+      { type: "toolResult", toolName: "read", text: "Read image file [image/png]", imageCount: 1 },
+      { type: "assistant", text: "The dialog reads \"Disk full: free 2 GB to continue.\"" },
+    ] }),
+  },
+  {
+    name: "view_media refused before spawning",
+    tool: "view_media",
+    args: { paths: ["report.pdf"], objective: "Summarise the report" },
+    result: {
+      content: [{ type: "text", text: "view_media: report.pdf is not an image it can read." }],
+      details: { status: "validation-error", errorMessage: "view_media: report.pdf is not an image it can read.", exitCode: null, signal: null, aborted: false, trail: [] },
+    },
+  },
+  {
     name: "custom subagent done",
     tool: "sa__security_audit",
     args: { task: "Audit the token handling" },
@@ -242,6 +272,8 @@ describe("worker rows", () => {
     assert.equal(collapsedRow("oracle", { task: "t" }, ok("", { exitCode: 1, errorMessage: "boom" })), " ✗ Consulted oracle · t");
     assert.equal(collapsedRow("librarian", { query: "q" }, running, true), " ⠋ Researching with librarian · q");
     assert.equal(collapsedRow("reviewer", { diff_description: "d" }, ok("", { aborted: true, stopReason: "aborted" })), " ⊘ Reviewed changes · d");
+    assert.equal(collapsedRow("view_media", { paths: ["a.png"], objective: "o" }, running, true), " ⠋ Viewing media · o");
+    assert.equal(collapsedRow("view_media", { paths: ["a.png"], objective: "Quote the error" }, ok("a", { status: "success" })), " ✓ Viewed media · Quote the error");
     assert.equal(collapsedRow("Task", { description: "d", prompt: "p" }, running, true), " ⠋ Running subagent · d");
     assert.equal(collapsedRow("Task", { description: "d", prompt: "p", capabilityProfile: "read-only" }, ok("a")), " ✓ Subagent (read-only) finished · d");
     assert.equal(collapsedRow("sa__security_audit", { task: "t" }, ok("a")), " ✓ Subagent (security_audit) finished · t");

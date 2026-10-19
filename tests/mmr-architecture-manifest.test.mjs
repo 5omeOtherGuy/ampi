@@ -203,6 +203,21 @@ describe("architecture manifest guardrails", () => {
     );
   });
 
+  it("view_media is an ampi-workers tool in the manifest, the status catalog and every locked mode but free", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/tool-registry.ts");
+    const { MMR_MODES } = await importSource("extensions/ampi-core/modes.ts");
+    const manifestTools = MMR_EXTENSION_MANIFEST.find((entry) => entry.name === "ampi-workers")?.tools ?? [];
+    assert.ok(manifestTools.includes("view_media"));
+    const [decision] = resolveMmrTools(["view_media"], []).decisions;
+    assert.equal(decision.status, "deferred");
+    assert.equal(decision.owner, "ampi-workers");
+    for (const mode of ["low", "medium", "high", "ultra"]) {
+      assert.ok(MMR_MODES[mode].tools.includes("view_media"), `${mode} must allow view_media`);
+    }
+    assert.equal(MMR_MODES.free.tools.includes("view_media"), false);
+  });
+
   it("ampi-shell manifest tools match its tools, the status catalog and every locked mode's allowlist", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const { MMR_SHELL_TOOL_NAMES } = await importSource("extensions/ampi-shell/index.ts");

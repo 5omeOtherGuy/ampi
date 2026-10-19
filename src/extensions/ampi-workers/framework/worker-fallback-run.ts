@@ -62,9 +62,10 @@ type WorkerFallbackCtx = Pick<ExtensionContext, "ui" | "hasUI" | "signal"> & {
 
 /**
  * Thin pass-through over {@link runMmrWorkerWithModelFallback} that fixes the
- * two bits every subagent caller repeats verbatim: outcome classification
- * under the named profile's nonzero-exit policy (default `fail-on-nonzero`)
- * and resolving the fallback registry from `ctx.modelRegistry`. The
+ * bits every subagent caller repeats verbatim: outcome classification
+ * under the named profile's nonzero-exit policy (default `fail-on-nonzero`),
+ * the profile's `requiredInput` for the offered models, and resolving the
+ * fallback registry from `ctx.modelRegistry`. The
  * per-subagent `run` closure is passed through unchanged.
  */
 export function runMmrWorkerWithSharedFallback(params: {
@@ -77,6 +78,7 @@ export function runMmrWorkerWithSharedFallback(params: {
   candidatePreferences: readonly MmrModelPreference[];
   run: (runArgs: MmrWorkerFallbackRunArgs) => Promise<MmrWorkerFallbackRunOutput>;
 }): Promise<MmrWorkerFallbackOutcome> {
+  const requiredInput = getMmrSubagentProfile(params.profileName)?.requiredInput;
   return runMmrWorkerWithModelFallback({
     ctx: params.ctx,
     ...(params.sessionId !== undefined ? { sessionId: params.sessionId } : {}),
@@ -87,5 +89,6 @@ export function runMmrWorkerWithSharedFallback(params: {
     candidatePreferences: params.candidatePreferences,
     classifyOutcome: (result) => classifyMmrWorkerOutcomeForProfile(result, getMmrSubagentProfile(params.profileName)),
     run: params.run,
+    ...(requiredInput !== undefined ? { requiredInput } : {}),
   });
 }

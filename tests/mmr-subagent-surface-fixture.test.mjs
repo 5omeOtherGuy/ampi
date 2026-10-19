@@ -558,3 +558,51 @@ describe("mmr-subagent-surface: librarian fixture", () => {
     assertFixtureMatches("librarian-github.md", rendered);
   });
 });
+
+describe("mmr-subagent-surface: media fixture", () => {
+  let assembleMmrSubagentSurface;
+  let renderMmrPromptDebugFixture;
+  let clearMmrSubagentPromptBuilders;
+  let registerMmrSubagentsPromptBuilders;
+  let getMmrSubagentProfile;
+
+  beforeEach(async () => {
+    const assembly = await importSource("extensions/ampi-core/subagent-prompt-assembly.ts");
+    const renderer = await importSource("extensions/ampi-core/prompt-debug-renderer.ts");
+    const prompts = await importSource("extensions/ampi-workers/profiles/prompts.ts");
+    const profiles = await importSource("extensions/ampi-core/subagent-profiles.ts");
+    assembleMmrSubagentSurface = assembly.assembleMmrSubagentSurface;
+    renderMmrPromptDebugFixture = renderer.renderMmrPromptDebugFixture;
+    clearMmrSubagentPromptBuilders = assembly.clearMmrSubagentPromptBuilders;
+    registerMmrSubagentsPromptBuilders = prompts.registerMmrSubagentsPromptBuilders;
+    getMmrSubagentProfile = profiles.getMmrSubagentProfile;
+    clearMmrSubagentPromptBuilders();
+    registerMmrSubagentsPromptBuilders();
+  });
+
+  it("pins the rendered debug surface for the media subagent behind view_media", () => {
+    const profile = getMmrSubagentProfile("media");
+    const result = assembleMmrSubagentSurface({
+      profile,
+      baseSystemPrompt: "",
+      // finder's manifest offers grep, find, read and bash; media keeps read only.
+      activeToolManifest: buildFinderActiveManifest(),
+      cwd: "/abs/repo",
+    });
+
+    const rendered = renderMmrPromptDebugFixture(result);
+
+    assert.match(rendered, /^=== System Messages ===/m);
+    assert.match(rendered, /^=== Tools ===/m);
+    assert.match(rendered, /^# read$/m);
+    assert.doesNotMatch(rendered, /^# grep$/m);
+    assert.doesNotMatch(rendered, /^# find$/m);
+    assert.doesNotMatch(rendered, /^# bash$/m);
+    assert.match(rendered, /You look at images for another agent that cannot see them/);
+    assert.match(rendered, /Working directory: \/abs\/repo/);
+    assert.match(rendered, /Quote visible text exactly/);
+    assertNoRepeatedLongSystemPromptLines("media", rendered);
+
+    assertFixtureMatches("media.md", rendered);
+  });
+});

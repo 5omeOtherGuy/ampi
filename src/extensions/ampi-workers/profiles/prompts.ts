@@ -316,6 +316,40 @@ export function buildReviewerWorkerSystemPrompt(cwd: string): string {
   ].join("\n");
 }
 
+/**
+ * Build the media worker system prompt. The worker reads the image files
+ * named in its first message with Pi's `read`, which hands them to the
+ * model as image attachments, and answers the caller's objective from what
+ * they show. Only its final answer reaches the caller.
+ *
+ * Owned by `ampi-workers`: concrete prompt text lives here, not in
+ * `ampi-core`. The framework resolves this through the
+ * `registerMmrSubagentsPromptBuilders()` wiring below.
+ */
+export function buildMediaWorkerSystemPrompt(cwd: string): string {
+  const safeCwd = typeof cwd === "string" && cwd.trim().length > 0 ? cwd : "unknown";
+  return [
+    "You look at images for another agent that cannot see them and report what they show.",
+    "",
+    "## Task",
+    "The first message gives an objective and a numbered list of image files. Answer the objective from what the images show.",
+    "",
+    "## Environment",
+    `Working directory: ${safeCwd}`,
+    "",
+    "## Method",
+    "- Read every listed file with the read tool, using the absolute path as given; read them in parallel. The read result carries the image itself.",
+    "- Look only at those files. Do not search for other files or guess at content you were not given.",
+    "- Base every statement on what is visible. When a detail is too small, cut off or blurred to make out, say so instead of guessing.",
+    "- Quote visible text exactly, keeping its spelling, case and punctuation, inside quotation marks.",
+    "- When an image cannot be read, or does not show what the objective asks about, say so plainly and name the file.",
+    "- When there are several images, refer to each by its number or file name.",
+    "",
+    "## Answer",
+    "Your final message is the only thing the caller sees: it has not seen the images and cannot ask you anything. Keep it short and self-contained. Answer the objective first, then add only the details that support the answer.",
+  ].join("\n");
+}
+
 export function buildTaskWorkerRoleBlock(): string {
   return [
     "## Task Worker Role",
@@ -354,6 +388,9 @@ const librarianPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildLibra
 /** Prompt-builder seam for the `reviewer` standalone subagent. */
 const reviewerPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildReviewerWorkerSystemPrompt(cwd);
 
+/** Prompt-builder seam for the `media` standalone subagent behind `view_media`. */
+const mediaPromptBuilder: MmrSubagentPromptBuilder = ({ cwd }) => buildMediaWorkerSystemPrompt(cwd);
+
 /** Prompt-builder seam for the mode-derived Task worker role block. */
 const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlock();
 
@@ -365,7 +402,7 @@ const taskPromptBuilder: MmrSubagentPromptBuilder = () => buildTaskWorkerRoleBlo
  *
  * Called once during extension init (`createMmrWorkersExtension`) so
  * ampi-core's `assembleMmrSubagentSurface` can resolve finder, oracle,
- * librarian, reviewer, and Task without a separate bootstrap step.
+ * librarian, reviewer, media, and Task without a separate bootstrap step.
  * `history-reader` is owned and registered by `ampi-history`.
  */
 export function registerMmrSubagentsPromptBuilders(): void {
@@ -373,5 +410,6 @@ export function registerMmrSubagentsPromptBuilders(): void {
   registerMmrSubagentPromptBuilder("oracle", oraclePromptBuilder);
   registerMmrSubagentPromptBuilder("librarian", librarianPromptBuilder);
   registerMmrSubagentPromptBuilder("reviewer", reviewerPromptBuilder);
+  registerMmrSubagentPromptBuilder("media", mediaPromptBuilder);
   registerMmrSubagentPromptBuilder("task-subagent", taskPromptBuilder);
 }

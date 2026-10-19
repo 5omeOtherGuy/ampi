@@ -252,6 +252,14 @@ export type MmrWorkerRunPreparer<TDetails = unknown> = (
 ) => MmrPreparedWorkerRunResult<TDetails>;
 
 /**
+ * Run preparer of a blocking tool call. Unlike {@link MmrWorkerRunPreparer},
+ * which the background surface calls synchronously, it may resolve later.
+ */
+export type MmrBlockingWorkerRunPreparer<TDetails = unknown> = (
+  ...args: Parameters<MmrWorkerRunPreparer<TDetails>>
+) => MmrPreparedWorkerRunResult<TDetails> | Promise<MmrPreparedWorkerRunResult<TDetails>>;
+
+/**
  * Build the per-call run preparer for a worker spec: params validation →
  * pre-spawn gate → parent-side invocation resolution → runner options →
  * a registry-ready prepared run whose thunk wraps the session-scoped model
@@ -587,9 +595,11 @@ export function createWorkerTool<TParams, TDetails, TRun = void>(
      * Run preparer the blocking execute uses instead of the spec's own.
      * A tool that wraps its prepared run (the reviewer adds its check
      * children) passes the same preparer its background surface uses, so
-     * both surfaces still share one preparation path.
+     * both surfaces still share one preparation path. A blocking-only tool
+     * may return a promise, for a check that has to read files before the
+     * run is prepared (`view_media` detects image types by content).
      */
-    prepareRun?: MmrWorkerRunPreparer<TDetails>;
+    prepareRun?: MmrBlockingWorkerRunPreparer<TDetails>;
   },
 ): ToolDefinition {
   const prepareRun = factoryOptions.prepareRun ?? createWorkerRunPreparer(spec, deps, factoryOptions);
@@ -678,7 +688,10 @@ export function createWorkerTool<TParams, TDetails, TRun = void>(
       // 1. Prepare the run: params → gate → invocation resolution → runner
       //    options → run thunk + projector. Pre-spawn failures return their
       //    shaped result without registering anything.
-      const prep = prepareRun(rawParams, ctx, onUpdate ? { onUpdate } : {});
+      const pending = prepareRun(rawParams, ctx, onUpdate ? { onUpdate } : {});
+      // Await only an async preparer, so a synchronous one registers its run
+      // in the same tick as before.
+      const prep = pending instanceof Promise ? await pending : pending;
       if (!prep.ok) return prep.result;
       const prepared = prep.prepared;
       prepared.runMode = "blocking";

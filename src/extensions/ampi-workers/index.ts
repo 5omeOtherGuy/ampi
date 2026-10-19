@@ -7,6 +7,7 @@ import { resetMmrWorkerFallbackState } from "./framework/fallback.js";
 import { type FinderToolDeps, maybeNumberFinderReadToolResult, registerFinderTool } from "./builtin-workers/finder.js";
 import { type LibrarianToolDeps, isLibrarianGithubToolPrerequisiteRegistered, registerLibrarianTool } from "./builtin-workers/librarian.js";
 import { type ReviewerToolDeps, registerReviewerTool } from "./builtin-workers/reviewer.js";
+import { type ViewMediaToolDeps, registerViewMediaTool } from "./builtin-workers/view-media.js";
 import { type MmrAdvisorToolDeps, registerOracleTool } from "./builtin-workers/oracle.js";
 import { registerMmrSubagentsPromptBuilders } from "./profiles/prompts.js";
 import { type TaskToolDeps, registerTaskParentPromptCapture, registerTaskTool } from "./builtin-workers/task.js";
@@ -40,6 +41,7 @@ registerAmpiOwnedExtensionPath(fileURLToPath(import.meta.url));
  * - `oracle` exposes the matching {@link MmrAdvisorToolDeps} seams.
  * - `task` exposes the matching {@link TaskToolDeps} seams.
  * - `librarian` exposes the matching {@link LibrarianToolDeps} seams.
+ * - `viewMedia` exposes the matching {@link ViewMediaToolDeps} seams.
  * - `asyncTasks` exposes the background-task seams ({@link AsyncTaskToolDeps}).
  */
 export interface MmrWorkersFactoryOverrides {
@@ -48,6 +50,7 @@ export interface MmrWorkersFactoryOverrides {
   task?: TaskToolDeps;
   librarian?: LibrarianToolDeps;
   reviewer?: ReviewerToolDeps;
+  viewMedia?: ViewMediaToolDeps;
   asyncTasks?: AsyncTaskToolDeps;
 }
 
@@ -82,6 +85,7 @@ export function createMmrWorkersExtension(overrides: MmrWorkersFactoryOverrides 
     registerTaskTool(pi, overrides.task ?? {});
     registerLibrarianTool(pi, overrides.librarian ?? {});
     registerReviewerTool(pi, overrides.reviewer ?? {});
+    registerViewMediaTool(pi, overrides.viewMedia ?? {});
     pi.on("tool_result", maybeNumberFinderReadToolResult);
     // Clear session-scoped worker-model fallback state at session
     // boundaries so one session\'s failure counts and stored overrides can
@@ -117,6 +121,7 @@ export function createMmrWorkersExtension(overrides: MmrWorkersFactoryOverrides 
       Task: true,
       librarian: () => isLibrarianGithubToolPrerequisiteRegistered(pi),
       reviewer: true,
+      viewMedia: true,
       asyncTasks: true,
     };
     registerMmrFeatureGateProvider(createMmrWorkersFeatureGateProvider(capabilities));

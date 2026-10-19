@@ -148,7 +148,8 @@ function describeCandidates(candidates: readonly MmrModelCandidateResolution[]):
  *
  * Steps:
  *  1. Pick the first registered+authenticated provider/model route from
- *     `profile.modelPreferences` via `selectMmrModelRoute`.
+ *     `profile.modelPreferences` via `selectMmrModelRoute`, skipping models
+ *     that lack an input kind named in `profile.requiredInput`.
  *  2. If `explicitModel` is supplied, require it to match the resolved
  *     route (provider/id or bare id). Mismatch fails closed.
  *  3. If `explicitTools` is supplied, require an exact (order-independent)
@@ -177,6 +178,7 @@ export function resolveMmrSubagentRoute<TModel extends MmrRegisteredModelLike>(
     modelPreferences: profile.modelPreferences,
     modeThinkingLevel: profile.thinkingLevel,
     registry,
+    ...(profile.requiredInput !== undefined ? { requiredInput: profile.requiredInput } : {}),
   });
 
   for (const candidate of route.candidates) {
