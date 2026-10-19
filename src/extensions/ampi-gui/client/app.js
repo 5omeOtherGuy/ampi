@@ -135,8 +135,8 @@ function notify(text, level = "info") {
 }
 
 const titlebar = mountTitlebar({ post, notify, onChanged: () => refreshSessions() });
-// Extensions' questions in a session ampi app runs; the shown session's routes answer them.
-const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: (route, body) => postTo(`${base}${route}`, body), notify });
+// Extensions' questions in a session ampi app runs; the session that asked answers them.
+const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: postTo, answerUrl: () => `${base}dialog`, notify });
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -627,9 +627,11 @@ const listTimer = setInterval(() => refreshSessions(), 60_000);
 const EMPTY_TEXT = empty.textContent;
 const HOME_TEXT = "Pick a session in the sidebar to read it or carry it on. A session nothing runs starts when you send it a message.";
 
+/** Stop following the shown session; its questions leave the page with it. */
 function closeStream() {
   source?.close();
   source = undefined;
+  dialogs.load(null);
 }
 
 /** Offer the shown session as `next` (`live`, `home` or a `bannerFor` access), with that banner. */
@@ -642,8 +644,6 @@ function setAccess(next, banner = {}) {
   composer.setEnabled(next === "live" || next === "dormant");
   composer.setLocked(banner.reason ?? null);
   if (next !== "live") {
-    // Only the session the page follows live asks here.
-    dialogs.load(null);
     busy = false;
     composer.setQueue(null);
     composer.setStatus({ busy: false, phase: "idle" });

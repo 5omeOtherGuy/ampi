@@ -53,7 +53,8 @@ export async function locateSessionAmpi(pi, cwd) {
  * @property {string} cwd The session's working directory.
  * @property {any} sessionManager Pi's `SessionManager` for the session (open, create or in memory).
  * @property {"tui" | "rpc" | "json" | "print"} mode What extensions see as `ctx.mode`.
- * @property {any} [uiContext] Pi's `ExtensionUIContext`; without one, extensions get Pi's no-op UI.
+ * @property {any} [uiContext] Pi's `ExtensionUIContext`; without one, extensions get Pi's no-op UI. With
+ *   one, Pi's theme is loaded from Pi's settings first, as Pi's command does, for `ctx.ui.theme`.
  * @property {boolean} connectMcp Whether the MCP extension connects the configured servers when the
  *   session starts, as Pi's command does. Without it, the MCP extension gets a transport that refuses
  *   every server: it still reads its configuration (which can activate codemode or tool_search), but
@@ -111,6 +112,8 @@ export async function createAmpiSdkSession({ cwd, sessionManager, mode, uiContex
   };
 
   const runtime = await sdk.createAgentSessionRuntime(createRuntime, { cwd, agentDir: sdk.getAgentDir(), sessionManager });
+  // As Pi's main() does before its modes start: extensions with a UI style text through `ctx.ui.theme`.
+  if (uiContext) sdk.initTheme(runtime.services.settingsManager.getTheme(), false);
   await runtime.session.bindExtensions({ mode, uiContext });
   return runtime;
 }

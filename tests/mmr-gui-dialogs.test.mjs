@@ -52,7 +52,10 @@ async function setup({ dialogs = true, idle = true } = {}) {
   const { pi } = createMockPi();
   const context = createMockExtensionContext({ cwd: "/work/app", sessionId: "s-1", idle });
   const time = fakeTime();
-  const bridge = createMmrGuiBridge(pi, { now: time.now, setTimer: time.setTimer, clearTimer: time.clearTimer, home: "/home/u" });
+  // Numbered ids keep the expectations readable; the default ids are random (tested below).
+  let issued = 0;
+  const createDialogId = () => `dialog-${++issued}`;
+  const bridge = createMmrGuiBridge(pi, { now: time.now, setTimer: time.setTimer, clearTimer: time.clearTimer, createDialogId, home: "/home/u" });
   bridge.start(context.ctx, { dialogs });
   const events = [];
   bridge.subscribe((event) => events.push(event));
@@ -90,6 +93,20 @@ describe("ampi-gui dialogs: the bridge's queue", () => {
       { id: "dialog-4", kind: "editor", title: "Commit message", message: null, options: [], placeholder: null, initial: "fix: …" },
     ]);
     assert.deepEqual(bridge.snapshot().dialogs, asked, "oldest first");
+  });
+
+  it("gives every question a random id, so two sessions never share one", async () => {
+    const { createMmrGuiDialogQueue } = await importSource("extensions/ampi-gui/dialogs.ts");
+    const ids = [];
+    for (let session = 0; session < 2; session++) {
+      const time = fakeTime();
+      const queue = createMmrGuiDialogQueue({ emit: (event, data) => event === "dialog" && ids.push(data.id), ...time });
+      queue.ask(confirm);
+      queue.ask(select);
+    }
+    assert.equal(ids.length, 4);
+    for (const id of ids) assert.match(id, /^dialog-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.equal(new Set(ids).size, 4, "each session's first question has its own id");
   });
 
   it("answers cancelled at once, with no event, in a session whose extensions ask in the terminal", async () => {
@@ -313,6 +330,61 @@ describe("ampi-gui dialogs: the page's modal", () => {
     assert.match(selectHtml, /id="ask-option-1"[^>]*aria-selected="false">B</);
     assert.match(dialogHtml({ ...base, kind: "input" }), /<input id="ask-field" type="text"/);
     assert.match(dialogHtml({ ...base, kind: "editor", initial: "a\nb" }), /<textarea id="ask-field"[^>]*>a\nb<\/textarea>/);
+  });
+
+  it("answers the session that asked, and draws another session's question anew under the same id", async () => {
+    const { mountDialogs } = await loadDialogs();
+    const { parseHTML } = await import("linkedom");
+    const { window, document } = parseHTML("<!doctype html><html><body><dialog id='ask'></dialog></body></html>");
+    const dialog = document.getElementById("ask");
+    // linkedom has no modal dialogs; only `open` matters here.
+    dialog.showModal = () => {
+      dialog.open = true;
+    };
+    dialog.close = () => {
+      dialog.open = false;
+    };
+    const saved = globalThis.document;
+    globalThis.document = document;
+    try {
+      const posts = [];
+      let base = "/s/session-a/api/";
+      const dialogs = mountDialogs({
+        dialog,
+        post: async (url, body) => {
+          posts.push([url, body]);
+          return { ok: true, status: 200, body: {} };
+        },
+        answerUrl: () => `${base}dialog`,
+        notify: () => {},
+      });
+      const click = async (answer) => {
+        dialog.querySelector(`[data-answer="${answer}"]`).dispatchEvent(new window.Event("click", { bubbles: true }));
+        await new Promise(setImmediate);
+      };
+      const runLs = { id: "dialog-1", kind: "select", title: "Run ls?", message: null, options: ["Reject", "Allow once"], placeholder: null, initial: null };
+      const pushForce = { id: "dialog-1", kind: "confirm", title: "Push --force to main?", message: "x", options: [], placeholder: null, initial: null };
+
+      // The page moves on to session B before B's snapshot arrives: A's question still answers A.
+      dialogs.load([runLs]);
+      base = "/s/session-b/api/";
+      await click("submit");
+      assert.deepEqual(posts.shift(), ["/s/session-a/api/dialog", { id: "dialog-1", value: "Reject" }]);
+      assert.equal(dialog.open, false);
+
+      // B's snapshot holds a different question under the same id: the modal shows B's, and the answer goes to B.
+      base = "/s/session-a/api/";
+      dialogs.load([runLs]);
+      base = "/s/session-b/api/";
+      dialogs.load([pushForce]);
+      assert.equal(dialog.querySelector("h2").textContent, "Push --force to main?");
+      assert.equal(dialog.querySelector('[data-answer="submit"]').textContent, "Yes");
+      await click("cancel");
+      assert.deepEqual(posts, [["/s/session-b/api/dialog", { id: "dialog-1", value: false }]]);
+      assert.equal(dialog.open, false);
+    } finally {
+      globalThis.document = saved;
+    }
   });
 
   it("moves through a listbox with the arrow keys, Home and End, stopping at the ends", async () => {

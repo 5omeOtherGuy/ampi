@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { MmrGuiDialogAnswer, MmrGuiDialogOptions, MmrGuiDialogRequest } from "../ampi-core/gui-host.js";
 import { MMR_GUI_MAX_PROMPT_LENGTH } from "./commands.js";
 import { MMR_GUI_HUB_IDLE_MS } from "./hub.js";
@@ -47,6 +48,12 @@ export interface MmrGuiDialogQueueOptions {
   clearTimer: (handle: unknown) => void;
   /** Defaults to {@link MMR_GUI_UNATTENDED_MS}. */
   unattendedMs?: number;
+  /**
+   * A new question's id. The default is random, so ids never repeat across
+   * the sessions one page switches between and an answer cannot reach
+   * another session's question.
+   */
+  createId?: () => string;
 }
 
 export interface MmrGuiDialogQueue {
@@ -95,8 +102,8 @@ interface Open {
 export function createMmrGuiDialogQueue(options: MmrGuiDialogQueueOptions): MmrGuiDialogQueue {
   const { emit, now, setTimer, clearTimer } = options;
   const unattendedMs = options.unattendedMs ?? MMR_GUI_UNATTENDED_MS;
+  const createId = options.createId ?? (() => `dialog-${randomUUID()}`);
   const open = new Map<string, Open>();
-  let nextId = 1;
   let watchers = 0;
   let unwatchedSince = now();
   let unattendedTimer: unknown;
@@ -142,7 +149,7 @@ export function createMmrGuiDialogQueue(options: MmrGuiDialogQueueOptions): MmrG
     ask(request, dialogOptions = {}) {
       const { signal, timeout } = dialogOptions;
       if (signal?.aborted) return Promise.resolve(CANCELLED);
-      const dialog = normalize(`dialog-${nextId++}`, request);
+      const dialog = normalize(createId(), request);
       return new Promise((resolve) => {
         let timer: unknown;
         const onAbort = () => close(dialog.id, CANCELLED, "abort");

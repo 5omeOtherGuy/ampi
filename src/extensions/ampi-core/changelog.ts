@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentDir, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMmrGuiHost } from "./gui-host.js";
 import { parseBoolEnv, readPreferredEnv } from "./internal/env.js";
 
 export const MMR_CHANGELOG_STATE_VERSION = 1;
@@ -511,10 +512,13 @@ function hasExistingSessionEntries(ctx: ExtensionContext): boolean {
   }
 }
 
-type ChangelogSkipReason = "!hasUI" | `event.reason=${string}` | "existing-session-entries";
+type ChangelogSkipReason = "!hasUI" | "app-session" | `event.reason=${string}` | "existing-session-entries";
 
 function getChangelogSkipReason(event: SessionStartLikeEvent, ctx: ExtensionContext): ChangelogSkipReason | undefined {
   if (!ctx.hasUI) return "!hasUI";
+  // A session `ampi app` runs answers ctx.ui on a page that may not be open yet; the
+  // notice stays pending for the next terminal session instead of being marked seen.
+  if (getMmrGuiHost()?.role === "session") return "app-session";
   if (event.reason === "reload" || event.reason === "resume" || event.reason === "fork") {
     return `event.reason=${event.reason}` as ChangelogSkipReason;
   }

@@ -52,14 +52,16 @@ const CLOSED = {
 const FOCUSABLE = "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex='0']";
 
 /**
- * Wire the modal. `post(route, body)` resolves `{ ok, status, body }`;
- * `notify(text)` shows a toast. The returned object takes the snapshot's
- * list (`load`) and the `dialog` and `dialog_closed` events.
+ * Wire the modal. `post(url, body)` resolves `{ ok, status, body }`;
+ * `answerUrl()` is where the shown session takes answers, read when a
+ * question arrives, so an answer goes to the session that asked even after
+ * the page moved on; `notify(text)` shows a toast. The returned object takes
+ * the snapshot's list (`load`) and the `dialog` and `dialog_closed` events.
  */
-export function mountDialogs({ dialog, post, notify }) {
-  /** The open questions, oldest first; the first one is shown. */
+export function mountDialogs({ dialog, post, answerUrl, notify }) {
+  /** The open questions, oldest first, each with the `url` that answers it; the first one is shown. */
   let queue = [];
-  /** The id of the question in the modal. */
+  /** The queue entry in the modal. */
   let shown = null;
   let sending = false;
   let active = 0;
@@ -67,7 +69,8 @@ export function mountDialogs({ dialog, post, notify }) {
   let returnFocus = null;
 
   const field = () => dialog.querySelector("#ask-field");
-  const current = () => queue.find((entry) => entry.id === shown);
+  const current = () => (shown && queue.includes(shown) ? shown : undefined);
+  const same = (a, b) => a.id === b.id && a.url === b.url;
 
   function setActive(index) {
     const list = field();
@@ -90,8 +93,8 @@ export function mountDialogs({ dialog, post, notify }) {
   function render() {
     const next = queue[0];
     if (!next) return hide();
-    if (shown === next.id) return;
-    shown = next.id;
+    if (shown === next) return;
+    shown = next;
     sending = false;
     active = 0;
     dialog.innerHTML = dialogHtml(next);
@@ -105,9 +108,9 @@ export function mountDialogs({ dialog, post, notify }) {
     if (input?.tagName === "TEXTAREA") input.setSelectionRange(input.value.length, input.value.length);
   }
 
-  function drop(id) {
-    queue = queue.filter((entry) => entry.id !== id);
-    if (shown === id) shown = null;
+  function drop(entry) {
+    queue = queue.filter((open) => open !== entry);
+    if (shown === entry) shown = null;
     render();
   }
 
@@ -116,10 +119,10 @@ export function mountDialogs({ dialog, post, notify }) {
     if (!entry || sending) return;
     sending = true;
     for (const button of dialog.querySelectorAll("button")) button.disabled = true;
-    const result = await post("dialog", { id: entry.id, ...body });
+    const result = await post(entry.url, { id: entry.id, ...body });
     // 409: closed meanwhile (another page answered, or it timed out); its dialog_closed event follows.
-    if (result.ok || result.status === 409) return drop(entry.id);
-    if (shown !== entry.id) return;
+    if (result.ok || result.status === 409) return drop(entry);
+    if (shown !== entry) return;
     sending = false;
     for (const button of dialog.querySelectorAll("button")) button.disabled = false;
     const error = dialog.querySelector(".ask-error");
@@ -188,19 +191,28 @@ export function mountDialogs({ dialog, post, notify }) {
   });
 
   return {
-    /** The snapshot's open questions; `null` or an empty list closes the modal. */
+    /**
+     * The shown session's open questions, from its snapshot; `null` or an
+     * empty list closes the modal. The page calls `load(null)` before it
+     * leaves a session.
+     */
     load(list) {
-      queue = Array.isArray(list) ? [...list] : [];
-      if (shown !== null && !queue.some((entry) => entry.id === shown)) shown = null;
+      const url = answerUrl();
+      const loaded = (Array.isArray(list) ? list : []).map((question) => ({ ...question, url }));
+      // A question still shown keeps its modal (and what was typed); any other one is drawn anew.
+      queue = loaded.map((entry) => queue.find((open) => same(open, entry)) ?? entry);
       render();
     },
-    add(entry) {
-      if (!queue.some((open) => open.id === entry.id)) queue.push(entry);
+    add(question) {
+      const entry = { ...question, url: answerUrl() };
+      if (!queue.some((open) => same(open, entry))) queue.push(entry);
       render();
     },
     closed({ id, answeredBy }) {
-      if (shown === id && CLOSED[answeredBy]) notify(CLOSED[answeredBy]);
-      drop(id);
+      const entry = queue.find((open) => same(open, { id, url: answerUrl() }));
+      if (!entry) return;
+      if (shown === entry && CLOSED[answeredBy]) notify(CLOSED[answeredBy]);
+      drop(entry);
     },
   };
 }

@@ -153,6 +153,8 @@ export interface MmrGuiBridgeOptions {
   /** Timers of the dialogs' timeouts and of the unattended cancel; default `setTimeout`, unref'd. */
   setTimer?: (callback: () => unknown, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /** Ids of new questions; default random (see `dialogs.ts`). */
+  createDialogId?: () => string;
 }
 
 type Content = "text" | "thinking" | "toolCall";
@@ -190,6 +192,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
         return handle;
       }),
     clearTimer: options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)),
+    createId: options.createDialogId,
   });
   /** Whether the page answers extensions' questions (a hosted session). */
   let asksPage = false;

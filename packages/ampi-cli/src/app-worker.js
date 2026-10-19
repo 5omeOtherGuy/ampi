@@ -68,7 +68,8 @@ const CANCELLED = Object.freeze({ cancelled: true });
  * `notice`. A dialog asked before ampi-gui set the handler, or whose handler
  * fails, resolves as cancelled: `undefined`, or `false` for confirm. The
  * other members do what Pi's RPC mode does for them without a client:
- * nothing, or an empty answer. Because a UI context is bound, Pi tells
+ * nothing, or an empty answer; `theme` is Pi's theme, which
+ * createAmpiSdkSession loads from Pi's settings. Because a UI context is bound, Pi tells
  * extensions `ctx.hasUI === true` (and `ctx.mode === "rpc"`), as in RPC mode.
  *
  * @returns {Record<string, any>} Pi's `ExtensionUIContext`.

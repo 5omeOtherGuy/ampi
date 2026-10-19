@@ -60,17 +60,21 @@ describe("ampi SDK session", () => {
   it("loads ampi and Pi's codemode, tool_search and MCP built-ins, serves the hosted GUI, and closes it on dispose", async () => {
     const ports = [];
     registerAmpiGuiHost({ token: TOKEN, ownerPid: process.pid, ready: (info) => ports.push(info.port) });
+    const uiContext = createAmpiAppUIContext();
     const runtime = await createAmpiSdkSession({
       cwd: project,
       sessionManager: pi.SessionManager.inMemory(project),
       mode: "rpc",
-      uiContext: createAmpiAppUIContext(),
+      uiContext,
       connectMcp: true,
       pi,
     });
     try {
       // With the worker's UI context bound, extensions see a UI, and ampi-gui answers their dialogs.
       assert.equal(runtime.session.extensionRunner.hasUI(), true);
+      // Extensions that check hasUI style text through the theme, as in Pi's own modes.
+      assert.ok(uiContext.theme instanceof pi.Theme);
+      assert.equal(typeof uiContext.theme.fg("accent", "x"), "string");
       assert.equal(typeof globalThis[AMPI_GUI_HOST_GLOBAL_KEY].dialog, "function");
       assert.equal(typeof globalThis[AMPI_GUI_HOST_GLOBAL_KEY].notice, "function");
       const loaded = runtime.services.resourceLoader.getExtensions().extensions.map((extension) => extension.path);

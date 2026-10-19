@@ -299,7 +299,7 @@ describe("mmr-core changelog parsing and update display", () => {
     }
   });
 
-  it("skips reload, fork, non-UI, and existing-entry sessions without consuming the pending changelog", async () => {
+  it("skips reload, fork, non-UI, app-hosted and existing-entry sessions without consuming the pending changelog", async () => {
     const { maybeShowMmrChangelogOnSessionStart } = await importChangelogModule();
     const tempRoot = mkdtempSync(path.join(tmpdir(), "ampi-skip-"));
     try {
@@ -333,6 +333,20 @@ describe("mmr-core changelog parsing and update display", () => {
       const noUi = createMockExtensionContext({ models: MODELS, hasUI: false });
       await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "new" }, noUi.ctx, { packageRoot, statePath, now: "2026-05-25T00:02:00.000Z" });
       assert.deepEqual(noUi.notifications, []);
+
+      // A session `ampi app` runs in a worker: it has a UI, but no terminal to show the notice in.
+      globalThis.__pi_ampi_gui_host_v1__ = { role: "session", token: "t", ownerPid: process.pid, ready() {} };
+      try {
+        const appSession = createMockExtensionContext({ models: MODELS });
+        await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "new" }, appSession.ctx, {
+          packageRoot,
+          statePath,
+          now: "2026-05-25T00:02:30.000Z",
+        });
+        assert.deepEqual(appSession.notifications, []);
+      } finally {
+        delete globalThis.__pi_ampi_gui_host_v1__;
+      }
 
       const withEntries = createMockExtensionContext({ models: MODELS, entries: [{ type: "message" }] });
       await maybeShowMmrChangelogOnSessionStart({ type: "session_start", reason: "new" }, withEntries.ctx, { packageRoot, statePath, now: "2026-05-25T00:03:00.000Z" });

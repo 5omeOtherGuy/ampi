@@ -179,14 +179,15 @@ describe("ampi-gui in a hosted session", () => {
     host.notice("Saved", "info");
     const transcript = JSON.parse((await send(port, { target: "/api/transcript", headers })).body);
     assert.deepEqual(
-      transcript.dialogs.map((dialog) => [dialog.id, dialog.kind, dialog.title]),
-      [["dialog-1", "select", "Approval Required"]],
+      transcript.dialogs.map((dialog) => [dialog.kind, dialog.title]),
+      [["select", "Approval Required"]],
     );
+    const [{ id }] = transcript.dialogs;
     const posted = await send(port, {
       method: "POST",
       target: "/api/dialog",
       headers: { ...headers, "Content-Type": "application/json", Origin: `http://127.0.0.1:${port}` },
-      body: JSON.stringify({ id: "dialog-1", value: "Reject" }),
+      body: JSON.stringify({ id, value: "Reject" }),
     });
     assert.equal(posted.status, 200);
     assert.deepEqual(await answer, { value: "Reject" });

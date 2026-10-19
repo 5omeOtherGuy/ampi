@@ -187,8 +187,9 @@ export function mountComposer({ root, post, mac = false, now }) {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    // The sidebar sheet makes the page around the composer inert.
-    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") })) {
+    // The sidebar sheet makes the page around the composer inert, and an open modal takes every Escape,
+    // also one pressed while focus has fallen out of it.
+    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") && !document.querySelector("dialog[open]") })) {
       chord.reset();
       return;
     }
