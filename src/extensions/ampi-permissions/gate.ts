@@ -84,15 +84,35 @@ export function formatMmrPermissionsRejectReason(toolName: string, decision: Mmr
   return `The ${toolName} call was rejected by the permissions rule ${ruleText(decision)}${forPart(decision)}.`;
 }
 
+/** Which rule, or which reason, made a call need approval. */
+function approvalCause(decision: MmrPermissionDecision): string {
+  if (decision.rule?.action === "delegate") {
+    return `The permissions rule ${ruleText(decision)} asks for approval${forPart(decision)}, because its program did not allow the call.`;
+  }
+  return decision.rule
+    ? `The permissions rule ${ruleText(decision)} asks for approval${forPart(decision)}.`
+    : `It needs approval because ${decision.reason ?? "a permissions rule asks for it"}${forPart(decision)}.`;
+}
+
 /**
  * Why a call that needs approval did not run in a session that cannot ask
  * (print and JSON runs). The one place this text lives.
  */
 export function formatMmrPermissionsNoUiReason(toolName: string, decision: MmrPermissionDecision): string {
-  const why = decision.rule
-    ? `The permissions rule ${ruleText(decision)} asks for approval${forPart(decision)}.`
-    : `It needs approval because ${decision.reason ?? "a permissions rule asks for it"}${forPart(decision)}.`;
-  return `The ${toolName} call needs the user's approval, and this run cannot ask for it. ${why} An allow rule in ampi.permissions lets such calls run without asking.`;
+  return `The ${toolName} call needs the user's approval, and this run cannot ask for it. ${approvalCause(decision)} An allow rule in ampi.permissions lets such calls run without asking.`;
+}
+
+/**
+ * Why a call that needs approval did not run in a subagent, which never
+ * opens a dialog. The subagent passes it on to the agent that started it.
+ */
+export function formatMmrPermissionsSubagentReason(toolName: string, decision: MmrPermissionDecision): string {
+  return `The ${toolName} call needs the user's approval, and a subagent cannot ask the user for it. ${approvalCause(decision)} Tell the main session: the call has to run there, where the user can approve it, or a rule in ampi.permissions has to allow it.`;
+}
+
+/** The warning for a delegate program that gave no answer; the call then asks. */
+export function formatMmrPermissionsDelegateWarning(program: string, problem: string): string {
+  return `ampi-permissions: the delegate program "${program}" ${problem}, so its calls ask for approval as an ask rule would.`;
 }
 
 export function formatMmrPermissionsFeedbackReason(feedback: string | undefined): string {

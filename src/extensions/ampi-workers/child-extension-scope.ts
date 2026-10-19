@@ -54,14 +54,19 @@ import { isRecord } from "../ampi-core/internal/json.js";
  *  - media        — read (built-in), which carries the images; only ampi-core needed.
  *  - task-subagent— read/bash/edit/write/skill (built-in) + read_web_page/
  *                   web_search (ampi-web) + finder (ampi-workers) + task_list
- *                   (ampi-tasks).
+ *                   (ampi-tasks). ampi-permissions owns no tool but gates the
+ *                   child's bash/edit/write calls with the user's rules.
+ *
+ * finder, oracle and librarian have no shell or edit tools, so they leave out
+ * ampi-permissions. Profiles without an entry (reviewer, custom subagents)
+ * load it through full discovery.
  */
 export const MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   finder: ["ampi-core"],
   oracle: ["ampi-core", "ampi-web", "ampi-history"],
   librarian: ["ampi-core", "ampi-github"],
   media: ["ampi-core"],
-  "task-subagent": ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks"],
+  "task-subagent": ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks", "ampi-permissions"],
 };
 
 /** Minimal host surface for enumerating loaded extension source paths. */

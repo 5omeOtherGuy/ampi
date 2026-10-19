@@ -27,7 +27,7 @@ describe("mmr-subagents child-extension-scope: keep map", () => {
     assert.deepEqual([...map.oracle], ["ampi-core", "ampi-web", "ampi-history"]);
     assert.deepEqual([...map.librarian], ["ampi-core", "ampi-github"]);
     assert.deepEqual([...map.media], ["ampi-core"]);
-    assert.deepEqual([...map["task-subagent"]], ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks"]);
+    assert.deepEqual([...map["task-subagent"]], ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks", "ampi-permissions"]);
     for (const names of Object.values(map)) {
       assert.ok([...names].includes("ampi-core"), "every profile keeps ampi-core");
     }
