@@ -1,8 +1,9 @@
 // Stream JSON output of the `ampi` command (packages/ampi-cli/src/stream-json.js):
 // hand-written Pi JSON event sequences against the records they must become,
 // a schema check of every record (tests/fixtures/ampi-cli/stream-json.schema.json),
-// what the init record reads from the session, and spawned runs against the
-// installed Pi with the scripted offline model (tests/fixtures/ampi-cli/faux-model).
+// subagent records made from the trail in a worker tool's progress, what the
+// init record reads from the session, and spawned runs against the installed Pi
+// with the scripted offline model (tests/fixtures/ampi-cli/faux-model).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -10,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { Check, Errors } from "typebox/schema";
-import { createStreamJsonEncoder, readStreamJsonContext } from "../packages/ampi-cli/src/stream-json.js";
+import { createStreamJsonEncoder, readStreamJsonContext, readWorkerRun } from "../packages/ampi-cli/src/stream-json.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -264,6 +265,436 @@ describe("ampi stream JSON: records from Pi's events", () => {
     assert.equal(Check(schema, { ...valid, message: { ...valid.message, stop_reason: "stop" } }), false);
     assert.equal(Check(schema, { ...valid, message: { ...valid.message, content: [{ type: "toolCall", id: "c" }] } }), false);
     assert.equal(Check(schema, { type: "result", subtype: "success", is_error: true, duration_ms: 1, num_turns: 1, result: "", session_id: "s" }), false);
+  });
+});
+
+// --- Worker tools: progress updates whose details carry ampi's worker run
+// envelope and the child's trail, written as ampi-workers sends them.
+
+const workerRun = (toolName, runMode = "blocking", status = "running") => ({
+  kind: "worker-run",
+  version: 1,
+  run: { profileName: toolName === "Task" ? "task-subagent" : toolName, toolName, agent: toolName, runMode, status, workerTools: ["bash", "read"] },
+  snapshot: {},
+  render: {},
+});
+const workerDetails = (toolName, trail, runMode, status) => ({
+  worker: `ampi-workers.${toolName}`,
+  status: "success",
+  usage: { input: 7, output: 3, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 1 },
+  workerTools: ["bash", "read"],
+  trail,
+  ...workerRun(toolName, runMode, status),
+});
+const progress = (toolCallId, trail, { toolName = "Task", runMode = "blocking", extra = {} } = {}) => ({
+  type: "tool_execution_update",
+  toolCallId,
+  toolName,
+  args: { prompt: "run probe", description: "Probe" },
+  partialResult: { content: [{ type: "text", text: "(working)" }], details: workerDetails(toolName, trail, runMode) },
+  ...extra,
+});
+const finished = (toolCallId, trail, { toolName = "Task", text = "Child done.", extra = {} } = {}) => ({
+  type: "tool_execution_end",
+  toolCallId,
+  toolName,
+  result: { content: [{ type: "text", text }], details: workerDetails(toolName, trail, "blocking", "succeeded") },
+  isError: false,
+  durationMs: 40,
+  ...extra,
+});
+/** One turn of the main agent that calls worker tools and reports their results. */
+const workerTurn = (calls, events) => {
+  const message = assistant(
+    calls.map(({ id, name }) => ({ type: "toolCall", id, name, arguments: { prompt: "run probe", description: "Probe" } })),
+    "toolUse",
+    usage(40, 6),
+  );
+  const results = calls.map(({ id, name }) => ({ role: "toolResult", toolCallId: id, toolName: name, content: [{ type: "text", text: `${name} done.` }], isError: false, timestamp: 4 }));
+  return [
+    { type: "turn_start" },
+    ...ends(message),
+    ...calls.map(({ id, name }) => ({ type: "tool_execution_start", toolCallId: id, toolName: name, args: { prompt: "run probe", description: "Probe" } })),
+    ...events,
+    ...results.flatMap(ends),
+    { type: "turn_end", message, toolResults: results },
+  ];
+};
+const finalTurn = () => turn(assistant([{ type: "text", text: "Parent done." }], "stop", usage(50, 2)));
+
+const said = (text) => ({ type: "assistant", text });
+const prompted = (text = "Task: run probe") => ({ type: "user", text });
+const toolItem = (toolCallId, status, extra = {}) => ({
+  type: "tool",
+  toolCallId,
+  toolName: "bash",
+  status,
+  args: { command: `echo ${toolCallId}` },
+  argsPreview: `{"command":"echo ${toolCallId}"}`,
+  ...(status === "running" ? {} : { isError: status === "failed" }),
+  ...extra,
+});
+
+/** A tool item as the child's answer first names it, before the child starts the tool with its arguments. */
+const named = (item) => {
+  const { args: _args, ...rest } = item;
+  return rest;
+};
+const childText = (parent, text) => ({
+  type: "assistant",
+  message: { type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason: null },
+  parent_tool_use_id: parent,
+  session_id: SESSION,
+});
+const childToolUse = (parent, id, input = { command: `echo ${id}` }) => ({
+  type: "assistant",
+  message: { type: "message", role: "assistant", content: [{ type: "tool_use", id, name: "bash", input }], stop_reason: null },
+  parent_tool_use_id: parent,
+  session_id: SESSION,
+});
+const childToolResult = (parent, id, content, isError = false) => ({
+  type: "user",
+  message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
+  parent_tool_use_id: parent,
+  session_id: SESSION,
+});
+/** The records of the events that a subagent produced, checked against the schema. */
+const childRecordsOf = (events, options) => {
+  const { records } = encode([header, ...events], options);
+  assertSchema(records);
+  return records.filter((record) => typeof record.parent_tool_use_id === "string");
+};
+/** A short form of child records, for sequences longer than a few records. */
+const summaryOf = (records) =>
+  records.map((record) => {
+    const block = record.message.content[0];
+    if (block.type === "text") return block.text;
+    if (block.type === "thinking") return `thinking: ${block.thinking}`;
+    if (block.type === "tool_use") return `use ${block.id}`;
+    return `result ${block.tool_use_id}: ${block.content}${block.is_error ? " (error)" : ""}`;
+  });
+
+describe("ampi stream JSON: subagent records from worker progress", () => {
+  it("puts a Task child's answers and tool calls between the parent's tool_use and tool_result", () => {
+    const task = { id: "toolu_task", name: "Task" };
+    const events = run(
+      "delegate probe",
+      workerTurn(
+        [task],
+        [
+          progress(task.id, [prompted()]),
+          progress(task.id, [prompted(), said("Running the probe.")]),
+          progress(task.id, [prompted(), said("Running the probe."), named(toolItem("call_echo", "running"))]),
+          progress(task.id, [prompted(), said("Running the probe."), toolItem("call_echo", "running")]),
+          progress(task.id, [prompted(), said("Running the probe."), toolItem("call_echo", "completed", { resultPreview: "child-ok" })]),
+          // The last answer arrives only with the final result.
+          finished(task.id, [prompted(), said("Running the probe."), toolItem("call_echo", "completed", { resultPreview: "child-ok" }), said("Child done: child-ok")]),
+        ],
+      ),
+      finalTurn(),
+    );
+    const { records } = encode(events);
+    assertSchema(records);
+    const callUsage = { input_tokens: 40, output_tokens: 6, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+    const answerUsage = { input_tokens: 50, output_tokens: 2, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+    assert.deepEqual(records, [
+      INIT,
+      userRecord([{ type: "text", text: "delegate probe" }]),
+      assistantRecord([{ type: "tool_use", id: "toolu_task", name: "Task", input: { prompt: "run probe", description: "Probe" } }], "tool_use", callUsage),
+      childText("toolu_task", "Running the probe."),
+      childToolUse("toolu_task", "call_echo"),
+      childToolResult("toolu_task", "call_echo", "child-ok"),
+      childText("toolu_task", "Child done: child-ok"),
+      userRecord([{ type: "tool_result", tool_use_id: "toolu_task", content: "Task done.", is_error: false }]),
+      assistantRecord([{ type: "text", text: "Parent done." }], "end_turn", answerUsage),
+      {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        duration_ms: 5,
+        num_turns: 2,
+        session_id: SESSION,
+        usage: { input_tokens: 90, output_tokens: 8, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        result: "Parent done.",
+      },
+    ]);
+  });
+
+  it("keeps init and result, turns and usage the same as without the child records", () => {
+    const task = { id: "toolu_task", name: "Task" };
+    const trail = [prompted(), said("Looking."), toolItem("call_a", "completed", { resultPreview: "a" }), said("Found it.")];
+    const withChild = encode(run("delegate probe", workerTurn([task], [progress(task.id, trail), finished(task.id, trail)]), finalTurn())).records;
+    const without = encode(run("delegate probe", workerTurn([task], []), finalTurn())).records;
+    assert.equal(withChild.filter((record) => typeof record.parent_tool_use_id === "string").length, 4);
+    assert.deepEqual(withChild[0], without[0]);
+    assert.deepEqual(withChild.at(-1), without.at(-1));
+    assert.equal(withChild.at(-1).num_turns, 2);
+    assert.deepEqual(
+      withChild.filter((record) => record.parent_tool_use_id === null),
+      without.filter((record) => record.parent_tool_use_id === null),
+    );
+  });
+
+  it("maps each kind of trail item, and gives a tool call one tool_result at most", () => {
+    const first = [
+      prompted(),
+      { type: "skillInvocation", name: "probe", location: "/skills/probe/SKILL.md", text: "Run the probe." },
+      { type: "thinking", text: "The probe needs a shell." },
+      said("Checking."),
+      toolItem("call_a", "completed", { resultPreview: "a-ok" }),
+      // A separate result for a tool whose item is still there adds nothing.
+      { type: "toolResult", toolCallId: "call_a", toolName: "bash", text: "a-again", isError: true },
+      // A result for a tool the stream never saw adds nothing.
+      { type: "toolResult", toolCallId: "call_unseen", toolName: "bash", text: "lost" },
+      { type: "bashExecution", command: "ls", output: "notes.md", exitCode: 0 },
+      { type: "custom", customType: "note", text: "A note." },
+      { type: "compactionSummary", summary: "Earlier work.", tokensBefore: 900 },
+      { type: "branchSummary", summary: "Another branch." },
+      { type: "toolResult", toolName: "bash", text: "no call id" },
+      toolItem("call_b", "running"),
+      // Items the stream cannot read are left out.
+      { type: "unknown-kind", text: "?" },
+      null,
+      "text",
+      { type: "tool", toolName: "bash", status: "running" },
+    ];
+    // The tool's result arrives as a separate item; its text is the result.
+    const second = [...first, { type: "toolResult", toolCallId: "call_b", toolName: "bash", text: "b-out", isError: true }];
+    // The tool item completes later; its result was already streamed.
+    const third = second.map((item) => (item?.toolCallId === "call_b" && item.type === "tool" ? toolItem("call_b", "completed", { resultPreview: "b-done" }) : item));
+    const events = [progress("toolu_task", first), progress("toolu_task", second), finished("toolu_task", third)];
+    assert.deepEqual(summaryOf(childRecordsOf(events)), ["Checking.", "use call_a", "result call_a: a-ok", "use call_b", "result call_b: b-out (error)"]);
+    assert.deepEqual(summaryOf(childRecordsOf(events, { thinking: true })), [
+      "thinking: The probe needs a shell.",
+      "Checking.",
+      "use call_a",
+      "result call_a: a-ok",
+      "use call_b",
+      "result call_b: b-out (error)",
+    ]);
+    const thinkingRecord = childRecordsOf(events, { thinking: true })[0];
+    assert.deepEqual(thinkingRecord.message.content, [{ type: "thinking", thinking: "The probe needs a shell." }]);
+  });
+
+  it("reports a failed child tool, a tool first seen finished, and no result for a tool still running at the end", () => {
+    const trail = [
+      prompted(),
+      toolItem("call_fail", "failed", { resultPreview: "exit code 1" }),
+      toolItem("call_bare", "completed"),
+      { ...toolItem("call_odd", "running"), args: ["not", "an", "object"] },
+    ];
+    const records = childRecordsOf([progress("toolu_task", trail), finished("toolu_task", trail)]);
+    assert.deepEqual(records, [
+      childToolUse("toolu_task", "call_fail"),
+      childToolResult("toolu_task", "call_fail", "exit code 1", true),
+      childToolUse("toolu_task", "call_bare"),
+      childToolResult("toolu_task", "call_bare", ""),
+      childToolUse("toolu_task", "call_odd", {}),
+    ]);
+  });
+
+  it("waits for a child tool's arguments before its tool_use, keeping the order", () => {
+    const events = [
+      progress("t", [prompted(), named(toolItem("call_1", "running")), named(toolItem("call_2", "running"))]),
+      progress("t", [prompted(), toolItem("call_1", "running"), named(toolItem("call_2", "running"))]),
+      progress("t", [prompted(), toolItem("call_1", "completed", { resultPreview: "one" }), named(toolItem("call_2", "running")), said("Later.")]),
+      progress("t", [prompted(), toolItem("call_1", "completed", { resultPreview: "one" }), toolItem("call_2", "running"), said("Later.")]),
+      // A tool that finishes, or a worker call that ends, before the arguments arrive streams without them.
+      progress("t", [prompted(), toolItem("call_1", "completed", { resultPreview: "one" }), toolItem("call_2", "running"), said("Later."), named(toolItem("call_3", "completed"))]),
+      finished("t", [prompted(), toolItem("call_1", "completed", { resultPreview: "one" }), toolItem("call_2", "running"), said("Later."), named(toolItem("call_3", "completed")), named(toolItem("call_4", "running"))]),
+    ];
+    const records = childRecordsOf(events);
+    assert.deepEqual(summaryOf(records), ["use call_1", "result call_1: one", "use call_2", "Later.", "use call_3", "result call_3: ", "use call_4"]);
+    assert.deepEqual(
+      records.filter((record) => record.type === "assistant" && record.message.content[0].type === "tool_use").map((record) => record.message.content[0].input),
+      [{ command: "echo call_1" }, { command: "echo call_2" }, {}, {}],
+    );
+  });
+
+  it("streams nothing twice when the same snapshot arrives again", () => {
+    const trail = [prompted(), said("Once."), toolItem("call_a", "running")];
+    const done = [prompted(), said("Once."), toolItem("call_a", "completed", { resultPreview: "a" })];
+    const events = [progress("t", trail), progress("t", trail), progress("t", trail), progress("t", done), progress("t", done), finished("t", done)];
+    assert.deepEqual(summaryOf(childRecordsOf(events)), ["Once.", "use call_a", "result call_a: a"]);
+  });
+
+  it("follows a trail at its limit that drops its oldest items, and skips items dropped before an update showed them", () => {
+    // A trail of at most four items, as ampi's is of at most 32.
+    const updates = [
+      [said("One"), toolItem("t1", "running")],
+      [said("One"), toolItem("t1", "completed", { resultPreview: "t1-ok" }), said("Two"), said("Three")],
+      // One item dropped.
+      [toolItem("t1", "completed", { resultPreview: "t1-ok" }), said("Two"), said("Three"), toolItem("t2", "running")],
+      // Two items dropped at once, while t2 completes.
+      [said("Three"), toolItem("t2", "completed", { resultPreview: "t2-ok" }), said("Four"), said("Five")],
+      [said("Five"), said("Six"), said("Seven"), said("Eight")],
+      // "Nine" and "Ten" were dropped before any update showed them.
+      [said("Eleven"), said("Twelve"), said("Again"), said("Again")],
+      [said("Twelve"), said("Again"), said("Again"), said("Again")],
+      // One to three new items fit here; the longest overlap wins, so nothing comes twice.
+      [said("Again"), said("Again"), said("Again"), said("Again")],
+    ];
+    const events = updates.map((trail) => progress("t", trail));
+    events.push(finished("t", updates.at(-1)));
+    assert.deepEqual(summaryOf(childRecordsOf(events)), [
+      "One",
+      "use t1",
+      "result t1: t1-ok",
+      "Two",
+      "Three",
+      "use t2",
+      "result t2: t2-ok",
+      "Four",
+      "Five",
+      "Six",
+      "Seven",
+      "Eight",
+      "Eleven",
+      "Twelve",
+      "Again",
+      "Again",
+      "Again",
+      "Again",
+    ]);
+  });
+
+  it("streams the new run of a child that a model fallback restarted, under the same call", () => {
+    const events = [
+      progress("t", [prompted(), said("First try."), toolItem("call_ls", "completed", { resultPreview: "a" })]),
+      // The new run's trail starts again from the prompt.
+      progress("t", [prompted()]),
+      progress("t", [prompted(), toolItem("call_ls", "completed", { resultPreview: "b" }), said("Second try.")]),
+      finished("t", [prompted(), toolItem("call_ls", "completed", { resultPreview: "b" }), said("Second try.")]),
+    ];
+    const records = childRecordsOf(events);
+    assert.deepEqual(summaryOf(records), ["First try.", "use call_ls", "result call_ls: a", "use call_ls", "result call_ls: b", "Second try."]);
+    assert.ok(records.every((record) => record.parent_tool_use_id === "t"));
+  });
+
+  it("reads the envelope's snapshot trail when the details have none, and ignores a trail that is not a list", () => {
+    const details = (trail, snapshotTrail) => {
+      const { trail: _trail, ...rest } = workerDetails("finder", [], "blocking");
+      return { ...rest, ...(trail === undefined ? {} : { trail }), snapshot: { trail: snapshotTrail } };
+    };
+    const update = (trail, snapshotTrail) => ({ ...progress("f", [], { toolName: "finder" }), partialResult: { content: [], details: details(trail, snapshotTrail) } });
+    assert.deepEqual(summaryOf(childRecordsOf([update(undefined, [said("From the snapshot.")])])), ["From the snapshot."]);
+    assert.deepEqual(childRecordsOf([update({ length: 1, 0: said("Not a list.") }, "nor this")]), []);
+  });
+
+  it("streams nothing for tools without the envelope and for background and internal runs", () => {
+    const trail = [prompted(), said("Hidden.")];
+    const bash = [
+      { type: "tool_execution_start", toolCallId: "call_sh", toolName: "bash", args: { command: "make" } },
+      { type: "tool_execution_update", toolCallId: "call_sh", toolName: "bash", args: {}, partialResult: { content: [{ type: "text", text: "building" }], details: { trail } } },
+      { type: "tool_execution_end", toolCallId: "call_sh", toolName: "bash", result: { content: [{ type: "text", text: "done" }] }, isError: false },
+    ];
+    const background = [
+      progress("call_bg", trail, { toolName: "start_task", runMode: "background" }),
+      progress("call_int", trail, { runMode: "internal" }),
+      { ...finished("call_poll", trail, { toolName: "task_wait" }), result: { content: [], details: workerDetails("Task", trail, "background", "succeeded") } },
+    ];
+    const unknownVersion = { ...progress("call_v2", trail), partialResult: { content: [], details: { ...workerDetails("Task", trail), version: 2 } } };
+    assert.deepEqual(childRecordsOf([...bash, ...background, unknownVersion]), []);
+  });
+
+  it("carries a finder child's sanitised links as its trail gives them", () => {
+    const text = "Defined in [src/app.ts#L4-L9](file:///work/app/src/app.ts#L4-L9); an outside copy is /etc/app.ts#L1.";
+    const records = childRecordsOf([progress("call_find", [prompted("Find the app"), said(text)], { toolName: "finder" })]);
+    assert.deepEqual(records, [childText("call_find", text)]);
+  });
+
+  it("names each worker call's own parent when two run at once", () => {
+    const task = { id: "toolu_task", name: "Task" };
+    const finder = { id: "toolu_find", name: "finder" };
+    const events = run(
+      "two at once",
+      workerTurn(
+        [task, finder],
+        [
+          progress(task.id, [prompted(), said("Task one.")]),
+          progress(finder.id, [prompted("Find"), said("Finder one.")], { toolName: "finder" }),
+          progress(task.id, [prompted(), said("Task one."), toolItem("call_t", "running")]),
+          progress(finder.id, [prompted("Find"), said("Finder one."), toolItem("call_f", "completed", { resultPreview: "f" })], { toolName: "finder" }),
+          finished(task.id, [prompted(), said("Task one."), toolItem("call_t", "completed", { resultPreview: "t" })]),
+          finished(finder.id, [prompted("Find"), said("Finder one."), toolItem("call_f", "completed", { resultPreview: "f" }), said("Finder two.")], { toolName: "finder" }),
+        ],
+      ),
+      finalTurn(),
+    );
+    const { records } = encode(events);
+    assertSchema(records);
+    const children = records.filter((record) => typeof record.parent_tool_use_id === "string");
+    assert.deepEqual(
+      children.map((record) => [record.parent_tool_use_id, summaryOf([record])[0]]),
+      [
+        ["toolu_task", "Task one."],
+        ["toolu_find", "Finder one."],
+        ["toolu_task", "use call_t"],
+        ["toolu_find", "use call_f"],
+        ["toolu_find", "result call_f: f"],
+        ["toolu_task", "result call_t: t"],
+        ["toolu_find", "Finder two."],
+      ],
+    );
+  });
+
+  it("names the outermost call the stream showed for a worker another tool called", () => {
+    const code = { id: "toolu_code", name: "codemode" };
+    const nested = (id, parent) => ({ extra: { parentToolCallId: parent }, id });
+    const batch = nested("toolu_code/1", "toolu_code");
+    const inner = nested("toolu_code/1/1", "toolu_code/1");
+    const events = run(
+      "script it",
+      workerTurn(
+        [code],
+        [
+          { type: "tool_execution_start", toolCallId: batch.id, toolName: "batch", args: {}, parentToolCallId: "toolu_code" },
+          { type: "tool_execution_start", toolCallId: inner.id, toolName: "Task", args: {}, parentToolCallId: batch.id },
+          progress(inner.id, [prompted(), said("Nested child.")], { extra: inner.extra }),
+          finished(inner.id, [prompted(), said("Nested child."), toolItem("call_n", "completed", { resultPreview: "n" })], { extra: inner.extra }),
+          { type: "tool_execution_end", toolCallId: batch.id, toolName: "batch", result: { content: [] }, isError: false, parentToolCallId: "toolu_code" },
+        ],
+      ),
+      finalTurn(),
+    );
+    const { records } = encode(events);
+    assertSchema(records);
+    const children = records.filter((record) => typeof record.parent_tool_use_id === "string");
+    assert.equal(children.length, 3);
+    assert.ok(children.every((record) => record.parent_tool_use_id === "toolu_code"));
+    // The parent id names a tool_use the stream showed.
+    assert.ok(records.some((record) => record.message?.content?.some((block) => block.type === "tool_use" && block.id === "toolu_code" && record.parent_tool_use_id === null)));
+  });
+
+  it("detects the worker run envelope as ampi-workers does", async () => {
+    const { readWorkerRunEnvelope } = await importSource("extensions/ampi-workers/rendering/worker-run-envelope.ts");
+    const valid = workerRun("Task");
+    const cases = [
+      valid,
+      workerRun("finder", "background"),
+      workerRun("oracle", "internal"),
+      { ...workerDetails("Task", []), trail: [said("x")] },
+      // Legacy details without the envelope.
+      { worker: "ampi-workers.Task", status: "success", trail: [] },
+      { ...valid, version: 2 },
+      { ...valid, version: "1" },
+      { ...valid, kind: "worker-runs" },
+      { ...valid, run: undefined },
+      { ...valid, run: [] },
+      { ...valid, run: { ...valid.run, runMode: "foreground" } },
+      { ...valid, run: { ...valid.run, status: 1 } },
+      { ...valid, run: { ...valid.run, agent: undefined } },
+      { ...valid, run: { ...valid.run, profileName: null } },
+      { ...valid, run: { ...valid.run, toolName: 7 } },
+      { ...valid, snapshot: "not an object" },
+      [valid],
+      null,
+      undefined,
+      "worker-run",
+    ];
+    for (const details of cases) {
+      assert.equal(readWorkerRun(details)?.runMode, readWorkerRunEnvelope(details)?.run.runMode, JSON.stringify(details));
+    }
   });
 });
 

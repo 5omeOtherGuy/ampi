@@ -127,6 +127,9 @@ ampi -x "list files" --stream-json | jq -c 'select(.type == "assistant") | .mess
 
 # The outcome, the number of turns and the token usage
 ampi -x "list files" --stream-json | jq -c 'select(.type == "result") | {subtype, num_turns, usage}'
+
+# What the subagents did, grouped under the tool call that started each one
+ampi -x "use Task to list the files" --stream-json | jq -c 'select(.parent_tool_use_id != null) | {parent: .parent_tool_use_id, content: .message.content}'
 ```
 
 The records, in order:
@@ -134,13 +137,18 @@ The records, in order:
 | Record | When | Fields |
 | --- | --- | --- |
 | `{"type": "system", "subtype": "init"}` | First | `cwd`; `session_id`, the session's id (the same as in ampi's thread index); `tools`, the names of the tools the model can call; `mcp_servers`; `agent_mode`, the ampi mode, left out when no ampi mode is active. |
-| `{"type": "user"}` | For the message and each tool result | `message.content`: `text` blocks, or one `tool_result` block (`tool_use_id`, `content` as text, `is_error`); `parent_tool_use_id`; `session_id`. |
-| `{"type": "assistant"}` | For each answer of the model | `message.content`: `text`, `tool_use` (`id`, `name`, `input`), and with `--stream-json-thinking` `thinking` (`thinking`) and `redacted_thinking` (`data`); `message.stop_reason`: `end_turn`, `tool_use`, `max_tokens` or `null`; `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`; `parent_tool_use_id`; `session_id`. |
+| `{"type": "user"}` | For the message and each tool result | `message.content`: `text` blocks, or one `tool_result` block (`tool_use_id`, `content` as text, `is_error`); `parent_tool_use_id`, `null` for the main agent's records and the id of the main agent's `tool_use` that started the subagent for a subagent's records; `session_id`. |
+| `{"type": "assistant"}` | For each answer of the model | `message.content`: `text`, `tool_use` (`id`, `name`, `input`), and with `--stream-json-thinking` `thinking` (`thinking`) and `redacted_thinking` (`data`); `message.stop_reason`: `end_turn`, `tool_use`, `max_tokens` or `null`; `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`; `parent_tool_use_id`, as for `user` records; `session_id`. |
 | `{"type": "result"}` | Last (with `--stream-json-input`, after each run) | `subtype` `success` with `result`, the final answer's text, or `error_during_execution` with `error`; `is_error`; `duration_ms`; `num_turns`; `session_id`; `usage`, summed over the run. |
 
 - **Exit status.** As in execute mode: `0` with a `success` result, `1` with an error result (a failed or aborted request, or an answer cut off at the model's output limit), `2` for a usage error, which prints no records. When Pi's automatic retry recovers from a failed request, the run succeeds.
 - **Usage errors.** `--stream-json` needs execute mode: `-x`, or redirected input or output. It replaces Pi's output format, so it cannot be combined with `--mode text`, `json` or `rpc`. `--stream-json-thinking` implies `--stream-json`.
-- **Not included.** Subagent output is not streamed, so `parent_tool_use_id` is always `null`. `mcp_servers` is always empty, because Pi does not tell extensions the connection state of its MCP servers. Images in messages and tool results are left out, and Pi has no turn limit, so there is no `error_max_turns` result. Pi's own diagnostics stay on stderr; an error that stops Pi before the session starts is reported there, without records.
+- **Subagents.** While the main agent runs a subagent tool such as `Task`, `finder`, `oracle` or `librarian`, the subagent's answers, its tool calls and their results are written as `assistant` and `user` records between the main agent's `tool_use` of that call and its `tool_result`, with `parent_tool_use_id` set to that call's id; with `--stream-json-thinking` its thinking too. They are made from the progress the subagent reports to the main agent, which keeps a short summary of what it did, so they are not a complete transcript:
+  - Text is shortened: answers and thinking to 4000 characters, tool results to 180, with whitespace collapsed.
+  - Subagent `assistant` records have `stop_reason: null` and no `usage`. The `result` record's `num_turns` and `usage` count the main agent only; a subagent's own usage is in the `details` of its tool result, which `ampi -x --mode json` shows.
+  - The summary holds the subagent's last 32 items; in a long run, items it dropped before the main agent saw them are missing from the stream.
+  - Background tasks (`start_task`, and what `task_poll` and `task_wait` report) are not streamed, nor are subagents a subagent starts: such a call is one tool call of its subagent. A subagent that another tool started, such as a codemode script, is grouped under the main agent's call of that tool.
+- **Not included.** `mcp_servers` is always empty, because Pi does not tell extensions the connection state of its MCP servers. Images in messages and tool results are left out, and Pi has no turn limit, so there is no `error_max_turns` result. Pi's own diagnostics stay on stderr; an error that stops Pi before the session starts is reported there, without records.
 - **Pi's own format.** `ampi -x --mode json` prints Pi's JSON event stream instead, with every streaming update.
 
 ### Messages on stdin
