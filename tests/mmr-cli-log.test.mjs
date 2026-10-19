@@ -214,6 +214,20 @@ describe("ampi log: the command", { concurrency: true }, () => {
     assert.doesNotMatch(result.stderr, /secret/);
   });
 
+  it("logs only the name of Pi's own command at debug, never its header, environment or server arguments", async () => {
+    const header = ["sk-", "SECRETHEADER", "0123456789"].join("");
+    const env = ["sk-", "SECRETENV", "0123456789"].join("");
+    const arg = ["sk-", "SECRETARG", "0123456789"].join("");
+    const args = ["mcp", "add", "docs", "--header", `Authorization=Bearer ${header}`, "--env", `DOCS_KEY=${env}`, "--", "docs-server", arg];
+    const result = await runAmpi(["--log-level", "debug", "--log-file", "ampi.log", ...args]);
+    const log = result.log("ampi.log");
+    assert.match(log, / debug pi mcp add through Pi's executable /);
+    for (const secret of [header, env, arg]) {
+      assert.ok(!result.stderr.includes(secret), result.stderr);
+      assert.ok(!log.includes(secret), log);
+    }
+  });
+
   it("hands --no-color and --color to the environment of Pi's tools, and leaves it alone without them", async () => {
     const command = "run: echo NO_COLOR=$NO_COLOR FORCE_COLOR=$FORCE_COLOR";
     const [off, on, neither] = await Promise.all([

@@ -523,7 +523,7 @@ The command's diagnostics are the `ampi: …` lines it writes about itself, at f
 - `error`: usage errors and failures, such as a missing message in execute mode.
 - `warn`: something it could not do as asked while it goes on, such as labels it could not store or a session it could not archive.
 - `info`: a note about what it chose, such as using the ampi that Pi already loads.
-- `debug`: the command it runs, whether it loads ampi, and the arguments it hands to Pi, with each message argument replaced by `<message>` and each `--api-key` value by `<redacted>`.
+- `debug`: the command it runs, whether it loads ampi, and the arguments it hands to a Pi session, with each message argument replaced by `<message>` and each `--api-key` value by `<redacted>`. For Pi's own commands (`install`, `mcp add` and the like) it logs only the command's name, such as `pi mcp add`, never its arguments.
 
 `--log-level` writes the given level and the ones above it; the default, `info`, writes everything but `debug`. `AMPI_LOG_LEVEL` and `AMPI_LOG_FILE` apply when the flags are not given. An unknown level, from the flag or the variable, is a usage error (status `2`).
 

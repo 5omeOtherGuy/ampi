@@ -8,7 +8,7 @@ import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
-import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutApiKeys, withoutMessages } from "./execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutMessages } from "./execute.js";
 import { applyColorToEnv, createLogger, readLogSettings } from "./log.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
@@ -44,6 +44,21 @@ function piExecutable() {
   return typeof entry === "string" ? path.join(pi.root, entry) : undefined;
 }
 
+/** Pi's commands whose second argument names a subcommand, as in `pi mcp add`. */
+const PI_SUBCOMMANDS = new Set(["mcp", "auth"]);
+
+/**
+ * The name of one of Pi's own commands for the debug log, such as `pi mcp add`:
+ * never its other arguments, which can hold headers, environment values and secrets.
+ *
+ * @param {string[]} args
+ * @returns {string}
+ */
+function piCommandName([command, subcommand]) {
+  const words = PI_SUBCOMMANDS.has(command) && /^[a-z][a-z-]*$/.test(subcommand ?? "") ? [command, subcommand] : [command];
+  return ["pi", ...words].join(" ");
+}
+
 /**
  * Run one of Pi's own commands through Pi's own executable, so it gets the
  * same process setup (proxy settings, warnings) as `pi <command>`.
@@ -58,7 +73,7 @@ function runPiCommand(args, log) {
     log.error(MISSING_PI_BIN);
     return 1;
   }
-  log.debug(`Pi's executable ${bin} with the arguments ${JSON.stringify(withoutApiKeys(args))}`);
+  log.debug(`${piCommandName(args)} through Pi's executable ${bin}`);
   const result = spawnSync(process.execPath, [bin, ...args], { stdio: "inherit" });
   if (result.error) {
     log.error(`could not run Pi: ${result.error.message}`);
