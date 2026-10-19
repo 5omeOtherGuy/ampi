@@ -581,10 +581,11 @@ the model choice, where images are saved and the limits.
 
 ## `ampi-permissions`
 
-Approval for risky tool calls, inert until `ampi.permissions` or
-`ampi.dangerouslyAllowAll: false` is set. See
+Approval for risky tool calls and changes to guarded files, inert until
+`ampi.permissions`, `ampi.dangerouslyAllowAll: false` or the user's
+`ampi.guardedFiles.allowlist` is set. See
 [`ampi-permissions`](../src/extensions/ampi-permissions/README.md) for the
-rules, the defaults and the dialog. The rule engine itself is in ampi-core
+rules, the defaults, guarded files and the dialogs. The rule engine itself is in ampi-core
 ([`ampi-core-api.md`](./ampi-core-api.md#tool-permissions)).
 
 ### Re-exports from the package root
@@ -592,7 +593,7 @@ rules, the defaults and the dialog. The rule engine itself is in ampi-core
 | Export | Kind | Notes |
 | --- | --- | --- |
 | `createMmrPermissionsExtension` | function | Factory producing the Pi extension; accepts `agentDir` and `columns` overrides, and `delegateTimeoutMs`, `delegateTimer` and `delegateSpawn` for delegate programs. |
-| `loadMmrPermissionsSettings` | function | Reads `ampi.permissions` and `ampi.dangerouslyAllowAll` from a user file and an optional trusted project file. |
+| `loadMmrPermissionsSettings` | function | Reads `ampi.permissions` and `ampi.dangerouslyAllowAll` from a user file and an optional trusted project file, and `ampi.guardedFiles.allowlist` from the user file only (`guardedFilesAllowlist`). |
 | `formatMmrPermissionsNoUiReason` | function | The block reason for a call that needs approval in a run that cannot ask (a subagent child gives its own reason). |
 
 ### Re-exported types

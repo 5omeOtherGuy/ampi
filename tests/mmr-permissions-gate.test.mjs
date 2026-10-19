@@ -130,7 +130,7 @@ describe("ampi-permissions: turning it on", () => {
     assert.deepEqual(t.gateStatus(), {
       gate: "ampi-permissions",
       status: "enabled",
-      reason: `on: 1 project rule, 2 user rules, ${MMR_PERMISSIONS_DEFAULT_RULES.length} default rules`,
+      reason: `on: 1 project rule, 2 user rules, ${MMR_PERMISSIONS_DEFAULT_RULES.length} default rules, 0 guarded file allowlist entries`,
       source: "ampi-permissions",
     });
     const off = await setup({ user: { ampi: { dangerouslyAllowAll: false } } });

@@ -237,8 +237,9 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
   },
   {
     // Blocks tool calls by rule, in the main session and in subagent
-    // children; writes the user settings file only when the user picks
-    // "Allow All for Every Session". It also starts the programs the user's
+    // children, and asks before changes to guarded files; writes the user
+    // settings file only when the user picks "Allow All for Every Session"
+    // or "Always Allow This Path". It also starts the programs the user's
     // own delegate rules name, which decide a call and run nothing else;
     // that is no child agent process, so the class stays passive.
     name: "ampi-permissions",
