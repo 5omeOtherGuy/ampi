@@ -892,6 +892,48 @@ export function isMmrPermissionsSessionAllowAll(): boolean {
   return (globalThis as Record<string, unknown>)[SESSION_ALLOW_ALL_KEY] === true;
 }
 
+const NON_INTERACTIVE_KEY = "__pi_ampi_permissions_non_interactive_v1__";
+
+/**
+ * Mark this process's run as one that cannot ask the user, even when Pi
+ * reports a UI (the `ampi` command's execute runs, `--stream-json-input`
+ * among them). The plain JavaScript `ampi` command sets the global key
+ * directly, since it cannot import this module.
+ */
+export function setMmrPermissionsNonInteractive(value: boolean): void {
+  (globalThis as Record<string, unknown>)[NON_INTERACTIVE_KEY] = value;
+}
+
+/** Whether this process's run cannot ask the user, whatever Pi reports. */
+export function isMmrPermissionsNonInteractive(): boolean {
+  return (globalThis as Record<string, unknown>)[NON_INTERACTIVE_KEY] === true;
+}
+
+const DENIALS_KEY = "__pi_ampi_permissions_denials_v1__";
+
+/**
+ * Note a tool call the gate blocked in the main session: one tool name per
+ * blocked call, in order. Kept on a process global as a plain list of
+ * strings, so the `ampi` command can read it when a run ends.
+ */
+export function recordMmrPermissionsDenial(toolName: string): void {
+  const store = globalThis as Record<string, unknown>;
+  const list = store[DENIALS_KEY];
+  if (Array.isArray(list)) list.push(toolName);
+  else store[DENIALS_KEY] = [toolName];
+}
+
+/** The tool names of the calls blocked so far, one per call, in order. */
+export function readMmrPermissionsDenials(): readonly string[] {
+  const list = (globalThis as Record<string, unknown>)[DENIALS_KEY];
+  return Array.isArray(list) ? list.filter((name): name is string => typeof name === "string") : [];
+}
+
+/** Forget the blocked calls noted so far. */
+export function clearMmrPermissionsDenials(): void {
+  (globalThis as Record<string, unknown>)[DENIALS_KEY] = [];
+}
+
 const PROJECT_TRUSTED_KEY = "__pi_ampi_permissions_project_trusted_v1__";
 
 /**

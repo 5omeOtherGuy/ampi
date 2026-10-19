@@ -320,7 +320,8 @@ describe("ampi-permissions: rules from settings", () => {
     const expected =
       "The bash call needs the user's approval, and this run cannot ask for it. " +
       'The permissions rule "ask bash" asks for approval (for "git push origin main"). ' +
-      "An allow rule in ampi.permissions lets such calls run without asking.";
+      "An allow rule in ampi.permissions lets such calls run without asking. " +
+      "To let every tool call run, repeat the run with --dangerously-allow-all (the ampi command) or --ampi-dangerously-allow-all (pi).";
     assert.deepEqual(await t.call("bash", push), { block: true, reason: expected });
     assert.equal(t.bus.emitted.length, 0, "no approval status without a dialog");
   });

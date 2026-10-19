@@ -228,6 +228,13 @@ describe("ampi completion resolver", () => {
     assert.deepEqual(values(await complete("ampi --log-level ")), ["error", "warn", "info", "debug"]);
   });
 
+  it("completes --dangerously-allow-all as a flag that takes no value, once, and not before a command", async () => {
+    assert.deepEqual(values(await complete("ampi --dang")), ["--dangerously-allow-all"]);
+    assert.deepEqual(values(await complete("ampi --dangerously-allow-all --fa")), ["--fast"]);
+    assert.deepEqual(values(await complete("ampi -x --dangerously-allow-all --dang")), []);
+    assert.deepEqual(values(await complete("ampi --dangerously-allow-all thr")), []);
+  });
+
   it("offers no command after an option that is not global, and nothing after a message", async () => {
     assert.deepEqual(values(await complete("ampi -m high thr")), []);
     assert.deepEqual(values(await complete("ampi fix the ")), []);

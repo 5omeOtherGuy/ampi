@@ -199,7 +199,8 @@ describe("ampi-permissions delegate: exit codes", () => {
       reason:
         "The bash call needs the user's approval, and this run cannot ask for it. " +
         `The permissions rule "${text}" asks for approval (for "echo hi"), because its program did not allow the call. ` +
-        "An allow rule in ampi.permissions lets such calls run without asking.",
+        "An allow rule in ampi.permissions lets such calls run without asking. " +
+        "To let every tool call run, repeat the run with --dangerously-allow-all (the ampi command) or --ampi-dangerously-allow-all (pi).",
     });
   });
 

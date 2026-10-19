@@ -6,7 +6,7 @@
 // home and agent directory.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
@@ -224,6 +224,50 @@ describe("ampi execute mode: thread options", () => {
     await shutdown(reloaded, "quit", ctx("s1"));
     assert.deepEqual(warnings, ["ampi: timings: startup 800 ms, turn 450 ms, total 1300 ms"]);
   });
+
+  it("marks an execute run for ampi-permissions and reports the calls it refused, once when the run quits", async () => {
+    const permissions = await importSource("extensions/ampi-core/permissions.ts");
+    try {
+      const options = { labels: [], titled: false, archive: false, timings: false };
+      runOf(options, host([]))();
+      assert.equal(permissions.isMmrPermissionsNonInteractive(), false, "an interactive run is not marked");
+      const warnings = [];
+      const runtime = runOf({ ...options, nonInteractive: true, reportDenials: true }, host(warnings));
+      const first = runtime();
+      assert.equal(permissions.isMmrPermissionsNonInteractive(), true, "marked before any session starts");
+      await start(first, "startup", ctx("s1"));
+      for (const tool of ["bash", "edit", "bash"]) permissions.recordMmrPermissionsDenial(tool);
+      await shutdown(first, "new", ctx("s1"));
+      const next = runtime();
+      await start(next, "new", ctx("s2"));
+      await shutdown(next, "quit", ctx("s2"));
+      assert.deepEqual(warnings, [
+        "ampi: ampi-permissions refused 3 tool calls in this run (bash, edit). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.\n",
+      ]);
+    } finally {
+      permissions.setMmrPermissionsNonInteractive(false);
+      permissions.clearMmrPermissionsDenials();
+    }
+  });
+
+  it("writes no refusal line when nothing was refused or the output lists the refusals itself", async () => {
+    const permissions = await importSource("extensions/ampi-core/permissions.ts");
+    try {
+      const options = { labels: [], titled: false, archive: false, timings: false, nonInteractive: true };
+      const warnings = [];
+      const quiet = runOf({ ...options, reportDenials: true }, host(warnings))();
+      await start(quiet, "startup", ctx("s1"));
+      await shutdown(quiet, "quit", ctx("s1"));
+      permissions.recordMmrPermissionsDenial("bash");
+      const streamJson = runOf({ ...options, reportDenials: false }, host(warnings))();
+      await start(streamJson, "startup", ctx("s2"));
+      await shutdown(streamJson, "quit", ctx("s2"));
+      assert.deepEqual(warnings, []);
+    } finally {
+      permissions.setMmrPermissionsNonInteractive(false);
+      permissions.clearMmrPermissionsDenials();
+    }
+  });
 });
 
 describe("ampi execute mode: the command", { concurrency: true }, () => {
@@ -308,6 +352,44 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
     assert.equal(result.status, 2);
     assert.equal(result.stdout, "");
     assert.equal(result.stderr, `ampi: ${EXECUTE_NO_MESSAGE_ERROR}\n`);
+  });
+
+  /** A run's directories with user settings whose one rule asks before `echo`. */
+  const askEchoRoot = () => {
+    const root = path.join(dir, String(++runs));
+    mkdirSync(path.join(root, "agent"), { recursive: true });
+    const rule = { tool: "bash", matches: { command: "echo *" }, action: "ask" };
+    writeFileSync(path.join(root, "agent", "settings.json"), JSON.stringify({ ampi: { permissions: [rule] } }));
+    return root;
+  };
+
+  it("refuses a call that needs approval with a reason naming both flags, reports it on stderr and still exits 0", async () => {
+    const result = await runAmpi(["-x", "run: echo hi"], "", askEchoRoot());
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(
+      result.stdout,
+      "Ran: The bash call needs the user's approval, and this run cannot ask for it. " +
+        `The permissions rule "ask bash --command 'echo *'" asks for approval (for "echo hi"). ` +
+        "An allow rule in ampi.permissions lets such calls run without asking. " +
+        "To let every tool call run, repeat the run with --dangerously-allow-all (the ampi command) or --ampi-dangerously-allow-all (pi).\n",
+    );
+    assert.equal(
+      result.stderr,
+      "ampi: ampi-permissions refused 1 tool call in this run (bash). " +
+        "Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.\n",
+    );
+    // A warning like any other: --log-level error hides it, and the refusal still reaches the agent.
+    const quiet = await runAmpi(["--log-level", "error", "-x", "run: echo hi"], "", askEchoRoot());
+    assert.equal(quiet.status, 0, quiet.stderr);
+    assert.equal(quiet.stdout, result.stdout);
+    assert.equal(quiet.stderr, "");
+  });
+
+  it("runs every call with --dangerously-allow-all", async () => {
+    const result = await runAmpi(["-x", "--dangerously-allow-all", "run: echo hi"], "", askEchoRoot());
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "Ran: hi\n");
+    assert.equal(result.stderr, "");
   });
 
   it("exits 2 for -x with RPC mode, which needs stdin for itself", async () => {

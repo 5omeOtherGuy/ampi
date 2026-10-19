@@ -686,7 +686,17 @@ already split. These are ampi-core exports used by `ampi permissions`, not
 package-root exports; the text form is described in the
 [`ampi` command's README](../packages/ampi-cli/README.md#the-text-form). `setMmrPermissionsSessionAllowAll` and
 `isMmrPermissionsSessionAllowAll` hold the session-wide "allow all" answer
-on a process global. Matching rules and the defaults are described in the
+on a process global; `ampi-permissions` also sets it for the whole process
+when `--ampi-dangerously-allow-all` is given. Beside it, and also module
+exports of `ampi-core/permissions.ts` only:
+`setMmrPermissionsNonInteractive` and `isMmrPermissionsNonInteractive` hold
+the mark the `ampi` command sets in its execute runs, which makes the gate
+refuse calls that need approval even when Pi reports a UI;
+`recordMmrPermissionsDenial(toolName)`, `readMmrPermissionsDenials()` and
+`clearMmrPermissionsDenials()` keep the tool name of every call the gate
+blocked in the main session, one per call and in order, which the command
+reports when a run ends. The plain JavaScript command reads and writes both
+globals directly. Matching rules and the defaults are described in the
 [`ampi-permissions` README](../src/extensions/ampi-permissions/README.md).
 
 Guarded files live beside the engine in `ampi-core/guarded-files.ts`, which

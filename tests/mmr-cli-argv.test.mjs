@@ -3,6 +3,7 @@
 // JavaScript, imported directly.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { parseArgs } from "@earendil-works/pi-coding-agent";
 import { AMPI_COMMANDS, PI_COMMANDS, routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
 
 describe("ampi argv router: starting Pi", () => {
@@ -87,6 +88,44 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual([execute.options.execute, execute.options.fast], [true, true]);
     // After -- it is part of the message.
     assert.deepEqual(routeAmpiArgv(["--", "--fast"]).piArgs, ["--", "--fast"]);
+  });
+
+  it("translates --dangerously-allow-all to --ampi-dangerously-allow-all once, with its value attached", () => {
+    assert.equal(routeAmpiArgv(["fix it"]).options.dangerouslyAllowAll, false);
+    // Attached, so Pi's parser cannot take the message that follows for the flag's value.
+    const route = routeAmpiArgv(["-x", "--dangerously-allow-all", "fix it", "--dangerously-allow-all"]);
+    assert.deepEqual(route.piArgs, ["--ampi-dangerously-allow-all=true", "fix it"]);
+    assert.deepEqual([route.options.execute, route.options.dangerouslyAllowAll], [true, true]);
+    assert.deepEqual(parseArgs(route.piArgs).messages, ["fix it"]);
+    assert.deepEqual(routeAmpiArgv(["--dangerously-allow-all"]).piArgs, ["--ampi-dangerously-allow-all=true"]);
+    // Beside --fast, both with their values attached, so neither takes the message.
+    const both = routeAmpiArgv(["--fast", "--dangerously-allow-all", "fix it"]);
+    assert.deepEqual(both.piArgs, ["--ampi-fast=true", "--ampi-dangerously-allow-all=true", "fix it"]);
+    assert.deepEqual(parseArgs(both.piArgs).messages, ["fix it"]);
+    // After --, it is part of the message.
+    const passed = routeAmpiArgv(["--", "--dangerously-allow-all"]);
+    assert.deepEqual(passed.piArgs, ["--", "--dangerously-allow-all"]);
+    assert.equal(passed.options.dangerouslyAllowAll, false);
+  });
+
+  it("refuses a value on --dangerously-allow-all instead of turning it on", () => {
+    for (const value of ["false", "true", ""]) {
+      const route = routeAmpiArgv(["-x", `--dangerously-allow-all=${value}`, "fix it"]);
+      assert.equal(route.command, "error", value);
+      assert.equal(route.error, "--dangerously-allow-all takes no value.");
+      assert.deepEqual(route.piArgs, []);
+      assert.equal(route.options.dangerouslyAllowAll, false, value);
+    }
+  });
+
+  it("refuses Pi's allow-all form with a value other than true", () => {
+    for (const value of ["false", "", "yes"]) {
+      const route = routeAmpiArgv(["-x", `--ampi-dangerously-allow-all=${value}`, "fix it"]);
+      assert.equal(route.command, "error", value);
+      assert.equal(route.error, "--ampi-dangerously-allow-all takes no value other than true.");
+      assert.deepEqual(route.piArgs, []);
+    }
+    assert.deepEqual(routeAmpiArgv(["-x", "--ampi-dangerously-allow-all=true", "fix it"]).piArgs, ["--ampi-dangerously-allow-all=true", "fix it"], "the true form passes through");
   });
 
   it("reads -x/--execute, --timings and --no-archive-after-execute and keeps them away from Pi", () => {

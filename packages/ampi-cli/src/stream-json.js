@@ -3,7 +3,8 @@
 // stream-json records, one JSON object per line: a `system`/`init` record, a
 // `user` record per user message and tool result, an `assistant` record per
 // completed assistant message, and a `result` record when the run ends (one
-// per run when `--stream-json-input` sends several messages).
+// per run when `--stream-json-input` sends several messages), which lists the
+// tools ampi-permissions refused in that run as `permission_denials`.
 //
 // Subagents: while the main agent runs a blocking ampi worker tool (`Task`,
 // `finder`, `oracle` and the others), the tool's progress updates carry a
@@ -53,6 +54,9 @@ const STOP_REASONS = /** @type {Record<string, string>} */ ({ stop: "end_turn", 
  * @property {boolean} thinking Include thinking blocks (`--stream-json-thinking`).
  * @property {() => number} now A clock in milliseconds, for `duration_ms`.
  * @property {() => StreamJsonContext} context Read once, when the first event after the session header arrives.
+ * @property {() => readonly string[]} [denials] The tool names of the calls ampi-permissions refused
+ *   during the current run, one per call; read once by `finish`, which expects the list to start
+ *   again empty for the next run.
  *
  * @typedef {Record<string, any>} StreamJsonRecord
  *
@@ -178,7 +182,7 @@ function failureOf(message) {
  * @param {StreamJsonOptions} options
  * @returns {StreamJsonEncoder}
  */
-export function createStreamJsonEncoder({ thinking, now, context }) {
+export function createStreamJsonEncoder({ thinking, now, context, denials }) {
   /** @type {number | undefined} When the current run started: at creation for the first, at its agent_start for later ones. */
   let startedAt = now();
   let sessionId = "";
@@ -397,6 +401,9 @@ export function createStreamJsonEncoder({ thinking, now, context }) {
       const records = init();
       const error = failure ?? failureOf(lastAssistant);
       const end = now();
+      // Each refused tool once, in the order it was first refused; left out when nothing was.
+      const refused = [...new Set(denials?.() ?? [])];
+      const refusals = refused.length > 0 ? { permission_denials: refused } : {};
       const common = { duration_ms: Math.round(end - (startedAt ?? end)), num_turns: turns, session_id: sessionId, usage: { ...usage } };
       const result = lastAssistant ? textOf(lastAssistant.content) : "";
       startedAt = undefined;
@@ -407,10 +414,10 @@ export function createStreamJsonEncoder({ thinking, now, context }) {
       callerOf.clear();
       toolUseIds.clear();
       if (error === undefined) {
-        records.push({ type: "result", subtype: "success", is_error: false, ...common, result });
+        records.push({ type: "result", subtype: "success", is_error: false, ...common, result, ...refusals });
         return { records, exitCode: 0 };
       }
-      records.push({ type: "result", subtype: "error_during_execution", is_error: true, ...common, error });
+      records.push({ type: "result", subtype: "error_during_execution", is_error: true, ...common, error, ...refusals });
       return { records, exitCode: 1 };
     },
   };

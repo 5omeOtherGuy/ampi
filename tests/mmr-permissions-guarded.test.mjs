@@ -629,7 +629,7 @@ describe("ampi-permissions guarded files: rules, runs without UI and subagents",
     assert.equal(result.block, true);
     assert.equal(
       result.reason,
-      `The write call changes a guarded file: ${path.join(t.cwd, ".git", "config")} (Git internals). Changes to guarded files need the user's approval, even when a rule allows the tool, and this run cannot ask for it. A path in ampi.guardedFiles.allowlist in the user settings lets such calls run without asking.`,
+      `The write call changes a guarded file: ${path.join(t.cwd, ".git", "config")} (Git internals). Changes to guarded files need the user's approval, even when a rule allows the tool, and this run cannot ask for it. A path in ampi.guardedFiles.allowlist in the user settings lets such calls run without asking. To let every tool call run, repeat the run with --dangerously-allow-all (the ampi command) or --ampi-dangerously-allow-all (pi).`,
     );
   });
 

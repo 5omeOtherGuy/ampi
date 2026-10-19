@@ -258,6 +258,26 @@ describe("ampi stream JSON: records from Pi's events", () => {
     assertSchema(records);
   });
 
+  it("lists each tool ampi-permissions refused once in the result, and only in the run that refused it", () => {
+    let clock = 1000;
+    /** The refusals noted since the last read, as the command's reader takes them. */
+    const pending = [];
+    const encoder = createStreamJsonEncoder({ thinking: false, now: () => (clock += 5), context: () => CONTEXT, denials: () => pending.splice(0) });
+    const answer = assistant([{ type: "text", text: "Done." }], "stop", usage(4, 1));
+    for (const event of run("first", turn(answer))) encoder.push(event);
+    pending.push("bash", "edit", "bash");
+    const first = encoder.finish().records.at(-1);
+    assert.deepEqual(first.permission_denials, ["bash", "edit"]);
+    for (const event of [{ type: "agent_start" }, ...ends(userMessage("second")), ...turn(answer)]) encoder.push(event);
+    const second = encoder.finish().records.at(-1);
+    assert.equal("permission_denials" in second, false);
+    pending.push("write");
+    const failed = encoder.finish("Pi stopped with an error.").records.at(-1);
+    assert.equal(failed.subtype, "error_during_execution");
+    assert.deepEqual(failed.permission_denials, ["write"]);
+    assertSchema([first, second, failed]);
+  });
+
   it("has a schema that rejects records outside the format", () => {
     const valid = assistantRecord([{ type: "text", text: "x" }], "end_turn", { input_tokens: 1, output_tokens: 1 });
     assert.ok(Check(schema, valid));
@@ -767,10 +787,11 @@ describe("ampi stream JSON: the command", { concurrency: true }, () => {
    * without one, that waits for an availability check Pi runs in the
    * background, which can still be pending when ampi picks the mode's model.
    */
-  const runAmpi = (args) => {
+  const runAmpi = (args, { agentSettings } = {}) => {
     const root = path.join(dir, String(++runs));
     for (const sub of ["home", "agent", "project/.pi"]) mkdirSync(path.join(root, sub), { recursive: true });
     writeFileSync(path.join(root, "agent", "auth.json"), JSON.stringify({ faux: { type: "api_key", key: "scripted" } }));
+    if (agentSettings !== undefined) writeFileSync(path.join(root, "agent", "settings.json"), JSON.stringify(agentSettings));
     const project = path.join(root, "project");
     writeFileSync(path.join(project, ".pi", "settings.json"), JSON.stringify({ ampiCore: { modelPreferences: { low: ["faux/faux-1"] } } }));
     writeFileSync(path.join(project, "notes.md"), "");
@@ -838,6 +859,22 @@ describe("ampi stream JSON: the command", { concurrency: true }, () => {
       ["system", "user", "result"],
     );
     assert.equal(records.at(-1).error, "The scripted model failed.");
+  });
+
+  it("lists the tools ampi-permissions refused in the result record, and none with --dangerously-allow-all", async () => {
+    const agentSettings = { ampi: { permissions: [{ tool: "bash", matches: { command: "echo *" }, action: "ask" }] } };
+    const refused = await runAmpi(["-x", "--stream-json", "run: echo hi"], { agentSettings });
+    assert.equal(refused.status, 0, refused.stderr);
+    const records = recordsOf(refused.stdout);
+    assertSchema(records);
+    assert.deepEqual(records.at(-1).permission_denials, ["bash"]);
+    assert.match(records.at(-1).result, /^Ran: The bash call needs the user's approval, and this run cannot ask for it\. /);
+    assert.doesNotMatch(refused.stderr, /refused/, "the result record carries the list instead");
+    const allowed = await runAmpi(["-x", "--stream-json", "--dangerously-allow-all", "run: echo hi"], { agentSettings });
+    assert.equal(allowed.status, 0, allowed.stderr);
+    const end = recordsOf(allowed.stdout).at(-1);
+    assert.equal(end.result, "Ran: hi");
+    assert.equal("permission_denials" in end, false);
   });
 
   it("refuses --stream-json outside execute mode and together with Pi's --mode", async () => {
