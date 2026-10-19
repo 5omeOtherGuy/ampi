@@ -2,6 +2,7 @@
 // start Pi with ampi loaded.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
@@ -10,7 +11,7 @@ import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
 import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll } from "./execute.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
-import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources } from "./pi-compat.js";
+import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources, piAgentDir } from "./pi-compat.js";
 import { createStatsOutput, createStreamJsonOutput, createToolOutput } from "./run-output.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
 import { createStreamJsonInputDriver } from "./stream-json-input.js";
@@ -369,6 +370,32 @@ export async function runAmpi(argv) {
       return runAppProcess(route.open === true);
     case "app-worker":
       return runAppWorkerProcess();
+    case "skill": {
+      // A listing never installs packages or refreshes model catalogues.
+      process.env.PI_OFFLINE = "1";
+      const [pi, { readSessionSkills, runSkillCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./skill.js")]);
+      const cwd = process.cwd();
+      return runSkillCommand(route.skillArgs ?? [], {
+        pi,
+        cwd,
+        agentDir: piAgentDir(pi),
+        readSkills: () => readSessionSkills(pi, cwd),
+        git: (args) => {
+          const result = spawnSync("git", args, {
+            encoding: "utf8",
+            stdio: ["ignore", "ignore", "pipe"],
+            env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+          });
+          return { status: result.status, stderr: result.stderr ?? "", error: result.error };
+        },
+        tempRoot: os.tmpdir(),
+        columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
+        interactive: process.stdin.isTTY === true,
+        confirm,
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
       const cwd = process.cwd();

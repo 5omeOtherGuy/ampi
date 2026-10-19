@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "config" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "config" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -30,6 +30,7 @@ import { parseArgs } from "node:util";
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
  * @property {string[]} [toolsArgs] The command line after `tools` (or `tool`), when `command` is `"tools"`.
  * @property {boolean} [open] `ampi app --open`: open the page in a browser.
+ * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
  */
@@ -140,6 +141,7 @@ export function routeAmpiArgv(argv) {
     if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], options, open: args.length === 2 };
     return { command: "error", piArgs: [], options, error: "ampi app takes only --open." };
   }
+  if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], options, skillArgs: args.slice(1) };
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
     return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
@@ -312,6 +314,8 @@ Commands:
                                 ampi threads --help lists its options
   tools list|show [--mode <m>]  Print the tools a session declares to the model in a mode, or one
                                 tool's description and parameters; ampi tools --help has more
+  skill list|info|add|remove    List the skills Pi loads, show one, install skills from a directory
+                                or git repository, or remove one; ampi skill --help has more
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
   app [--open]                  Serve every session on this machine from one local web page:
