@@ -23,7 +23,8 @@ import { compareVersions, parseVersion } from "./versions.js";
  * @property {(args: string[]) => NpmResult} runNpm Run npm with these arguments and wait for it.
  * @property {(file: string) => string} realpath The real path of a file; throws when it does not exist.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {(text: string) => void} progress Writes the install line and npm's own output to stderr at every log level.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  */
 
 export const CLI_PACKAGE_NAME = "@skippermissions/ampi-cli";
@@ -96,7 +97,7 @@ export function runUpdateCommand(argv, host) {
   try {
     ({ values } = parseArgs({ args: [...argv], options: OPTIONS, allowPositionals: false, strict: true }));
   } catch (error) {
-    host.err(`ampi: update: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}\n`);
+    host.log.error(`update: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}`);
     return 2;
   }
   if (values.help) {
@@ -105,7 +106,7 @@ export function runUpdateCommand(argv, host) {
   }
   const target = values["target-version"];
   if (target !== undefined && parseVersion(target) === undefined) {
-    host.err(`ampi: update: --target-version needs a version such as 0.4.0, not "${target}".\n${USAGE_HINT}\n`);
+    host.log.error(`update: --target-version needs a version such as 0.4.0, not "${target}".\n${USAGE_HINT}`);
     return 2;
   }
   const porcelain = values.porcelain === true;
@@ -115,16 +116,16 @@ export function runUpdateCommand(argv, host) {
   const installed = readPackageAt(host.cliRoot);
   const current = installed?.version === undefined ? undefined : parseVersion(installed.version);
   if (installed?.version === undefined || current === undefined) {
-    host.err(`ampi: cannot read the version of ${CLI_PACKAGE_NAME} in ${host.cliRoot}; reinstall it.\n`);
+    host.log.error(`cannot read the version of ${CLI_PACKAGE_NAME} in ${host.cliRoot}; reinstall it.`);
     return 1;
   }
   const wanted = target ?? "latest";
 
   const checkout = readPackageAt(path.resolve(host.cliRoot, "..", ".."));
   if (checkout?.name === AMPI_PACKAGE_NAME) {
-    host.err(
-      `ampi: this ampi runs from a source checkout of the ampi repository (${checkout.root}), so ampi update leaves it alone. ` +
-        `Update it with git pull and npm ci in ${checkout.root}.\n`,
+    host.log.error(
+      `this ampi runs from a source checkout of the ampi repository (${checkout.root}), so ampi update leaves it alone. ` +
+        `Update it with git pull and npm ci in ${checkout.root}.`,
     );
     return 1;
   }
@@ -132,11 +133,11 @@ export function runUpdateCommand(argv, host) {
   const root = host.runNpm(["root", "-g"]);
   const globalRoot = root.status === 0 ? root.stdout.trim() : "";
   if (globalRoot === "") {
-    host.err(`ampi: could not ask npm for its global directory (npm root -g): ${npmFailure(root)}.\n`);
+    host.log.error(`could not ask npm for its global directory (npm root -g): ${npmFailure(root)}.`);
     return 1;
   }
   if (!sameRealPath(host, host.cliRoot, path.join(globalRoot, ...CLI_PACKAGE_NAME.split("/")))) {
-    host.err(`ampi: ${otherInstallAdvice(realPathOr(host, host.cliRoot), globalRoot, wanted)}\n`);
+    host.log.error(otherInstallAdvice(realPathOr(host, host.cliRoot), globalRoot, wanted));
     return 1;
   }
 
@@ -145,9 +146,9 @@ export function runUpdateCommand(argv, host) {
   if (view.status !== 0) {
     if (/\bE404\b/.test(view.stderr)) {
       const what = target === undefined ? `${CLI_PACKAGE_NAME} is not on the npm registry` : `${CLI_PACKAGE_NAME} ${target} is not on the npm registry`;
-      host.err(`ampi: ${what} (npm: ${npmFailure(view)}).\n`);
+      host.log.error(`${what} (npm: ${npmFailure(view)}).`);
     } else {
-      host.err(`ampi: npm view ${spec} version failed: ${npmFailure(view)}.\n`);
+      host.log.error(`npm view ${spec} version failed: ${npmFailure(view)}.`);
     }
     return 1;
   }
@@ -155,7 +156,7 @@ export function runUpdateCommand(argv, host) {
   const found = parseVersion(published);
   if (found === undefined || (target !== undefined && published !== target)) {
     const what = target === undefined ? `a version for ${CLI_PACKAGE_NAME}` : `${CLI_PACKAGE_NAME} ${target}`;
-    host.err(`ampi: npm view did not report ${what}${published === "" ? "" : ` (it printed "${firstLine(published)}")`}; it is not on the npm registry.\n`);
+    host.log.error(`npm view did not report ${what}${published === "" ? "" : ` (it printed "${firstLine(published)}")`}; it is not on the npm registry.`);
     return 1;
   }
 
@@ -168,15 +169,15 @@ export function runUpdateCommand(argv, host) {
   }
 
   const args = ["install", "-g", "--ignore-scripts", `${CLI_PACKAGE_NAME}@${published}`];
-  host.err(`ampi: updating ampi-cli from ${installed.version} to ${published}: npm ${args.join(" ")}\n`);
+  host.progress(`ampi: updating ampi-cli from ${installed.version} to ${published}: npm ${args.join(" ")}\n`);
   const install = host.runNpm(args);
   for (const text of [install.stdout, install.stderr]) {
-    if (install.status === 0 && text.trim() !== "") host.err(text.endsWith("\n") ? text : `${text}\n`);
+    if (install.status === 0 && text.trim() !== "") host.progress(text.endsWith("\n") ? text : `${text}\n`);
   }
   if (install.status !== 0) {
     const tail = install.stderr.trimEnd().split("\n").slice(-STDERR_TAIL_LINES).join("\n");
     const how = install.error !== undefined ? `could not start: ${install.error.message}` : install.status === null ? "ended on a signal" : `exited with status ${install.status}`;
-    host.err(`ampi: npm ${args.join(" ")} ${how}${tail === "" ? "." : `:\n${tail}`}\n`);
+    host.log.error(`npm ${args.join(" ")} ${how}${tail === "" ? "." : `:\n${tail}`}`);
     return 1;
   }
   report(porcelain ? `updated ${published}` : `ampi-cli updated from ${installed.version} to ${published}.`);

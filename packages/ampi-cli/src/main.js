@@ -8,7 +8,8 @@ import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
-import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll } from "./execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutMessages } from "./execute.js";
+import { applyColorToEnv, createLogger, readLogSettings } from "./log.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
 import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources, piAgentDir } from "./pi-compat.js";
@@ -43,22 +44,39 @@ function piExecutable() {
   return typeof entry === "string" ? path.join(pi.root, entry) : undefined;
 }
 
+/** Pi's commands whose second argument names a subcommand, as in `pi mcp add`. */
+const PI_SUBCOMMANDS = new Set(["mcp", "auth"]);
+
+/**
+ * The name of one of Pi's own commands for the debug log, such as `pi mcp add`:
+ * never its other arguments, which can hold headers, environment values and secrets.
+ *
+ * @param {string[]} args
+ * @returns {string}
+ */
+function piCommandName([command, subcommand]) {
+  const words = PI_SUBCOMMANDS.has(command) && /^[a-z][a-z-]*$/.test(subcommand ?? "") ? [command, subcommand] : [command];
+  return ["pi", ...words].join(" ");
+}
+
 /**
  * Run one of Pi's own commands through Pi's own executable, so it gets the
  * same process setup (proxy settings, warnings) as `pi <command>`.
  *
  * @param {string[]} args
+ * @param {import("./log.js").Logger} log
  * @returns {number}
  */
-function runPiCommand(args) {
+function runPiCommand(args, log) {
   const bin = piExecutable();
   if (bin === undefined) {
-    process.stderr.write(`ampi: ${MISSING_PI_BIN}\n`);
+    log.error(MISSING_PI_BIN);
     return 1;
   }
+  log.debug(`${piCommandName(args)} through Pi's executable ${bin}`);
   const result = spawnSync(process.execPath, [bin, ...args], { stdio: "inherit" });
   if (result.error) {
-    process.stderr.write(`ampi: could not run Pi: ${result.error.message}\n`);
+    log.error(`could not run Pi: ${result.error.message}`);
     return 1;
   }
   return result.status ?? 1;
@@ -70,15 +88,16 @@ function runPiCommand(args) {
  * reads stdin itself and runs Pi's print mode with the combined message.
  *
  * @param {import("./argv.js").AmpiRoute} route
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number | undefined>}
  */
-async function startPi({ piArgs, options }) {
+async function startPi({ piArgs, options }, log) {
   const pi = await import(PI_PACKAGE_NAME);
   let args = [...piArgs];
   const parsed = pi.parseArgs(args);
   // RPC mode talks JSON over stdin, which execute mode reads for the message.
   if (options.execute && parsed.mode === "rpc") {
-    process.stderr.write("ampi: -x cannot be combined with --mode rpc.\n");
+    log.error("-x cannot be combined with --mode rpc.");
     return 2;
   }
   const execute = isExecuteRun({
@@ -87,16 +106,17 @@ async function startPi({ piArgs, options }) {
     stdinIsTTY: process.stdin.isTTY === true,
     stdoutIsTTY: process.stdout.isTTY === true,
   });
+  log.debug(execute ? `execute mode${options.streamJson ? " with stream JSON" : ""}` : "not execute mode: the terminal UI, or the mode Pi's arguments ask for");
   if (!execute && (options.timings || !options.archive)) {
-    process.stderr.write("ampi: --timings and --no-archive-after-execute need execute mode (-x).\n");
+    log.error("--timings and --no-archive-after-execute need execute mode (-x).");
     return 2;
   }
   if (options.streamJson && !execute) {
-    process.stderr.write("ampi: --stream-json needs execute mode (-x).\n");
+    log.error("--stream-json needs execute mode (-x).");
     return 2;
   }
   if (options.streamJson && parsed.mode !== undefined) {
-    process.stderr.write(`ampi: --stream-json replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
+    log.error(`--stream-json replaces Pi's output mode; leave out --mode ${parsed.mode}.`);
     return 2;
   }
   /** @type {[string, boolean][]} The other execute-mode flags that were given. */
@@ -108,20 +128,20 @@ async function startPi({ piArgs, options }) {
   for (const [flag, given] of executeFlags) {
     if (!given) continue;
     if (!execute) {
-      process.stderr.write(`ampi: ${flag} needs execute mode (-x).\n`);
+      log.error(`${flag} needs execute mode (-x).`);
       return 2;
     }
     if (parsed.mode !== undefined && flag !== "--plugin-ready-timeout") {
-      process.stderr.write(`ampi: ${flag} replaces Pi's output mode; leave out --mode ${parsed.mode}.\n`);
+      log.error(`${flag} replaces Pi's output mode; leave out --mode ${parsed.mode}.`);
       return 2;
     }
   }
   if (options.streamJsonInput && (parsed.messages.length > 0 || parsed.fileArgs.length > 0)) {
-    process.stderr.write("ampi: --stream-json-input reads every message from stdin; leave out the message argument.\n");
+    log.error("--stream-json-input reads every message from stdin; leave out the message argument.");
     return 2;
   }
   if (options.streamJsonInput && process.stdin.isTTY === true) {
-    process.stderr.write("ampi: --stream-json-input reads JSON lines from stdin, which is a terminal here; pipe the messages in.\n");
+    log.error("--stream-json-input reads JSON lines from stdin, which is a terminal here; pipe the messages in.");
     return 2;
   }
   const cwd = process.cwd();
@@ -129,12 +149,12 @@ async function startPi({ piArgs, options }) {
   let mcpServers;
   if (options.mcpConfig !== undefined) {
     if (parsed.noMcp) {
-      process.stderr.write("ampi: --mcp-config needs Pi's MCP support; leave out --no-mcp.\n");
+      log.error("--mcp-config needs Pi's MCP support; leave out --no-mcp.");
       return 2;
     }
     const read = readMcpConfigFlag(options.mcpConfig, cwd);
     if ("error" in read) {
-      process.stderr.write(`ampi: ${read.error}\n`);
+      log.error(read.error);
       return 2;
     }
     mcpServers = read.servers;
@@ -150,7 +170,7 @@ async function startPi({ piArgs, options }) {
     hidePipedStdinFromPi();
     const built = buildExecuteArgs(pi.parseArgs, args, stdin);
     if ("error" in built) {
-      process.stderr.write(`ampi: ${built.error}\n`);
+      log.error(built.error);
       return 2;
     }
     args = built.args;
@@ -158,34 +178,57 @@ async function startPi({ piArgs, options }) {
   if (decision.load) {
     const ampi = locateAmpiPackage(CLI_ROOT);
     if (ampi === undefined) {
-      process.stderr.write(`ampi: cannot find ${AMPI_PACKAGE_NAME}; reinstall @skippermissions/ampi-cli.\n`);
+      log.error(`cannot find ${AMPI_PACKAGE_NAME}; reinstall @skippermissions/ampi-cli.`);
       return 1;
     }
+    log.debug(`loading ampi from ${ampi.root}`);
     args.unshift("-e", ampi.root);
+  } else if (decision.reason === "extension-flag") {
+    log.debug(`not loading ampi: the -e argument ${decision.source} loads it`);
   } else if (decision.reason === "pi") {
-    process.stderr.write(`ampi: using the ampi that Pi already loads (${decision.source}).\n`);
+    log.info(`using the ampi that Pi already loads (${decision.source}).`);
   }
   // The process setup Pi's own executable does before calling main().
   process.title = "ampi";
   process.env.PI_CODING_AGENT = "true";
   process.env.AI_AGENT = "pi";
   process.emitWarning = () => {};
-  const runExtension = createRunExtension({
-    labels: options.labels,
-    titled: options.title !== undefined,
-    archive: execute && options.archive,
-    timings: execute && options.timings,
-  });
+  const runExtension = createRunExtension(
+    {
+      labels: options.labels,
+      titled: options.title !== undefined,
+      archive: execute && options.archive,
+      timings: execute && options.timings,
+    },
+    {
+      now: () => performance.now(),
+      timestamp: () => new Date().toISOString(),
+      log,
+      // --timings output, which the user asked for: not a diagnostic.
+      report: (line) => process.stderr.write(`${line}\n`),
+    },
+  );
   const extensionFactories = [{ name: "ampi-cli", factory: runExtension, hidden: true }];
   if (mcpServers !== undefined) {
-    const factory = createMcpConfigExtension(mcpServers, { agentDir: pi.getAgentDir(), configDirName: pi.CONFIG_DIR_NAME });
+    const factory = createMcpConfigExtension(
+      mcpServers,
+      { agentDir: pi.getAgentDir(), configDirName: pi.CONFIG_DIR_NAME },
+      {
+        warn: (message) => log.warn(message),
+        fail: (message) => {
+          log.error(message);
+          process.exit(2);
+        },
+      },
+    );
     extensionFactories.push({ name: "ampi-cli-mcp-config", factory, hidden: true });
   }
-  if (options.streamJsonInput) return runStreamJsonInput(pi, args, extensionFactories, options.streamJsonThinking);
-  if (options.streamJson) return runPiJson(pi, args, extensionFactories, options.streamJsonThinking, createStreamJsonOutput);
-  if (options.stats) return runPiJson(pi, args, extensionFactories, false, createStatsOutput);
+  if (log.level === "debug") log.debug(`Pi's arguments: ${JSON.stringify(withoutMessages(pi.parseArgs, args))}`);
+  if (options.streamJsonInput) return runStreamJsonInput(pi, args, extensionFactories, options.streamJsonThinking, log);
+  if (options.streamJson) return runPiJson(pi, args, extensionFactories, options.streamJsonThinking, createStreamJsonOutput, log);
+  if (options.stats) return runPiJson(pi, args, extensionFactories, false, createStatsOutput, log);
   const { outputTool } = options;
-  if (outputTool !== undefined) return runPiJson(pi, args, extensionFactories, false, (encoder) => createToolOutput(outputTool, encoder));
+  if (outputTool !== undefined) return runPiJson(pi, args, extensionFactories, false, (encoder) => createToolOutput(outputTool, encoder), log);
   await pi.main(args, { extensionFactories });
   return undefined;
 }
@@ -226,9 +269,10 @@ function readLines(stream, onLine, onEnd) {
  * @param {string[]} args Pi's arguments, without a message.
  * @param {{ name: string, factory: (pi: any) => void, hidden: boolean }[]} extensionFactories
  * @param {boolean} thinking
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number>}
  */
-async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
+async function runStreamJsonInput(pi, args, extensionFactories, thinking, log) {
   /** @type {import("./stream-json-input.js").StreamJsonInputDriver | undefined} */
   let driver;
   /** @type {string[]} Lines read before the driver exists. */
@@ -253,7 +297,7 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
     );
   });
   if (!hasMessage) {
-    process.stderr.write(`ampi: ${EXECUTE_NO_MESSAGE_ERROR}\n`);
+    log.error(EXECUTE_NO_MESSAGE_ERROR);
     return 2;
   }
 
@@ -271,7 +315,7 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
     write: (records) => {
       if (records.length > 0) written = output.write(records.map((record) => `${JSON.stringify(record)}\n`).join(""));
     },
-    warn: (text) => process.stderr.write(`${text}\n`),
+    log,
     // The last records must reach stdout before Pi exits the process.
     end: () => void written.finally(rpcInput.end),
   });
@@ -281,7 +325,7 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
   // Pi can also stop on its own before it reads its input, for example after a question it asked on stdin.
   const exitCode = () => {
     if (current.ended) return current.exitCode;
-    process.stderr.write("ampi: Pi stopped before every message from stdin was handled.\n");
+    log.error("Pi stopped before every message from stdin was handled.");
     return 1;
   };
   exitWithCodeAfterPiRpc(exitCode);
@@ -312,9 +356,10 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking) {
  * @param {{ name: string, factory: (pi: any) => void, hidden: boolean }[]} extensionFactories
  * @param {boolean} thinking Whether the encoder keeps thinking blocks.
  * @param {(encoder: import("./stream-json.js").StreamJsonEncoder) => import("./run-output.js").RunOutput} outputOf
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number>}
  */
-async function runPiJson(pi, args, extensionFactories, thinking, outputOf) {
+async function runPiJson(pi, args, extensionFactories, thinking, outputOf, log) {
   /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
   let runtime;
   const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
@@ -331,7 +376,7 @@ async function runPiJson(pi, args, extensionFactories, thinking, outputOf) {
   // Pi's JSON mode sets a failing exit code only when the run threw; the error is then on stderr.
   const failed = process.exitCode !== undefined && process.exitCode !== 0;
   const end = runOutput.finish(failed ? "Pi stopped with an error; see stderr." : undefined);
-  if (end.stderr !== "") process.stderr.write(end.stderr);
+  for (const note of end.notes) log[note.level](note.message);
   if (end.stdout !== "") await output.write(end.stdout);
   return failed ? Number(process.exitCode) : end.exitCode;
 }
@@ -344,6 +389,16 @@ async function runPiJson(pi, args, extensionFactories, thinking, outputOf) {
  */
 export async function runAmpi(argv) {
   const route = routeAmpiArgv(argv);
+  const settings = readLogSettings(route.options, process.env, process.cwd());
+  const log = createLogger(settings);
+  const error = route.error ?? settings.error;
+  if (error !== undefined) {
+    log.error(`${error}\n${route.usageHint ?? "Run ampi --help for the supported options."}`);
+    return 2;
+  }
+  // Before Pi is imported: its colour library reads the environment once, when it loads.
+  applyColorToEnv(route.options.color, process.env);
+  log.debug(`command: ${route.command}`);
   switch (route.command) {
     case "help":
       process.stdout.write(formatAmpiHelp());
@@ -351,13 +406,10 @@ export async function runAmpi(argv) {
     case "version":
       process.stdout.write(formatVersions());
       return 0;
-    case "error":
-      process.stderr.write(`ampi: ${route.error}\n${route.usageHint ?? "Run ampi --help for the supported options."}\n`);
-      return 2;
     case "pi-command":
-      return runPiCommand(route.piArgs);
+      return runPiCommand(route.piArgs, log);
     case "threads":
-      return runThreads(route.threadArgs ?? []);
+      return runThreads(route.threadArgs ?? [], log);
     case "tools": {
       // A listing never installs packages or refreshes model catalogues.
       process.env.PI_OFFLINE = "1";
@@ -367,7 +419,7 @@ export async function runAmpi(argv) {
         readTools: (mode) => readSessionTools(pi, cwd, mode),
         columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
       });
     }
     case "doctor": {
@@ -392,7 +444,7 @@ export async function runAmpi(argv) {
         isTTY: process.stdout.isTTY === true,
         colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
       });
     }
     case "update": {
@@ -403,13 +455,14 @@ export async function runAmpi(argv) {
         runNpm: spawnNpm,
         realpath: (file) => realpathSync(file),
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        progress: writeProgress,
+        log,
       });
     }
     case "app":
-      return runAppProcess(route.open === true);
+      return runAppProcess(route.open === true, log);
     case "app-worker":
-      return runAppWorkerProcess();
+      return runAppWorkerProcess(log);
     case "skill": {
       // A listing never installs packages or refreshes model catalogues.
       process.env.PI_OFFLINE = "1";
@@ -433,7 +486,8 @@ export async function runAmpi(argv) {
         interactive: process.stdin.isTTY === true,
         confirm,
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        progress: writeProgress,
+        log,
       });
     }
     case "mcp": {
@@ -441,7 +495,7 @@ export async function runAmpi(argv) {
       return runMcpCommand(route.mcpArgs ?? [], {
         loadPi: () => import(PI_PACKAGE_NAME),
         cwd: process.cwd(),
-        runPi: (args) => runPiCommand(["mcp", ...args]),
+        runPi: (args) => runPiCommand(["mcp", ...args], log),
         capturePi: (args) => {
           const bin = piExecutable();
           if (bin === undefined) return { status: null, stdout: "", stderr: "", error: new Error(MISSING_PI_BIN) };
@@ -452,7 +506,9 @@ export async function runAmpi(argv) {
         interactive: process.stdin.isTTY === true,
         confirm,
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
+        // Pi's own stderr from a pi mcp command whose output ampi reads: passed on, not a diagnostic.
+        piStderr: (text) => process.stderr.write(text),
       });
     }
     case "config": {
@@ -463,11 +519,11 @@ export async function runAmpi(argv) {
         cwd,
         locateAmpi: () => locateLoadedAmpi(pi, cwd),
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
       });
     }
   }
-  return startPi(route);
+  return startPi(route, log);
 }
 
 /**
@@ -475,9 +531,10 @@ export async function runAmpi(argv) {
  * session's timers would otherwise keep the process alive.
  *
  * @param {boolean} open
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number>}
  */
-async function runAppProcess(open) {
+async function runAppProcess(open, log) {
   const [pi, { runApp }] = await Promise.all([import(PI_PACKAGE_NAME), import("./app.js")]);
   // The process setup Pi's own executable does, so tools see they run under an agent.
   process.title = "ampi";
@@ -492,7 +549,7 @@ async function runAppProcess(open) {
     open,
     cwd: process.cwd(),
     out: (text) => process.stdout.write(text),
-    err: (text) => process.stderr.write(text),
+    log,
     stopped,
   });
   process.exit(code);
@@ -503,11 +560,12 @@ async function runAppProcess(open) {
  * process with, then exit: the session's MCP connections and timers would
  * otherwise keep the process alive.
  *
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number>}
  */
-async function runAppWorkerProcess() {
+async function runAppWorkerProcess(log) {
   if (typeof process.send !== "function") {
-    process.stderr.write("ampi: app --worker is started by ampi app, which talks to it over an IPC channel; it does not run on its own.\n");
+    log.error("app --worker is started by ampi app, which talks to it over an IPC channel; it does not run on its own.");
     return 2;
   }
   const [pi, { runAppWorker }] = await Promise.all([import(PI_PACKAGE_NAME), import("./app-worker.js")]);
@@ -536,6 +594,15 @@ async function locateLoadedAmpi(pi, cwd) {
 }
 
 /**
+ * Write progress the user sees whatever the log level, not a diagnostic:
+ * skill add's `Cloning <url>…`, and ampi update's install line with npm's own
+ * output.
+ *
+ * @param {string} text
+ */
+const writeProgress = (text) => process.stderr.write(text);
+
+/**
  * Ask a yes/no question on stderr and read the answer from stdin; anything
  * but y or yes, or the end of stdin, is no.
  *
@@ -543,6 +610,7 @@ async function locateLoadedAmpi(pi, cwd) {
  * @returns {Promise<boolean>}
  */
 async function confirm(question) {
+  // The question is output the user asked for (threads delete), not a diagnostic.
   const prompt = createInterface({ input: process.stdin, output: process.stderr });
   const answer = await new Promise((resolve) => {
     prompt.once("close", () => resolve(""));
@@ -556,9 +624,10 @@ async function confirm(question) {
  * Run a thread command; the ones that open a session start Pi on it.
  *
  * @param {string[]} threadArgs
+ * @param {import("./log.js").Logger} log
  * @returns {Promise<number | undefined>}
  */
-async function runThreads(threadArgs) {
+async function runThreads(threadArgs, log) {
   // A reader that stops early (`ampi threads list --json | head -1`) closes the pipe: stop quietly.
   process.stdout.on("error", (error) => {
     if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
@@ -575,10 +644,10 @@ async function runThreads(threadArgs) {
     now: () => Date.now(),
     columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
     out: (text) => process.stdout.write(text),
-    err: (text) => process.stderr.write(text),
+    log,
     confirm,
     locateAmpi: () => locateLoadedAmpi(pi, cwd),
   });
   if ("code" in result) return result.code;
-  return startPi(routeAmpiArgv(result.piArgs));
+  return startPi(routeAmpiArgv(result.piArgs), log);
 }

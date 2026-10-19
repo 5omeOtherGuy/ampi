@@ -14,7 +14,7 @@ import { loadThroughPi, piExternalEditorCommand, piSettingsPath, readPiSettings 
  * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package the
  *   keymap comes from: the one Pi loads from its settings, else the CLI's own.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  *
  * @typedef {(settings: unknown, cwd: string) => { jsonc: string, problems: readonly string[] }} KeymapFormatter
  */
@@ -86,12 +86,12 @@ export async function runConfigCommand(argv, host) {
     const options = OPTIONS[/** @type {keyof typeof OPTIONS} */ (command)];
     ({ values } = /** @type {any} */ (parseArgs({ args: rest, options, allowPositionals: false, strict: true })));
   } catch (error) {
-    host.err(`ampi: config ${command}: ${error instanceof Error ? error.message : String(error)}\nRun ampi config ${command} --help for the options.\n`);
+    host.log.error(`config ${command}: ${error instanceof Error ? error.message : String(error)}\nRun ampi config ${command} --help for the options.`);
     return 2;
   }
   if (command === "keymap") return printKeymap(host);
   if (values.global && values.workspace) {
-    host.err("ampi: config edit takes --global or --workspace, not both.\n");
+    host.log.error("config edit takes --global or --workspace, not both.");
     return 2;
   }
   return edit(host, values.workspace ? "project" : "user");
@@ -106,7 +106,7 @@ async function printKeymap(host) {
   const entry = ampi === undefined ? undefined : path.join(ampi.root, KEYMAP_ENTRY);
   if (entry === undefined || !existsSync(entry)) {
     const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
-    host.err(`ampi: ${which} is too old for config keymap; update @skippermissions/ampi (or ampi-cli).\n`);
+    host.log.error(`${which} is too old for config keymap; update @skippermissions/ampi (or ampi-cli).`);
     return 1;
   }
   /** @type {KeymapFormatter | undefined} */
@@ -115,15 +115,15 @@ async function printKeymap(host) {
     const received = /** @type {{ formatKeymapJsonc?: KeymapFormatter } | undefined} */ (await loadThroughPi(host.pi, entry, KEYMAP_EVENT));
     format = received?.formatKeymapJsonc;
   } catch (error) {
-    host.err(`ampi: could not load ampi's keymap: ${error instanceof Error ? error.message : String(error)}\n`);
+    host.log.error(`could not load ampi's keymap: ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
   if (typeof format !== "function") {
-    host.err("ampi: could not load ampi's keymap: the ampi package did not provide it.\n");
+    host.log.error("could not load ampi's keymap: the ampi package did not provide it.");
     return 1;
   }
   const { jsonc, problems } = format(readPiSettings(host.pi, host.cwd), host.cwd);
-  for (const problem of problems) host.err(`ampi: keymap: ${problem}\n`);
+  for (const problem of problems) host.log.warn(`keymap: ${problem}`);
   host.out(`${jsonc}\n`);
   return 0;
 }
@@ -150,11 +150,11 @@ async function edit(host, scope) {
   });
   if (created !== undefined && !existsSync(file)) removeEmptyDirectories(path.dirname(file), created);
   if (outcome instanceof Error) {
-    host.err(`ampi: could not start the editor ${editor}: ${outcome.message}\n`);
+    host.log.error(`could not start the editor ${editor}: ${outcome.message}`);
     return 1;
   }
   if (outcome !== 0) {
-    host.err(`ampi: the editor ${editor} exited with ${outcome === null ? "a signal" : `status ${outcome}`}.\n`);
+    host.log.error(`the editor ${editor} exited with ${outcome === null ? "a signal" : `status ${outcome}`}.`);
     return 1;
   }
   return 0;

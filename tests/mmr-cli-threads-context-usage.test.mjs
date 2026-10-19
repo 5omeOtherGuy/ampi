@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it, mock } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { threadIndexPath, updateThreadRecord } from "../packages/ampi-cli/src/thread-index.js";
 import { formatThreadsHelp, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
 
@@ -221,9 +222,11 @@ async function run(args, { root = repoRoot, version } = {}) {
     out: (value) => {
       out += value;
     },
-    err: (value) => {
-      err += value;
-    },
+    log: createLogger({
+      stderr: (value) => {
+        err += value;
+      },
+    }),
     confirm: async (question) => {
       throw new Error(`unexpected question: ${question}`);
     },

@@ -1,6 +1,7 @@
 // Argument routing for the `ampi` command. Pure: reads nothing and prints
 // nothing, so every translation is testable without starting Pi.
 import { parseArgs } from "node:util";
+import { isLogLevel } from "./log.js";
 
 /**
  * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "update" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
@@ -20,6 +21,9 @@ import { parseArgs } from "node:util";
  * @property {string} [outputTool] `--output-tool`: print the text of the last finished call to this tool (execute mode).
  * @property {string} [mcpConfig] `--mcp-config`: MCP servers for this run, as JSON or a file path.
  * @property {number} [pluginReadyTimeout] `--plugin-ready-timeout`, in seconds: accepted in execute mode and not used.
+ * @property {string} [logLevel] `--log-level`: error, warn, info or debug.
+ * @property {string} [logFile] `--log-file`: where diagnostics go instead of stderr.
+ * @property {boolean} [color] true for `--color`, false for `--no-color`; the last one wins.
  *
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
@@ -72,10 +76,17 @@ const OPTIONS = /** @type {const} */ ({
   // Its value is optional, so the router decides whether the next argument is one.
   "plugin-ready-timeout": { type: "boolean" },
   "settings-file": { type: "string" },
+  "log-level": { type: "string" },
+  "log-file": { type: "string" },
+  color: { type: "boolean" },
+  "no-color": { type: "boolean" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "V" },
   "pi-help": { type: "boolean" },
 });
+
+/** ampi's options that may also come before a command, as in `ampi --log-level debug threads list`. */
+const GLOBAL_OPTIONS = new Set(["log-level", "log-file", "color", "no-color"]);
 
 /**
  * Pi's options that always take the next argument as their value. Declaring
@@ -123,13 +134,76 @@ const SETTINGS_FILE_ERROR =
  * Split the `ampi` command line into ampi's own commands and options and the
  * arguments Pi receives. Unknown options and positionals reach Pi unchanged and
  * in order; everything after `--` reaches Pi verbatim. One of Pi's own commands
- * as the first argument hands the whole command line to Pi untouched.
+ * as the first argument hands the whole command line to Pi untouched. The
+ * logging and colour options may also come before a command.
  *
  * @param {readonly string[]} argv Arguments after the executable and script.
  * @returns {AmpiRoute}
  */
 export function routeAmpiArgv(argv) {
   const args = [...argv];
+  const lead = countLeadingGlobalOptions(args);
+  const commandRoute = routeCommand(args.slice(lead));
+  const read = readOptions(commandRoute === undefined ? args : args.slice(0, lead));
+  const { options } = read;
+  if (read.error !== undefined) return { command: "error", piArgs: [], options, error: read.error };
+  if (commandRoute !== undefined) return { ...commandRoute, options };
+  if (read.help) return { command: "help", piArgs: [], options };
+  if (read.version) return { command: "version", piArgs: [], options };
+  return { command: "pi", piArgs: read.piArgs, options };
+}
+
+/**
+ * How many arguments the global options at the start of the command line take.
+ *
+ * @param {readonly string[]} args
+ * @returns {number}
+ */
+function countLeadingGlobalOptions(args) {
+  let index = 0;
+  for (;;) {
+    const match = /^--([^=]+)(=?)/.exec(args[index] ?? "");
+    if (match === null || !GLOBAL_OPTIONS.has(match[1])) return index;
+    const takesValue = /** @type {Record<string, { type: string }>} */ (OPTIONS)[match[1]].type === "string";
+    index += takesValue && match[2] === "" ? 2 : 1;
+  }
+}
+
+/**
+ * The route for a command line that starts with one of ampi's commands or
+ * Pi's, or `undefined` when it starts Pi.
+ *
+ * @param {string[]} args The command line after the leading global options.
+ * @returns {Omit<AmpiRoute, "options"> | undefined}
+ */
+function routeCommand(args) {
+  if (args[0] === "help") return { command: "help", piArgs: [] };
+  if (args[0] === "version") return { command: "version", piArgs: [] };
+  if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], threadArgs: args };
+  if (args[0] === "tools" || args[0] === "tool") return { command: "tools", piArgs: [], toolsArgs: args.slice(1) };
+  if (args[0] === "app") {
+    // `--worker` is started only by `ampi app`, which talks to it over the IPC channel.
+    if (args.length === 2 && args[1] === "--worker") return { command: "app-worker", piArgs: [] };
+    if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], open: args.length === 2 };
+    return { command: "error", piArgs: [], error: "ampi app takes only --open." };
+  }
+  if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
+  if (args[0] === "mcp") return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
+  if (args[0] === "doctor") return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
+  if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1));
+  // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
+  if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) return { command: "config", piArgs: [], configArgs: args.slice(1) };
+  if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args };
+  return undefined;
+}
+
+/**
+ * Read ampi's options and collect the arguments Pi receives.
+ *
+ * @param {string[]} args
+ * @returns {{ options: AmpiOptions, piArgs: string[], help: boolean, version: boolean, error?: string }}
+ */
+function readOptions(args) {
   /** @type {AmpiOptions} */
   const options = {
     labels: [],
@@ -142,26 +216,6 @@ export function routeAmpiArgv(argv) {
     streamJsonInput: false,
     stats: false,
   };
-  if (args[0] === "help") return { command: "help", piArgs: [], options };
-  if (args[0] === "version") return { command: "version", piArgs: [], options };
-  if (args[0] === "threads" || args[0] === "last" || args[0] === "usage") return { command: "threads", piArgs: [], options, threadArgs: args };
-  if (args[0] === "tools" || args[0] === "tool") return { command: "tools", piArgs: [], options, toolsArgs: args.slice(1) };
-  if (args[0] === "app") {
-    // `--worker` is started only by `ampi app`, which talks to it over the IPC channel.
-    if (args.length === 2 && args[1] === "--worker") return { command: "app-worker", piArgs: [], options };
-    if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], options, open: args.length === 2 };
-    return { command: "error", piArgs: [], options, error: "ampi app takes only --open." };
-  }
-  if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], options, skillArgs: args.slice(1) };
-  if (args[0] === "mcp") return { command: "mcp", piArgs: [], options, mcpArgs: args.slice(1) };
-  if (args[0] === "doctor") return { command: "doctor", piArgs: [], options, doctorArgs: args.slice(1) };
-  if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1), options);
-  // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
-  if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
-    return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
-  }
-  if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args, options };
-
   const { tokens } = parseArgs({
     args,
     options: { ...PI_VALUE_OPTIONS, ...OPTIONS },
@@ -294,17 +348,28 @@ export function routeAmpiArgv(argv) {
           options.pluginReadyTimeout = next ?? PLUGIN_READY_TIMEOUT_BARE;
         }
         break;
+      case "log-level":
+        if (!value) error ??= "--log-level needs a level: error, warn, info or debug.";
+        else if (!isLogLevel(value)) error ??= `--log-level must be error, warn, info or debug, not "${value}".`;
+        else options.logLevel = value;
+        break;
+      case "log-file":
+        if (!value) error ??= "--log-file needs a file path.";
+        else options.logFile = value;
+        break;
+      case "color":
+        options.color = true;
+        break;
+      case "no-color":
+        options.color = false;
+        break;
     }
   }
   if (options.streamJsonInput && !options.streamJson) error ??= "--stream-json-input needs --stream-json or --stream-json-thinking.";
   if (options.stats && streamJsonFlag !== undefined) error ??= `--stats cannot be combined with ${streamJsonFlag}.`;
   if (options.outputTool !== undefined && streamJsonFlag !== undefined) error ??= `--output-tool cannot be combined with ${streamJsonFlag}.`;
   if (options.stats && options.outputTool !== undefined) error ??= "--stats cannot be combined with --output-tool.";
-
-  if (error !== undefined) return { command: "error", piArgs: [], options, error };
-  if (help) return { command: "help", piArgs: [], options };
-  if (version) return { command: "version", piArgs: [], options };
-  return { command: "pi", piArgs, options };
+  return { options, piArgs, help, version, error };
 }
 
 /**
@@ -315,10 +380,9 @@ export function routeAmpiArgv(argv) {
  * usage error.
  *
  * @param {string[]} rest The arguments after `update` or `up`.
- * @param {AmpiOptions} options
- * @returns {AmpiRoute}
+ * @returns {Omit<AmpiRoute, "options">}
  */
-function routeUpdate(rest, options) {
+function routeUpdate(rest) {
   /** @type {string[]} */
   const ours = [];
   /** @type {string[]} */
@@ -339,12 +403,11 @@ function routeUpdate(rest, options) {
     // `--target-version <v>`: the value is the next argument unless that is an option.
     if (arg === "--target-version" && index + 1 < rest.length && !rest[index + 1].startsWith("-")) index++;
   }
-  if (theirs.length === 0) return { command: "update", piArgs: [], options, updateArgs: rest };
-  if (ours.length === 0) return { command: "pi-command", piArgs: ["update", ...rest], options };
+  if (theirs.length === 0) return { command: "update", piArgs: [], updateArgs: rest };
+  if (ours.length === 0) return { command: "pi-command", piArgs: ["update", ...rest] };
   return {
     command: "error",
     piArgs: [],
-    options,
     error:
       `${[...new Set(ours)].join(" and ")} ${ours.length === 1 ? "is an option" : "are options"} of ampi's own update, ` +
       `and ${theirs.join(" ")} ${theirs.length === 1 ? "goes" : "go"} to Pi's update; run them as two commands.`,
@@ -433,6 +496,15 @@ Options:
   --mcp-config <json|path>
       Connect these MCP servers for this run, given as JSON or a JSON file in the mcpServers
       format of Pi's mcp.json; a server of the same name in an mcp.json file is used instead
+  --log-level <level>
+      Write ampi's own diagnostics at this level and above: error, warn, info (the default)
+      or debug
+  --log-file <file>
+      Append ampi's diagnostics to this file, one line each, instead of stderr; errors also
+      go to stderr. Pi's own output is not affected.
+  --color, --no-color
+      Set FORCE_COLOR=1 or NO_COLOR=1 for Pi and the tools it runs. Pi's own commands and
+      the terminal UI theme keep their colours; the CLI README has the details.
   -h, --help
       Print this help and exit
   -V, -v, --version
@@ -443,6 +515,7 @@ Options:
       Hand everything after it to Pi as the message, without reading ampi options
 
   Every other option and argument goes to Pi unchanged, for example --model, -c, -r or -p.
+  The logging and colour options also work before a command: ampi --log-level debug threads.
 
 Exit status in execute mode: 0 on success, 1 when the agent or Pi fails, 2 on a usage
 error such as a missing message.
@@ -453,6 +526,10 @@ Environment variables:
                                 sessions and installed packages
   PI_OFFLINE                    Set to 1 to start without network activity such as model
                                 catalogue refreshes
+  AMPI_LOG_LEVEL                The level when --log-level is not given
+  AMPI_LOG_FILE                 The log file when --log-file is not given
+  NO_COLOR                      A non-empty value turns colour off in tools that follow it;
+                                Pi's own text keeps its colour unless --no-color is given
 
 Examples:
 

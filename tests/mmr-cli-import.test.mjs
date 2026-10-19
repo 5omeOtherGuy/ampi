@@ -19,6 +19,7 @@ import { convertClaudeCodeSession } from "../packages/ampi-cli/src/import/claude
 import { convertCodexSession } from "../packages/ampi-cli/src/import/codex.js";
 import { formatImportHelp } from "../packages/ampi-cli/src/import/index.js";
 import { convertOpenCodeSession, loadNodeSqlite, openOpenCode } from "../packages/ampi-cli/src/import/opencode.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { formatThreadsHelp, runThreadsCommand } from "../packages/ampi-cli/src/threads.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -357,9 +358,11 @@ async function run(args, { env = {}, time = NOW, cwd = "/work/demo", loadSqlite 
       out: (text) => {
         out += text;
       },
-      err: (text) => {
-        err += text;
-      },
+      log: createLogger({
+        stderr: (text) => {
+          err += text;
+        },
+      }),
       confirm: async () => false,
       locateAmpi: async () => ({ root: repoRoot }),
       ...(loadSqlite === undefined ? {} : { loadSqlite }),

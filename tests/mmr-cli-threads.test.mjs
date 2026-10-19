@@ -13,6 +13,7 @@ import path from "node:path";
 import { after, before, describe, it, mock } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
 import { routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { formatThreadMarkdown } from "../packages/ampi-cli/src/thread-markdown.js";
 import {
   isThreadColor,
@@ -123,9 +124,11 @@ async function run(args, { env = {}, columns = 80, confirm } = {}) {
     out: (text) => {
       out += text;
     },
-    err: (text) => {
-      err += text;
-    },
+    log: createLogger({
+      stderr: (text) => {
+        err += text;
+      },
+    }),
     confirm: async (question) => {
       questions.push(question);
       if (confirm === undefined) throw new Error(`unexpected question: ${question}`);
@@ -334,7 +337,7 @@ describe("ampi threads: reading sessions", () => {
       now: () => NOW,
       columns: 80,
       out: (text) => assert.equal(text, "No sessions in this directory. ampi threads list --all lists every directory.\n"),
-      err: assert.fail,
+      log: createLogger({ stderr: assert.fail }),
       confirm: assert.fail,
     });
     assert.deepEqual(empty, { code: 0 });

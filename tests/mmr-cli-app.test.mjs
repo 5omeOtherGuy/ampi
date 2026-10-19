@@ -16,6 +16,7 @@ import { registerAmpiGuiHub, runApp, WORKER_STOP_TIMEOUT_MS } from "../packages/
 import { AMPI_GUI_HOST_GLOBAL_KEY } from "../packages/ampi-cli/src/app-worker.js";
 import { formatAmpiHelp, routeAmpiArgv } from "../packages/ampi-cli/src/argv.js";
 import { readProcStart } from "../packages/ampi-cli/src/live-registry.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 import { createMockExtensionContext } from "./helpers/pi-stub.mjs";
 
@@ -135,7 +136,7 @@ function startApp({ registryDir = path.join(tempDir(), "live"), children = [], o
     open,
     cwd: "/work/here",
     out: (text) => out.push(text),
-    err: (text) => err.push(text),
+    log: createLogger({ stderr: (text) => err.push(text) }),
     stopped,
     registryDir,
     pid: APP_PID,

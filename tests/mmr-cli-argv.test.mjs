@@ -326,3 +326,63 @@ describe("ampi argv router: help, version and errors", () => {
     }
   });
 });
+
+describe("ampi argv router: logging and colour options", () => {
+  it("reads --log-level and --log-file in both forms and --color and --no-color, and keeps them away from Pi", () => {
+    for (const argv of [
+      ["--log-level", "debug", "--log-file", "ampi.log", "--no-color", "-m", "low", "go"],
+      ["-m", "low", "--log-level=debug", "go", "--no-color", "--log-file=ampi.log"],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi", argv.join(" "));
+      assert.deepEqual(route.piArgs, ["--ampi-mode", "low", "go"], argv.join(" "));
+      assert.deepEqual([route.options.logLevel, route.options.logFile, route.options.color], ["debug", "ampi.log", false], argv.join(" "));
+    }
+    const plain = routeAmpiArgv(["go"]).options;
+    assert.deepEqual([plain.logLevel, plain.logFile, plain.color], [undefined, undefined, undefined]);
+  });
+
+  it("lets the last colour flag win", () => {
+    assert.equal(routeAmpiArgv(["--no-color", "--color"]).options.color, true);
+    assert.equal(routeAmpiArgv(["--color", "--no-color"]).options.color, false);
+  });
+
+  it("reads them before ampi's commands and Pi's, which then get the rest of the command line", () => {
+    const threads = routeAmpiArgv(["--log-level", "warn", "--color", "threads", "list", "--json"]);
+    assert.equal(threads.command, "threads");
+    assert.deepEqual(threads.threadArgs, ["threads", "list", "--json"]);
+    assert.deepEqual([threads.options.logLevel, threads.options.color], ["warn", true]);
+    const install = routeAmpiArgv(["--no-color", "--log-file=pi.log", "install", "npm:x", "-l"]);
+    assert.equal(install.command, "pi-command");
+    assert.deepEqual(install.piArgs, ["install", "npm:x", "-l"]);
+    assert.deepEqual([install.options.logFile, install.options.color], ["pi.log", false]);
+    const config = routeAmpiArgv(["--log-level=debug", "config", "keymap"]);
+    assert.deepEqual([config.command, config.configArgs, config.options.logLevel], ["config", ["keymap"], "debug"]);
+    assert.equal(routeAmpiArgv(["--color", "help"]).command, "help");
+    // After a command they belong to that command, which reads its own options.
+    assert.deepEqual(routeAmpiArgv(["threads", "list", "--color"]).threadArgs, ["threads", "list", "--color"]);
+  });
+
+  it("leaves them to Pi after --", () => {
+    const route = routeAmpiArgv(["--", "--log-level", "nonsense", "--no-color"]);
+    assert.equal(route.command, "pi");
+    assert.deepEqual(route.piArgs, ["--", "--log-level", "nonsense", "--no-color"]);
+    assert.equal(route.options.logLevel, undefined);
+  });
+
+  it("rejects an unknown level and a missing level or file, before a command too", () => {
+    for (const [argv, message] of [
+      [["--log-level", "verbose"], '--log-level must be error, warn, info or debug, not "verbose".'],
+      [["--log-level=INFO", "threads"], '--log-level must be error, warn, info or debug, not "INFO".'],
+      [["--log-level"], "--log-level needs a level: error, warn, info or debug."],
+      [["--log-level="], "--log-level needs a level: error, warn, info or debug."],
+      [["-x", "go", "--log-file"], "--log-file needs a file path."],
+      [["--log-file=", "threads"], "--log-file needs a file path."],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "error", argv.join(" "));
+      assert.equal(route.error, message, argv.join(" "));
+      assert.deepEqual(route.piArgs, []);
+    }
+  });
+});

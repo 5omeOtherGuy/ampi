@@ -8,9 +8,9 @@
 import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { liveRegistryDir } from "./live-registry.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt } from "./packages.js";
 import { countPiCredentialedModels, listPiExtensionSources, piAgentDir, piBinDir, readPiSettingsErrors } from "./pi-compat.js";
-import { liveRegistryDir } from "./live-registry.js";
 import { readThreadIndex, threadIndexPath } from "./thread-index.js";
 import { satisfiesRange } from "./versions.js";
 
@@ -51,7 +51,7 @@ import { satisfiesRange } from "./versions.js";
  * @property {boolean} isTTY Whether stdout is a terminal.
  * @property {number | undefined} colorDepth Bits per color of stdout, when it is a terminal.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  *
  * @typedef {{ name: string, path: string, where: "bin" | "path" }} ToolLocation
  *
@@ -151,7 +151,7 @@ export async function runDoctorCommand(argv, host) {
   try {
     ({ values } = parseArgs({ args: [...argv], options: OPTIONS, allowPositionals: false, strict: true }));
   } catch (error) {
-    host.err(`ampi: doctor: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}\n`);
+    host.log.error(`doctor: ${error instanceof Error ? error.message : String(error)}\n${USAGE_HINT}`);
     return 2;
   }
   if (values.help) {

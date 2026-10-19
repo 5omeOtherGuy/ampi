@@ -36,7 +36,8 @@ import { cut } from "./threads.js";
  * @property {boolean} interactive Whether a question can be answered (stdin is a terminal).
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {(text: string) => void} progress Writes a progress line, such as `Cloning <url>…`, to stderr at every log level.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  *
  * @typedef {{ kind: "local", path: string } | { kind: "git", url: string, subpath: string } | { kind: "error", error: string }} SkillSourceSpec
  *
@@ -142,7 +143,7 @@ Examples:
  */
 export async function runSkillCommand(argv, host) {
   const outcome = await dispatch(argv, host);
-  if (outcome.message !== undefined) host.err(`ampi: ${clean(outcome.message)}\n${outcome.code === 2 ? `${USAGE_HINT}\n` : ""}`);
+  if (outcome.message !== undefined) host.log.error(outcome.code === 2 ? `${clean(outcome.message)}\n${USAGE_HINT}` : clean(outcome.message));
   return outcome.code;
 }
 
@@ -243,7 +244,7 @@ export async function readSessionSkills(pi, cwd) {
  */
 async function loadSkills(host) {
   const loaded = await host.readSkills();
-  for (const failure of loaded.failures) host.err(`ampi: ${clean(failure)}\n`);
+  for (const failure of loaded.failures) host.log.warn(clean(failure));
   return loaded;
 }
 
@@ -284,7 +285,7 @@ async function list(host, json) {
   }
   if (sorted.length === 0) lines.push("", "Install one with ampi skill add <source>.");
   host.out(`${lines.join("\n")}\n`);
-  for (const problem of problems) host.err(`ampi: ${clean(`${problem.path ? `${problem.path}: ` : ""}${problem.message}`)}\n`);
+  for (const problem of problems) host.log.warn(clean(`${problem.path ? `${problem.path}: ` : ""}${problem.message}`));
   return { code: 0 };
 }
 
@@ -613,7 +614,7 @@ async function add(host, source, options) {
   const temp = mkdtempSync(path.join(host.tempRoot, "ampi-skill-"));
   try {
     const clone = path.join(temp, "repo");
-    host.err(`Cloning ${spec.url}…\n`);
+    host.progress(`Cloning ${spec.url}…\n`);
     const result = host.git(["clone", "--depth", "1", "--quiet", "--no-tags", "--", spec.url, clone]);
     if (result.error?.code === "ENOENT") return fail("git is not installed, and a git source needs it.");
     if (result.error !== undefined || result.status !== 0) {

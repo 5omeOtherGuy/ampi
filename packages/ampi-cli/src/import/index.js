@@ -178,7 +178,7 @@ export async function runImportCommand(argv, host) {
   }
   /** @param {string} message */
   const usage = (message) => {
-    host.err(`ampi: ${message}\n${USAGE_HINT}\n`);
+    host.log.error(`${message}\n${USAGE_HINT}`);
     return { code: 2 };
   };
   const sub = command === "claude-code" ? "claude" : command;
@@ -202,7 +202,7 @@ export async function runImportCommand(argv, host) {
   try {
     return await importSessions(host, agent, plan);
   } catch (error) {
-    host.err(`ampi: ${messageOf(error)}\n`);
+    host.log.error(messageOf(error));
     return { code: 1 };
   }
 }
@@ -383,7 +383,7 @@ function importFrom(host, { agent, name, where }, plan, dir, reader) {
         const labels = validateThreadLabels([...(readThreadIndex(index)[written.id]?.labels ?? []), IMPORTED_LABEL, agent]);
         updateThreadRecord(index, written.id, { labels });
       } catch (error) {
-        host.err(`ampi: ${source.id} was imported, but its labels were not stored in the thread index: ${messageOf(error)}\n`);
+        host.log.warn(`${source.id} was imported, but its labels were not stored in the thread index: ${messageOf(error)}`);
       }
       report({ type: "imported", agent, sourceId: source.id, sessionId: written.id, messages: conversion.messages.length });
     } catch (error) {

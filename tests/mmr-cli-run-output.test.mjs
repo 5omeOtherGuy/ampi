@@ -75,7 +75,7 @@ describe("ampi --stats: the summary line", () => {
     events.splice(-1, 0, ...turn(assistant([{ type: "text", text: "Really one." }], "stop", usage(5, 1, 0.25))));
     const end = outputOf(createStatsOutput, events);
     assert.equal(end.exitCode, 0);
-    assert.equal(end.stderr, "");
+    assert.deepEqual(end.notes, []);
     assert.ok(end.stdout.endsWith("}\n"));
     assert.equal(end.stdout.split("\n").length, 2, "exactly one line");
     assert.deepEqual(JSON.parse(end.stdout), {
@@ -143,7 +143,7 @@ describe("ampi --output-tool: the text of one tool's last call", () => {
     );
     assert.deepEqual(
       outputOf((encoder) => createToolOutput("bash", encoder), events),
-      { stdout: "second\npart two\n", stderr: "", exitCode: 0 },
+      { stdout: "second\npart two\n", notes: [], exitCode: 0 },
     );
   });
 
@@ -155,7 +155,7 @@ describe("ampi --output-tool: the text of one tool's last call", () => {
     );
     assert.deepEqual(
       outputOf((encoder) => createToolOutput("bash", encoder), events),
-      { stdout: "Command exited with code 2\n", stderr: "", exitCode: 1 },
+      { stdout: "Command exited with code 2\n", notes: [], exitCode: 1 },
     );
   });
 
@@ -163,7 +163,7 @@ describe("ampi --output-tool: the text of one tool's last call", () => {
     const events = run(turn(callOf("c1", "read"), toolRun("c1", "read", [{ type: "text", text: "file" }])), answer);
     assert.deepEqual(
       outputOf((encoder) => createToolOutput("bash", encoder), events),
-      { stdout: "", stderr: "ampi: no call to the tool bash finished, so there is no output to print.\n", exitCode: 1 },
+      { stdout: "", notes: [{ level: "error", message: "no call to the tool bash finished, so there is no output to print." }], exitCode: 1 },
     );
   });
 
@@ -173,13 +173,17 @@ describe("ampi --output-tool: the text of one tool's last call", () => {
       { type: "text", text: "a screenshot" },
     ];
     const end = outputOf((encoder) => createToolOutput("look", encoder), run(turn(callOf("c1", "look"), toolRun("c1", "look", content)), answer));
-    assert.deepEqual(end, { stdout: "a screenshot\n", stderr: "ampi: left out an image of the look result; only its text is printed.\n", exitCode: 0 });
+    assert.deepEqual(end, {
+      stdout: "a screenshot\n",
+      notes: [{ level: "warn", message: "left out an image of the look result; only its text is printed." }],
+      exitCode: 0,
+    });
   });
 
   it("exits 1 with the error on stderr when the run failed after the call", () => {
     const failed = turn(assistant([], "error", usage(1, 0, 0), { errorMessage: "overloaded" }));
     const end = outputOf((encoder) => createToolOutput("bash", encoder), run(turn(callOf("c1", "bash"), toolRun("c1", "bash", [{ type: "text", text: "out" }])), failed));
-    assert.deepEqual(end, { stdout: "out\n", stderr: "ampi: overloaded\n", exitCode: 1 });
+    assert.deepEqual(end, { stdout: "out\n", notes: [{ level: "error", message: "overloaded" }], exitCode: 1 });
   });
 });
 

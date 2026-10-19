@@ -77,7 +77,7 @@ describe("ampi --mcp-config: the inline extension", () => {
       },
     });
     factory(pi);
-    assert.deepEqual(lines, [["fail", 'ampi: --mcp-config: invalid server name "bad name"']]);
+    assert.deepEqual(lines, [["fail", '--mcp-config: invalid server name "bad name"']]);
   });
 
   it("reports once each server that the user's or a trusted project's mcp.json defines, naming the file Pi uses", async () => {
@@ -105,7 +105,7 @@ describe("ampi --mcp-config: the inline extension", () => {
       }
       return { lines, notes };
     };
-    const note = (name, file) => `ampi: the MCP server "${name}" from --mcp-config is not used: ${file} defines a server of that name, which Pi uses instead.`;
+    const note = (name, file) => `the MCP server "${name}" from --mcp-config is not used: ${file} defines a server of that name, which Pi uses instead.`;
     const userFile = path.join(agentDir, "mcp.json");
     const projectFile = path.join(project, ".pi", "mcp.json");
 
@@ -126,8 +126,8 @@ describe("ampi --mcp-config: the inline extension", () => {
     assert.deepEqual(
       ui.notes.map(({ message, level }) => [level, message]),
       [
-        ["warning", note("doc_search", userFile)],
-        ["warning", note("files", userFile)],
+        ["warning", `ampi: ${note("doc_search", userFile)}`],
+        ["warning", `ampi: ${note("files", userFile)}`],
       ],
     );
   });

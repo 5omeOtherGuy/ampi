@@ -11,6 +11,7 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { Check, Errors } from "typebox/schema";
 import { EXECUTE_NO_MESSAGE_ERROR } from "../packages/ampi-cli/src/execute.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { createStreamJsonEncoder } from "../packages/ampi-cli/src/stream-json.js";
 import { createStreamJsonInputDriver, parseStreamJsonInputLine } from "../packages/ampi-cli/src/stream-json-input.js";
 
@@ -124,7 +125,7 @@ describe("ampi stream JSON input: driving Pi's RPC mode", () => {
     const driver = createStreamJsonInputDriver(encoder, {
       send: (command) => sent.push(command),
       write: (written) => records.push(...written),
-      warn: (text) => warnings.push(text),
+      log: createLogger({ stderr: (text) => warnings.push(text) }),
       end: () => ended++,
     });
     return { driver, sent, records, warnings, ended: () => ended };
@@ -199,7 +200,7 @@ describe("ampi stream JSON input: driving Pi's RPC mode", () => {
       ["select", "confirm", "input", "editor"].map((method) => ({ type: "extension_ui_response", id: `ui-${method}`, cancelled: true })),
     );
     driver.receive({ type: "extension_error", extensionPath: "/ext/a.ts", event: "input", error: "boom" });
-    assert.deepEqual(warnings, ["ampi: extension error (/ext/a.ts, input): boom"]);
+    assert.deepEqual(warnings, ["ampi: extension error (/ext/a.ts, input): boom\n"]);
   });
 
   it("reports a prompt Pi rejects as a failed run and exits 1", () => {

@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { resolveModeArgument, runToolsCommand, toolSource } from "../packages/ampi-cli/src/tools.js";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
@@ -101,7 +102,7 @@ describe("ampi tools: listing and detail formats", () => {
       },
       columns: found.columns ?? Number.POSITIVE_INFINITY,
       out: (text) => (out += text),
-      err: (text) => (err += text),
+      log: createLogger({ stderr: (text) => (err += text) }),
     });
     return { code, out, err, requested };
   };
