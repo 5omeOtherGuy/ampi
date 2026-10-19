@@ -733,6 +733,9 @@ describe("ampi stream JSON: what the init record reads from the session", () => 
     try {
       setMmrModeState({ mode: "high" });
       assert.deepEqual(readStreamJsonContext(pi), { tools: ["read", "grep"], mcpServers: [], agentMode: "high" });
+      // A registered mode reports its own key, not its base mode.
+      setMmrModeState({ mode: "high", registeredMode: { key: "review", label: "Review", color: "#d97706", source: "extension" } });
+      assert.deepEqual(readStreamJsonContext(pi), { tools: ["read", "grep"], mcpServers: [], agentMode: "review" });
       setMmrModeState(undefined);
       assert.deepEqual(readStreamJsonContext(pi), { tools: ["read", "grep"], mcpServers: [] });
     } finally {

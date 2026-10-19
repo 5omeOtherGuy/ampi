@@ -44,7 +44,7 @@ ampi --pi-help           # Pi's own options, including the flags ampi's extensio
 
 | ampi option | What it does |
 | --- | --- |
-| `-m`, `--mode <mode>` | Start in an ampi mode: `low`, `medium`, `high`, `ultra` or `free`, or a legacy alias. `--mode text`, `json` and `rpc` keep Pi's meaning (output format). |
+| `-m`, `--mode <mode>` | Start in an ampi mode: `low`, `medium`, `high`, `ultra` or `free`, a legacy alias, or the key or label of a mode another extension [registered](../../src/extensions/ampi-core/README.md#registered-modes) (passed on unchecked; ampi-core resolves it once every extension has loaded). `--mode text`, `json` and `rpc` keep Pi's meaning (output format). `ampi tools -m` knows only the built-in modes. |
 | `--fast` | Start the session at fast speed: priority serving from the provider at a higher price, for OpenAI and OpenAI Codex models. Works in execute mode too; Alt+R turns it on or off in a session. The same as Pi's `--ampi-fast`. |
 | `-x`, `--execute` | Run one message without the terminal UI and print only the final assistant message. See [Execute mode](#execute-mode). |
 | `--stream-json` | In execute mode, print the run as JSON records, one per line, instead of the final message. See [Stream JSON](#stream-json). |
@@ -142,7 +142,7 @@ The records, in order:
 
 | Record | When | Fields |
 | --- | --- | --- |
-| `{"type": "system", "subtype": "init"}` | First | `cwd`; `session_id`, the session's id (the same as in ampi's thread index); `tools`, the names of the tools the model can call; `mcp_servers`; `agent_mode`, the ampi mode, left out when no ampi mode is active. |
+| `{"type": "system", "subtype": "init"}` | First | `cwd`; `session_id`, the session's id (the same as in ampi's thread index); `tools`, the names of the tools the model can call; `mcp_servers`; `agent_mode`, the ampi mode (a registered mode's key, not its base mode's), left out when no ampi mode is active. |
 | `{"type": "user"}` | For the message and each tool result | `message.content`: `text` blocks, or one `tool_result` block (`tool_use_id`, `content` as text, `is_error`); `parent_tool_use_id`, `null` for the main agent's records and the id of the main agent's `tool_use` that started the subagent for a subagent's records; `session_id`. |
 | `{"type": "assistant"}` | For each answer of the model | `message.content`: `text`, `tool_use` (`id`, `name`, `input`), and with `--stream-json-thinking` `thinking` (`thinking`) and `redacted_thinking` (`data`); `message.stop_reason`: `end_turn`, `tool_use`, `max_tokens` or `null`; `message.usage`: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`; `parent_tool_use_id`, as for `user` records; `session_id`. |
 | `{"type": "result"}` | Last (with `--stream-json-input`, after each run) | `subtype` `success` with `result`, the final answer's text, or `error_during_execution` with `error`; `is_error`; `duration_ms`; `num_turns`; `session_id`; `usage`, summed over the run. |

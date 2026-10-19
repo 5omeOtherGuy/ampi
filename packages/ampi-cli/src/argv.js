@@ -483,7 +483,8 @@ Options:
 
   -m, --mode <mode>
       Start in an ampi mode: low, medium, high, ultra or free (rush, smart, deep and fable are
-      accepted as aliases). --mode text, json and rpc keep Pi's meaning (output format).
+      accepted as aliases), or the key or label of a mode another extension registered.
+      --mode text, json and rpc keep Pi's meaning (output format).
   --fast
       Start the session at fast speed: the provider serves requests with priority, at a higher
       price (OpenAI and OpenAI Codex models only). Alt+R turns it on or off in a session.

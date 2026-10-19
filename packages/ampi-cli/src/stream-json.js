@@ -431,6 +431,8 @@ export function readStreamJsonContext(pi) {
   } catch {
     // The extension API of a runtime that has already been replaced.
   }
-  const agentMode = /** @type {any} */ (globalThis)[AMPI_CORE_RUNTIME_GLOBAL_KEY]?.getMmrModeState?.()?.mode;
+  // A registered mode reports its own key; `mode` holds only its base mode.
+  const state = /** @type {any} */ (globalThis)[AMPI_CORE_RUNTIME_GLOBAL_KEY]?.getMmrModeState?.();
+  const agentMode = state?.registeredMode?.key ?? state?.mode;
   return { tools, mcpServers: [], ...(typeof agentMode === "string" ? { agentMode } : {}) };
 }

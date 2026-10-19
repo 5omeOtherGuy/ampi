@@ -21,6 +21,12 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("passes a registered mode's key or label through unchecked, for ampi-core to resolve", () => {
+    assert.deepEqual(routeAmpiArgv(["-m", "review", "-x", "hi"]).piArgs.slice(0, 2), ["--ampi-mode", "review"]);
+    assert.deepEqual(routeAmpiArgv(["--mode", "Review"]).piArgs, ["--ampi-mode", "Review"]);
+    assert.equal(routeAmpiArgv(["--mode=SKETCH"]).options.mode, "SKETCH");
+  });
+
   it("keeps Pi's output modes on --mode but not on -m", () => {
     assert.deepEqual(routeAmpiArgv(["--mode", "json", "-p", "hi"]).piArgs, ["--mode", "json", "-p", "hi"]);
     assert.equal(routeAmpiArgv(["--mode", "rpc"]).options.mode, undefined);
