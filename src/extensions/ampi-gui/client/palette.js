@@ -36,12 +36,11 @@ function sendBlocked(state) {
  * out) and `chips` are its first key's chips in the platform's names.
  *
  * With no query, the sections come in PALETTE_SECTIONS order and each lists
- * its commands in registration order. With a query, only matching commands
- * are listed: the ones that can run first, each part best match first; each
- * section keeps the order of its rows, and the section with the best row
- * comes first. When no command matches well (see GOOD_MATCH), a Message
- * section with the row `{ kind: "message", title, text, state, reason? }`
- * comes before them.
+ * its commands in registration order. With a query, the matching commands
+ * form one Commands section ranked across every section: the ones that can
+ * run first, each part best match first. When no command matches well (see
+ * GOOD_MATCH), a Message section with the row `{ kind: "message", title,
+ * text, state, reason? }` comes before it.
  */
 export function paletteSections(commands, state, query = "", { mac = false } = {}) {
   const rows = [];
@@ -72,15 +71,7 @@ export function paletteSections(commands, state, query = "", { mac = false } = {
 
   const ranked = fuzzyRank(rows, text, (row) => row.title);
   const ordered = [...ranked.filter(({ item }) => item.state === "available"), ...ranked.filter(({ item }) => item.state !== "available")];
-  const sections = [];
-  for (const { item } of ordered) {
-    let group = sections.find((candidate) => candidate.section === item.section);
-    if (!group) {
-      group = { section: item.section, rows: [] };
-      sections.push(group);
-    }
-    group.rows.push(item);
-  }
+  const sections = ordered.length > 0 ? [{ section: "Commands", rows: ordered.map(({ item }) => item) }] : [];
   if (!ranked.some((match) => match.quality >= GOOD_MATCH)) {
     const reason = sendBlocked(state);
     const row = { kind: "message", id: "send-message", title: SEND_TITLE, text, state: reason ? "unavailable" : "available", ...(reason ? { reason } : {}) };
@@ -115,8 +106,8 @@ export function switchRows(list, currentId, query = "", now = Date.now()) {
 // Page wiring
 
 const MODES = {
-  commands: { placeholder: "Find a command, or type a message…", label: "Command or message", list: "Commands", empty: "No commands match." },
-  switch: { placeholder: "Find a session to switch to…", label: "Session to switch to", list: "Sessions", empty: "No other session matches." },
+  commands: { dialog: "Command palette", placeholder: "Find a command, or type a message…", label: "Command or message", list: "Commands", empty: "No commands match." },
+  switch: { dialog: "Switch thread", placeholder: "Find a session to switch to…", label: "Session to switch to", list: "Sessions", empty: "No other session matches." },
 };
 
 function element(tag, className, text) {
@@ -226,19 +217,39 @@ export function mountPalette({ dialog, commands, state, openSession, send, mac =
     else commands().find((command) => command.id === row.id)?.run(at, { chord: null });
   }
 
-  /** The keys that open the palette also close it. */
-  function isToggle(event) {
+  /** Whether `event` is one of the keys of the command `id`. */
+  function isKeyOf(event, id) {
     const chord = eventChord(event, { mac });
-    const palette = commands().find((command) => command.id === "command-palette");
-    return Boolean(chord && palette) && keysOf(palette).some((text) => chordId(text, { mac }) === chord);
+    const command = commands().find((candidate) => candidate.id === id);
+    return Boolean(chord && command) && keysOf(command).some((text) => chordId(text, { mac }) === chord);
+  }
+
+  /** Open the palette on the commands (`commands`) or on Switch Thread (`switch`); a second open of the same mode closes it. */
+  function toggle(next = "commands") {
+    if (dialog.open && mode === next) return close();
+    if (!dialog.open) returnFocus = document.activeElement;
+    pointer = null;
+    opened = state();
+    mode = next;
+    dialog.dataset.mode = next;
+    dialog.setAttribute("aria-label", MODES[next].dialog);
+    input.placeholder = MODES[next].placeholder;
+    input.setAttribute("aria-label", MODES[next].label);
+    list.setAttribute("aria-label", MODES[next].list);
+    input.value = "";
+    draw();
+    if (!dialog.open) dialog.showModal();
+    input.focus();
   }
 
   input.addEventListener("input", draw);
   dialog.addEventListener("keydown", (event) => {
     if (event.isComposing) return;
-    if (isToggle(event)) {
+    // The keys that open either mode switch to it or, in that mode already, close it; the page's own handler skips open dialogs.
+    const next = isKeyOf(event, "command-palette") ? "commands" : isKeyOf(event, "switch-thread") ? "switch" : null;
+    if (next) {
       event.preventDefault();
-      close();
+      toggle(next);
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (rows.length > 0) setActive(Math.max(0, Math.min(rows.length - 1, active + (event.key === "ArrowDown" ? 1 : -1))));
@@ -265,27 +276,11 @@ export function mountPalette({ dialog, commands, state, openSession, send, mac =
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) close();
   });
-  // Esc closes the dialog itself.
+  // Esc closes the dialog itself. The event arrives after close() too, and
+  // by then a command (Switch Thread) may have opened the dialog again.
   dialog.addEventListener("close", () => {
-    if (returnFocus) close();
+    if (!dialog.open && returnFocus) close();
   });
 
-  return {
-    /** Open the palette on the commands (`commands`) or on Switch Thread (`switch`); a second open of the same mode closes it. */
-    toggle(next = "commands") {
-      if (dialog.open && mode === next) return close();
-      if (!dialog.open) returnFocus = document.activeElement;
-      pointer = null;
-      opened = state();
-      mode = next;
-      dialog.dataset.mode = next;
-      input.placeholder = MODES[next].placeholder;
-      input.setAttribute("aria-label", MODES[next].label);
-      list.setAttribute("aria-label", MODES[next].list);
-      input.value = "";
-      draw();
-      if (!dialog.open) dialog.showModal();
-      input.focus();
-    },
-  };
+  return { toggle };
 }

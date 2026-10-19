@@ -81,16 +81,24 @@ describe("ampi-gui palette: fuzzy ranking", () => {
     );
   });
 
-  it("ranks Archive Thread above Search Threads and Switch Thread above Show Chat Pane in the default palette", async () => {
+  it("ranks the default palette's matches in one list across its sections", async () => {
     const { paletteSections } = await palette();
     const { DEFAULT_COMMANDS } = await commandsModule();
-    const arch = titles(paletteSections(DEFAULT_COMMANDS, sessionState(), "arch"));
-    assert.equal(arch[0], "Archive Thread");
-    assert.ok(arch.indexOf("Archive Thread") < arch.indexOf("Search Threads…"), arch.join(", "));
-    const sw = paletteSections(DEFAULT_COMMANDS, sessionState(), "sw").flatMap((section) => section.rows);
-    const rank = (title) => sw.findIndex((row) => row.title === title);
-    // "Show Where" starts both words with s and w, so it may rank with Switch; "Show" holds its w inside the word.
-    assert.ok(rank("Switch Thread…") >= 0 && rank("Switch Thread…") < rank("Show Chat Pane"), sw.map((row) => row.title).join(", "));
+    // s and w both start words; s starts a word and w follows it; w sits inside "Show" (the shorter title first); neither starts a word.
+    assert.deepEqual(titles(paletteSections(DEFAULT_COMMANDS, sessionState(), "sw")), [
+      "Show Where the Thread Runs",
+      "Switch Thread…",
+      "Show Keymap",
+      "Show Chat Pane",
+      "Copy as Markdown",
+    ]);
+    // "arch" starts both Archive titles (the shorter first) and sits inside "Search"; Unarchive cannot run here, so it comes last.
+    assert.deepEqual(titles(paletteSections(DEFAULT_COMMANDS, sessionState(), "arch")), [
+      "Archive Thread",
+      "Archive Inactive Threads Older than 72h",
+      "Search Threads…",
+      "Unarchive Thread",
+    ]);
   });
 });
 
@@ -161,22 +169,22 @@ describe("ampi-gui palette: sections", () => {
     assert.equal(row("Show Chat Pane"), undefined, "the composer is not on the home page");
     assert.equal(row("Go Home").state, "available");
 
-    // With a query the commands that can run come first in their section, and the section with the best match first.
+    // With a query the matches form one list across the sections, the commands that can run first.
     const typed = paletteSections(DEFAULT_COMMANDS, sessionState(), "archive");
     assert.deepEqual(
       typed.map((section) => [section.section, section.rows.map((entry) => [entry.title, entry.state])]),
       [
         [
-          "Thread",
+          "Commands",
           [
             ["Archive Thread", "available"],
+            ["Archive Inactive Threads Older than 72h", "available"],
             ["Unarchive Thread", "unavailable"],
           ],
         ],
-        ["Global", [["Archive Inactive Threads Older than 72h", "available"]]],
       ],
     );
-    assert.equal(typed[0].rows[1].reason, "This session is not archived");
+    assert.equal(typed[0].rows[2].reason, "This session is not archived");
   });
 
   it("offers to send the text as a message only when no command matches it well", async () => {
@@ -198,6 +206,21 @@ describe("ampi-gui palette: sections", () => {
       assert.ok(!paletteSections(DEFAULT_COMMANDS, sessionState(), query).some((section) => section.section === "Message"), query);
     }
     assert.ok(!paletteSections(DEFAULT_COMMANDS, sessionState(), "").some((section) => section.section === "Message"));
+
+    // At the threshold: a word start, then a letter inside a word after a gap that costs 0.1 per skipped letter.
+    // "qz" scores 7 + (1 - 2.0) = 6 over 20 skipped letters (3 per letter, good) and 5.9 over 21 (just under).
+    const run = () => {};
+    const only = (title) => [{ id: "one", title, section: "Global", keys: [], run }];
+    const atThreshold = paletteSections(only(`Q${"u".repeat(20)}z`), {}, "qz");
+    assert.deepEqual(
+      atThreshold.map((section) => section.section),
+      ["Commands"],
+    );
+    const underThreshold = paletteSections(only(`Q${"u".repeat(21)}z`), {}, "qz");
+    assert.deepEqual(
+      underThreshold.map((section) => section.section),
+      ["Message", "Commands"],
+    );
 
     const readOnly = paletteSections(DEFAULT_COMMANDS, sessionState({ writable: false }), "hello there")[0].rows[0];
     assert.deepEqual([readOnly.state, readOnly.reason], ["unavailable", "This session is read-only here"]);
@@ -308,5 +331,113 @@ describe("ampi-gui palette: Archive Inactive", () => {
     assert.equal(command.when({ sessionList: { ...list, actions: { archive: false } } }).reason, "Archiving needs ampi-threads");
     const none = { ...list, groups: groups.filter((group) => group.kind !== "inactive") };
     assert.equal(command.when({ sessionList: none }).reason, "No session has been inactive for 72 hours");
+  });
+});
+
+describe("ampi-gui palette: the dialog in a document", () => {
+  const PAGE =
+    '<textarea id="prompt"></textarea><dialog id="palette-dialog" aria-label="Command palette"><div class="palette-head"><input class="palette-input"></div>' +
+    '<div class="palette-body"><div class="palette-list" role="listbox"></div><p class="palette-empty" hidden></p></div></dialog>';
+
+  /**
+   * A linkedom page with the palette mounted on the default registry. A
+   * browser fires a dialog's `close` event in a later task, not inside
+   * `close()`; the fake does the same, which is what the reopen case needs.
+   */
+  async function mounted() {
+    const { mountPalette } = await palette();
+    const { DEFAULT_COMMANDS } = await commandsModule();
+    const { parseHTML } = await import("linkedom");
+    const { window, document } = parseHTML(`<!doctype html><html><body>${PAGE}</body></html>`);
+    let active = null;
+    Object.defineProperty(document, "activeElement", { configurable: true, get: () => active ?? document.body });
+    window.HTMLElement.prototype.focus = function focus() {
+      active = this;
+    };
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    const dialog = document.getElementById("palette-dialog");
+    dialog.showModal = () => {
+      dialog.open = true;
+    };
+    dialog.close = () => {
+      if (!dialog.open) return;
+      dialog.open = false;
+      setImmediate(() => dialog.dispatchEvent(new window.Event("close")));
+    };
+    const ui = {};
+    const shown = [];
+    const page = mountPalette({
+      dialog,
+      commands: () => DEFAULT_COMMANDS,
+      state: () => sessionState({ ui }),
+      openSession: (id) => shown.push(id),
+      send: () => {},
+      now: () => NOW,
+    });
+    ui.switchThread = () => page.toggle("switch");
+    ui.openPalette = () => page.toggle("commands");
+    const input = dialog.querySelector(".palette-input");
+    const key = (name, modifiers = {}) => dialog.dispatchEvent(Object.assign(new window.Event("keydown", { bubbles: true }), { key: name }, modifiers));
+    const type = (text) => {
+      input.value = text;
+      input.dispatchEvent(new window.Event("input"));
+    };
+    const prompt = document.getElementById("prompt");
+    prompt.focus();
+    return { page, dialog, document, input, key, type, prompt, shown };
+  }
+  const settle = () => new Promise(setImmediate);
+
+  it("keeps Switch Thread open when it is run from the palette", async () => {
+    const saved = globalThis.document;
+    const { page, dialog, document, input, key, type, prompt, shown } = await mounted();
+    globalThis.document = document;
+    try {
+      page.toggle("commands");
+      type("switch");
+      key("Enter");
+      await settle();
+      assert.equal(dialog.open, true, "the close event of the palette leaves the picker open");
+      assert.equal(dialog.dataset.mode, "switch");
+      assert.equal(dialog.getAttribute("aria-label"), "Switch thread");
+      assert.equal(document.activeElement, input);
+      assert.deepEqual(
+        [...dialog.querySelectorAll('[role="option"] .palette-title')].map((node) => node.textContent),
+        ["Old"],
+      );
+      key("Enter");
+      await settle();
+      assert.deepEqual(shown, ["old"]);
+      assert.equal(dialog.open, false);
+      assert.equal(document.activeElement, prompt, "focus goes back to where it was before the palette opened");
+    } finally {
+      globalThis.document = saved;
+    }
+  });
+
+  it("switches mode with Mod+P and Ctrl+O while open, and closes on a second press of the same key", async () => {
+    const saved = globalThis.document;
+    const { page, dialog, document, key, prompt } = await mounted();
+    globalThis.document = document;
+    try {
+      page.toggle("commands");
+      let prevented = 0;
+      dialog.addEventListener("keydown", (event) => {
+        if (event.defaultPrevented) prevented++;
+      });
+      key("p", { ctrlKey: true });
+      assert.equal(prevented, 1, "the browser's print dialog does not open");
+      assert.deepEqual([dialog.open, dialog.dataset.mode, dialog.getAttribute("aria-label")], [true, "switch", "Switch thread"]);
+      key("o", { ctrlKey: true });
+      assert.deepEqual([dialog.open, dialog.dataset.mode, dialog.getAttribute("aria-label")], [true, "commands", "Command palette"]);
+      key("p", { ctrlKey: true });
+      key("p", { ctrlKey: true });
+      await settle();
+      assert.equal(dialog.open, false);
+      assert.equal(prevented, 4);
+      assert.equal(document.activeElement, prompt);
+    } finally {
+      globalThis.document = saved;
+    }
   });
 });
