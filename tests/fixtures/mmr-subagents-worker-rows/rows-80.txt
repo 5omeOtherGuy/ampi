@@ -89,7 +89,7 @@
    ✓ bash git status --porcelain
    ✓ read packages/api/handler.ts
    Review checks
-   ✓ house-style · repository root · no issues
+   ✓ house-style · repository root · 0 counted findings (see report)
    ! input-validation · packages/api · 2 findings
    ✗ changelog · repository root · failed: worker exited with code 1: The scrip…
    Main summary: the handler change looks right.

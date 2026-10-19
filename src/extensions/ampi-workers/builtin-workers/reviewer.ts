@@ -36,6 +36,7 @@ import {
 } from "../framework/worker-tool-factory.js";
 import { resolveWorkerCwd, type ToolHostLike } from "../framework/worker-host.js";
 import {
+  AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL,
   countAmpiReviewFindings,
   planAmpiReviewChecks,
   type AmpiReviewCheck,
@@ -172,7 +173,11 @@ export const reviewerParameters = REVIEWER_PARAMETERS_SCHEMA;
 
 export type ReviewerParams = Static<typeof REVIEWER_PARAMETERS_SCHEMA>;
 
-/** Outcome of one review check: `pending` / `running` appear only in progress details. */
+/**
+ * Outcome of one review check: `pending` / `running` appear only in progress
+ * details. `no-issues` means the check answered with no counted finding (see
+ * `countAmpiReviewFindings`), not that its report is free of findings.
+ */
 export type ReviewerCheckStatus = "pending" | "running" | "no-issues" | "findings" | "failed";
 
 /** Per-check entry of {@link ReviewerDetails.checks}. */
@@ -574,7 +579,7 @@ function checkRunDetails(run: ReviewerCheckRun, final: boolean): ReviewerCheckDe
 function checkOutcomeLabel(details: ReviewerCheckDetails): string {
   if (details.status === "failed") return `failed: ${details.failureReason ?? "unknown reason"}`;
   if (details.status === "findings") return `${details.findings} ${details.findings === 1 ? "finding" : "findings"}`;
-  if (details.status === "no-issues") return "no issues";
+  if (details.status === "no-issues") return AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL;
   return details.status;
 }
 
@@ -851,7 +856,9 @@ function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPrepare
     prepared.run = async ({ signal, onProgress }) => {
       const limit = createRunLimiter(REVIEWER_MAX_CONCURRENT_RUNS);
       // The lead run's latest shaped progress (the one with content and
-      // details), re-sent with fresh check states when a check changes.
+      // details), re-sent with fresh check states when a check starts or
+      // settles. Refreshes begin only after the lead run's first shaped
+      // progress: before it there is no update to re-send.
       let lastShaped: AgentToolResult<ReviewerDetails> | undefined;
       const leadProgress: typeof onProgress = (update) => {
         if (isShapedProgress(update)) lastShaped = update as AgentToolResult<ReviewerDetails>;

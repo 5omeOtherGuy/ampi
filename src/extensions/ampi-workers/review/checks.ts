@@ -597,16 +597,26 @@ export function planAmpiReviewChecks(input: PlanAmpiReviewChecksInput): AmpiRevi
 // Findings
 // ---------------------------------------------------------------------------
 
-/** A line that starts (after list markers, emphasis or backticks) with `<path>:<start>-<end>`. */
-const FINDING_LINE = /^\s*(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+)?[*_`]*[^\s:`*]+:\d+-\d+\b/;
+/** A line that starts (after list markers, emphasis or backticks) with `<path>:<start>-<end>` or `<path>:<line>`. */
+const FINDING_LINE = /^\s*(?:[-*+]\s+|\d+[.)]\s+|#{1,6}\s+)?[*_`]*[^\s:`*]+:\d+(?:-\d+)?\b/;
 const FINDINGS_HEADING = /^\s*(?:#{1,6}\s*)?[*_]*findings[*_]*\s*:?\s*[*_]*\s*$/i;
+
+/**
+ * Outcome label of a check that answered without a counted finding. The
+ * counter only knows the entry shapes it recognizes, so this label never
+ * claims the check passed; the report itself says whether it did.
+ */
+export const AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL = "0 counted findings (see report)";
 
 /**
  * Count the findings in a reviewer report: the lines that begin with a
  * `<file path>:<startLine>-<endLine>` location, the entry shape the reviewer
- * system prompt asks for. When the report has a `Findings` heading line only
- * lines after it count, so a location quoted in the summary is not a finding.
- * Every entry counts, compliments included.
+ * system prompt asks for, or a single-line `<file path>:<line>`. When the
+ * report has a `Findings` heading line only lines after it count, so a
+ * location quoted in the summary is not a finding. Every entry counts,
+ * compliments included. Findings in other shapes (a table row, a labelled
+ * location) are not counted, which is why a zero count is reported as
+ * {@link AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL}.
  */
 export function countAmpiReviewFindings(report: string): number {
   const lines = report.replace(/\r\n?/g, "\n").split("\n");

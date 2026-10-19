@@ -355,6 +355,9 @@ describe("changed-file resolution", () => {
     assert.equal(countAmpiReviewFindings(report), 3);
     assert.equal(countAmpiReviewFindings("Clean.\n\nFindings\n\nNone."), 0);
     assert.equal(countAmpiReviewFindings("- x.ts:1-2 — severity: low; type: compliment\r\n- y.ts:3-4 — low"), 2);
+    // A single-line location counts too; a labelled location and a table row do not.
+    assert.equal(countAmpiReviewFindings("Findings\n- `src/api/h.ts:42` — high, bug\n3. src/b.ts:7 — low\nNote: 3 items"), 2);
+    assert.equal(countAmpiReviewFindings("**File:** `src/api/h.ts:40-44`\n| src/api/h.ts:40-44 | high |"), 0);
   });
 });
 
@@ -513,7 +516,7 @@ async function reviewerTool(deps) {
 const EXPECTED_CHECKS_SECTION = [
   "## Checks",
   "",
-  "### b-docs (repository root): no issues",
+  "### b-docs (repository root): 0 counted findings (see report)",
   "",
   "Docs are fine.",
   "",
@@ -538,11 +541,11 @@ const EXPECTED_CHECKS_SECTION = [
   "## Findings",
   "1. `packages/x/h.ts:5-7` — severity: high; type: bug",
   "",
-  "### logs (packages/x): no issues",
+  "### logs (packages/x): 0 counted findings (see report)",
   "",
   "Clean.",
   "",
-  "### perf (packages/y): no issues",
+  "### perf (packages/y): 0 counted findings (see report)",
   "",
   "Clean.",
   "",
@@ -684,7 +687,6 @@ describe("reviewer with review checks", () => {
     const report = [
       "Two handlers trust their input.",
       "",
-      "- `src/api/h.ts:42` — high, bug",
       "**File:** `src/api/h.ts:40-44`",
       "#### 1. `src/api/h.ts:40-44`",
       "| src/api/h.ts:40-44 | high |",
@@ -692,7 +694,8 @@ describe("reviewer with review checks", () => {
     const { runner } = immediateRunner((options) => workerResult(runName(options) === "handlers" ? report : "Main: clean."));
     const tool = await reviewerTool({ runner, reviewCheckEnv: env });
     const result = await tool.execute("c1", { diff_description: "uncommitted changes" }, undefined, undefined, { cwd: "/repo" });
-    assert.equal(result.content[0].text, `Main: clean.\n\n## Checks\n\n### handlers (src/api): no issues\n\n${report}`);
+    // The heading claims only what the counter knows; the report says the rest.
+    assert.equal(result.content[0].text, `Main: clean.\n\n## Checks\n\n### handlers (src/api): 0 counted findings (see report)\n\n${report}`);
     assert.deepEqual(result.details.checks.map((check) => [check.name, check.status, check.findings]), [["handlers", "no-issues", 0]]);
   });
 
@@ -771,6 +774,50 @@ describe("reviewer with review checks", () => {
     const projected = prep.prepared.projectResult(raw);
     assert.equal(projected.content[0].text, `${OUTPUTS.main}\n\n${EXPECTED_CHECKS_SECTION}`);
     assert.deepEqual(projected.details.checks, EXPECTED_CHECK_DETAILS);
+  });
+
+  it("re-sends progress when a pending check starts after the main review has reported progress", async () => {
+    const { env } = fakeGitRepo(SIX_CHECKS, SIX_STATUS);
+    const manual = manualRunner();
+    const tool = await reviewerTool({ runner: manual.runner, reviewCheckEnv: env });
+    const updates = [];
+    const pending = tool.execute("c1", { diff_description: "uncommitted changes" }, undefined, (update) => updates.push(update), { cwd: "/repo" });
+    await manual.waitForCalls(4);
+    const main = manual.calls.find((call) => call.name === "main");
+    main.options.onProgress({ messages: [], finalOutput: "Reading the diff.", truncatedFinalOutput: "Reading the diff.", trail: [], usage: workerResult("").usage });
+    const statuses = (update) => Object.fromEntries(update.details.checks.map((check) => [check.name, check.status]));
+    assert.deepEqual(statuses(updates.at(-1)), {
+      "b-docs": "running",
+      "c-broken": "running",
+      style: "running",
+      input: "pending",
+      logs: "pending",
+      perf: "pending",
+    });
+    const before = updates.length;
+    const docs = manual.calls.find((call) => call.name === "b-docs");
+    docs.settle(resultFor(docs.options));
+    await manual.waitForCalls(5);
+    // Freeing b-docs' slot starts input; that start is visible before input's own run reports anything.
+    const started = updates.slice(before).find((update) => statuses(update).input === "running");
+    assert.ok(started, "a progress update carries the started check");
+    assert.equal(started.content[0].text, "Reading the diff.");
+    assert.deepEqual(statuses(started), {
+      "b-docs": "no-issues",
+      "c-broken": "running",
+      style: "running",
+      input: "running",
+      logs: "pending",
+      perf: "pending",
+    });
+    // Settle everything; the last pending checks start as slots free.
+    while (manual.calls.length < 7) {
+      const started = manual.calls.length;
+      for (const call of manual.calls) call.settle(resultFor(call.options));
+      await manual.waitForCalls(started + 1);
+    }
+    for (const call of manual.calls) call.settle(resultFor(call.options));
+    await pending;
   });
 
   it("reports progress from the main review, and again when a check settles", async () => {

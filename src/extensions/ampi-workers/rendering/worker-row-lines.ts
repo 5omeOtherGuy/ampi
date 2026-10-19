@@ -9,6 +9,7 @@ import { Markdown, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@eare
 import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import { compactOneLine, formatWorkerStatusLine, type SubagentTheme } from "./subagent-render-format.js";
 import { isRecord } from "../../ampi-core/internal/json.js";
+import { AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL } from "../review/checks.js";
 import { finalAssistantTrailIndex, formatToolArguments, isWorkerPromptEcho, structuredArgsFromPreview } from "./tool-argument-display.js";
 import {
   WORKER_ROW_ANSWER_LINES,
@@ -205,7 +206,7 @@ export function workerTrailLines(
 function checkOutcome(check: WorkerRowCheck): string {
   switch (check.status) {
     case "no-issues":
-      return "no issues";
+      return AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL;
     case "findings":
       return `${check.findings} ${check.findings === 1 ? "finding" : "findings"}`;
     case "failed":
