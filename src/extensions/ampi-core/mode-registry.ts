@@ -23,11 +23,15 @@ export interface MmrRegisteredModeDefinition {
   readonly key: string;
   /** Shown in compact pickers and the prompt box; up to 24 characters. Defaults to the key. */
   readonly label?: string;
-  /** One line saying what the mode is for. */
+  /** One line saying what the mode is for; up to 200 characters. */
   readonly description?: string;
   /** Label colour, `#rrggbb`. */
   readonly color: string;
-  /** The registering extension, for example its package name. Reads `extension` when unset. */
+  /**
+   * The registering extension, for example its package name; up to 100
+   * characters. Reads `extension` when unset. Only a registration that names
+   * the same source can replace this one.
+   */
   readonly source?: string;
   /** The locked mode it runs as; defaults to `medium`. */
   readonly baseMode?: MmrLockedModeKey;
@@ -37,7 +41,7 @@ export interface MmrRegisteredModeDefinition {
   readonly thinkingLevel?: MmrRegisteredModeThinkingLevel;
   /** Exact Pi tool names replacing the base mode's tool list. */
   readonly tools?: readonly string[];
-  /** Text appended to the system prompt while the mode is active. */
+  /** Text appended to the system prompt while the mode is active; up to 4000 characters. */
   readonly promptAppend?: string;
 }
 
@@ -80,6 +84,9 @@ export const MMR_EVENT_MODES_READY = "ampi-core:modes-ready";
 export const MMR_REGISTERED_MODE_DEFAULT_SOURCE = "extension";
 export const MMR_REGISTERED_MODE_KEY_MAX = 32;
 export const MMR_REGISTERED_MODE_LABEL_MAX = 24;
+export const MMR_REGISTERED_MODE_DESCRIPTION_MAX = 200;
+export const MMR_REGISTERED_MODE_SOURCE_MAX = 100;
+export const MMR_REGISTERED_MODE_PROMPT_APPEND_MAX = 4000;
 
 /** Values of Pi's own `--mode`, which `ampi --mode` hands to Pi. */
 const PI_OUTPUT_MODES = ["text", "json", "rpc"] as const;
@@ -88,7 +95,9 @@ const BASE_MODES: readonly MmrLockedModeKey[] = ["low", "medium", "high", "ultra
 const THINKING_LEVELS: readonly MmrRegisteredModeThinkingLevel[] = ["low", "medium", "high", "xhigh"];
 const KEY_PATTERN = /^[a-z0-9-]+$/;
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
+// C0 and C1 controls, DEL, and format characters (bidi overrides and
+// isolates, zero-width characters), which could disguise a label in a list.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]|\p{Cf}/u;
 
 interface ModeStore {
   /** By lowercase key, in registration order. */
@@ -119,12 +128,17 @@ function describe(value: unknown): string {
   return typeof value === "string" ? `"${value}"` : String(value);
 }
 
-function readLine(def: Record<string, unknown>, field: string, key: string, max?: number): string | undefined {
+function checkLength(value: string, field: string, key: string, max: number): void {
+  if ([...value].length > max) throw new Error(`Mode "${key}": ${field} must be at most ${max} characters.`);
+}
+
+function readLine(def: Record<string, unknown>, field: string, key: string, max: number): string | undefined {
   const value = def[field];
   if (value === undefined) return undefined;
   if (typeof value !== "string" || value.trim().length === 0) throw new Error(`Mode "${key}": ${field} must be a non-empty string.`);
-  if (CONTROL_CHARACTERS.test(value)) throw new Error(`Mode "${key}": ${field} must be one line without control characters.`);
-  if (max !== undefined && [...value].length > max) throw new Error(`Mode "${key}": ${field} must be at most ${max} characters.`);
+  if (CONTROL_CHARACTERS.test(value)) throw new Error(`Mode "${key}": ${field} must be one line without control or format characters.`);
+  if (value.trim() !== value) throw new Error(`Mode "${key}": ${field} must not start or end with whitespace.`);
+  checkLength(value, field, key, max);
   return value;
 }
 
@@ -186,8 +200,8 @@ export function normalizeMmrModeDefinition(input: unknown): MmrRegisteredMode {
 
   const label = readLine(def, "label", key, MMR_REGISTERED_MODE_LABEL_MAX) ?? key;
   if (RESERVED_NAMES.has(label.toLowerCase())) throw new Error(`Mode "${key}": label "${label}" names a built-in mode, alias or Pi output mode.`);
-  const description = readLine(def, "description", key);
-  const source = readLine(def, "source", key) ?? MMR_REGISTERED_MODE_DEFAULT_SOURCE;
+  const description = readLine(def, "description", key, MMR_REGISTERED_MODE_DESCRIPTION_MAX);
+  const source = readLine(def, "source", key, MMR_REGISTERED_MODE_SOURCE_MAX) ?? MMR_REGISTERED_MODE_DEFAULT_SOURCE;
 
   if (typeof def.color !== "string" || !COLOR_PATTERN.test(def.color)) {
     throw new Error(`Mode "${key}": color ${describe(def.color)} must be written as #rrggbb.`);
@@ -205,6 +219,7 @@ export function normalizeMmrModeDefinition(input: unknown): MmrRegisteredMode {
 
   const promptAppend = def.promptAppend;
   if (promptAppend !== undefined && typeof promptAppend !== "string") throw new Error(`Mode "${key}": promptAppend must be a string.`);
+  if (typeof promptAppend === "string") checkLength(promptAppend, "promptAppend", key, MMR_REGISTERED_MODE_PROMPT_APPEND_MAX);
 
   const modelPreferences = readModelPreferences(def, key);
   const tools = readStringList(def, "tools", key);
@@ -227,9 +242,12 @@ function sameMode(a: MmrRegisteredMode, b: MmrRegisteredMode): boolean {
 }
 
 /**
- * Validate and store a definition. A key held by a registration with the same
- * source is replaced in place (an extension registering again after a reload,
- * or answering {@link MMR_EVENT_MODES_READY} again); any other clash throws.
+ * Validate and store a definition. An identical definition changes nothing
+ * (an extension answering {@link MMR_EVENT_MODES_READY} again). A different
+ * one replaces the held registration only when both name the same source;
+ * neither the API nor the event bus says which extension is calling, so a
+ * definition without a source (read as the default) never replaces another.
+ * Any other clash throws.
  */
 function addMode(input: unknown): MmrRegisteredMode {
   const mode = normalizeMmrModeDefinition(input);
@@ -237,6 +255,9 @@ function addMode(input: unknown): MmrRegisteredMode {
   const held = store.modes.get(id);
   if (held && held.source !== mode.source) {
     throw new Error(`Mode key "${mode.key}" is already registered by ${held.source}.`);
+  }
+  if (held && mode.source === MMR_REGISTERED_MODE_DEFAULT_SOURCE && !sameMode(held, mode)) {
+    throw new Error(`Mode key "${mode.key}" is already registered; a registration that replaces it must name its source.`);
   }
   const label = mode.label.toLowerCase();
   for (const [otherId, other] of store.modes) {
@@ -383,10 +404,13 @@ export function connectMmrModeRegistryEvents(pi: MmrModeRegistryEventHost): MmrM
     }
   });
   const offUnregister = pi.events.on(MMR_EVENT_UNREGISTER_MODE, (data) => {
-    const key = typeof data === "object" && data !== null ? (data as { key?: unknown }).key : undefined;
-    if (typeof key !== "string") return;
-    const mode = getMmrRegisteredMode(key);
-    if (mode && viaBus.has(mode)) removeMode(mode);
+    // Reading `key` runs the payload's getters; a throwing one is ignored like any malformed message.
+    try {
+      const key = typeof data === "object" && data !== null ? (data as { key?: unknown }).key : undefined;
+      if (typeof key !== "string") return;
+      const mode = getMmrRegisteredMode(key);
+      if (mode && viaBus.has(mode)) removeMode(mode);
+    } catch {}
   });
 
   return {

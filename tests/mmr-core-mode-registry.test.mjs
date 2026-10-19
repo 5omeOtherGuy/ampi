@@ -168,6 +168,26 @@ describe("mode registry validation", () => {
     assert.equal(stored.source, "extension", "the source reads extension when unset");
     assert.equal(Object.isFrozen(stored), true);
   });
+
+  it("refuses C1 controls, format characters and edge whitespace in the label, description and source", () => {
+    for (const field of ["label", "description", "source"]) {
+      for (const disguised of ["a\u0085b", "a\u009bb", "a‮b", "a⁦b", "a​b", "a؜b", "\tab"]) {
+        refuses({ key: "d", [field]: disguised }, new RegExp(`${field} must be one line without control or format characters`));
+      }
+      for (const padded of [" ab", "ab ", "ab ", "　ab"]) refuses({ key: "d", [field]: padded }, new RegExp(`${field} must not start or end with whitespace`));
+    }
+    registry.registerMmrMode({ key: "d", label: "Prüfen ✓", description: "Reads a change — and reports it", source: "@scope/modes", color: "#d97706" });
+    assert.equal(registry.getMmrRegisteredMode("d").label, "Prüfen ✓");
+  });
+
+  it("caps the description at 200, the source at 100 and promptAppend at 4000 characters", () => {
+    // Characters, not UTF-16 units: each of these takes two units.
+    registry.registerMmrMode({ key: "a", color: "#d97706", description: "😀".repeat(200), source: "😀".repeat(100), promptAppend: "😀".repeat(4000) });
+    refuses({ key: "b", description: "d".repeat(201) }, /description must be at most 200 characters/);
+    refuses({ key: "b", source: "s".repeat(101) }, /source must be at most 100 characters/);
+    refuses({ key: "b", promptAppend: "p".repeat(4001) }, /promptAppend must be at most 4000 characters/);
+    assert.deepEqual(registry.listMmrModes().map((mode) => mode.key), ["a"]);
+  });
 });
 
 describe("mode registry API", () => {
@@ -215,6 +235,17 @@ describe("mode registry API", () => {
     assert.deepEqual(events.map((event) => event.change), ["registered", "registered"]);
   });
 
+  it("never lets a definition without a source replace another, which keeps two such extensions apart", () => {
+    const events = [];
+    registry.onMmrModesChanged((event) => events.push(event));
+    registry.registerMmrMode({ key: "notes", color: "#d97706" });
+    assert.doesNotThrow(() => registry.registerMmrMode({ key: "notes", color: "#d97706" }), "the same definition again changes nothing");
+    assert.throws(() => registry.registerMmrMode({ key: "notes", color: "#22c55e" }), /already registered; a registration that replaces it must name its source/);
+    assert.throws(() => registry.registerMmrMode({ key: "notes", color: "#22c55e", source: "other" }), /already registered by extension/);
+    assert.equal(registry.getMmrRegisteredMode("notes").color, "#d97706");
+    assert.equal(events.length, 1);
+  });
+
   it("shares one store between two copies of the module", async () => {
     const copy = await importSource("extensions/ampi-core/mode-registry.ts");
     assert.notEqual(copy, registry);
@@ -251,6 +282,41 @@ describe("mode registry over pi.events", () => {
     t.pi.events.emit("ampi-core:unregister-mode", { key: "REVIEW" });
     t.pi.events.emit("ampi-core:unregister-mode", "review");
     assert.deepEqual(registry.listMmrModes().map((mode) => mode.key), ["sketch"]);
+  });
+
+  it("ignores an unregister message whose key cannot be read, without an error on the console", async () => {
+    const t = await start({ after: [busModes(REVIEW)] });
+    const printed = [];
+    const consoleError = console.error;
+    console.error = (...args) => printed.push(args);
+    try {
+      t.pi.events.emit("ampi-core:unregister-mode", {
+        get key() {
+          throw new Error("unreadable key");
+        },
+      });
+      await settle();
+    } finally {
+      console.error = consoleError;
+    }
+    assert.deepEqual(printed, []);
+    assert.deepEqual(registry.listMmrModes().map((mode) => mode.key), ["review"]);
+  });
+
+  it("keeps the first of two extensions that register one key without a source, and warns about the second", async () => {
+    const t = await start({ after: [busModes({ key: "notes", color: "#d97706" }), busModes({ key: "notes", color: "#22c55e" })] });
+    assert.equal(registry.getMmrRegisteredMode("notes").color, "#d97706");
+    const warnings = t.notifications.filter((note) => note.level === "warning" && /Refused a mode registration/.test(note.message));
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0].message, /Mode key "notes" is already registered; a registration that replaces it must name its source/);
+  });
+
+  it("reports an over-long or disguised bus registration as a warning", async () => {
+    const t = await start({ after: [busModes({ key: "long", color: "#d97706", promptAppend: "p".repeat(4001) }, { key: "hidden", color: "#d97706", label: "Re‮view" })] });
+    const message = t.notifications.filter((note) => /Refused a mode registration/.test(note.message)).map((note) => note.message).join("\n");
+    assert.match(message, /Mode "long": promptAppend must be at most 4000 characters/);
+    assert.match(message, /Mode "hidden": label must be one line without control or format characters/);
+    assert.equal(registry.listMmrModes().length, 0);
   });
 
   it("reports a refused bus registration once, at session start, and lists it in /ampi-status", async () => {
@@ -347,9 +413,13 @@ describe("applying a registered mode", () => {
   it("replaces the tool list, still adding the edit tool and honouring ampi.tools.disable", async () => {
     registry.registerMmrMode({ ...REVIEW, tools: ["read", "write", "grep", "find"], modelPreferences: [{ model: "claude-opus-4-8" }] });
     const cwd = projectWith({ ampi: { tools: { disable: ["find"] } } });
-    await start({ cwd, flags: { "ampi-mode": "review" } });
+    const t = await start({ cwd, flags: { "ampi-mode": "review" } });
     assert.deepEqual(current().activeTools, ["read", "write", "edit", "grep"]);
     assert.equal(current().editTools.family, "edit");
+    // Resolving the tools again (a tool provider's rules changed) keeps its own list.
+    t.pi.events.emit("mmr-core:tool-rules-changed", undefined);
+    await settle();
+    assert.deepEqual(current().activeTools, ["read", "write", "edit", "grep"]);
   });
 
   it("refuses to start when its own tool list resolves no active tool", async () => {
@@ -384,6 +454,31 @@ describe("applying a registered mode", () => {
     await t.mode("high");
     assert.equal(current().registeredMode, undefined);
     assert.equal(t.notifications.at(-1).message, "/mode overrode the mode lock: this session now runs in high.");
+  });
+
+  it("applies a new definition of the active mode at once, and leaves the session alone when another mode changes", async () => {
+    registry.registerMmrMode(REVIEW);
+    registry.registerMmrMode(SKETCH);
+    const t = await start({ flags: { "ampi-mode": "review" } });
+    const applies = t.calls.setModel.length;
+    registry.registerMmrMode({ ...SKETCH, description: "Quick drafts" });
+    await settle();
+    assert.equal(t.calls.setModel.length, applies, "replacing a mode that is not active applies nothing");
+
+    registry.registerMmrMode({
+      ...REVIEW,
+      label: "Critic",
+      color: "#22c55e",
+      thinkingLevel: "medium",
+      modelPreferences: [{ model: "claude-opus-4-8", providers: ["claude-subscription"] }],
+    });
+    await settle();
+    assert.equal(current().mode, "high");
+    assert.deepEqual(current().registeredMode, { key: "review", label: "Critic", color: "#22c55e", source: "tests" });
+    assert.equal(current().thinkingLevel, "medium");
+    assert.equal(`${current().provider}/${current().model}`, "claude-subscription/claude-opus-4-8");
+    assert.equal(t.emits.filter((emit) => emit.name === "mmr-core:state-changed").at(-1).data.registeredMode.label, "Critic");
+    assert.equal(t.calls.appendEntry.at(-1)[1].registeredModeKey, "review");
   });
 
   it("falls back to its base mode when it is unregistered during the session", async () => {

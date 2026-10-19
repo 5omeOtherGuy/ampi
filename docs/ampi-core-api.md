@@ -441,10 +441,15 @@ Every name is also exported in its `Mmr*` / `MMR_*` form.
   replaced or removed). `definition` is `{ key, color, label?,
   description?, source?, baseMode?, modelPreferences?, thinkingLevel?,
   tools?, promptAppend? }`. Throws on an invalid field, a reserved key or
-  label, or a key or label another registration holds; a key held by a
-  registration with the same `source` is replaced in place.
-- `unregisterAmpiMode(key)` — remove a mode by key; returns `false` when
-  none had it.
+  label, or a key or label another registration holds. An identical
+  definition changes nothing; a different one for a held key replaces it in
+  place only when both name the same `source` (a definition without one
+  never replaces another). Replacing the active mode applies the new
+  definition at once.
+- `unregisterAmpiMode(key)` — remove a mode by key, however it was
+  registered (through the API or over the event bus); returns `false` when
+  none had it. The bus message `ampi-core:unregister-mode` removes only
+  modes registered over the bus.
 - `listAmpiModes()` — registered modes in registration order, as frozen
   `AmpiRegisteredMode` records (`label` filled in, `color` lowercase,
   `source` defaulting to `extension`, `baseMode` defaulting to `medium`).

@@ -702,6 +702,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     lastCtx = ctx;
     stopFollowingModes ??= onMmrModesChanged((event) => {
       if (event.change === "unregistered") fallBackFromUnregisteredMode(event.key);
+      else followReplacedMode(event.key);
     });
 
     // Every extension has loaded by now, so registered modes resolve here. A
@@ -734,6 +735,17 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     });
     // A failed apply keeps the previous session's state; give it this session's lock.
     publishModeLock();
+  }
+
+  // The active registered mode was registered again with a new definition:
+  // apply it now, so its base mode, model, thinking level, tools and label follow.
+  function followReplacedMode(key: string): void {
+    const state = getMmrModeState();
+    const registered = getMmrRegisteredMode(key);
+    const ctx = lastCtx;
+    if (!ctx || !registered || state?.registeredMode?.key !== registered.key) return;
+    void applyMode(registered.baseMode, ctx, { source: state.source, persist: true, notify: false, overrideModeLock: true, registeredMode: registered })
+      .catch(() => undefined);
   }
 
   // The active registered mode went away (its extension unregistered it, or
