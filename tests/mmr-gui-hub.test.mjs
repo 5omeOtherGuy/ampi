@@ -5,10 +5,12 @@
 // live process has open, and a hosted session gives way when one opens it.
 // The hub is a real server on loopback; the workers are real session
 // servers (ampi-gui hosted as `ampi app --worker` hosts it) or a recording
-// server, started by a fake startSession. Timers and the clock are injected.
+// server, started by a fake startSession. A terminal session is ampi-core's
+// live registry writer and ampi-gui in Pi's tui mode on a stub Pi, so its
+// entry and token file are the real ones. Timers and the clock are injected.
 
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, request } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -20,6 +22,7 @@ after(cleanupLoadedSource);
 
 const HUB_TOKEN = ["hub", "test", "token"].join("-");
 const WORKER_TOKEN = ["worker", "test", "token"].join("-");
+const TERMINAL_TOKEN = ["terminal", "test", "token"].join("-");
 const HUB_PID = 7_100_001;
 const WORKER_PID = 7_100_002;
 const TERMINAL_PID = 7_100_003;
@@ -178,7 +181,8 @@ async function startHub({ upstream = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "ampi-hub-"));
   dirs.push(dir);
   const registryDir = path.join(dir, "live");
-  const alive = new Set([HUB_PID, WORKER_PID, TERMINAL_PID, LATE_PID]);
+  // This process plays the terminal sessions that run ampi-gui (startTerminal).
+  const alive = new Set([HUB_PID, WORKER_PID, TERMINAL_PID, LATE_PID, process.pid]);
   const probes = { onProbe: undefined };
   const registry = {
     dir: registryDir,
@@ -295,7 +299,35 @@ async function startHub({ upstream = {} } = {}) {
     };
     writeFileSync(path.join(registryDir, `${pid}.json`), JSON.stringify(entry));
   };
-  return { hub, port, headers, post, fire, clock, starts, workers, byId, hold, probes, close: () => hub.close() };
+  return { hub, port, headers, post, fire, clock, starts, workers, byId, hold, probes, alive, registryDir, close: () => hub.close() };
+}
+
+/**
+ * A terminal session with the web GUI on, as Pi runs ampi in a terminal:
+ * ampi-core's live registry writer and ampi-gui on one stub Pi in tui mode,
+ * with the hub's registry, so the entry (pid: this process) and the token
+ * file are what a real terminal writes.
+ */
+async function startTerminal(ctx, id) {
+  const { createMmrGuiExtension } = await importSource("extensions/ampi-gui/index.ts");
+  const mock = createMockPi();
+  const renamed = [];
+  mock.pi.setSessionName = (name) => renamed.push(name);
+  const timers = [];
+  const writer = liveRegistry.registerMmrLiveRegistry(mock.pi, {
+    dir: ctx.registryDir,
+    now: () => 0,
+    setTimer: (callback) => timers.push(callback),
+    clearTimer: () => {},
+  });
+  createMmrGuiExtension({ loadSettings: () => ({ enabled: true }), registryDir: ctx.registryDir, createToken: () => TERMINAL_TOKEN })(mock.pi);
+  const session = createMockExtensionContext({ mode: "tui", cwd: "/work/lib", sessionId: id, sessionFile: ctx.byId[id].path });
+  const fire = (name, event = {}) => mock.handlers.get(name)({ type: name, ...event }, session.ctx);
+  await fire("session_start", { reason: "startup" });
+  for (const run of timers.splice(0)) run();
+  await writer.idle();
+  const port = Number(/^Web GUI: http:\/\/127\.0\.0\.1:(\d+)\//.exec(session.notifications[0].message)[1]);
+  return { port, mock, renamed, fire, stop: () => fire("session_shutdown", { reason: "quit" }) };
 }
 
 describe("ampi app hub: pages and the session list", () => {
@@ -323,6 +355,9 @@ describe("ampi app hub: pages and the session list", () => {
       assert.equal(rows["s-held"].elsewhere, true);
       assert.equal(rows["s-c"].host, null);
       assert.equal(rows["s-c"].elsewhere, false);
+      // Two processes with one file: the first entry is the host, as it is the holder the hub answers with.
+      const entry = (pid, kind) => ({ pid, kind, sessionPath: "/s/x.jsonl", gui: null, status: null });
+      assert.equal(hubModule.mmrGuiRowHosts([entry(TERMINAL_PID, "tui"), entry(LATE_PID, "execute")]).get("/s/x.jsonl").pid, TERMINAL_PID);
 
       const view = await send(ctx.port, { target: "/api/sessions/s-c", headers: ctx.headers() });
       assert.equal(view.status, 200);
@@ -603,7 +638,7 @@ describe("ampi app hub: one writer per session file", () => {
       assert.equal(events.json().state, "elsewhere");
       assert.equal((await ctx.post("/s/s-held/api/interrupt", {})).status, 409);
       const transcript = (await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() })).json();
-      assert.deepEqual(transcript.state, { state: "elsewhere", kind: "tui", pid: TERMINAL_PID });
+      assert.deepEqual(transcript.state, { state: "elsewhere", kind: "tui", pid: TERMINAL_PID, gui: false }, "a terminal without the GUI");
 
       assert.deepEqual(ctx.starts, [], "startSession was never called");
       assert.deepEqual(readFileSync(file), bytes, "the file is unchanged");
@@ -710,6 +745,119 @@ describe("ampi app hub: one writer per session file", () => {
   });
 });
 
+describe("ampi app hub: terminal sessions", () => {
+  it("forwards GET, POST and the event stream to a terminal's own GUI with the token from its token file", async () => {
+    const ctx = await startHub();
+    const terminal = await startTerminal(ctx, "s-held");
+    try {
+      const list = (await send(ctx.port, { target: "/api/sessions", headers: ctx.headers() })).json();
+      const row = list.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === "s-held");
+      assert.deepEqual(row.host, { kind: "tui", pid: process.pid, gui: true, phase: "idle" });
+
+      const snapshot = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+      assert.equal(snapshot.status, 200);
+      assert.equal(snapshot.json().session.id, "s-held", "the terminal's live snapshot");
+      assert.equal("state" in snapshot.json(), false);
+      assert.equal(typeof snapshot.json().lastEventId, "number");
+      assert.equal(snapshot.headers["set-cookie"], undefined, "the terminal's cookie never reaches the browser");
+      assert.equal(snapshot.body.includes(TERMINAL_TOKEN), false);
+
+      const sent = await ctx.post("/s/s-held/api/send", { text: "from the page" });
+      assert.equal(sent.status, 200);
+      assert.equal(terminal.mock.calls.sendUserMessage.at(-1)?.content, "from the page", "the terminal's session got the message");
+
+      const stream = await openStream(ctx.port, "/s/s-held/api/events", ctx.headers());
+      await stream.next(/retry: 2000/);
+      terminal.fire("session_info_changed");
+      await stream.next(/event: session/);
+      assert.equal(parseEvents(stream.text()).find((event) => event.event === "session")?.data.id, "s-held");
+      stream.close();
+
+      assert.equal((await ctx.post("/api/rename", { sessionId: "s-held", name: "Renamed here" })).status, 200);
+      assert.deepEqual(terminal.renamed, ["Renamed here"], "a rename goes to the terminal too");
+      assert.deepEqual(ctx.starts, [], "no worker for a session a terminal runs");
+    } finally {
+      await ctx.close();
+      await terminal.stop();
+    }
+  });
+
+  it("keeps a terminal session read-only when its token file is missing or names another token", async () => {
+    const ctx = await startHub();
+    const terminal = await startTerminal(ctx, "s-held");
+    const tokenFile = path.join(ctx.registryDir, `${process.pid}.token`);
+    try {
+      for (const [label, spoil] of [
+        ["another token", () => writeFileSync(tokenFile, ["not", "the", "token"].join("-"))],
+        ["no token file", () => rmSync(tokenFile)],
+      ]) {
+        spoil();
+        const transcript = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+        assert.equal(transcript.status, 200, label);
+        assert.deepEqual(transcript.json().state, { state: "elsewhere", kind: "tui", pid: process.pid, gui: true }, label);
+        assert.equal(transcript.json().items.length, 2, `${label}: read from the file`);
+        const sent = await ctx.post("/s/s-held/api/send", { text: "may I?" });
+        assert.equal(sent.status, 409, label);
+        assert.equal(sent.json().gui, true, label);
+        assert.equal((await send(ctx.port, { target: "/s/s-held/api/events", headers: ctx.headers() })).status, 409, label);
+      }
+      assert.deepEqual(terminal.mock.calls.sendUserMessage, [], "nothing reached the terminal");
+      assert.deepEqual(ctx.starts, []);
+    } finally {
+      await ctx.close();
+      await terminal.stop();
+    }
+  });
+
+  it("keeps a session another ampi app runs read-only although its entry names a GUI with a matching token file", async () => {
+    const ctx = await startHub();
+    const terminal = await startTerminal(ctx, "s-held");
+    const entryFile = path.join(ctx.registryDir, `${process.pid}.json`);
+    try {
+      writeFileSync(entryFile, JSON.stringify({ ...JSON.parse(readFileSync(entryFile, "utf8")), kind: "app-session", ownerPid: LATE_PID }));
+      const transcript = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+      assert.equal(transcript.status, 200);
+      assert.deepEqual(transcript.json().state, { state: "elsewhere", kind: "app-session", pid: process.pid, gui: true });
+      assert.equal(transcript.json().items.length, 2, "read from the file");
+      const sent = await ctx.post("/s/s-held/api/send", { text: "may I?" });
+      assert.equal(sent.status, 409);
+      assert.equal(sent.json().kind, "app-session");
+      assert.equal((await send(ctx.port, { target: "/s/s-held/api/events", headers: ctx.headers() })).status, 409);
+      assert.deepEqual(terminal.mock.calls.sendUserMessage, [], "nothing reached the GUI the entry names");
+      assert.deepEqual(ctx.starts, []);
+    } finally {
+      await ctx.close();
+      await terminal.stop();
+    }
+  });
+
+  it("answers 502 once the terminal's GUI has gone, reads the registry again and tells the pages", async () => {
+    const ctx = await startHub();
+    const terminal = await startTerminal(ctx, "s-held");
+    const files = [`${process.pid}.json`, `${process.pid}.token`].map((name) => path.join(ctx.registryDir, name));
+    const saved = files.map((file) => readFileSync(file));
+    const page = await openStream(ctx.port, "/api/events", ctx.headers());
+    try {
+      await page.next(/retry: 2000/);
+      await terminal.stop();
+      // As after a crash: the process still runs, its files are there, its server is not.
+      for (const [index, file] of files.entries()) writeFileSync(file, saved[index]);
+      const gone = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+      assert.equal(gone.status, 502);
+      assert.equal(gone.json().state, "gone");
+      await page.next(/event: sessions/);
+
+      ctx.alive.delete(process.pid);
+      const after = await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() });
+      assert.deepEqual(after.json().state, { state: "not-running" });
+      assert.deepEqual(readdirSync(ctx.registryDir), [], "the dead process's entry and token file are removed");
+    } finally {
+      page.close();
+      await ctx.close();
+    }
+  });
+});
+
 describe("ampi-gui with a hub host", () => {
   it("serves the hub in RPC mode, tells the host its port once and records the app without a file", async () => {
     const dir = path.join(mkdtempSync(path.join(tmpdir(), "ampi-hub-ext-")), "live");
@@ -745,8 +893,10 @@ describe("ampi-gui with a hub host", () => {
     assert.equal(entry.sessionPath, null);
     assert.equal(entry.gui.port, port);
     assert.equal(entry.ownerPid, undefined);
+    assert.equal(readFileSync(path.join(dir, `${process.pid}.token`), "utf8"), HUB_TOKEN, "a second ampi app reads the link from here");
 
     await emit("session_shutdown", { reason: "quit" });
+    assert.deepEqual(readdirSync(dir), []);
     await assert.rejects(send(port, { headers: { Host: `127.0.0.1:${port}` } }), { code: "ECONNREFUSED" });
   });
 });

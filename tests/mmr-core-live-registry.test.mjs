@@ -16,6 +16,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
@@ -26,6 +27,8 @@ after(cleanupLoadedSource);
 
 const FIXTURES = path.join(import.meta.dirname, "fixtures", "live-registry");
 const HASH = "0f".repeat(32);
+const TOKEN = ["gui", "token", "for", "tests"].join("-");
+const TOKEN_HASH = createHash("sha256").update(TOKEN).digest("hex");
 const load = () => importSource("extensions/ampi-core/live-registry.ts");
 const dirs = [];
 after(() => {
@@ -309,9 +312,9 @@ describe("ampi-core live registry writer", () => {
     const { ctx } = createMockExtensionContext({ mode: "tui", sessionId: "s-1", sessionFile: "/sessions/s-1.jsonl" });
     await emit("session_start", { reason: "startup" }, ctx);
     clock.now += 1000;
-    setMmrLiveFields({ gui: { port: 40123, tokenHash: HASH } });
+    setMmrLiveFields({ gui: { port: 40123, token: TOKEN } });
     await handle.idle();
-    assert.deepEqual(readOwn(dir).gui, { port: 40123, tokenHash: HASH });
+    assert.deepEqual(readOwn(dir).gui, { port: 40123, tokenHash: TOKEN_HASH }, "the entry holds the token's hash");
     clock.now += 1000;
     setMmrLiveFields({ title: "Generated title" });
     await handle.idle();
@@ -322,7 +325,7 @@ describe("ampi-core live registry writer", () => {
     assert.equal(readOwn(dir).gui, null);
     assert.deepEqual(readdirSync(dir), [`${process.pid}.json`]);
     await emit("session_shutdown", { reason: "quit" }, ctx);
-    setMmrLiveFields({ gui: { port: 1, tokenHash: HASH } });
+    setMmrLiveFields({ gui: { port: 1, token: TOKEN } });
     await handle.idle();
     assert.deepEqual(readdirSync(dir), [], "a contribution after shutdown writes nothing");
   });
@@ -334,12 +337,12 @@ describe("ampi-core live registry writer", () => {
     const { ctx } = createMockExtensionContext({ mode: "rpc", sessionId: "s-1", sessionFile: "/sessions/s-1.jsonl" });
     await emit("session_start", { reason: "startup" }, ctx);
     // The clock stands still, so the throttle holds this write for its timer.
-    setMmrLiveFields({ gui: { port: 40124, tokenHash: HASH } });
+    setMmrLiveFields({ gui: { port: 40124, token: TOKEN } });
     await handle.idle();
     assert.notEqual(readOwn(dir).gui?.port, 40124);
     assert.equal(clock.timers.length, 1);
     await flushMmrLiveEntry();
-    assert.deepEqual(readOwn(dir).gui, { port: 40124, tokenHash: HASH });
+    assert.deepEqual(readOwn(dir).gui, { port: 40124, tokenHash: TOKEN_HASH });
     assert.equal(clock.timers.length, 0, "the flush replaces the pending write");
     await emit("session_shutdown", { reason: "quit" }, ctx);
     await flushMmrLiveEntry();

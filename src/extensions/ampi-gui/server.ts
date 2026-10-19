@@ -86,11 +86,6 @@ function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
-/** SHA-256 of the token, hex, as the live registry stores it. */
-export function hashMmrGuiToken(token: string): string {
-  return digest(token).toString("hex");
-}
-
 function sameToken(candidate: string | undefined | null, token: string): boolean {
   if (typeof candidate !== "string" || candidate === "") return false;
   return timingSafeEqual(digest(candidate), digest(token));

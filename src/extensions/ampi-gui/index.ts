@@ -11,7 +11,7 @@ import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
 import { mmrGuiRowHosts, startMmrGuiHub } from "./hub.js";
-import { hashMmrGuiToken, type MmrGuiServer, startMmrGuiServer } from "./server.js";
+import { type MmrGuiServer, startMmrGuiServer } from "./server.js";
 import { createMmrGuiSessions } from "./sessions.js";
 
 /** Palette command that opens the running session in the browser. */
@@ -97,7 +97,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
           warn(ctx, "could not start the app's web GUI", error);
           return;
         }
-        setMmrLiveFields({ gui: { port: server.port, tokenHash: hashMmrGuiToken(hub.token) } });
+        setMmrLiveFields({ gui: { port: server.port, token: hub.token } });
         if (!hostReady) {
           hostReady = true;
           await flushMmrLiveEntry();
@@ -132,9 +132,13 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
           current.ui.notify(opened ? `Opening the web GUI: ${url}` : `Open this link in a browser: ${url}`, "info");
         },
       });
-      // ampi-core writes this process's live registry entry; the GUI adds its port.
-      setMmrLiveFields({ gui: { port: server.port, tokenHash: hashMmrGuiToken(token) } });
+      // ampi-core writes this process's live registry entry; the GUI adds its port, and its token for `ampi app`.
+      setMmrLiveFields({ gui: { port: server.port, token } });
       if (!hosted) {
+        // Written now, not within the write throttle: an `ampi app` page that
+        // read the entry meanwhile would take this terminal for one without
+        // the web GUI.
+        await flushMmrLiveEntry();
         ctx.ui.notify(`Web GUI: ${url}`, "info");
       } else if (!hostReady) {
         // The host already holds the token; it builds the link itself. The

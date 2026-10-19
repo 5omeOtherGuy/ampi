@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -24,7 +24,11 @@ import type { MmrModeKey } from "./types.js";
  * Readers remove the files of processes that no longer run, and of a pid
  * that now belongs to another process (its start time differs). The file
  * holds paths, pids, a title and a hash of the GUI's access token, never the
- * token itself. The plain JavaScript reader for the `ampi` command,
+ * token itself. While the GUI serves, the token is in `<pid>.token` next to
+ * the entry (owner-only, like the entry), so `ampi app` can reach a
+ * terminal's GUI for the user; readers use it only when it matches the
+ * entry's hash, and remove it with a dead process's entry. The plain
+ * JavaScript reader for the `ampi` command,
  * `packages/ampi-cli/src/live-registry.js`, follows the same rules.
  */
 
@@ -210,9 +214,49 @@ export async function readMmrLiveEntries(options: MmrLiveRegistryOptions = {}): 
       running = current === null || current === entry.procStart;
     }
     if (running) entries.push(entry);
-    else await rm(file, { force: true });
+    else {
+      await rm(file, { force: true });
+      await rm(tokenFile(dir, entry.pid), { force: true });
+    }
   }
   return entries.sort((a, b) => a.pid - b.pid);
+}
+
+/** SHA-256 of a GUI access token, hex, as entries store it. */
+export function hashMmrLiveToken(token: string): string {
+  return createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+function tokenFile(dir: string, pid: number): string {
+  return path.join(dir, `${pid}.token`);
+}
+
+/**
+ * The GUI access token of a live entry, from `<pid>.token`, or `undefined`
+ * when the entry has no GUI or the file is missing, unreadable or holds
+ * another token than the entry's hash names.
+ */
+export async function readMmrLiveToken(entry: MmrLiveEntry, options: Pick<MmrLiveRegistryOptions, "dir"> = {}): Promise<string | undefined> {
+  if (!entry.gui) return undefined;
+  let token: string;
+  try {
+    token = await readFile(tokenFile(options.dir ?? resolveDefaultMmrLiveDir(), entry.pid), "utf8");
+  } catch {
+    return undefined;
+  }
+  return token !== "" && hashMmrLiveToken(token) === entry.gui.tokenHash ? token : undefined;
+}
+
+/** Write `content` to `file` through a temp file renamed over it, readable only by the owner. */
+async function writeOwnerOnly(file: string, content: string): Promise<void> {
+  const temp = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  await writeFile(temp, content, { mode: 0o600 });
+  try {
+    await rename(temp, file);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
 }
 
 /** Write an entry atomically (a temp file renamed over `<pid>.json`), readable only by the owner. */
@@ -220,21 +264,16 @@ export async function writeMmrLiveEntry(entry: Omit<MmrLiveEntry, "version">, op
   const dir = options.dir ?? resolveDefaultMmrLiveDir();
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const file = path.join(dir, `${entry.pid}.json`);
-  const temp = `${file}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
   const body: MmrLiveEntry = { version: MMR_LIVE_REGISTRY_VERSION, ...entry };
-  await writeFile(temp, `${JSON.stringify(body, null, 2)}\n`, { mode: 0o600 });
-  try {
-    await rename(temp, file);
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
-  }
+  await writeOwnerOnly(file, `${JSON.stringify(body, null, 2)}\n`);
   return file;
 }
 
-/** Remove a process's entry; a missing file is fine. */
+/** Remove a process's entry and its token file; missing files are fine. */
 export async function removeMmrLiveEntry(pid: number, options: Pick<MmrLiveRegistryOptions, "dir"> = {}): Promise<void> {
-  await rm(path.join(options.dir ?? resolveDefaultMmrLiveDir(), `${pid}.json`), { force: true });
+  const dir = options.dir ?? resolveDefaultMmrLiveDir();
+  await rm(path.join(dir, `${pid}.json`), { force: true });
+  await rm(tokenFile(dir, pid), { force: true });
 }
 
 /** A path with its symbolic links resolved, as far as it exists. */
@@ -285,8 +324,11 @@ export function resolveMmrLiveKind(
 export interface MmrLiveFields {
   /** A generated session title; Pi's session name wins when there is one. */
   title?: string | null;
-  /** The web GUI's port and token hash, or `null` when it is not serving. */
-  gui?: MmrLiveGui | null;
+  /**
+   * The web GUI's port and access token, or `null` when it is not serving.
+   * The entry records the token's hash; the token goes to `<pid>.token`.
+   */
+  gui?: { port: number; token: string } | null;
 }
 
 interface LiveFieldsStore {
@@ -381,12 +423,17 @@ export function registerMmrLiveRegistry(
   let timer: unknown;
   let pending = false;
   let chain: Promise<unknown> = Promise.resolve();
+  /** The token in this process's token file, if one was written. */
+  let tokenOnDisk: string | undefined;
 
   function removeOnExit(): void {
-    try {
-      rmSync(path.join(storage.dir ?? resolveDefaultMmrLiveDir(), `${process.pid}.json`), { force: true });
-    } catch {
-      // Best effort: the next reader removes a dead process's entry.
+    const dir = storage.dir ?? resolveDefaultMmrLiveDir();
+    for (const name of [`${process.pid}.json`, `${process.pid}.token`]) {
+      try {
+        rmSync(path.join(dir, name), { force: true });
+      } catch {
+        // Best effort: the next reader removes a dead process's files.
+      }
     }
   }
 
@@ -415,7 +462,7 @@ export function registerMmrLiveRegistry(
       status: { phase: status.phase, label: status.label },
       startedAt: session.startedAt,
       updatedAt: new Date(now()).toISOString(),
-      gui: fields.gui ?? null,
+      gui: fields.gui ? { port: fields.gui.port, tokenHash: hashMmrLiveToken(fields.gui.token) } : null,
       ...(session.ownerPid !== undefined ? { ownerPid: session.ownerPid } : {}),
     };
   }
@@ -426,7 +473,26 @@ export function registerMmrLiveRegistry(
     const entry = snapshot();
     if (!entry) return chain;
     written = `${entry.mode}|${entry.status?.phase}|${entry.status?.label}`;
-    chain = chain.then(() => writeMmrLiveEntry(entry, storage)).catch(() => {});
+    const token = liveStore().fields.gui?.token;
+    const dir = storage.dir ?? resolveDefaultMmrLiveDir();
+    // The token file is there before the entry names the GUI, and goes after the entry stops naming it.
+    chain = chain
+      .then(async () => {
+        if (token !== undefined && token !== tokenOnDisk) {
+          await mkdir(dir, { recursive: true, mode: 0o700 });
+          await writeOwnerOnly(tokenFile(dir, process.pid), token);
+          tokenOnDisk = token;
+        }
+      })
+      .catch(() => {})
+      .then(() => writeMmrLiveEntry(entry, storage))
+      .then(async () => {
+        if (token === undefined && tokenOnDisk !== undefined) {
+          tokenOnDisk = undefined;
+          await rm(tokenFile(dir, process.pid), { force: true });
+        }
+      })
+      .catch(() => {});
     return chain;
   }
 
@@ -493,6 +559,7 @@ export function registerMmrLiveRegistry(
     liveStore().fields = {};
     process.off("exit", removeOnExit);
     await chain;
+    tokenOnDisk = undefined;
     await removeMmrLiveEntry(process.pid, storage).catch(() => {});
   });
 

@@ -4,6 +4,7 @@
 // the format and the reading rules are those of
 // src/extensions/ampi-core/live-registry.ts. tests/mmr-cli-live-registry.test.mjs
 // checks that both readers return the same entries for the same files.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import path from "node:path";
 
@@ -149,10 +150,11 @@ function parseEntry(value) {
 }
 
 /**
- * The entries of running processes, by pid. Removes the files of processes
- * that no longer run, and of a pid whose process started at another time
- * than the entry says. Files that are not valid entries, or whose name is
- * not their pid, are skipped and left alone. A missing directory has none.
+ * The entries of running processes, by pid. Removes the files (the entry
+ * and its token file) of processes that no longer run, and of a pid whose
+ * process started at another time than the entry says. Files that are not
+ * valid entries, or whose name is not their pid, are skipped and left alone.
+ * A missing directory has none.
  *
  * @param {LiveRegistryOptions} options
  * @returns {LiveEntry[]}
@@ -185,9 +187,32 @@ export function readLiveEntries({ dir, isAlive = processIsAlive, procStart = rea
       running = current === null || current === entry.procStart;
     }
     if (running) entries.push(entry);
-    else rmSync(file, { force: true });
+    else {
+      rmSync(file, { force: true });
+      rmSync(path.join(dir, `${entry.pid}.token`), { force: true });
+    }
   }
   return entries.sort((a, b) => a.pid - b.pid);
+}
+
+/**
+ * The GUI access token of a live entry, from `<pid>.token` next to it, or
+ * undefined when the entry has no GUI or the file is missing, unreadable or
+ * holds another token than the entry's hash names.
+ *
+ * @param {string} dir The registry directory.
+ * @param {LiveEntry} entry
+ * @returns {string | undefined}
+ */
+export function readLiveToken(dir, entry) {
+  if (!entry.gui) return undefined;
+  let token;
+  try {
+    token = readFileSync(path.join(dir, `${entry.pid}.token`), "utf8");
+  } catch {
+    return undefined;
+  }
+  return token !== "" && createHash("sha256").update(token, "utf8").digest("hex") === entry.gui.tokenHash ? token : undefined;
 }
 
 /**

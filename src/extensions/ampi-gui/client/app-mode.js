@@ -93,7 +93,7 @@ function holderWords(kind, pid) {
  *
  * | `access` | When | The page |
  * | --- | --- | --- |
- * | `held` | another live process has the file open | read-only, `html` names where it runs |
+ * | `held` | another live process has the file open | read-only, `html` names where it runs; for a terminal without the web GUI (`gui: false`), how to continue here |
  * | `dormant` | nothing runs it | the transcript with the composer on; a send starts it |
  * | `imported` | it was imported and cannot be continued | the composer off, with `reason` |
  * | `gone` | the process that ran it here stopped | read-only, `html` says to open it again |
@@ -102,6 +102,12 @@ export function bannerFor(state, title) {
   const name = `<strong>${escapeHtml(title || "This session")}</strong>`;
   switch (state?.state) {
     case "elsewhere":
+      if (state.kind === "tui" && state.gui === false) {
+        return {
+          access: "held",
+          html: `${name} is open in ${holderWords(state.kind, state.pid)}, which does not run the web GUI. To continue it here, turn on ampiGui in that terminal; until then it is read-only here.`,
+        };
+      }
       return {
         access: "held",
         html: `${name} is open in ${holderWords(state.kind, state.pid)}. Continue it there; here it is read-only, so the two never write the same file.`,
@@ -113,6 +119,19 @@ export function bannerFor(state, title) {
     default:
       return { access: "gone", html: `The process that ran ${name} here has stopped. Pick the session again to continue it.` };
   }
+}
+
+/**
+ * Whether the session list says the shown session changed hands since the
+ * page showed it with `access` and the hub's `state`, so the page shows it
+ * again: a process started a session shown dormant, a holder let go of one
+ * shown held, or the holder's pid or web GUI is not the one shown (a
+ * terminal's entry can name its GUI only after the page read it).
+ */
+export function hostChanged(access, state, host) {
+  if (access === "dormant") return Boolean(host);
+  if (access !== "held") return false;
+  return !host || host.pid !== state?.pid || host.gui !== Boolean(state?.gui);
 }
 
 /**
