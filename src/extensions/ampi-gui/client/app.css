@@ -2409,3 +2409,164 @@ details[open] > summary .chevron {
     margin-top: 0.5rem;
   }
 }
+
+/* The command palette: a wide card near the top, its field, then the commands by section. */
+.palette-dialog {
+  width: min(52rem, 100vw - 2rem);
+  max-width: none;
+  max-height: min(28rem, 100dvh - 4rem);
+  margin: 12vh auto auto;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: var(--ampi-surface-bg);
+  box-shadow: var(--ampi-shadow-card);
+  overflow: hidden;
+}
+
+.palette-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.palette-head {
+  flex: none;
+  padding: calc(var(--ampi-space) * 3) calc(var(--ampi-space) * 6);
+  border-bottom: 1px solid var(--ampi-border-strong);
+}
+
+.dialog input.palette-input {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--ampi-text-lg);
+  line-height: var(--ampi-leading-lg);
+}
+
+.dialog input.palette-input:focus-visible {
+  outline: none;
+}
+
+.palette-body {
+  min-height: 0;
+  padding: calc(var(--ampi-space) * 3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.palette-group + .palette-group {
+  margin-top: calc(var(--ampi-space) * 2);
+}
+
+.palette-section {
+  padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 3);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: var(--ampi-leading-xs);
+}
+
+.palette-option {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 3);
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.palette-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--ampi-fg) 10%, transparent);
+}
+
+.palette-option[aria-disabled="true"] {
+  cursor: default;
+}
+
+.palette-option[aria-disabled="true"] > * {
+  opacity: 0.5;
+}
+
+.palette-label {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: calc(var(--ampi-space) * 2.5);
+  min-width: 0;
+}
+
+.palette-title,
+.palette-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-title {
+  flex: none;
+  max-width: 100%;
+  color: var(--ampi-fg);
+  font-size: var(--ampi-text-lg);
+  font-weight: 500;
+  line-height: var(--ampi-leading-lg);
+}
+
+.palette-description {
+  flex: 1;
+  min-width: 0;
+  color: var(--ampi-muted-fg);
+}
+
+.palette-keys {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+
+.palette-keys kbd {
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  background: var(--ampi-card);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.palette-time {
+  flex: none;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.palette-empty {
+  margin: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 3.5);
+  color: var(--ampi-muted-fg);
+}
+
+/* On a phone the palette is a sheet from the top edge, without the key chips. */
+@media (max-width: 767px) {
+  .palette-dialog {
+    width: 100vw;
+    max-height: calc(100dvh - 3rem);
+    margin: 0 auto auto;
+    border-radius: 0 0 18px 18px;
+  }
+
+  .palette-head {
+    padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 4);
+  }
+
+  .palette-body {
+    padding: calc(var(--ampi-space) * 2);
+  }
+
+  .palette-keys {
+    display: none;
+  }
+}

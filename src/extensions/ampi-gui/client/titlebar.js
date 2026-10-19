@@ -184,6 +184,22 @@ export function deleteDialogHtml(title) {
   return `<form method="dialog"><h2 id="action-dialog-title">Delete session?</h2><p class="dialog-text"><strong>${escapeHtml(title || "This session")}</strong> is deleted: its session file and its labels, colour and other thread metadata. This cannot be undone.</p><div class="dialog-actions"><button class="button" type="submit" value="cancel" autofocus>Cancel</button><button class="button destructive" type="submit" value="delete">Delete</button></div></form>`;
 }
 
+/** The confirmation before archiving the sidebar's Inactive group, with how many sessions it holds. */
+export function archiveInactiveDialogHtml(count) {
+  const sessions = count === 1 ? "1 session" : `${count} sessions`;
+  return `<form method="dialog"><h2 id="action-dialog-title">Archive inactive threads?</h2><p class="dialog-text">${sessions} with no activity in the last 72 hours move to Archived. Unarchive any of them from its actions menu.</p><div class="dialog-actions"><button class="button" type="submit" value="cancel" autofocus>Cancel</button><button class="button primary" type="submit" value="archive">Archive ${sessions}</button></div></form>`;
+}
+
+/** Archive the sessions `ids`, one request each, in order; answers `{ archived, failed }` as counts. */
+export async function archiveSessions(ids, post) {
+  let archived = 0;
+  for (const sessionId of ids) {
+    const result = await post("archive", { sessionId, archived: true });
+    if (result.ok) archived++;
+  }
+  return { archived, failed: ids.length - archived };
+}
+
 /** Answers that can use a sentence from the server; otherwise a fallback. */
 function errorText(result, fallback) {
   return typeof result.body?.error === "string" ? result.body.error : fallback;
@@ -596,11 +612,12 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
 
   /**
    * Do `action` for `session`; `from` is where focus returns after a dialog,
-   * `value` a colour (or `null` to reset) or the text to copy.
+   * `value` a colour (or `null` to reset), the text to copy, or the ids
+   * Archive Inactive archives.
    */
   async function run(action, session, from = button, value) {
-    // Full Width and Report Bug… need no session.
-    if (!session && action !== "full-width" && action !== "report-bug") return;
+    // Full Width, Report Bug… and Archive Inactive need no session.
+    if (!session && !["full-width", "report-bug", "archive-inactive"].includes(action)) return;
     const id = session?.id;
     switch (action) {
       case "markdown":
@@ -646,6 +663,20 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
         const archived = !session.archived;
         return setField("archive", { sessionId: id, archived }, archived ? "Archived the session" : "Unarchived the session", "Could not change the archive.");
       }
+      case "archive-inactive":
+        return showDialog(from, {
+          html: archiveInactiveDialogHtml(value.length),
+          async onClose(answer) {
+            if (answer !== "archive") return;
+            const { archived, failed } = await archiveSessions(value, post);
+            notify(
+              failed > 0
+                ? `Archived ${archived} of ${value.length} sessions; the others could not be archived.`
+                : `Archived ${archived === 1 ? "1 inactive session" : `${archived} inactive sessions`}`,
+            );
+            onChanged();
+          },
+        });
       case "labels":
         return editLabels(session, from);
       case "delete":

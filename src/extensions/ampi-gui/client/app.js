@@ -30,6 +30,7 @@ import { mountComposer } from "./composer.js";
 import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
+import { mountPalette } from "./palette.js";
 import { createPrefs } from "./prefs.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountThreadSearch } from "./thread-search.js";
@@ -199,13 +200,17 @@ function applyScheme(scheme) {
   $("scheme").title = label;
 }
 
-$("scheme").addEventListener("click", () => {
+/** The next scheme after the current one, as the title bar's button and Change Theme… step through them. */
+function cycleScheme() {
   const next = SCHEMES[(SCHEMES.indexOf(readScheme()) + 1) % SCHEMES.length];
   try {
     localStorage.setItem("ampi-gui-color-scheme", next);
   } catch {}
   applyScheme(next);
-});
+  return next;
+}
+
+$("scheme").addEventListener("click", cycleScheme);
 applyScheme(readScheme());
 
 // ---------------------------------------------------------------------------
@@ -991,6 +996,14 @@ const keys = createKeyDispatcher({ commands: () => commands.list(), mac });
 /** A session page, not ampi app's home page or Activity. */
 const onThreadPage = () => !feedShown && (!appMode || shownId !== null);
 const keymap = mountKeymap({ dialog: $("keymap-dialog"), groups: () => keymapGroups(commands.list(), { threadPage: onThreadPage(), mac }) });
+const palette = mountPalette({
+  dialog: $("palette-dialog"),
+  commands: () => commands.list(),
+  state: () => keyState(),
+  openSession: (id) => openSessionPage(id),
+  send: (text) => composer.send(text),
+  mac,
+});
 
 /** The actions menu's target for a listed session: the title bar's when it is the one shown. */
 function sessionTarget(id) {
@@ -1056,6 +1069,14 @@ const ui = {
     sidebar.closeSheet();
     composer.focus();
   },
+  openPalette: () => palette.toggle("commands"),
+  switchThread: () => palette.toggle("switch"),
+  cycleScheme() {
+    notify(`Color scheme: ${cycleScheme()}`);
+  },
+  archiveInactive: (ids) => titlebar.run("archive-inactive", null, document.activeElement, ids),
+  collapseProjects: (collapsed) => sidebar.collapseProjects(collapsed),
+  reload: () => location.reload(),
 };
 
 /** What the commands' `when` and `run` read (see commands.js). */
@@ -1067,6 +1088,8 @@ function keyState() {
     contexts: inSidebar ? ["sidebar", "global"] : ["global"],
     session: titlebar.target(),
     focusedSession: row ? sessionTarget(row.dataset.id) : null,
+    sessionList,
+    shownId: feedShown ? null : shownSessionId(),
     interruptible: composer.interruptible(),
     writable: composer.writable(),
     promptEmpty: composer.isEmpty(),
