@@ -8,6 +8,7 @@ import { MMR_PERMISSIONS_DEFAULT_RULES } from "../ampi-core/permission-defaults.
 import {
   AMPI_PERMISSIONS_ALLOW_ALL_ENV,
   AMPI_PERMISSIONS_PROJECT_RULES_ENV,
+  clearMmrPermissionsDenials,
   isMmrPermissionsNonInteractive,
   isMmrPermissionsSessionAllowAll,
   MMR_PERMISSIONS_SHELL_TOOLS,
@@ -328,6 +329,9 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
     pi.on("session_start", async (event, ctx) => {
       // A new, resumed or forked session starts asking again; a reload keeps the answer.
       if (event.reason !== "reload") setMmrPermissionsSessionAllowAll(false);
+      // Only a run that cannot ask reads the refused calls when it ends; elsewhere
+      // the list starts again with each session instead of growing with the process.
+      if (!isMmrPermissionsNonInteractive()) clearMmrPermissionsDenials();
       // A subagent child takes its parent's "allow all" answer from the environment.
       if (getMmrSubagentState() && process.env[AMPI_PERMISSIONS_ALLOW_ALL_ENV] === "1") setMmrPermissionsSessionAllowAll(true);
       // The flag holds for the whole process, through /new, /resume and /fork,
