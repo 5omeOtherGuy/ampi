@@ -7,6 +7,19 @@ import { escapeHtml, renderMarkdown } from "./markdown.js";
 
 export const CHEVRON = '<svg class="icon chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
 
+/** What a message's element id starts with, so a link's `#m-<item id>` can never name another element of the page. */
+export const MESSAGE_ANCHOR_PREFIX = "m-";
+
+/** The element id of the message for item `id`. */
+export function messageAnchorId(id) {
+  return `${MESSAGE_ANCHOR_PREFIX}${id}`;
+}
+
+/** The item id a message anchor names, or `null` for any other fragment. */
+export function anchorItemId(anchor) {
+  return anchor.startsWith(MESSAGE_ANCHOR_PREFIX) && anchor.length > MESSAGE_ANCHOR_PREFIX.length ? anchor.slice(MESSAGE_ANCHOR_PREFIX.length) : null;
+}
+
 // ---------------------------------------------------------------------------
 // The transcript's items and groups, indexed for drawing
 

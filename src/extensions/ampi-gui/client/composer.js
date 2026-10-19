@@ -41,6 +41,23 @@ export function submitState({ busy, text, connected }) {
   return { mode: "send", label, disabled: !connected || text.trim() === "" };
 }
 
+/**
+ * The prompt after replying to `selected`: the text as a Markdown block
+ * quote and a blank line, in a new paragraph after what the prompt already
+ * holds. `caret` is where typing goes on, after the quote.
+ */
+export function quoteReply(selected, existing = "") {
+  const quote = selected
+    .replace(/\r\n?/g, "\n")
+    .replace(/^\n+|\s+$/g, "")
+    .split("\n")
+    .map((line) => (line.trim() === "" ? ">" : `> ${line}`))
+    .join("\n");
+  const before = existing.trim() === "" ? "" : `${existing.replace(/\s+$/, "")}\n\n`;
+  const text = `${before}${quote}\n\n`;
+  return { text, caret: text.length };
+}
+
 /** The text area's placeholder, which names the keys while a turn runs. */
 export function placeholderFor(busy, mac) {
   if (!busy) return "Write a message";
@@ -262,6 +279,16 @@ export function mountComposer({ root, post, mac = false }) {
     },
     focus() {
       field.focus({ preventScroll: true });
+    },
+    /** Quote `selected` in the prompt after what it holds (see `quoteReply`), and type on after it. */
+    quote(selected) {
+      const { text, caret } = quoteReply(selected, field.value);
+      field.value = text;
+      grow();
+      refresh();
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(caret, caret);
+      field.scrollTop = field.scrollHeight;
     },
   };
 }

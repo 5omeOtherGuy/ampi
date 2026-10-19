@@ -27,21 +27,25 @@ import {
 } from "./app-mode.js";
 import { createCommandRegistry, DEFAULT_COMMANDS } from "./commands.js";
 import { mountComposer } from "./composer.js";
+import { endJumps, mountOutline, nextUnread, outlineRows } from "./controls.js";
 import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
 import { mountModePicker } from "./mode-picker.js";
 import { mountPalette } from "./palette.js";
 import { createPrefs } from "./prefs.js";
+import { mountSelectionActions } from "./selection.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountThreadSearch } from "./thread-search.js";
 import { mountTitlebar } from "./titlebar.js";
 import {
+  anchorItemId,
   CHEVRON,
   createTranscript,
   groupItemIds,
   groupOf,
   itemHtml,
+  messageAnchorId,
   partNodeHtml,
   planWorkFolds,
   setGroups,
@@ -222,34 +226,46 @@ function atBottom() {
   return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 48;
 }
 
-function withFollow(update) {
+/** Whether something changed in the transcript since the reader left the bottom: the jump button's dot. */
+let unread = false;
+
+/** Show the jump button away from the bottom, with its dot when `changed` (an item added or changed out of view) or earlier changes are unread. */
+function drawJump(changed = false) {
+  const bottom = atBottom();
+  unread = nextUnread(unread, { atBottom: bottom, changed });
+  jump.hidden = bottom;
+  jump.dataset.unread = String(unread);
+  const label = unread ? "Jump to bottom, new messages below" : "Jump to bottom";
+  jump.setAttribute("aria-label", label);
+  jump.title = label;
+}
+
+/** Run `update`, then stay at the bottom if the reader was there; `changed` when it adds or changes transcript items. */
+function withFollow(update, changed = false) {
   const follow = atBottom();
   update();
   if (follow) chat.scrollTop = chat.scrollHeight;
-  jump.hidden = atBottom();
+  drawJump(changed && !follow && !viewing);
 }
 
 /** Whether the reader was at the bottom when the chat last scrolled. */
 let pinned = true;
 chat.addEventListener("scroll", () => {
   pinned = atBottom();
-  jump.hidden = pinned;
+  drawJump();
 });
 // The chat shrinks when queued messages or a longer prompt grow the composer,
 // and when the window changes size: keep a reader at the bottom there.
 new ResizeObserver(() => {
   if (pinned) chat.scrollTop = chat.scrollHeight;
-  jump.hidden = atBottom();
+  drawJump();
 }).observe(chat);
 jump.addEventListener("click", () => {
   chat.scrollTop = chat.scrollHeight;
   chat.focus({ preventScroll: true });
 });
 document.addEventListener("keydown", (event) => {
-  // End jumps to the newest output when focus is not in a text field.
-  if (event.key === "End" && !event.target.closest?.("input, textarea, [contenteditable]")) {
-    chat.scrollTop = chat.scrollHeight;
-  }
+  if (endJumps(event)) chat.scrollTop = chat.scrollHeight;
 });
 
 // ---------------------------------------------------------------------------
@@ -258,12 +274,19 @@ document.addEventListener("keydown", (event) => {
 function itemNode(item) {
   let node = transcript.querySelector(`[data-id="${CSS.escape(item.id)}"]`);
   if (!node) {
-    node = document.createElement("article");
-    node.className = `msg ${item.type}`;
-    node.dataset.id = item.id;
-    node.setAttribute("aria-label", item.type === "user" ? "You" : "Assistant");
+    node = messageNode(item);
     transcript.append(node);
   }
+  return node;
+}
+
+/** A message's element: its item id, and an anchor id for links (`#m-<item id>`). */
+function messageNode(item) {
+  const node = document.createElement("article");
+  node.className = `msg ${item.type}`;
+  node.id = messageAnchorId(item.id);
+  node.dataset.id = item.id;
+  node.setAttribute("aria-label", item.type === "user" ? "You" : "Assistant");
   return node;
 }
 
@@ -343,6 +366,63 @@ transcript.addEventListener("click", (event) => {
 function drawChrome() {
   empty.hidden = (viewing ? viewing.items.length : items.size) > 0;
   liveDot.hidden = !busy || Boolean(viewing);
+  outline.setCount(userMessageCount());
+}
+
+/** How many messages you wrote in the session shown. */
+function userMessageCount() {
+  let count = 0;
+  for (const item of shownTranscript().items.values()) if (item.type === "user") count++;
+  return count;
+}
+
+const outline = mountOutline({
+  button: $("outline"),
+  menu: $("outline-menu"),
+  scroller: chat,
+  rows: () => outlineRows(shownTranscript().items.values(), Date.now()),
+});
+
+const selectionActions = mountSelectionActions({
+  transcript,
+  scroller: chat,
+  chip: $("selection-chip"),
+  item: (id) => shownTranscript().items.get(id),
+  composer,
+  linkReason: () => linkBlocked(),
+  notify,
+});
+
+/** Why a link to a message cannot be made on this page, or `null`: a terminal's page shows other sessions at its own `#/s/<id>` address, which a message anchor would replace. */
+function linkBlocked() {
+  return !appMode && viewing ? "Links to messages work for this terminal's own session, or in ampi app" : null;
+}
+
+/**
+ * Scroll to the message the address's fragment names (`#m-<item id>`) and
+ * focus it, opening the work fold that hides it. Answers whether it did.
+ */
+function showHashMessage() {
+  let anchor;
+  try {
+    anchor = decodeURIComponent(location.hash.slice(1));
+  } catch {
+    return false;
+  }
+  const id = anchorItemId(anchor);
+  const node = id && document.getElementById(anchor);
+  if (!node || !transcript.contains(node)) return false;
+  if (node.hidden) {
+    const fold = planWorkFolds(shownTranscript(), busy && !viewing).find((candidate) => candidate.itemIds.includes(id));
+    if (fold) openRows.add(fold.key);
+    drawFolds();
+  }
+  node.tabIndex = -1;
+  node.scrollIntoView({ block: "start" });
+  node.focus({ preventScroll: true });
+  pinned = atBottom();
+  drawJump();
+  return true;
 }
 
 transcript.addEventListener(
@@ -455,7 +535,10 @@ function upsertItem(item) {
   if (item.replaces) {
     items.delete(item.replaces);
     const replaced = !viewing && transcript.querySelector(`[data-id="${CSS.escape(item.replaces)}"]`);
-    if (replaced) replaced.dataset.id = item.id;
+    if (replaced) {
+      replaced.dataset.id = item.id;
+      replaced.id = messageAnchorId(item.id);
+    }
   }
   setItem(live, item);
   drawItem(item);
@@ -551,8 +634,11 @@ function flush() {
       if (item) drawPart(item, Number(key.slice(split + 1)));
     }
     dirty.clear();
-  });
+  }, true);
 }
+
+/** The events that add or change transcript items, which light the jump button's dot out of view. */
+const ITEM_EVENTS = new Set(["item", "tool", "groups"]);
 
 function connect() {
   source?.close();
@@ -564,7 +650,7 @@ function connect() {
       withFollow(() => {
         handle(JSON.parse(event.data));
         drawChrome();
-      });
+      }, ITEM_EVENTS.has(name));
     });
   }
   // The server no longer has the events we missed: start over from a snapshot.
@@ -710,7 +796,8 @@ async function showSession(id) {
   $("readonly-banner").hidden = false;
   drawView(view);
   chat.scrollTop = 0;
-  jump.hidden = atBottom();
+  unread = false;
+  drawJump();
   chat.focus({ preventScroll: true });
   markRead(id);
 }
@@ -723,10 +810,7 @@ function drawView(view) {
   for (const item of view.items) setItem(viewing.transcript, item);
   transcript.replaceChildren();
   for (const item of view.items) {
-    const node = document.createElement("article");
-    node.className = `msg ${item.type}`;
-    node.dataset.id = item.id;
-    node.setAttribute("aria-label", item.type === "user" ? "You" : "Assistant");
+    const node = messageNode(item);
     node.innerHTML = itemHtml(viewing.transcript, item, openRows);
     transcript.append(node);
   }
@@ -744,6 +828,7 @@ function route() {
 window.addEventListener("hashchange", () => {
   // On Activity the address is `/feed`; a fragment there names no session.
   if (!appMode && !feedShown) route();
+  showHashMessage();
 });
 window.addEventListener("focus", () => refreshSessions());
 // Relative times and other terminals' sessions change while the page is open.
@@ -833,11 +918,13 @@ async function openSession(id, { keepScroll = false } = {}) {
     connect();
   }
   chat.scrollTop = keepScroll ? scroll : chat.scrollHeight;
-  jump.hidden = atBottom();
+  if (!keepScroll) unread = false;
+  drawJump();
   if (response.ok) markRead(id);
   if (keepScroll) return;
   if (access === "live" || access === "dormant") composer.focus();
   else chat.focus({ preventScroll: true });
+  showHashMessage();
 }
 
 /**
@@ -885,9 +972,9 @@ function showRoute(id) {
 }
 
 /** Go to a session's address (or the home page) and show it; Back and Forward return. */
-function navigate(id, { replace = false } = {}) {
-  if (replace) history.replaceState(historyState(id), "", appPath(id));
-  else history.pushState(historyState(id), "", appPath(id));
+function navigate(id, { replace = false, hash = "" } = {}) {
+  if (replace) history.replaceState(historyState(id), "", `${appPath(id)}${hash}`);
+  else history.pushState(historyState(id), "", `${appPath(id)}${hash}`);
   showRoute(id);
 }
 
@@ -993,7 +1080,8 @@ async function startApp() {
   new EventSource("/api/events").addEventListener("sessions", () => refreshSessions());
   refreshSessions();
   if (location.pathname === "/feed") showFeedRoute(parseFeedSearch(location.search, activity.defaults()), { replace: true });
-  else navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true });
+  // A link to a message keeps its fragment; openSession scrolls to the message.
+  else navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true, hash: location.hash });
 }
 
 // ---------------------------------------------------------------------------
@@ -1115,6 +1203,11 @@ const ui = {
   collapseProjects: (collapsed) => sidebar.collapseProjects(collapsed),
   reload: () => location.reload(),
   openModePicker,
+  toggleOutline: () => outline.toggle(),
+  replyToSelection: () => selectionActions.reply(),
+  copySelectionMarkdown: () => selectionActions.copyMarkdown(),
+  copySelectionStyled: () => selectionActions.copyStyled(),
+  copySelectionLink: () => selectionActions.copyLink(),
 };
 
 /** What the commands' `when` and `run` read (see commands.js). */
@@ -1133,6 +1226,9 @@ function keyState() {
     promptEmpty: composer.isEmpty(),
     promptFocused: composer.hasFocus(),
     modes: modeChangeable() ? { locked: liveSession.modeLocked === true } : null,
+    userMessages: feedShown ? 0 : userMessageCount(),
+    selection: selectionActions.active(),
+    linkBlocked: linkBlocked(),
     ui,
   };
 }
@@ -1174,13 +1270,16 @@ async function start() {
     const snapshot = await response.json();
     withFollow(() => load(snapshot));
     chat.scrollTop = chat.scrollHeight;
-    jump.hidden = true;
+    drawJump();
     connect();
     composer.focus();
     refreshSessions();
     if (location.pathname === "/feed") showFeedRoute(parseFeedSearch(location.search, activity.defaults()), { replace: true });
     else if (routeId()) route();
-    else markRead(liveSession.id);
+    else {
+      markRead(liveSession.id);
+      showHashMessage();
+    }
   } catch {
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Could not reach Pi";
