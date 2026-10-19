@@ -260,6 +260,11 @@ describe("ampi-tui intro layout", () => {
     [50, 20],
   ]) {
     it(`matches the ${width}x${rows} fixtures and fills exactly the terminal`, () => {
+      // Commands without a key render by their palette name, as in a real session.
+      register("thread.switch", "thread", "switch");
+      register("prompt.queue", "prompt", "queue message");
+      register("ampi.keymapJson", "ampi", "show keymap");
+      register("ampi.showWelcome", "ampi", "show welcome");
       for (let stage = 0; stage < 7; stage++) {
         const lines = render(stage, { width, rows });
         assert.equal(lines.length, rows, `stage ${stage} has ${rows} rows`);

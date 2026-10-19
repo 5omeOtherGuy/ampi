@@ -23,8 +23,8 @@
                                                                Make it yours
 
                                   Rebind any command under ampi.keymap in your or the project's settings;
-                                        ampi config keymap prints the keys in effect, ready to copy.
-                                            ampi show welcome in the palette replays this tour.
+                                        "ampi show keymap" shows the keys in effect, ready to copy.
+                                                   "ampi show welcome" replays this tour.
 
 
 

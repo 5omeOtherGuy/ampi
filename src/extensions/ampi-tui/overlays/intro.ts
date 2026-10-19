@@ -104,8 +104,8 @@ export const MMR_INTRO_STAGES: readonly MmrIntroStage[] = [
     title: "Make it yours",
     lines: [
       "Rebind any command under ampi.keymap in your or the project's settings;",
-      "ampi config keymap prints the keys in effect, ready to copy.",
-      "ampi show welcome in the palette replays this tour.",
+      "{ampi.keymapJson} shows the keys in effect, ready to copy.",
+      "{ampi.showWelcome} replays this tour.",
     ],
   },
 ];
