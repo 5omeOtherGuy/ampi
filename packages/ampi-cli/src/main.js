@@ -538,6 +538,24 @@ export async function runAmpi(argv) {
       const { runCompletionsCommand } = await import("./completions.js");
       return runCompletionsCommand(route.completionsArgs ?? [], { out: (text) => process.stdout.write(text), log });
     }
+    case "permissions": {
+      const [pi, { runPermissionsCommand }, { openInPiEditor }] = await Promise.all([
+        import(PI_PACKAGE_NAME),
+        import("./permissions.js"),
+        import("./editor.js"),
+      ]);
+      const cwd = process.cwd();
+      return runPermissionsCommand(route.permissionsArgs ?? [], {
+        pi,
+        cwd,
+        locateAmpi: () => locateLoadedAmpi(pi, cwd),
+        out: (text) => process.stdout.write(text),
+        log,
+        stdinIsTTY: process.stdin.isTTY === true,
+        readStdin: () => readAll(process.stdin),
+        editFile: (file) => openInPiEditor(pi, cwd, file),
+      });
+    }
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
       const cwd = process.cwd();

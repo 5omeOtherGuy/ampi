@@ -275,8 +275,62 @@ export function parseMmrPermissionRules(value: readonly unknown[]): {
 // Text form
 // ---------------------------------------------------------------------------
 
+/*
+ * The text form writes a rule on one line:
+ * `<action> <tool> [--<field> <pattern>]... [--context thread|subagent] [--to <program>] [--message <text>]`.
+ *
+ * Words are split the way a shell splits them, without anything a shell
+ * would expand: spaces and tabs separate words, single quotes keep
+ * everything literal, a backslash outside quotes keeps the next character,
+ * and inside double quotes `\n`, `\t`, `\r`, `\\` and `\"` are escapes while
+ * any other backslash stays. `--a.b` names a nested input field, a repeated
+ * field makes a list, and an unquoted `true`, `false`, `null` or JSON number
+ * is that value; quoted or escaped, it is a string. `--context`, `--to` and
+ * `--message` are the rule's own options, so an input field with one of those
+ * names can only be matched in the JSON settings.
+ */
+
+const BARE_WORD = /^[A-Za-z0-9_./:@%+=,-]+$/;
+const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
+const FIELD_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]*$/;
+const WORD_SPACE = /[ \t\f\v]/;
+const DOUBLE_QUOTE_ESCAPES: Readonly<Record<string, string>> = { n: "\n", t: "\t", r: "\r", "\\": "\\", '"': '"' };
+
+/** The options of a rule's text form that belong to the rule, not to an input field. */
+export const MMR_PERMISSION_RULE_OPTIONS: readonly string[] = Object.freeze(["context", "to", "message"]);
+const RULE_OPTIONS: ReadonlySet<string> = new Set(MMR_PERMISSION_RULE_OPTIONS);
+
+type MmrPermissionScalar = string | boolean | number | null;
+
+function isLiteralWord(text: string): boolean {
+  return text === "true" || text === "false" || text === "null" || (JSON_NUMBER.test(text) && Number.isFinite(Number(text)));
+}
+
+function literalOf(text: string): MmrPermissionScalar {
+  if (!isLiteralWord(text)) return text;
+  if (text === "true") return true;
+  if (text === "false") return false;
+  if (text === "null") return null;
+  return Number(text);
+}
+
+/**
+ * One word as the text form reads it back: bare when it has only plain
+ * characters and is no literal or option, in double quotes with escapes when
+ * it holds a control character (so it stays on one line), and in single
+ * quotes otherwise.
+ */
 function quote(text: string): string {
-  return /^[A-Za-z0-9_./:@%+=,-]+$/.test(text) ? text : `'${text.replace(/'/g, "'\\''")}'`;
+  if (BARE_WORD.test(text) && !isLiteralWord(text) && !text.startsWith("--")) return text;
+  if (/\p{Cc}/u.test(text)) {
+    const escaped = text.replace(/[\\"]/g, "\\$&").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r");
+    return `"${escaped}"`;
+  }
+  return `'${text.replace(/'/g, "'\\''")}'`;
+}
+
+function formatScalar(value: Exclude<MmrPermissionScalar, string>): string {
+  return Object.is(value, -0) ? "-0" : JSON.stringify(value);
 }
 
 function formatPatternFlags(field: string, pattern: MmrPermissionPattern): string[] {
@@ -285,12 +339,15 @@ function formatPatternFlags(field: string, pattern: MmrPermissionPattern): strin
   if (pattern !== null && typeof pattern === "object") {
     return Object.entries(pattern).flatMap(([key, entry]) => formatPatternFlags(`${field}.${key}`, entry));
   }
-  return [`--${field} ${JSON.stringify(pattern)}`];
+  return [`--${field} ${formatScalar(pattern as Exclude<MmrPermissionScalar, string>)}`];
 }
 
 /**
  * A rule as one line: `<action> <tool> --<field> <pattern>...`, then
  * `--context`, `--to` and `--message` when set. A list repeats its field.
+ * `parseMmrPermissionRulesText` reads the line back into an equal rule
+ * whenever `findMmrPermissionRuleTextProblem` finds nothing; for the other
+ * rules the line is only a summary.
  */
 export function formatMmrPermissionRule(rule: MmrPermissionRule): string {
   const parts = [rule.action, quote(rule.tool)];
@@ -299,6 +356,297 @@ export function formatMmrPermissionRule(rule: MmrPermissionRule): string {
   if (rule.to !== undefined) parts.push(`--to ${quote(rule.to)}`);
   if (rule.message !== undefined) parts.push(`--message ${quote(rule.message)}`);
   return parts.join(" ");
+}
+
+function patternTextProblem(at: string, pattern: MmrPermissionPattern): string | undefined {
+  if (Array.isArray(pattern)) {
+    if (pattern.length === 1) return `${at} is a list of one entry, which the text form writes as the entry alone`;
+    for (const entry of pattern) {
+      if (Array.isArray(entry)) return `${at} holds a list inside a list`;
+      if (entry !== null && typeof entry === "object") return `${at} is a list that holds an object`;
+    }
+    return undefined;
+  }
+  if (pattern === null || typeof pattern !== "object") return undefined;
+  for (const [name, entry] of Object.entries(pattern)) {
+    if (!FIELD_NAME.test(name)) return `the field name ${JSON.stringify(name)} in ${at} cannot be written as an option`;
+    const problem = patternTextProblem(`${at}.${name}`, entry);
+    if (problem !== undefined) return problem;
+  }
+  return undefined;
+}
+
+/**
+ * Why a valid rule has no exact text form, or `undefined` when it has one:
+ * an input field named `context`, `to` or `message`, a field name with a dot
+ * or another character an option name cannot hold, a list inside a list, a
+ * list that holds objects, a list of one entry, or an empty `matches`.
+ */
+export function findMmrPermissionRuleTextProblem(rule: MmrPermissionRule): string | undefined {
+  if (rule.matches === undefined) return undefined;
+  const fields = Object.entries(rule.matches);
+  if (fields.length === 0) return "matches is an empty object, which the text form leaves out";
+  for (const [name, pattern] of fields) {
+    if (RULE_OPTIONS.has(name)) return `the input field ${JSON.stringify(name)} has the name of the rule's own --${name} option`;
+    if (!FIELD_NAME.test(name)) return `the input field name ${JSON.stringify(name)} cannot be written as an option`;
+    const problem = patternTextProblem(`--${name}`, pattern);
+    if (problem !== undefined) return problem;
+  }
+  return undefined;
+}
+
+/** A word of the text form, with its quotes and escapes removed. */
+export interface MmrPermissionWord {
+  readonly value: string;
+  /** Some of it was quoted or escaped, so it is a string even when it reads `true` or `42`. */
+  readonly quoted: boolean;
+  /** It starts with an unquoted `--`, so it names an option. */
+  readonly option: boolean;
+}
+
+/** Split one line of the text form into words; a quote left open or a backslash at the end is a problem. */
+export function splitMmrPermissionWords(line: string): { words: MmrPermissionWord[] } | { problem: string } {
+  const words: MmrPermissionWord[] = [];
+  let current: { value: string; quoted: boolean; option: boolean } | undefined;
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i] as string;
+    if (WORD_SPACE.test(ch)) {
+      if (current) words.push(current);
+      current = undefined;
+      i++;
+      continue;
+    }
+    current ??= { value: "", quoted: false, option: line.startsWith("--", i) };
+    if (ch === "'") {
+      const close = line.indexOf("'", i + 1);
+      if (close < 0) return { problem: "a single quote is not closed" };
+      current.value += line.slice(i + 1, close);
+      current.quoted = true;
+      i = close + 1;
+    } else if (ch === '"') {
+      let closed = false;
+      for (i++; i < line.length; i++) {
+        const inner = line[i] as string;
+        if (inner === '"') {
+          closed = true;
+          i++;
+          break;
+        }
+        const escaped = inner === "\\" ? DOUBLE_QUOTE_ESCAPES[line[i + 1] ?? ""] : undefined;
+        if (escaped !== undefined) i++;
+        current.value += escaped ?? inner;
+      }
+      if (!closed) return { problem: "a double quote is not closed" };
+      current.quoted = true;
+    } else if (ch === "\\") {
+      if (i + 1 >= line.length) return { problem: "the line ends in a backslash" };
+      current.value += line[i + 1];
+      current.quoted = true;
+      i += 2;
+    } else {
+      current.value += ch;
+      i++;
+    }
+  }
+  if (current) words.push(current);
+  return { words };
+}
+
+/**
+ * The words of a command line the user's shell has already split: each is
+ * taken as it is, except one that is itself wholly quoted (`"true"` or
+ * `'42'`), which is unquoted to a string.
+ */
+export function mmrPermissionWordsFromArgs(args: readonly string[]): MmrPermissionWord[] {
+  return args.map((arg) => {
+    if (arg.length >= 2 && /^(?:'.*'|".*")$/s.test(arg)) {
+      const split = splitMmrPermissionWords(arg);
+      if ("words" in split && split.words.length === 1) return { value: (split.words[0] as MmrPermissionWord).value, quoted: true, option: false };
+    }
+    return { value: arg, quoted: false, option: arg.startsWith("--") };
+  });
+}
+
+/** What the options among some words say. */
+export interface MmrPermissionWordsRead {
+  /** The words that are neither options nor option values, in order. */
+  readonly positionals: readonly MmrPermissionWord[];
+  /** The input fields the `--<field>` options name: nested at dots, a repeated field as a list. */
+  readonly fields: { readonly [field: string]: MmrPermissionPattern };
+  readonly context?: string;
+  readonly to?: string;
+  readonly message?: string;
+  /** The names (values of `flags`) of the flags that were given. */
+  readonly flags: ReadonlySet<string>;
+  readonly problems: readonly string[];
+}
+
+interface FieldLeaf {
+  readonly values: MmrPermissionScalar[];
+}
+type FieldNode = Map<string, FieldNode | FieldLeaf>;
+
+function fieldsOf(node: FieldNode): { [field: string]: MmrPermissionPattern } {
+  return Object.fromEntries(
+    [...node].map(([name, entry]) => [
+      name,
+      entry instanceof Map ? fieldsOf(entry) : entry.values.length === 1 ? (entry.values[0] as MmrPermissionScalar) : entry.values,
+    ]),
+  );
+}
+
+/**
+ * Read the options among `words`: `--<field> <value>` or `--<field>=<value>`
+ * (an option always takes the next word as its value), `--context`, `--to`
+ * and `--message`, and the words in `flags` (word to flag name) that take no
+ * value. Every other word is a positional.
+ */
+export function readMmrPermissionWords(
+  words: readonly MmrPermissionWord[],
+  options: { readonly flags?: Readonly<Record<string, string>> } = {},
+): MmrPermissionWordsRead {
+  const positionals: MmrPermissionWord[] = [];
+  const flags = new Set<string>();
+  const problems: string[] = [];
+  const root: FieldNode = new Map();
+  const own: { context?: string; to?: string; message?: string } = {};
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i] as MmrPermissionWord;
+    const flag = !word.quoted && options.flags && Object.hasOwn(options.flags, word.value) ? options.flags[word.value] : undefined;
+    if (flag !== undefined) {
+      flags.add(flag);
+      continue;
+    }
+    if (!word.option) {
+      positionals.push(word);
+      continue;
+    }
+    const equals = word.value.indexOf("=");
+    const name = word.value.slice(2, equals < 0 ? undefined : equals);
+    let value: MmrPermissionWord | undefined;
+    if (equals >= 0) value = { value: word.value.slice(equals + 1), quoted: word.quoted, option: false };
+    else if (i + 1 < words.length) value = words[++i];
+    if (name === "") {
+      problems.push(`${word.value} is not an option`);
+      continue;
+    }
+    const path = name.split(".");
+    const bad = path.find((segment) => !FIELD_NAME.test(segment));
+    if (bad !== undefined) {
+      problems.push(`--${name} is not an option: a field name has letters, digits, _ and - only${bad === "" ? ", and no empty part" : ""}`);
+      continue;
+    }
+    const top = path[0] as string;
+    if (RULE_OPTIONS.has(top) && path.length > 1) {
+      problems.push(`--${name}: --${top} is the rule's own option, so an input field named ${top} can only be matched in the JSON settings`);
+      continue;
+    }
+    if (value === undefined) {
+      problems.push(`--${name} needs a value`);
+      continue;
+    }
+    if (RULE_OPTIONS.has(top)) {
+      const key = top as keyof typeof own;
+      if (own[key] !== undefined) problems.push(`--${top} is given twice`);
+      else own[key] = value.value;
+      continue;
+    }
+    const scalar = value.quoted ? value.value : literalOf(value.value);
+    let node: FieldNode | undefined = root;
+    for (const [index, segment] of path.slice(0, -1).entries()) {
+      const next: FieldNode | FieldLeaf | undefined = node.get(segment);
+      if (next === undefined) {
+        const created: FieldNode = new Map();
+        node.set(segment, created);
+        node = created;
+      } else if (next instanceof Map) {
+        node = next;
+      } else {
+        problems.push(`--${name}: --${path.slice(0, index + 1).join(".")} already has a value, so it cannot also hold fields`);
+        node = undefined;
+        break;
+      }
+    }
+    if (node === undefined) continue;
+    const last = path.at(-1) as string;
+    const existing = node.get(last);
+    if (existing === undefined) node.set(last, { values: [scalar] });
+    else if (existing instanceof Map) problems.push(`--${name} already holds fields (--${name}.<field>), so it cannot also have a value`);
+    else existing.values.push(scalar);
+  }
+  return { positionals, fields: fieldsOf(root), ...own, flags, problems };
+}
+
+/** A validation problem in the text form's words: `--command` for `matches.command`, `--to` for `to`. */
+function textProblem(problem: string): string {
+  if (problem.startsWith("matches.")) return `--${problem.slice("matches.".length)}`;
+  if (/^(?:to|message|context)\b/.test(problem)) return `--${problem}`;
+  return problem.replace("needs to:", "needs --to:");
+}
+
+/**
+ * Read a rule from its words: the action, the tool, then the options. The
+ * problems cover the words and everything `validateMmrPermissionRule` reports.
+ * Words in `flags` (word to flag name) are left out of the rule wherever an
+ * option value cannot stand, and returned in `flags`.
+ */
+export function parseMmrPermissionRuleWords(
+  words: readonly MmrPermissionWord[],
+  options: { readonly flags?: Readonly<Record<string, string>> } = {},
+): { rule?: MmrPermissionRule; problems: string[]; flags: ReadonlySet<string> } {
+  const isFlag = (word: MmrPermissionWord) => !word.quoted && options.flags !== undefined && Object.hasOwn(options.flags, word.value);
+  const leading: MmrPermissionWord[] = [];
+  const named: string[] = [];
+  let start = 0;
+  for (; start < words.length && named.length < 2; start++) {
+    const word = words[start] as MmrPermissionWord;
+    if (isFlag(word)) leading.push(word);
+    else if (word.option) break;
+    else named.push(word.value);
+  }
+  const [action, tool] = named;
+  const problems: string[] = [];
+  if (action === undefined) problems.push("a rule starts with its action: allow, reject, ask or delegate");
+  else if (tool === undefined) problems.push("a rule needs a tool after its action");
+  const read = readMmrPermissionWords([...leading, ...words.slice(start)], options);
+  problems.push(...read.problems);
+  for (const extra of read.positionals) problems.push(`unexpected word ${quote(extra.value)}; only the action and the tool come without an option`);
+  const candidate: Record<string, unknown> = {
+    tool,
+    ...(Object.keys(read.fields).length > 0 ? { matches: read.fields } : {}),
+    action,
+    ...(read.context !== undefined ? { context: read.context } : {}),
+    ...(read.to !== undefined ? { to: read.to } : {}),
+    ...(read.message !== undefined ? { message: read.message } : {}),
+  };
+  for (const problem of validateMmrPermissionRule(candidate)) {
+    if (action === undefined && problem.startsWith("action ")) continue;
+    if (tool === undefined && problem.startsWith("tool ")) continue;
+    problems.push(textProblem(problem));
+  }
+  return problems.length > 0 ? { problems, flags: read.flags } : { rule: candidate as unknown as MmrPermissionRule, problems, flags: read.flags };
+}
+
+/**
+ * Read rules in the text form, one per line. Blank lines and lines whose
+ * first non-blank character is `#` are skipped. Each problem names its line:
+ * `line N: <problem>`.
+ */
+export function parseMmrPermissionRulesText(text: string): { rules: MmrPermissionRule[]; problems: string[] } {
+  const rules: MmrPermissionRule[] = [];
+  const problems: string[] = [];
+  for (const [index, raw] of text.replace(/^\uFEFF/, "").split("\n").entries()) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+    const split = splitMmrPermissionWords(line);
+    const parsed: { rule?: MmrPermissionRule; problems: readonly string[] } =
+      "problem" in split ? { problems: [split.problem] } : parseMmrPermissionRuleWords(split.words);
+    if (parsed.rule !== undefined) rules.push(parsed.rule);
+    else problems.push(...parsed.problems.map((problem) => `line ${index + 1}: ${problem}`));
+  }
+  return { rules, problems };
 }
 
 // ---------------------------------------------------------------------------
@@ -491,7 +839,9 @@ function evaluateShellLine(
   });
   if (parts.length === 1) {
     const [only] = decisions as [MmrPermissionDecision];
-    return only.action === "allow" ? ALLOW : only;
+    if (only.action !== "allow") return only;
+    // An allowed line keeps the rule that allowed it, without the part.
+    return only.rule && only.source ? { action: "allow", rule: only.rule, source: only.source } : ALLOW;
   }
   // A rejected part decides without running any program; delegated parts
   // come next, since one of their programs may still reject the line.

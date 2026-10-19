@@ -262,6 +262,20 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("routes permissions and its alias permission with each subcommand and the rest of the command line", () => {
+    for (const group of ["permissions", "permission"]) {
+      for (const rest of [[], ["list", "--json"], ["ls"], ["test", "bash", "--command", "git push", "-q"], ["edit", "--workspace"], ["add", "ask", "bash", "-m", "x"]]) {
+        const route = routeAmpiArgv([group, ...rest]);
+        assert.equal(route.command, "permissions", [group, ...rest].join(" "));
+        assert.deepEqual(route.permissionsArgs, rest);
+        assert.deepEqual(route.piArgs, []);
+      }
+    }
+    const message = routeAmpiArgv(["permissionsx", "list"]);
+    assert.equal(message.command, "pi");
+    assert.deepEqual(message.piArgs, ["permissionsx", "list"]);
+  });
+
   it("routes tools and its alias tool with the rest of the command line, -m included", () => {
     for (const group of ["tools", "tool"]) {
       const route = routeAmpiArgv([group, "list", "-m", "high", "--json"]);

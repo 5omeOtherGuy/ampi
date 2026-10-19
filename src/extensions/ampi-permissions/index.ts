@@ -1,14 +1,13 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir, type ToolCallEvent, type ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-import { findMmrGuardedFiles, type MmrGuardedFile } from "../ampi-core/guarded-files.js";
+import type { MmrGuardedFile } from "../ampi-core/guarded-files.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { rewriteJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
 import { MMR_PERMISSIONS_DEFAULT_RULES } from "../ampi-core/permission-defaults.js";
 import {
   AMPI_PERMISSIONS_ALLOW_ALL_ENV,
   AMPI_PERMISSIONS_PROJECT_RULES_ENV,
-  evaluateMmrPermission,
   isMmrPermissionsSessionAllowAll,
   MMR_PERMISSIONS_SHELL_TOOLS,
   type MmrPermissionContext,
@@ -24,6 +23,7 @@ import {
 } from "../ampi-core/runtime.js";
 import type { MmrFeatureGateProvider } from "../ampi-core/types.js";
 import { loadMmrPermissionsSettings, type MmrPermissionsSettings } from "./config.js";
+import { decideMmrPermissionsCall } from "./decide.js";
 import {
   type MmrPermissionsDelegateSpawn,
   type MmrPermissionsDelegateTimer,
@@ -207,10 +207,6 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       return inQueue(event, () => askUser(event, decision, ctx));
     }
 
-    function guardedFiles(event: ToolCallEvent, ctx: ExtensionContext): MmrGuardedFile[] {
-      return findMmrGuardedFiles(event.toolName, event.input, settings.guardedFilesAllowlist, { cwd: ctx.cwd, agentDir: agentDir() });
-    }
-
     /**
      * Add the guarded forms of each path, and the path itself, to the user's
      * `ampi.guardedFiles.allowlist` as exact `{ path }` entries, so glob
@@ -321,19 +317,18 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
     });
 
     pi.on("tool_call", async (event, ctx) => {
-      if (!settings.enabled || allowedWithoutAsking()) return undefined;
       const context: MmrPermissionContext = getMmrSubagentState() ? "subagent" : "thread";
-      let decision: MmrPermissionDecision = settings.failClosed
-        ? { action: "ask", reason: settings.failClosed }
-        : evaluateMmrPermission(
-            { toolName: event.toolName, input: event.input },
-            { project: settings.projectRules, user: settings.userRules },
-            { context },
-          );
+      const decided = decideMmrPermissionsCall({ toolName: event.toolName, input: event.input }, settings, {
+        context,
+        sessionAllowAll: isMmrPermissionsSessionAllowAll(),
+        guardedFiles: { cwd: ctx.cwd, agentDir: agentDir() },
+      });
+      if (decided.rules === undefined) return undefined;
+      let decision = decided.rules;
       if (decision.action === "reject") return { block: true, reason: formatMmrPermissionsRejectReason(event.toolName, decision) };
       // Guarded files ask even when a rule allows the tool. A yes here stands
       // in for the approval a rule asks for, so a call shows one dialog at most.
-      const guarded = guardedFiles(event, ctx);
+      const guarded = decided.guarded;
       let approved = false;
       if (guarded.length > 0) {
         if (context === "subagent") return { block: true, reason: formatMmrGuardedFilesSubagentReason(event.toolName, guarded) };

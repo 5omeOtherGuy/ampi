@@ -22,6 +22,10 @@ Commands:
                                 and sign in to them; ampi mcp --help lists the commands
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
+  permissions list|test|edit|add
+                                List the rules of ampi-permissions, test what a session decides
+                                about a tool call, edit the rules as text or add one;
+                                ampi permissions --help has more
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, continue those nothing else has open, and
                                 join those a terminal runs with its web GUI on

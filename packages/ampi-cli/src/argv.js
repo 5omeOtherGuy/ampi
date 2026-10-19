@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "completions" | "complete" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "permissions" | "doctor" | "review" | "update" | "dev" | "completions" | "complete" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -39,6 +39,7 @@ import { isLogLevel } from "./log.js";
  * @property {string[]} [topArgs] The command line after `top`, when `command` is `"top"`.
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
  * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
+ * @property {string[]} [permissionsArgs] The command line after `permissions` (or `permission`), when `command` is `"permissions"`.
  * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
  * @property {string[]} [reviewArgs] The command line after `review`, when `command` is `"review"`.
  * @property {string[]} [updateArgs] The command line after `update` (or `up`), when `command` is `"update"`.
@@ -74,6 +75,7 @@ export const AMPI_COMMANDS = Object.freeze({
   top: aliasList(),
   skill: aliasList("skills"),
   mcp: aliasList(),
+  permissions: aliasList("permission"),
   doctor: aliasList(),
   review: aliasList(),
   update: aliasList("up"),
@@ -287,6 +289,8 @@ function routeCommand(args) {
       return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
     case "mcp":
       return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
+    case "permissions":
+      return { command: "permissions", piArgs: [], permissionsArgs: args.slice(1) };
     case "doctor":
       return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
     case "review":
@@ -561,6 +565,10 @@ Commands:
                                 and sign in to them; ampi mcp --help lists the commands
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
+  permissions list|test|edit|add
+                                List the rules of ampi-permissions, test what a session decides
+                                about a tool call, edit the rules as text or add one;
+                                ampi permissions --help has more
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, continue those nothing else has open, and
                                 join those a terminal runs with its web GUI on

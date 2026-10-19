@@ -153,6 +153,144 @@ describe("permission rule text form", () => {
   });
 });
 
+describe("permission rule text form: reading it back", () => {
+  // Each line is the formatter's exact output for its rule, written by hand.
+  const TABLE = [
+    {
+      what: "a regex with spaces, both kinds of quotes and a backslash",
+      line: `ask bash --command '/^echo "it'\\''s" \\d+ a|b/'`,
+      rule: { tool: "bash", matches: { command: `/^echo "it's" \\d+ a|b/` }, action: "ask" },
+    },
+    {
+      what: "nested fields and a tool glob",
+      line: "allow 'mcp__github__*' --repo.owner me --repo.name 'ampi*'",
+      rule: { tool: "mcp__github__*", matches: { repo: { owner: "me", name: "ampi*" } }, action: "allow" },
+    },
+    {
+      what: "a repeated field, which is a list",
+      line: "ask bash --command 'git push*' --command 'git tag*'",
+      rule: { tool: "bash", matches: { command: ["git push*", "git tag*"] }, action: "ask" },
+    },
+    {
+      what: "literals next to the strings that look like them",
+      line: "reject x --flag true --name 'true' --count 42 --id '42' --ratio -1500 --none null --empty ''",
+      rule: { tool: "x", matches: { flag: true, name: "true", count: 42, id: "42", ratio: -1500, none: null, empty: "" }, action: "reject" },
+    },
+    {
+      what: "a delegate rule whose program has arguments",
+      line: "delegate bash --command 'git *' --to 'node ~/bin/approve.mjs --strict'",
+      rule: { tool: "bash", matches: { command: "git *" }, action: "delegate", to: "node ~/bin/approve.mjs --strict" },
+    },
+    {
+      what: "a reject message with a line break, a tab and double quotes",
+      line: 'reject bash --command \'rm *\' --message "Use the clean script.\\n\\tIt keeps \\"dist\\"."',
+      rule: { tool: "bash", matches: { command: "rm *" }, action: "reject", message: 'Use the clean script.\n\tIt keeps "dist".' },
+    },
+    {
+      what: "a subagent rule",
+      line: "allow 'mcp__*' --context subagent",
+      rule: { tool: "mcp__*", action: "allow", context: "subagent" },
+    },
+    {
+      what: "words that would read as an option or a comment",
+      line: "ask '--odd' --command '--force' --command '#x'",
+      rule: { tool: "--odd", matches: { command: ["--force", "#x"] }, action: "ask" },
+    },
+  ];
+
+  for (const { what, line, rule } of TABLE) {
+    it(`formats and reads back ${what}`, () => {
+      assert.equal(rules.formatMmrPermissionRule(rule), line);
+      assert.equal(rules.findMmrPermissionRuleTextProblem(rule), undefined);
+      const parsed = rules.parseMmrPermissionRulesText(line);
+      assert.deepEqual(parsed, { rules: [rule], problems: [] });
+      assert.equal(rules.formatMmrPermissionRule(parsed.rules[0]), line, "formatting what was read is stable");
+    });
+  }
+
+  it("keeps the documented form of ordinary rules", () => {
+    assert.equal(rules.formatMmrPermissionRule({ tool: "bash", matches: { command: "git push*" }, action: "ask" }), "ask bash --command 'git push*'");
+    assert.equal(rules.formatMmrPermissionRule({ tool: "edit", matches: { path: "src/a.ts" }, action: "allow" }), "allow edit --path src/a.ts");
+  });
+
+  it("reads other spellings of the same rule: = values, escapes, double quotes, comments and blank lines", () => {
+    const text = [
+      "# my rules",
+      "",
+      'ask bash --command="git push*"',
+      "   # indented comment",
+      "ask bash --command git\\ push\\*",
+      'allow bash --command "/^\\d+$/" --command /^(ls|pwd)$/',
+      "reject bash --command a#b\r",
+      "reject x --ratio -1.5e3 --big 1e400",
+    ].join("\n");
+    assert.deepEqual(rules.parseMmrPermissionRulesText(text), {
+      rules: [
+        { tool: "bash", matches: { command: "git push*" }, action: "ask" },
+        { tool: "bash", matches: { command: "git push*" }, action: "ask" },
+        { tool: "bash", matches: { command: ["/^\\d+$/", "/^(ls|pwd)$/"] }, action: "allow" },
+        { tool: "bash", matches: { command: "a#b" }, action: "reject" },
+        { tool: "x", matches: { ratio: -1500, big: "1e400" }, action: "reject" },
+      ],
+      problems: [],
+    });
+  });
+
+  it("names the line of every problem", () => {
+    const text = [
+      "foo bash",
+      "ask",
+      "ask bash --command",
+      "ask bash --command 'git push",
+      "ask bash --command '/(/'",
+      "ask bash --to my-check",
+      "# fine",
+      "allow bash --command ls",
+      "ask bash extra --path.x a --path b",
+    ].join("\n");
+    assert.deepEqual(rules.parseMmrPermissionRulesText(text), {
+      rules: [{ tool: "bash", matches: { command: "ls" }, action: "allow" }],
+      problems: [
+        'line 1: action must be allow, reject, ask or delegate (got "foo")',
+        "line 2: a rule needs a tool after its action",
+        "line 3: --command needs a value",
+        "line 4: a single quote is not closed",
+        "line 5: --command: invalid regular expression /(/ (Invalid regular expression: /(/: Unterminated group)",
+        "line 6: --to is allowed only on a delegate rule",
+        "line 9: --path already holds fields (--path.<field>), so it cannot also have a value",
+        "line 9: unexpected word extra; only the action and the tool come without an option",
+      ],
+    });
+  });
+
+  it("finds the rules the text form cannot write exactly instead of writing them wrongly", () => {
+    const problem = (matches) => rules.findMmrPermissionRuleTextProblem({ tool: "t", matches, action: "ask" });
+    assert.match(problem({ context: "x" }), /input field "context" has the name of the rule's own --context option/);
+    assert.match(problem({ message: "x" }), /--message option/);
+    assert.match(problem({ "a.b": "x" }), /field name "a\.b" cannot be written as an option/);
+    assert.match(problem({ a: { "has space": 1 } }), /field name "has space" in --a cannot/);
+    assert.match(problem({ a: [["x", "y"], "z"] }), /list inside a list/);
+    assert.match(problem({ a: [{ b: "x" }, { c: "y" }] }), /list that holds an object/);
+    assert.match(problem({ a: ["x"] }), /list of one entry/);
+    assert.match(problem({}), /empty object/);
+    assert.equal(problem({ a: { context: "x" } }), undefined, "only top-level fields share the option names");
+  });
+
+  it("reads words a shell has already split, unquoting only a word that is wholly quoted", () => {
+    assert.deepEqual(
+      rules.mmrPermissionWordsFromArgs(["ask", '"true"', "'42'", "true", "--a=b", "it's"]).map(({ value, quoted, option }) => [value, quoted, option]),
+      [
+        ["ask", false, false],
+        ["true", true, false],
+        ["42", true, false],
+        ["true", false, false],
+        ["--a=b", false, true],
+        ["it's", false, false],
+      ],
+    );
+  });
+});
+
 describe("permission evaluation", () => {
   it("takes the first match in the order project, user, defaults; nothing matching allows", () => {
     const push = bash("git push origin main");

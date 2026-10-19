@@ -62,6 +62,22 @@ function readSettingsFile(filePath: string, warnings: string[]): Record<string, 
  * `ampi.guardedFiles` is ignored with a warning.
  */
 export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOptions): MmrPermissionsSettings {
+  return readPermissionsFiles([
+    ["user", options.userFile],
+    ["project", options.projectFile],
+  ]);
+}
+
+/**
+ * The project's permission settings alone, as a session reads that file,
+ * with the gate on whatever the file says: for `ampi permissions test
+ * --workspace`, which leaves the user's settings out.
+ */
+export function loadMmrWorkspacePermissionsSettings(projectFile: string): MmrPermissionsSettings {
+  return { ...readPermissionsFiles([["project", projectFile]]), enabled: true };
+}
+
+function readPermissionsFiles(files: readonly (readonly ["user" | "project", string | undefined])[]): MmrPermissionsSettings {
   const warnings: string[] = [];
   let enabled = false;
   let allowAll = false;
@@ -70,10 +86,6 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
   let userRules: MmrPermissionRule[] = [];
   let guardedFilesAllowlist: readonly MmrGuardedFilesAllowlistEntry[] = [];
 
-  const files: ["user" | "project", string | undefined][] = [
-    ["user", options.userFile],
-    ["project", options.projectFile],
-  ];
   for (const [scope, filePath] of files) {
     if (filePath === undefined) continue;
     const ampi = readSettingsFile(filePath, warnings)?.ampi;

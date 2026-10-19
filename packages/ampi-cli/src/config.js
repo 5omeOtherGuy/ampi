@@ -1,11 +1,11 @@
 // `ampi config keymap` and `ampi config edit`: the keymap in effect as JSONC,
 // and Pi's settings file in the external editor. Every other `ampi config`
 // command line is Pi's own `config` command (see argv.js).
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { loadThroughPi, piExternalEditorCommand, piSettingsPath, readPiSettings } from "./pi-compat.js";
+import { openInPiEditor } from "./editor.js";
+import { loadThroughPi, piSettingsPath, readPiSettings } from "./pi-compat.js";
 
 /**
  * @typedef {object} ConfigHost
@@ -129,50 +129,15 @@ async function printKeymap(host) {
 }
 
 /**
- * Open a settings file in Pi's external editor, as Pi starts it for the
- * prompt: the command split at spaces, with the file as its last argument.
- * The file's directory is created when it is missing, so the editor can save,
- * and removed again when the editor leaves it empty.
+ * Open a settings file in Pi's external editor (see editor.js).
  *
  * @param {ConfigHost} host
  * @param {"user" | "project"} scope
  * @returns {Promise<number>}
  */
 async function edit(host, scope) {
-  const file = piSettingsPath(host.pi, host.cwd, scope);
-  const [editor, ...args] = piExternalEditorCommand(host.pi, host.cwd).split(" ");
-  const created = mkdirSync(path.dirname(file), { recursive: true });
-  /** @type {number | null | Error} */
-  const outcome = await new Promise((resolve) => {
-    const child = spawn(editor, [...args, file], { stdio: "inherit", shell: process.platform === "win32" });
-    child.on("error", resolve);
-    child.on("close", resolve);
-  });
-  if (created !== undefined && !existsSync(file)) removeEmptyDirectories(path.dirname(file), created);
-  if (outcome instanceof Error) {
-    host.log.error(`could not start the editor ${editor}: ${outcome.message}`);
-    return 1;
-  }
-  if (outcome !== 0) {
-    host.log.error(`the editor ${editor} exited with ${outcome === null ? "a signal" : `status ${outcome}`}.`);
-    return 1;
-  }
-  return 0;
-}
-
-/**
- * Remove `dir` and its parents up to `top` while they are empty.
- *
- * @param {string} dir
- * @param {string} top
- */
-function removeEmptyDirectories(dir, top) {
-  for (let current = dir; ; current = path.dirname(current)) {
-    try {
-      rmdirSync(current);
-    } catch {
-      return;
-    }
-    if (current === top) return;
-  }
+  const problem = await openInPiEditor(host.pi, host.cwd, piSettingsPath(host.pi, host.cwd, scope));
+  if (problem === undefined) return 0;
+  host.log.error(problem);
+  return 1;
 }
