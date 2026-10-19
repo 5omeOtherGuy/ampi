@@ -27,7 +27,7 @@ Alt+D               # toggle the active mode's thinking preset (medium, high, ul
 Alt+R               # toggle fast speed (OpenAI and OpenAI Codex models; about 2x the price, 2.5x for gpt-5.5)
 ```
 
-Fast speed asks the provider for priority serving. It applies in every mode, is remembered per session, and never reaches subagent workers; `↯` before the mode name in the prompt box and the `Speed:` line of `/ampi-status` show it. New sessions start at `ampi.speed` (`"standard"` or `"fast"`), or fast with `--ampi-fast`.
+Fast speed asks the provider for priority serving. It applies in every mode, is remembered per session, and never reaches subagent workers; `↯` before the mode name in the prompt box and the `Speed:` line of `/ampi-status` show it. New sessions start at `ampi.speed` (`"standard"` or `"fast"`), or fast with `--ampi-fast=true`.
 
 In the interactive TUI, locked modes compact the conversation automatically once a finished run leaves it at 90% of the context window (Medium: 270k of 300k); `free`, subagent workers and `print`, `json` and `rpc` runs never do. Set `ampiCore.autoCompact` to `{ "threshold": 0.8 }` to compact earlier or to `false` to leave compaction to Pi; `/ampi-status debug` shows the threshold and the last auto-compaction.
 

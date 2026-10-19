@@ -131,7 +131,7 @@ Ctrl+S               # mode dial, until the first message; each further press tu
                      # that only works then)
 Alt+D                # toggle the active mode's thinking preset where supported (Alt+R before 0.4.0)
 Alt+R                # toggle fast speed: priority serving at a higher price, OpenAI and OpenAI Codex models only;
-                     # ampi.speed or --ampi-fast (ampi --fast) start new sessions fast
+                     # ampi.speed or --ampi-fast=true (ampi --fast) start new sessions fast
 Esc                  # clear the prompt
 Esc Esc              # stop the running turn (one Esc no longer does)
 Alt+Enter            # new line in the prompt (no longer queues a follow-up)
