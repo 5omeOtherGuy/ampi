@@ -140,7 +140,7 @@ describe("ampi app worker protocol", () => {
     const [options] = fakes.calls.sessions;
     assert.equal(options.mode, "rpc");
     assert.equal(options.connectMcp, true);
-    assert.equal(options.uiContext, undefined);
+    assert.equal(typeof options.uiContext?.confirm, "function", "a UI context, so extensions see hasUI");
     assert.equal(options.cwd, cwd);
     const host = globalThis[AMPI_GUI_HOST_GLOBAL_KEY];
     assert.equal(host.role, "session");
@@ -162,6 +162,80 @@ describe("ampi app worker protocol", () => {
     channel.emit("message", { type: "stop" });
     assert.equal(await exit, 0);
     assert.equal(fakes.calls.disposed, 1);
+  });
+
+  it("binds a UI context whose dialogs ask the handler ampi-gui sets, and are cancelled without one", async () => {
+    const cwd = tempDir();
+    const fakes = createFakes(cwd);
+    const channel = createChannel();
+    const exit = startWorker(channel, fakes, path.join(cwd, "live"));
+    channel.emit("message", { type: "start", token: TOKEN, session: { cwd } });
+    await channel.next("ready");
+    const ui = fakes.calls.sessions[0].uiContext;
+    const host = globalThis[AMPI_GUI_HOST_GLOBAL_KEY];
+
+    // Before ampi-gui sets its handler, every dialog is cancelled and notify goes nowhere.
+    assert.equal(await ui.confirm("Delete?", "It is gone for good."), false);
+    assert.equal(await ui.select("Pick", ["a", "b"]), undefined);
+    assert.equal(await ui.input("Name"), undefined);
+    assert.equal(await ui.editor("Edit", "text"), undefined);
+    ui.notify("nobody hears this");
+
+    const asked = [];
+    const notices = [];
+    const answers = [{ value: true }, { value: "b" }, { value: "typed" }, { value: "edited" }, { cancelled: true }];
+    host.dialog = async (request, options) => {
+      asked.push({ request, options });
+      return answers.shift();
+    };
+    host.notice = (message, level) => notices.push([message, level]);
+    const signal = new AbortController().signal;
+    assert.equal(await ui.confirm("Delete?", "It is gone for good.", { timeout: 500 }), true);
+    assert.equal(await ui.select("Pick", ["a", "b"], { signal }), "b");
+    assert.equal(await ui.input("Name", "e.g. main"), "typed");
+    assert.equal(await ui.editor("Edit", "text"), "edited");
+    assert.equal(await ui.confirm("Again?", "Cancelled this time."), false);
+    assert.deepEqual(
+      asked.map((entry) => entry.request),
+      [
+        { kind: "confirm", title: "Delete?", message: "It is gone for good." },
+        { kind: "select", title: "Pick", options: ["a", "b"] },
+        { kind: "input", title: "Name", placeholder: "e.g. main" },
+        { kind: "editor", title: "Edit", initial: "text" },
+        { kind: "confirm", title: "Again?", message: "Cancelled this time." },
+      ],
+    );
+    assert.deepEqual(asked[0].options, { timeout: 500 }, "Pi's timeout goes to the handler");
+    assert.equal(asked[1].options.signal, signal, "and its abort signal");
+
+    // A failing handler, or an answer of the wrong type, is a cancel.
+    host.dialog = async () => {
+      throw new Error("page gone");
+    };
+    assert.equal(await ui.confirm("Delete?", "?"), false);
+    host.dialog = async () => ({ value: 42 });
+    assert.equal(await ui.input("Name"), undefined);
+
+    ui.notify("Saved", "warning");
+    ui.notify("Plain");
+    assert.deepEqual(notices, [
+      ["Saved", "warning"],
+      ["Plain", "info"],
+    ]);
+
+    // The rest answers as Pi's RPC mode does without a client.
+    assert.equal(await ui.custom(() => ({})), undefined);
+    assert.equal(ui.getEditorText(), "");
+    assert.equal(ui.getToolsExpanded(), false);
+    assert.deepEqual(ui.getAllThemes(), []);
+    assert.equal(ui.setTheme("dark").success, false);
+    assert.equal(typeof ui.onTerminalInput(() => {}), "function");
+    for (const name of ["setStatus", "setWidget", "setTitle", "setEditorText", "setFooter", "setHeader", "setWorkingMessage"]) {
+      assert.equal(ui[name]("key", ["line"]), undefined, name);
+    }
+
+    channel.emit("message", { type: "stop" });
+    assert.equal(await exit, 0);
   });
 
   it("answers held without opening a file another live process has open", async () => {

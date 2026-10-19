@@ -312,12 +312,15 @@ export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiS
     if (missed === undefined) res.write("event: reset\ndata: {}\n\n");
     else for (const event of missed) res.write(formatMmrGuiEvent(event));
     const unsubscribe = bridge.subscribe((event) => res.write(formatMmrGuiEvent(event)));
+    // A page that follows the session can answer its questions (`dialogs.ts`).
+    const unwatch = bridge.watch();
     const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), heartbeatMs);
     heartbeat.unref();
     track(res);
     const done = () => {
       clearInterval(heartbeat);
       unsubscribe();
+      unwatch();
     };
     req.on("close", done);
     res.on("close", done);

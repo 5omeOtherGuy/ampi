@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as pi from "@earendil-works/pi-coding-agent";
-import { AMPI_GUI_HOST_GLOBAL_KEY, registerAmpiGuiHost } from "../packages/ampi-cli/src/app-worker.js";
+import { AMPI_GUI_HOST_GLOBAL_KEY, createAmpiAppUIContext, registerAmpiGuiHost } from "../packages/ampi-cli/src/app-worker.js";
 import { createAmpiSdkSession } from "../packages/ampi-cli/src/sdk-session.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -60,8 +60,23 @@ describe("ampi SDK session", () => {
   it("loads ampi and Pi's codemode, tool_search and MCP built-ins, serves the hosted GUI, and closes it on dispose", async () => {
     const ports = [];
     registerAmpiGuiHost({ token: TOKEN, ownerPid: process.pid, ready: (info) => ports.push(info.port) });
-    const runtime = await createAmpiSdkSession({ cwd: project, sessionManager: pi.SessionManager.inMemory(project), mode: "rpc", connectMcp: true, pi });
+    const uiContext = createAmpiAppUIContext();
+    const runtime = await createAmpiSdkSession({
+      cwd: project,
+      sessionManager: pi.SessionManager.inMemory(project),
+      mode: "rpc",
+      uiContext,
+      connectMcp: true,
+      pi,
+    });
     try {
+      // With the worker's UI context bound, extensions see a UI, and ampi-gui answers their dialogs.
+      assert.equal(runtime.session.extensionRunner.hasUI(), true);
+      // Extensions that check hasUI style text through the theme, as in Pi's own modes.
+      assert.ok(uiContext.theme instanceof pi.Theme);
+      assert.equal(typeof uiContext.theme.fg("accent", "x"), "string");
+      assert.equal(typeof globalThis[AMPI_GUI_HOST_GLOBAL_KEY].dialog, "function");
+      assert.equal(typeof globalThis[AMPI_GUI_HOST_GLOBAL_KEY].notice, "function");
       const loaded = runtime.services.resourceLoader.getExtensions().extensions.map((extension) => extension.path);
       assert.ok(loaded.includes(path.join(repoRoot, "src", "extensions", "ampi-core", "index.ts")), loaded.join("\n"));
       assert.ok(loaded.includes(path.join(repoRoot, "src", "extensions", "ampi-gui", "index.ts")), loaded.join("\n"));
@@ -78,5 +93,6 @@ describe("ampi SDK session", () => {
       await runtime.dispose();
     }
     assert.equal(await status(ports[0]), "ECONNREFUSED", "dispose closes the GUI server");
+    assert.equal(globalThis[AMPI_GUI_HOST_GLOBAL_KEY].dialog, undefined, "and ampi-gui takes its dialog handler back");
   });
 });

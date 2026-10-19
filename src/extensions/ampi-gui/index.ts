@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ExtensionAPI, type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
-import { getMmrGuiHost } from "../ampi-core/gui-host.js";
+import { getMmrGuiHost, type MmrGuiSessionHost } from "../ampi-core/gui-host.js";
 import { flushMmrLiveEntry, readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
@@ -76,6 +76,8 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
     const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     let server: MmrGuiServer | undefined;
     let hostReady = false;
+    /** The host record whose `dialog` and `notice` this session set. */
+    let hostedRecord: MmrGuiSessionHost | undefined;
 
     function warn(ctx: ExtensionContext, what: string, error: unknown): void {
       ctx.ui.notify(`ampi-gui: ${what}: ${error instanceof Error ? error.message : String(error)}`, "warning");
@@ -112,13 +114,19 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       const hosted = host?.role === "session" && ctx.mode === "rpc";
       if ((ctx.mode !== "tui" && !hosted) || server) return;
       const token = hosted ? host.token : overrides.createToken ? overrides.createToken() : randomBytes(32).toString("base64url");
-      bridge.start(ctx);
+      // Without a terminal, extensions ask the page: the worker's ctx.ui calls these.
+      bridge.start(ctx, { dialogs: hosted });
       try {
         server = await startMmrGuiServer({ bridge, commands, sessions, token, clientDir: CLIENT_DIR });
       } catch (error) {
         bridge.stop();
         warn(ctx, "could not start the web GUI", error);
         return;
+      }
+      if (hosted) {
+        hostedRecord = host;
+        host.dialog = (request, options) => bridge.ask(request, options);
+        host.notice = (message, level) => bridge.notice(message, level);
       }
       const url = server.url;
       registerMmrCommand({
@@ -155,6 +163,11 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       if (!server) return;
       const closing = server;
       server = undefined;
+      if (hostedRecord) {
+        hostedRecord.dialog = undefined;
+        hostedRecord.notice = undefined;
+        hostedRecord = undefined;
+      }
       if (!hub) unregisterMmrCommand(MMR_GUI_OPEN_COMMAND_ID);
       setMmrLiveFields({ gui: null });
       bridge.stop();

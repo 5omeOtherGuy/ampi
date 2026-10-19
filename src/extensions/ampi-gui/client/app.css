@@ -483,6 +483,83 @@ button {
   color: var(--ampi-primary-fg);
 }
 
+.button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.button:focus-visible,
+.ask-options:focus-visible {
+  outline: 2px solid var(--ampi-link);
+  outline-offset: 2px;
+}
+
+/* An extension's question (ampi app): one at a time, over the scrim */
+.ask-dialog {
+  width: min(32rem, 100vw - 2rem);
+}
+
+.ask-dialog h2,
+.ask-message,
+.ask-options [role="option"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ask-message {
+  margin: 0 0 calc(var(--ampi-space) * 3);
+  color: var(--ampi-muted-fg);
+}
+
+.ask-options {
+  max-height: min(20rem, 50vh);
+  margin: 0;
+  padding: var(--ampi-space);
+  overflow-y: auto;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-input-bg);
+  list-style: none;
+}
+
+.ask-options [role="option"] {
+  padding: 6px 8px;
+  border-radius: var(--ampi-radius-sm);
+  cursor: pointer;
+}
+
+.ask-options [role="option"][aria-selected="true"] {
+  background: var(--ampi-accent);
+  box-shadow: inset 2px 0 0 var(--ampi-link);
+}
+
+.ask-dialog textarea {
+  width: 100%;
+  min-height: 10rem;
+  padding: 8px 10px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-input-bg);
+  color: var(--ampi-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+  resize: vertical;
+}
+
+.ask-error {
+  margin: calc(var(--ampi-space) * 2) 0 0;
+  color: var(--ampi-danger);
+}
+
+.toast[data-level="warning"] {
+  background: var(--ampi-warning);
+}
+
+.toast[data-level="error"] {
+  background: var(--ampi-danger);
+}
+
 .toast {
   position: fixed;
   top: calc(var(--ampi-titlebar-height) + 8px);
@@ -490,6 +567,10 @@ button {
   z-index: 50;
   max-width: calc(100vw - 2rem);
   padding: 6px 12px;
+  max-height: 50vh;
+  overflow-y: auto;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
   transform: translateX(-50%);
   border-radius: var(--ampi-radius-lg);
   background: var(--ampi-primary);

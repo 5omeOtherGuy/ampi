@@ -2,8 +2,9 @@
 // (ampi-core's gui-host.ts), the GUI serves Pi's RPC mode with the host's
 // token whatever its setting says, reports its port to the host once instead
 // of printing a link, and the live registry records the session as an
-// `app-session` of the host. The server's Host, Origin and token checks hold
-// unchanged. Without a host nothing changes.
+// `app-session` of the host. It sets the host's dialog and notice handlers,
+// so extensions' questions are answered on the page. The server's Host,
+// Origin and token checks hold unchanged. Without a host nothing changes.
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -162,6 +163,41 @@ describe("ampi-gui in a hosted session", () => {
     });
     assert.equal(idle.status, 409, "the command endpoint answers: nothing is running");
     await emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("sets the host's dialog and notice handlers, which ask the page, and takes them back at shutdown", async () => {
+    const ready = await registerHost();
+    const { emit } = await load({ enabled: true });
+    await emit("session_start", { reason: "startup" });
+    const host = globalThis[await hostKey()];
+    assert.equal(typeof host.dialog, "function");
+    assert.equal(typeof host.notice, "function");
+
+    const { port } = ready[0];
+    const headers = { Host: `127.0.0.1:${port}`, Cookie: `ampi_gui_${port}=${HOST_TOKEN}` };
+    const answer = host.dialog({ kind: "select", title: "Approval Required", options: ["Allow Once", "Reject"] }, {});
+    host.notice("Saved", "info");
+    const transcript = JSON.parse((await send(port, { target: "/api/transcript", headers })).body);
+    assert.deepEqual(
+      transcript.dialogs.map((dialog) => [dialog.kind, dialog.title]),
+      [["select", "Approval Required"]],
+    );
+    const [{ id }] = transcript.dialogs;
+    const posted = await send(port, {
+      method: "POST",
+      target: "/api/dialog",
+      headers: { ...headers, "Content-Type": "application/json", Origin: `http://127.0.0.1:${port}` },
+      body: JSON.stringify({ id, value: "Reject" }),
+    });
+    assert.equal(posted.status, 200);
+    assert.deepEqual(await answer, { value: "Reject" });
+
+    // A question still open at shutdown is cancelled, and the worker answers later ones itself.
+    const open = host.dialog({ kind: "confirm", title: "Continue?", message: "" }, {});
+    await emit("session_shutdown", { reason: "quit" });
+    assert.deepEqual(await open, { cancelled: true });
+    assert.equal(host.dialog, undefined);
+    assert.equal(host.notice, undefined);
   });
 
   it("closes the server and removes the entry at shutdown", async () => {

@@ -22,6 +22,9 @@
 // (exit 1; also for any error while opening the file or locating ampi). The worker also stops when
 // the channel closes, before it is ready too: a cancelled start never builds a session.
 //
+// Extensions that ask the user (`ctx.ui.confirm`, `select`, `input`,
+// `editor`) are answered on the page: see createAmpiAppUIContext.
+//
 // The worker binds no command actions, so its session's runtime is never
 // replaced. A worker that binds them (for /new or /resume) has to rebind its
 // activity subscription to the new runtime.session, as Pi's session runtime
@@ -29,7 +32,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { findLiveOwner, liveRegistryDir } from "./live-registry.js";
-import { piAgentDir } from "./pi-compat.js";
+import { piAgentDir, piTheme } from "./pi-compat.js";
 import { createAmpiSdkSession, locateSessionAmpi } from "./sdk-session.js";
 
 /**
@@ -53,6 +56,79 @@ const GUI_HOST_SEAM = path.join("src", "extensions", "ampi-core", "gui-host.ts")
  */
 export function registerAmpiGuiHost({ token, ownerPid, ready }) {
   /** @type {Record<string, unknown>} */ (globalThis)[AMPI_GUI_HOST_GLOBAL_KEY] = { role: "session", token, ownerPid, ready };
+}
+
+/** A dialog nobody answered. */
+const CANCELLED = Object.freeze({ cancelled: true });
+
+/**
+ * The session's `ctx.ui`. A worker has no terminal, so the dialogs (select,
+ * confirm, input, editor) go to the `dialog` handler ampi-gui sets on the
+ * host record at session start, which asks the page, and notify goes to its
+ * `notice`. A dialog asked before ampi-gui set the handler, or whose handler
+ * fails, resolves as cancelled: `undefined`, or `false` for confirm. The
+ * other members do what Pi's RPC mode does for them without a client:
+ * nothing, or an empty answer; `theme` is Pi's theme, which
+ * createAmpiSdkSession loads from Pi's settings. Because a UI context is bound, Pi tells
+ * extensions `ctx.hasUI === true` (and `ctx.mode === "rpc"`), as in RPC mode.
+ *
+ * @returns {Record<string, any>} Pi's `ExtensionUIContext`.
+ */
+export function createAmpiAppUIContext() {
+  const host = () => /** @type {Record<string, any> | undefined} */ (/** @type {Record<string, unknown>} */ (globalThis)[AMPI_GUI_HOST_GLOBAL_KEY]);
+  /** @param {Record<string, unknown>} request @param {unknown} options @returns {Promise<Record<string, unknown>>} */
+  const ask = async (request, options) => {
+    const handler = host()?.dialog;
+    if (typeof handler !== "function") return CANCELLED;
+    try {
+      const answer = await handler(request, isObject(options) ? options : {});
+      return isObject(answer) ? answer : CANCELLED;
+    } catch {
+      return CANCELLED;
+    }
+  };
+  /** @param {Record<string, unknown>} answer */
+  const text = (answer) => (typeof answer.value === "string" ? answer.value : undefined);
+  const nothing = () => {};
+  return {
+    select: async (/** @type {string} */ title, /** @type {string[]} */ options, /** @type {unknown} */ opts) =>
+      text(await ask({ kind: "select", title, options: [...options] }, opts)),
+    confirm: async (/** @type {string} */ title, /** @type {string} */ message, /** @type {unknown} */ opts) =>
+      (await ask({ kind: "confirm", title, message }, opts)).value === true,
+    input: async (/** @type {string} */ title, /** @type {string | undefined} */ placeholder, /** @type {unknown} */ opts) =>
+      text(await ask({ kind: "input", title, placeholder }, opts)),
+    editor: async (/** @type {string} */ title, /** @type {string | undefined} */ prefill) => text(await ask({ kind: "editor", title, initial: prefill }, {})),
+    notify(/** @type {string} */ message, /** @type {string | undefined} */ type) {
+      try {
+        host()?.notice?.(String(message), type ?? "info");
+      } catch {}
+    },
+    onTerminalInput: () => nothing,
+    setStatus: nothing,
+    setWorkingMessage: nothing,
+    setWorkingVisible: nothing,
+    setWorkingIndicator: nothing,
+    setHiddenThinkingLabel: nothing,
+    setWidget: nothing,
+    setFooter: nothing,
+    setHeader: nothing,
+    setTitle: nothing,
+    custom: async () => undefined,
+    pasteToEditor: nothing,
+    setEditorText: nothing,
+    getEditorText: () => "",
+    addAutocompleteProvider: nothing,
+    setEditorComponent: nothing,
+    getEditorComponent: () => undefined,
+    get theme() {
+      return piTheme();
+    },
+    getAllThemes: () => [],
+    getTheme: () => undefined,
+    setTheme: () => ({ success: false, error: "A session in ampi app has no terminal theme to switch." }),
+    getToolsExpanded: () => false,
+    setToolsExpanded: nothing,
+  };
 }
 
 /**
@@ -207,7 +283,7 @@ export async function runAppWorker(options) {
     });
     // ampi's extensions read settings relative to the working directory.
     chdir(cwd);
-    runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: undefined, connectMcp: true, pi });
+    runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: createAmpiAppUIContext(), connectMcp: true, pi });
     if (port === undefined) {
       /** @type {string[]} */
       const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);

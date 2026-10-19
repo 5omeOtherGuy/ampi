@@ -835,3 +835,14 @@ export function listPiTrustResources(pi, cwd) {
   }
   return found;
 }
+
+/**
+ * Pi's current theme, which `ctx.ui.theme` is in Pi's own modes. Pi keeps
+ * it on a global under this symbol and exports no getter for it; it is
+ * `undefined` until Pi's `initTheme` has run.
+ *
+ * @returns {unknown}
+ */
+export function piTheme() {
+  return /** @type {Record<symbol, unknown>} */ (globalThis)[Symbol.for("@earendil-works/pi-coding-agent:theme")];
+}

@@ -115,6 +115,14 @@ export function mountComposer({ root, post, mac = false, now }) {
   /** Sends run one after another, in the order they were typed. */
   let sends = Promise.resolve();
 
+  let phase = "idle";
+  /** True when approvals are asked on this page, so the note about the terminal does not apply. */
+  let promptsHere = false;
+
+  function showApproval() {
+    approval.hidden = promptsHere || phase !== "waitingApproval";
+  }
+
   function showNotice(text) {
     notice.textContent = text;
     notice.hidden = text === "";
@@ -179,8 +187,9 @@ export function mountComposer({ root, post, mac = false, now }) {
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    // The sidebar sheet makes the page around the composer inert.
-    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") })) {
+    // The sidebar sheet makes the page around the composer inert, and an open modal takes every Escape,
+    // also one pressed while focus has fallen out of it.
+    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") && !document.querySelector("dialog[open]") })) {
       chord.reset();
       return;
     }
@@ -255,8 +264,14 @@ export function mountComposer({ root, post, mac = false, now }) {
     setStatus(status) {
       busy = status.busy;
       if (!busy) chord.reset();
-      approval.hidden = status.phase !== "waitingApproval";
+      phase = status.phase;
+      showApproval();
       refresh();
+    },
+    /** Whether the session's extensions ask on this page (`ampi app`) rather than in its terminal. */
+    setPromptsHere(value) {
+      promptsHere = value;
+      showApproval();
     },
     setQueue: renderQueue,
     setConnected(value) {
