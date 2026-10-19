@@ -6,6 +6,7 @@ import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { mmrEntryCost, readMmrEntryUsage } from "../../ampi-core/session-usage.js";
 import { isMmrFastInEffect } from "../../ampi-core/speed.js";
 import { getMmrThreadReports } from "../../ampi-core/thread-reports.js";
+import type { MmrModeState } from "../../ampi-core/types.js";
 import { MMR_SHORTCUT_HELP_TMUX_NOTE, type MmrShortcutHelpEntry } from "./help.js";
 import { createMmrMentionProvider, pickMmrThreadMention, readMmrRecentCommits } from "./mentions.js";
 import {
@@ -15,6 +16,7 @@ import {
   MmrPromptBox,
   type MmrPromptBoxHost,
   type MmrPromptBoxSlots,
+  parseMmrHexColor,
 } from "./prompt-box.js";
 import type { MmrStatusFeed } from "./status-feed.js";
 
@@ -63,6 +65,14 @@ export interface MmrPromptBoxInstall {
 }
 
 /** Ask the tmux server this session runs in for its `extended-keys` option. */
+/** The box's mode label: a registered mode's label in its colour, else the mode key. */
+function modeLabel(state: MmrModeState | undefined): Pick<MmrPromptBoxSlots, "mode" | "modeColor"> {
+  const registered = state?.registeredMode;
+  if (!registered) return { mode: state?.mode };
+  const color = parseMmrHexColor(registered.color);
+  return color ? { mode: registered.label, modeColor: color } : { mode: registered.label };
+}
+
 function readTmuxExtendedKeys(): Promise<string | undefined> {
   if (!process.env.TMUX) return Promise.resolve(undefined);
   return new Promise((resolve) => {
@@ -131,7 +141,7 @@ export function createMmrPromptBoxInstall(
     const cwd = ctx ? ctx.sessionManager.getCwd() : undefined;
     const branch = getFooterData()?.getGitBranch();
     return {
-      mode: getMmrModeState()?.mode,
+      ...modeLabel(getMmrModeState()),
       fast: isMmrFastInEffect(ctx?.model),
       gauge,
       status,

@@ -201,6 +201,8 @@ export interface MmrRejectedModeSource {
 export interface MmrModeSelection {
   mode: MmrModeKey;
   source: MmrModeSelectionSource;
+  /** Key of the registered mode the winning source named; `mode` is then its base mode. */
+  registeredModeKey?: string;
   warnings: string[];
   rejectedSources: MmrRejectedModeSource[];
 }
@@ -350,6 +352,22 @@ export interface MmrModeState {
    * message; never persisted, because it is derived from the session entries.
    */
   modeLock?: MmrModeLock;
+  /**
+   * The registered mode the session runs, when it is one (see
+   * `mode-registry.ts`). `mode` then holds its base locked mode, so every
+   * per-mode table and reader keeps working on a built-in key.
+   */
+  registeredMode?: MmrRegisteredModeInfo;
+}
+
+/** What the mode state records about an active registered mode. */
+export interface MmrRegisteredModeInfo {
+  key: string;
+  label: string;
+  /** Label colour, `#rrggbb` in lowercase. */
+  color: string;
+  /** The registering extension, or `extension` when it named none. */
+  source: string;
 }
 
 /**
@@ -412,6 +430,11 @@ export interface PersistedMmrModeState {
   gatedTools: string[];
   disabledTools: string[];
   appliedAt: string;
+  /**
+   * Key of the registered mode the session ran; `mode` holds its base mode,
+   * so a reader that does not know registered modes still gets a valid one.
+   */
+  registeredModeKey?: string;
 }
 
 /**

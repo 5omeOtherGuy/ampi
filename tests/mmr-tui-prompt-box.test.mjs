@@ -89,6 +89,8 @@ const CASES = {
   "mode-ultra": { slots: { mode: "ultra" } },
   "mode-free": { slots: { mode: "free" } },
   "mode-fast": { slots: { mode: "medium", fast: true, gauge: "$0.02" } },
+  "mode-registered": { slots: { mode: "Review", modeColor: [0xd9, 0x77, 0x06], gauge: "$0.02" } },
+  "mode-registered-fast": { slots: { mode: "Review", modeColor: [0xd9, 0x77, 0x06], fast: true, gauge: "$0.02" } },
   "status-thinking": {
     slots: {
       gauge: "$····",
@@ -254,6 +256,16 @@ describe("ampi-tui prompt box: geometry", () => {
     // One column fewer and the label goes too.
     assert.equal(plain(makeBox({ slots: { gauge: "$0.02", fast: true } }).editor.render(12)[0]), `╭${"─".repeat(10)}╮`);
     assert.equal(plain(makeBox({ slots: { mode: undefined, fast: true } }).editor.render(20)[0]), `╭${"─".repeat(18)}╮`);
+  });
+
+  it("draws a registered mode's label in its own colour, with the fast marker in front", () => {
+    const color = [0xd9, 0x77, 0x06];
+    const top = makeBox({ slots: { mode: "Review", modeColor: color } }).editor.render(80)[0];
+    assert.ok(top.includes("\x1b[38;2;217;119;6mReview\x1b[39m"), JSON.stringify(top));
+    const fast = makeBox({ slots: { mode: "Review", modeColor: color, fast: true } }).editor.render(80)[0];
+    assert.ok(fast.includes("\x1b[38;2;217;119;6m↯Review\x1b[39m"), JSON.stringify(fast));
+    const plainKey = makeBox({ slots: { mode: "review" } }).editor.render(80)[0];
+    assert.doesNotMatch(plainKey, /38;2;/, "a name without a colour of its own keeps the border colour");
   });
 
   it("shows no label without a mode and the free mode in the border colour", () => {
@@ -616,6 +628,19 @@ describe("ampi-tui prompt box: installation", () => {
     box.promptBox.statusChanged();
     assert.equal(box.intervals.length, 0);
     assert.equal(plain(box.editor.render(80).at(-1))[2], "∼");
+  });
+
+  it("feeds the box a registered mode's label and colour from ampi-core's state", async () => {
+    const runtime = await importSource("extensions/ampi-core/runtime.ts");
+    runtime.setMmrModeState({ mode: "high", registeredMode: { key: "review", label: "Review", color: "#d97706", source: "extension" } });
+    try {
+      const top = install().editor.render(80)[0];
+      assert.ok(top.includes("\x1b[38;2;217;119;6mReview\x1b[39m"), JSON.stringify(top));
+      runtime.setMmrModeState({ mode: "high" });
+      assert.ok(install().editor.render(80)[0].includes("\x1b[38;2;61;212;255mhigh\x1b[39m"), "a built-in mode keeps its own colour");
+    } finally {
+      runtime.setMmrModeState(undefined);
+    }
   });
 
   it("reads the gauge from the session's assistant messages", () => {

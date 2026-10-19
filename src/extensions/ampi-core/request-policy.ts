@@ -192,18 +192,21 @@ export function getOtherToggleThinkingLevel(
   return options[nextIndex].level;
 }
 
-function findThinkingOption(modeKey: MmrToggleableModeKey, level: MmrToggleThinkingLevel): MmrModeThinkingOption | undefined {
+function findThinkingOption(modeKey: MmrModeKey, level: MmrToggleThinkingLevel): MmrModeThinkingOption | undefined {
+  if (!isToggleableMmrMode(modeKey)) return undefined;
   return MMR_MODE_THINKING_TOGGLES[modeKey].find((option) => option.level === level);
 }
 
 /**
  * Return a new policy with its reasoning effort (and any per-level
- * `max_tokens` override) adjusted to the given toggle level. Pure: never
+ * `max_tokens` override) adjusted to the given toggle level. A mode without
+ * thinking presets (a registered mode built on `low`, say) takes the level
+ * with no preset overrides. Pure: never
  * mutates the input policy or the shared `MMR_REQUEST_POLICIES` data, so
  * toggling one mode cannot corrupt another mode's static defaults.
  */
 export function applyMmrThinkingLevelToPolicy(
-  modeKey: MmrToggleableModeKey,
+  modeKey: MmrModeKey,
   policy: MmrRequestPolicy,
   level: MmrToggleThinkingLevel,
 ): MmrRequestPolicy {

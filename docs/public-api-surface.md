@@ -60,6 +60,12 @@ names.
 - Feature gates and settings loaders: `createMmrFeatureGateRegistry`,
   `loadMmrCoreSettings`, `loadMmrWebSettings`, `loadMmrGithubSettings`,
   `loadMmrHistorySettings`.
+- Mode registry: `registerMmrMode`, `unregisterMmrMode`, `listMmrModes`,
+  `getMmrRegisteredMode`, `resolveMmrRegisteredMode`, `onMmrModesChanged`,
+  the `MMR_EVENT_REGISTER_MODE`, `MMR_EVENT_UNREGISTER_MODE` and
+  `MMR_EVENT_MODES_READY` event names, and their types. The event names
+  and payloads are a protocol other extensions use without importing ampi,
+  so they change only like any other Stable export.
 - Thread status model: `createMmrThreadStatusReducer` and its types.
   `loadMmrHistorySettings`, `loadMmrTuiSettings`, `loadMmrThreadsSettings`,
   `loadMmrGuiSettings`, `loadMmrShellSettings`, `loadMmrPainterSettings`.

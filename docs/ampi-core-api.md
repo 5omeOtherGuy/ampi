@@ -422,6 +422,53 @@ onMmrStateChanged(pi, (state) => {
 The event bus is a notification channel only; it does not support
 request/response. For queries, use the read APIs above.
 
+## Mode registry
+
+```ts
+import { listAmpiModes, onAmpiModesChanged, registerAmpiMode, resolveAmpiRegisteredMode } from "@skippermissions/ampi";
+import type { AmpiRegisteredMode, AmpiRegisteredModeDefinition } from "@skippermissions/ampi";
+```
+
+Modes other extensions add, each running as one of the four locked modes
+with its own key, label, description, colour and optional overrides. The
+registry is process-global, so every copy of ampi-core in the process sees
+the same modes. Behaviour, limits and the reload rule:
+[`ampi-core` README, Registered modes](../src/extensions/ampi-core/README.md#registered-modes).
+Every name is also exported in its `Mmr*` / `MMR_*` form.
+
+- `registerAmpiMode(definition)` — validate and add a mode; returns a
+  function that removes it again (a no-op once the registration was
+  replaced or removed). `definition` is `{ key, color, label?,
+  description?, source?, baseMode?, modelPreferences?, thinkingLevel?,
+  tools?, promptAppend? }`. Throws on an invalid field, a reserved key or
+  label, or a key or label another registration holds; a key held by a
+  registration with the same `source` is replaced in place.
+- `unregisterAmpiMode(key)` — remove a mode by key; returns `false` when
+  none had it.
+- `listAmpiModes()` — registered modes in registration order, as frozen
+  `AmpiRegisteredMode` records (`label` filled in, `color` lowercase,
+  `source` defaulting to `extension`, `baseMode` defaulting to `medium`).
+- `getAmpiRegisteredMode(key)` — one mode by key, case-insensitively.
+- `resolveAmpiRegisteredMode(name)` — the mode a typed name means, by key
+  or label, case-insensitively. Built-in names never match here; resolve
+  them first with `resolveMmrModeKey`.
+- `onAmpiModesChanged(listener)` — called with `{ change, key }`, where
+  `change` is `"registered"` or `"unregistered"`. Returns an unsubscribe
+  function. An in-process callback, not a Pi event-bus topic. A listener
+  that throws does not stop the change or the other listeners.
+- Event-bus protocol, for extensions that do not import ampi:
+  `AMPI_EVENT_REGISTER_MODE` (`ampi-core:register-mode`, payload: a
+  definition), `AMPI_EVENT_UNREGISTER_MODE` (`ampi-core:unregister-mode`,
+  payload `{ key }`, removes only modes registered over the bus) and
+  `AMPI_EVENT_MODES_READY` (`ampi-core:modes-ready`, payload
+  `{ version: 1 }`, emitted by ampi-core from its factory and at the start
+  of each session; answer it by emitting the definitions again,
+  synchronously).
+- `MmrModeState.registeredMode` (`AmpiRegisteredModeInfo`: `{ key, label,
+  color, source }`) names the active registered mode; `mode` then holds its
+  base key. The persisted `ampi-core.mode-state` entry carries the key as
+  `registeredModeKey`.
+
 ## Command registry
 
 ```ts

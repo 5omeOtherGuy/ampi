@@ -10,6 +10,7 @@ import type {
   MmrModeSelectionSource,
   MmrModeState,
   MmrModelResolution,
+  MmrRegisteredModeInfo,
   MmrRejectedModeSource,
   MmrToolResolution,
   PersistedMmrModeState,
@@ -31,6 +32,9 @@ const MMR_MODE_SELECTION_SOURCES: ReadonlySet<MmrModeSelectionSource> = new Set(
 function isMmrModeSelectionSource(value: unknown): value is MmrModeSelectionSource {
   return typeof value === "string" && MMR_MODE_SELECTION_SOURCES.has(value as MmrModeSelectionSource);
 }
+
+// Same shape the mode registry accepts for a key.
+const REGISTERED_MODE_KEY = /^[a-z0-9-]{1,32}$/;
 
 export const AMPI_MODE_STATE_ENTRY = "ampi-core.mode-state";
 /** Legacy persisted entry key read for existing sessions. */
@@ -70,6 +74,8 @@ export function createMmrModeState(args: {
   settingsWarnings?: readonly string[];
   /** Runtime-only session mode lock; not persisted. */
   modeLock?: MmrModeLock;
+  /** The registered mode `mode` is the base of; its key is persisted. */
+  registeredMode?: MmrRegisteredModeInfo;
 }): MmrModeState {
   const featureGateDecisions = args.featureGateDecisions
     ? [...args.featureGateDecisions]
@@ -127,6 +133,7 @@ export function createMmrModeState(args: {
     ...(args.settingsFilesRead ? { settingsFilesRead: [...args.settingsFilesRead] } : {}),
     ...(args.settingsWarnings ? { settingsWarnings: [...args.settingsWarnings] } : {}),
     ...(args.modeLock ? { modeLock: { ...args.modeLock } } : {}),
+    ...(args.registeredMode ? { registeredMode: { ...args.registeredMode } } : {}),
   };
 }
 
@@ -148,6 +155,9 @@ export function toPersistedModeState(state: MmrModeState): PersistedMmrModeState
     gatedTools: state.gatedTools,
     disabledTools: state.disabledTools,
     appliedAt: state.appliedAt,
+    // An additive field: the version stays 1, and readers that do not know
+    // registered modes still find the base mode in `mode`.
+    ...(state.registeredMode ? { registeredModeKey: state.registeredMode.key } : {}),
   };
 }
 
@@ -202,6 +212,9 @@ function parsePersistedModeState(data: unknown): PersistedMmrModeState | undefin
     gatedTools: readStringArray(candidate.gatedTools),
     disabledTools: readStringArray(candidate.disabledTools),
     appliedAt: typeof candidate.appliedAt === "string" ? candidate.appliedAt : new Date(0).toISOString(),
+    ...(typeof candidate.registeredModeKey === "string" && REGISTERED_MODE_KEY.test(candidate.registeredModeKey)
+      ? { registeredModeKey: candidate.registeredModeKey }
+      : {}),
   };
 }
 

@@ -1,13 +1,14 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, getKeybindings, matchesKey, rgbColor, visibleWidth } from "@earendil-works/pi-tui";
 import { selectMmrModelRoute } from "../../ampi-core/model-resolver.js";
-import { MMR_MODE_KEYS, MMR_MODES } from "../../ampi-core/modes.js";
+import { getMmrModeName, getMmrRegisteredMode, listMmrModes, type MmrRegisteredMode } from "../../ampi-core/mode-registry.js";
+import { MMR_MODES } from "../../ampi-core/modes.js";
 import { getDefaultToggleThinkingLevel, isToggleableMmrMode } from "../../ampi-core/request-policy.js";
 import { getMmrModeState } from "../../ampi-core/runtime.js";
 import { loadMmrCoreSettings } from "../../ampi-core/settings.js";
 import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
 import type { MmrCoreSettings, MmrModeKey, MmrModelPreference } from "../../ampi-core/types.js";
-import { MMR_MODE_LABEL_COLORS } from "../editor/prompt-box.js";
+import { MMR_MODE_LABEL_COLORS, parseMmrHexColor } from "../editor/prompt-box.js";
 import { fitMmrText, type MmrFrameHint, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFrame, renderMmrScrollbar } from "../ui/frame.js";
 
 /**
@@ -30,8 +31,11 @@ import { fitMmrText, type MmrFrameHint, type MmrFrameTheme, mmrFrameInnerWidth, 
  * - Ctrl+S or → turns to the next mode (low → medium → high → ultra →
  *   low), ← to the previous one. From `free` either direction lands on
  *   `medium`. Each turn applies the mode at once.
- * - Tab switches to the list view: every mode, `free` last, one row each.
- *   ↑/↓ move the selection and apply that mode at once; Tab goes back.
+ * - Tab switches to the list view: the four ring modes, then the modes
+ *   other extensions registered, then `free`, one row each. ↑/↓ move the
+ *   selection and apply that mode at once; Tab goes back.
+ * - On a registered mode the dial opens on the list. Turning from one, as
+ *   from `free`, lands on `medium`.
  * - Esc closes. So does a quiet spell: the dial closes itself
  *   {@link MMR_MODE_DIAL_IDLE_MS} after the last key.
  */
@@ -44,7 +48,7 @@ export const MMR_MODE_DIAL_IDLE_MS = 2000;
 export const MMR_MODE_LIST_ROWS = 7;
 export const MMR_MODE_LIST_TITLE = "Modes";
 
-/** The modes on the dial, in turning order. `free` sits outside the ring. */
+/** The modes on the dial, in turning order. `free` and registered modes sit outside the ring. */
 export const MMR_MODE_DIAL_RING = ["low", "medium", "high", "ultra"] as const satisfies readonly MmrModeKey[];
 
 /** One line per mode for the dial and the list. */
@@ -79,14 +83,45 @@ export interface MmrModeRoutes {
 
 export type MmrModeDialView = "dial" | "list";
 
+/** One row of the list view. */
+export interface MmrModeDialRow {
+  /** The mode's key: a built-in key or a registered key. */
+  readonly key: string;
+  readonly name: string;
+  /** The dim second column. */
+  readonly detail: string;
+}
+
+/**
+ * The list view's rows: `low`, `medium`, `high`, `ultra`, the registered
+ * modes in registration order, then `free`. A registered row's second column
+ * is its description, else its source.
+ */
+export function listMmrModeDialRows(): MmrModeDialRow[] {
+  const builtin = (key: MmrModeKey): MmrModeDialRow => ({ key, name: MMR_MODES[key].displayName, detail: MMR_MODE_DIAL_DESCRIPTIONS[key] });
+  return [
+    ...MMR_MODE_DIAL_RING.map(builtin),
+    ...listMmrModes().map((mode) => ({ key: mode.key, name: mode.label, detail: registeredDetail(mode) })),
+    builtin("free"),
+  ];
+}
+
+function registeredDetail(mode: MmrRegisteredMode): string {
+  return mode.description ?? mode.source;
+}
+
+function isBuiltinMode(mode: string): mode is MmrModeKey {
+  return Object.hasOwn(MMR_MODES, mode);
+}
+
 export interface MmrModeDialOptions {
-  /** The active mode when the dial opens; `undefined` counts as `medium`. */
-  readonly mode: MmrModeKey | undefined;
+  /** The active mode when the dial opens (a built-in or registered key); `undefined` counts as `medium`. */
+  readonly mode: string | undefined;
   readonly theme: MmrFrameTheme;
   /** The models the dial names for a mode. */
-  readonly routes: (mode: MmrModeKey) => MmrModeRoutes;
-  /** Switch to `mode` now. */
-  readonly apply: (mode: MmrModeKey) => void;
+  readonly routes: (mode: string) => MmrModeRoutes;
+  /** Switch to `mode` (a built-in or registered key) now. */
+  readonly apply: (mode: string) => void;
   /** Called once, when the dial closes. */
   readonly onClose: () => void;
   /** Redraw after a change that came from a timer or a command, not a key. */
@@ -98,23 +133,29 @@ export interface MmrModeDialOptions {
   readonly terminalRows?: () => number | undefined;
 }
 
-function paintMode(theme: MmrFrameTheme, mode: MmrModeKey, text: string, bold: boolean): string {
-  const rgb = MMR_MODE_LABEL_COLORS[mode];
+function modeColor(mode: string): readonly [number, number, number] | undefined {
+  if (isBuiltinMode(mode)) return MMR_MODE_LABEL_COLORS[mode];
+  const registered = getMmrRegisteredMode(mode);
+  return registered ? parseMmrHexColor(registered.color) : undefined;
+}
+
+function paintMode(theme: MmrFrameTheme, mode: string, text: string, bold: boolean): string {
+  const rgb = modeColor(mode);
   if (!rgb) return bold ? theme.bold(text) : text;
   return theme.style(text, { fg: rgbColor(rgb[0], rgb[1], rgb[2]), bold });
 }
 
 /** Filled cells of a bar `width` cells long: the first cell for `low` and `free`, all of them for `ultra`. */
-export function mmrModeDialFill(mode: MmrModeKey, width: number): number {
-  const step = Math.max(0, (MMR_MODE_DIAL_RING as readonly MmrModeKey[]).indexOf(mode));
+export function mmrModeDialFill(mode: string, width: number): number {
+  const step = Math.max(0, (MMR_MODE_DIAL_RING as readonly string[]).indexOf(mode));
   return 1 + Math.round(((width - 1) * step) / (MMR_MODE_DIAL_RING.length - 1));
 }
 
 export class MmrModeDial implements Component {
   private readonly theme: MmrFrameTheme;
   private readonly options: MmrModeDialOptions;
-  private mode: MmrModeKey;
-  private view: MmrModeDialView = "dial";
+  private mode: string;
+  private view: MmrModeDialView;
   private listOffset = 0;
   private timer: unknown;
   private closed = false;
@@ -123,11 +164,13 @@ export class MmrModeDial implements Component {
     this.options = options;
     this.theme = options.theme;
     this.mode = options.mode ?? "medium";
+    // A registered mode has no place on the ring; the list shows it.
+    this.view = isBuiltinMode(this.mode) ? "dial" : "list";
     this.armTimer();
   }
 
   /** The mode the dial points at. */
-  getMode(): MmrModeKey {
+  getMode(): string {
     return this.mode;
   }
 
@@ -142,7 +185,7 @@ export class MmrModeDial implements Component {
   /** Turn the dial `step` places along the ring and apply the mode. */
   turn(step: 1 | -1): void {
     if (this.closed) return;
-    const ring: readonly MmrModeKey[] = MMR_MODE_DIAL_RING;
+    const ring: readonly string[] = MMR_MODE_DIAL_RING;
     const index = ring.indexOf(this.mode);
     const next = index === -1 ? "medium" : ring[(index + step + ring.length) % ring.length];
     this.select(next);
@@ -184,15 +227,16 @@ export class MmrModeDial implements Component {
     return this.view === "dial" ? this.renderDial(width) : this.renderList(width);
   }
 
-  private select(mode: MmrModeKey): void {
+  private select(mode: string): void {
     if (mode === this.mode) return;
     this.mode = mode;
     this.options.apply(mode);
   }
 
   private moveInList(delta: number): void {
-    const index = MMR_MODE_KEYS.indexOf(this.mode);
-    const next = MMR_MODE_KEYS[Math.max(0, Math.min(MMR_MODE_KEYS.length - 1, index + delta))];
+    const keys = listMmrModeDialRows().map((row) => row.key);
+    const index = keys.indexOf(this.mode);
+    const next = keys[Math.max(0, Math.min(keys.length - 1, index + delta))];
     if (next) this.select(next);
   }
 
@@ -224,7 +268,8 @@ export class MmrModeDial implements Component {
 
     const routes = this.options.routes(mode);
     const route = (label: string, value: string | undefined) => `${label}${theme.fg("dim", fitMmrText(value ?? NOT_AVAILABLE, inner - label.length))}`;
-    const description = theme.fg("dim", fitMmrText(MMR_MODE_DIAL_DESCRIPTIONS[mode], inner));
+    const detail = isBuiltinMode(mode) ? MMR_MODE_DIAL_DESCRIPTIONS[mode] : listMmrModeDialRows().find((row) => row.key === mode)?.detail ?? "";
+    const description = theme.fg("dim", fitMmrText(detail, inner));
 
     return renderMmrFrame(
       {
@@ -240,26 +285,27 @@ export class MmrModeDial implements Component {
   private renderList(width: number): string[] {
     const theme = this.theme;
     const inner = mmrFrameInnerWidth(width);
-    const total = MMR_MODE_KEYS.length;
+    const rows = listMmrModeDialRows();
+    const total = rows.length;
     const terminalRows = this.options.terminalRows?.();
     const visible = Math.max(
       1,
       Math.min(total, MMR_MODE_LIST_ROWS, terminalRows === undefined ? total : terminalRows - LIST_RESERVED_ROWS),
     );
-    const selected = MMR_MODE_KEYS.indexOf(this.mode);
+    const selected = rows.findIndex((row) => row.key === this.mode);
     if (selected < this.listOffset) this.listOffset = selected;
     if (selected >= this.listOffset + visible) this.listOffset = selected - visible + 1;
     this.listOffset = Math.max(0, Math.min(this.listOffset, total - visible));
 
     const lines: string[] = [];
     for (let index = this.listOffset; index < this.listOffset + visible; index++) {
-      const key = MMR_MODE_KEYS[index];
-      const current = key === this.mode;
-      const name = MMR_MODES[key].displayName;
+      const row = rows[index];
+      const current = row.key === this.mode;
       const marker = current ? " ‣ " : "   ";
+      const name = fitMmrText(row.name, Math.max(1, inner - marker.length));
       const room = Math.max(0, inner - marker.length - visibleWidth(name) - 2);
-      const description = fitMmrText(MMR_MODE_DIAL_DESCRIPTIONS[key], room);
-      lines.push(`${paintMode(theme, key, `${marker}${name}`, current)}  ${theme.fg("dim", description)}`);
+      const description = fitMmrText(row.detail, room);
+      lines.push(`${paintMode(theme, row.key, `${marker}${name}`, current)}  ${theme.fg("dim", description)}`);
     }
     const scrollbar = renderMmrScrollbar({ total, visible, offset: this.listOffset }, theme);
     return renderMmrFrame(
@@ -285,7 +331,7 @@ export async function openMmrModeDial(ctx: ExtensionContext, options: MmrModeDia
   await ctx.ui.custom<undefined>(
     (tui, theme, _keybindings, done) => {
       const dial = new MmrModeDial({
-        mode: getMmrModeState()?.mode,
+        mode: currentModeName(),
         theme,
         routes: createMmrModeRouteReader(ctx),
         apply: options.apply,
@@ -307,6 +353,11 @@ export async function openMmrModeDial(ctx: ExtensionContext, options: MmrModeDia
   );
 }
 
+function currentModeName(): string | undefined {
+  const state = getMmrModeState();
+  return state ? getMmrModeName(state) : undefined;
+}
+
 function formatRoute(provider: string, model: string, thinking: string | undefined): string {
   return thinking ? `${provider}/${model} · ${thinking}` : `${provider}/${model}`;
 }
@@ -316,11 +367,12 @@ function formatRoute(provider: string, model: string, thinking: string | undefin
  * mode reports what ampi-core applied (thinking toggles included). Other
  * modes are resolved from their model preferences, with project and user
  * overrides, against Pi's model registry, the way ampi-core would resolve
- * them on a switch. The oracle line follows the oracle subagent profile and
+ * them on a switch; a registered mode by its own preferences, or else its
+ * base mode's. The oracle line follows the oracle subagent profile and
  * its overrides. `free` names Pi's own model and no oracle, since it drops
  * ampi's tools. Settings are read once per reader and only when first needed.
  */
-export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "model" | "modelRegistry">): (mode: MmrModeKey) => MmrModeRoutes {
+export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "model" | "modelRegistry">): (mode: string) => MmrModeRoutes {
   let settings: MmrCoreSettings | undefined;
   const readSettings = (): MmrCoreSettings => {
     settings ??= loadMmrCoreSettings(ctx.cwd).settings;
@@ -340,14 +392,18 @@ export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "mo
     return resolved.get(key);
   }
 
-  function agent(mode: MmrModeKey): string | undefined {
+  function agent(mode: string): string | undefined {
     if (mode === "free") return ctx.model ? formatRoute(ctx.model.provider, ctx.model.id, undefined) : undefined;
     const state = getMmrModeState();
-    if (state?.mode === mode && state.modelApplied) return formatRoute(state.provider, state.model, state.thinkingLevel);
-    const definition = MMR_MODES[mode];
-    const preferences = readSettings().modelPreferences?.[mode] ?? definition.modelPreferences;
-    // As on a switch, a mode with thinking presets runs every route at its first preset.
-    const toggle = isToggleableMmrMode(mode) ? getDefaultToggleThinkingLevel(mode) : undefined;
+    if (state && getMmrModeName(state) === mode && state.modelApplied) return formatRoute(state.provider, state.model, state.thinkingLevel);
+    const registered = isBuiltinMode(mode) ? undefined : getMmrRegisteredMode(mode);
+    const base = isBuiltinMode(mode) ? mode : registered?.baseMode;
+    if (!base) return undefined;
+    const definition = MMR_MODES[base];
+    const preferences = registered?.modelPreferences ?? readSettings().modelPreferences?.[base] ?? definition.modelPreferences;
+    // As on a switch, a mode with thinking presets runs every route at its
+    // first preset, or at the level a registered mode sets.
+    const toggle = isToggleableMmrMode(base) ? (registered?.thinkingLevel ?? getDefaultToggleThinkingLevel(base)) : registered?.thinkingLevel;
     const routed = toggle ? preferences.map((preference) => ({ ...preference, thinkingLevel: toggle })) : preferences;
     return select(`mode:${mode}`, routed, toggle ?? definition.thinkingLevel);
   }

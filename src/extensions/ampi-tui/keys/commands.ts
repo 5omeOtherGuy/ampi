@@ -6,6 +6,7 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../../ampi-core/command-registry.js";
+import { getMmrModeName } from "../../ampi-core/mode-registry.js";
 import { MMR_MODE_KEYS } from "../../ampi-core/modes.js";
 import { getMmrPromptHistory, type MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, isMmrModeLocked } from "../../ampi-core/runtime.js";
@@ -539,7 +540,9 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
         () => {
           // A locked session keeps its mode: the rows leave the palette (`/mode` still overrides).
           if (isMmrModeLocked()) return { state: "hidden", reason: getMmrModeState()?.modeLock?.reason };
-          return getMmrModeState()?.mode === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE;
+          // A registered mode built on `mode` is not `mode` itself.
+          const state = getMmrModeState();
+          return state && getMmrModeName(state) === mode ? { state: "unavailable", reason: `${mode} is the current mode` } : AVAILABLE;
         },
       ),
     ),
