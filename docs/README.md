@@ -44,6 +44,7 @@ The public product name is `ampi`. Preferred package subpaths use `ampi/extensio
 | `ampi-threads` | `mmr-threads` | Thread index and Amp-compatible archive commands (Ctrl+C Ctrl+N, Ctrl+C Ctrl+E) | On |
 | `ampi-gui` | `mmr-gui` | Local web GUI: session sidebar, live transcript and composer on `127.0.0.1` | Off |
 | `ampi-web` | `mmr-web` | `web_search`, `read_web_page` | Off |
+| `ampi-painter` | `mmr-painter` | `painter` | Off |
 | `ampi-history` | `mmr-history` | `find_session`, `read_session` | Off |
 | `ampi-github` | `mmr-github` | Read-only GitHub repository tools | Off |
 

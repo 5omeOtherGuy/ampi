@@ -159,6 +159,18 @@ export const MMR_EXTENSION_MANIFEST: readonly MmrExtensionManifestEntry[] = Obje
     childRole: "worker-dep",
   },
   {
+    name: "ampi-painter",
+    entrypoint: "./src/extensions/ampi-painter/index.ts",
+    exportSubpath: "./extensions/ampi-painter",
+    exportAliases: ["./extensions/mmr-painter"],
+    autoLoaded: true,
+    tools: ["painter"],
+    dynamicTools: false,
+    featureGates: ["ampi-painter", "mmr-painter"],
+    riskClass: "network",
+    childRole: "none",
+  },
+  {
     name: "ampi-github",
     entrypoint: "./src/extensions/ampi-github/index.ts",
     exportSubpath: "./extensions/ampi-github",

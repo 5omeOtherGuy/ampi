@@ -201,6 +201,47 @@ const CASES = [
     result: textResult("Applied patch: 2 files", { summary: "2 files", files: patchFiles }),
   },
   {
+    name: "painter running",
+    tool: "painter",
+    args: { prompt: "A lighthouse icon, flat style\nthree colours", background: "transparent" },
+  },
+  {
+    name: "painter saved",
+    tool: "painter",
+    args: {
+      prompt:
+        "Turn the sketch into a clean app icon: a lighthouse on a rock, flat colours, a thick outline and a soft shadow under the rock",
+      reference_images: ["design/sketch.png", "/home/user/Pictures/palette.jpg"],
+      output_path: "assets/icon.png",
+    },
+    result: {
+      content: [
+        { type: "text", text: "Saved the image to /home/user/proj/assets/icon.png (made with fakeimg/img-1)." },
+        { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" },
+      ],
+      details: { path: "/home/user/proj/assets/icon.png", model: "fakeimg/img-1" },
+    },
+  },
+  {
+    name: "painter saved to the agent directory",
+    tool: "painter",
+    args: { prompt: "A lighthouse icon" },
+    result: {
+      content: [{ type: "text", text: "Saved the image." }],
+      details: {
+        path: "/home/user/.pi/agent/data/ampi/painter/01a151a3-83c9-746d-977c-e8f99643562b/2026-10-19T00-51-13-427Z-1.png",
+        model: "fakeimg/img-1",
+      },
+    },
+  },
+  {
+    name: "painter error",
+    tool: "painter",
+    args: { prompt: "A lighthouse icon" },
+    result: textResult("fakeimg/img-1 could not make the image: the request was refused"),
+    isError: true,
+  },
+  {
     name: "mcp tool",
     tool: "mcp__docs__search",
     args: { query: "tool rendering", limit: 5 },
@@ -271,6 +312,37 @@ describe("ampi-tui tool rows", () => {
     assert.deepEqual(row(byName["shell_command left running"]), ["", " ✓ Ran npm run dev (still running as pid 4242)"]);
     assert.deepEqual(row(byName["shell_command_status still running"]), ["", " ✓ Checked pid 4242, still running"]);
     assert.deepEqual(row(byName["shell_command_kill"]), ["", " ✓ Stopped pid 4242 (SIGTERM)"]);
+    assert.deepEqual(row(byName["painter running"]), ["", " ⠋ Painting A lighthouse icon, flat style …"]);
+    assert.deepEqual(row(byName["painter saved"]), ["", " ✓ Painted icon.png"]);
+    assert.deepEqual(row(byName["painter error"]), ["", " ✗ Painted A lighthouse icon"]);
+  });
+
+  it("drops terminal control sequences from the prompt, references and saved path on painter's card", async () => {
+    const { createToolRendererResolver } = await load();
+    const resolver = createToolRendererResolver({ home: HOME });
+    const title = "\u001b]0;owned\u0007";
+    const clear = "\u001b[2J";
+    const lines = renderCase(
+      resolver,
+      {
+        tool: "painter",
+        args: { prompt: `A lighthouse${clear} icon`, reference_images: [`design/${title}sketch.png`] },
+        result: {
+          content: [{ type: "text", text: "Saved the image." }],
+          details: { path: `${CWD}/assets/${title}icon${clear}.png`, model: "fakeimg/img-1" },
+        },
+      },
+      true,
+      140,
+    );
+    // The card's lines, after the blank line and the title.
+    const card = lines.slice(2).join("\n");
+    assert.ok(!card.includes("\u001b]0;") && !card.includes(clear), JSON.stringify(card));
+    assert.deepEqual(lines.slice(2).map(stripAnsi), [
+      "   Prompt: A lighthouse icon",
+      "   References: design/sketch.png",
+      "   Saved to: assets/icon.png",
+    ]);
   });
 
   it("cuts long rows to the width with an ellipsis", async () => {

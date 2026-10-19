@@ -186,6 +186,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-threads` | On | Thread index and Amp-compatible archive commands: archive and start a new session, archive and quit, unarchive (`ampiThreads.enabled: false` turns it off) |
 | `ampi-gui` | Off | Opt-in local web GUI: a live view of the running session in your browser, with a composer that steers, queues and interrupts and a sidebar of your sessions (see [Web GUI](#web-gui)) |
 | `ampi-web` | Off | Opt-in web search/page reading (SearXNG, Brave, DuckDuckGo fallback) with SSRF protection |
+| `ampi-painter` | Off | `painter` makes or edits one image per call with the user's image model and saves it (`ampiPainter.enabled: true`) |
 | `ampi-github` | Off | Opt-in read-only GitHub tools and the `librarian` prerequisite |
 | `ampi-history` | Off | Opt-in local Pi session search and reuse behind opaque refs |
 

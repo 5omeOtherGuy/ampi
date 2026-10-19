@@ -1,6 +1,6 @@
 # ampi repository map
 
-`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers fourteen extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-shell`, `ampi-tasks`, `ampi-web`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-permissions`, `ampi-tui`, `ampi-threads`, `ampi-gui`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
+`ampi` is a Pi package containing modular multi-model-routing extensions. The package registers fifteen extensions: `ampi-core`, `ampi-session-fallback`, `ampi-patch`, `ampi-shell`, `ampi-tasks`, `ampi-web`, `ampi-painter`, `ampi-github`, `ampi-workers`, `ampi-custom-subagents`, `ampi-permissions`, `ampi-tui`, `ampi-threads`, `ampi-gui`, and `ampi-history`. Two further directories ship in source but are not registered in `pi.extensions`: `ampi-toolbox` (a deprecated compatibility shim) and `ampi-debug` (a developer-only capture extension excluded from the published package).
 
 ## Top-level files
 
@@ -32,6 +32,7 @@
   "./src/extensions/ampi-shell/index.ts",
   "./src/extensions/ampi-tasks/index.ts",
   "./src/extensions/ampi-web/index.ts",
+  "./src/extensions/ampi-painter/index.ts",
   "./src/extensions/ampi-github/index.ts",
   "./src/extensions/ampi-workers/index.ts",
   "./src/extensions/ampi-custom-subagents/index.ts",
@@ -60,6 +61,7 @@ src/
     ampi-shell/
     ampi-tasks/
     ampi-web/
+    ampi-painter/
     ampi-github/
     ampi-workers/
     ampi-custom-subagents/
@@ -134,12 +136,12 @@ Important files:
 - `skill-sources.ts` — pure classification of where Pi found a skill (user, project, package, settings, temporary; Pi's or an `.agents` directory) from its `sourceInfo`, for every surface that lists skills.
 - `session-usage.ts` — the usage each session entry records and what it cost (recorded, or priced from the model), shared by `ampi-tui`'s cost gauge and `ampi-threads`' cost report.
 - `above-editor-dashboard.ts` — split-pane dashboard widget coordination.
-- `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton; `runtime.ts` also holds the `mmr-core:*` event names, the tool-approval event among them.
+- `lifecycle-hooks.ts`, `runtime.ts` — session/request lifecycle wiring and the live registry singleton; `runtime.ts` also holds the `mmr-core:*` event names, the tool-approval event and the tool-rules-changed event (a tool provider's answer changed, so the mode's tools are resolved again) among them.
 - `auto-compact.ts` — locked-mode auto-compaction at a fraction of the context window (`ampiCore.autoCompact`), with its run guard and failure backoff.
 - `internal/` — low-level env, JSON, and settings-file utilities.
 - `README.md`, `ROADMAP.md` — extension docs and milestones.
 
-Registered surface: slash commands (`/mode`, `/ampi-status`, `/ampi-changelog`, `/ampi-config`), mode shortcuts, the `ampi-above-editor-dashboard` widget, and the feature gates for `ampi-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `ampi-history`, `ampi-web`, `ampi-patch`, and `ampi-tasks`.
+Registered surface: slash commands (`/mode`, `/ampi-status`, `/ampi-changelog`, `/ampi-config`), mode shortcuts, the `ampi-above-editor-dashboard` widget, and the feature gates for `ampi-workers` (with the pre-merge `mmr-subagents`/`mmr-async-tasks` ids as accepted aliases), `ampi-history`, `ampi-web`, `ampi-painter`, `ampi-patch`, and `ampi-tasks`.
 
 ### `src/extensions/ampi-session-fallback/`
 
@@ -200,6 +202,18 @@ Important files:
 - `url-policy.ts` — SSRF protection and external-URL validation.
 - `reader/`, `search/` — page-reader and pluggable search-backend implementations (including the SearXNG sidecar).
 - `README.md`, `ROADMAP.md` — configuration, safety, diagnostics, and roadmap.
+
+### `src/extensions/ampi-painter/`
+
+Owns `painter`: one generated or edited image per call, from a prompt and up to three reference images, through an image model of the user's providers. Off by default (`ampiPainter.enabled` or `AMPI_PAINTER_ENABLE`); gated while no image model is usable. Saves to `output_path` inside the working directory, or under the agent directory per session.
+
+Important files:
+
+- `index.ts` — Pi extension entry point, tool and feature-gate providers, and the model checks at session start and model switch.
+- `tool.ts` — `painter` tool definition, schema and prompt guidance.
+- `model.ts` — image model choice (`ampiPainter.model`, else the first usable one by provider and id).
+- `files.ts` — reference image checks, the `output_path` rule and saving.
+- `config.ts` — `ampiPainter.*` settings and `AMPI_PAINTER_ENABLE`.
 
 ### `src/extensions/ampi-github/`
 

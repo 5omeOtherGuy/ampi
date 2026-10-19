@@ -55,6 +55,7 @@ export const MMR_SMART_TOOL_NAMES = [
   "task_cancel",
   "task_list",
   "ask_user_choice",
+  "painter",
   "finder",
   "reviewer",
   "read_mcp_resource",
@@ -84,6 +85,7 @@ export const MMR_RUSH_TOOL_NAMES = [
   "task_cancel",
   "task_list",
   "ask_user_choice",
+  "painter",
 ] satisfies string[];
 
 /**
@@ -125,6 +127,7 @@ export const MMR_DEEP_TOOL_NAMES = [
   "reviewer",
   "task_list",
   "ask_user_choice",
+  "painter",
 ] satisfies string[];
 
 export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
@@ -139,7 +142,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     thinkingLevel: "medium",
     tools: MMR_RUSH_TOOL_NAMES,
     promptRoute: "default",
-    featureGates: ["ampi-workers"],
+    featureGates: ["ampi-workers", "ampi-painter"],
   },
 
   medium: {
@@ -153,7 +156,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     thinkingLevel: "medium",
     tools: MMR_SMART_TOOL_NAMES,
     promptRoute: "default",
-    featureGates: ["ampi-workers"],
+    featureGates: ["ampi-workers", "ampi-painter"],
   },
 
   high: {
@@ -167,7 +170,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     thinkingLevel: "xhigh",
     tools: MMR_DEEP_TOOL_NAMES,
     promptRoute: "deep",
-    featureGates: ["ampi-workers", "ampi-history", "ampi-web"],
+    featureGates: ["ampi-workers", "ampi-history", "ampi-web", "ampi-painter"],
   },
 
   ultra: {
@@ -183,7 +186,7 @@ export const MMR_MODES: Record<MmrModeKey, MmrModeDefinition> = {
     thinkingLevel: "xhigh",
     tools: MMR_DEEP_TOOL_NAMES,
     promptRoute: "deep",
-    featureGates: ["ampi-workers", "ampi-history", "ampi-web"],
+    featureGates: ["ampi-workers", "ampi-history", "ampi-web", "ampi-painter"],
   },
 
   free: {

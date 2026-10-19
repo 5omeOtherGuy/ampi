@@ -220,6 +220,25 @@ describe("architecture manifest guardrails", () => {
     }
   });
 
+  it("ampi-painter's manifest tool matches its tool, the status catalog and every locked mode's allowlist and gates", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    const { MMR_PAINTER_TOOL_NAME } = await importSource("extensions/ampi-painter/index.ts");
+    const { resolveMmrTools } = await importSource("extensions/ampi-core/tool-registry.ts");
+    const { MMR_MODES } = await importSource("extensions/ampi-core/modes.ts");
+    const entry = MMR_EXTENSION_MANIFEST.find((candidate) => candidate.name === "ampi-painter");
+    assert.deepEqual([...(entry?.tools ?? [])], [MMR_PAINTER_TOOL_NAME]);
+    assert.deepEqual([...(entry?.featureGates ?? [])], ["ampi-painter", "mmr-painter"]);
+    // Without the extension loaded, the catalog still credits ampi-painter.
+    const [decision] = resolveMmrTools([MMR_PAINTER_TOOL_NAME], []).decisions;
+    assert.equal(decision.status, "deferred");
+    assert.equal(decision.owner, "ampi-painter");
+    for (const mode of ["low", "medium", "high", "ultra"]) {
+      assert.ok(MMR_MODES[mode].tools.includes(MMR_PAINTER_TOOL_NAME), `${mode} must allow painter`);
+      assert.ok(MMR_MODES[mode].featureGates.includes("ampi-painter"), `${mode} must report the ampi-painter gate`);
+    }
+    assert.equal(MMR_MODES.free.tools.includes(MMR_PAINTER_TOOL_NAME), false);
+  });
+
   it("manifest tools never collide with the planned-tool catalog", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const { MMR_PLANNED_TOOL_CATALOG } = await importSource("extensions/ampi-core/planned-catalog.ts");

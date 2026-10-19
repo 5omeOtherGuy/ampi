@@ -87,6 +87,14 @@ Owned by `ampi-shell` (`mmr-shell` runtime id). Pi's `bash` stays the tool for q
 
 Every running command is stopped when the session ends.
 
+## Images
+
+Owned by `ampi-painter` (`mmr-painter` runtime id). Off by default; `gated` until an image model of the user's providers is usable.
+
+| I need to... | Use | Notes |
+| --- | --- | --- |
+| Make or edit one image | `painter` | `prompt`, `reference_images?` (up to 3), `background?` (`transparent`, `opaque`, `auto`), `output_path?`; saved under the agent directory unless `output_path` names a new file inside the working directory |
+
 ## Tasks
 
 Owned by `ampi-tasks` (`mmr-tasks` runtime id).
@@ -102,6 +110,7 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 | Capability | Enable | Provides |
 | --- | --- | --- |
 | Web search/page reads | `AMPI_WEB_ENABLE=true` (legacy `MMR_WEB_ENABLE` still accepted) or `ampiWeb.enabled=true` | `web_search`, `read_web_page` |
+| Image generation and edits | `AMPI_PAINTER_ENABLE=1` (legacy `MMR_PAINTER_ENABLE` still accepted) or `ampiPainter.enabled=true`, plus a usable image model | `painter` |
 | GitHub repository reads | `AMPI_GITHUB_ENABLE=true` (legacy `MMR_GITHUB_ENABLE` still accepted) | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
 | Prior local Pi sessions | `AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted) | `find_session`, `read_session` |
 | Web GUI for the running session | `AMPI_GUI_ENABLE=true` or `ampiGui.enabled=true` | A `Web GUI: http://127.0.0.1:<port>/?t=<token>` link at session start and the `thread open in browser` command; a live transcript and a composer (Enter steers, Ctrl+Enter queues, Esc Esc interrupts); page keys such as Ctrl+B (sidebar), `/` (search), Ctrl+Alt+Up/Down (previous or next session) and `?`, which lists them all; local only |
@@ -254,6 +263,8 @@ Minimal settings example:
 | `ampiShell.enabled` | `true` | Load `ampi-shell` (`AMPI_SHELL_ENABLE=0` also turns it off) |
 | `ampiShell.backgroundAfterMs` | `30000` | How long `shell_command` waits before leaving a command in the background |
 | `ampiShell.maxBackground` | `8` | Background commands that may run at once per session |
+| `ampiPainter.enabled` | `false` | Offer `painter` (`AMPI_PAINTER_ENABLE=1` also turns it on) |
+| `ampiPainter.model` | unset | Image model as `provider/id`, split at the first `/`; unset uses the first usable one by provider, then id |
 
 Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.json`. Flat (`ampiCore`) and nested (`ampi.core`) forms are accepted where supported by the owning extension.
 

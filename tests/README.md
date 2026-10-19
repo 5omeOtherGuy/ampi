@@ -45,6 +45,7 @@ The `ampi` command in `packages/ampi-cli/` is plain JavaScript, so `tests/mmr-cl
 - [`fixtures/mmr-tui-tool-rows/`](fixtures/mmr-tui-tool-rows) — transcript tool rows at 80 and 140 columns, collapsed and expanded, as plain text.
 - [`fixtures/mmr-tui-tool-groups/`](fixtures/mmr-tui-tool-groups) — runs of tool calls folded into one summary row at 80 and 140 columns, collapsed and expanded, running and finished, as plain text.
 - [`fixtures/mmr-tui-queue/`](fixtures/mmr-tui-queue) — the box of queued messages above the prompt at 80 and 140 columns, as plain text and with ANSI kept.
+- [`fixtures/ampi-painter/`](fixtures/ampi-painter) — `pixel.png`, a 1×1 PNG that the fake image model returns and the reference-image tests read.
 - [`fixtures/ampi-threads-markdown/`](fixtures/ampi-threads-markdown) — a Pi session file with branches, tool calls, a shell command and an image, and its hand-written Markdown export.
 - [`fixtures/ampi-cli/`](fixtures/ampi-cli) — `ampi --help` output, the JSON Schema of a `--stream-json` record, `faux-model/`, a test-only Pi extension with a scripted offline model (`faux/faux-1`), `offline-guard.mjs`, a preload that refuses network access and records child processes, and `mcp-echo-server.mjs`, a stdio MCP server with one `echo` tool.
 

@@ -836,6 +836,11 @@ export { createAmpiShellExtension, createMmrShellExtension } from "./extensions/
 export type { MmrShellFactoryOverrides } from "./extensions/ampi-shell/index.js";
 export { loadMmrShellSettings } from "./extensions/ampi-shell/config.js";
 export type { MmrShellSettings } from "./extensions/ampi-shell/config.js";
+// --- ampi-painter (Stable) ---
+export { createAmpiPainterExtension, createMmrPainterExtension } from "./extensions/ampi-painter/index.js";
+export type { MmrPainterFactoryOverrides } from "./extensions/ampi-painter/index.js";
+export { loadMmrPainterSettings } from "./extensions/ampi-painter/config.js";
+export type { MmrPainterSettings } from "./extensions/ampi-painter/config.js";
 // --- ampi-permissions (Stable) ---
 export { createAmpiPermissionsExtension, createMmrPermissionsExtension } from "./extensions/ampi-permissions/index.js";
 export type { MmrPermissionsFactoryOverrides } from "./extensions/ampi-permissions/index.js";
@@ -1093,6 +1098,9 @@ export {
   loadMmrShellSettings as loadAmpiShellSettings,
 } from "./extensions/ampi-shell/config.js";
 export {
+  loadMmrPainterSettings as loadAmpiPainterSettings,
+} from "./extensions/ampi-painter/config.js";
+export {
   loadMmrPermissionsSettings as loadAmpiPermissionsSettings,
 } from "./extensions/ampi-permissions/config.js";
 export {
@@ -1349,6 +1357,12 @@ export type {
 export type {
   MmrShellFactoryOverrides as AmpiShellFactoryOverrides,
 } from "./extensions/ampi-shell/index.js";
+export type {
+  MmrPainterSettings as AmpiPainterSettings,
+} from "./extensions/ampi-painter/config.js";
+export type {
+  MmrPainterFactoryOverrides as AmpiPainterFactoryOverrides,
+} from "./extensions/ampi-painter/index.js";
 export type {
   LoadMmrPermissionsSettingsOptions as LoadAmpiPermissionsSettingsOptions,
   MmrPermissionsSettings as AmpiPermissionsSettings,

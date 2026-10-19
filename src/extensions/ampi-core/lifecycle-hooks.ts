@@ -9,6 +9,7 @@ import { assembleActiveSurface } from "./prompt-assembly.js";
 import { applyMmrRequestPolicy, buildMmrSubagentOutputPolicy } from "./request-policy.js";
 import {
   MMR_EVENT_SESSION_IDENTITY_CHANGED,
+  MMR_EVENT_TOOL_RULES_CHANGED,
   getMmrManagedModelOverride,
   getMmrModeState,
   getMmrSessionIdentity,
@@ -305,6 +306,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     if (refuseMmrImportedSessionInput(ctx)) return { action: "handled" };
     // The first user message fixes the session's mode.
     controller.noteUserMessage();
+    // A tool refresh held back by a managed model update (a session fallback
+    // applied at session start) runs before the turn's tools are read.
+    controller.flushToolRefresh();
     // Reassert the active mode's context cap before Pi runs its pre-prompt
     // compaction check, in case a provider (re)registration (e.g. `/login`)
     // transiently re-resolved the active model to its uncapped window. Native
@@ -359,4 +363,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   // A route change published outside a mode apply (a session fallback to
   // another provider) can call for the other edit tool family.
   onMmrStateChanged(pi, (state) => controller.refreshEditTools(state));
+
+  // A tool provider's answer changed after the mode was applied (ampi-painter
+  // finds its image model only after session start).
+  pi.events.on(MMR_EVENT_TOOL_RULES_CHANGED, () => controller.refreshModeTools());
 }

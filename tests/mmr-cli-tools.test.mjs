@@ -250,7 +250,7 @@ const READ_ONLY_GIT = new Set(["rev-parse", "status", "log", "show", "diff", "br
  * do not have: a web search backend, session history, GitHub access for the
  * librarian, and an MCP server with resources.
  */
-const NOT_CONFIGURED = new Set(["web_search", "read_web_page", "read_session", "find_session", "librarian", "read_mcp_resource"]);
+const NOT_CONFIGURED = new Set(["web_search", "read_web_page", "read_session", "find_session", "librarian", "read_mcp_resource", "painter"]);
 
 describe("ampi tools: the command", { concurrency: true }, () => {
   const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-tools-run-"));
