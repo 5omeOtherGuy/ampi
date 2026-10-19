@@ -73,6 +73,8 @@ Add your own rules; they come before the defaults:
 | `ampi.dangerouslyAllowAll` | unset | `true` (user settings only) lets every call run without asking; `false` turns the gate on |
 | `ampi.guardedFiles.allowlist` | unset | User settings only: globs and exact `{ "path": ... }` entries guarded files may change without asking; present turns the gate on |
 
+For one run, the Pi flag `--ampi-dangerously-allow-all` (`ampi --dangerously-allow-all` with the `ampi` command) lets every call run without asking, as `ampi.dangerouslyAllowAll: true` does, in interactive and non-interactive runs alike. It holds for the whole process, through `/new`, `/resume` and `/fork`, and `/ampi-status` says the flag is set. With `pi`, give it after the message or as `--ampi-dangerously-allow-all=true`: Pi takes the argument after an extension flag for that flag's value.
+
 ### Rules
 
 A rule is an object:
@@ -103,7 +105,7 @@ Settings are read when a session starts and again after the dialog writes them.
 
 ### Evaluation order
 
-1. `ampi.dangerouslyAllowAll: true` in the user settings, or "Allow All for This Session", allows every call, guarded files included.
+1. `ampi.dangerouslyAllowAll: true` in the user settings, `--ampi-dangerously-allow-all` (`ampi --dangerously-allow-all`), or "Allow All for This Session", allows every call, guarded files and delegate programs included.
 2. A `reject` from the rules blocks the call, before any delegate program runs and without asking about guarded files.
 3. A call that changes a guarded file the allowlist does not cover opens the guarded file dialog, even when a rule allows it (see [Guarded files](#guarded-files)).
 4. Otherwise the first matching rule decides, in this order: the trusted project's rules, the user's rules, ampi's defaults. A yes in the guarded file dialog stands in for an `ask`, so a call shows one dialog at most; a delegate program that rejects still blocks.
@@ -207,7 +209,9 @@ Hard links are not detected either. A second name made with `ln` (without `-s`) 
 
 ### Runs without a UI
 
-In print and JSON runs nothing can ask, so a call that needs approval is blocked with a reason that says so and names the rule. Add an `allow` rule for calls such runs should make. A change to a guarded file is blocked the same way, with a reason that names the path and its category; add the path to `ampi.guardedFiles.allowlist` for such runs. Delegate programs run as in any session; one that asks ends in the same reason.
+In print and JSON runs nothing can ask, and neither can an execute run of the `ampi` command (`ampi -x`, `--stream-json`, `--stream-json-input`), even when Pi reports a UI, as it does in the RPC mode behind `--stream-json-input`. The command marks such runs, and a call that needs approval is then blocked instead of opening a dialog. The reason says that the call needs approval and the run cannot ask, names the rule or reason that asked, and says that an `allow` rule lets such calls run and that the run can be repeated with every call allowed (`--dangerously-allow-all` with the `ampi` command, `--ampi-dangerously-allow-all` with `pi`). A change to a guarded file is blocked the same way, with a reason that names the path and its category and points at `ampi.guardedFiles.allowlist`. Delegate programs run as in any session; one that asks ends in the same reason.
+
+Every call the gate blocks in the main session, for any reason, is noted for the run. The `ampi` command reports them when the run ends: as `permission_denials` in the stream JSON result record, and otherwise as one line on stderr. The exit code does not change. See the [ampi-cli README](../../../packages/ampi-cli/README.md#tool-calls-that-need-approval).
 
 ### Delegate programs
 
@@ -247,7 +251,7 @@ Subagent children evaluate the same settings as the main session, with `context:
 - A child never opens a dialog. A call that would ask, by a rule, ampi's defaults or a delegate program, is blocked with a reason that says the user has to approve it, that a subagent cannot ask, and that the call has to run in the main session or be allowed by a rule in `ampi.permissions`. A change to a guarded file is blocked likewise, pointing at `ampi.guardedFiles.allowlist`. The child reports that to the agent that started it.
 - `Task` children load the gate through their extension list; `reviewer` and custom subagents load every extension, so they have it too. `finder`, `oracle` and `librarian` have no shell or edit tools and run without it.
 `finder`, `oracle`, `librarian` and `view_media` have no shell or edit tools and run without it.
-- A child takes two answers from the session that starts it. When you allowed all for that session, every call in the child runs too. When that session reads the project's rules, so does the child, even if the child, in print or JSON mode, decides project trust differently; project rules only tighten, so that is safe. A child passes both answers on to the subagents it starts.
+- A child takes two answers from the session that starts it. When you allowed all for that session, or started it with `--ampi-dangerously-allow-all`, every call in the child runs too. When that session reads the project's rules, so does the child, even if the child, in print or JSON mode, decides project trust differently; project rules only tighten, so that is safe. A child passes both answers on to the subagents it starts.
 - A child takes these answers when it starts: allowing all in the main session later does not reach a child that is already running.
 
 ## Diagnostics and troubleshooting
@@ -258,6 +262,8 @@ Subagent children evaluate the same settings as the main session, with `context:
 - **A harmless command asks.** It writes to a file, runs a subshell, uses a variable or brace expansion, or is not on the default list. Add an `allow` rule for it.
 - **A delegate rule asks every time.** The program failed; the warning at its first call says how (`exited with code 3`, `timed out after 10 s`, `was not found on PATH`). Run it by hand with a JSON line on stdin to check it.
 - **An edit asks with `Guarded File Modification` although a rule allows it.** The path is in a guarded place; the dialog names its category. Answer "Always Allow This Path", or add the path or a glob to `ampi.guardedFiles.allowlist` in the user settings.
+- **A call in `ampi -x` or a print run says "this run cannot ask for it".** Nobody can answer a dialog there. Add an `allow` rule for the call, or repeat the run with `--dangerously-allow-all` (`--ampi-dangerously-allow-all` with `pi`).
+- **`Unknown option: --ampi-dangerously-allow-all`.** The ampi Pi loads from its settings is older than the flag; update it.
 - **A subagent says a call needs approval.** Children cannot ask. Run the call in the main session, add an `allow` rule (with `context: "subagent"` to limit it to children), or allow all for the session before starting the subagent.
 
 ## Public API
