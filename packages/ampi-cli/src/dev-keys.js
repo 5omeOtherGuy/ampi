@@ -93,7 +93,8 @@ the same way, and the command exits at its end; the exit keys work there too. st
 be a terminal when stdin is one; to keep the lines, copy them or replay recorded input.
 
 Exit status: 0 on the exit keys or at the end of the input, 1 when ampi's key reader cannot
-be loaded, 2 on a usage error.
+be loaded, 2 on a usage error, and 128 plus the signal number (143 on SIGTERM, 129 on
+SIGHUP) after restoring the terminal.
 
 Examples:
 
@@ -219,12 +220,14 @@ function readTerminal(host, read) {
     const finish = async (code, drain) => {
       if (done) return;
       done = true;
-      unwatch();
       host.stdin.removeListener("end", onEnd);
       try {
         if (drain) await terminal.drain(DRAIN_MS);
       } finally {
         terminal.stop();
+        // Watched until here, so a signal during the drain cannot kill the
+        // process with the terminal still in raw mode.
+        unwatch();
         resolve(code);
       }
     };

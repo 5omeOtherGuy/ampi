@@ -591,7 +591,7 @@ printf '\x18t' | ampi dev keys
 
 When stdin is a terminal, stdout must be the same terminal, because the input mode is switched with sequences written to stdout; `ampi dev keys > keys.jsonl` is refused with a usage error.
 
-Exit status: `0` on the exit keys or at the end of the input, `1` when the ampi in use is too old to have the key reader or it fails to load, `2` on a usage error.
+Exit status: `0` on the exit keys or at the end of the input, `1` when the ampi in use is too old to have the key reader or it fails to load, `2` on a usage error, and 128 plus the signal number (`143` on SIGTERM, `129` on SIGHUP) after restoring the terminal.
 
 A key that never shows up, or shows up as another key, is changed or held back by the terminal or a multiplexer before ampi sees it. Pi's own documentation, in the `docs/` directory of the installed `@earendil-works/pi-coding-agent` package, covers which terminals send what: `keybindings.md`, `terminal-setup.md` and `tmux.md`. tmux, for one, forwards modified keys only with its `extended-keys` option on.
 

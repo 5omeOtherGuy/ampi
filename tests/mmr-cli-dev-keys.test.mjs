@@ -272,7 +272,7 @@ describe("ampi dev keys: exit keys on the terminal", () => {
     t.type("\x03", 999);
     assert.equal(await code, 0);
     assert.deepEqual(t.lines(), [press(["ctrl+c"], null, "ctrl+c"), press(["ctrl+c"], "ampi.quit")]);
-    assert.deepEqual(t.terminalCalls, ["start", "unwatch signals", "drain 1000", "stop"]);
+    assert.deepEqual(t.terminalCalls, ["start", "drain 1000", "stop", "unwatch signals"]);
     assert.match(t.stderr(), /Ctrl\+C twice or Ctrl\+D/);
   });
 
@@ -314,20 +314,20 @@ describe("ampi dev keys: exit keys on the terminal", () => {
     const ctrlD = await runTyped(["\x04", "x"]);
     assert.equal(ctrlD.code, 0);
     assert.deepEqual(ctrlD.lines, [press(["ctrl+d"])]);
-    assert.deepEqual(ctrlD.terminalCalls, ["start", "unwatch signals", "drain 1000", "stop"]);
+    assert.deepEqual(ctrlD.terminalCalls, ["start", "drain 1000", "stop", "unwatch signals"]);
   });
 
   it("restores the terminal at the end of stdin, on a signal, and when handling a chunk throws", async () => {
     const ended = await runTyped(["a"]);
     assert.equal(ended.code, 0);
-    assert.deepEqual(ended.terminalCalls, ["start", "unwatch signals", "stop"]);
+    assert.deepEqual(ended.terminalCalls, ["start", "stop", "unwatch signals"]);
 
     const signalled = createHost({ stdinIsTTY: true });
     const signalCode = signalled.run([]);
     await signalled.started;
     signalled.signal("SIGTERM");
     assert.equal(await signalCode, 143);
-    assert.deepEqual(signalled.terminalCalls, ["start", "unwatch signals", "stop"]);
+    assert.deepEqual(signalled.terminalCalls, ["start", "stop", "unwatch signals"]);
 
     const failing = createHost({
       stdinIsTTY: true,
@@ -340,7 +340,7 @@ describe("ampi dev keys: exit keys on the terminal", () => {
     failing.type("a");
     failing.type("\x13");
     assert.equal(await failCode, 1);
-    assert.deepEqual(failing.terminalCalls, ["start", "unwatch signals", "stop"]);
+    assert.deepEqual(failing.terminalCalls, ["start", "stop", "unwatch signals"]);
     assert.match(failing.stderr(), /^ampi: dev keys: stdout is gone$/m);
   });
 });
