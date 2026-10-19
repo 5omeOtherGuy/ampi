@@ -22,7 +22,9 @@
 // (the shown session's More Actions target), `focusedSession` (the one
 // focused in the sidebar), `sessionList` (the last GET /api/sessions
 // answer), `shownId` (the shown session's id), `interruptible`, `writable`,
-// `promptEmpty`, `promptFocused` and `ui`, the page's actions. The registry
+// `promptEmpty`, `promptFocused`, `modes` (`{ locked }` while the shown
+// session is live with an ampi mode, else `null`) and `ui`, the page's
+// actions. The registry
 // is pure: tests load it in Node.
 
 import { parseChord } from "./keys.js";
@@ -356,6 +358,29 @@ export const DEFAULT_COMMANDS = [
     description: "With the prompt empty and not focused, focus the previous or next message",
     when: (state) => (state.threadPage && state.promptEmpty && !state.promptFocused ? AVAILABLE : HIDDEN),
     run: (state, { chord }) => state.ui.moveMessage(chord.endsWith("up") ? -1 : 1, false),
+  },
+  {
+    id: "change-mode",
+    title: "Change mode",
+    section: "Thread",
+    keys: [],
+    palette: { title: "Change Mode…" },
+    description: "Choose the session's mode or model; once the mode is locked, Change anyway overrides the lock",
+    when: (state) => (!state.threadPage ? HIDDEN : state.modes ? AVAILABLE : unavailable("This session's mode cannot change here")),
+    run: (state) => state.ui.openModePicker(),
+  },
+  {
+    id: "choose-mode",
+    title: "Choose mode",
+    section: "Thread",
+    keys: ["ctrl+s"],
+    palette: false,
+    description: "With the prompt focused and the mode not locked yet, open the mode picker",
+    when: (state) => {
+      if (!state.threadPage || !state.promptFocused || !state.modes) return HIDDEN;
+      return state.modes.locked ? unavailable("The mode is locked once the session has a message. Change Mode… in the palette overrides it.") : AVAILABLE;
+    },
+    run: (state) => state.ui.openModePicker(),
   },
   // More Actions, for the session focused in the sidebar, else the one shown.
   sessionCommand("thread.copyMarkdown", "Copy as Markdown", "markdown", "Copy the session to the clipboard as Markdown", {

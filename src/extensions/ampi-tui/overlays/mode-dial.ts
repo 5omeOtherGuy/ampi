@@ -1,13 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, getKeybindings, matchesKey, rgbColor, visibleWidth } from "@earendil-works/pi-tui";
-import { selectMmrModelRoute } from "../../ampi-core/model-resolver.js";
 import { getMmrModeName, getMmrRegisteredMode, listMmrModes, type MmrRegisteredMode } from "../../ampi-core/mode-registry.js";
+import { createMmrModeRouteResolver, type MmrModeRoute } from "../../ampi-core/mode-routes.js";
 import { MMR_MODES } from "../../ampi-core/modes.js";
-import { getDefaultToggleThinkingLevel, isToggleableMmrMode } from "../../ampi-core/request-policy.js";
 import { getMmrModeState } from "../../ampi-core/runtime.js";
-import { loadMmrCoreSettings } from "../../ampi-core/settings.js";
-import { getMmrSubagentProfile } from "../../ampi-core/subagent-profiles.js";
-import type { MmrCoreSettings, MmrModeKey, MmrModelPreference } from "../../ampi-core/types.js";
+import type { MmrModeKey } from "../../ampi-core/types.js";
 import { MMR_MODE_LABEL_COLORS, parseMmrHexColor } from "../editor/prompt-box.js";
 import { fitMmrText, type MmrFrameHint, type MmrFrameTheme, mmrFrameInnerWidth, renderMmrFrame, renderMmrScrollbar } from "../ui/frame.js";
 
@@ -358,62 +355,19 @@ function currentModeName(): string | undefined {
   return state ? getMmrModeName(state) : undefined;
 }
 
-function formatRoute(provider: string, model: string, thinking: string | undefined): string {
-  return thinking ? `${provider}/${model} · ${thinking}` : `${provider}/${model}`;
+function formatRoute(route: MmrModeRoute | undefined): string | undefined {
+  if (!route) return undefined;
+  return route.thinkingLevel ? `${route.provider}/${route.model} · ${route.thinkingLevel}` : `${route.provider}/${route.model}`;
 }
 
 /**
- * Read, without applying anything, the models a mode would run. The active
- * mode reports what ampi-core applied (thinking toggles included). Other
- * modes are resolved from their model preferences, with project and user
- * overrides, against Pi's model registry, the way ampi-core would resolve
- * them on a switch; a registered mode by its own preferences, or else its
- * base mode's. The oracle line follows the oracle subagent profile and
- * its overrides. `free` names Pi's own model and no oracle, since it drops
- * ampi's tools. Settings are read once per reader and only when first needed.
+ * The dial's Agent and Oracle lines: ampi-core's routes for a mode
+ * (`createMmrModeRouteResolver`) as `provider/model · thinking`.
  */
 export function createMmrModeRouteReader(ctx: Pick<ExtensionContext, "cwd" | "model" | "modelRegistry">): (mode: string) => MmrModeRoutes {
-  let settings: MmrCoreSettings | undefined;
-  const readSettings = (): MmrCoreSettings => {
-    settings ??= loadMmrCoreSettings(ctx.cwd).settings;
-    return settings;
+  const resolve = createMmrModeRouteResolver(ctx);
+  return (mode) => {
+    const routes = resolve(mode);
+    return { agent: formatRoute(routes.agent), oracle: formatRoute(routes.oracle) };
   };
-  const resolved = new Map<string, string | undefined>();
-
-  function select(key: string, preferences: readonly MmrModelPreference[], thinking: MmrModelPreference["thinkingLevel"]): string | undefined {
-    if (!resolved.has(key)) {
-      let text: string | undefined;
-      try {
-        const route = selectMmrModelRoute({ modelPreferences: preferences, modeThinkingLevel: thinking, registry: ctx.modelRegistry });
-        if (route.selected) text = formatRoute(route.selected.provider, route.selected.model, route.selected.thinkingLevel);
-      } catch {}
-      resolved.set(key, text);
-    }
-    return resolved.get(key);
-  }
-
-  function agent(mode: string): string | undefined {
-    if (mode === "free") return ctx.model ? formatRoute(ctx.model.provider, ctx.model.id, undefined) : undefined;
-    const state = getMmrModeState();
-    if (state && getMmrModeName(state) === mode && state.modelApplied) return formatRoute(state.provider, state.model, state.thinkingLevel);
-    const registered = isBuiltinMode(mode) ? undefined : getMmrRegisteredMode(mode);
-    const base = isBuiltinMode(mode) ? mode : registered?.baseMode;
-    if (!base) return undefined;
-    const definition = MMR_MODES[base];
-    const preferences = registered?.modelPreferences ?? readSettings().modelPreferences?.[base] ?? definition.modelPreferences;
-    // As on a switch, a mode with thinking presets runs every route at its
-    // first preset, or at the level a registered mode sets.
-    const toggle = isToggleableMmrMode(base) ? (registered?.thinkingLevel ?? getDefaultToggleThinkingLevel(base)) : registered?.thinkingLevel;
-    const routed = toggle ? preferences.map((preference) => ({ ...preference, thinkingLevel: toggle })) : preferences;
-    return select(`mode:${mode}`, routed, toggle ?? definition.thinkingLevel);
-  }
-
-  function oracle(): string | undefined {
-    const profile = getMmrSubagentProfile("oracle");
-    if (!profile) return undefined;
-    const preferences = readSettings().subagentModelPreferences?.oracle ?? profile.modelPreferences;
-    return select("oracle", preferences, profile.thinkingLevel);
-  }
-
-  return (mode) => ({ agent: agent(mode), oracle: mode === "free" ? undefined : oracle() });
 }

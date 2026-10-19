@@ -58,6 +58,13 @@
     0 2px 8px -2px light-dark(#0b0d0b1f, #00000099);
   --ampi-scrim: light-dark(#0b0d0b59, #000000a6);
 
+  /* Mode tints: the terminal prompt box's label colours in dark, deeper shades for light backgrounds */
+  --ampi-mode-low: light-dark(#8a6d00, #ffd700);
+  --ampi-mode-medium: light-dark(#12804e, #3dffa6);
+  --ampi-mode-high: light-dark(#0a7ea3, #3dd4ff);
+  --ampi-mode-ultra: light-dark(#7a4fc0, #d8b3ff);
+  --ampi-mode-free: var(--ampi-muted-fg);
+
   /* User message bubble */
   --ampi-bubble-bg: light-dark(#e9ede9, #1e1e24);
   --ampi-bubble-fg: light-dark(#283329, #dce5dc);

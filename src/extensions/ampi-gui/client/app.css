@@ -967,6 +967,54 @@ button {
   text-overflow: ellipsis;
 }
 
+/* The mode button: the session's mode in its tint; it opens the mode picker. */
+.mode {
+  border: 0;
+  background: color-mix(in srgb, var(--ampi-mode-tint) 12%, transparent);
+  color: var(--ampi-mode-tint);
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mode:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ampi-mode-tint) 20%, transparent);
+}
+
+.mode:disabled {
+  cursor: default;
+}
+
+.mode .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Each mode's tint, for the title bar button and the picker's rows; a registered mode sets its own. */
+[data-ampi-mode] {
+  --ampi-mode-tint: var(--ampi-fg);
+}
+
+[data-ampi-mode="low"] {
+  --ampi-mode-tint: var(--ampi-mode-low);
+}
+
+[data-ampi-mode="medium"] {
+  --ampi-mode-tint: var(--ampi-mode-medium);
+}
+
+[data-ampi-mode="high"] {
+  --ampi-mode-tint: var(--ampi-mode-high);
+}
+
+[data-ampi-mode="ultra"] {
+  --ampi-mode-tint: var(--ampi-mode-ultra);
+}
+
+[data-ampi-mode="free"] {
+  --ampi-mode-tint: var(--ampi-mode-free);
+}
+
 .icon-button {
   display: inline-grid;
   place-items: center;
@@ -1928,7 +1976,6 @@ details[open] > summary .chevron {
     border-bottom-color: transparent;
   }
 
-  .mode,
   .chip {
     display: none !important;
   }
@@ -2567,6 +2614,275 @@ details[open] > summary .chevron {
   }
 
   .palette-keys {
+    display: none;
+  }
+}
+
+/* The mode picker: a 544px popover under the mode button, its field and tabs, then the rows. */
+.mode-picker {
+  position: fixed;
+  inset: auto;
+  width: min(34rem, 100vw - 1rem);
+  max-width: none;
+  max-height: min(30rem, 100dvh - 5rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ampi-radius-bubble);
+  background: var(--ampi-surface-bg);
+  color: var(--ampi-fg);
+  box-shadow: var(--ampi-shadow-card);
+  overflow: hidden;
+}
+
+.mode-picker[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.mode-picker::backdrop {
+  background: transparent;
+}
+
+.mode-picker-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 3);
+  border-bottom: 1px solid var(--ampi-border-strong);
+}
+
+.mode-picker-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ampi-fg);
+  font: inherit;
+  font-size: var(--ampi-text-base);
+}
+
+.mode-picker-input:focus-visible {
+  outline: none;
+}
+
+.mode-picker kbd {
+  flex: none;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 18px;
+  text-align: center;
+}
+
+.mode-picker-tabs {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-accent);
+}
+
+.mode-picker-tabs button {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  font: inherit;
+  font-size: var(--ampi-text-sm);
+  cursor: pointer;
+}
+
+.mode-picker-tabs button[aria-selected="true"] {
+  background: var(--ampi-surface-bg);
+  color: var(--ampi-fg);
+  box-shadow: 0 1px 2px light-dark(#0b0d0b1f, #00000066);
+}
+
+.mode-picker-tabs kbd {
+  margin: 0 4px;
+}
+
+.mode-picker-notice {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 3);
+  padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 4);
+  border-bottom: 1px solid var(--ampi-border);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+}
+
+.mode-picker-notice[data-kind="locked"],
+.mode-picker-notice[data-kind="free"] {
+  color: var(--ampi-warning);
+}
+
+.mode-picker-notice[data-kind="error"] {
+  color: var(--ampi-danger);
+}
+
+.mode-picker-notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-picker-notice .button {
+  flex: none;
+  color: var(--ampi-fg);
+  font: inherit;
+}
+
+.mode-picker-body {
+  min-height: 0;
+  padding: calc(var(--ampi-space) * 1.5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mode-picker-section {
+  padding: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 2.5) calc(var(--ampi-space) * 1);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: var(--ampi-leading-xs);
+}
+
+.mode-picker-option {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 3);
+  padding: 6px 10px;
+  border-radius: var(--ampi-radius-lg);
+  cursor: pointer;
+}
+
+.mode-picker-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--ampi-fg) 8%, transparent);
+}
+
+.mode-picker-option[aria-disabled="true"] {
+  cursor: default;
+}
+
+.mode-picker-option[aria-disabled="true"] .mode-picker-main {
+  opacity: 0.55;
+}
+
+.mode-picker-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mode-picker-line {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  min-width: 0;
+}
+
+.mode-picker-name {
+  flex: none;
+  font-weight: 600;
+  line-height: var(--ampi-leading-base);
+}
+
+.mode-picker-option[data-kind="model"] .mode-picker-name {
+  font-weight: 500;
+}
+
+.mode-picker-option[data-kind="mode"] .mode-picker-name {
+  color: var(--ampi-mode-tint);
+}
+
+.mode-picker-chip {
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mode-picker-description {
+  overflow: hidden;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  line-height: var(--ampi-leading-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mode-picker-check {
+  flex: none;
+  color: var(--ampi-mode-tint, var(--ampi-fg));
+}
+
+.mode-picker-option[data-kind="model"] .mode-picker-check {
+  color: var(--ampi-fg);
+}
+
+.mode-picker-fast {
+  margin-top: calc(var(--ampi-space) * 1.5);
+  border-top: 1px solid var(--ampi-border);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.mode-picker-state {
+  flex: none;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--ampi-accent);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: 20px;
+}
+
+.mode-picker-state[data-on="true"] {
+  background: color-mix(in srgb, var(--ampi-warning) 18%, transparent);
+  color: var(--ampi-warning);
+}
+
+.mode-picker-empty {
+  margin: calc(var(--ampi-space) * 2) calc(var(--ampi-space) * 2.5);
+  color: var(--ampi-muted-fg);
+}
+
+/* On a phone the picker is a sheet from the top edge, without the key chips. */
+@media (max-width: 767px) {
+  .mode-picker {
+    top: 0;
+    left: 0;
+    width: 100vw;
+    max-height: calc(100dvh - 3rem);
+    border-radius: 0 0 var(--ampi-radius-bubble) var(--ampi-radius-bubble);
+  }
+
+  .mode-picker::backdrop {
+    background: var(--ampi-scrim);
+  }
+
+  .mode-picker kbd {
     display: none;
   }
 }

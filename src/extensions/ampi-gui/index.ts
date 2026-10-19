@@ -11,6 +11,7 @@ import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands, createMmrGuiExporter } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
 import { mmrGuiRowHosts, startMmrGuiHub } from "./hub.js";
+import { describeMmrGuiModes } from "./modes.js";
 import { type MmrGuiServer, startMmrGuiServer } from "./server.js";
 import { createMmrGuiSessions } from "./sessions.js";
 
@@ -95,6 +96,8 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
             sessions,
             commands,
             exportSession,
+            // The app's own session lends its model registry and settings to the new-thread view.
+            modes: () => describeMmrGuiModes(ctx, { live: false }),
             registry: { dir: overrides.registryDir },
           });
         } catch (error) {

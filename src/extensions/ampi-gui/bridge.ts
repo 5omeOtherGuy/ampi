@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { MmrGuiDialogAnswer, MmrGuiDialogOptions, MmrGuiDialogRequest } from "../ampi-core/gui-host.js";
 import { getMmrPromptQueue, type MmrQueuedPrompts, onMmrPromptQueueChanged } from "../ampi-core/prompt-queue.js";
-import { getMmrModeState, onMmrApproval, onMmrStateChanged } from "../ampi-core/runtime.js";
+import { getMmrModeState, isMmrModeLocked, onMmrApproval, onMmrStateChanged } from "../ampi-core/runtime.js";
 import {
   createMmrThreadStatusReducer,
   type MmrThreadStatus,
@@ -103,6 +103,8 @@ export interface MmrGuiSessionInfo {
   mode: string | null;
   /** `provider/model`, or `null` when none is selected. */
   model: string | null;
+  /** The live session only: whether its mode is locked, so the mode picker shows it read-only. */
+  modeLocked?: boolean;
 }
 
 export interface MmrGuiSnapshot {
@@ -312,6 +314,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       // A registered mode shows by its label.
       mode: mode?.registeredMode?.label ?? mode?.mode ?? null,
       model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null,
+      modeLocked: isMmrModeLocked(),
     };
   }
 
