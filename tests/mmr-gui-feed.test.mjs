@@ -111,6 +111,20 @@ describe("session query: is: and the row matcher", () => {
     assert.deepEqual(parsed.terms, []);
   });
 
+  it("leaves find_session as it was: is: flags unsupported, a bare is: a word", async () => {
+    const { searchSessionsWithDiagnostics } = await importSource("extensions/ampi-history/session-catalog.ts");
+    const { queryDiagnostics } = await searchSessionsWithDiagnostics({ listSessions: async () => SESSIONS }, "is:pinned is:open is:", {
+      limit: 10,
+      now: new Date(NOW),
+      redactionEnabled: false,
+    });
+    assert.deepEqual(queryDiagnostics, [
+      { filter: "keyword:is:", status: "applied" },
+      { filter: "is:pinned", status: "unsupported" },
+      { filter: "is:open", status: "unsupported" },
+    ]);
+  });
+
   it("reports the filters a row cannot answer, and nothing it can", () => {
     const parsed = query.parseSessionQuery(
       'parser "exact phrase" label:x project:y cwd:z is:live pinned:true archived:false after:7d before:today id:01 name:n provider:p model:m tool:t file:f has:tools repo:o/r parent:01 created_after:7d offset:2 sort:created commit:abc colour:red',
@@ -375,24 +389,28 @@ describe("Activity and Search Threads: client helpers", () => {
   const client = () => importSource("extensions/ampi-gui/client/activity.js");
   const searchClient = () => importSource("extensions/ampi-gui/client/thread-search.js");
 
-  it("keeps the filters in the address without the defaults, and reads them back", async () => {
+  it("keeps the filters in the address, time and status always, and reads them back under any default", async () => {
     const { feedPath, parseFeedSearch, FEED_DEFAULTS } = await client();
     const mine = { time: "7d", status: "all" };
     const filters = { time: "72h", status: "archived", project: "/work/a b", q: 'label:bug "two words"' };
-    const url = feedPath(filters, mine);
+    const url = feedPath(filters);
     assert.equal(url, "/feed?time=72h&status=archived&project=%2Fwork%2Fa+b&q=label%3Abug+%22two+words%22");
     assert.deepEqual(parseFeedSearch(url.slice("/feed".length), mine), filters);
-    assert.equal(feedPath({ time: "7d", status: "all", project: null, q: "" }, mine), "/feed");
+    // An address written while 24h was the default still means 24h once 7d is.
+    const before = feedPath({ ...FEED_DEFAULTS, project: null, q: "" });
+    assert.equal(before, "/feed?time=24h&status=all");
+    assert.deepEqual(parseFeedSearch(before.slice("/feed".length), mine), { time: "24h", status: "all", project: null, q: "" });
+    // Only /feed without them takes the defaults.
     assert.deepEqual(parseFeedSearch("", mine), { time: "7d", status: "all", project: null, q: "" });
-    assert.equal(feedPath({ ...FEED_DEFAULTS, project: "", q: "" }), "/feed?project=none");
+    assert.equal(feedPath({ ...FEED_DEFAULTS, project: "", q: "" }), "/feed?time=24h&status=all&project=none");
     assert.deepEqual(parseFeedSearch("?project=none&time=1h&status=committed"), { time: "24h", status: "all", project: "", q: "" });
   });
 
   it("marks the chosen option and the default, and links each to its address", async () => {
     const { choiceOptionsHtml, FEED_TIMES } = await client();
     const html = choiceOptionsHtml("time", FEED_TIMES, { time: "72h", status: "all", project: null, q: "" }, { time: "7d", status: "all" });
-    assert.match(html, /<a class="feed-option" href="\/feed\?time=72h" data-key="time" data-value="72h" aria-current="true">/);
-    assert.match(html, /href="\/feed" data-key="time" data-value="7d" title="Default">/);
+    assert.match(html, /<a class="feed-option" href="\/feed\?time=72h&#38;status=all" data-key="time" data-value="72h" aria-current="true">/);
+    assert.match(html, /href="\/feed\?time=7d&#38;status=all" data-key="time" data-value="7d" title="Default">/);
     assert.equal(html.match(/aria-current/g).length, 1);
   });
 
@@ -421,5 +439,118 @@ describe("Activity and Search Threads: client helpers", () => {
     assert.equal(stepSelection(0, 1, 3), 1);
     assert.equal(stepSelection(2, 1, 3), 2);
     assert.equal(stepSelection(-1, 1, 0), -1);
+  });
+});
+
+describe("Activity and Search Threads: the pages in a document", () => {
+  const FEED_HTML =
+    '<main id="feed"><input id="feed-q"><div id="feed-time"></div><div id="feed-status"></div><div id="feed-projects"></div>' +
+    '<p id="feed-note" hidden></p><div id="feed-days"></div><p id="feed-empty" hidden></p><div id="feed-menu" hidden></div></main>';
+  const SEARCH_HTML =
+    '<dialog id="search-dialog"><button id="search-close"></button><a id="search-syntax"></a><input id="search-input">' +
+    '<p id="search-note" hidden></p><div id="search-results"></div><p id="search-empty" hidden></p></dialog>';
+
+  /**
+   * Run `body` with a linkedom document as the page's `document` and
+   * `window`, `fetch` answered by `answer(url)`. linkedom tracks no focus, so
+   * `focus()` records the element and `activeElement` falls back to the body
+   * once that element leaves the document, as a browser's does.
+   */
+  async function withPage(html, answer, body) {
+    const { parseHTML } = await import("linkedom");
+    const { window, document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+    let active = null;
+    Object.defineProperty(document, "activeElement", { configurable: true, get: () => (active?.isConnected ? active : document.body) });
+    window.HTMLElement.prototype.focus = function focus() {
+      active = this;
+    };
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    const saved = { document: globalThis.document, window: globalThis.window, fetch: globalThis.fetch };
+    Object.assign(globalThis, {
+      document,
+      window,
+      fetch: async (url) => ({ ok: true, json: async () => structuredClone(answer(new URL(url, "http://127.0.0.1"))) }),
+    });
+    try {
+      await body({ window, document });
+    } finally {
+      Object.assign(globalThis, saved);
+    }
+  }
+  const settle = () => new Promise(setImmediate);
+  const key = (window, name) => Object.assign(new window.Event("keydown", { bubbles: true }), { key: name });
+
+  it("keeps typed search text and keyboard focus when the list refreshes", async () => {
+    const { mountActivity } = await importSource("extensions/ampi-gui/client/activity.js");
+    const answer = feed({ time: "all" });
+    await withPage(FEED_HTML, () => answer, async ({ document }) => {
+      const page = mountActivity({
+        root: document.getElementById("feed"),
+        prefs: { get: (name) => (name === "feedDefaultTime" ? "24h" : "all"), set() {} },
+        notify() {},
+        onFilters() {},
+        onOpen() {},
+        sessionHref: (id) => `/s/${id}`,
+        now: () => NOW,
+      });
+      const field = document.getElementById("feed-q");
+      page.show({ time: "all", status: "all", project: null, q: "" });
+      await settle();
+
+      // Text typed after the last search survives a refresh of the list.
+      field.value = "parser label:b";
+      page.refresh();
+      await settle();
+      assert.equal(field.value, "parser label:b");
+
+      // So does focus, on an option and on a result row, though both are drawn anew.
+      const option = document.querySelector('a.feed-option[data-key="status"][data-value="active"]');
+      option.focus();
+      page.refresh();
+      await settle();
+      assert.equal(option.isConnected, false);
+      assert.equal(document.activeElement.getAttribute("data-value"), "active");
+      assert.equal(document.activeElement.isConnected, true);
+      document.querySelector('a.feed-row[data-id="b"]').focus();
+      page.refresh();
+      await settle();
+      assert.equal(document.activeElement.getAttribute("data-id"), "b");
+
+      // Back or Forward to another query puts that query in the field.
+      page.show({ time: "all", status: "all", project: null, q: "label:docs" });
+      await settle();
+      assert.equal(field.value, "label:docs");
+      page.hide();
+    });
+  });
+
+  it("opens the top result for the text in the field when Enter comes before its answer", async () => {
+    const { mountThreadSearch } = await importSource("extensions/ampi-gui/client/thread-search.js");
+    const results = (q) => search(q).results;
+    await withPage(SEARCH_HTML, (url) => ({ applied: null, results: results(url.searchParams.get("q")) }), async ({ window, document }) => {
+      const dialog = document.getElementById("search-dialog");
+      dialog.showModal = () => {
+        dialog.open = true;
+      };
+      dialog.close = () => {
+        dialog.open = false;
+        dialog.dispatchEvent(new window.Event("close"));
+      };
+      const opened = [];
+      const searchDialog = mountThreadSearch({ dialog, onOpen: (id) => opened.push(id), sessionHref: (id) => `/s/${id}`, now: () => NOW });
+      searchDialog.open();
+      await settle();
+      const input = document.getElementById("search-input");
+      // The empty query lists the newest first; "Release" matches only b.
+      assert.equal(results("")[0].id, "live-1");
+      assert.deepEqual(ids(results("Release")), ["b"]);
+
+      input.value = "Release";
+      input.dispatchEvent(new window.Event("input"));
+      input.dispatchEvent(key(window, "Enter"));
+      await settle();
+      assert.deepEqual(opened, ["b"]);
+      assert.equal(dialog.open, false);
+    });
   });
 });

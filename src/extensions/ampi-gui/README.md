@@ -146,7 +146,7 @@ The filter column on the left (above the sessions on a narrow screen) has four p
 | Status | All; Active (neither archived nor snoozed); Archived; Snoozed (snoozed and not archived) |
 | Projects | All, then each working directory with the number of its sessions that pass the other filters; No project for sessions without one |
 
-- The filters are in the address (`/feed?time=7d&status=active&project=…&q=label%3Adocs`), so Back and Forward step through them and a copied link opens the same view. Values that are your defaults are left out of the address.
+- The filters are in the address (`/feed?time=7d&status=active&project=…&q=label%3Adocs`), so Back and Forward step through them and a copied link opens the same view. The time window and status are always written, so changing a default leaves earlier addresses as they were; only `/feed` on its own opens with your defaults.
 - Right-click a Time or Status choice (or press the context menu key on it) for **Use as default** and **Reset default**. The default is stored with the page's other preferences in the `ampi_gui_prefs` cookie, so every ampi page on this machine shares it. The built-in defaults are Last 24h and All.
 - A filter in the query that needs more than the list knows is named above the sessions instead of being dropped silently; see [Search syntax](#search-syntax).
 - In `ampi app`, Activity takes the session page's place, and opening a row opens that session at `/s/<id>`; on a terminal's own page the terminal's session keeps running while Activity is shown.

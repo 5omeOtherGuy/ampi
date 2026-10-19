@@ -45,15 +45,15 @@ export function parseFeedSearch(search, defaults = FEED_DEFAULTS) {
   };
 }
 
-/** The `/feed` address for `filters`, leaving out the values that are the defaults. */
-export function feedPath(filters, defaults = FEED_DEFAULTS) {
-  const params = new URLSearchParams();
-  if (filters.time !== defaults.time) params.set("time", filters.time);
-  if (filters.status !== defaults.status) params.set("status", filters.status);
+/**
+ * The `/feed` address for `filters`. Time and status are always written, so
+ * a history entry or a copied link keeps its meaning when the default changes.
+ */
+export function feedPath(filters) {
+  const params = new URLSearchParams({ time: filters.time, status: filters.status });
   if (filters.project !== null) params.set("project", filters.project === "" ? "none" : filters.project);
   if (filters.q) params.set("q", filters.q);
-  const search = params.toString();
-  return search ? `/feed?${search}` : "/feed";
+  return `/feed?${params}`;
 }
 
 /** The GET /api/feed request for `filters`, with the browser's time zone and language for the day labels. */
@@ -114,13 +114,13 @@ function optionHtml({ key, value, label, href, chosen, count, title }) {
  * The Projects card: All with the sum, then each project with its count. A
  * chosen project with no sessions in the other filters is listed with 0.
  */
-export function projectOptionsHtml(projects, filters, defaults = FEED_DEFAULTS) {
+export function projectOptionsHtml(projects, filters) {
   const listed = [...projects];
   if (filters.project !== null && !listed.some((project) => project.cwd === filters.project)) {
     listed.push({ cwd: filters.project, label: projectName(filters.project), count: 0 });
   }
   const all = listed.reduce((sum, project) => sum + project.count, 0);
-  const href = (project) => feedPath({ ...filters, project }, defaults);
+  const href = (project) => feedPath({ ...filters, project });
   return [
     optionHtml({ key: "project", value: "*", label: "All", href: href(null), chosen: filters.project === null, count: all }),
     ...listed.map((project) =>
@@ -133,7 +133,7 @@ export function projectOptionsHtml(projects, filters, defaults = FEED_DEFAULTS) 
 export function choiceOptionsHtml(key, options, filters, defaults = FEED_DEFAULTS) {
   return options
     .map(({ value, label }) =>
-      optionHtml({ key, value, label, href: feedPath({ ...filters, [key]: value }, defaults), chosen: filters[key] === value, title: defaults[key] === value ? "Default" : undefined }),
+      optionHtml({ key, value, label, href: feedPath({ ...filters, [key]: value }), chosen: filters[key] === value, title: defaults[key] === value ? "Default" : undefined }),
     )
     .join("");
 }
@@ -180,9 +180,24 @@ export function mountActivity({ root, prefs, notify, onFilters, onOpen, sessionH
   function drawFilters() {
     cards.time.innerHTML = choiceOptionsHtml("time", FEED_TIMES, filters, defaults());
     cards.status.innerHTML = choiceOptionsHtml("status", FEED_STATUSES, filters, defaults());
-    cards.project.innerHTML = projectOptionsHtml(data?.projects ?? [], filters, defaults());
-    // The field follows the address (Back and Forward); typing reaches here only once the field holds `filters.q`.
-    if (query.value !== filters.q) query.value = filters.q;
+    cards.project.innerHTML = projectOptionsHtml(data?.projects ?? [], filters);
+  }
+
+  /** Which option or row `node` is, so its copy can be found after a redraw. */
+  const nodeKey = (node) =>
+    node?.matches?.("a.feed-option") ? `option ${node.dataset.key} ${node.dataset.value}` : node?.matches?.("a.feed-row") ? `row ${node.dataset.id}` : null;
+  const findNode = (key) => (key ? ([...root.querySelectorAll("a.feed-option, a.feed-row")].find((node) => nodeKey(node) === key) ?? null) : null);
+
+  /** Run `draw`, then give focus and the open menu back to the new copies of the option or row that had them. */
+  function redraw(draw) {
+    const focused = nodeKey(document.activeElement);
+    const anchored = nodeKey(menuFor);
+    draw();
+    findNode(focused)?.focus({ preventScroll: true });
+    if (anchored) {
+      menuFor = findNode(anchored);
+      if (!menuFor) closeMenu();
+    }
   }
 
   function drawResults() {
@@ -219,8 +234,10 @@ export function mountActivity({ root, prefs, notify, onFilters, onOpen, sessionH
     // A newer request owns the page.
     if (mine !== request) return;
     data = answer;
-    drawFilters();
-    drawResults();
+    redraw(() => {
+      drawFilters();
+      drawResults();
+    });
   }
 
   root.addEventListener("click", (event) => {
@@ -230,7 +247,9 @@ export function mountActivity({ root, prefs, notify, onFilters, onOpen, sessionH
     if (link.classList.contains("feed-row")) return onOpen(link.dataset.id);
     const { key, value } = link.dataset;
     const next = key === "project" ? (value === "*" ? null : value === "none" ? "" : value) : value;
-    if (filters[key] !== next) onFilters({ ...filters, [key]: next });
+    // Text still waiting for the search delay goes along with the new choice.
+    clearTimeout(typing);
+    if (filters[key] !== next || query.value !== filters.q) onFilters({ ...filters, q: query.value, [key]: next });
   });
 
   query.addEventListener("input", () => {
@@ -263,8 +282,8 @@ export function mountActivity({ root, prefs, notify, onFilters, onOpen, sessionH
     prefs.set(pref, value);
     const label = (key === "time" ? FEED_TIMES : FEED_STATUSES).find((option) => option.value === value)?.label ?? value;
     notify(`${label} is now the default ${key === "time" ? "time window" : "status"}`);
-    // The address leaves out defaults: write it again for the new one.
-    onFilters(filters, { replace: true });
+    // The address keeps its values; only the Default marks move.
+    redraw(drawFilters);
   }
 
   function openMenu(option, x, y) {
@@ -329,16 +348,22 @@ export function mountActivity({ root, prefs, notify, onFilters, onOpen, sessionH
     defaults,
     /** Show the page with `next` filters and load its sessions. */
     show(next) {
+      // The field follows the address when its query changes (Back, Forward, a link); text still being typed stays.
+      if (next.q !== filters.q) {
+        clearTimeout(typing);
+        query.value = next.q;
+      }
       filters = next;
       closeMenu();
-      drawFilters();
+      redraw(drawFilters);
       load();
     },
-    /** Load the sessions again, as the list changes. */
+    /** Load the sessions again, as the list changes. The field and focus stay as they are. */
     refresh: () => load(),
-    /** Stop a pending search and close the menu, as the page is left. */
+    /** Drop a pending search and close the menu, as the page is left. */
     hide() {
       clearTimeout(typing);
+      query.value = filters.q;
       closeMenu();
     },
   };

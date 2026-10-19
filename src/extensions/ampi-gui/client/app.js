@@ -891,7 +891,7 @@ window.addEventListener("popstate", (event) => {
 
 /** Show Activity with `filters` and put them in the address; Back returns to the filters before. */
 function showFeedRoute(filters, { replace = false } = {}) {
-  const url = feedPath(filters, activity.defaults());
+  const url = feedPath(filters);
   const same = location.pathname === "/feed" && `${location.pathname}${location.search}` === url;
   if (replace || same) history.replaceState({ ampiFeed: true }, "", url);
   else history.pushState({ ampiFeed: true }, "", url);

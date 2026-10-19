@@ -297,8 +297,8 @@ export interface MmrGuiSearchableRow {
 
 export interface MmrGuiSessions {
   list(): Promise<MmrGuiSessionList>;
-  /** Every row with its text, newest first, and the clock the rows were built with (epoch ms). */
-  searchable(): Promise<{ now: number; rows: MmrGuiSearchableRow[] }>;
+  /** Every row with its text, newest first, the clock the rows were built with (epoch ms) and the home directory their project labels use. */
+  searchable(): Promise<{ now: number; home: string; rows: MmrGuiSearchableRow[] }>;
   /** A session's catalogue record, by exact id. */
   find(id: string): Promise<SessionInfo | undefined>;
   /** A saved session's file as text. */
@@ -369,6 +369,7 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
       const infos = new Map(listed.sessions.map((info) => [info.id, info]));
       return {
         now: listed.now,
+        home,
         rows: listed.rows.map((row) => {
           const info = infos.get(row.id);
           return { row, ...(info?.name ? { name: info.name } : {}), firstMessage: info?.firstMessage ?? "" };

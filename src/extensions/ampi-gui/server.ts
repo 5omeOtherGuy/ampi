@@ -137,13 +137,13 @@ export async function sendMmrGuiActivity(res: ServerResponse, rawPath: "/api/fee
   if (rawPath === "/api/feed") {
     const request = parseMmrGuiFeedRequest(url.searchParams);
     if (!request.ok) return sendJson(res, 400, { error: request.error });
-    const { now, rows } = await sessions.searchable();
-    return sendJson(res, 200, buildMmrGuiFeed(rows, request.value, { now }));
+    const { now, home, rows } = await sessions.searchable();
+    return sendJson(res, 200, buildMmrGuiFeed(rows, request.value, { now, home }));
   }
   const request = parseMmrGuiSearchRequest(url.searchParams);
   if (!request.ok) return sendJson(res, 400, { error: request.error });
-  const { now, rows } = await sessions.searchable();
-  return sendJson(res, 200, searchMmrGuiSessions(rows, request.value, { now }));
+  const { now, home, rows } = await sessions.searchable();
+  return sendJson(res, 200, searchMmrGuiSessions(rows, request.value, { now, home }));
 }
 
 /** One event-stream event; the hub's own events have no `id`, so they leave the replay position alone. */

@@ -57,7 +57,11 @@ export function mountThreadSearch({ dialog, onOpen, sessionHref, now = () => Dat
   let results = [];
   let selected = -1;
   let request = 0;
+  /** The request whose answer the list shows. */
+  let shown = 0;
   let typing = 0;
+  /** Enter came before the answer to the current text: open its top result when it arrives. */
+  let openOnAnswer = false;
   let returnFocus = null;
 
   function select(index) {
@@ -93,10 +97,15 @@ export function mountThreadSearch({ dialog, onOpen, sessionHref, now = () => Dat
       answer = { applied: null, results: [], error: "Could not reach Pi." };
     }
     if (mine !== request || !dialog.open) return;
+    shown = mine;
     draw(answer);
     if (answer.error) {
       note.textContent = answer.error;
       note.hidden = false;
+    }
+    if (openOnAnswer) {
+      openOnAnswer = false;
+      if (results[0]) open(results[0].id);
     }
   }
 
@@ -108,8 +117,12 @@ export function mountThreadSearch({ dialog, onOpen, sessionHref, now = () => Dat
   }
 
   input.addEventListener("input", () => {
+    openOnAnswer = false;
     clearTimeout(typing);
-    typing = setTimeout(search, TYPING_MS);
+    typing = setTimeout(() => {
+      typing = 0;
+      search();
+    }, TYPING_MS);
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -117,6 +130,16 @@ export function mountThreadSearch({ dialog, onOpen, sessionHref, now = () => Dat
       select(stepSelection(selected, event.key === "ArrowDown" ? 1 : -1, results.length));
     } else if (event.key === "Enter") {
       event.preventDefault();
+      if (typing || shown !== request) {
+        // The list is for earlier text: search now and open the top result of the answer.
+        openOnAnswer = true;
+        if (typing) {
+          clearTimeout(typing);
+          typing = 0;
+          search();
+        }
+        return;
+      }
       const result = results[selected];
       if (result) open(result.id);
     }
@@ -139,6 +162,8 @@ export function mountThreadSearch({ dialog, onOpen, sessionHref, now = () => Dat
   });
   dialog.addEventListener("close", () => {
     clearTimeout(typing);
+    typing = 0;
+    openOnAnswer = false;
     request++;
     returnFocus?.focus?.();
     returnFocus = null;
