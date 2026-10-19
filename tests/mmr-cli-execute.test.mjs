@@ -242,7 +242,7 @@ describe("ampi execute mode: thread options", () => {
       await start(next, "new", ctx("s2"));
       await shutdown(next, "quit", ctx("s2"));
       assert.deepEqual(warnings, [
-        "ampi: ampi-permissions refused 3 tool calls in this run (bash, edit). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.",
+        "ampi: ampi-permissions refused 3 tool calls in this run (bash, edit). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.\n",
       ]);
     } finally {
       permissions.setMmrPermissionsNonInteractive(false);
@@ -378,6 +378,11 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
       "ampi: ampi-permissions refused 1 tool call in this run (bash). " +
         "Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.\n",
     );
+    // A warning like any other: --log-level error hides it, and the refusal still reaches the agent.
+    const quiet = await runAmpi(["--log-level", "error", "-x", "run: echo hi"], "", askEchoRoot());
+    assert.equal(quiet.status, 0, quiet.stderr);
+    assert.equal(quiet.stdout, result.stdout);
+    assert.equal(quiet.stderr, "");
   });
 
   it("runs every call with --dangerously-allow-all", async () => {

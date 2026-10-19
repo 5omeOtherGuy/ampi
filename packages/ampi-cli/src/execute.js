@@ -37,8 +37,8 @@ export function takePermissionDenials() {
 }
 
 /**
- * The stderr line about the calls ampi-permissions refused, or undefined when
- * it refused none.
+ * The warning about the calls ampi-permissions refused, without the logger's
+ * `ampi: ` prefix, or undefined when it refused none.
  *
  * @param {readonly string[]} denials One tool name per refused call.
  * @returns {string | undefined}
@@ -46,7 +46,7 @@ export function takePermissionDenials() {
 export function formatPermissionDenials(denials) {
   if (denials.length === 0) return undefined;
   const calls = denials.length === 1 ? "1 tool call" : `${denials.length} tool calls`;
-  return `ampi: ampi-permissions refused ${calls} in this run (${[...new Set(denials)].join(", ")}). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.`;
+  return `ampi-permissions refused ${calls} in this run (${[...new Set(denials)].join(", ")}). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.`;
 }
 
 /** Stands in for an argument while finding which one Pi reads as the first message. */
@@ -189,13 +189,13 @@ export async function readAll(stream) {
  * @property {boolean} timings Write the startup, turn and total durations to stderr when the run ends.
  * @property {boolean} [nonInteractive] Mark the run as one that cannot ask the user, so ampi-permissions
  *   refuses the calls that need approval even when Pi reports a UI (every execute run).
- * @property {boolean} [reportDenials] Write one line to stderr when the run ends if ampi-permissions
+ * @property {boolean} [reportDenials] Log one warning when the run ends if ampi-permissions
  *   refused any call (the execute outputs without stream JSON, whose result record lists them).
  *
  * @typedef {object} RunExtensionHost
  * @property {() => number} now Milliseconds since the command started.
  * @property {() => string} timestamp The archive date (ISO 8601).
- * @property {import("./log.js").Logger} log For the warnings about labels and the archive.
+ * @property {import("./log.js").Logger} log For the warnings about labels, the archive and refused calls.
  * @property {(line: string) => void} report Writes the --timings line to stderr.
  */
 
@@ -292,7 +292,7 @@ export function createRunExtension(options, host) {
         host.report(`ampi: timings: ${parts.join(", ")}`);
       }
       const denials = options.reportDenials ? formatPermissionDenials(readPermissionDenials()) : undefined;
-      if (denials !== undefined) host.report(denials);
+      if (denials !== undefined) host.log.warn(denials);
     });
   };
 }
