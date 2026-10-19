@@ -13,7 +13,14 @@ import {
 import { getMmrThreadIndex, type MmrThreadIndex } from "../ampi-core/thread-index.js";
 import { MMR_GUI_SESSION_ACTIONS, type MmrGuiCommands, type MmrGuiExporter, postToMmrGui } from "./commands.js";
 import type { MmrGuiModes } from "./modes.js";
-import { listMmrGuiDirectories, type MmrGuiPathKind, mmrGuiPathKind, parseMmrGuiNewThread } from "./new-thread.js";
+import {
+  createMmrGuiWorktree,
+  listMmrGuiDirectories,
+  type MmrGuiExecFile,
+  type MmrGuiPathKind,
+  mmrGuiPathKind,
+  parseMmrGuiNewThread,
+} from "./new-thread.js";
 import {
   formatMmrGuiEvent,
   isMmrGuiSessionId,
@@ -49,7 +56,7 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | `GET /api/feed`, `GET /api/search` | Activity and Search Threads, as on a session server, over the hub's rows |
  * | `GET /api/modes` | the mode picker's modes and models for a thread not started yet, with no lock or speed (`modes.ts`) |
  * | `GET /api/directories?q=` | the new-thread composer's directories (`new-thread.ts`) |
- * | `POST /api/threads` | `{ prompt, cwd, mode?, labels? }`: starts a worker for a new session in `cwd` (in `mode`), records the labels in the thread index, sends the prompt as the first message and answers `{ ok, sessionId }` |
+ * | `POST /api/threads` | `{ prompt, cwd, mode?, labels?, worktree? }`: with `worktree: true`, first creates a Git worktree of `cwd`'s checkout and uses it as `cwd` (`createMmrGuiWorktree`); starts a worker for a new session in `cwd` (in `mode`), records the labels in the thread index, sends the prompt as the first message and answers `{ ok, sessionId, worktree? }` |
  * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
  * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for another holder; a session nothing runs is renamed in its file |
  * | `POST /api/delete` | 409 for a session a worker runs or is starting; otherwise as on a session server |
@@ -87,7 +94,9 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * forwarded before the catalogue lists it. Pi saves the file only with the
  * first message, so the pages are told to read the list again when its first
  * turn starts and when it settles. The hub writes only the labels,
- * to the thread index. When the worker does not take the first message, the
+ * to the thread index, and, for New Worktree, runs `git worktree add` before
+ * the start: no worker starts when it fails, and the worktree stays when
+ * the start fails after it. When the worker does not take the first message, the
  * hub stops it and answers that refusal; a start that outlasts
  * {@link MMR_GUI_HUB_START_TIMEOUT_MS} answers 504 and its worker is
  * stopped once it is ready.
@@ -135,6 +144,10 @@ export interface MmrGuiHubOptions {
   home?: string;
   /** Whether a path is a directory; defaults to `fs.stat`. */
   pathKind?: (file: string) => Promise<MmrGuiPathKind>;
+  /** Runs `git` for New Worktree; defaults to `child_process.execFile`. */
+  execFile?: MmrGuiExecFile;
+  /** A new worktree's four hex characters; defaults to random ones. */
+  worktreeSuffix?: () => string;
   /** Where the live registry is and how to probe its processes. */
   registry?: MmrLiveRegistryOptions;
   /** The hub's own process; its entry names no file. Defaults to this process. */
@@ -522,9 +535,17 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     if (!post) return;
     const checked = await parseMmrGuiNewThread(post.json, { modes: options.modes(), pathKind: options.pathKind ?? mmrGuiPathKind });
     if (!checked.ok) return sendJson(res, checked.status, checked.body);
-    const { prompt, cwd, mode, labels } = checked.value;
+    const { prompt, mode, labels } = checked.value;
     const index = (options.threadIndex ?? getMmrThreadIndex)();
     if (labels.length > 0 && !index) return sendJson(res, 409, { error: "Labels need the ampi-threads extension." });
+    let cwd = checked.value.cwd;
+    let worktree: { path: string; branch: string } | undefined;
+    if (checked.value.worktree) {
+      const made = await createMmrGuiWorktree(cwd, prompt, { run: options.execFile, suffix: options.worktreeSuffix?.() });
+      if (!made.ok) return sendJson(res, made.status, made.body);
+      worktree = { path: made.path, branch: made.branch };
+      cwd = made.path;
+    }
 
     let timer: unknown;
     let timedOut = false;
@@ -572,7 +593,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
         warning = `The thread started, but its labels were not saved: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
-    sendJson(res, 200, { ok: true, sessionId: session.sessionId, ...(warning ? { warning } : {}) });
+    sendJson(res, 200, { ok: true, sessionId: session.sessionId, ...(worktree ? { worktree } : {}), ...(warning ? { warning } : {}) });
   }
 
   async function hubCommand(request: MmrGuiRequest): Promise<void> {

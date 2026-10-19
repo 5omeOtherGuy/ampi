@@ -4,16 +4,19 @@
 // mode, the first message, the labels, the thread hosted before the
 // catalogue lists it), the mode on its way from `ampi app` to the worker's
 // session, and the client's pure parts (submit keys and variants, the
-// mention, escaping, the registry's new commands). Workers are a recording
+// mention, escaping, the registry's new commands), and New Worktree against
+// a Git repository built in a temporary directory. Workers are a recording
 // server started by a fake startSession; timers are injected.
 
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFile as execFileCallback, execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, request } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, before, describe, it } from "node:test";
+import { promisify } from "node:util";
 import { runApp } from "../packages/ampi-cli/src/app.js";
 import { AMPI_GUI_HOST_GLOBAL_KEY, runAppWorker } from "../packages/ampi-cli/src/app-worker.js";
 import { createLogger } from "../packages/ampi-cli/src/log.js";
@@ -91,8 +94,9 @@ describe("ampi-gui new thread: the request", () => {
     writeFileSync(file, "x");
     const check = (body) => newThread.parseMmrGuiNewThread(body, { modes: MODES });
     const good = { prompt: "  Fix the parser  ", cwd: dir, mode: "high", labels: ["docs", "p1", "docs"] };
-    assert.deepEqual(await check(good), { ok: true, value: { prompt: "Fix the parser", cwd: dir, mode: "high", labels: ["docs", "p1"] } });
-    assert.deepEqual((await check({ prompt: "x", cwd: dir })).value, { prompt: "x", cwd: dir, mode: null, labels: [] }, "mode and labels are optional");
+    assert.deepEqual(await check(good), { ok: true, value: { prompt: "Fix the parser", cwd: dir, mode: "high", labels: ["docs", "p1"], worktree: false } });
+    assert.deepEqual((await check({ prompt: "x", cwd: dir })).value, { prompt: "x", cwd: dir, mode: null, labels: [], worktree: false }, "mode, labels and worktree are optional");
+    assert.equal((await check({ ...good, worktree: true })).value.worktree, true);
 
     const refused = async (body, status, pattern) => {
       const result = await check({ ...good, ...body });
@@ -115,6 +119,7 @@ describe("ampi-gui new thread: the request", () => {
     await refused({ labels: ["Docs"] }, 400, /"Docs" is not a label/);
     await refused({ labels: ["a".repeat(33)] }, 400, /at most 32 characters/);
     await refused({ labels: Array.from({ length: 21 }, (_, index) => `l${index}`) }, 400, /at most 20 labels/);
+    await refused({ worktree: "yes" }, 400, /worktree must be true or false/);
   });
 
   it("accepts and refuses the same labels as the thread index", async () => {
@@ -264,11 +269,29 @@ async function startRecorder({ sendStatus = 200 } = {}) {
   };
 }
 
-/** A hub over one saved session in `repo`, a fake thread index and a fake startSession whose workers are `recorder`. */
-async function startHub({ recorder, index = true, start } = {}) {
-  const root = tempDir();
+/**
+ * Git without the user's or the system's configuration, so the tests never
+ * read them, in English, and never finding a checkout above the temporary root.
+ */
+const GIT_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_CEILING_DIRECTORIES: realpathSync(tmpdir()), LC_ALL: "C" };
+const git = (cwd, ...args) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: { ...process.env, ...GIT_ENV } }).trim();
+
+/** A Git repository with one commit on `main`. */
+function initRepo(repo) {
+  execFileSync("git", ["init", "-q", "-b", "main", repo], { env: { ...process.env, ...GIT_ENV } });
+  git(repo, "-c", "user.name=ampi", "-c", "user.email=ampi@example.invalid", "commit", "-q", "--allow-empty", "-m", "start");
+}
+
+/**
+ * A hub over one saved session in `repo`, a fake thread index and a fake
+ * startSession whose workers are `recorder`; `gitRepo` makes `repo` a Git
+ * repository, `hub` adds options to the hub's.
+ */
+async function startHub({ recorder, index = true, start, gitRepo = false, hub: hubOptions = {} } = {}) {
+  const root = realpathSync(tempDir());
   const repo = path.join(root, "repo");
   mkdirSync(repo);
+  if (gitRepo) initRepo(repo);
   const file = path.join(root, "s-old.jsonl");
   writeFileSync(file, `${JSON.stringify({ type: "session", version: 3, id: "s-old", timestamp: iso(2), cwd: repo })}\n`);
   const infos = [{ path: file, id: "s-old", cwd: repo, created: new Date(NOW - 7_200_000), modified: new Date(NOW - 7_200_000), messageCount: 2, firstMessage: "Old", allMessagesText: "" }];
@@ -328,6 +351,7 @@ async function startHub({ recorder, index = true, start } = {}) {
       return timer;
     },
     clearTimer: (timer) => timers.delete(timer),
+    ...hubOptions,
   });
   const port = hub.port;
   const headers = (extra = {}) => ({ Host: `127.0.0.1:${port}`, Cookie: `ampi_gui_${port}=${HUB_TOKEN}`, ...extra });
@@ -493,6 +517,155 @@ describe("ampi-gui new thread: the hub", () => {
       assert.deepEqual(app.starts, []);
     } finally {
       await app.close();
+    }
+  });
+});
+
+describe("ampi-gui new thread: New Worktree", () => {
+  const runFile = promisify(execFileCallback);
+  /** Runs git as the hub asks, without the user's configuration, and records each call. */
+  function recordingRunner() {
+    const calls = [];
+    const run = (file, args, options) => {
+      calls.push({ file, args: [...args], options: { ...options } });
+      return runFile(file, [...args], { ...options, encoding: "utf8", env: { ...options.env, ...GIT_ENV } });
+    };
+    return { calls, run };
+  }
+
+  it("creates the worktree from HEAD on ampi/<slug> beside the main checkout, through execFile, and starts the session in it", async () => {
+    const recorder = await startRecorder();
+    const runner = recordingRunner();
+    const suffixes = ["beef", "f00d"];
+    const app = await startHub({ recorder, gitRepo: true, hub: { execFile: runner.run, worktreeSuffix: () => suffixes.shift() } });
+    try {
+      const sub = path.join(app.repo, "src");
+      mkdirSync(sub);
+      const created = await app.post("/api/threads", { prompt: "Fix the parser's edge cases", cwd: sub, worktree: true, labels: ["docs"] });
+      assert.equal(created.status, 200);
+      const target = path.join(app.root, "repo-worktrees", "fix-the-parsers-edge-cases-beef");
+      const branch = "ampi/fix-the-parsers-edge-cases-beef";
+      assert.deepEqual(created.json(), { ok: true, sessionId: "s-new", worktree: { path: target, branch } });
+      assert.deepEqual(app.starts, [{ cwd: target }], "the session's cwd is the new worktree");
+      assert.equal(git(target, "symbolic-ref", "--short", "HEAD"), branch);
+      assert.equal(git(target, "rev-parse", "HEAD"), git(app.repo, "rev-parse", "HEAD"), "it starts from the checkout's HEAD");
+      assert.match(git(app.repo, "worktree", "list", "--porcelain"), new RegExp(`worktree ${target}\\nHEAD [0-9a-f]+\\nbranch refs/heads/${branch}`));
+      assert.deepEqual(JSON.parse(recorder.requests.find((entry) => entry.url === "/api/send").body), { text: "Fix the parser's edge cases" });
+      assert.deepEqual(app.labels, [["s-new", { labels: ["docs"] }]]);
+
+      // From inside that worktree, the next one still goes beside the main checkout.
+      const again = await app.post("/api/threads", { prompt: "Next", cwd: target, worktree: true });
+      assert.equal(again.json().worktree.path, path.join(app.root, "repo-worktrees", "next-f00d"));
+      assert.deepEqual(app.starts[1], { cwd: path.join(app.root, "repo-worktrees", "next-f00d") });
+
+      // git runs as a file with its arguments, never through a shell.
+      assert.deepEqual(
+        runner.calls.slice(0, 2).map((call) => [call.file, call.args]),
+        [
+          ["git", ["-C", sub, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"]],
+          ["git", ["-C", sub, "worktree", "add", "-b", branch, "--", target, "HEAD"]],
+        ],
+      );
+      for (const call of runner.calls) {
+        assert.equal(call.options.shell, undefined);
+        assert.equal(call.options.timeout, newThread.MMR_GUI_WORKTREE_TIMEOUT_MS);
+      }
+      assert.equal(newThread.MMR_GUI_WORKTREE_TIMEOUT_MS, 30_000);
+    } finally {
+      await app.close();
+      await recorder.close();
+    }
+  });
+
+  it("answers 409 with git's message when the branch exists, and 400 outside a Git checkout, without starting a worker", async () => {
+    const runner = recordingRunner();
+    const app = await startHub({ recorder: { port: 1 }, gitRepo: true, hub: { execFile: runner.run, worktreeSuffix: () => "beef" } });
+    try {
+      git(app.repo, "branch", "ampi/fix-parser-beef");
+      const taken = await app.post("/api/threads", { prompt: "Fix parser", cwd: app.repo, worktree: true });
+      assert.equal(taken.status, 409);
+      assert.match(taken.json().error, /^fatal: a branch named 'ampi\/fix-parser-beef' already exists$/);
+
+      const plain = path.join(app.root, "plain");
+      mkdirSync(plain);
+      const outside = await app.post("/api/threads", { prompt: "Fix parser", cwd: plain, worktree: true });
+      assert.deepEqual([outside.status, outside.json()], [400, { error: `${plain} is not in a Git checkout, so it has no worktrees.` }]);
+      assert.deepEqual(
+        runner.calls.at(-1).args.slice(0, 3),
+        ["-C", plain, "rev-parse"],
+        "outside a checkout, nothing but rev-parse runs",
+      );
+      assert.deepEqual(app.starts, []);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("names the slug after the prompt's first words in kebab case, at most 32 characters, with four hex characters", () => {
+    const slug = (prompt) => newThread.mmrGuiWorktreeSlug(prompt, "beef");
+    assert.equal(slug("Fix the parser"), "fix-the-parser-beef");
+    assert.equal(slug("  --  !! ?? "), "thread-beef", "no words");
+    assert.equal(slug(""), "thread-beef");
+    assert.equal(slug("修复登录错误 🚀"), "thread-beef", "nothing left in ASCII");
+    assert.equal(slug("Réparer le café naïve"), "reparer-le-cafe-naive-beef", "accents dropped");
+    assert.equal(slug("Don't break the build"), "dont-break-the-build-beef");
+    assert.equal(slug("Port the 2 tests to v24"), "port-the-2-tests-to-v24-beef");
+    assert.equal(slug("Refactor the session catalogue so every directory loads lazily"), "refactor-the-session-catalogue-beef", "cut between words");
+    assert.equal(slug("x".repeat(50)), `${"x".repeat(32)}-beef`, "one long word is cut");
+    assert.equal(slug("x".repeat(32)), `${"x".repeat(32)}-beef`, "one word of exactly 32 is kept");
+    assert.equal(slug("abcdefghij abcdefghij abcdefghij"), "abcdefghij-abcdefghij-abcdefghij-beef", "words joining to exactly 32 are kept");
+    assert.match(newThread.mmrGuiWorktreeSlug("Fix it"), /^fix-it-[0-9a-f]{4}$/);
+    for (const prompt of ["a ".repeat(40), "Ünïcödé wörds everywhere in this rather long prompt"]) {
+      const value = slug(prompt);
+      assert.ok(value.length <= 37, value);
+      assert.match(value, /^[a-z0-9]+(-[a-z0-9]+)*-beef$/, value);
+    }
+  });
+
+  it("explains a missing, slow, too old or refusing git, and runs git without the variables that point it at another repository", async () => {
+    const failing = (failure) => async () => {
+      throw Object.assign(new Error("Command failed"), failure);
+    };
+    const create = (run) => newThread.createMmrGuiWorktree("/w/repo", "Fix it", { run, suffix: "beef" });
+    assert.deepEqual(await create(failing({ code: "ENOENT" })), { ok: false, status: 409, body: { error: "New Worktree needs git, and git is not on PATH." } });
+    assert.deepEqual(await create(failing({ killed: true, signal: "SIGTERM" })), { ok: false, status: 409, body: { error: "git did not finish within 30 seconds." } });
+    const dubious = "fatal: detected dubious ownership in repository at '/w/repo'";
+    assert.deepEqual(await create(failing({ code: 128, stderr: `${dubious}\nTo add an exception for this directory, call:\n` })), {
+      ok: false,
+      status: 400,
+      body: { error: `/w/repo cannot have worktrees: ${dubious}` },
+    });
+
+    // A git older than 2.31 echoes the option it does not know and answers with relative paths.
+    const calls = [];
+    const old = async (file, args, options) => {
+      calls.push(args);
+      return { stdout: "--path-format=absolute\n/w/repo\n.git\n", stderr: "" };
+    };
+    assert.deepEqual(await create(old), { ok: false, status: 409, body: { error: "New Worktree needs git 2.31 or later." } });
+    assert.equal(calls.length, 1, "no worktree add after that answer");
+
+    const saved = { GIT_DIR: process.env.GIT_DIR, GIT_WORK_TREE: process.env.GIT_WORK_TREE };
+    process.env.GIT_DIR = "/elsewhere/.git";
+    process.env.GIT_WORK_TREE = "/elsewhere";
+    try {
+      const envs = [];
+      const result = await create(async (file, args, options) => {
+        envs.push(options.env);
+        return { stdout: args.includes("rev-parse") ? "/w/repo\n/w/repo/.git\n" : "", stderr: "" };
+      });
+      assert.deepEqual(result, { ok: true, path: path.join("/w", "repo-worktrees", "fix-it-beef"), branch: "ampi/fix-it-beef" });
+      assert.equal(envs.length, 2);
+      for (const env of envs) {
+        assert.equal(env.GIT_DIR, undefined);
+        assert.equal(env.GIT_WORK_TREE, undefined);
+        assert.equal(env.PATH, process.env.PATH, "the rest of the environment stays");
+      }
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
     }
   });
 });
@@ -698,6 +871,30 @@ describe("ampi-gui new thread: the composer's pure parts", () => {
     assert.deepEqual(threadRequest({ prompt: "x", cwd: null, mode: "high", labels: [] }), { error: "Choose a directory first." });
     assert.deepEqual(threadRequest({ prompt: "x", cwd: "/w", mode: "high", labels: ["a"] }), { body: { prompt: "x", cwd: "/w", mode: "high", labels: ["a"] } });
     assert.deepEqual(threadRequest({ prompt: "x", cwd: "/w", mode: null, labels: [] }), { body: { prompt: "x", cwd: "/w", labels: [] } });
+    assert.deepEqual(threadRequest({ prompt: "x", cwd: "/w", mode: null, labels: [], worktree: true }), { body: { prompt: "x", cwd: "/w", labels: [], worktree: true } });
+    assert.deepEqual(threadRequest({ prompt: "x", cwd: "/w", mode: null, labels: [], worktree: false }), { body: { prompt: "x", cwd: "/w", labels: [] } });
+  });
+
+  it("offers Current or New Worktree on Git checkouts only, and shows the created worktree's branch on the pill", async () => {
+    const { directoryOptionHtml, directoryPillDetail, directoryAfterWorktree } = await client();
+    const repo = { path: "/w/repo", label: "repo", git: true, branch: "main", lastUsed: null, sessions: 1 };
+    const html = directoryOptionHtml(repo, 0);
+    assert.match(html, /data-choice="current">Current</);
+    assert.match(html, /data-choice="worktree">New Worktree</);
+    assert.match(html, /<kbd>Tab<\/kbd>/);
+    assert.match(html, /The checkout itself; Tab for a new worktree/);
+    assert.match(directoryOptionHtml(repo, 0, { worktree: true }), /New worktree; Tab for the checkout itself/);
+    assert.ok(!directoryOptionHtml({ ...repo, git: false, branch: null }, 0).includes("data-choice"), "a plain directory has no worktrees");
+
+    assert.equal(directoryPillDetail(null), "");
+    assert.equal(directoryPillDetail({ path: "/w/repo", label: "repo" }), "");
+    assert.equal(directoryPillDetail({ ...repo, worktree: true }), "New Worktree");
+    const made = directoryAfterWorktree({ path: "/w/repo-worktrees/fix-it-beef", branch: "ampi/fix-it-beef" });
+    assert.deepEqual(made, { path: "/w/repo-worktrees/fix-it-beef", label: "repo", git: true, branch: "ampi/fix-it-beef", worktree: false, createdBranch: "ampi/fix-it-beef" });
+    assert.equal(directoryPillDetail(made), "ampi/fix-it-beef");
+    // Created from a row that is itself a worktree, the pill still names the main checkout, not the source worktree.
+    assert.equal(directoryAfterWorktree({ path: "/w/repo-worktrees/next-f00d", branch: "ampi/next-f00d" }).label, "repo");
+    assert.equal(directoryAfterWorktree({ path: "/w/elsewhere/fix-it-beef", branch: "ampi/fix-it-beef" }).label, "fix-it-beef", "outside a -worktrees folder, its own folder");
   });
 
   it("inserts the current thread as @<id> at the cursor, with a space before it when it would touch a word", async () => {
