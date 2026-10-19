@@ -441,6 +441,33 @@ describe("ampi permissions test", () => {
     assert.equal(tooOld.status, 4);
     assert.match(tooOld.stderr, /ampi 0\.0\.1 is too old for permissions test; update @skippermissions\/ampi/);
   });
+
+  it("loads a project's own ampi only once Pi trusts the project", async () => {
+    // A checkout whose settings name a package of its own called @skippermissions/ampi.
+    const env = makeEnv();
+    const vendored = path.join(env.project, "vendor", "ampi");
+    const marker = path.join(env.root, "project-ampi-ran");
+    mkdirSync(path.join(vendored, "src"), { recursive: true });
+    writeFileSync(path.join(vendored, "package.json"), JSON.stringify({ name: "@skippermissions/ampi", version: "6.6.6", pi: { extensions: ["./src/index.ts"] } }));
+    writeFileSync(path.join(vendored, "src", "index.ts"), "export default function () {}\n");
+    writeFileSync(
+      path.join(vendored, "src", "permissions-cli.ts"),
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "");\nexport default function () {}\n`,
+    );
+    env.writeProject({ packages: ["../vendor/ampi"] });
+    env.writeUser({ ampi: { permissions: [{ tool: "bash", matches: { command: "ls*" }, action: "reject" }] } });
+
+    const untrusted = await env.run(["test", "bash", "--command", "ls"]);
+    assert.equal(untrusted.status, 1, untrusted.stderr);
+    assert.equal(untrusted.stdout, "reject: user rule reject bash --command 'ls*' (for ls)\n", "the command's own ampi decides");
+    assert.equal(existsSync(marker), false, "the project's code did not run");
+
+    env.trust(true);
+    const trusted = await env.run(["test", "bash", "--command", "ls"]);
+    assert.equal(trusted.status, 4);
+    assert.match(trusted.stderr, /the ampi package did not provide them/);
+    assert.equal(existsSync(marker), true, "a trusted project's ampi loads");
+  });
 });
 
 describe("ampi permissions: help and usage", () => {
