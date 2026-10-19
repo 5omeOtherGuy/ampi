@@ -624,6 +624,10 @@ describe("ampi-tui prompt box: installation", () => {
     assert.ok(!top(install()).includes("$"), "fresh and idle: no gauge");
     assert.match(top(install({ busy: true })), / \$···· ─/, "first turn, no response yet");
     assert.match(top(install({ entries: [usage(0.001), { type: "message", message: { role: "user" } }, usage(0.002)] })), / \$0\.003 ─/);
+    // Tokens of a model nothing prices, as in an imported session: the cost is unknown, not zero.
+    const unpriced = { type: "message", message: { role: "assistant", provider: "claude-code-import", model: "m", usage: { input: 40, output: 6, cost: { total: 0 } } } };
+    assert.ok(!top(install({ entries: [unpriced] })).includes("$"), "only unknown costs: no gauge");
+    assert.match(top(install({ entries: [unpriced, usage(0.02)] })), / \$0\.02 ─/, "unknown costs add nothing");
   });
 
   it("dims the frame while an overlay is open and reports its height", () => {

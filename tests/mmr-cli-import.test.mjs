@@ -195,6 +195,35 @@ describe("Claude Code sessions as Pi messages", () => {
     });
   });
 
+  it("counts the tokens of an assistant message split around tool results once, on its latest part", () => {
+    const line = (entry) => JSON.stringify(entry);
+    const part = (iso, content, outputTokens) =>
+      line({
+        type: "assistant",
+        cwd: "/w",
+        timestamp: iso,
+        message: { id: "msg_7", role: "assistant", model: "claude-sonnet-4-5", content, usage: { input_tokens: 100, output_tokens: outputTokens } },
+      });
+    const result = (iso, id) =>
+      line({ type: "user", cwd: "/w", timestamp: iso, message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] } });
+    const text = [
+      line({ type: "user", cwd: "/w", timestamp: "2026-10-01T00:00:00.000Z", message: { role: "user", content: "Check both files" } }),
+      part("2026-10-01T00:00:01.000Z", [{ type: "tool_use", id: "t1", name: "Read", input: { file_path: "a.ts" } }], 10),
+      result("2026-10-01T00:00:02.000Z", "t1"),
+      part("2026-10-01T00:00:03.000Z", [{ type: "tool_use", id: "t2", name: "Read", input: { file_path: "b.ts" } }], 25),
+      result("2026-10-01T00:00:04.000Z", "t2"),
+    ].join("\n");
+    const call = (id, file) => ({ type: "toolCall", id, name: "Read", arguments: { file_path: file } });
+    const toolResult = (id, iso) => ({ role: "toolResult", toolCallId: id, toolName: "Read", content: [{ type: "text", text: "ok" }], isError: false, timestamp: at(iso) });
+    assert.deepEqual(convertClaudeCodeSession(text).messages, [
+      { role: "user", content: "Check both files", timestamp: at("2026-10-01T00:00:00.000Z") },
+      assistant([call("t1", "a.ts")], "claude-sonnet-4-5", "2026-10-01T00:00:01.000Z", usage(0, 0, 0, 0, 0), "toolUse"),
+      toolResult("t1", "2026-10-01T00:00:02.000Z"),
+      assistant([call("t2", "b.ts")], "claude-sonnet-4-5", "2026-10-01T00:00:03.000Z", usage(100, 25, 0, 0, 125), "toolUse"),
+      toolResult("t2", "2026-10-01T00:00:04.000Z"),
+    ]);
+  });
+
   it("prefers a title the user set over a generated one or a summary", () => {
     const line = (entry) => JSON.stringify(entry);
     const text = [

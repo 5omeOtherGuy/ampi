@@ -8,8 +8,11 @@ import { isRecord } from "./internal/json.js";
  * owns the guard so that turning optional extensions off cannot lift it:
  * its `input` handler refuses every prompt in such a session, whichever host
  * sent it (the terminal UI, RPC, the SDK, or an extension), before Pi sends
- * anything. Viewing, Markdown export, search and mentions only read the
- * session and keep working.
+ * anything; its `user_bash` handler blocks `!` and `!!` commands and RPC
+ * `bash`, and its `session_before_compact` handler cancels compaction, the
+ * two other ways a session gains entries without an `input` event. Viewing,
+ * Markdown export, search and mentions only read the session and keep
+ * working.
  */
 
 /** The custom entry type `ampi threads import` writes into every session it creates. */
@@ -25,7 +28,7 @@ export function isMmrImportedSession(entries: readonly unknown[]): boolean {
 }
 
 /**
- * Refuse a prompt when the current session is imported: with a UI (the
+ * Refuse a prompt or a compaction when the current session is imported: with a UI (the
  * terminal UI or an RPC client) the notice is shown; without one (print and
  * JSON runs) it goes to stderr and the process exit code becomes 1, so a
  * scripted run fails instead of ending quietly. Returns whether it refused.
@@ -43,4 +46,18 @@ export function refuseMmrImportedSessionInput(
     // Pi sends a prompt whose input handler threw, so a notice that cannot be shown must not undo the refusal.
   }
   return true;
+}
+
+/**
+ * Block a `!` or `!!` command (or an RPC `bash` command) in an imported
+ * session by throwing: Pi runs no command whose `user_bash` handler failed
+ * and records nothing, and shows the error's message, in the terminal UI as
+ * an extension error and to an RPC client as the command's error.
+ */
+export function refuseMmrImportedSessionBash(ctx: Pick<ExtensionContext, "sessionManager">): void {
+  if (!isMmrImportedSession(ctx.sessionManager.getEntries())) return;
+  const error = new Error(MMR_IMPORTED_SESSION_NOTICE);
+  // The terminal UI prints a failing handler's stack under its message; the notice needs none.
+  error.stack = error.message;
+  throw error;
 }

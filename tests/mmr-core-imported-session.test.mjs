@@ -1,6 +1,7 @@
 // The read-only guard for imported sessions
 // (src/extensions/ampi-core/imported-session.ts): the predicate, ampi-core's
-// input handler on the stub Pi with and without a UI, and a real Pi SDK
+// input, user_bash and session_before_compact handlers on the stub Pi with
+// and without a UI, and a real Pi SDK
 // session opened on an imported session file, in which a prompt reaches
 // neither the model nor the file. Print mode's exit code is covered by the
 // spawn test in tests/mmr-cli-import.test.mjs.
@@ -68,6 +69,42 @@ describe("ampi-core's input handler", () => {
     const { ctx, notifications } = createMockExtensionContext({ entries: [userEntry] });
     assert.equal(await input({ type: "input", text: "continue", source: "interactive" }, ctx), undefined);
     assert.deepEqual(notifications, []);
+  });
+
+  /** Every handler ampi-core registers for `event`, in order (the stub's combined handler drops their results). */
+  async function handlersFor(event) {
+    const extension = (await importSource("extensions/ampi-core/index.ts")).default;
+    const mock = createMockPi();
+    const found = [];
+    const on = mock.pi.on;
+    mock.pi.on = (name, handler) => {
+      if (name === event) found.push(handler);
+      return on(name, handler);
+    };
+    extension(mock.pi);
+    return found;
+  }
+
+  it("blocks a ! command and RPC bash in an imported session by failing, and lets them run in an ordinary one", async () => {
+    const [userBash, ...rest] = await handlersFor("user_bash");
+    assert.equal(rest.length, 0);
+    const event = { type: "user_bash", command: "echo appended", excludeFromContext: false, cwd: "/work" };
+    const imported = createMockExtensionContext({ entries: [importEntry, userEntry] });
+    // Pi runs no command whose user_bash handler threw, records nothing and shows the error's message.
+    assert.throws(() => userBash(event, imported.ctx), (error) => error.message === NOTICE && error.stack === NOTICE);
+    const ordinary = createMockExtensionContext({ entries: [userEntry] });
+    assert.equal(userBash(event, ordinary.ctx), undefined, "undefined runs the command");
+  });
+
+  it("cancels compaction in an imported session with the notice, before any other handler, and leaves an ordinary one alone", async () => {
+    const [guard] = await handlersFor("session_before_compact");
+    const imported = createMockExtensionContext({ entries: [importEntry, userEntry] });
+    // Pi stops at the first handler that cancels, so the thread status never shows a compaction.
+    assert.deepEqual(await guard({ type: "session_before_compact", reason: "manual" }, imported.ctx), { cancel: true });
+    assert.deepEqual(imported.notifications, [{ message: NOTICE, level: "warning" }]);
+    const ordinary = createMockExtensionContext({ entries: [userEntry] });
+    assert.equal(await guard({ type: "session_before_compact", reason: "manual" }, ordinary.ctx), undefined);
+    assert.deepEqual(ordinary.notifications, []);
   });
 
   it("writes the notice to stderr and sets exit code 1 without a UI", async () => {

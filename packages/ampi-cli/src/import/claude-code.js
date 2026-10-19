@@ -135,7 +135,9 @@ function convertUsage(usage) {
  * Sidechain entries (a subagent's work) and meta entries (text Claude Code
  * added for the model) are skipped, as are every entry type but user and
  * assistant. Lines of one assistant message (they share its id) that follow
- * each other become one Pi message, with the last line's usage. Tool results
+ * each other become one Pi message, with the last line's usage. When tool
+ * results fall between them, each part stays a message of its own and only
+ * the latest part keeps the usage, so the tokens count once. Tool results
  * become tool result messages named after the call they answer.
  *
  * @param {string} text
@@ -152,6 +154,8 @@ export function convertClaudeCodeSession(text) {
   const toolNames = new Map();
   /** The Claude Code id of the assistant message last added, while nothing else followed it. */
   let openAssistant = "";
+  /** The Pi message holding each Claude Code assistant message's usage. */
+  const usageHolders = new Map();
   let time = 0;
 
   for (const line of text.split("\n")) {
@@ -204,6 +208,11 @@ export function convertClaudeCodeSession(text) {
           ? "length"
           : "stop";
       if (!merged) messages.push(target);
+      if (id !== "") {
+        const holder = usageHolders.get(id);
+        if (holder !== undefined && holder !== target) holder.usage = convertUsage(undefined);
+        usageHolders.set(id, target);
+      }
       openAssistant = id;
       continue;
     }
