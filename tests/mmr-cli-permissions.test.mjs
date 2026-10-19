@@ -29,7 +29,8 @@ after(() => {
 
 /**
  * A home, an agent directory and a project under one temporary directory,
- * and `run`, which spawns `ampi permissions` there with stdin given as text.
+ * and `run`, which spawns `ampi permissions` there with stdin given as text
+ * and `before` as ampi's options ahead of the command.
  */
 function makeEnv() {
   const root = mkdtempSync(path.join(os.tmpdir(), "ampi-cli-permissions-"));
@@ -40,9 +41,9 @@ function makeEnv() {
   for (const dir of [home, agentDir, project]) mkdirSync(dir, { recursive: true });
   const userFile = path.join(agentDir, "settings.json");
   const projectFile = path.join(project, ".pi", "settings.json");
-  const run = (args, { input = "", env = {} } = {}) =>
+  const run = (args, { input = "", env = {}, before = [] } = {}) =>
     new Promise((resolve, reject) => {
-      const child = spawn(process.execPath, [bin, "permissions", ...args], {
+      const child = spawn(process.execPath, [bin, ...before, "permissions", ...args], {
         cwd: project,
         env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", VISUAL: "", EDITOR: "false", ...env },
       });
@@ -204,8 +205,38 @@ describe("ampi permissions edit", () => {
     assert.match(removed.stderr, /no setting turns ampi-permissions on any more/);
 
     env.writeUser({ theme: "dark", ampi: { permissions: [PUSH] } });
-    await env.run(["edit"], { input: "" });
+    const comment = await env.run(["edit"], { input: "# no rules\n" });
+    assert.equal(comment.status, 0, comment.stderr);
     assert.deepEqual(env.readJson(env.userFile), { theme: "dark" });
+  });
+
+  it("refuses empty stdin with a hint and leaves the file as it was", async () => {
+    const env = makeEnv();
+    env.writeUser({ theme: "dark", ampi: { permissions: [PUSH] } });
+    const before = readFileSync(env.userFile, "utf8");
+    for (const input of ["", "\n", " \n\t\n"]) {
+      const result = await env.run(["edit"], { input });
+      assert.equal(result.status, 1, JSON.stringify(input));
+      assert.match(result.stderr, /^ampi: stdin is empty, so nothing was written to .*settings\.json\. To remove every rule, send a comment line such as "# no rules"/m);
+      assert.equal(readFileSync(env.userFile, "utf8"), before);
+    }
+  });
+
+  it("writes its notes as --log-level and --log-file say", async () => {
+    const env = makeEnv();
+    env.writeUser({ ampi: { permissions: [PUSH] } });
+    const quiet = await env.run(["edit"], { input: "ask bash --command 'git push*'\n", before: ["--log-level", "warn"] });
+    assert.equal(quiet.status, 0);
+    assert.equal(quiet.stderr, "");
+    const logFile = path.join(env.root, "ampi.log");
+    const logged = await env.run(["edit"], { input: "", before: ["--log-file", logFile] });
+    assert.equal(logged.status, 1);
+    assert.match(logged.stderr, /^ampi: stdin is empty/);
+    const unchanged = await env.run(["edit"], { input: "ask bash --command 'git push*'\n", before: ["--log-file", logFile] });
+    assert.equal(unchanged.stderr, "");
+    const lines = readFileSync(logFile, "utf8");
+    assert.match(lines, / error stdin is empty, so nothing was written/);
+    assert.match(lines, / info no change; nothing was written/);
   });
 
   it("refuses to start when the stored rules have no exact text form or hold an invalid entry", async () => {

@@ -10,18 +10,13 @@ import { isDeepStrictEqual, parseArgs } from "node:util";
 import { isPiProjectTrusted, loadThroughPi, piSettingsPath } from "./pi-compat.js";
 
 /**
- * @typedef {object} PermissionsLog The command's diagnostics; each message is one `ampi: …` line on stderr.
- * @property {(message: string) => void} error
- * @property {(message: string) => void} warn
- * @property {(message: string) => void} info
- *
  * @typedef {object} PermissionsHost
  * @property {any} pi The `@earendil-works/pi-coding-agent` module.
  * @property {string} cwd
  * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package whose
  *   rule engine the command uses: the one Pi loads from its settings, else the CLI's own.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {PermissionsLog} log
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
  * @property {boolean} stdinIsTTY Whether `edit` opens the editor (a terminal) or reads the rules from stdin.
  * @property {() => Promise<string>} readStdin All of stdin.
  * @property {(file: string) => Promise<string | undefined>} editFile Open a file in Pi's external editor;
@@ -68,21 +63,46 @@ const PERMISSIONS_EVENT = "ampi:permissions-cli";
 export const PERMISSIONS_COMMANDS = /** @type {const} */ (["list", "test", "edit", "add"]);
 export const PERMISSIONS_ALIASES = /** @type {const} */ ({ ls: "list" });
 
-/** The options of `list` and `edit`, read strictly. */
+/**
+ * Each subcommand's own options. `list` and `edit` read theirs strictly;
+ * `test` and `add` take any `--<field>` besides, and their `--context`, `--to`
+ * and `--message` are read with the rule's words (see FLAGS).
+ */
 export const OPTIONS = /** @type {const} */ ({
   list: { json: { type: "boolean" }, builtin: { type: "boolean" }, workspace: { type: "boolean" }, help: { type: "boolean", short: "h" } },
+  test: {
+    context: { type: "string" },
+    workspace: { type: "boolean" },
+    json: { type: "boolean" },
+    quiet: { type: "boolean", short: "q" },
+    help: { type: "boolean", short: "h" },
+  },
   edit: { workspace: { type: "boolean" }, help: { type: "boolean", short: "h" } },
+  add: {
+    context: { type: "string" },
+    to: { type: "string" },
+    message: { type: "string" },
+    workspace: { type: "boolean" },
+    help: { type: "boolean", short: "h" },
+  },
 });
 
 /**
- * The options of `test` and `add`, which take any `--<field>` besides: each
- * word that is one of these, where an option value cannot stand, is the
- * option it names.
+ * The flags of a subcommand's options table, by spelling: each word that is
+ * one of these, where an option value cannot stand, is the option it names.
+ *
+ * @param {Readonly<Record<string, { type: string, short?: string }>>} table
+ * @returns {Record<string, string>}
  */
-export const FLAGS = /** @type {const} */ ({
-  test: { "--workspace": "workspace", "--json": "json", "-q": "quiet", "--quiet": "quiet", "-h": "help", "--help": "help" },
-  add: { "--workspace": "workspace", "-h": "help", "--help": "help" },
-});
+const flagsOf = (table) =>
+  Object.fromEntries(
+    Object.entries(table)
+      .filter(([, spec]) => spec.type === "boolean")
+      .flatMap(([name, spec]) => [[`--${name}`, name], ...(spec.short === undefined ? [] : [[`-${spec.short}`, name]])]),
+  );
+
+/** The flags of `test` and `add`, for the rule engine's word reader. */
+const FLAGS = Object.freeze({ test: flagsOf(OPTIONS.test), add: flagsOf(OPTIONS.add) });
 
 /** Exit codes of `test`: the decision, a usage error, or no decision at all. */
 const TEST_EXIT = /** @type {const} */ ({ allow: 0, reject: 1, ask: 3, delegate: 3, usage: 2, undecided: 4 });
@@ -243,6 +263,8 @@ read from stdin and no editor opens.
   ampi-permissions off unless ampi.dangerouslyAllowAll: false, ampi.guardedFiles.allowlist or the
   other settings file keeps it on; ampi.permissions: [] keeps it on with ampi's defaults only, so
   write that with ampi config edit.
+- Empty stdin (not even a comment) is refused and writes nothing; send "# no rules" to remove
+  every rule from a script.
 - When the rules hold something the text form cannot write exactly (an input field named context,
   to or message, a list of objects, a list inside a list), or the list holds an invalid entry,
   edit does not start: change the JSON with ampi config edit.
@@ -254,8 +276,8 @@ Options:
                                 and delegate rules; edit writes them with a warning
   -h, --help                    Print this help
 
-Exit status: 0 on success or when nothing changed, 1 when a line has a problem, the editor fails
-or the file cannot be written, 2 on a usage error.
+Exit status: 0 on success or when nothing changed, 1 when stdin is empty, a line has a problem,
+the editor fails or the file cannot be written, 2 on a usage error.
 
 Examples:
 
@@ -706,6 +728,14 @@ async function edit(args, host) {
     }
   } else {
     edited = await host.readStdin();
+    // An empty pipe is far more often a mistake (a redirect from a missing or empty file) than a wish to remove every rule.
+    if (edited.trim() === "") {
+      host.log.error(
+        `stdin is empty, so nothing was written to ${file}. To remove every rule, send a comment line such as "# no rules"; ` +
+          `to edit the rules in your editor, run ampi permissions edit${flag} from a terminal.`,
+      );
+      return 1;
+    }
   }
 
   const parsed = cli.parseRulesText(edited);

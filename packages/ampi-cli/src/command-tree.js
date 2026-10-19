@@ -314,6 +314,60 @@ const MCP = command("mcp", "Add, list, check and remove MCP servers", {
   ],
 });
 
+/** Where a permission rule or a tested call applies. */
+const PERMISSION_CONTEXT = {
+  choices: [
+    { value: "thread", description: "The main session" },
+    { value: "subagent", description: "A subagent" },
+  ],
+};
+
+/** The actions of a permission rule. */
+const PERMISSION_ACTION = {
+  choices: [
+    { value: "allow", description: "Run the call" },
+    { value: "reject", description: "Block the call" },
+    { value: "ask", description: "Ask before the call runs" },
+    { value: "delegate", description: "Let a program decide" },
+  ],
+};
+
+const WORKSPACE_RULES = () => option("--workspace", "This project's .pi/settings.json instead");
+
+/**
+ * `permissions test` and `add` read any `--<field> <value>` of the call or
+ * rule besides their own options; those words and their values are taken as
+ * the trailing positionals, so the options still complete after them.
+ */
+const PERMISSIONS = command("permissions", "List, test, edit or add the rules of ampi-permissions", {
+  aliases: ["permission"],
+  commands: [
+    command("list", "Print the rules, one per line in the text form", {
+      aliases: ["ls"],
+      options: [json("Print the JSON list as it is stored"), option("--builtin", "Print ampi's default rules"), WORKSPACE_RULES()],
+    }),
+    command("test", "Say what a session here decides about a tool call", {
+      args: [arg("tool"), rest("input")],
+      options: [
+        valued("--context", "Decide for the main session or a subagent", { kind: PERMISSION_CONTEXT }),
+        option("--workspace", "Decide with this project's rules and ampi's defaults only"),
+        json("Print one JSON object"),
+        option("--quiet", "Print nothing; the exit status says it", { short: ["-q"] }),
+      ],
+    }),
+    command("edit", "Edit the rules as text in your editor, or from stdin", { options: [WORKSPACE_RULES()] }),
+    command("add", "Put one new rule first", {
+      args: [arg("action", PERMISSION_ACTION), arg("tool"), rest("patterns")],
+      options: [
+        valued("--context", "Limit the rule to the main session or subagents", { kind: PERMISSION_CONTEXT }),
+        valued("--to", "A delegate rule's program and its arguments"),
+        valued("--message", "A reject rule's reason"),
+        WORKSPACE_RULES(),
+      ],
+    }),
+  ],
+});
+
 /** ampi's own options of the root command, in the order of `ampi --help`. */
 const AMPI_OPTIONS = [
   valued("--mode", "Start in an ampi mode, or set Pi's output mode", { short: ["-m"], kind: MODE_OR_OUTPUT, shortKind: "mode" }),
@@ -443,6 +497,7 @@ export const COMMAND_TREE = deepFreeze(
           }),
         ],
       }),
+      PERMISSIONS,
       command("app", "Serve every session from one local web page", {
         options: [option("--open", "Open the page in a browser"), option("--worker", "Started by ampi app only", { hidden: true })],
       }),

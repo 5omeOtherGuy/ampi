@@ -40,6 +40,12 @@ import { OPTIONS as DEV_KEYS_OPTIONS } from "../packages/ampi-cli/src/dev-keys.j
 import { OPTIONS as DOCTOR_OPTIONS } from "../packages/ampi-cli/src/doctor.js";
 import { AGENT_ALIASES, AGENTS, DETECT_OPTIONS, formatImportHelp, IMPORT_OPTIONS } from "../packages/ampi-cli/src/import/index.js";
 import { ADD_VALUE_OPTIONS, formatMcpHelp } from "../packages/ampi-cli/src/mcp.js";
+import {
+  formatPermissionsHelp,
+  PERMISSIONS_ALIASES,
+  PERMISSIONS_COMMANDS,
+  OPTIONS as PERMISSIONS_OPTIONS,
+} from "../packages/ampi-cli/src/permissions.js";
 import { OPTIONS as REVIEW_OPTIONS } from "../packages/ampi-cli/src/review.js";
 import { ALIASES as SKILL_ALIASES, COMMANDS as SKILL_COMMANDS, OPTIONS as SKILL_OPTIONS, formatSkillHelp } from "../packages/ampi-cli/src/skill.js";
 import { ALIASES as THREAD_ALIASES, OPTIONS as THREAD_OPTIONS } from "../packages/ampi-cli/src/threads.js";
@@ -128,13 +134,25 @@ describe("ampi completion resolver", () => {
     assert.deepEqual(values(await complete("ampi top -")), ["--json", "--stream-jsonl", "-h", "--help"]);
   });
 
+  it("completes permissions, its subcommands, and test's and add's options after the call's own fields", async () => {
+    assert.deepEqual(values(await complete("ampi perm")), ["permissions"]);
+    assert.deepEqual(values(await complete("ampi permissions ")), ["list", "test", "edit", "add"]);
+    const testOptions = ["--context", "--workspace", "--json", "-q", "--quiet", "-h", "--help"];
+    assert.deepEqual(values(await complete("ampi permissions test -")), testOptions);
+    assert.deepEqual(values(await complete("ampi permissions test bash --command git-push -")), testOptions);
+    assert.deepEqual(values(await complete("ampi permission test bash --context ")), ["thread", "subagent"]);
+    assert.deepEqual(values(await complete("ampi permissions ls -")), ["--json", "--builtin", "--workspace", "-h", "--help"]);
+    assert.deepEqual(values(await complete("ampi permissions add ")), ["allow", "reject", "ask", "delegate"]);
+    assert.deepEqual(values(await complete("ampi permissions add ask bash --command x --")), ["--context", "--to", "--message", "--workspace", "--help"]);
+  });
+
   it("offers the commands for an empty word, without the hidden __complete or any alias", async () => {
     const offered = values(await complete("ampi "));
-    for (const name of ["help", "version", "threads", "last", "usage", "review", "tools", "skill", "mcp", "config", "app", "top", "doctor", "update", "dev", "completions"]) {
+    for (const name of ["help", "version", "threads", "last", "usage", "review", "tools", "skill", "mcp", "config", "permissions", "app", "top", "doctor", "update", "dev", "completions"]) {
       assert.ok(offered.includes(name), `${name} is offered`);
     }
     for (const name of ["install", "remove", "uninstall", "list", "auth"]) assert.ok(offered.includes(name), `Pi's ${name} is offered`);
-    for (const hidden of ["__complete", "tool", "skills", "up"]) assert.ok(!offered.includes(hidden), `${hidden} is not offered`);
+    for (const hidden of ["__complete", "tool", "skills", "up", "permission"]) assert.ok(!offered.includes(hidden), `${hidden} is not offered`);
     assert.equal(new Set(offered).size, offered.length);
   });
 
@@ -464,6 +482,9 @@ function findTreeDrift(tree) {
   }
   for (const words of usageSubcommands(formatMcpHelp(), "mcp")) compareCommands(["mcp", ...words.split(" ").slice(0, -1)], words.split(" ").slice(-1));
   compareTable(["mcp", "add"], Object.fromEntries([...ADD_VALUE_OPTIONS].map((name) => [name, { type: "string" }])), { repeat: false });
+  compareAliases(["permissions"], PERMISSIONS_ALIASES);
+  compareCommands(["permissions"], [...PERMISSIONS_COMMANDS, ...Object.keys(PERMISSIONS_OPTIONS), ...usageSubcommands(formatPermissionsHelp(), "permissions")]);
+  for (const [name, table] of Object.entries(PERMISSIONS_OPTIONS)) compareTable(["permissions", name], table);
   compareCommands(["config"], Object.keys(CONFIG_OPTIONS));
   for (const [name, table] of Object.entries(CONFIG_OPTIONS)) compareTable(["config", name], table);
   compareTable(["doctor"], DOCTOR_OPTIONS);
