@@ -52,6 +52,10 @@
   /* Menus, dialogs and the sheet's scrim */
   --ampi-popover-bg: light-dark(#fcfcfc, #111513);
   --ampi-shadow: 0 8px 24px light-dark(#0b0d0b1f, #00000080);
+  /* Large floating cards (the command palette): a hairline ring, a soft drop and a close one. */
+  --ampi-shadow-card:
+    0 0 0 1px light-dark(#0b0d0b14, #ffffff1a), 0 10px 24px -6px light-dark(#0b0d0b33, #000000cc),
+    0 2px 8px -2px light-dark(#0b0d0b1f, #00000099);
   --ampi-scrim: light-dark(#0b0d0b59, #000000a6);
 
   /* User message bubble */

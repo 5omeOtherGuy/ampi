@@ -45,6 +45,7 @@ Even when on, it starts only in an interactive terminal session (Pi's `tui` mode
 | `POST /api/markdown`, `/api/archive`, `/api/pin`, `/api/color`, `/api/labels`, `/api/snooze`, `/api/unread`, `/api/cost`, `/api/running`, `/api/rename`, `/api/delete`; `GET /api/export` | Page endpoints | The title bar's [More Actions](#more-actions); see [Commands](#commands) |
 | `ampi_gui_prefs` | Cookie | The page's preferences (sidebar width, sidebar open, Full Width, Activity's default time window and status), shared by every ampi page on this machine; see [More Actions](#more-actions) and [Activity and Search](#activity-and-search) |
 | Ctrl+B (⌘B on macOS), `/`, Ctrl+Shift+K (⇧⌘K), `?` and the rest of [Keyboard](#keyboard) | Page keys | Show or hide the sidebar, filter the sidebar, search every session, list every key in the Keymap overlay |
+| Ctrl+O or Ctrl+K (⌘K), Ctrl+P (⌘P) | Page keys | The [command palette](#command-palette) and its Switch Thread picker |
 
 The palette lists the command as `thread open in browser`.
 
@@ -153,7 +154,7 @@ The filter column on the left (above the sessions on a narrow screen) has four p
 
 #### Search Threads
 
-Mod+Shift+K, the sidebar's search button or the `Search threads` command opens a dialog over the page: a field and a link to this section. With the field empty it lists the latest sessions; as you type it lists the sessions that match, newest first, at most 50. Each result shows the title with its project on the right, how long ago it was active with **Archived**, **Snoozed** and **Live** badges (Live: a running Pi has it open), and the first two lines of its first message. Up and Down move the selection, Enter or a click opens the session, and Esc closes the dialog.
+Mod+Shift+K, the sidebar's search button or the palette's `Search Threads…` opens a dialog over the page: a field and a link to this section. With the field empty it lists the latest sessions; as you type it lists the sessions that match, newest first, at most 50. Each result shows the title with its project on the right, how long ago it was active with **Archived**, **Snoozed** and **Live** badges (Live: a running Pi has it open), and the first two lines of its first message. Up and Down move the selection, Enter or a click opens the session, and Esc closes the dialog.
 
 #### Search syntax
 
@@ -196,7 +197,7 @@ Text typed here goes to the same Pi session as the terminal, the way the termina
 
 ### Keyboard
 
-The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctrl elsewhere; the overlay names the keys as your platform does. Plain keys (letters, `/`, `?`, arrows) do nothing while you type in a field; keys with Ctrl, Alt or ⌘ work there too, and so does Esc Esc. A modal (a question, Rename, the Keymap overlay, Search Threads) keeps every key to itself. Two-key sequences (`g g`, Esc Esc) take the second key within 1.5 seconds.
+The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctrl elsewhere; the overlay names the keys as your platform does. Plain keys (letters, `/`, `?`, arrows) do nothing while you type in a field; keys with Ctrl, Alt or ⌘ work there too, and so does Esc Esc. A modal (a question, Rename, the Keymap overlay, Search Threads, the command palette) keeps every key to itself. Two-key sequences (`g g`, Esc Esc) take the second key within 1.5 seconds.
 
 | Key | Where | Does |
 | --- | --- | --- |
@@ -208,6 +209,8 @@ The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctr
 | Mod+B | Anywhere | Show or hide the sidebar |
 | `/` | Anywhere | Open the sidebar and focus its search |
 | Mod+Shift+K | Anywhere | Open [Search Threads](#search-threads) |
+| Ctrl+O or Mod+K | Anywhere | Open or close the [command palette](#command-palette) |
+| Mod+P | Anywhere but a focused sidebar row (where Ctrl+P moves up) | Switch Thread: pick another session in the palette |
 | Down, `j`, Ctrl+N / Up, `k`, Ctrl+P | A focused sidebar row or group | Move to the next / previous row or group |
 | Enter | A focused sidebar row or group | Show the session, or open or close the group |
 | `m` | A focused sidebar row | Open the row's actions menu |
@@ -225,6 +228,27 @@ A key whose command cannot run now (archiving an archived session, focusing the 
 **Keys the browser keeps.** In a Chromium tab, Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab and Ctrl+Shift+T (⌘N, ⌘T, ⌘W and ⇧⌘T on macOS) never reach the page. A binding on one of them is still listed, marked with `*`; on Linux and Windows that is Ctrl+N in the sidebar, where Down and `j` do the same. The **Edit keyboard shortcuts** button is not active yet.
 
 Every key and every More Actions entry is a command in the page's registry (`client/commands.js`), which names the terminal's command id where one means the same (`thread.archive`, `thread.interrupt`, `thread.rename`, `thread.copyMarkdown`, `thread.unarchive`, `thread.showCost`).
+
+### Command palette
+
+Ctrl+O or Mod+K opens a card near the top of the page (a sheet from the top edge on a narrow screen) with a field and the page's commands, and the same keys close it. The palette shows the registry above and holds no commands of its own; it lists only the page's commands, never the terminal's palette commands, which open terminal overlays.
+
+- **Sections.** With the field empty, Global, Thread, Thread Panes and Navigation, each in the registry's order. Each row has a title, a short description and the command's first key on the right. Keys that need a focused sidebar row and the message keys (Up, Down) are left out.
+- **Commands that cannot run now** are listed dimmed with the reason in place of the description (Delete Thread while the session runs, Interrupt while nothing runs); Enter and a click do nothing on them. Commands that do not apply at all, such as Rename Thread on `ampi app`'s home page, are not listed.
+- **Typing** filters by title. Every word must match, its letters in order but not necessarily together; a letter that starts a word or follows the previous match counts more, so `sw` finds Switch Thread before titles where s and w sit inside words, and `arch` puts Archive Thread before Search Threads. The matches form one list, best first across every section, with the commands that can run before the others.
+- **A message instead.** When no title matches the text well, the first row is **Send as a message to this thread**: Enter sends the text to the session shown, as Enter in the composer would (steering a running turn). It is dimmed on `ampi app`'s home page and for a session that is read-only here.
+- **Keys.** Up and Down move, the pointer moves the selection when it moves, Enter or a click runs the command, and Esc, a click outside or the opening key closes the palette. Mod+P switches the open palette to Switch Thread, and Ctrl+O or Mod+K switches back. Focus goes back where it was before the palette opened, and a dialog a command opens returns focus there too.
+
+| Section | Entries |
+| --- | --- |
+| Global | Search Threads…, Switch Thread… (Mod+P), Open Activity, Change Theme… (steps the colour scheme as the title bar's button does), Archive Inactive Threads Older than 72h, Sidebar: Collapse All Projects, Sidebar: Expand All Projects, Focus Title Bar, Copy Current URL, Show Keymap, Reload Page, Report a Bug |
+| Thread | Archive Thread, Interrupt, the [More Actions](#more-actions) entries (Copy as Markdown, Copy Session ID, Copy Resume Command, Export to Markdown, Export to JSON, Show Where the Thread Runs, View Costs, Pin or Unpin Thread, Rename Thread, Edit Labels, Change Thread Color, Mark as Unread or Read, Snooze or Unsnooze Thread, Unarchive Thread, Delete Thread), for the session focused in the sidebar, else the one shown |
+| Thread Panes | Show Chat Pane (Ctrl+Shift+A), Toggle Full Width |
+| Navigation | Go Home (`g g`), Go Back (Ctrl+[), Go Forward (Ctrl+]) |
+
+**Switch Thread…** (Mod+P) turns the card into a list of the other sessions the sidebar lists, the most recently active first, with each one's project and age; typing filters them by title the same way, and Enter opens the session. **Archive Inactive Threads Older than 72h** asks first, with the number of sessions in the sidebar's Inactive group (no activity for 72 hours, and not running, pinned, snoozed or archived), then archives exactly those through the thread index; it is dimmed without `ampi-threads` or when that group is empty.
+
+A command's palette title and section can differ from its Keymap label (`palette: { title, section }` in `client/commands.js`, or `palette: false` to leave it out): the palette uses title case and lists the sidebar's archive key under Thread.
 
 ### Commands
 

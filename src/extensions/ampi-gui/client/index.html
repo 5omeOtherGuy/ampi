@@ -172,6 +172,16 @@
           <p class="search-empty" id="search-empty" hidden>No sessions match.</p>
         </div>
       </dialog>
+      <dialog class="dialog palette-dialog" id="palette-dialog" aria-label="Command palette">
+        <div class="palette-head">
+          <input class="palette-input" id="palette-input" type="text" role="combobox" aria-controls="palette-list" aria-expanded="true" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+        </div>
+        <!-- Arrow keys move through the list from the field, so the scrolling body takes no Tab stop. -->
+        <div class="palette-body" tabindex="-1">
+          <div class="palette-list" id="palette-list" role="listbox" aria-label="Commands"></div>
+          <p class="palette-empty" id="palette-empty" hidden></p>
+        </div>
+      </dialog>
       <div class="toast" id="toast" role="status" hidden></div>
     </div>
   </body>

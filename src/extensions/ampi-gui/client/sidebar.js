@@ -413,6 +413,16 @@ export function mountSidebar({ app, prefs, now = () => Date.now() }) {
       busy = next;
       draw();
     },
+    /** Close (`true`) or open every project group; the other groups keep their state. */
+    collapseProjects(collapsed) {
+      for (const group of data.groups) {
+        if (group.kind !== "project") continue;
+        // Project groups start open, so a closed one is a flipped one.
+        if (collapsed) flipped.add(group.id);
+        else flipped.delete(group.id);
+      }
+      draw();
+    },
     redraw: draw,
     /** Switch to `ampi app`'s rows. */
     useAppMode() {

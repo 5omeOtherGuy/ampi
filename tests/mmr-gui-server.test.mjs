@@ -243,7 +243,7 @@ describe("ampi-gui server: static files", () => {
     const css = await send({ path: "/client/tokens.css", headers: cookie() });
     assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
     assert.match(css.body, /--ampi-bg: light-dark\(/);
-    for (const file of ["sidebar.js", "titlebar.js", "transcript.js", "commands.js", "keys.js", "keymap.js", "prefs.js"]) {
+    for (const file of ["sidebar.js", "titlebar.js", "transcript.js", "commands.js", "keys.js", "keymap.js", "prefs.js", "palette.js", "fuzzy.js"]) {
       const res = await send({ path: `/client/${file}`, headers: cookie() });
       assert.equal(res.status, 200, file);
       assert.equal(res.headers["content-type"], "text/javascript; charset=utf-8", file);

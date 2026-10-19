@@ -243,6 +243,12 @@ export function mountComposer({ root, post, mac = false }) {
       showNotice("");
       interrupt();
     },
+    /** Send `text` as Enter in the prompt would (the command palette's message row), after any send still running. */
+    send(text) {
+      const body = sendBody(text, false);
+      if (!body || !connected || locked !== null) return;
+      sends = sends.then(() => run("send", body));
+    },
     /** Say `text` under the composer for `ms`, as the first Esc of Esc Esc does. */
     hint(text, ms) {
       showNotice(text);

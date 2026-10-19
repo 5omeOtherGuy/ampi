@@ -12,16 +12,25 @@
 // - `when(state)`: `{ state: "available" | "unavailable" | "hidden", reason? }`.
 // - `run(state, { chord })`: does it through `state.ui`.
 // - `hint`: what the page says while it waits for a sequence's second key.
+// - `palette`: how the command palette lists it, `{ title?, section? }`
+//   when that differs from the keymap's sentence-case title and section, or
+//   `false` to leave it out. The palette lists the PALETTE_SECTIONS only,
+//   and never a command that has a `context`.
 //
-// `state` is what app.js knows when a key is pressed: `threadPage` (a
-// session is shown, not ampi app's home page), `session` (the shown
-// session's More Actions target), `focusedSession` (the one focused in the
-// sidebar), `interruptible`, `writable`, `promptEmpty`, `promptFocused` and
-// `ui`, the page's actions. The registry is pure: tests load it in Node.
+// `state` is what app.js knows when a key is pressed or the palette opens:
+// `threadPage` (a session is shown, not ampi app's home page), `session`
+// (the shown session's More Actions target), `focusedSession` (the one
+// focused in the sidebar), `sessionList` (the last GET /api/sessions
+// answer), `shownId` (the shown session's id), `interruptible`, `writable`,
+// `promptEmpty`, `promptFocused` and `ui`, the page's actions. The registry
+// is pure: tests load it in Node.
 
 import { parseChord } from "./keys.js";
 
 export const SECTIONS = ["Global", "Sidebar", "Thread", "Thread Panes", "Navigation"];
+
+/** The command palette's sections, in its order. */
+export const PALETTE_SECTIONS = ["Global", "Thread", "Thread Panes", "Navigation"];
 
 const AVAILABLE = { state: "available" };
 const HIDDEN = { state: "hidden" };
@@ -40,6 +49,9 @@ export function createCommandRegistry(entries = []) {
       if (!SECTIONS.includes(entry.section)) throw new Error(`Command "${entry.id}" has an unknown section "${entry.section}"`);
       if (typeof entry.title !== "string" || entry.title === "") throw new Error(`Command "${entry.id}" has no title`);
       if (typeof entry.run !== "function") throw new Error(`Command "${entry.id}" has no run()`);
+      if (entry.palette?.section && !SECTIONS.includes(entry.palette.section)) {
+        throw new Error(`Command "${entry.id}" has an unknown palette section "${entry.palette.section}"`);
+      }
       for (const text of entry.keys ?? []) {
         const parsed = parseChord(text);
         if (parsed.error) throw new Error(`Command "${entry.id}" has a key that does not parse: "${text}" (${parsed.error})`);
@@ -72,13 +84,22 @@ function sessionAvailability(state, need, what) {
   return AVAILABLE;
 }
 
+/** Every session a GET /api/sessions answer lists, once each. */
+export const listedSessions = (list) => (list?.groups ?? []).flatMap((group) => group.sessions);
+
+/** The ids in the sidebar's Inactive group (no activity for 72 hours, not running, pinned, snoozed or archived), in its order. */
+export function inactiveSessionIds(list) {
+  return (list?.groups ?? []).filter((group) => group.kind === "inactive").flatMap((group) => group.sessions.map((session) => session.id));
+}
+
 /** A More Actions entry as a command on the focused or shown session: `action` is the menu's (titlebar.js `run`). */
-function sessionCommand(id, title, action, description, { keys = [], need, what = title, section = "Thread", when } = {}) {
+function sessionCommand(id, title, action, description, { keys = [], need, what = title, section = "Thread", when, palette } = {}) {
   return {
     id,
     title,
     section,
     keys,
+    ...(palette ? { palette } : {}),
     description,
     when: when ?? ((state) => sessionAvailability(state, need, what)),
     run: (state) => state.ui.sessionAction(action, targetOf(state)),
@@ -93,6 +114,7 @@ export const DEFAULT_COMMANDS = [
     title: "Go to home screen",
     section: "Navigation",
     keys: ["g g"],
+    palette: { title: "Go Home" },
     description: "In ampi app, the page that lists every session; on a terminal's own page, the session that terminal runs",
     run: (state) => state.ui.goHome(),
   },
@@ -101,6 +123,7 @@ export const DEFAULT_COMMANDS = [
     title: "Go back",
     section: "Navigation",
     keys: ["ctrl+["],
+    palette: { title: "Go Back" },
     description: "The page shown before, as the browser's Back button",
     run: (state) => state.ui.back(),
   },
@@ -109,30 +132,89 @@ export const DEFAULT_COMMANDS = [
     title: "Go forward",
     section: "Navigation",
     keys: ["ctrl+]"],
+    palette: { title: "Go Forward" },
     description: "The page left with Go back",
     run: (state) => state.ui.forward(),
   },
   {
-    id: "open-activity",
-    title: "Open Activity",
-    section: "Navigation",
-    keys: [],
-    description: "Every session active in a time window, by day, with filters for status, project and a search",
-    run: (state) => state.ui.openActivity(),
+    id: "command-palette",
+    title: "Toggle command palette",
+    section: "Global",
+    keys: ["ctrl+o", "mod+k"],
+    palette: false,
+    description: "Find a command by name and run it, or send what you typed as a message",
+    run: (state) => state.ui.openPalette(),
   },
   {
     id: "search-threads",
     title: "Search threads",
     section: "Global",
     keys: ["mod+shift+k"],
+    palette: { title: "Search Threads…" },
     description: "Find a session by words, labels, project or state, and open it",
     run: (state) => state.ui.searchThreads(),
+  },
+  {
+    id: "switch-thread",
+    title: "Switch thread",
+    section: "Global",
+    keys: ["mod+p"],
+    palette: { title: "Switch Thread…" },
+    description: "Pick another session by name, the most recently active first",
+    when: (state) => (listedSessions(state.sessionList).some((session) => session.id !== state.shownId) ? AVAILABLE : unavailable("No other session is listed")),
+    run: (state) => state.ui.switchThread(),
+  },
+  {
+    id: "open-activity",
+    title: "Open Activity",
+    section: "Global",
+    keys: [],
+    description: "Every session active in a time window, by day, with filters for status, project and a search",
+    run: (state) => state.ui.openActivity(),
+  },
+  {
+    id: "change-theme",
+    title: "Change theme",
+    section: "Global",
+    keys: [],
+    palette: { title: "Change Theme…" },
+    description: "Step the colour scheme from system to light to dark, as the title bar's button does",
+    run: (state) => state.ui.cycleScheme(),
+  },
+  {
+    id: "archive-inactive",
+    title: "Archive Inactive Threads Older than 72h",
+    section: "Global",
+    keys: [],
+    description: "Archive every session in the sidebar's Inactive group, after asking",
+    when: (state) => {
+      if (!state.sessionList?.actions?.archive) return unavailable("Archiving needs ampi-threads");
+      return inactiveSessionIds(state.sessionList).length > 0 ? AVAILABLE : unavailable("No session has been inactive for 72 hours");
+    },
+    run: (state) => state.ui.archiveInactive(inactiveSessionIds(state.sessionList)),
+  },
+  {
+    id: "sidebar-collapse-projects",
+    title: "Sidebar: Collapse All Projects",
+    section: "Global",
+    keys: [],
+    description: "Close every project group in the sidebar",
+    run: (state) => state.ui.collapseProjects(true),
+  },
+  {
+    id: "sidebar-expand-projects",
+    title: "Sidebar: Expand All Projects",
+    section: "Global",
+    keys: [],
+    description: "Open every project group in the sidebar",
+    run: (state) => state.ui.collapseProjects(false),
   },
   {
     id: "focus-title-bar",
     title: "Focus title bar",
     section: "Global",
     keys: ["ctrl+shift+m"],
+    palette: { title: "Focus Title Bar" },
     description: "Move focus to the title bar's first button",
     run: (state) => state.ui.focusTitleBar(),
   },
@@ -141,6 +223,7 @@ export const DEFAULT_COMMANDS = [
     title: "Copy current URL",
     section: "Global",
     keys: ["mod+shift+c"],
+    palette: { title: "Copy Current URL" },
     description: "Copy this page's address; it never carries the access token",
     run: (state) => state.ui.copyUrl(),
   },
@@ -149,8 +232,17 @@ export const DEFAULT_COMMANDS = [
     title: "Show keymap",
     section: "Global",
     keys: ["?", "alt+shift+/"],
+    palette: { title: "Show Keymap" },
     description: "List the keys this page answers",
     run: (state) => state.ui.showKeymap(),
+  },
+  {
+    id: "reload-page",
+    title: "Reload Page",
+    section: "Global",
+    keys: [],
+    description: "Load this page again from the server",
+    run: (state) => state.ui.reload(),
   },
 
   // Sidebar
@@ -228,6 +320,7 @@ export const DEFAULT_COMMANDS = [
     title: "Archive focused session",
     section: "Sidebar",
     keys: ["mod+shift+e"],
+    palette: { title: "Archive Thread", section: "Thread" },
     description: "Archive the session focused in the sidebar, else the one shown",
     when: (state) => archiveAvailability(state, true),
     run: (state) => state.ui.sessionAction("archive", targetOf(state)),
@@ -249,6 +342,7 @@ export const DEFAULT_COMMANDS = [
     title: "Move between user messages",
     section: "Thread",
     keys: ["up", "down"],
+    palette: false,
     description: "With the prompt empty and not focused, focus the previous or next message you wrote",
     when: (state) => (state.threadPage && state.promptEmpty && !state.promptFocused ? AVAILABLE : HIDDEN),
     run: (state, { chord }) => state.ui.moveMessage(chord.endsWith("up") ? -1 : 1, true),
@@ -258,6 +352,7 @@ export const DEFAULT_COMMANDS = [
     title: "Move between all messages",
     section: "Thread",
     keys: ["shift+up", "shift+down"],
+    palette: false,
     description: "With the prompt empty and not focused, focus the previous or next message",
     when: (state) => (state.threadPage && state.promptEmpty && !state.promptFocused ? AVAILABLE : HIDDEN),
     run: (state, { chord }) => state.ui.moveMessage(chord.endsWith("up") ? -1 : 1, false),
@@ -267,15 +362,23 @@ export const DEFAULT_COMMANDS = [
     need: "markdown",
     what: "Copying",
   }),
-  sessionCommand("copy-session-id", "Copy session ID", "copy-id", "Copy the session's id"),
-  sessionCommand("copy-resume-command", "Copy resume command", "copy-resume", "Copy the ampi threads continue command that resumes the session in a terminal"),
+  sessionCommand("copy-session-id", "Copy session ID", "copy-id", "Copy the session's id", { palette: { title: "Copy Session ID" } }),
+  sessionCommand("copy-resume-command", "Copy resume command", "copy-resume", "Copy the ampi threads continue command that resumes the session in a terminal", {
+    palette: { title: "Copy Resume Command" },
+  }),
   sessionCommand("export-markdown", "Export as Markdown file", "export-markdown", "Download the session's current branch as a Markdown file", {
     need: "markdown",
     what: "Exporting as Markdown",
+    palette: { title: "Export to Markdown" },
   }),
-  sessionCommand("export-json", "Export as JSON file", "export-json", "Download the session and every entry of its file as JSON, as ampi threads export prints it"),
-  sessionCommand("show-running-in", "Show where the session runs", "running", "The process that runs the session, its phase, directory and Git branch"),
+  sessionCommand("export-json", "Export as JSON file", "export-json", "Download the session and every entry of its file as JSON, as ampi threads export prints it", {
+    palette: { title: "Export to JSON" },
+  }),
+  sessionCommand("show-running-in", "Show where the session runs", "running", "The process that runs the session, its phase, directory and Git branch", {
+    palette: { title: "Show Where the Thread Runs" },
+  }),
   sessionCommand("thread.showCost", "Show cost & usage", "cost", "What the session cost so far, per model", {
+    palette: { title: "View Costs" },
     when: (state) => {
       const target = targetOf(state);
       if (!target) return unavailable("No session is shown");
@@ -286,37 +389,51 @@ export const DEFAULT_COMMANDS = [
     keys: ["ctrl+g i"],
     need: "archive",
     what: "Pinning",
+    palette: { title: "Pin or Unpin Thread" },
   }),
   {
     id: "thread.rename",
     title: "Rename session",
     section: "Thread",
     keys: [],
+    palette: { title: "Rename Thread" },
     description: "Give the session a new title; a session another process runs is renamed there",
     when: (state) => (targetOf(state) ? AVAILABLE : HIDDEN),
     run: (state) => state.ui.sessionAction("rename", targetOf(state)),
   },
-  sessionCommand("edit-labels", "Edit labels", "labels", "Add or remove the session's labels", { need: "archive", what: "Labels" }),
-  sessionCommand("set-color", "Set session color", "color-menu", "Pick the colour of the session's disc", { need: "archive", what: "Colours" }),
+  sessionCommand("edit-labels", "Edit labels", "labels", "Add or remove the session's labels", {
+    need: "archive",
+    what: "Labels",
+    palette: { title: "Edit Labels" },
+  }),
+  sessionCommand("set-color", "Set session color", "color-menu", "Pick the colour of the session's disc", {
+    need: "archive",
+    what: "Colours",
+    palette: { title: "Change Thread Color" },
+  }),
   sessionCommand("toggle-unread", "Mark as unread or read", "unread", "Mark the session unread, or read again", {
     need: "archive",
     what: "Unread marks",
+    palette: { title: "Mark as Unread or Read" },
   }),
   sessionCommand("toggle-snooze", "Snooze or unsnooze session", "snooze", "Move the session to Snoozed until its next message, or back", {
     keys: ["ctrl+g z"],
     need: "archive",
     what: "Snoozing",
+    palette: { title: "Snooze or Unsnooze Thread" },
   }),
   {
     id: "thread.unarchive",
     title: "Unarchive session",
     section: "Thread",
     keys: [],
+    palette: { title: "Unarchive Thread" },
     description: "Take the session focused in the sidebar, else the one shown, out of the archive",
     when: (state) => archiveAvailability(state, false),
     run: (state) => state.ui.sessionAction("archive", targetOf(state)),
   },
   sessionCommand("delete-session", "Delete session", "delete", "Delete the session's file and thread metadata, after asking", {
+    palette: { title: "Delete Thread" },
     when: (state) => {
       const target = targetOf(state);
       if (!target) return unavailable("No session is shown");
@@ -325,6 +442,7 @@ export const DEFAULT_COMMANDS = [
   }),
   sessionCommand("report-bug", "Report a bug", "report-bug", "Open ampi's issue forms on GitHub in a new tab", {
     section: "Global",
+    palette: { title: "Report a Bug" },
     when: () => AVAILABLE,
   }),
 
@@ -334,6 +452,7 @@ export const DEFAULT_COMMANDS = [
     title: "Show chat and focus prompt",
     section: "Thread Panes",
     keys: ["ctrl+shift+a"],
+    palette: { title: "Show Chat Pane" },
     description: "Close the sidebar sheet and put the cursor in the composer",
     when: (state) => (!state.threadPage ? HIDDEN : state.writable ? AVAILABLE : unavailable("This session is read-only here")),
     run: (state) => state.ui.focusPrompt(),
@@ -343,6 +462,7 @@ export const DEFAULT_COMMANDS = [
     title: "Toggle full width",
     section: "Thread Panes",
     keys: [],
+    palette: { title: "Toggle Full Width" },
     description: "Let the transcript and the composer use the whole width of the page; remembered on this machine",
     run: (state) => state.ui.sessionAction("full-width", null),
   },
