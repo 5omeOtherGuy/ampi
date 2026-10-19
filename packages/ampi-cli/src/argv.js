@@ -417,6 +417,11 @@ function readOptions(args) {
         options.fast = true;
         break;
       case "dangerously-allow-all":
+        // A value is refused rather than read: `--dangerously-allow-all=false` must not turn it on.
+        if (token.inlineValue) {
+          error ??= "--dangerously-allow-all takes no value.";
+          break;
+        }
         // With its value attached: Pi's parser takes the argument after an extension flag it
         // does not know yet as that flag's value, which would swallow a message that follows.
         if (!options.dangerouslyAllowAll) piArgs.push("--ampi-dangerously-allow-all=true");
