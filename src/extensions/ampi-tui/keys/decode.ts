@@ -142,22 +142,21 @@ function codeCombo(code: number, shifted: number | undefined, mods: Modifiers): 
 const CSI = /^\x1b\[([0-9:;]*)([A-Za-z~])$/;
 const SS3 = /^\x1bO([A-Z])$/;
 
-type Decoded = MmrKeyCombo | "release" | undefined;
+/**
+ * What a key event reports: a press, a repeat while the key is held, or a
+ * release. Only terminals speaking the kitty keyboard protocol report repeats
+ * and releases; everything else is a press.
+ */
+export type MmrKeyEventType = "press" | "repeat" | "release";
 
-function decodeSequence(data: string): Decoded {
-  const ss3 = SS3.exec(data);
-  if (ss3) {
-    const key = LETTER_KEYS[ss3[1]];
-    return key ? combo(key) : undefined;
-  }
-  const csi = CSI.exec(data);
-  if (!csi) return undefined;
-  const [, paramText, final] = csi;
-  const params = paramText.split(";").map((part) => part.split(":"));
-  const modsField = params[1] ?? [];
-  // Kitty event types: 1 press, 2 repeat, 3 release.
-  if (modsField[1] === "3") return "release";
-  const mods = parseModifierParam(modsField[0]);
+/** A decoded key, or a release whose key may have no keymap name (`combo` undefined). */
+type Decoded = { readonly combo: MmrKeyCombo | undefined; readonly event: MmrKeyEventType } | undefined;
+
+const press = (key: MmrKeyCombo | undefined): Decoded => (key ? { combo: key, event: "press" } : undefined);
+
+/** The key of a CSI sequence, its event field left aside. */
+function decodeCsiKey(paramText: string, final: string, params: readonly string[][]): MmrKeyCombo | undefined {
+  const mods = parseModifierParam(params[1]?.[0]);
   if (!mods) return undefined;
 
   if (final === "u") {
@@ -182,6 +181,25 @@ function decodeSequence(data: string): Decoded {
   return key ? withModifiers(combo(key), mods) : undefined;
 }
 
+function decodeSequence(data: string): Decoded {
+  const ss3 = SS3.exec(data);
+  if (ss3) {
+    const key = LETTER_KEYS[ss3[1]];
+    return press(key ? combo(key) : undefined);
+  }
+  const csi = CSI.exec(data);
+  if (!csi) return undefined;
+  const [, paramText, final] = csi;
+  const params = paramText.split(";").map((part) => part.split(":"));
+  // Kitty event types: 1 press, 2 repeat, 3 release.
+  const eventField = params[1]?.[1];
+  const event: MmrKeyEventType = eventField === "3" ? "release" : eventField === "2" ? "repeat" : "press";
+  const key = decodeCsiKey(paramText, final, params);
+  // A release is an event even for a key without a keymap name.
+  if (event === "release") return { combo: key, event };
+  return key ? { combo: key, event } : undefined;
+}
+
 /** One key without an ESC prefix: a control byte, a printable character or an escape sequence. */
 function decodeOne(data: string): Decoded {
   if (data.startsWith(ESC) && data.length > 1) return decodeSequence(data);
@@ -189,10 +207,35 @@ function decodeOne(data: string): Decoded {
   if (chars.length !== 1) return undefined;
   const code = data.codePointAt(0) ?? -1;
   const control = CONTROL_KEYS.get(code);
-  if (control) return control;
-  if (code >= 0x01 && code <= 0x1a) return combo(String.fromCharCode(code + 0x60), { ctrl: true });
+  if (control) return press(control);
+  if (code >= 0x01 && code <= 0x1a) return press(combo(String.fromCharCode(code + 0x60), { ctrl: true }));
   if (code < 0x20) return undefined;
-  return characterCombo(data);
+  return press(characterCombo(data));
+}
+
+/** One chunk of terminal input as a key event: its combos and what the terminal reported. */
+export interface MmrTerminalKeyEvent {
+  /** Two for a merged double Escape, otherwise one; empty for the release of a key without a keymap name. */
+  readonly combos: MmrKeyCombo[];
+  readonly event: MmrKeyEventType;
+}
+
+/**
+ * Decode one chunk of terminal input with its kitty event type. Unlike
+ * {@link decodeMmrTerminalKeys}, a release keeps the released key's combos.
+ * Returns `undefined` for the same chunks: pasted or multi-character text and
+ * unknown sequences.
+ */
+export function decodeMmrTerminalKeyEvent(data: string): MmrTerminalKeyEvent | undefined {
+  if (data === `${ESC}${ESC}`) return { combos: [combo("esc"), combo("esc")], event: "press" };
+  const direct = decodeOne(data);
+  if (direct) return { combos: direct.combo ? [direct.combo] : [], event: direct.event };
+  // Alt+key: ESC followed by the key's own bytes (`\x1bx`, `\x1b\r`, `\x1b\x1b[A`).
+  if (data.startsWith(ESC) && data.length > 1) {
+    const rest = decodeOne(data.slice(1));
+    if (rest?.combo && rest.event !== "release" && !rest.combo.alt) return { combos: [{ ...rest.combo, alt: true }], event: rest.event };
+  }
+  return undefined;
 }
 
 /**
@@ -203,14 +246,7 @@ function decodeOne(data: string): Decoded {
  * multi-character text and unknown sequences.
  */
 export function decodeMmrTerminalKeys(data: string): MmrKeyCombo[] | undefined {
-  if (data === `${ESC}${ESC}`) return [combo("esc"), combo("esc")];
-  const direct = decodeOne(data);
-  if (direct === "release") return [];
-  if (direct) return [direct];
-  // Alt+key: ESC followed by the key's own bytes (`\x1bx`, `\x1b\r`, `\x1b\x1b[A`).
-  if (data.startsWith(ESC) && data.length > 1) {
-    const rest = decodeOne(data.slice(1));
-    if (rest && rest !== "release" && !rest.alt) return [{ ...rest, alt: true }];
-  }
-  return undefined;
+  const decoded = decodeMmrTerminalKeyEvent(data);
+  if (decoded === undefined) return undefined;
+  return decoded.event === "release" ? [] : decoded.combos;
 }

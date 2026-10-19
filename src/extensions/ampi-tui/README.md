@@ -754,6 +754,7 @@ Later releases open the dial read-only in a locked session, showing the mode and
 - **Colours are not the `ampi` theme.** A theme is set in Pi's settings (or with `--use-theme`); `ampi-tui` leaves it in place. Choose `ampi` in `/settings`.
 - **You want the footer back.** Set `ampiTui.enabled` to `false` and restart Pi or run `/reload`.
 - **A rebinding has no effect.** Check for an `ampi keymap:` warning at session start, then run `/reload`. A binding to a single key that Pi does not reserve is handed to Pi's shortcut list, which Pi reads at session start, so it needs `/reload` even when the warning is absent.
+- **A key does nothing.** Run `ampi dev keys` from the [`ampi` command](../../../packages/ampi-cli/README.md#ampi-dev-keys) and press the key: each line shows the keys ampi reads and the command the keymap maps them to, without starting a session.
 - **Home and End only move the cursor.** The prompt has text, or Pi runs in regular mode (`tuiMode: "regular"`), where the terminal's own scrollback replaces transcript scrolling.
 - **Shift+Tab no longer changes the thinking level.** On an empty prompt it selects messages; type something first, or set `"thread.selectPreviousMessage": null` under `ampi.keymap` to give it back to Pi.
 - **No notification when a turn finishes.** Check `ampiTui.notifications` (`enabled` and `system`), whether your terminal shows OSC 777 notifications, and whether you run inside tmux (see [Limits](#limits)). Try `AMPI_FORCE_BEL=1` for a bell instead. Notifications closer than two seconds apart are dropped.

@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { MmrCommandDefinition } from "./extensions/ampi-core/command-registry.js";
-import { formatMmrKeymapJsonc, readMmrKeymapSettings, resolveMmrKeymap } from "./extensions/ampi-core/keymap.js";
+import { formatMmrKeymapJsonc, type MmrResolvedKeymap, readMmrKeymapSettings, resolveMmrKeymap } from "./extensions/ampi-core/keymap.js";
 import { createMmrToggleFastCommand } from "./extensions/ampi-core/speed.js";
 import { createMmrThreadCommands, type MmrThreadCommandHost } from "./extensions/ampi-threads/commands.js";
 import { loadMmrThreadsSettings } from "./extensions/ampi-threads/config.js";
@@ -69,10 +69,12 @@ export function collectMmrDefaultCommands(options: { threads?: boolean } = {}): 
   ];
 }
 
-export interface MmrEffectiveKeymapJsonc {
-  /** The keymap as `formatMmrKeymapJsonc` prints it. */
-  readonly jsonc: string;
-  /** Settings entries that were skipped and keys bound twice, as the terminal UI reports them. */
+export interface MmrEffectiveKeymap {
+  /** ampi's palette commands that are turned on, as {@link collectMmrDefaultCommands} lists them. */
+  readonly commands: readonly MmrCommandDefinition[];
+  /** Their default keys with the settings' leader and overrides applied. */
+  readonly keymap: MmrResolvedKeymap;
+  /** A note when ampi-tui is off, settings entries that were skipped and keys bound twice, as the terminal UI reports them. */
   readonly problems: readonly string[];
 }
 
@@ -80,9 +82,10 @@ export interface MmrEffectiveKeymapJsonc {
  * The keymap in effect in `cwd` for Pi settings `settings` (global and project
  * settings merged), with the commands of ampi's extensions that are turned on
  * there. ampi-tui and ampi-threads read their own switches, so these are read
- * the same way.
+ * the same way. With ampi-tui off the keymap is still resolved, and the first
+ * problem says that none of its keys are bound.
  */
-export function formatMmrEffectiveKeymapJsonc(settings: unknown, cwd: string = process.cwd()): MmrEffectiveKeymapJsonc {
+export function resolveMmrEffectiveKeymap(settings: unknown, cwd: string = process.cwd()): MmrEffectiveKeymap {
   const commands = collectMmrDefaultCommands({ threads: loadMmrThreadsSettings(cwd).enabled });
   const tuiOff = loadMmrTuiSettings(cwd).enabled ? [] : ["ampi-tui is turned off, so none of these keys are bound."];
   const keymapSettings = readMmrKeymapSettings(settings);
@@ -92,9 +95,23 @@ export function formatMmrEffectiveKeymapJsonc(settings: unknown, cwd: string = p
     leader: keymapSettings.leader,
   });
   return {
-    jsonc: formatMmrKeymapJsonc(commands, keymap),
+    commands,
+    keymap,
     problems: [...tuiOff, ...keymapSettings.problems, ...keymap.problems, ...keymap.conflicts.map(describeMmrKeymapConflict)],
   };
+}
+
+export interface MmrEffectiveKeymapJsonc {
+  /** The keymap as `formatMmrKeymapJsonc` prints it. */
+  readonly jsonc: string;
+  /** Settings entries that were skipped and keys bound twice, as the terminal UI reports them. */
+  readonly problems: readonly string[];
+}
+
+/** The keymap {@link resolveMmrEffectiveKeymap} resolves, as JSONC. */
+export function formatMmrEffectiveKeymapJsonc(settings: unknown, cwd: string = process.cwd()): MmrEffectiveKeymapJsonc {
+  const { commands, keymap, problems } = resolveMmrEffectiveKeymap(settings, cwd);
+  return { jsonc: formatMmrKeymapJsonc(commands, keymap), problems };
 }
 
 /** Event channel on which this module's extension entry hands `ampi config keymap` its formatter. */

@@ -846,3 +846,60 @@ export function listPiTrustResources(pi, cwd) {
 export function piTheme() {
   return /** @type {Record<symbol, unknown>} */ (globalThis)[Symbol.for("@earendil-works/pi-coding-agent:theme")];
 }
+
+/**
+ * @typedef {object} PiInputTerminal The terminal in the input mode of Pi's terminal UI, for `ampi dev keys`.
+ * @property {(onInput: (chunk: string) => void) => void} start Put the terminal into that mode (raw
+ *   mode, bracketed paste, and the kitty keyboard protocol or modifyOtherKeys, whichever the terminal
+ *   answers for) and hand `onInput` one key sequence or one bracketed paste at a time. The terminal's
+ *   replies to the protocol queries are not handed on.
+ * @property {(maxMs: number) => Promise<void>} drain Turn the keyboard protocols off and swallow what
+ *   arrives for up to `maxMs`, so late key-release reports do not reach the shell.
+ * @property {() => void} stop Turn bracketed paste and the keyboard protocols off, pause stdin and
+ *   restore its earlier raw mode.
+ */
+
+/**
+ * Pi's terminal (`ProcessTerminal` of pi-tui), reduced to its input: no
+ * rendering and no resize handling. It writes the mode sequences to
+ * `process.stdout` and reads `process.stdin`, so both must be the terminal.
+ *
+ * @param {any} tui The `@earendil-works/pi-tui` module.
+ * @returns {PiInputTerminal}
+ */
+export function createPiInputTerminal(tui) {
+  const terminal = new tui.ProcessTerminal();
+  return {
+    start: (onInput) => terminal.start(onInput, () => {}),
+    drain: (maxMs) => terminal.drainInput(maxMs),
+    stop: () => terminal.stop(),
+  };
+}
+
+/**
+ * Split input that does not come from a terminal into the chunks Pi's
+ * terminal hands on: one key sequence at a time (`\x18t\x1b\x1b` is `\x18`,
+ * `t` and `\x1b\x1b`), and a bracketed paste as one chunk with its markers.
+ * pi-tui's `StdinBuffer` does the splitting, as in `ProcessTerminal`.
+ *
+ * @param {any} tui The `@earendil-works/pi-tui` module.
+ * @param {(chunk: string) => void} onChunk
+ * @returns {{ write: (data: string) => void, end: () => void }} `write` takes the next input; `end`
+ *   hands on what is still buffered and releases the buffer's timer.
+ */
+export function createPiInputSplitter(tui, onChunk) {
+  const buffer = new tui.StdinBuffer();
+  buffer.on("data", (/** @type {string} */ sequence) => {
+    if (sequence !== "") onChunk(sequence);
+  });
+  buffer.on("paste", (/** @type {string} */ text) => onChunk(`\x1b[200~${text}\x1b[201~`));
+  return {
+    write: (data) => buffer.process(data),
+    end: () => {
+      /** @type {string[]} */
+      const rest = buffer.flush();
+      buffer.destroy();
+      for (const sequence of rest) onChunk(sequence);
+    },
+  };
+}

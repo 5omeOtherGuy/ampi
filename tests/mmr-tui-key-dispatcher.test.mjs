@@ -86,6 +86,30 @@ describe("ampi-tui key dispatcher", () => {
     assert.equal(t.cleared(), 1, "the hint closes when the chord completes");
   });
 
+  it("reports the pending prefix as canonical keys until it completes, is cancelled or lapses", () => {
+    const t = setup({ defaults: { ...DEFAULTS, "thread.goto": "<leader>g g" } });
+    assert.equal(t.dispatcher.pendingKeys(), undefined);
+    t.press("ctrl+x");
+    assert.equal(t.dispatcher.pendingKeys(), "ctrl+x");
+    t.press("g");
+    assert.equal(t.dispatcher.pendingKeys(), "ctrl+x g", "every key of a longer prefix");
+    t.press("g");
+    assert.deepEqual(t.runs, ["thread.goto"]);
+    assert.equal(t.dispatcher.pendingKeys(), undefined);
+
+    t.press("ctrl+c");
+    assert.equal(t.dispatcher.pendingKeys(), "ctrl+c");
+    t.press("q");
+    assert.equal(t.dispatcher.pendingKeys(), undefined, "an unrelated key cancels");
+
+    t.press("esc");
+    t.advance(499);
+    assert.equal(t.dispatcher.pendingKeys(), "esc");
+    t.advance(1);
+    assert.equal(t.dispatcher.pendingKeys(), undefined, "the deadline lapses without expire()");
+    assert.deepEqual(t.runs, ["thread.goto"]);
+  });
+
   it("lets the leader lapse after the chord timeout", () => {
     const t = setup();
     t.press("ctrl+x");

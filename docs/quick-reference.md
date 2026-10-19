@@ -218,6 +218,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Trust a project's MCP servers | `ampi mcp approve tools` | Trusts the whole project as Pi's trust prompt does, after listing its servers and other project resources; asks first (`--yes` skips) |
 | Sign in to an MCP server | `ampi mcp oauth login docs` | `oauth logout`, `oauth status` (signed in, needs sign-in, not an OAuth server); client credentials go in the server's `oauth` block in `mcp.json` |
 | Rename, archive, label, color or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `color <id> <color>` (a name, `#rrggbb` or `none`), `delete` (asks first; `--yes` skips) |
+| See what ampi reads for each key | `ampi dev keys` | One JSON line per key: the keys, the event, the command id the keymap runs and the prefix it waits on; `--raw` adds the bytes, `--no-keymap` leaves out the keymap; Ctrl+C twice or Ctrl+D quits; piped input is replayed |
 | See why the command did something | `ampi --log-level debug --log-file ampi.log -x "..."` | Levels `error`, `warn`, `info` (default), `debug`, also from `AMPI_LOG_LEVEL`; the file (also `AMPI_LOG_FILE`) gets one line per diagnostic and errors still reach stderr; Pi's own output is not logged |
 | Turn colour off or on | `ampi --no-color -x "..."` | Sets `NO_COLOR=1` (`--color`: `FORCE_COLOR=1`) for Pi and the tools it runs; Pi's text outside the terminal UI follows the flag |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
@@ -301,5 +302,6 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | Alt+Enter no longer queues a follow-up | It inserts a newline in the prompt box; use `prompt queue message` in the palette, or bind `prompt.queue` under `ampi.keymap` |
 | Alt+R no longer toggles the thinking level | Since 0.4.0 Alt+D toggles the thinking preset; Alt+R turns fast speed on or off |
 | Shift+Tab no longer cycles the thinking level | On an empty prompt it selects your previous message; type something first, or set `"thread.selectPreviousMessage": null` under `ampi.keymap` |
+| A key does nothing | Run `ampi dev keys` and press it: the line shows what ampi receives and which command the keymap maps it to; no line means the terminal or tmux holds the key back |
 
 Full troubleshooting: [`troubleshooting.md`](troubleshooting.md).
