@@ -73,7 +73,7 @@ Add your own rules; they come before the defaults:
 | `ampi.dangerouslyAllowAll` | unset | `true` (user settings only) lets every call run without asking; `false` turns the gate on |
 | `ampi.guardedFiles.allowlist` | unset | User settings only: globs and exact `{ "path": ... }` entries guarded files may change without asking; present turns the gate on |
 
-For one run, the Pi flag `--ampi-dangerously-allow-all` (`ampi --dangerously-allow-all` with the `ampi` command) lets every call run without asking, as `ampi.dangerouslyAllowAll: true` does, in interactive and non-interactive runs alike. It holds for the whole process, through `/new`, `/resume` and `/fork`, and `/ampi-status` says the flag is set. With `pi`, give it after the message or as `--ampi-dangerously-allow-all=true`: Pi takes the argument after an extension flag for that flag's value.
+For one run, the Pi flag `--ampi-dangerously-allow-all` (`ampi --dangerously-allow-all` with the `ampi` command) lets every call run without asking, as `ampi.dangerouslyAllowAll: true` does, in interactive and non-interactive runs alike. It holds for the whole process, through `/new`, `/resume` and `/fork`, and `/ampi-status` says the flag is set. With `pi`, give it after the message or as `--ampi-dangerously-allow-all=true`: Pi takes the argument after an extension flag for that flag's value. Pi sets the flag to true whatever value it is given, so `--ampi-dangerously-allow-all=false` turns it on too; leave the flag out to keep the gate. `ampi --dangerously-allow-all` takes no value and refuses one.
 
 ### Rules
 
