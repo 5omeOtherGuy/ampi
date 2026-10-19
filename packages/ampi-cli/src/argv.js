@@ -9,6 +9,8 @@ import { isLogLevel } from "./log.js";
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
  * @property {boolean} fast `--fast`: start the session at fast speed, forwarded as `--ampi-fast=true`.
+ * @property {boolean} dangerouslyAllowAll `--dangerously-allow-all`: let every tool call run without
+ *   asking, forwarded as `--ampi-dangerously-allow-all=true`.
  * @property {string} [title] `--title`, forwarded as Pi's `--name`.
  * @property {string[]} labels `-l`/`--label` values, stored in the thread index once the session starts.
  * @property {boolean} execute `-x`/`--execute`: run one prompt and print the final assistant message.
@@ -118,6 +120,7 @@ export const DEV_COMMANDS = new Set(["keys"]);
 export const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
   fast: { type: "boolean" },
+  "dangerously-allow-all": { type: "boolean" },
   title: { type: "string" },
   label: { type: "string", short: "l", multiple: true },
   execute: { type: "boolean", short: "x" },
@@ -325,6 +328,7 @@ function readOptions(args) {
   const options = {
     labels: [],
     fast: false,
+    dangerouslyAllowAll: false,
     execute: false,
     timings: false,
     archive: true,
@@ -411,6 +415,12 @@ function readOptions(args) {
         // message for example, as its value.
         if (!options.fast) piArgs.push("--ampi-fast=true");
         options.fast = true;
+        break;
+      case "dangerously-allow-all":
+        // With its value attached: Pi's parser takes the argument after an extension flag it
+        // does not know yet as that flag's value, which would swallow a message that follows.
+        if (!options.dangerouslyAllowAll) piArgs.push("--ampi-dangerously-allow-all=true");
+        options.dangerouslyAllowAll = true;
         break;
       case "title":
         if (value === undefined) {
@@ -604,6 +614,10 @@ Options:
   --fast
       Start the session at fast speed: the provider serves requests with priority, at a higher
       price (OpenAI and OpenAI Codex models only). Alt+R turns it on or off in a session.
+  --dangerously-allow-all
+      Let every tool call run without asking for approval, in subagents too: ampi-permissions
+      skips its rules and guarded files for this run. The same as Pi's
+      --ampi-dangerously-allow-all. Without it, execute mode refuses calls that need approval.
   -x, --execute
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.

@@ -8,7 +8,7 @@ import { createInterface } from "node:readline";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { formatAmpiHelp, routeAmpiArgv } from "./argv.js";
-import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, withoutMessages } from "./execute.js";
+import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecuteRun, readAll, takePermissionDenials, withoutMessages } from "./execute.js";
 import { applyColorToEnv, createLogger, readLogSettings } from "./log.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
@@ -200,6 +200,10 @@ async function startPi({ piArgs, options }, log) {
       titled: options.title !== undefined,
       archive: execute && options.archive,
       timings: execute && options.timings,
+      // Nobody answers a dialog in an execute run, even when Pi reports a UI (RPC mode).
+      nonInteractive: execute,
+      // Stream JSON lists the refused tools in its result record instead.
+      reportDenials: execute && !options.streamJson,
     },
     {
       now: () => performance.now(),
@@ -304,7 +308,12 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking, log) {
 
   /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
   let runtime;
-  const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
+  const encoder = createStreamJsonEncoder({
+    thinking,
+    now: () => performance.now(),
+    context: () => readStreamJsonContext(runtime),
+    denials: takePermissionDenials,
+  });
   const rpcInput = feedPiRpcInput();
   const output = capturePiJsonOutput((record) => {
     driver?.receive(record);
@@ -363,7 +372,12 @@ async function runStreamJsonInput(pi, args, extensionFactories, thinking, log) {
 async function runPiJson(pi, args, extensionFactories, thinking, outputOf, log) {
   /** @type {any} The extension API of the current runtime, for the tools and mode in the init record. */
   let runtime;
-  const encoder = createStreamJsonEncoder({ thinking, now: () => performance.now(), context: () => readStreamJsonContext(runtime) });
+  const encoder = createStreamJsonEncoder({
+    thinking,
+    now: () => performance.now(),
+    context: () => readStreamJsonContext(runtime),
+    denials: takePermissionDenials,
+  });
   const runOutput = outputOf(encoder);
   const output = capturePiJsonOutput((event) => runOutput.push(event));
   try {

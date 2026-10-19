@@ -61,6 +61,10 @@ Options:
   --fast
       Start the session at fast speed: the provider serves requests with priority, at a higher
       price (OpenAI and OpenAI Codex models only). Alt+R turns it on or off in a session.
+  --dangerously-allow-all
+      Let every tool call run without asking for approval, in subagents too: ampi-permissions
+      skips its rules and guarded files for this run. The same as Pi's
+      --ampi-dangerously-allow-all. Without it, execute mode refuses calls that need approval.
   -x, --execute
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.

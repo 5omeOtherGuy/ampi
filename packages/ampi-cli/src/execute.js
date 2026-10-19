@@ -1,7 +1,8 @@
 // Execute mode (`ampi -x`): one prompt through Pi's print mode, the final
 // assistant message on stdout and everything else on stderr. Also the inline
 // extension that applies --title, -l and the execute-mode archive to the
-// session through ampi's thread index.
+// session through ampi's thread index, marks execute runs as runs that cannot
+// ask for approval, and reports the tool calls ampi-permissions refused.
 
 export const EXECUTE_NO_MESSAGE_ERROR =
   "execute mode needs a message: pass it as an argument, on stdin, or both (for example: git diff | ampi -x \"review this\").";
@@ -12,6 +13,41 @@ export const EXECUTE_NO_MESSAGE_ERROR =
  * Pi's loader can import, so the command reads the registration directly.
  */
 const THREAD_INDEX_GLOBAL_KEY = "__pi_ampi_thread_index_v1__";
+
+/**
+ * The globals of ampi-permissions' state in ampi-core (see
+ * `src/extensions/ampi-core/permissions.ts`), read and written directly for
+ * the same reason: the mark of a run that cannot ask the user, and the tool
+ * names of the calls the gate blocked, one per call.
+ */
+const PERMISSIONS_NON_INTERACTIVE_GLOBAL_KEY = "__pi_ampi_permissions_non_interactive_v1__";
+const PERMISSIONS_DENIALS_GLOBAL_KEY = "__pi_ampi_permissions_denials_v1__";
+
+/** @returns {string[]} The tool names of the calls ampi-permissions blocked so far, one per call, in order. */
+export function readPermissionDenials() {
+  const list = /** @type {any} */ (globalThis)[PERMISSIONS_DENIALS_GLOBAL_KEY];
+  return Array.isArray(list) ? list.filter((name) => typeof name === "string") : [];
+}
+
+/** @returns {string[]} The blocked calls' tool names, as `readPermissionDenials`; the list starts again empty. */
+export function takePermissionDenials() {
+  const denials = readPermissionDenials();
+  /** @type {any} */ (globalThis)[PERMISSIONS_DENIALS_GLOBAL_KEY] = [];
+  return denials;
+}
+
+/**
+ * The stderr line about the calls ampi-permissions refused, or undefined when
+ * it refused none.
+ *
+ * @param {readonly string[]} denials One tool name per refused call.
+ * @returns {string | undefined}
+ */
+export function formatPermissionDenials(denials) {
+  if (denials.length === 0) return undefined;
+  const calls = denials.length === 1 ? "1 tool call" : `${denials.length} tool calls`;
+  return `ampi: ampi-permissions refused ${calls} in this run (${[...new Set(denials)].join(", ")}). Run again with --dangerously-allow-all to let every call run, or add an allow rule to ampi.permissions.`;
+}
 
 /** Stands in for an argument while finding which one Pi reads as the first message. */
 const PROBE = "\u0000ampi-message-probe";
@@ -151,6 +187,10 @@ export async function readAll(stream) {
  * @property {boolean} titled Whether `--title` named the session; the index then records the title as the user's.
  * @property {boolean} archive Archive the session in the thread index when the run ends.
  * @property {boolean} timings Write the startup, turn and total durations to stderr when the run ends.
+ * @property {boolean} [nonInteractive] Mark the run as one that cannot ask the user, so ampi-permissions
+ *   refuses the calls that need approval even when Pi reports a UI (every execute run).
+ * @property {boolean} [reportDenials] Write one line to stderr when the run ends if ampi-permissions
+ *   refused any call (the execute outputs without stream JSON, whose result record lists them).
  *
  * @typedef {object} RunExtensionHost
  * @property {() => number} now Milliseconds since the command started.
@@ -173,7 +213,7 @@ const hasMessages = (ctx) => ctx.sessionManager.getEntries().some((/** @type {an
  * the run quits, the session it ends in is archived if this run created it
  * (it started without messages, or came from /new or /fork), so a session
  * continued with -c, -r or --session stays where it was; then the timings are
- * written. Without ampi-threads (the thread index is not registered) labels are
+ * written, and then the line about refused tool calls. Without ampi-threads (the thread index is not registered) labels are
  * reported as not stored and nothing is archived.
  *
  * The archive follows ampi-threads' own (`hasMmrSessionMessages` and
@@ -196,6 +236,8 @@ export function createRunExtension(options, host) {
   return (pi) => {
     /** @type {{ get(id: string): Promise<any>, update(id: string, patch: object): Promise<any> } | undefined} */
     let index;
+    // Set as Pi loads the extensions, before any session or tool call starts.
+    if (options.nonInteractive) /** @type {any} */ (globalThis)[PERMISSIONS_NON_INTERACTIVE_GLOBAL_KEY] = true;
 
     pi.on("session_start", async (/** @type {{ reason: string }} */ event, /** @type {any} */ ctx) => {
       // Kept for the end of the run: ampi-threads unregisters it at shutdown.
@@ -249,6 +291,8 @@ export function createRunExtension(options, host) {
         parts.push(`total ${Math.round(host.now())} ms`);
         host.report(`ampi: timings: ${parts.join(", ")}`);
       }
+      const denials = options.reportDenials ? formatPermissionDenials(readPermissionDenials()) : undefined;
+      if (denials !== undefined) host.report(denials);
     });
   };
 }

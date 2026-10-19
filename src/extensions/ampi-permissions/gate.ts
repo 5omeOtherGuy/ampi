@@ -148,9 +148,17 @@ export function formatMmrGuardedFilesDismissedReason(toolName: string, files: re
   return `The guarded file dialog was closed without an answer, so the ${toolName} call did not run. It changes ${guardedList(files)}.`;
 }
 
-/** Why a call that changes a guarded file did not run in a session that cannot ask. */
+/** How a run that cannot ask is repeated with every tool call allowed. */
+const RERUN_ALLOW_ALL =
+  "To let every tool call run, repeat the run with --dangerously-allow-all (the ampi command) or --ampi-dangerously-allow-all (pi).";
+
+/**
+ * Why a call that changes a guarded file did not run in a session that
+ * cannot ask (print and JSON runs, and every execute run of the `ampi`
+ * command).
+ */
 export function formatMmrGuardedFilesNoUiReason(toolName: string, files: readonly MmrGuardedFile[]): string {
-  return `The ${toolName} call changes ${guardedList(files)}. Changes to guarded files need the user's approval, even when a rule allows the tool, and this run cannot ask for it. A path in ampi.guardedFiles.allowlist in the user settings lets such calls run without asking.`;
+  return `The ${toolName} call changes ${guardedList(files)}. Changes to guarded files need the user's approval, even when a rule allows the tool, and this run cannot ask for it. A path in ampi.guardedFiles.allowlist in the user settings lets such calls run without asking. ${RERUN_ALLOW_ALL}`;
 }
 
 /** Why a call that changes a guarded file did not run in a subagent, which never opens a dialog. */
@@ -184,10 +192,11 @@ function approvalCause(decision: MmrPermissionDecision): string {
 
 /**
  * Why a call that needs approval did not run in a session that cannot ask
- * (print and JSON runs). The one place this text lives.
+ * (print and JSON runs, and every execute run of the `ampi` command, even
+ * one in which Pi reports a UI). The one place this text lives.
  */
 export function formatMmrPermissionsNoUiReason(toolName: string, decision: MmrPermissionDecision): string {
-  return `The ${toolName} call needs the user's approval, and this run cannot ask for it. ${approvalCause(decision)} An allow rule in ampi.permissions lets such calls run without asking.`;
+  return `The ${toolName} call needs the user's approval, and this run cannot ask for it. ${approvalCause(decision)} An allow rule in ampi.permissions lets such calls run without asking. ${RERUN_ALLOW_ALL}`;
 }
 
 /**

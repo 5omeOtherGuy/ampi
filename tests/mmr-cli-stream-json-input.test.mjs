@@ -249,9 +249,10 @@ describe("ampi stream JSON input: the command", { concurrency: true, timeout: 30
    * Start the command with --stream-json-input in its own home, agent
    * directory and project, with stdin and stdout as pipes the test drives.
    */
-  const start = (args = []) => {
+  const start = (args = [], { agentSettings } = {}) => {
     const root = path.join(dir, String(++runs));
     for (const sub of ["home", "agent", "project"]) mkdirSync(path.join(root, sub), { recursive: true });
+    if (agentSettings !== undefined) writeFileSync(path.join(root, "agent", "settings.json"), JSON.stringify(agentSettings));
     const project = path.join(root, "project");
     const env = { PATH: process.env.PATH, HOME: path.join(root, "home"), PI_CODING_AGENT_DIR: path.join(root, "agent"), PI_OFFLINE: "1" };
     const argv = [bin, "-e", fauxModel, "--model", "faux/faux-1", "-x", "--stream-json", "--stream-json-input", ...args];
@@ -327,6 +328,32 @@ describe("ampi stream JSON input: the command", { concurrency: true, timeout: 30
     assert.ok(init.session_id.length > 0);
     assert.ok(records.every((record) => record.session_id === init.session_id));
     assert.ok(records.filter((record) => record.type === "result").every((record) => record.subtype === "success" && record.num_turns === 1));
+  });
+
+  it("refuses a call that needs approval instead of opening a dialog, and lists it in that run's result only", async () => {
+    const agentSettings = { ampi: { permissions: [{ tool: "bash", matches: { command: "echo *" }, action: "ask" }] } };
+    const run = start([], { agentSettings });
+    run.send(line(user("run: echo one")));
+    await run.until(hasResult);
+    run.send(line(user("nothing to run")));
+    run.end();
+    const { status, stdout, stderr } = await run.done;
+    assert.equal(status, 0, stderr);
+    const records = recordsOf(stdout);
+    assertSchema(records);
+    const toolResult = records.find((record) => record.type === "user" && record.message.content[0].type === "tool_result").message.content[0];
+    assert.equal(toolResult.is_error, true);
+    assert.match(toolResult.content, /^The bash call needs the user's approval, and this run cannot ask for it\. .* --ampi-dangerously-allow-all \(pi\)\.$/);
+    assert.doesNotMatch(toolResult.content, /dialog/);
+    const results = records.filter((record) => record.type === "result");
+    assert.deepEqual(
+      results.map((record) => [record.result.split(".")[0], record.permission_denials]),
+      [
+        ["Ran: The bash call needs the user's approval, and this run cannot ask for it", ["bash"]],
+        ["Echo: nothing to run", undefined],
+      ],
+    );
+    assert.doesNotMatch(stderr, /refused/);
   });
 
   it("delivers a steering message to the run in progress", async () => {

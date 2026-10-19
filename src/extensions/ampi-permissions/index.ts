@@ -8,10 +8,12 @@ import { MMR_PERMISSIONS_DEFAULT_RULES } from "../ampi-core/permission-defaults.
 import {
   AMPI_PERMISSIONS_ALLOW_ALL_ENV,
   AMPI_PERMISSIONS_PROJECT_RULES_ENV,
+  isMmrPermissionsNonInteractive,
   isMmrPermissionsSessionAllowAll,
   MMR_PERMISSIONS_SHELL_TOOLS,
   type MmrPermissionContext,
   type MmrPermissionDecision,
+  recordMmrPermissionsDenial,
   setMmrPermissionsProjectTrusted,
   setMmrPermissionsSessionAllowAll,
 } from "../ampi-core/permissions.js";
@@ -57,6 +59,9 @@ import {
 
 const FEATURE_GATES: ReadonlySet<string> = new Set(["ampi-permissions", "mmr-permissions"]);
 
+/** The Pi flag that allows every tool call of the run; `ampi --dangerously-allow-all` passes it on. */
+const MMR_PERMISSIONS_ALLOW_ALL_FLAG = "ampi-dangerously-allow-all";
+
 const INERT: MmrPermissionsSettings = Object.freeze({
   enabled: false,
   allowAll: false,
@@ -83,7 +88,7 @@ function plural(count: number, noun: string, nouns = `${noun}s`): string {
   return `${count} ${count === 1 ? noun : nouns}`;
 }
 
-function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): MmrFeatureGateProvider {
+function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings, flagged: () => boolean): MmrFeatureGateProvider {
   return {
     name: "ampi-permissions",
     evaluate(gate) {
@@ -98,6 +103,7 @@ function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): M
       }
       let reason = `on: ${plural(settings.projectRules.length, "project rule")}, ${plural(settings.userRules.length, "user rule")}, ${plural(MMR_PERMISSIONS_DEFAULT_RULES.length, "default rule")}, ${plural(settings.guardedFilesAllowlist.length, "guarded file allowlist entry", "guarded file allowlist entries")}`;
       if (settings.allowAll) reason += "; ampi.dangerouslyAllowAll is true, so every tool call runs without asking";
+      else if (flagged()) reason += `; --${MMR_PERMISSIONS_ALLOW_ALL_FLAG} is set, so every tool call runs without asking`;
       else if (isMmrPermissionsSessionAllowAll()) reason += "; every tool call is allowed for this session";
       if (settings.failClosed) reason += `; every tool call asks because ${settings.failClosed}`;
       return { gate, status: "enabled", reason };
@@ -109,13 +115,17 @@ function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): M
  * ampi-permissions: asks before risky tool calls and before changes to
  * guarded files. Inert until the user's or the trusted project's settings
  * set `ampi.permissions` or `ampi.dangerouslyAllowAll: false`, or the user's
- * set `ampi.guardedFiles.allowlist`.
+ * set `ampi.guardedFiles.allowlist`. The `--ampi-dangerously-allow-all` flag
+ * allows every call of the run, and a run that cannot ask (no UI, or an
+ * execute run of the `ampi` command) refuses calls that need approval.
  */
 export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOverrides = {}) {
   return function ampiPermissionsExtension(pi: ExtensionAPI): void {
     const agentDir = overrides.agentDir ?? getAgentDir;
     const columns = overrides.columns ?? (() => process.stdout.columns || 80);
     let settings = INERT;
+    /** Whether `--ampi-dangerously-allow-all` was given. */
+    let flagged = false;
     let warned = new Set<string>();
     /** Delegate programs already warned about this session. */
     let programsWarned = new Set<string>();
@@ -304,13 +314,26 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       return asking ? { ...asking, action: "ask" } : undefined;
     }
 
-    registerMmrFeatureGateProvider(createFeatureGateProvider(() => settings));
+    pi.registerFlag(MMR_PERMISSIONS_ALLOW_ALL_FLAG, {
+      description: "Let every tool call of this run go ahead without asking: ampi-permissions skips its rules, guarded files and delegate programs, in subagents too",
+      type: "boolean",
+      default: false,
+    });
+
+    registerMmrFeatureGateProvider(createFeatureGateProvider(() => settings, () => flagged));
+
+    /** Whether nobody can answer a dialog in this run. */
+    const cannotAsk = (ctx: ExtensionContext) => !ctx.hasUI || isMmrPermissionsNonInteractive();
 
     pi.on("session_start", async (event, ctx) => {
       // A new, resumed or forked session starts asking again; a reload keeps the answer.
       if (event.reason !== "reload") setMmrPermissionsSessionAllowAll(false);
       // A subagent child takes its parent's "allow all" answer from the environment.
       if (getMmrSubagentState() && process.env[AMPI_PERMISSIONS_ALLOW_ALL_ENV] === "1") setMmrPermissionsSessionAllowAll(true);
+      // The flag holds for the whole process, through /new, /resume and /fork,
+      // and reaches subagent children as the override does.
+      flagged = pi.getFlag(MMR_PERMISSIONS_ALLOW_ALL_FLAG) === true;
+      if (flagged) setMmrPermissionsSessionAllowAll(true);
       warned = new Set();
       programsWarned = new Set();
       load(ctx);
@@ -318,6 +341,13 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
 
     pi.on("tool_call", async (event, ctx) => {
       const context: MmrPermissionContext = getMmrSubagentState() ? "subagent" : "thread";
+      const result = await gate(event, ctx, context);
+      // A child's refusals reach its parent in the worker's report, not here.
+      if (result?.block && context === "thread") recordMmrPermissionsDenial(event.toolName);
+      return result;
+    });
+
+    async function gate(event: ToolCallEvent, ctx: ExtensionContext, context: MmrPermissionContext): Promise<ToolCallEventResult | undefined> {
       const decided = decideMmrPermissionsCall({ toolName: event.toolName, input: event.input }, settings, {
         context,
         sessionAllowAll: isMmrPermissionsSessionAllowAll(),
@@ -332,7 +362,7 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       let approved = false;
       if (guarded.length > 0) {
         if (context === "subagent") return { block: true, reason: formatMmrGuardedFilesSubagentReason(event.toolName, guarded) };
-        if (!ctx.hasUI) return { block: true, reason: formatMmrGuardedFilesNoUiReason(event.toolName, guarded) };
+        if (cannotAsk(ctx)) return { block: true, reason: formatMmrGuardedFilesNoUiReason(event.toolName, guarded) };
         const answer = await inQueue(event, () => askGuarded(event, guarded, ctx));
         if (answer) return answer;
         // An answer in the queue may have allowed everything.
@@ -348,9 +378,9 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       if (decision.action === "allow" || approved) return undefined;
       // A subagent never opens a dialog: nobody is there to answer it.
       if (context === "subagent") return { block: true, reason: formatMmrPermissionsSubagentReason(event.toolName, decision) };
-      if (!ctx.hasUI) return { block: true, reason: formatMmrPermissionsNoUiReason(event.toolName, decision) };
+      if (cannotAsk(ctx)) return { block: true, reason: formatMmrPermissionsNoUiReason(event.toolName, decision) };
       return ask(event, decision, ctx);
-    });
+    }
   };
 }
 

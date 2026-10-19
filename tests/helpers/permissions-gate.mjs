@@ -63,10 +63,12 @@ function createBus() {
  * Load the extension. `user` and `project` are the settings objects written
  * to the agent directory and `<cwd>/.pi/settings.json` (`userText` is written
  * as it is, for a user settings file that is no JSON object); `answers` are what
- * the dialog returns, in order; `subagent` makes this session a child.
+ * the dialog returns, in order; `subagent` makes this session a child;
+ * `flags` are the Pi flag values `getFlag` returns. `start(reason)` starts
+ * another session in the same process, as /new, /resume and /fork do.
  */
 export async function setupPermissions(modules, options = {}) {
-  const { user, userText, project, trusted = true, hasUI = true, answers = [], subagent = false, overrides = {} } = options;
+  const { user, userText, project, trusted = true, hasUI = true, answers = [], subagent = false, flags = {}, overrides = {} } = options;
   const agentDir = tempDir();
   if (user !== undefined) writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify(user));
   if (userText !== undefined) writeFileSync(path.join(agentDir, "settings.json"), userText);
@@ -76,7 +78,7 @@ export async function setupPermissions(modules, options = {}) {
     writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify(project));
   }
 
-  const mock = createMockPi();
+  const mock = createMockPi({ flags });
   const bus = createBus();
   mock.pi.events = bus;
   const context = createMockExtensionContext({ cwd, hasUI, projectTrusted: trusted });
@@ -90,11 +92,12 @@ export async function setupPermissions(modules, options = {}) {
   modules.extension.createMmrPermissionsExtension({ agentDir: () => agentDir, columns: () => 80, ...overrides })(mock.pi);
 
   modules.runtime.setMmrSubagentState(subagent ? TASK_CHILD_STATE : undefined);
-  await mock.handlers.get("session_start")({ type: "session_start", reason: "startup" }, context.ctx);
+  const start = (reason) => mock.handlers.get("session_start")({ type: "session_start", reason }, context.ctx);
+  await start("startup");
   let next = 0;
   const call = (toolName, input) =>
     mock.handlers.get("tool_call")({ type: "tool_call", toolCallId: `call-${++next}`, toolName, input }, context.ctx);
-  return { cwd, agentDir, bus, selects, notifications: context.notifications, controller, call };
+  return { cwd, agentDir, bus, selects, notifications: context.notifications, controller, call, start, flagDefs: mock.flagDefs };
 }
 
 /** Set environment variables for one test; the returned function restores them. */
