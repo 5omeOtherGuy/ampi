@@ -34,6 +34,8 @@ function makePi() {
     handlers,
     pi: {
       registerTool: (definition) => tools.push(definition),
+      registerCommand: () => {},
+      registerFlag: () => {},
       on: (name, handler) => handlers.set(name, handler),
       getAllTools: () => tools.map((tool) => ({ name: tool.name, sourceInfo: { path: "test" } })),
     },

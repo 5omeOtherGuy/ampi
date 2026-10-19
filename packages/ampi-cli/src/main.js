@@ -1,7 +1,7 @@
 // The `ampi` command: route the arguments, then print help or versions, or
 // start Pi with ampi loaded.
-import { spawnSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -511,6 +511,24 @@ export async function runAmpi(argv) {
         piStderr: (text) => process.stderr.write(text),
       });
     }
+    case "review": {
+      const [pi, { runReviewCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./review.js")]);
+      const cwd = process.cwd();
+      return runReviewCommand(route.reviewArgs ?? [], {
+        pi,
+        cwd,
+        // The child logs as this command does, so --log-level and --log-file reach it too.
+        env: { ...process.env, AMPI_LOG_LEVEL: settings.level, ...(settings.file !== undefined ? { AMPI_LOG_FILE: settings.file } : {}) },
+        runPi: runAmpiChild,
+        makeTempDir: () => mkdtempSync(path.join(os.tmpdir(), "ampi-review-")),
+        now: () => Date.now(),
+        locateAmpi: () => locateLoadedAmpi(pi, cwd),
+        out: (text) => process.stdout.write(text),
+        // Pi's own output from the review run: passed on, not a diagnostic.
+        err: (text) => void process.stderr.write(text),
+        log,
+      });
+    }
     case "config": {
       const [pi, { runConfigCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("./config.js")]);
       const cwd = process.cwd();
@@ -555,6 +573,44 @@ export async function runAmpi(argv) {
     }
   }
   return startPi(route, log);
+}
+
+/**
+ * Run the ampi command itself as a child process with `args`, for `ampi
+ * review`: Pi's `main()` exits the process on an unknown flag or when no
+ * model is available, so it cannot run in this one. Through the ampi command
+ * the child loads ampi as execute mode decides, and the reviewer children it
+ * starts run the same executable, so they load ampi too; Pi's own executable
+ * with `-e` would leave them without it. Stdin is closed, and the child's
+ * stdout and stderr both go to `forward`. SIGINT and SIGTERM are passed on, so
+ * the review stops and the command can still clean up.
+ *
+ * @type {import("./review.js").ReviewPiRunner}
+ */
+function runAmpiChild(args, { cwd, env, forward }) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(CLI_ROOT, "bin", "ampi.js"), ...args], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (text) => forward(text));
+    child.stderr.on("data", (text) => {
+      stderr += text;
+      forward(text);
+    });
+    /** @param {NodeJS.Signals} signal */
+    const pass = (signal) => child.kill(signal);
+    process.on("SIGINT", pass);
+    process.on("SIGTERM", pass);
+    /** @param {{ status: number | null, stderr: string, error?: Error }} run */
+    const settle = (run) => {
+      process.off("SIGINT", pass);
+      process.off("SIGTERM", pass);
+      resolve(run);
+    };
+    child.on("error", (error) => settle({ status: null, stderr, error }));
+    child.on("close", (status) => settle({ status, stderr }));
+  });
 }
 
 /**

@@ -223,6 +223,19 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(route.piArgs, []);
   });
 
+  it("routes review with the rest of the command line, Pi's --thinking included, and sends review after -- to Pi", () => {
+    const route = routeAmpiArgv(["--log-level", "debug", "review", "the", "last", "commit", "--thinking", "high", "-l", "ci"]);
+    assert.equal(route.command, "review");
+    assert.deepEqual(route.reviewArgs, ["the", "last", "commit", "--thinking", "high", "-l", "ci"]);
+    assert.deepEqual(route.piArgs, []);
+    assert.deepEqual(route.options.labels, [], "-l after review is review's own");
+    assert.equal(route.options.logLevel, "debug");
+
+    const message = routeAmpiArgv(["--", "review", "x"]);
+    assert.equal(message.command, "pi");
+    assert.deepEqual(message.piArgs, ["--", "review", "x"]);
+  });
+
   it("keeps config keymap and config edit for ampi, with the rest of their command line", () => {
     assert.deepEqual(routeAmpiArgv(["config", "keymap"]).configArgs, ["keymap"]);
     const edit = routeAmpiArgv(["config", "edit", "--workspace"]);

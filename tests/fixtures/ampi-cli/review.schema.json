@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "The JSON document ampi review --json prints",
+  "type": "object",
+  "required": ["diff", "summary", "findings", "checks", "report"],
+  "additionalProperties": false,
+  "properties": {
+    "diff": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string" },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "checks": { "type": "array", "items": { "$ref": "#/$defs/check" } },
+    "report": { "type": "string" }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["file", "startLine", "endLine", "severity", "type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "startLine": { "type": "integer", "minimum": 0 },
+        "endLine": { "type": "integer", "minimum": 0 },
+        "severity": { "enum": ["critical", "high", "medium", "low", null] },
+        "type": { "enum": ["bug", "suggested_edit", "compliment", "non_actionable", null] },
+        "text": { "type": "string" },
+        "check": { "type": "string", "minLength": 1 }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["name", "path", "scope", "status", "findings"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["no-issues", "findings", "failed"] },
+        "findings": { "type": "integer", "minimum": 0 },
+        "error": { "type": "string" }
+      }
+    }
+  }
+}

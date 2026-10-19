@@ -11,8 +11,10 @@
 //   `**Tool Result:**` with the output in a plain block; both belong to the
 //   assistant. A `!` shell command is `**Shell:**` in the user's part.
 // - Text is copied as it is; thinking, images (noted as `(image)`), system
-//   prompts and extension messages are left out. Fences are longer than any
-//   run of backticks inside them.
+//   prompts and extension messages are left out, except a review that
+//   `ampi review` recorded (an `ampi-review` extension message), whose report
+//   is the assistant's. Fences are longer than any run of backticks inside
+//   them.
 // - The branch that ends with the last entry is rendered, as Pi opens it.
 
 const UNTITLED = "Untitled";
@@ -23,6 +25,8 @@ const MODE_STATE_ENTRIES = new Set(["ampi-core.mode-state", "mmr-core.mode-state
 const MODES = new Set(["low", "medium", "high", "ultra", "free"]);
 /** @type {Record<string, string>} */
 const LEGACY_MODES = { rush: "low", smart: "medium", deep: "high", fable: "ultra" };
+/** The extension message `ampi review` records its report in. */
+const REVIEW_MESSAGE_TYPE = "ampi-review";
 
 /** @typedef {Record<string, any>} Entry */
 
@@ -103,6 +107,20 @@ function renderMessage(message) {
   }
 }
 
+/**
+ * The parts a message entry, or an `ampi review` report, adds.
+ *
+ * @param {Entry} entry
+ */
+function renderEntry(entry) {
+  if (entry.type === "message") return renderMessage(asRecord(entry.message));
+  if (entry.type === "custom_message" && entry.customType === REVIEW_MESSAGE_TYPE) {
+    const text = blocksText(entry.content).trim();
+    return text ? { speaker: /** @type {const} */ ("Assistant"), parts: [text] } : undefined;
+  }
+  return undefined;
+}
+
 /** @param {Entry[]} entries */
 function firstPrompt(entries) {
   for (const entry of entries) {
@@ -166,8 +184,7 @@ export function formatThreadMarkdown(entries) {
   /** @type {string | undefined} */
   let speaker;
   for (const entry of branch) {
-    if (entry.type !== "message") continue;
-    const rendered = renderMessage(asRecord(entry.message));
+    const rendered = renderEntry(entry);
     if (!rendered) continue;
     if (rendered.speaker !== speaker) {
       speaker = rendered.speaker;

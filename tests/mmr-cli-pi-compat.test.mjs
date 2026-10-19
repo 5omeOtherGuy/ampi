@@ -350,16 +350,28 @@ describe("Pi session calls used by the thread commands", () => {
       writer.appendSessionInfo("Imported");
       assert.equal(existsSync(writer.getSessionFile()), false, "no file before the first message");
       writer.appendMessage({ role: "user", content: "Hello", timestamp: Date.parse("2026-10-01T09:00:00.000Z") });
+      writer.appendCustomMessageEntry("probe-report", "Shown in the session", true, { kept: 1 });
       const [listed] = (await listPiSessions(pi, { cwd: "/work/imported", env, scope: "workspace" })).filter((session) => session.id === "s-imported");
       assert.deepEqual(
         { path: listed.path, name: listed.name, modified: listed.modified.toISOString(), messageCount: listed.messageCount },
         { path: writer.getSessionFile(), name: "Imported", modified: "2026-10-01T09:00:00.000Z", messageCount: 1 },
       );
+      const entries = readPiSessionEntries(pi, writer.getSessionFile());
       assert.deepEqual(
-        readPiSessionEntries(pi, writer.getSessionFile()).map((entry) => entry.type),
-        ["custom", "session_info", "message"],
+        entries.map((entry) => entry.type),
+        ["custom", "session_info", "message", "custom_message"],
       );
+      const { customType, content, display, details } = /** @type {any} */ (entries[3]);
+      assert.deepEqual({ customType, content, display, details }, { customType: "probe-report", content: "Shown in the session", display: true, details: { kept: 1 } });
     }
+  });
+
+  it("writes no session file while it holds only extension entries", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const writer = createPiSessionWriter(pi, { cwd: "/work/quiet", env: {} });
+    writer.appendCustomEntry("probe", {});
+    writer.appendCustomMessageEntry("probe-report", "Not yet", true, undefined);
+    assert.equal(existsSync(writer.getSessionFile()), false);
   });
 });
 
@@ -890,5 +902,61 @@ describe("Pi's MCP list and project trust, as the mcp commands use them", () => 
     mkdirSync(path.join(home, ".agents", "skills"), { recursive: true });
     assert.equal(pi.hasTrustRequiringProjectResources(home), false);
     assert.deepEqual(listPiTrustResources(pi, home), []);
+  });
+});
+
+describe("Pi's print mode, as ampi review runs /ampi-review-run in it", () => {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-print-")));
+  const agentDir = path.join(dir, "agent");
+  const marker = path.join(dir, "ran.txt");
+  const probe = path.join(dir, "probe.ts");
+  const fauxModel = path.join(import.meta.dirname, "fixtures", "ampi-cli", "faux-model");
+  const piRoot = path.join(import.meta.dirname, "..", "node_modules", "@earendil-works", "pi-coding-agent");
+  const piBin = path.join(piRoot, JSON.parse(readFileSync(path.join(piRoot, "package.json"), "utf8")).bin.pi);
+  /** @param {string[]} args */
+  const piPrint = (args) =>
+    spawnSync(process.execPath, [piBin, "-e", fauxModel, "-e", probe, "--model", "faux/faux-1", "--no-session", "-p", ...args], {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { PATH: process.env.PATH, HOME: path.join(dir, "home"), PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" },
+    });
+
+  before(() => {
+    // The scripted provider counts as signed in at once.
+    writeJson(path.join(agentDir, "auth.json"), { faux: { type: "api_key", key: "scripted" } });
+    writeFileSync(
+      probe,
+      [
+        'import { writeFileSync } from "node:fs";',
+        "export default function (pi: any) {",
+        '  pi.registerFlag("probe-out", { type: "string", description: "probe" });',
+        '  pi.registerCommand("probe-run", { description: "probe", handler: async () => writeFileSync(String(pi.getFlag("probe-out")), "ran") });',
+        '  pi.registerCommand("probe-throw", { description: "probe", handler: async () => { throw new Error("probe failed"); } });',
+        "}",
+      ].join("\n"),
+    );
+  });
+  after(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("runs an extension command with its string flag and starts no model turn", () => {
+    const result = piPrint([`--probe-out=${marker}`, "/probe-run"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readFileSync(marker, "utf8"), "ran");
+    // The scripted model answers every prompt with "Echo: …", so an empty stdout means no turn.
+    assert.equal(result.stdout, "");
+  });
+
+  it("prints a command's thrown error on stderr and still exits 0", () => {
+    const result = piPrint(["/probe-throw"]);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /Extension error \(command:probe-throw\): probe failed/);
+  });
+
+  it("exits 1 before print mode for an extension flag nothing registered, naming it", () => {
+    const result = piPrint(["--ampi-review-request=x", "/probe-run"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Unknown options?: [^\n]*--ampi-review-request\b/);
   });
 });

@@ -43,6 +43,7 @@ The mode is fixed once a session has a message: the dial or cycle, the picker an
 | Run bounded child work | “Use Task to…” | `Task` |
 | Review a completed diff/change | “Use reviewer to review…” | `reviewer` |
 | Check a change against the repository's review rules | “Use reviewer to run the review checks on…” | `reviewer` with `checks_only`, `check_filter`, `check_scope`; rules in `.agents/checks/*.md` |
+| Review a diff from a shell or CI job, without a session | `ampi review` (see [Command line](#command-line)) | the same `reviewer` pipeline; report or `--json` findings, exit 0 or 1 |
 | Research a GitHub repository | “Use librarian to explain owner/repo…” | `librarian` |
 | Look at an image or screenshot | “Use view_media to read the error in screenshot.png” | `view_media` |
 | Run independent jobs | “Run finder/Task/librarian with background: true…” | `background: true`, `task_poll`, `task_wait`, `task_cancel` |
@@ -203,6 +204,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; a subagent's records name the tool call that started it in `parent_tool_use_id`; `--stream-json-thinking` adds thinking blocks |
 | Send several messages to one session | `producer \| ampi -x --stream-json --stream-json-input` | One JSON user message per stdin line, `"steer": true` to redirect the run in progress; a result record after each run |
+| Review a diff without a session | `ampi review [description]` | The reviewer and the review checks once, on the uncommitted changes by default; the report, or `--json` with parsed findings; `-f`, `-i`, `-c`, `-s`, `--checks-only`, `--thinking low\|high` (default `low`); recorded as an archived thread; exit 0 when it ran, 1 when it failed, 2 on a usage error |
 | Send piped input with a request | `git diff \| ampi -x "review this"` | The message is the argument, a newline, then stdin; redirected input or output implies `-x` |
 | Get one JSON summary of the run | `ampi -x --stats "..."` | The result, turns, token usage and, when the model reports it, `total_cost_usd` on one line |
 | Print one tool's output | `ampi -x --output-tool bash "run the tests"` | The text of the last finished call to that tool; exit 1 when it failed or never finished |

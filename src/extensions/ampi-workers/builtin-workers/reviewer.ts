@@ -728,6 +728,46 @@ function createRunLimiter(limit: number): <T>(job: () => Promise<T>) => Promise<
   };
 }
 
+/** What one run of a reviewer call reported: its report when it succeeded, else why it failed. */
+export interface AmpiReviewerRunReport {
+  report?: string;
+  failure?: string;
+}
+
+/**
+ * The reports of one reviewer call, run by run: the main review (absent under
+ * `checks_only`), then each check in the order of `ReviewerDetails.checks`.
+ */
+export interface AmpiReviewerReports {
+  main?: AmpiReviewerRunReport;
+  checks: AmpiReviewerRunReport[];
+}
+
+function runReport(result: MmrWorkerResult | undefined): AmpiReviewerRunReport {
+  if (!result) return { failure: "cancelled" };
+  return isReviewerSuccess(result) ? { report: reviewerReportText(result) } : { failure: reviewerFailureReason(result) };
+}
+
+/** The run state of each prepared call that has review checks, for {@link readAmpiReviewerReports}. */
+const callRunStates = new WeakMap<MmrPreparedWorkerRun<ReviewerDetails>, ReviewerRunState>();
+
+/**
+ * The reports of a prepared reviewer call once its run settled with
+ * `result`, the result `prepared.run` resolved with. `ampi review` reads them
+ * to parse each run's findings apart from the combined report.
+ */
+export function readAmpiReviewerReports(
+  prepared: MmrPreparedWorkerRun<ReviewerDetails>,
+  result: MmrWorkerResult,
+): AmpiReviewerReports {
+  const state = callRunStates.get(prepared);
+  if (!state) return { main: runReport(result), checks: [] };
+  return {
+    ...(state.checksOnly ? {} : { main: runReport(state.mainResult) }),
+    checks: state.checks.map((run) => runReport(run.result)),
+  };
+}
+
 type ReviewerSpec = MmrWorkerToolSpec<ReviewerParams, ReviewerDetails, ReviewerRunState | undefined>;
 type ReviewerFactoryOptions = Parameters<typeof createWorkerRunPreparer<ReviewerParams, ReviewerDetails, ReviewerRunState | undefined>>[2];
 
@@ -905,6 +945,7 @@ function createReviewerCallPreparer(deps: ReviewerToolDeps): MmrWorkerRunPrepare
       await Promise.all(jobs);
       return representativeResult(runState, cancelled());
     };
+    callRunStates.set(prepared, runState);
     return prep;
   };
 }
