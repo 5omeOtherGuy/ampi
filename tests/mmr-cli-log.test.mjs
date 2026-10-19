@@ -265,13 +265,13 @@ const STDERR_ALLOWED = [
   { file: "main.js", line: "createInterface({ input: process.stdin, output: process.stderr })", reason: "the yes/no question of threads delete" },
   { file: "pi-compat.js", line: "process.stderr.write(`", reason: "a line Pi wrote to stdout that is not JSON, passed on" },
   { file: "main.js", line: "piStderr: (text) => process.stderr.write(text)", reason: "Pi's own stderr from a pi mcp command, passed on" },
-  { file: "main.js", line: "progress: (text) => process.stderr.write(text)", reason: "the Cloning line of skill add, progress at every level" },
+  { file: "main.js", line: "const writeProgress = (text) => process.stderr.write(text)", reason: "skill add's Cloning line, update's install line and npm's output: progress at every level" },
 ];
 
 describe("ampi diagnostics guard", () => {
   it("finds no stderr write outside the logger and the listed outputs", () => {
     const found = [];
-    for (const file of readdirSync(cliSrc).filter((name) => name.endsWith(".js"))) {
+    for (const file of readdirSync(cliSrc, { recursive: true }).filter((name) => name.endsWith(".js"))) {
       for (const [index, line] of readFileSync(path.join(cliSrc, file), "utf8").split("\n").entries()) {
         if (/process\.stderr\b|console\.(error|warn)\b/.test(line)) found.push({ file, number: index + 1, line });
       }

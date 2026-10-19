@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { buildDoctorChecks, createDoctorPi, DOCTOR_FILE_SYSTEM, formatDoctorText, gatherDoctorFacts, runDoctorCommand } from "../packages/ampi-cli/src/doctor.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { otherInstallAdvice, runUpdateCommand } from "../packages/ampi-cli/src/update.js";
 import { compareVersions, parseVersion, satisfiesRange } from "../packages/ampi-cli/src/versions.js";
 
@@ -127,7 +128,7 @@ const makeHost = ({ pi = {}, fs = {}, env = {}, pathDirs = [], ...rest } = {}) =
       isTTY: false,
       colorDepth: undefined,
       out: (text) => out.push(text),
-      err: (text) => err.push(text),
+      log: createLogger({ stderr: (text) => err.push(text) }),
       ...rest,
     },
     agentDir,
@@ -488,7 +489,14 @@ const runUpdate = (argv, { cliRoot: root, ...runner }) => {
   const out = [];
   const err = [];
   const npm = fakeRunner(runner);
-  const code = runUpdateCommand(argv, { cliRoot: root, runNpm: npm.runNpm, realpath: (file) => realpathSync(file), out: (text) => out.push(text), err: (text) => err.push(text) });
+  const code = runUpdateCommand(argv, {
+    cliRoot: root,
+    runNpm: npm.runNpm,
+    realpath: (file) => realpathSync(file),
+    out: (text) => out.push(text),
+    progress: (text) => err.push(text),
+    log: createLogger({ stderr: (text) => err.push(text) }),
+  });
   return { code, out: out.join(""), err: err.join(""), calls: npm.calls };
 };
 

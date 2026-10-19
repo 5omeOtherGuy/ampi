@@ -529,11 +529,11 @@ The command's diagnostics are the `ampi: …` lines it writes about itself, at f
 
 With `--log-file`, the lines are appended to the file instead of stderr, one per line: an ISO 8601 time, the level and the message, with line breaks written as `\n`. A new file is created with mode `0600`. Errors also go to stderr, so a failing command is never silent. If the file cannot be written, the command says so once on stderr and writes the rest there.
 
-The logger does not touch output you asked for (help, versions, the results of `threads`, `usage`, `tools`, `skill`, `mcp` and `config`, the `--timings` line, the `[y/N]` question of `threads delete`, the `Cloning <url>…` line of `skill add`), nor anything Pi writes itself: Pi's own warnings, errors and terminal UI are not filtered and do not go to the log file.
+The logger does not touch output you asked for (help, versions, the results of `threads`, `usage`, `tools`, `skill`, `mcp`, `config`, `doctor` and `update`, the `--timings` line, the `[y/N]` question of `threads delete`, the `Cloning <url>…` line of `skill add`, the `updating ampi-cli from … to …` line of `update` and npm's output after it), nor anything Pi writes itself: Pi's own warnings, errors and terminal UI are not filtered and do not go to the log file.
 
-The logging and colour options also work in front of a command, as in `ampi --log-level debug threads list`; after `threads`, `usage`, `last`, `tools`, `skill`, `mcp`, `config` or one of Pi's commands, the rest of the command line belongs to that command.
+The logging and colour options also work in front of a command, as in `ampi --log-level debug threads list`; after `threads`, `usage`, `last`, `tools`, `skill`, `mcp`, `config`, `doctor`, `update` or one of Pi's commands, the rest of the command line belongs to that command.
 
-The command prints no colour of its own. `--no-color` sets `NO_COLOR=1` and removes `FORCE_COLOR` in the environment that Pi and the tools it runs inherit; `--color` sets `FORCE_COLOR=1` and removes `NO_COLOR`; without either, the environment stays as it is. With Pi 1.3 this changes:
+The command's own output has colour only in the status words of `ampi doctor`, which `--no-color` turns off (see [Doctor](#doctor)). `--no-color` sets `NO_COLOR=1` and removes `FORCE_COLOR` in the environment that Pi and the tools it runs inherit; `--color` sets `FORCE_COLOR=1` and removes `NO_COLOR`; without either, the environment stays as it is. With Pi 1.3 this changes:
 
 - Pi's text outside the terminal UI, such as `ampi --pi-help`: `--no-color` removes its bold and dim styling, and `--color` keeps it when stdout is not a terminal. The colour library Pi uses reads the `--no-color` argument of the process, not `NO_COLOR`, so `NO_COLOR` alone in your environment does not change this text.
 - Tools the agent runs, such as `bash` commands: they inherit the variables, so programs that follow `NO_COLOR` or `FORCE_COLOR` do so.

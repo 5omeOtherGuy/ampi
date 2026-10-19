@@ -444,7 +444,7 @@ export async function runAmpi(argv) {
         isTTY: process.stdout.isTTY === true,
         colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
       });
     }
     case "update": {
@@ -455,7 +455,8 @@ export async function runAmpi(argv) {
         runNpm: spawnNpm,
         realpath: (file) => realpathSync(file),
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        progress: writeProgress,
+        log,
       });
     }
     case "app":
@@ -485,8 +486,7 @@ export async function runAmpi(argv) {
         interactive: process.stdin.isTTY === true,
         confirm,
         out: (text) => process.stdout.write(text),
-        // "Cloning <url>…", progress the user sees whatever the log level: not a diagnostic.
-        progress: (text) => process.stderr.write(text),
+        progress: writeProgress,
         log,
       });
     }
@@ -592,6 +592,15 @@ async function locateLoadedAmpi(pi, cwd) {
   }
   return locateAmpiPackage(CLI_ROOT);
 }
+
+/**
+ * Write progress the user sees whatever the log level, not a diagnostic:
+ * skill add's `Cloning <url>…`, and ampi update's install line with npm's own
+ * output.
+ *
+ * @param {string} text
+ */
+const writeProgress = (text) => process.stderr.write(text);
 
 /**
  * Ask a yes/no question on stderr and read the answer from stdin; anything
