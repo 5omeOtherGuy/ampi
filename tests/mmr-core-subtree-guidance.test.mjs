@@ -418,7 +418,9 @@ describe("turning subfolder guidance off", () => {
   });
 
   it("stays on when a context file appears after Pi loaded its resources", async (t) => {
-    const { read, fire, agentStart, discovery, appendedTexts } = await setupHooks(t, { files: FEATURE_TREE, discovered: [] });
+    // src/late is read only after the reload, so its guidance cannot be hidden by coverage.
+    const files = { ...FEATURE_TREE, "src/late/AGENTS.md": "late rules", "src/late/w.ts": "w" };
+    const { read, fire, agentStart, discovery, appendedTexts } = await setupHooks(t, { files, discovered: [] });
     // An AGENTS.md created mid-session: discovery finds it, but Pi keeps
     // passing the files of its last load until the next reload.
     discovery.files = [{ path: "/project/AGENTS.md", content: "new rules" }];
@@ -432,7 +434,12 @@ describe("turning subfolder guidance off", () => {
     await fire("session_start", { reason: "reload" });
     assert.equal(discovery.runs, 2);
     agentStart([]);
-    assert.equal(await read("src/feature/y.ts"), undefined);
+    assert.equal(await read("src/late/w.ts"), undefined, "off after a reload in which Pi passed no files");
+
+    // Another reload in which Pi passes its files turns it back on for the same directory.
+    await fire("session_start", { reason: "reload" });
+    agentStart(discovery.files);
+    assert.equal(appendedTexts(await read("src/late/w.ts")).length, 1);
   });
 
   it("stays on when Pi passes no context files because none exist", async (t) => {
@@ -446,10 +453,15 @@ describe("turning subfolder guidance off", () => {
     const agentDir = path.join(tree.root, "agent");
     mkdirSync(agentDir);
     const saved = process.env.PI_CODING_AGENT_DIR;
+    const savedHome = process.env.HOME;
     process.env.PI_CODING_AGENT_DIR = agentDir;
+    // ampi-core reads its settings from HOME, so the real home must stay out of this test.
+    process.env.HOME = tree.home;
     t.after(() => {
       if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = saved;
+      if (savedHome === undefined) delete process.env.HOME;
+      else process.env.HOME = savedHome;
     });
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi, handlers } = createMockPi();
