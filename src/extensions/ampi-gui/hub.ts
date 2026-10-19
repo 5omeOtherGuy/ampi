@@ -10,6 +10,7 @@ import {
   readMmrLiveToken,
 } from "../ampi-core/live-registry.js";
 import { MMR_GUI_SESSION_ACTIONS, type MmrGuiCommands, type MmrGuiExporter } from "./commands.js";
+import type { MmrGuiModes } from "./modes.js";
 import {
   formatMmrGuiEvent,
   isMmrGuiSessionId,
@@ -43,6 +44,7 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
  * | `GET /api/export` | as on a session server, for any session |
  * | `GET /api/feed`, `GET /api/search` | Activity and Search Threads, as on a session server, over the hub's rows |
+ * | `GET /api/modes` | the mode picker's modes and models for a thread not started yet: no current mode, lock or speed (`modes.ts`) |
  * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
  * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for another holder; a session nothing runs is renamed in its file |
  * | `POST /api/delete` | 409 for a session a worker runs or is starting; otherwise as on a session server |
@@ -63,9 +65,9 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * - **elsewhere**: another live process has its file open (a terminal
  *   without the GUI or without a usable token file, a print or RPC run,
  *   another app's worker). `transcript` and `session` come from the file;
- *   `events` and every POST answer 409 with the holder and, when known,
- *   whether it serves a GUI (`gui`).
- * - **not running**: the same from the file, `events` answers 409, and
+ *   `events`, `modes` and every POST answer 409 with the holder and, when
+ *   known, whether it serves a GUI (`gui`).
+ * - **not running**: the same from the file, `events` and `modes` answer 409, and
  *   `POST send` starts a worker (one per session however many sends race),
  *   waits for it and forwards the message. Other POSTs answer 409. A send
  *   waits at most {@link MMR_GUI_HUB_START_TIMEOUT_MS} and then answers 504
@@ -73,7 +75,7 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *   session is hosted, so sending again reaches it.
  * - **imported**: `ampi threads import` wrote it (`isMmrImportedSession`),
  *   so it is read-only wherever it is open: as elsewhere, from the file,
- *   with 409 for `events` and every POST, and no worker is started.
+ *   with 409 for `events`, `modes` and every POST, and no worker is started.
  *
  * One writer per session file: the hub never starts a worker for a file
  * another live process names in the live registry (it checks just before
@@ -108,6 +110,8 @@ export interface MmrGuiHubOptions {
   commands: MmrGuiCommands;
   /** `GET /api/export`, as on a session server. */
   exportSession: MmrGuiExporter;
+  /** `GET /api/modes`: the modes and models for a new thread (`describeMmrGuiModes` with `live: false`). */
+  modes(): MmrGuiModes;
   /** Where the live registry is and how to probe its processes. */
   registry?: MmrLiveRegistryOptions;
   /** The hub's own process; its entry names no file. Defaults to this process. */
@@ -450,7 +454,8 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       }
       return proxy(workerUpstream(worker), request, rest, post.raw);
     }
-    if (rest === "events") return sendJson(res, 409, describe(state));
+    // Only a live session has a mode to change.
+    if (rest === "events" || rest === "modes") return sendJson(res, 409, describe(state));
     if (rest !== "transcript" && rest !== "session") return send(res, 404, "Not found");
     const view = await viewMmrGuiSession(sessions, id);
     if (!view) return sendJson(res, 404, { error: "No such session." });
@@ -522,6 +527,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     }
     if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
     if (rawPath === "/api/feed" || rawPath === "/api/search") return sendMmrGuiActivity(res, rawPath, request.url, sessions);
+    if (rawPath === "/api/modes") return sendJson(res, 200, options.modes());
     return send(res, 404, "Not found");
   }
 

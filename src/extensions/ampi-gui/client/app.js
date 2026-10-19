@@ -30,6 +30,7 @@ import { mountComposer } from "./composer.js";
 import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
+import { mountModePicker } from "./mode-picker.js";
 import { mountPalette } from "./palette.js";
 import { createPrefs } from "./prefs.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
@@ -177,6 +178,7 @@ const activity = mountActivity({
 const threadSearch = mountThreadSearch({ dialog: $("search-dialog"), onOpen: (id) => openSessionPage(id), sessionHref });
 // Extensions' questions in a session ampi app runs; the session that asked answers them.
 const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: postTo, answerUrl: () => `${base}dialog`, notify });
+const modePicker = mountModePicker({ dialog: $("mode-picker"), notify, mac });
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -383,9 +385,15 @@ function drawTitle() {
   $("cwd-chip").title = cwd;
   $("cwd-chip").setAttribute("aria-label", `Working directory ${cwd}`);
   $("cwd-chip").hidden = cwd === "";
-  $("mode").textContent = session.mode ?? "";
+  $("mode-label").textContent = session.mode ?? "";
   $("mode").hidden = !session.mode;
+  $("mode").dataset.ampiMode = session.mode ?? "";
+  // A registered mode's colour, as the picker's rows have it: set through the CSSOM, which the page's style policy allows.
+  if (session.modeColor) $("mode").style.setProperty("--ampi-mode-tint", session.modeColor);
+  else $("mode").style.removeProperty("--ampi-mode-tint");
+  $("mode").disabled = !modeChangeable();
   $("mode").setAttribute("aria-label", session.mode ? `Mode ${session.mode}` : "Mode");
+  $("mode").title = modeChangeable() ? "Change mode" : "This session's mode cannot change here";
   const disc = $("title-disc");
   paintDisc(disc, session.id, row?.color ?? null);
   disc.dataset.busy = String(busy && !viewing);
@@ -434,6 +442,7 @@ function setStatus(status) {
   if (status.queued > 0) details.push(`${status.queued} queued`);
   $("status-detail").textContent = details.join(" · ");
   composer.setStatus(status);
+  modePicker.refresh();
   sidebar.setBusy(status.busy);
   $("title-disc").dataset.busy = String(status.busy && !viewing);
   drawChrome();
@@ -1031,6 +1040,34 @@ function moveMessage(step, userOnly) {
   } else if (current && step > 0 && composer.writable()) composer.focus();
 }
 
+/** Whether the page can change the shown session's mode: it follows that session live, and the session has an ampi mode. */
+function modeChangeable() {
+  if (feedShown || viewing || (appMode && access !== "live")) return false;
+  return Boolean(liveSession.mode);
+}
+
+/** The mode picker's view of the shown session: its routes, and why nothing can change while a turn runs. */
+function openModePicker() {
+  if (!modeChangeable()) return;
+  const sessionBaseUrl = base;
+  modePicker.open($("mode"), {
+    async load() {
+      try {
+        const response = await fetch(`${sessionBaseUrl}modes`, { credentials: "same-origin" });
+        return { ok: response.ok, body: await response.json().catch(() => ({})) };
+      } catch {
+        return { ok: false, body: { error: "Could not reach Pi." } };
+      }
+    },
+    change: (route, body) => postTo(`${sessionBaseUrl}${route}`, body),
+    busy: () => (busy ? "Pi is working on a turn. Change the mode or model when it ends." : null),
+  });
+  $("mode").setAttribute("aria-expanded", String(modePicker.isOpen()));
+}
+
+$("mode").addEventListener("click", () => openModePicker());
+$("mode-picker").addEventListener("close", () => $("mode").setAttribute("aria-expanded", "false"));
+
 const ui = {
   goHome() {
     if (appMode) {
@@ -1077,6 +1114,7 @@ const ui = {
   archiveInactive: (ids) => titlebar.run("archive-inactive", null, document.activeElement, ids),
   collapseProjects: (collapsed) => sidebar.collapseProjects(collapsed),
   reload: () => location.reload(),
+  openModePicker,
 };
 
 /** What the commands' `when` and `run` read (see commands.js). */
@@ -1094,6 +1132,7 @@ function keyState() {
     writable: composer.writable(),
     promptEmpty: composer.isEmpty(),
     promptFocused: composer.hasFocus(),
+    modes: modeChangeable() ? { locked: liveSession.modeLocked === true } : null,
     ui,
   };
 }

@@ -11,6 +11,7 @@ import { getMmrModeState } from "../ampi-core/runtime.js";
 import { getMmrThreadIndex, type MmrThreadRecord, type MmrThreadRecordPatch } from "../ampi-core/thread-index.js";
 import { getMmrThreadReports } from "../ampi-core/thread-reports.js";
 import type { MmrGuiBridge } from "./bridge.js";
+import { createMmrGuiModeCommands, type MmrGuiModeCommandOptions } from "./modes.js";
 import { MMR_GUI_LOOPBACK, mmrGuiCookieName } from "./server.js";
 import { type MmrGuiSessions, persistedModeName } from "./sessions.js";
 
@@ -32,6 +33,7 @@ function liveModeName(): string | undefined {
  * | `/api/steer-next`  | `{}`                          | runs the `prompt.steerQueuedMessage` command |
  * | `/api/interrupt`   | `{}`                          | cancels the open questions, then runs the `thread.interrupt` command, or `ctx.abort()` without it |
  * | `/api/dialog`      | `{ id, value }` or `{ id, cancelled: true }` | answers an extension's open question (a session `ampi app` hosts); the first answer wins, any later one answers 409 |
+ * | `/api/mode`, `/api/model`, `/api/fast` | see `modes.ts` | the mode picker's changes |
  *
  * And the More Actions ({@link MMR_GUI_SESSION_ACTIONS}), for any listed
  * session; every body names it as `{ sessionId }`:
@@ -299,10 +301,12 @@ export interface MmrGuiCommandOptions {
   pid?: number;
   /** The Git branch in a directory; defaults to {@link readMmrGuiGitBranch}. */
   gitBranch?: (cwd: string) => Promise<string | null>;
+  /** The timers of the mode picker's commands (`modes.ts`). */
+  modes?: MmrGuiModeCommandOptions;
 }
 
 export function createMmrGuiCommands(
-  pi: Pick<ExtensionAPI, "sendUserMessage" | "setSessionName">,
+  pi: Pick<ExtensionAPI, "sendUserMessage" | "setSessionName" | "setModel" | "events">,
   bridge: MmrGuiBridge,
   sessions: MmrGuiSessions,
   options: MmrGuiCommandOptions = {},
@@ -332,6 +336,7 @@ export function createMmrGuiCommands(
   };
 
   return {
+    ...createMmrGuiModeCommands(pi, bridge, options.modes),
     async markdown(body) {
       const target = await findTarget(bridge, sessions, body);
       if ("status" in target) return target;

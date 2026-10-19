@@ -56,7 +56,10 @@
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/></svg>
               <span id="cwd"></span>
             </span>
-            <span class="mode" id="mode" hidden></span>
+            <button class="mode" id="mode" type="button" aria-haspopup="dialog" aria-controls="mode-picker" aria-expanded="false" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.75 11.25a5.25 5.25 0 1 1 10.5 0"/><path d="m8 11.25 2.5-3.5"/></svg>
+              <span id="mode-label"></span>
+            </button>
             <button class="icon-button" id="copy-link" type="button" aria-label="Copy link" title="Copy link" hidden>
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M7 9a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.9.9M9 7a2.6 2.6 0 0 0-3.7 0L2.9 9.4a2.6 2.6 0 0 0 3.7 3.7l.9-.9"/></svg>
             </button>
@@ -180,6 +183,26 @@
         <div class="palette-body" tabindex="-1">
           <div class="palette-list" id="palette-list" role="listbox" aria-label="Commands"></div>
           <p class="palette-empty" id="palette-empty" hidden></p>
+        </div>
+      </dialog>
+      <dialog class="mode-picker" id="mode-picker" aria-label="Mode and model">
+        <div class="mode-picker-head">
+          <input class="mode-picker-input" type="text" role="combobox" aria-label="Search modes and models" aria-controls="mode-picker-list" aria-expanded="true" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+          <kbd class="mode-picker-key" aria-hidden="true"></kbd>
+          <div class="mode-picker-tabs" role="tablist" aria-label="Show">
+            <button type="button" role="tab" data-tab="modes" aria-controls="mode-picker-list" tabindex="-1">Modes</button>
+            <button type="button" role="tab" data-tab="models" aria-controls="mode-picker-list" tabindex="-1">Models</button>
+            <kbd aria-hidden="true">Tab</kbd>
+          </div>
+        </div>
+        <div class="mode-picker-notice" role="status" hidden>
+          <span class="mode-picker-notice-text"></span>
+          <button class="button mode-picker-override" type="button" hidden>Change anyway</button>
+        </div>
+        <!-- Arrow keys move through the list from the field, so the scrolling body takes no Tab stop. -->
+        <div class="mode-picker-body" tabindex="-1">
+          <div class="mode-picker-list" id="mode-picker-list" role="listbox"></div>
+          <p class="mode-picker-empty" hidden></p>
         </div>
       </dialog>
       <div class="toast" id="toast" role="status" hidden></div>

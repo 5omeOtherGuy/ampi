@@ -70,11 +70,11 @@ The settings are read once when the extension loads. Restart Pi or run `/reload`
 ### The page
 
 - A sidebar of sessions on the left, 256 px wide by default. Drag its edge to resize it (or focus the edge and use the arrow keys; a double click resets it); the width and whether it is open are remembered for every ampi page in this browser (the `ampi_gui_prefs` cookie). Ctrl+B (⌘B on macOS) shows or hides it from anywhere on the page, and the button at the top of the sidebar or in the title bar does the same. See [Sessions](#sessions).
-- A 36 px title bar with the session's disc, its title (its name, or the first line of its first prompt), [More Actions](#more-actions) (`…`), the working directory and the ampi mode (a [registered mode](../ampi-core/README.md#registered-modes) by its label; a session read from its file by its key), and a button that cycles the colour scheme (system, light, dark; remembered in this browser).
+- A 36 px title bar with the session's disc, its title (its name, or the first line of its first prompt), [More Actions](#more-actions) (`…`), the working directory, the ampi mode as a button in the mode's colour that opens the [mode picker](#mode-picker) (a [registered mode](../ampi-core/README.md#registered-modes) by its label; a session read from its file by its key, not clickable), and a button that cycles the colour scheme (system, light, dark; remembered in this browser).
 - The transcript in a centred column up to 672 px wide, or the whole pane with Full Width. Your prompts are bubbles on the right. The assistant's replies are prose with rendered Markdown (headings, lists, tables, code cards, links). Thinking is a collapsed "Thinking" line. See [Work groups](#work-groups) for tool calls.
 - The composer at the bottom: a text area, a paperclip (attachments are not available yet; it says so), the agent's status (Sending, Thinking, Streaming, Running Tools, Auto-Compacting, Waiting for Approval, Cancelling or Error, with the streamed-token count or the tool name and the number of queued messages) and a round send button that turns into a stop square while a turn runs and nothing is typed. A pulsing dot ends the transcript while the agent works.
 - The transcript follows new output while you are at the bottom, also when the composer grows or the window changes size. Scroll up and it stays put; the round button above the composer (or End) jumps back down.
-- Below 768 px the layout narrows to one column: the sidebar becomes a sheet over the page (opened from the title bar, closed with Esc, a tap outside it or by choosing a session), and the title bar keeps only the sidebar button, the session's disc and title, More Actions and the colour scheme.
+- Below 768 px the layout narrows to one column: the sidebar becomes a sheet over the page (opened from the title bar, closed with Esc, a tap outside it or by choosing a session), and the title bar keeps only the sidebar button, the session's disc and title, More Actions, the mode button and the colour scheme.
 
 ### More Actions
 
@@ -222,6 +222,7 @@ The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctr
 | Up / Down | A session page, the prompt empty and not focused | Focus the previous / next message you wrote; Down past the newest returns to the prompt |
 | Shift+Up / Shift+Down | As above | The same over every message |
 | Ctrl+Shift+A | A session page you can write to | Close the sidebar sheet and focus the prompt |
+| Ctrl+S | The prompt, before the session's mode is locked | Open the [mode picker](#mode-picker); once the mode is locked it says so instead. Elsewhere Ctrl+S is the browser's |
 
 A key whose command cannot run now (archiving an archived session, focusing the prompt of a read-only one) says why in a toast when it holds Ctrl, Alt or ⌘; a plain key is left to the browser.
 
@@ -242,13 +243,34 @@ Ctrl+O or Mod+K opens a card near the top of the page (a sheet from the top edge
 | Section | Entries |
 | --- | --- |
 | Global | Search Threads…, Switch Thread… (Mod+P), Open Activity, Change Theme… (steps the colour scheme as the title bar's button does), Archive Inactive Threads Older than 72h, Sidebar: Collapse All Projects, Sidebar: Expand All Projects, Focus Title Bar, Copy Current URL, Show Keymap, Reload Page, Report a Bug |
-| Thread | Archive Thread, Interrupt, the [More Actions](#more-actions) entries (Copy as Markdown, Copy Session ID, Copy Resume Command, Export to Markdown, Export to JSON, Show Where the Thread Runs, View Costs, Pin or Unpin Thread, Rename Thread, Edit Labels, Change Thread Color, Mark as Unread or Read, Snooze or Unsnooze Thread, Unarchive Thread, Delete Thread), for the session focused in the sidebar, else the one shown |
+| Thread | Change Mode… (the [mode picker](#mode-picker)), Archive Thread, Interrupt, the [More Actions](#more-actions) entries (Copy as Markdown, Copy Session ID, Copy Resume Command, Export to Markdown, Export to JSON, Show Where the Thread Runs, View Costs, Pin or Unpin Thread, Rename Thread, Edit Labels, Change Thread Color, Mark as Unread or Read, Snooze or Unsnooze Thread, Unarchive Thread, Delete Thread), for the session focused in the sidebar, else the one shown |
 | Thread Panes | Show Chat Pane (Ctrl+Shift+A), Toggle Full Width |
 | Navigation | Go Home (`g g`), Go Back (Ctrl+[), Go Forward (Ctrl+]) |
 
 **Switch Thread…** (Mod+P) turns the card into a list of the other sessions the sidebar lists, the most recently active first, with each one's project and age; typing filters them by title the same way, and Enter opens the session. **Archive Inactive Threads Older than 72h** asks first, with the number of sessions in the sidebar's Inactive group (no activity for 72 hours, and not running, pinned, snoozed or archived), then archives exactly those through the thread index; it is dimmed without `ampi-threads` or when that group is empty.
 
 A command's palette title and section can differ from its Keymap label (`palette: { title, section }` in `client/commands.js`, or `palette: false` to leave it out): the palette uses title case and lists the sidebar's archive key under Thread.
+
+### Mode picker
+
+The title bar's mode button, Change Mode… in the palette and Ctrl+S in the prompt (until the mode is locked) open a 544 px card under the button (a sheet from the top edge on a narrow screen, also when the window is narrowed while it is open). The button has the session's mode colour, a registered mode's own included. It lists ampi's modes, or Pi's models, and changes the session the page follows live; a session shown read-only has no picker.
+
+- **Header.** A search field, the picker's key (Ctrl+S), and a Modes | Models switch. Tab in the field switches between the two; typing filters the list (every word must occur in the name, the description or a model's name).
+- **Modes.** Low, Medium, High and Ultra, the modes other extensions [registered](../ampi-core/README.md#registered-modes), then Free, the only place Free appears. Each row has the mode's name in its colour (the terminal prompt box's colours, deeper on a light background; a registered mode's own), a chip naming the agent's model and the oracle's (hover it for `provider/model · thinking`), the mode's description from ampi-core, and a check on the current mode. A mode none of whose models Pi has credentials for is dimmed with the reason instead of its description.
+- **Models.** Every model Pi's registry has credentials for, grouped by provider, with a check on the selected one. While a mode other than Free runs, the card says that choosing a model switches the session to Free, as Pi's own `/model` does: ampi's routing, mode prompt and tool rules stop until a mode is chosen again; the toast after the change says so too.
+- **Fast.** When the session has the `speed use fast` command (ampi-core registers it), a Fast row at the end of the Modes list shows whether fast speed is on and toggles it, or says why it is not available for the model. Without that command there is no Fast row.
+- **Locked.** Once the session has a message its mode is locked (`ampiCore.modeLock`): the rows are read-only and the card names the reason with a **Change anyway** button. After Change anyway, the next choice overrides the lock, as `/mode <key>` does in the terminal; on the Models tab the card still says that the session will switch to Free. Enter on a read-only row moves focus to the button. When the mode locks after the card opened, a choice refused for the lock reads the modes again and shows the same notice and button. In Free a model change changes no mode, so the Models tab stays open to choices.
+- **Busy.** While a turn runs, every row, Fast included, is read-only and the card says why.
+- **Keys.** Up and Down move, the pointer moves the selection when it moves, Enter or a click chooses, Esc or a click outside closes, and focus goes back where it was. A mode change answers once ampi-core reports the new mode; the title bar and the terminal's prompt box follow it.
+
+| Endpoint | Body | Effect |
+| --- | --- | --- |
+| `GET /api/modes` | (none) | `{ current, locked, lockReason, model, fast, modes, models }`: `modes` as listed above, each `{ key, label, description, color, agentModel, oracleModel, available, reason }` with the models as `{ provider, id, name, thinkingLevel }` (`oracleModel` is `null` for Free); `models` as `{ provider, id, name }`; `fast` is `{ on, available, reason }` or `null` |
+| `POST /api/mode` | `{ "mode": "high", "override": true? }` | Runs `/mode high` as typing it would, and answers `{ mode }` once ampi-core reports it; 409 while a turn runs, while another change is under way, for a mode without a usable model, and while the mode is locked (`state: "locked"`, the reason as `error`) unless `override` is `true` |
+| `POST /api/model` | `{ "provider": "…", "id": "…", "override": true? }` | Selects that model through Pi and answers `{ model, mode }`; ampi-core then leaves a locked mode for Free. 400 for a model Pi's registry does not know, 409 for one it has no credentials for, and the same 409s, except that in Free the lock does not apply |
+| `POST /api/fast` | `{}` | Runs `speed use fast` or `speed disable fast`; answers `{ fast }`; 409 while a turn runs and while another change is under way (the lock does not apply) |
+
+In `ampi app`, `/s/<id>/api/modes` and the three POSTs reach the session's own server like its other routes; a session nothing runs answers 409 as for `events`. The hub's own `GET /api/modes` answers the same lists for a thread not started yet, with `current`, `model` and `fast` `null` and `locked` false.
 
 ### Commands
 
@@ -370,7 +392,7 @@ The command runs an in-memory Pi session (never saved) in RPC mode, without MCP,
 
 The page asks `GET /api/app` first; a session server answers 404 and the page behaves exactly as on a terminal's own GUI (`#/s/<id>` addresses, the banner that points back to the terminal). With `{ app: true }` it runs in app mode (`client/app-mode.js` holds its pure parts):
 
-- **Two bases.** Requests about one session (`transcript`, `events`, `send`, `dequeue`, `steer-next`, `interrupt`) go to `/s/<id>/api/`; requests about every session (`sessions`, every More Actions route, `events` for the list) go to `/api/`.
+- **Two bases.** Requests about one session (`transcript`, `events`, `send`, `dequeue`, `steer-next`, `interrupt`, `modes`, `mode`, `model`, `fast`) go to `/s/<id>/api/`; requests about every session (`sessions`, every More Actions route, `events` for the list) go to `/api/`.
 - **Addresses.** Each session is at `/s/<id>` with a history entry `{ ampiSession: id }`, so Back and Forward show the session again (live or read-only, as it is then). `/` shows a prompt to pick a session.
 - **Rows.** Each row's disc is an image whose `aria-label` is `<host>, <flags>`: the host is "Running in a terminal" (`tui`), "Running in ampi -x" (`execute`), "Running in ampi app" (`app-session`) or "Not running"; the flags, in this order, are "Live" (the process serves a GUI), "Working" (its status phase is neither idle nor error; the disc spins) and "Error". The list reloads on `event: sessions`, every 5 seconds while the page is visible (and at once when it becomes visible again), on focus and after each turn; a redraw keeps keyboard focus on the same row.
 - **Opening a session.** `GET transcript` decides: a snapshot (hosted) shows the session live and follows its events; an answer with `state` is drawn from the file. `elsewhere` shows a banner naming the holder and its pid and hides the composer (for a terminal with `gui: false`, the banner says to turn on ampiGui in that terminal to continue the session here); `not-running` keeps the composer, whose first send shows Starting and, once the hub answers, loads the worker's snapshot; `imported` turns the composer off with the reason; a 502 (`gone`) says to pick the session again. Titles and holder names are HTML-escaped in banners. When the list shows that a read-only session's holder went away, or that a session shown as not running now runs, the page opens it again.

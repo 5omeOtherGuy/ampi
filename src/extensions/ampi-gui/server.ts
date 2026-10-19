@@ -5,6 +5,7 @@ import path from "node:path";
 import { buildMmrGuiFeed, parseMmrGuiFeedRequest, parseMmrGuiSearchRequest, searchMmrGuiSessions } from "./activity.js";
 import type { MmrGuiBridge } from "./bridge.js";
 import type { MmrGuiCommands, MmrGuiExporter } from "./commands.js";
+import { describeMmrGuiModes } from "./modes.js";
 import type { MmrGuiSessions } from "./sessions.js";
 
 /**
@@ -36,6 +37,8 @@ import type { MmrGuiSessions } from "./sessions.js";
  * - `GET /feed` is the page too, showing the Activity page;
  *   `GET /api/feed` and `GET /api/search` answer it and the Search Threads
  *   dialog (`activity.ts`), read-only.
+ * - `GET /api/modes` answers the mode picker: the modes, the models and the
+ *   session's mode (`modes.ts`).
  */
 
 export interface MmrGuiServerOptions {
@@ -382,6 +385,10 @@ export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiS
     }
     if (rawPath === "/api/session") return sendJson(res, 200, { ...bridge.session(), status: bridge.status() });
     if (rawPath === "/api/transcript") return sendJson(res, 200, bridge.snapshot());
+    if (rawPath === "/api/modes") {
+      const ctx = bridge.context();
+      return ctx ? sendJson(res, 200, describeMmrGuiModes(ctx)) : sendJson(res, 409, { error: "The session has ended." });
+    }
     if (rawPath === "/api/events") return serveEvents(request);
     if (rawPath === "/api/sessions") return sendJson(res, 200, await options.sessions.list());
     if (rawPath.startsWith("/api/sessions/")) {
