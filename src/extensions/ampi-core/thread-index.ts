@@ -1,7 +1,7 @@
 /**
  * Core-owned seam for the thread index: per-session metadata that Pi's own
  * session files do not carry (archived, labels, colour, pinned, where the
- * title came from).
+ * title came from, snoozed, unread).
  *
  * `ampi-threads` owns the store and registers it here at load; any other
  * extension reads and updates it through `getMmrThreadIndex()` without
@@ -24,6 +24,27 @@ export interface MmrThreadRecord {
   readonly pinned?: boolean;
   /** Whether the session title was generated or typed by the user. */
   readonly titleSource?: MmrThreadTitleSource;
+  /** When the session was snoozed (ISO 8601): it stays snoozed until a message newer than this. */
+  readonly snoozed?: string;
+  /** Marked unread by the user. */
+  readonly unread?: boolean;
+  /** When a page last opened the session (ISO 8601): a message newer than this makes it unread. */
+  readonly readAt?: string;
+}
+
+/** Whether a session is snoozed: it has a snooze date and its last activity (epoch ms) is not newer. */
+export function isMmrThreadSnoozed(record: MmrThreadRecord | undefined, lastActivity: number): boolean {
+  if (record?.snoozed === undefined) return false;
+  const until = Date.parse(record.snoozed);
+  return !Number.isNaN(until) && lastActivity <= until;
+}
+
+/** Whether a session is unread: marked so, or active (epoch ms) after a page last opened it. */
+export function isMmrThreadUnread(record: MmrThreadRecord | undefined, lastActivity: number): boolean {
+  if (record?.unread === true) return true;
+  if (record?.readAt === undefined) return false;
+  const readAt = Date.parse(record.readAt);
+  return !Number.isNaN(readAt) && lastActivity > readAt;
 }
 
 /** Fields to change: a value sets the field, `null` removes it, an absent key leaves it alone. */
@@ -40,6 +61,8 @@ export interface MmrThreadIndex {
    * `undefined` when no field is left (the record is then removed).
    */
   update(sessionId: string, patch: MmrThreadRecordPatch): Promise<MmrThreadRecord | undefined>;
+  /** Remove the session's whole record, fields this version does not know included; for a deleted session. */
+  remove(sessionId: string): Promise<void>;
 }
 
 /**

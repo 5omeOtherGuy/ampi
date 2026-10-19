@@ -263,6 +263,29 @@ button {
   outline-offset: -2px;
 }
 
+/* An unread session: a dot on its disc's top right and a bolder title. */
+.session-row[data-unread="true"] {
+  position: relative;
+}
+
+.session-row[data-unread="true"]::before {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--ampi-shell-bg);
+  border-radius: 50%;
+  background: var(--ampi-link);
+  content: "";
+}
+
+.session-row[data-unread="true"] .session-title {
+  color: var(--ampi-fg);
+  font-weight: 600;
+}
+
 .session-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -383,14 +406,18 @@ button {
   flex: none;
 }
 
+/* More Actions: 290 px, an icon per entry, groups split by hairlines. */
 .menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  left: var(--ampi-menu-shift, 0);
   z-index: 40;
   display: flex;
   flex-direction: column;
-  min-width: 13rem;
+  width: 290px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - var(--ampi-titlebar-height) - 16px);
+  overflow-y: auto;
   padding: calc(var(--ampi-space) * 1);
   border: 1px solid var(--ampi-border-strong);
   border-radius: var(--ampi-radius-xl);
@@ -399,41 +426,194 @@ button {
   box-shadow: var(--ampi-shadow);
 }
 
-.menu [role="menuitem"] {
+.menu [role^="menuitem"] {
   display: flex;
+  flex: none;
   align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  width: 100%;
   height: 28px;
   padding: 0 calc(var(--ampi-space) * 2);
   border: 0;
   border-radius: var(--ampi-radius-sm);
   background: transparent;
+  color: inherit;
   cursor: pointer;
+  font: inherit;
   text-align: left;
+  text-decoration: none;
   white-space: nowrap;
 }
 
-.menu [role="menuitem"]:hover,
-.menu [role="menuitem"]:focus {
+.menu [role^="menuitem"]:hover,
+.menu [role^="menuitem"]:focus,
+.menu [aria-expanded="true"] {
   background: var(--ampi-accent);
   outline: none;
 }
 
-.menu [role="menuitem"][aria-disabled="true"] {
+.menu [role^="menuitem"] > .icon {
+  flex: none;
+  color: var(--ampi-muted-fg);
+}
+
+.menu [role^="menuitem"][aria-disabled="true"] {
   color: var(--ampi-muted-fg);
   cursor: default;
 }
 
+.menu [role^="menuitem"][aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.menu [data-destructive="true"]:not([aria-disabled="true"]),
+.menu [data-destructive="true"]:not([aria-disabled="true"]) > .icon {
+  color: var(--ampi-danger);
+}
+
 .menu [role="separator"] {
+  flex: none;
   height: 1px;
   margin: calc(var(--ampi-space) * 1) calc(var(--ampi-space) * -1);
   background: var(--ampi-border-strong);
 }
 
-/* A sidebar row's menu (the `m` key), placed under its row. */
-#row-menu {
+.menu-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-detail {
+  flex: none;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.menu-keys {
+  display: inline-flex;
+  flex: none;
+  gap: 3px;
+}
+
+.menu-keys kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  color: var(--ampi-muted-fg);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 1;
+}
+
+.menu .menu-chevron {
+  width: 14px;
+  height: 14px;
+}
+
+.menu-icon-space {
+  flex: none;
+  width: 16px;
+}
+
+.menu .menu-check {
+  color: var(--ampi-fg);
+}
+
+/* Full Width's switch. */
+.menu-switch {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: var(--ampi-secondary);
+  transition: background 120ms;
+}
+
+.menu-switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ampi-bg);
+  content: "";
+  transition: transform 120ms;
+}
+
+[aria-checked="true"] > .menu-switch {
+  background: var(--ampi-primary);
+}
+
+[aria-checked="true"] > .menu-switch::after {
+  transform: translateX(11px);
+}
+
+/* A sidebar row's menu (the `m` key), placed under its row, and the submenus, placed beside their entry. */
+#row-menu,
+.submenu {
   position: fixed;
   top: var(--ampi-menu-top, 0);
   left: var(--ampi-menu-left, 0);
+}
+
+.submenu {
+  z-index: 45;
+  width: 220px;
+  max-height: calc(100dvh - 16px);
+}
+
+.submenu[data-kind="running"] {
+  width: 290px;
+}
+
+.menu-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--ampi-space) * 2);
+  padding: 6px 8px 4px;
+}
+
+.menu [role="menuitem"].menu-card-row {
+  height: auto;
+  min-height: 40px;
+  padding-block: 4px;
+}
+
+.menu-card-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menu-card-label {
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  line-height: var(--ampi-leading-xs);
+}
+
+/* Right-to-left only to put the ellipsis at the start; the value itself reads left to right in its <bdi>. */
+.menu-card-value {
+  overflow: hidden;
+  direction: rtl;
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-sm);
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.menu-card-note {
+  margin: 6px 8px;
+  color: var(--ampi-muted-fg);
 }
 
 .dialog {
@@ -490,9 +670,148 @@ button {
   color: var(--ampi-primary-fg);
 }
 
+.button.destructive {
+  border-color: transparent;
+  background: var(--ampi-danger);
+  color: var(--ampi-bg);
+}
+
 .button:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+/* More Actions' dialogs: Cost & Usage, Labels, Delete */
+.dialog .dialog-subtitle {
+  margin: calc(var(--ampi-space) * -2) 0 calc(var(--ampi-space) * 3);
+  overflow: hidden;
+  color: var(--ampi-muted-fg);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dialog-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dialog-note {
+  margin: calc(var(--ampi-space) * 2) 0 0;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.dialog-error {
+  margin: calc(var(--ampi-space) * 2) 0 0;
+  color: var(--ampi-danger);
+  overflow-wrap: anywhere;
+}
+
+.cost-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 calc(var(--ampi-space) * 2);
+  font-size: var(--ampi-text-lg);
+  line-height: var(--ampi-leading-lg);
+}
+
+.cost-table {
+  width: 100%;
+  margin-top: calc(var(--ampi-space) * 2);
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-table th,
+.cost-table td {
+  padding: 6px 0;
+  border-top: 1px solid var(--ampi-border-strong);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cost-table thead th {
+  border-top: 0;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.cost-table td,
+.cost-table thead th:last-child {
+  text-align: right;
+}
+
+.cost-table tbody th {
+  overflow-wrap: anywhere;
+}
+
+.cost-tokens {
+  display: block;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.label-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  min-height: 36px;
+  padding: 4px;
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-input-bg);
+}
+
+.label-editor:focus-within {
+  border-color: var(--ampi-link);
+}
+
+.label-chips {
+  display: contents;
+  list-style: none;
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 2px 0 8px;
+  border-radius: 12px;
+  background: var(--ampi-muted);
+  font-size: var(--ampi-text-sm);
+}
+
+.label-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  cursor: pointer;
+}
+
+.label-remove:hover {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+.dialog .label-editor input {
+  flex: 1 1 8rem;
+  width: auto;
+  min-width: 6rem;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  outline: none;
 }
 
 .button:focus-visible,
@@ -590,6 +909,11 @@ button {
   max-width: var(--ampi-column-max);
   margin: 0 auto;
   padding: 0 calc(var(--ampi-space) * 4);
+}
+
+/* Full Width (More Actions): the transcript and the composer use the whole pane. */
+.app[data-width="full"] .column {
+  max-width: none;
 }
 
 /* Title bar */

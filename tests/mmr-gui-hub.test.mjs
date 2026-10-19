@@ -244,16 +244,31 @@ async function startHub({ upstream = {} } = {}) {
     workers.push(worker);
     return worker;
   };
+  const renamedInFile = [];
   const commands = {
     markdown: async (body) => ({ status: 200, body: { ok: true, markdown: `# ${body.sessionId}` } }),
     archive: async (body) => ({ status: 200, body: { ok: true, archived: body.archived } }),
+    // The session server's rename of a session nobody runs (tests/mmr-gui-actions.test.mjs covers it).
+    rename: async (body) => {
+      renamedInFile.push(body.sessionId);
+      return { status: 200, body: { ok: true, name: body.name } };
+    },
+    // The session server's delete, which checks the live registry itself.
+    delete: async (body) => {
+      renamedInFile.push(`deleted ${body.sessionId}`);
+      return { status: 200, body: { ok: true } };
+    },
+    // A composer route the hub must not serve at /api/.
+    send: async () => ({ status: 200, body: { ok: true } }),
   };
+  const exportSession = async (sessionId, format) => ({ status: 200, filename: `${sessionId}.md`, contentType: "text/markdown; charset=utf-8", text: `# ${sessionId} as ${format}` });
   const hub = await hubModule.startMmrGuiHub({
     token: HUB_TOKEN,
     clientDir: path.join(getPreparedSourceRoot(), "extensions/ampi-gui/client"),
     startSession,
     sessions,
     commands,
+    exportSession,
     registry,
     pid: HUB_PID,
     now: () => clock.now,
@@ -301,7 +316,7 @@ async function startHub({ upstream = {} } = {}) {
     };
     writeFileSync(path.join(registryDir, `${pid}.json`), JSON.stringify(entry));
   };
-  return { hub, port, headers, post, fire, clock, starts, workers, byId, hold, probes, alive, registryDir, close: () => hub.close() };
+  return { hub, port, headers, post, fire, clock, starts, workers, byId, hold, probes, alive, registryDir, renamedInFile, close: () => hub.close() };
 }
 
 /**
@@ -370,16 +385,23 @@ describe("ampi app hub: pages and the session list", () => {
     }
   });
 
-  it("serves Markdown and archive for any session, and renames only a session it runs", async () => {
+  it("serves More Actions for any session, and renames a session where it runs or, when nothing runs it, in its file", async () => {
     const recorder = await startRecorder();
     const ctx = await startHub({ upstream: { "s-rec": recorder } });
     try {
       assert.deepEqual((await ctx.post("/api/markdown", { sessionId: "s-held" })).json(), { ok: true, markdown: "# s-held" });
       assert.deepEqual((await ctx.post("/api/archive", { sessionId: "s-c", archived: true })).json(), { ok: true, archived: true });
+      assert.equal((await ctx.post("/api/send", { text: "x" })).status, 404, "the composer's routes are per session");
 
-      const notHosted = await ctx.post("/api/rename", { sessionId: "s-c", name: "New name" });
-      assert.equal(notHosted.status, 409);
-      assert.match(notHosted.json().error, /where it runs/);
+      const notRunning = await ctx.post("/api/rename", { sessionId: "s-c", name: "New name" });
+      assert.equal(notRunning.status, 200);
+      assert.deepEqual(ctx.renamedInFile, ["s-c"], "the session server's rename writes a file nobody holds");
+      ctx.hold("s-held", TERMINAL_PID);
+      const held = await ctx.post("/api/rename", { sessionId: "s-held", name: "New name" });
+      assert.equal(held.status, 409);
+      assert.match(held.json().error, /rename it there/);
+      assert.equal(held.json().pid, TERMINAL_PID);
+      assert.deepEqual(ctx.renamedInFile, ["s-c"]);
       assert.equal((await ctx.post("/api/rename", { sessionId: "s-unknown", name: "x" })).status, 404);
 
       assert.equal((await ctx.post("/s/s-rec/api/send", { text: "start it" })).status, 200);
@@ -388,6 +410,17 @@ describe("ampi app hub: pages and the session list", () => {
       const forwarded = recorder.requests.at(-1);
       assert.equal(forwarded.url, "/api/rename");
       assert.deepEqual(JSON.parse(forwarded.body), { sessionId: "s-rec", name: "New name" });
+
+      const hosted = await ctx.post("/api/delete", { sessionId: "s-rec" });
+      assert.equal(hosted.status, 409, "a session a worker runs is never deleted");
+      assert.match(hosted.json().error, /ampi app runs this session/);
+      assert.equal((await ctx.post("/api/delete", { sessionId: "s-c" })).status, 200);
+      assert.deepEqual(ctx.renamedInFile, ["s-c", "deleted s-c"], "a session nothing runs goes to the session server's delete");
+
+      const download = await send(ctx.port, { target: "/api/export?sessionId=s-c&format=markdown", headers: ctx.headers() });
+      assert.equal(download.status, 200);
+      assert.equal(download.headers["content-disposition"], 'attachment; filename="s-c.md"');
+      assert.equal(download.body, "# s-c as markdown");
     } finally {
       await ctx.close();
       await recorder.close();

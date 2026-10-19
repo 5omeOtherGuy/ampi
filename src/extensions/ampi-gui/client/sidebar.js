@@ -11,8 +11,8 @@ const HASHED_COLORS = THREAD_COLORS.slice(0, -1);
 
 export const SIDEBAR_WIDTH = { default: 256, min: 200, max: 480, step: 16 };
 
-/** Groups that start collapsed: old and archived sessions. */
-const COLLAPSED_KINDS = new Set(["inactive", "archived"]);
+/** Groups that start collapsed, and show how many sessions they hold: old, snoozed and archived sessions. */
+const COLLAPSED_KINDS = new Set(["inactive", "snoozed", "archived"]);
 
 /**
  * A session's disc colour: the colour set in the thread index (a name or
@@ -72,15 +72,18 @@ export function clampSidebarWidth(width) {
 // ---------------------------------------------------------------------------
 // Page wiring
 
-const ICONS = {
+/** The group headers' icons; the session menu reuses the pin and archive ones. */
+export const ICONS = {
   pinned: '<path d="M9.5 2.25 13.75 6.5M10.75 3.5 7 7.25 4.25 7.5l4.25 4.25.25-2.75 3.75-3.75M6.4 9.6 2.75 13.25"/>',
   project: '<path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/>',
   inactive: '<circle cx="8" cy="8" r="5.75"/><path d="M8 4.75V8l2 1.5"/>',
+  snoozed: '<path d="M13.25 9.6A5.5 5.5 0 1 1 6.4 2.75a4.4 4.4 0 0 0 6.85 6.85z"/>',
   archived: '<rect x="1.75" y="2.75" width="12.5" height="3.25" rx="1"/><path d="M3 6v6.25a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6M6.5 8.75h3"/>',
 };
-const CHEVRON = '<path d="M6 3.5 10.5 8 6 12.5"/>';
+export const CHEVRON = '<path d="M6 3.5 10.5 8 6 12.5"/>';
 
-function icon(paths, className = "icon") {
+/** A 16-unit stroke icon from SVG path markup (constants in the client, never data). */
+export function icon(paths, className = "icon") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", className);
   svg.setAttribute("viewBox", "0 0 16 16");
@@ -101,25 +104,31 @@ export function paintDisc(disc, id, color) {
   }
 }
 
-function readStored(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
+/**
+ * A row's disc and title. An unread session's row is marked for CSS (a dot
+ * on the disc, a bolder title) and its title starts with "Unread" for
+ * screen readers.
+ */
+function rowBody(row, session, disc) {
+  const title = document.createElement("span");
+  title.className = "session-title";
+  title.textContent = session.title;
+  if (session.unread) {
+    row.dataset.unread = "true";
+    const note = document.createElement("span");
+    note.className = "visually-hidden";
+    note.textContent = "Unread: ";
+    title.prepend(note);
   }
-}
-
-function store(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {}
+  row.append(disc, title);
 }
 
 /**
  * Mount the sidebar. `app` carries `data-sidebar="open|closed"`; below
- * 768 px the open sidebar is an overlay sheet over the page.
+ * 768 px the open sidebar is an overlay sheet over the page. Its width and
+ * whether it is open are page preferences (`prefs.js`).
  */
-export function mountSidebar({ app, now = () => Date.now() }) {
+export function mountSidebar({ app, prefs, now = () => Date.now() }) {
   const $ = (id) => document.getElementById(id);
   const sidebar = $("sidebar");
   const list = $("session-list");
@@ -140,7 +149,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
   const flipped = new Set();
 
   // Open on wide screens unless the user closed it; a sheet always starts closed.
-  let open = !narrow.matches && readStored("ampi-gui-sidebar-open") !== "false";
+  let open = !narrow.matches && prefs.get("sidebarOpen");
 
   function setWidth(width) {
     const value = clampSidebarWidth(width);
@@ -150,7 +159,8 @@ export function mountSidebar({ app, now = () => Date.now() }) {
   }
   handle.setAttribute("aria-valuemin", String(SIDEBAR_WIDTH.min));
   handle.setAttribute("aria-valuemax", String(SIDEBAR_WIDTH.max));
-  setWidth(Number(readStored("ampi-gui-sidebar-width") ?? SIDEBAR_WIDTH.default));
+  setWidth(prefs.get("sidebarWidth"));
+  const storeWidth = (width) => prefs.set("sidebarWidth", width);
 
   function setOpen(next, { focus = false } = {}) {
     open = next;
@@ -160,7 +170,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
     // A sheet takes the page's place for keyboard and screen reader users.
     pane.inert = open && sheet;
     for (const toggle of toggles) toggle.setAttribute("aria-expanded", String(open));
-    if (!sheet) store("ampi-gui-sidebar-open", String(open));
+    if (!sheet && prefs.get("sidebarOpen") !== open) prefs.set("sidebarOpen", open);
     if (focus && open) search.focus();
     // Closing hides the sidebar: focus inside it moves to the button that opens it again.
     if (!open && (focus || sidebar.contains(document.activeElement))) $("sidebar-open").focus();
@@ -172,7 +182,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
 
   for (const button of toggles) button.addEventListener("click", () => toggle({ focus: narrow.matches }));
   scrim.addEventListener("click", () => setOpen(false, { focus: true }));
-  narrow.addEventListener("change", () => setOpen(narrow.matches ? false : readStored("ampi-gui-sidebar-open") !== "false"));
+  narrow.addEventListener("change", () => setOpen(narrow.matches ? false : prefs.get("sidebarOpen")));
   // On the document, so Escape closes the sheet even when focus fell to the page body.
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !event.defaultPrevented && narrow.matches && open) {
@@ -196,7 +206,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
     const up = () => {
       handle.removeEventListener("pointermove", move);
       delete app.dataset.resizing;
-      store("ampi-gui-sidebar-width", handle.getAttribute("aria-valuenow"));
+      storeWidth(Number(handle.getAttribute("aria-valuenow")));
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up, { once: true });
@@ -206,9 +216,9 @@ export function mountSidebar({ app, now = () => Date.now() }) {
     const delta = { ArrowLeft: -SIDEBAR_WIDTH.step, ArrowRight: SIDEBAR_WIDTH.step }[event.key];
     if (!delta) return;
     event.preventDefault();
-    store("ampi-gui-sidebar-width", String(setWidth(Number(handle.getAttribute("aria-valuenow")) + delta)));
+    storeWidth(setWidth(Number(handle.getAttribute("aria-valuenow")) + delta));
   });
-  handle.addEventListener("dblclick", () => store("ampi-gui-sidebar-width", String(setWidth(SIDEBAR_WIDTH.default))));
+  handle.addEventListener("dblclick", () => storeWidth(setWidth(SIDEBAR_WIDTH.default)));
 
   search.addEventListener("input", draw);
   search.addEventListener("keydown", (event) => {
@@ -236,10 +246,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
     disc.setAttribute("aria-label", label);
     disc.title = label;
     if (hostWorking(host)) disc.dataset.busy = "true";
-    const title = document.createElement("span");
-    title.className = "session-title";
-    title.textContent = session.title;
-    row.append(disc, title);
+    rowBody(row, session, disc);
     if (host) {
       const dot = document.createElement("span");
       dot.className = "running-dot";
@@ -271,11 +278,8 @@ export function mountSidebar({ app, now = () => Date.now() }) {
       disc.setAttribute("role", "img");
       disc.setAttribute("aria-label", "Working");
     } else disc.setAttribute("aria-hidden", "true");
-    const title = document.createElement("span");
-    title.className = "session-title";
-    title.textContent = session.title;
     row.title = session.title;
-    row.append(disc, title);
+    rowBody(row, session, disc);
     if (session.elsewhere) {
       const dot = document.createElement("span");
       dot.className = "running-dot";
@@ -307,7 +311,7 @@ export function mountSidebar({ app, now = () => Date.now() }) {
     label.className = "group-label";
     label.textContent = group.label;
     header.append(icon(ICONS[group.kind] ?? ICONS.project), label);
-    if (group.kind === "inactive" || group.kind === "archived") {
+    if (COLLAPSED_KINDS.has(group.kind)) {
       const count = document.createElement("span");
       count.className = "group-count";
       count.textContent = String(group.sessions.length);

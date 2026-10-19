@@ -77,6 +77,8 @@ export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides 
       showCosts: settings.showCosts,
       cost: (current) =>
         summarizeMmrThreadCost(current.sessionManager.getEntries(), (provider, model) => current.modelRegistry.find(provider, model)?.cost),
+      // Prices from the running session's model registry; none before the session starts.
+      costOfEntries: (entries) => summarizeMmrThreadCost(entries, (provider, model) => ctx?.modelRegistry.find(provider, model)?.cost),
       analyzeContext: (current) => analyzeMmrContext(contextInput(pi, current)),
       markdown: (entries, options) => formatMmrThreadMarkdown(entries, options),
     });

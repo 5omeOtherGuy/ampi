@@ -9,10 +9,11 @@ import { type MmrModelPrice, mmrEntryCost, readMmrEntryUsage } from "./session-u
  *
  * `ampi-threads` computes them and registers itself here at load; `ampi-tui`
  * shows them in its Thread Cost and Analyze Context overlays, and reads
- * `showCosts` for its cost gauge, and `ampi-gui` copies sessions as
- * Markdown, without importing `ampi-threads`. When `ampi-threads` is
- * disabled nothing is registered: the overlays and the GUI's copy are
- * unavailable and the gauge shows.
+ * `showCosts` for its cost gauge, and `ampi-gui` copies and exports
+ * sessions as Markdown and shows any session's cost, without importing
+ * `ampi-threads`. When `ampi-threads` is disabled nothing is registered: the
+ * overlays and the GUI's copy, export and cost are unavailable and the gauge
+ * shows.
  *
  * globalThis-anchored so registrations survive Pi's cache-isolated module
  * loads (each extension entrypoint may get its own copy of this module).
@@ -77,6 +78,14 @@ export interface MmrThreadReports {
   readonly showCosts: boolean;
   /** The current session's cost. */
   cost(ctx: ExtensionContext): MmrThreadCostReport;
+  /**
+   * The cost of any session's entries (every branch), for one this process
+   * does not run. It is `summarizeMmrThreadCost` with ampi-threads' price
+   * lookup (Pi's model registry), so no report computes cost on its own:
+   * the `ampi threads usage` and `ampi usage` commands call the same
+   * function with the model lookup they build.
+   */
+  costOfEntries(entries: readonly unknown[]): MmrThreadCostReport;
   /** What fills the current session's context window. */
   analyzeContext(ctx: ExtensionContext): MmrContextAnalysis;
   /**

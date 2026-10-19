@@ -15,6 +15,9 @@ import path from "node:path";
  * @property {string} [color]
  * @property {boolean} [pinned]
  * @property {"model" | "user"} [titleSource]
+ * @property {string} [snoozed] When the session was snoozed (ISO 8601); a newer message ends it.
+ * @property {boolean} [unread] Marked unread in the web GUI.
+ * @property {string} [readAt] When the web GUI last opened the session (ISO 8601).
  */
 
 const INDEX_VERSION = 1;
@@ -129,6 +132,8 @@ export function readThreadIndex(file) {
  * Change one session's record and write the index back through a temporary
  * file, so a reader never sees half a file. `patch` sets fields; a `null`
  * value removes one, and `null` for the whole patch removes the record.
+ * Fields the patch does not name stay as they are, the snooze, unread and
+ * read dates the web GUI writes included.
  * Returns the record as written, or `undefined` when none is left. A session
  * id ampi-threads refuses is refused here too, before anything is written.
  *

@@ -8,7 +8,7 @@ import { getMmrGuiHost, type MmrGuiSessionHost } from "../ampi-core/gui-host.js"
 import { flushMmrLiveEntry, readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
-import { createMmrGuiCommands } from "./commands.js";
+import { createMmrGuiCommands, createMmrGuiExporter } from "./commands.js";
 import { loadMmrGuiSettings, type MmrGuiSettings } from "./config.js";
 import { mmrGuiRowHosts, startMmrGuiHub } from "./hub.js";
 import { type MmrGuiServer, startMmrGuiServer } from "./server.js";
@@ -72,7 +72,8 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
           .map((entry) => entry.sessionPath as string),
       hosts: hub ? async () => mmrGuiRowHosts(await readMmrLiveEntries({ dir: overrides.registryDir })) : undefined,
     });
-    const commands = createMmrGuiCommands(pi, bridge, sessions);
+    const commands = createMmrGuiCommands(pi, bridge, sessions, { registry: { dir: overrides.registryDir } });
+    const exportSession = createMmrGuiExporter(bridge, sessions);
     const openUrl = overrides.openUrl ?? ((url: string) => openMmrGuiUrl(url));
     let server: MmrGuiServer | undefined;
     let hostReady = false;
@@ -93,6 +94,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
             startSession: (request) => hub.startSession(request),
             sessions,
             commands,
+            exportSession,
             registry: { dir: overrides.registryDir },
           });
         } catch (error) {
@@ -117,7 +119,7 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
       // Without a terminal, extensions ask the page: the worker's ctx.ui calls these.
       bridge.start(ctx, { dialogs: hosted });
       try {
-        server = await startMmrGuiServer({ bridge, commands, sessions, token, clientDir: CLIENT_DIR });
+        server = await startMmrGuiServer({ bridge, commands, exportSession, sessions, token, clientDir: CLIENT_DIR });
       } catch (error) {
         bridge.stop();
         warn(ctx, "could not start the web GUI", error);
