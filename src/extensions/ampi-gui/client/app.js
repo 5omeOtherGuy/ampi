@@ -32,6 +32,7 @@ import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
 import { mountModePicker } from "./mode-picker.js";
+import { mountNewThread } from "./new-thread.js";
 import { mountPalette } from "./palette.js";
 import { createPrefs } from "./prefs.js";
 import { mountSelectionActions } from "./selection.js";
@@ -88,6 +89,8 @@ let shownId = null;
 let access = "live";
 /** App mode: the hub's state for the session shown held or dormant: who holds it, with its pid and GUI. */
 let shownState = null;
+/** App mode: `GET /api/app`'s answer, which names this machine. */
+let appInfo = { hostname: "" };
 /** Whether the page shows Activity (`/feed`) in place of a session. */
 let feedShown = false;
 
@@ -147,16 +150,36 @@ setFullWidth(prefs.get("fullWidth"));
 const sidebar = mountSidebar({ app, prefs });
 
 let toastTimer = 0;
-/** A toast at the top centre; `level` is an extension's notify type (`info`, `warning` or `error`). */
-function notify(text, level = "info") {
+/**
+ * A toast at the top centre; `level` is an extension's notify type (`info`,
+ * `warning` or `error`). `link` (`{ label, href, open }`) adds a link that
+ * `open()` follows in the page, and keeps the toast up longer.
+ */
+function notify(text, level = "info", link) {
   const toast = $("toast");
   toast.textContent = text;
+  if (link) {
+    const anchor = document.createElement("a");
+    anchor.className = "toast-link";
+    anchor.href = link.href;
+    anchor.textContent = link.label;
+    anchor.addEventListener("click", (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      toast.hidden = true;
+      link.open();
+    });
+    toast.append(" ", anchor);
+  }
   toast.dataset.level = level;
   toast.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.hidden = true;
-  }, 4000);
+  toastTimer = setTimeout(
+    () => {
+      toast.hidden = true;
+    },
+    link ? 8000 : 4000,
+  );
 }
 
 const titlebar = mountTitlebar({
@@ -183,6 +206,28 @@ const threadSearch = mountThreadSearch({ dialog: $("search-dialog"), onOpen: (id
 // Extensions' questions in a session ampi app runs; the session that asked answers them.
 const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: postTo, answerUrl: () => `${base}dialog`, notify });
 const modePicker = mountModePicker({ dialog: $("mode-picker"), notify, mac });
+// ampi app's home page and /new: the composer that starts a thread.
+const newThread = mountNewThread({
+  root: $("new-thread"),
+  pickerDialog: $("place-picker"),
+  modePicker,
+  editLabels: (session, from, save) => titlebar.editLabels(session, from, save),
+  post: postTo,
+  async getJson(url) {
+    try {
+      const response = await fetch(url, { credentials: "same-origin" });
+      return response.ok ? await response.json() : undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  notify,
+  openThread: (id) => navigate(id),
+  threadHref: (id) => sessionHref(id),
+  close: (id) => navigate(id),
+  forgetOrigin: () => history.replaceState(historyState(null), "", location.pathname),
+  mac,
+});
 
 // ---------------------------------------------------------------------------
 // Colour scheme: system, light or dark, remembered per browser.
@@ -838,7 +883,6 @@ const listTimer = setInterval(() => refreshSessions(), 60_000);
 // App mode: every session at its own address, live when the app runs it
 
 const EMPTY_TEXT = empty.textContent;
-const HOME_TEXT = "Pick a session in the sidebar to read it or carry it on. A session nothing runs starts when you send it a message.";
 
 /** Stop following the shown session; its questions leave the page with it. */
 function closeStream() {
@@ -853,7 +897,7 @@ function setAccess(next, banner = {}) {
   app.dataset.view = next === "held" || next === "gone" ? "readonly" : next;
   $("readonly-text").innerHTML = banner.html ?? "";
   $("readonly-banner").hidden = !banner.html;
-  empty.textContent = next === "home" ? HOME_TEXT : EMPTY_TEXT;
+  empty.textContent = EMPTY_TEXT;
   composer.setEnabled(next === "live" || next === "dormant");
   composer.setLocked(banner.reason ?? null);
   if (next !== "live") {
@@ -952,7 +996,12 @@ function handOver(state) {
   refreshSessions();
 }
 
-function showHome() {
+/**
+ * ampi app's home page, `/` and `/new`: the new-thread composer. `from` is
+ * the thread it was opened from, whose Insert Current Thread it offers, and
+ * `text` a prompt to start with.
+ */
+function showHome({ from = null, fromCwd, text } = {}) {
   closeStream();
   shownId = null;
   base = sessionBase(true, null);
@@ -963,12 +1012,30 @@ function showHome() {
   setAccess("home");
   drawTitle();
   drawChrome();
+  $("new-thread").hidden = feedShown;
+  if (!feedShown) newThread.show({ from: from && { id: from, cwd: fromCwd ?? listedRow(from)?.cwd ?? "" }, text, host: appInfo.hostname });
 }
 
-function showRoute(id) {
+function showRoute(id, home = {}) {
   hideFeed();
+  $("new-thread").hidden = id !== null;
   if (id) openSession(id);
-  else showHome();
+  else showHome(home);
+}
+
+/** Whether the page shows the new-thread composer. */
+const newThreadShown = () => appMode && !feedShown && shownId === null;
+
+/** Open the composer at `/new`, from the thread shown (if any), with `text` as its prompt. */
+function openNewThread(text) {
+  if (!appMode) return notify("Needs ampi app");
+  sidebar.closeSheet();
+  if (newThreadShown()) return newThread.show({ from: newThread.fromId() && { id: newThread.fromId(), cwd: listedRow(newThread.fromId())?.cwd ?? "" }, text });
+  const from = feedShown ? null : shownId;
+  const cwd = from ? (liveSession.id === from ? liveSession.cwd : (viewing?.session.cwd ?? listedRow(from)?.cwd ?? "")) : "";
+  history.pushState(historyState(null, from), "", "/new");
+  hideFeed();
+  showHome({ from, fromCwd: cwd, text });
 }
 
 /** Go to a session's address (or the home page) and show it; Back and Forward return. */
@@ -980,7 +1047,7 @@ function navigate(id, { replace = false, hash = "" } = {}) {
 
 window.addEventListener("popstate", (event) => {
   if (location.pathname === "/feed") showFeed(parseFeedSearch(location.search, activity.defaults()));
-  else if (appMode) showRoute(routeFromHistory(event.state, location.pathname));
+  else if (appMode) showRoute(routeFromHistory(event.state, location.pathname), { from: event.state?.ampiFrom ?? null });
   else if (feedShown) {
     hideFeed();
     route();
@@ -1006,6 +1073,7 @@ function showFeed(filters) {
     if (appMode) showHome();
     app.dataset.page = "feed";
     $("feed").hidden = false;
+    $("new-thread").hidden = true;
     $("copy-link").hidden = false;
     $("activity-tile").setAttribute("aria-current", "page");
     sidebar.closeSheet();
@@ -1061,8 +1129,11 @@ $("session-list").addEventListener("click", (event) => {
   else if (access === "gone") openSession(shownId);
 });
 
-async function startApp() {
+async function startApp(info) {
   appMode = true;
+  appInfo = info;
+  newThreadButton.removeAttribute("aria-disabled");
+  newThreadButton.title = "New thread";
   clearInterval(listTimer);
   sidebar.useAppMode();
   app.querySelector(".banner-link").hidden = true;
@@ -1080,9 +1151,16 @@ async function startApp() {
   new EventSource("/api/events").addEventListener("sessions", () => refreshSessions());
   refreshSessions();
   if (location.pathname === "/feed") showFeedRoute(parseFeedSearch(location.search, activity.defaults()), { replace: true });
+  else if (location.pathname === "/new") showRoute(null, { from: history.state?.ampiFrom ?? null });
   // A link to a message keeps its fragment; openSession scrolls to the message.
   else navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true, hash: location.hash });
 }
+
+// The sidebar's New Thread button: ampi app only; a terminal's own page says why not.
+const newThreadButton = $("new-thread-button");
+newThreadButton.setAttribute("aria-disabled", "true");
+newThreadButton.title = "New thread: needs ampi app";
+newThreadButton.addEventListener("click", () => openNewThread());
 
 // ---------------------------------------------------------------------------
 // Keys: commands.js names the actions and their keys, keys.js picks the
@@ -1092,13 +1170,17 @@ const commands = createCommandRegistry(DEFAULT_COMMANDS);
 const keys = createKeyDispatcher({ commands: () => commands.list(), mac });
 /** A session page, not ampi app's home page or Activity. */
 const onThreadPage = () => !feedShown && (!appMode || shownId !== null);
-const keymap = mountKeymap({ dialog: $("keymap-dialog"), groups: () => keymapGroups(commands.list(), { threadPage: onThreadPage(), mac }) });
+const keymap = mountKeymap({
+  dialog: $("keymap-dialog"),
+  groups: () => keymapGroups(commands.list(), { threadPage: onThreadPage(), newThread: newThreadShown(), mac }),
+});
 const palette = mountPalette({
   dialog: $("palette-dialog"),
   commands: () => commands.list(),
   state: () => keyState(),
   openSession: (id) => openSessionPage(id),
   send: (text) => composer.send(text),
+  startThread: (text) => openNewThread(text),
   mac,
 });
 
@@ -1208,6 +1290,8 @@ const ui = {
   copySelectionMarkdown: () => selectionActions.copyMarkdown(),
   copySelectionStyled: () => selectionActions.copyStyled(),
   copySelectionLink: () => selectionActions.copyLink(),
+  newThread: () => openNewThread(),
+  newThreadControl: (kind) => newThread.control(kind),
 };
 
 /** What the commands' `when` and `run` read (see commands.js). */
@@ -1216,7 +1300,8 @@ function keyState() {
   const row = inSidebar ? document.activeElement.closest?.("a.session-row") : null;
   return {
     threadPage: onThreadPage(),
-    contexts: inSidebar ? ["sidebar", "global"] : ["global"],
+    // The composer's keys work wherever focus is while it is shown, the sidebar's only there.
+    contexts: [...(inSidebar ? ["sidebar"] : []), ...(newThreadShown() ? ["new-thread"] : []), "global"],
     session: titlebar.target(),
     focusedSession: row ? sessionTarget(row.dataset.id) : null,
     sessionList,
@@ -1229,6 +1314,8 @@ function keyState() {
     userMessages: feedShown ? 0 : userMessageCount(),
     selection: selectionActions.active(),
     linkBlocked: linkBlocked(),
+    app: appMode,
+    fromThread: newThreadShown() ? newThread.fromId() : null,
     ui,
   };
 }
@@ -1253,13 +1340,14 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-/** Whether `ampi app` serves this page: a session server answers 404. */
-async function isApp() {
+/** `GET /api/app`'s answer when `ampi app` serves this page, else `null`: a session server answers 404. */
+async function appAnswer() {
   try {
     const response = await fetch("/api/app", { credentials: "same-origin" });
-    return response.ok && (await response.json()).app === true;
+    const body = response.ok ? await response.json() : null;
+    return body?.app === true ? { hostname: typeof body.hostname === "string" ? body.hostname : "" } : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -1286,5 +1374,6 @@ async function start() {
   }
 }
 
-if (await isApp()) startApp();
+const info = await appAnswer();
+if (info) startApp(info);
 else start();

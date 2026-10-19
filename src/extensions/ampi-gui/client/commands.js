@@ -8,7 +8,8 @@
 // - `section`: one of SECTIONS.
 // - `keys`: the default chords, in the grammar of keys.js.
 // - `context`: where focus must be for the keys to fire; `sidebar` for the
-//   sidebar's focus mode, else everywhere on the page.
+//   sidebar's focus mode, `new-thread` while the new-thread composer is
+//   shown, else everywhere on the page.
 // - `when(state)`: `{ state: "available" | "unavailable" | "hidden", reason? }`.
 // - `run(state, { chord })`: does it through `state.ui`.
 // - `hint`: what the page says while it waits for a sequence's second key.
@@ -26,12 +27,14 @@
 // session is live with an ampi mode, else `null`), `userMessages` (how many
 // messages you wrote in the session shown), `selection` (text is selected in
 // the transcript), `linkBlocked` (why a link to it cannot be made here, or
-// `null`) and `ui`, the page's actions. The registry
+// `null`), `app` (`ampi app` serves the page), `fromThread` (the thread the
+// new-thread composer was opened from, or `null`) and `ui`, the page's
+// actions. The registry
 // is pure: tests load it in Node.
 
 import { parseChord } from "./keys.js";
 
-export const SECTIONS = ["Global", "Sidebar", "Thread", "Thread Panes", "Navigation"];
+export const SECTIONS = ["Global", "Sidebar", "Thread", "Thread Panes", "New Thread", "Navigation"];
 
 /** The command palette's sections, in its order. */
 export const PALETTE_SECTIONS = ["Global", "Thread", "Thread Panes", "Navigation"];
@@ -110,8 +113,34 @@ function sessionCommand(id, title, action, description, { keys = [], need, what 
   };
 }
 
+/** Why New Thread cannot run on a terminal's own page. */
+export const NEEDS_APP = "Needs ampi app";
+
+/** A key of the new-thread composer: it opens one of its pickers or menus (`kind`). */
+function composerCommand(id, title, key, kind, description) {
+  return {
+    id,
+    title,
+    section: "New Thread",
+    context: "new-thread",
+    keys: [key],
+    description,
+    run: (state) => state.ui.newThreadControl(kind),
+  };
+}
+
 /** The commands the page has now. */
 export const DEFAULT_COMMANDS = [
+  {
+    id: "new-thread",
+    title: "New thread",
+    section: "Global",
+    keys: ["alt+enter"],
+    palette: { title: "New Thread…" },
+    description: "Write a prompt and start a thread in a directory and mode you choose",
+    when: (state) => (state.app ? AVAILABLE : unavailable(NEEDS_APP)),
+    run: (state) => state.ui.newThread(),
+  },
   // Global
   {
     id: "go-home",
@@ -523,6 +552,16 @@ export const DEFAULT_COMMANDS = [
     palette: { title: "Report a Bug" },
     when: () => AVAILABLE,
   }),
+
+  // New Thread: the composer's keys, while it is shown.
+  composerCommand("new-thread-executor", "Choose where it runs", "ctrl+m", "executor", "The machine the new thread runs on"),
+  composerCommand("new-thread-directory", "Choose a directory", "ctrl+j", "directory", "The working directory, from the ones sessions used or a typed path"),
+  composerCommand("new-thread-mode", "Choose a mode", "ctrl+s", "mode", "The mode the new thread starts in"),
+  composerCommand("new-thread-labels", "Edit labels", "ctrl+l", "labels", "The labels the new thread gets in the thread index"),
+  {
+    ...composerCommand("new-thread-insert", "Insert current thread", "ctrl+i", "insert", "Mention the thread you came from, as @ and its id"),
+    when: (state) => (state.fromThread ? AVAILABLE : unavailable("Open New Thread from a thread to mention it")),
+  },
 
   // Thread Panes
   {

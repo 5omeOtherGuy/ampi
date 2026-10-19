@@ -1,4 +1,5 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import { homedir, hostname } from "node:os";
 import type { MmrGuiHubSession, MmrGuiHubStartRequest } from "../ampi-core/gui-host.js";
 import { isMmrImportedSession, MMR_IMPORTED_SESSION_NOTICE } from "../ampi-core/imported-session.js";
 import {
@@ -9,8 +10,10 @@ import {
   readMmrLiveEntries,
   readMmrLiveToken,
 } from "../ampi-core/live-registry.js";
-import { MMR_GUI_SESSION_ACTIONS, type MmrGuiCommands, type MmrGuiExporter } from "./commands.js";
+import { getMmrThreadIndex, type MmrThreadIndex } from "../ampi-core/thread-index.js";
+import { MMR_GUI_SESSION_ACTIONS, type MmrGuiCommands, type MmrGuiExporter, postToMmrGui } from "./commands.js";
 import type { MmrGuiModes } from "./modes.js";
+import { listMmrGuiDirectories, type MmrGuiPathKind, mmrGuiPathKind, parseMmrGuiNewThread } from "./new-thread.js";
 import {
   formatMmrGuiEvent,
   isMmrGuiSessionId,
@@ -38,13 +41,15 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *
  * | Route | Answer |
  * | --- | --- |
- * | `GET /`, `GET /feed`, `GET /s/<id>` | the page |
- * | `GET /api/app` | `{ app: true }`; a session server answers 404, which is how the page tells the two apart |
+ * | `GET /`, `GET /new`, `GET /feed`, `GET /s/<id>` | the page; `/` and `/new` show the new-thread composer |
+ * | `GET /api/app` | `{ app: true, hostname }`; a session server answers 404, which is how the page tells the two apart |
  * | `GET /api/events` | an event stream with `sessions` (no `id`, data `{}`) each time a worker starts or stops, so the page reads the list again |
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
  * | `GET /api/export` | as on a session server, for any session |
  * | `GET /api/feed`, `GET /api/search` | Activity and Search Threads, as on a session server, over the hub's rows |
- * | `GET /api/modes` | the mode picker's modes and models for a thread not started yet: no current mode, lock or speed (`modes.ts`) |
+ * | `GET /api/modes` | the mode picker's modes and models for a thread not started yet, with no lock or speed (`modes.ts`) |
+ * | `GET /api/directories?q=` | the new-thread composer's directories (`new-thread.ts`) |
+ * | `POST /api/threads` | `{ prompt, cwd, mode?, labels? }`: starts a worker for a new session in `cwd` (in `mode`), records the labels in the thread index, sends the prompt as the first message and answers `{ ok, sessionId }` |
  * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
  * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for another holder; a session nothing runs is renamed in its file |
  * | `POST /api/delete` | 409 for a session a worker runs or is starting; otherwise as on a session server |
@@ -77,6 +82,16 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *   so it is read-only wherever it is open: as elsewhere, from the file,
  *   with 409 for `events`, `modes` and every POST, and no worker is started.
  *
+ * A new thread (`POST /api/threads`) is hosted from the start: its worker
+ * creates the session file and is its only writer, so its routes are
+ * forwarded before the catalogue lists it. Pi saves the file only with the
+ * first message, so the pages are told to read the list again when its first
+ * turn starts and when it settles. The hub writes only the labels,
+ * to the thread index. When the worker does not take the first message, the
+ * hub stops it and answers that refusal; a start that outlasts
+ * {@link MMR_GUI_HUB_START_TIMEOUT_MS} answers 504 and its worker is
+ * stopped once it is ready.
+ *
  * One writer per session file: the hub never starts a worker for a file
  * another live process names in the live registry (it checks just before
  * starting one, and the worker checks again). Every
@@ -104,14 +119,22 @@ export interface MmrGuiHubOptions {
   clientDir: string;
   /** Starts a worker for a saved session (the hub host's `startSession`). */
   startSession(request: MmrGuiHubStartRequest): Promise<MmrGuiHubSession>;
-  /** The session list (rows with `host`), its read-only views, the catalogue, the saved entries and the rows Activity and search filter. */
-  sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read" | "searchable">;
+  /** The session list (rows with `host`), its read-only views, the catalogue, the saved entries and the rows Activity, search and the directory list read. */
+  sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read" | "searchable" | "invalidate">;
   /** The session server's commands; the hub serves the More Actions (`MMR_GUI_SESSION_ACTIONS`) from them. */
   commands: MmrGuiCommands;
   /** `GET /api/export`, as on a session server. */
   exportSession: MmrGuiExporter;
-  /** `GET /api/modes`: the modes and models for a new thread (`describeMmrGuiModes` with `live: false`). */
+  /** `GET /api/modes`: the modes and models for a new thread (`describeMmrGuiModes` with `live: false`); `current` is the mode it starts in by default. */
   modes(): MmrGuiModes;
+  /** Where a new thread's labels go; defaults to ampi-core's seam. */
+  threadIndex?: () => MmrThreadIndex | undefined;
+  /** `GET /api/app`'s `hostname`, the executor the composer names; defaults to `os.hostname()`. */
+  hostname?: string;
+  /** The home directory `~` names in a typed path; defaults to `os.homedir()`. */
+  home?: string;
+  /** Whether a path is a directory; defaults to `fs.stat`. */
+  pathKind?: (file: string) => Promise<MmrGuiPathKind>;
   /** Where the live registry is and how to probe its processes. */
   registry?: MmrLiveRegistryOptions;
   /** The hub's own process; its entry names no file. Defaults to this process. */
@@ -273,6 +296,11 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       if (isHolder(holder)) throw new StartError(409, elsewhere(holder.kind, holder.pid));
       throw new StartError(502, { error: `Could not start the session: ${error instanceof Error ? error.message : String(error)}` });
     }
+    return adopt(session, id);
+  }
+
+  /** Route session `id` to a worker that is ready, and follow its activity and exit. */
+  function adopt(session: MmrGuiHubSession, id: string): HubWorker {
     const worker: HubWorker = { id, session, busy: false, lastUse: now(), streams: new Set(), warned: new Set() };
     session.onActivity((state) => {
       worker.busy = state === "busy";
@@ -429,6 +457,13 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
 
   async function sessionRoute(request: MmrGuiRequest, id: string, rest: string): Promise<void> {
     const { req, res, method } = request;
+    // A worker runs it: a new thread is hosted before the catalogue lists it.
+    const hosted = workers.get(id);
+    if (hosted) {
+      const post = method === "POST" ? await readPost(request) : undefined;
+      if (method === "POST" && !post) return;
+      return proxy(workerUpstream(hosted), request, rest, post?.raw);
+    }
     const info = await sessions.find(id);
     if (!info) {
       req.resume();
@@ -467,8 +502,82 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     return sendJson(res, 200, rest === "session" ? { ...view.session, state } : { ...view, state });
   }
 
+  /** `GET /api/directories?q=`: the composer's directory picker. */
+  async function directories({ res, url }: MmrGuiRequest): Promise<void> {
+    const [{ rows }, live] = await Promise.all([sessions.searchable(), readMmrLiveEntries(registry).catch(() => [])]);
+    const answer = await listMmrGuiDirectories({
+      rows: rows.map((entry) => entry.row),
+      live,
+      query: url.searchParams.get("q") ?? "",
+      home: options.home ?? homedir(),
+      pathKind: options.pathKind,
+    });
+    sendJson(res, 200, answer);
+  }
+
+  /** `POST /api/threads`: start a worker for a new session, label it, and send its first message. */
+  async function createThread(request: MmrGuiRequest): Promise<void> {
+    const { res } = request;
+    const post = await readPost(request);
+    if (!post) return;
+    const checked = await parseMmrGuiNewThread(post.json, { modes: options.modes(), pathKind: options.pathKind ?? mmrGuiPathKind });
+    if (!checked.ok) return sendJson(res, checked.status, checked.body);
+    const { prompt, cwd, mode, labels } = checked.value;
+    const index = (options.threadIndex ?? getMmrThreadIndex)();
+    if (labels.length > 0 && !index) return sendJson(res, 409, { error: "Labels need the ampi-threads extension." });
+
+    let timer: unknown;
+    let timedOut = false;
+    const start = options.startSession(mode === null ? { cwd } : { cwd, mode });
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimer(() => {
+        timedOut = true;
+        reject(new StartError(504, { error: "The new thread did not start in time. Try again in a moment." }));
+      }, MMR_GUI_HUB_START_TIMEOUT_MS);
+    });
+    let session: MmrGuiHubSession;
+    try {
+      session = await Promise.race([start, timeout]);
+    } catch (error) {
+      // A start that comes too late is stopped: nobody knows its id.
+      if (timedOut) void start.then((late) => late.stop()).catch(() => {});
+      if (error instanceof StartError) return sendJson(res, error.status, error.body);
+      return sendJson(res, 502, { error: `Could not start the thread: ${error instanceof Error ? error.message : String(error)}` });
+    } finally {
+      clearTimer(timer);
+    }
+    const worker = adopt(session, session.sessionId);
+    // Pi saves the file with the first message, after adopt() told the pages: tell them again
+    // when the first turn starts and when it settles, so a thread nobody opened shows in the list.
+    let relisted = 0;
+    session.onActivity(() => {
+      if (relisted >= 2 || workers.get(worker.id) !== worker) return;
+      relisted++;
+      sessions.invalidate();
+      announce();
+    });
+    const sent = await postToMmrGui(session.port, session.token, "send", { text: prompt });
+    if (sent.status !== 200) {
+      // Nothing was saved without a message: the empty session goes with its worker.
+      retire(worker);
+      void session.stop().catch(() => {});
+      return sendJson(res, sent.status, { error: String(sent.body.error ?? "The new thread did not take its first message.") });
+    }
+    sessions.invalidate();
+    let warning: string | undefined;
+    if (labels.length > 0) {
+      try {
+        await index?.update(session.sessionId, { labels });
+      } catch (error) {
+        warning = `The thread started, but its labels were not saved: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+    sendJson(res, 200, { ok: true, sessionId: session.sessionId, ...(warning ? { warning } : {}) });
+  }
+
   async function hubCommand(request: MmrGuiRequest): Promise<void> {
     const { req, res, rawPath } = request;
+    if (rawPath === "/api/threads") return createThread(request);
     const name = rawPath.startsWith("/api/") ? rawPath.slice("/api/".length) : "";
     if (!MMR_GUI_SESSION_ACTIONS.includes(name)) {
       req.resume();
@@ -518,7 +627,9 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       return send(res, 404, "Not found");
     }
     if (method === "POST") return hubCommand(request);
-    if (rawPath === "/api/app") return sendJson(res, 200, { app: true });
+    if (rawPath === "/new") return request.servePage();
+    if (rawPath === "/api/app") return sendJson(res, 200, { app: true, hostname: options.hostname ?? hostname() });
+    if (rawPath === "/api/directories") return directories(request);
     if (rawPath === "/api/events") return serveHubEvents(request);
     if (rawPath === "/api/sessions") return sendJson(res, 200, await sessions.list());
     if (rawPath.startsWith("/api/sessions/")) {

@@ -10,16 +10,18 @@ const COLUMNS = [
   { label: "Sidebar", sections: ["Sidebar"] },
   { label: "Thread", sections: ["Thread", "Thread Panes"] },
 ];
+const NEW_THREAD_COLUMN = { label: "New Thread", sections: ["New Thread"] };
 
 /**
  * The overlay's columns for `commands`: Global, Sidebar and Thread while a
- * session is shown (`threadPage`), only Global elsewhere. Each row is a
+ * session is shown (`threadPage`), Global and New Thread while the
+ * new-thread composer is (`newThread`), only Global elsewhere. Each row is a
  * command with keys: `{ id, title, chords: [{ chips, reserved }] }`, where
  * `chips` are the platform's key names, one per step of a sequence, and
  * `reserved` marks a key a browser tab keeps for itself.
  */
-export function keymapGroups(commands, { threadPage = false, mac = false, overrides = {} } = {}) {
-  const columns = threadPage ? COLUMNS : COLUMNS.slice(0, 1);
+export function keymapGroups(commands, { threadPage = false, newThread = false, mac = false, overrides = {} } = {}) {
+  const columns = threadPage ? COLUMNS : newThread ? [COLUMNS[0], NEW_THREAD_COLUMN] : COLUMNS.slice(0, 1);
   return columns
     .map(({ label, sections }) => ({
       label,

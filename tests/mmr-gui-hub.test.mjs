@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, request } from "node:http";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, before, describe, it } from "node:test";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
@@ -354,7 +354,7 @@ describe("ampi app hub: pages and the session list", () => {
     try {
       const app = await send(ctx.port, { target: "/api/app", headers: ctx.headers() });
       assert.equal(app.status, 200);
-      assert.deepEqual(app.json(), { app: true });
+      assert.deepEqual(app.json(), { app: true, hostname: hostname() });
       const sessionServer = await send(worker.port, { target: "/api/app", headers: { Host: `127.0.0.1:${worker.port}`, Cookie: `ampi_gui_${worker.port}=${WORKER_TOKEN}` } });
       assert.equal(sessionServer.status, 404, "the page tells the hub from a session server by this route");
 
@@ -949,7 +949,7 @@ describe("ampi-gui with a hub host", () => {
     assert.equal(ready.length, 1);
     const { port } = ready[0];
     const app = await send(port, { target: "/api/app", headers: { Host: `127.0.0.1:${port}`, Cookie: `ampi_gui_${port}=${HUB_TOKEN}` } });
-    assert.deepEqual(app.json(), { app: true });
+    assert.deepEqual(app.json(), { app: true, hostname: hostname() });
     for (const run of timers.splice(0)) run();
     await writer.idle();
     const entry = JSON.parse(readFileSync(path.join(dir, `${process.pid}.json`), "utf8"));

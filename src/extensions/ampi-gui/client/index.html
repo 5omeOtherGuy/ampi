@@ -20,6 +20,9 @@
           <button class="icon-button sidebar-header-end" id="search-threads" type="button" aria-haspopup="dialog" aria-controls="search-dialog" aria-label="Search threads" title="Search threads">
             <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
           </button>
+          <button class="icon-button" id="new-thread-button" type="button" aria-label="New thread" aria-keyshortcuts="Alt+Enter" title="New thread">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 2.75h-3.5a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h8.5a1 1 0 0 0 1-1v-3.5"/><path d="M11.5 2.25 13.75 4.5 8 10.25H5.75V8z"/></svg>
+          </button>
         </div>
         <div class="sidebar-search">
           <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
@@ -73,6 +76,67 @@
             <div class="transcript" id="transcript" aria-live="off"></div>
             <div class="live-dot" id="live-dot" aria-hidden="true" hidden></div>
             <p class="empty" id="empty" hidden>No messages yet. Write one below, or in the terminal.</p>
+          </div>
+        </main>
+        <main class="new-thread" id="new-thread" aria-label="New thread" hidden>
+          <div class="new-thread-card">
+            <div class="new-thread-head">
+              <button class="new-thread-link" id="new-thread-close" type="button">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+                Close
+              </button>
+              <button class="new-thread-link" id="new-thread-insert" type="button" aria-keyshortcuts="Control+I" hidden>
+                Insert current thread <kbd aria-hidden="true"></kbd>
+              </button>
+            </div>
+            <label class="visually-hidden" for="new-thread-prompt">Prompt for the new thread</label>
+            <textarea id="new-thread-prompt" rows="3" autocomplete="off" spellcheck="true"></textarea>
+            <div class="new-thread-tools">
+              <button class="icon-button" id="new-thread-attach" type="button" aria-disabled="true" aria-label="Attach files (not available yet)" title="Attachments are not available in the web GUI yet">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 7.5 8 12.75a3.18 3.18 0 0 1-4.5-4.5l5.5-5.5a2.12 2.12 0 0 1 3 3l-5.5 5.5a1.06 1.06 0 0 1-1.5-1.5L10 4.75"/></svg>
+              </button>
+              <p class="new-thread-notice" id="new-thread-notice" role="status" hidden></p>
+            </div>
+            <p class="new-thread-error" id="new-thread-error" role="alert" hidden></p>
+            <div class="new-thread-bar">
+              <button class="pill" id="pill-executor" type="button" aria-haspopup="dialog" aria-controls="place-picker" aria-keyshortcuts="Control+M" aria-label="Runs on: this machine">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.25"/><path d="M5.5 13.75h5M8 11.25v2.5"/></svg>
+                <span>This machine</span>
+              </button>
+              <button class="pill" id="pill-directory" type="button" aria-haspopup="dialog" aria-controls="place-picker" aria-keyshortcuts="Control+J">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 3.5h4l1.5 1.5h7v7.5a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1z"/></svg>
+                <span id="pill-directory-label">Choose a directory</span>
+              </button>
+              <button class="pill pill-mode" id="pill-mode" type="button" aria-haspopup="dialog" aria-controls="mode-picker" aria-keyshortcuts="Control+S">
+                <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.75 11.25a5.25 5.25 0 1 1 10.5 0"/><path d="m8 11.25 2.5-3.5"/></svg>
+                <span id="pill-mode-label">Mode</span>
+              </button>
+              <ul class="label-chips new-thread-labels" id="new-thread-labels" aria-label="Labels" hidden></ul>
+              <div class="menu-anchor">
+                <button class="icon-button" id="new-thread-options" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="new-thread-menu" aria-label="Thread options" title="Thread options">
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle class="fill" cx="8" cy="3.5" r="1.1"/><circle class="fill" cx="8" cy="8" r="1.1"/><circle class="fill" cx="8" cy="12.5" r="1.1"/></svg>
+                </button>
+                <div class="menu new-thread-menu" id="new-thread-menu" role="menu" aria-label="Thread options" hidden>
+                  <button class="menu-entry" type="button" role="menuitem" tabindex="-1" data-value="labels" aria-keyshortcuts="Control+L">
+                    <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.25 3.25v4l6.5 6.5 5-5-6.5-6.5h-4a1 1 0 0 0-1 1z"/><circle cx="5.25" cy="5.25" r="0.9"/></svg>
+                    <span class="menu-label">Labels…</span>
+                    <span class="menu-detail" id="new-thread-labels-detail"></span>
+                    <span class="menu-keys" id="new-thread-labels-keys"></span>
+                  </button>
+                </div>
+              </div>
+              <div class="menu-anchor new-thread-send">
+                <button class="submit new-thread-submit" id="new-thread-submit" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="new-thread-send-menu" data-empty="true">
+                  <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M8.5 3.5 13 8l-4.5 4.5"/></svg>
+                  <span id="new-thread-submit-text"></span>
+                </button>
+                <div class="menu new-thread-menu new-thread-send-menu" id="new-thread-send-menu" role="menu" aria-label="Create" hidden>
+                  <button class="menu-entry" type="button" role="menuitem" tabindex="-1" data-value="open"><span class="menu-label">Create</span><span class="menu-keys"></span></button>
+                  <button class="menu-entry" type="button" role="menuitem" tabindex="-1" data-value="background"><span class="menu-label">Create in Background</span><span class="menu-keys"></span></button>
+                  <button class="menu-entry" type="button" role="menuitem" tabindex="-1" data-value="another"><span class="menu-label">Create and New Thread</span><span class="menu-keys"></span></button>
+                </div>
+              </div>
+            </div>
           </div>
         </main>
         <main class="feed" id="feed" aria-label="Activity" hidden>
@@ -211,6 +275,17 @@
         <!-- Arrow keys move through the list from the field, so the scrolling body takes no Tab stop. -->
         <div class="mode-picker-body" tabindex="-1">
           <div class="mode-picker-list" id="mode-picker-list" role="listbox"></div>
+          <p class="mode-picker-empty" hidden></p>
+        </div>
+      </dialog>
+      <!-- The new-thread composer's executor and directory pickers; they share the mode picker's look. -->
+      <dialog class="mode-picker place-picker" id="place-picker" aria-label="Directory">
+        <div class="mode-picker-head">
+          <input class="mode-picker-input" type="text" role="combobox" aria-controls="place-picker-list" aria-expanded="true" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+          <kbd class="mode-picker-key" aria-hidden="true"></kbd>
+        </div>
+        <div class="mode-picker-body" tabindex="-1">
+          <div class="mode-picker-list" id="place-picker-list" role="listbox" aria-label="Choices"></div>
           <p class="mode-picker-empty" hidden></p>
         </div>
       </dialog>

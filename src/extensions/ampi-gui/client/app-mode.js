@@ -48,9 +48,9 @@ export function appPath(id) {
   return id ? `/s/${encodeURIComponent(id)}` : "/";
 }
 
-/** The session a page address names: `{ id }`, `{ id: null }` for `/`, or `null` for any other path. */
+/** The session a page address names: `{ id }`, `{ id: null }` for `/` and `/new` (the new-thread composer), or `null` for any other path. */
 export function parseAppPath(pathname) {
-  if (pathname === "/") return { id: null };
+  if (pathname === "/" || pathname === "/new") return { id: null };
   const match = /^\/s\/([^/]+)\/?$/.exec(pathname);
   if (!match) return null;
   let id;
@@ -62,9 +62,9 @@ export function parseAppPath(pathname) {
   return SESSION_ID.test(id) ? { id } : null;
 }
 
-/** The history entry the page stores with each address. */
-export function historyState(id) {
-  return { ampiSession: id ?? null };
+/** The history entry the page stores with each address; the composer's also names the thread it was opened from. */
+export function historyState(id, from = null) {
+  return from ? { ampiSession: id ?? null, ampiFrom: from } : { ampiSession: id ?? null };
 }
 
 /** The session to show after Back or Forward: the entry's state, else the address. */

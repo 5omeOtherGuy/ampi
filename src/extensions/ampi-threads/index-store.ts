@@ -4,11 +4,14 @@ import path from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { isUnsafeObjectKey, writeFileAtomic } from "../ampi-core/internal/settings-file.js";
-import type {
-  MmrThreadIndex,
-  MmrThreadRecord,
-  MmrThreadRecordPatch,
-  MmrThreadTitleSource,
+import {
+  checkMmrThreadLabels,
+  MMR_THREAD_LABEL_MAX_LENGTH,
+  MMR_THREAD_LABELS_MAX,
+  type MmrThreadIndex,
+  type MmrThreadRecord,
+  type MmrThreadRecordPatch,
+  type MmrThreadTitleSource,
 } from "../ampi-core/thread-index.js";
 
 /**
@@ -29,8 +32,7 @@ import type {
 
 export const MMR_THREAD_INDEX_VERSION = 1;
 export const MMR_THREAD_INDEX_FILE = "index.json";
-export const MMR_THREAD_LABELS_MAX = 20;
-export const MMR_THREAD_LABEL_MAX_LENGTH = 32;
+export { MMR_THREAD_LABEL_MAX_LENGTH, MMR_THREAD_LABELS_MAX };
 export const MMR_THREAD_COLORS: readonly string[] = Object.freeze([
   "blue",
   "purple",
@@ -43,7 +45,6 @@ export const MMR_THREAD_COLORS: readonly string[] = Object.freeze([
   "gray",
 ]);
 
-const LABEL = /^[a-z0-9-]+$/;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const TITLE_SOURCES: ReadonlySet<MmrThreadTitleSource> = new Set(["model", "user"]);
 
@@ -62,26 +63,22 @@ export function resolveDefaultMmrThreadIndexDir(): string {
 
 /**
  * Check a label list and return it without duplicates, in order. Labels are
- * 1 to 32 lowercase letters, digits or hyphens; a session has at most 20.
+ * 1 to 32 lowercase letters, digits or hyphens; a session has at most 20
+ * (`checkMmrThreadLabels`).
  */
 export function validateMmrThreadLabels(labels: unknown): string[] {
-  if (!Array.isArray(labels)) throw new MmrThreadIndexError("labels must be a list of strings.");
-  const unique: string[] = [];
-  for (const label of labels) {
-    if (typeof label !== "string" || !LABEL.test(label)) {
-      throw new MmrThreadIndexError(
-        `label ${JSON.stringify(label)} is not allowed: use lowercase letters, digits and hyphens.`,
-      );
-    }
-    if (label.length > MMR_THREAD_LABEL_MAX_LENGTH) {
-      throw new MmrThreadIndexError(`label "${label}" is longer than ${MMR_THREAD_LABEL_MAX_LENGTH} characters.`);
-    }
-    if (!unique.includes(label)) unique.push(label);
+  const checked = checkMmrThreadLabels(labels);
+  if (checked.ok) return checked.labels;
+  if (checked.problem === "list") throw new MmrThreadIndexError("labels must be a list of strings.");
+  if (checked.problem === "characters") {
+    throw new MmrThreadIndexError(
+      `label ${JSON.stringify(checked.label)} is not allowed: use lowercase letters, digits and hyphens.`,
+    );
   }
-  if (unique.length > MMR_THREAD_LABELS_MAX) {
-    throw new MmrThreadIndexError(`a session takes at most ${MMR_THREAD_LABELS_MAX} labels, not ${unique.length}.`);
+  if (checked.problem === "length") {
+    throw new MmrThreadIndexError(`label "${checked.label}" is longer than ${MMR_THREAD_LABEL_MAX_LENGTH} characters.`);
   }
-  return unique;
+  throw new MmrThreadIndexError(`a session takes at most ${MMR_THREAD_LABELS_MAX} labels, not ${checked.count}.`);
 }
 
 function validColor(value: unknown): value is string {

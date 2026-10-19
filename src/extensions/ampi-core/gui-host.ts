@@ -71,8 +71,12 @@ export interface MmrGuiSessionHost {
   notice?: (message: string, level: "info" | "warning" | "error") => void;
 }
 
-/** What `startSession` opens: a saved session file, or a new session in a directory. */
-export type MmrGuiHubStartRequest = { path: string } | { cwd: string };
+/**
+ * What `startSession` opens: a saved session file, or a new session in a
+ * directory, optionally in an ampi mode (a key `--ampi-mode` takes), which
+ * the worker applies before the first message as `ampi -m` does.
+ */
+export type MmrGuiHubStartRequest = { path: string } | { cwd: string; mode?: string };
 
 /** A session the app started in a worker process; its GUI listens on `127.0.0.1:<port>` with `token`. */
 export interface MmrGuiHubSession {

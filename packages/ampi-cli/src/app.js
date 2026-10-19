@@ -27,7 +27,7 @@ const BIN = fileURLToPath(new URL("../bin/ampi.js", import.meta.url));
 export const WORKER_STOP_TIMEOUT_MS = 5_000;
 
 /**
- * @typedef {{ path: string } | { cwd: string }} StartRequest
+ * @typedef {{ path: string } | { cwd: string, mode?: string }} StartRequest
  *
  * @typedef {object} WorkerProcess What `forkWorker` returns; a `ChildProcess` in the command.
  * @property {number | undefined} pid
@@ -204,7 +204,9 @@ export async function runApp(options) {
           reject(Object.assign(new Error(String(message.message)), { code: message.code, holder: message.holder }));
         }
       });
-      child.send({ type: "start", token, session: request });
+      // The mode travels beside the session, as the worker's start message names it.
+      const { mode, ...target } = /** @type {StartRequest & { mode?: string }} */ (request);
+      child.send({ type: "start", token, session: target, ...(mode ? { mode } : {}) });
     });
 
   const token = createToken();

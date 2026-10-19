@@ -1550,17 +1550,11 @@ details[open] > summary .chevron {
   display: none;
 }
 
-/* ampi app's home page: a prompt to pick a session, and no composer. */
+/* ampi app's home page: the new-thread composer (below) instead of a session's chat and composer. */
 .app[data-view="home"] .composer-area,
 .app[data-view="home"] #title-disc,
-.app[data-view="home"] .menu-anchor {
+.app[data-view="home"] .titlebar .menu-anchor {
   display: none;
-}
-
-.app[data-view="home"] .empty {
-  max-width: 24rem;
-  margin: 30vh auto 0;
-  font-size: var(--ampi-text-base);
 }
 
 /* A session that cannot be continued keeps its composer, turned off, with the reason under it. */
@@ -2152,6 +2146,12 @@ details[open] > summary .chevron {
 /* The sidebar's search button and its footer tile row. */
 .sidebar-header-end {
   margin-left: auto;
+}
+
+/* New Thread on a terminal's own page: shown, dimmed, and a click says it needs ampi app. */
+#new-thread-button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .sidebar-footer {
@@ -3026,5 +3026,291 @@ details[open] > summary .chevron {
 
   .mode-picker kbd {
     display: none;
+  }
+}
+
+/* The new-thread composer (ampi app's home page and /new): an 832px card with an 18px radius, near the top of the pane. */
+.app[data-view="home"] .chat {
+  display: none;
+}
+
+.new-thread {
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--ampi-space) * 18) calc(var(--ampi-space) * 4) calc(var(--ampi-space) * 6);
+  background: var(--ampi-surface-bg);
+}
+
+.new-thread-card {
+  display: flex;
+  flex-direction: column;
+  max-width: 52rem;
+  margin: 0 auto;
+  border-radius: 18px;
+  background: var(--ampi-surface-bg);
+  box-shadow: var(--ampi-shadow-card);
+}
+
+.new-thread-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--ampi-space) * 2);
+  padding: calc(var(--ampi-space) * 4) calc(var(--ampi-space) * 4) 0;
+}
+
+.new-thread-link {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  height: 24px;
+  padding: 0 calc(var(--ampi-space) * 1.5);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  cursor: pointer;
+}
+
+.new-thread-link:hover {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+.new-thread-link .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.new-thread-link kbd,
+.pill kbd {
+  padding: 0 4px;
+  border: 1px solid var(--ampi-border-strong);
+  border-radius: var(--ampi-radius-xs);
+  font-family: var(--ampi-font-mono);
+  font-size: var(--ampi-text-xs);
+  line-height: 16px;
+}
+
+.new-thread-card textarea {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  max-height: 320px;
+  margin: 0;
+  padding: calc(var(--ampi-space) * 3) 22px calc(var(--ampi-space) * 1);
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ampi-fg);
+  font: inherit;
+  font-size: var(--ampi-text-lg);
+  line-height: var(--ampi-leading-lg);
+}
+
+.new-thread-card textarea::placeholder {
+  color: var(--ampi-muted-fg);
+}
+
+.new-thread-tools {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  padding: 0 calc(var(--ampi-space) * 4) calc(var(--ampi-space) * 3);
+}
+
+.new-thread-tools [aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.new-thread-notice,
+.new-thread-error {
+  margin: 0;
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.new-thread-error {
+  padding: 0 22px calc(var(--ampi-space) * 3);
+  color: var(--ampi-danger);
+}
+
+/* The footer bar: the three pills, the labels, the options menu and the send button. */
+.new-thread-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  border-top: 1px solid var(--ampi-border);
+  border-radius: 0 0 18px 18px;
+  background: color-mix(in srgb, var(--ampi-fg) 4%, transparent);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 16rem;
+  height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ampi-fg) 9%, transparent);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+  cursor: pointer;
+}
+
+.pill:hover {
+  background: color-mix(in srgb, var(--ampi-fg) 14%, transparent);
+  color: var(--ampi-fg);
+}
+
+.pill span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pill .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The mode pill wears its mode's tint ([data-ampi-mode] sets it). */
+.pill-mode,
+.pill-mode:hover {
+  background: color-mix(in srgb, var(--ampi-mode-tint, var(--ampi-muted-fg)) 15%, transparent);
+  color: var(--ampi-mode-tint, var(--ampi-muted-fg));
+}
+
+.new-thread-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.new-thread-labels .label-chip {
+  padding-right: 8px;
+}
+
+.new-thread-send {
+  margin-left: auto;
+}
+
+.new-thread-submit {
+  width: 32px;
+  height: 32px;
+}
+
+.new-thread-submit:not([data-state="creating"]) #new-thread-submit-text {
+  display: none;
+}
+
+.new-thread-submit[data-empty="true"] {
+  opacity: 0.5;
+}
+
+/* While the thread starts, the round button says so. */
+.new-thread-submit[data-state="creating"] {
+  display: inline-flex;
+  gap: 6px;
+  width: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--ampi-text-sm);
+  cursor: progress;
+}
+
+.new-thread-submit[data-state="creating"] .icon {
+  display: none;
+}
+
+.new-thread-menu {
+  width: 13rem;
+}
+
+.new-thread-send-menu {
+  right: 0;
+  left: auto;
+  width: 21rem;
+}
+
+/* The executor and directory rows: the name over the path, the branch and thread count on the right. */
+.place-meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 3);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+}
+
+.place-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 10rem;
+  overflow: hidden;
+  font-family: var(--ampi-font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.place-branch .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.place-picker {
+  width: min(37.5rem, 100vw - 1rem);
+}
+
+.place-picker .mode-picker-body {
+  overflow-x: hidden;
+}
+
+/* A long path shrinks with an ellipsis instead of widening the row. */
+.place-option .mode-picker-name,
+.place-option .mode-picker-description {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toast-link {
+  margin-left: calc(var(--ampi-space) * 2);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+@media (max-width: 767px) {
+  .new-thread {
+    padding: calc(var(--ampi-space) * 6) calc(var(--ampi-space) * 4);
+  }
+
+  .pill {
+    max-width: 10rem;
+  }
+
+  /* Near the right edge, the options menu opens leftwards so the page never scrolls sideways. */
+  .new-thread-menu {
+    right: 0;
+    left: auto;
+  }
+
+  .place-picker {
+    width: 100vw;
   }
 }

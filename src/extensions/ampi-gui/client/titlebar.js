@@ -535,8 +535,12 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
     dialog.showModal();
   }
 
-  /** The labels editor: chips that a click or Backspace removes, a field that Enter or a comma adds from. */
-  function editLabels(session, from) {
+  /**
+   * The labels editor: chips that a click or Backspace removes, a field that
+   * Enter or a comma adds from. Save writes them to the thread index, or
+   * hands them to `save(labels)` (the new-thread composer, before the thread exists).
+   */
+  function editLabels(session, from, save) {
     let labels = [...(session.labels ?? [])];
     showDialog(from, {
       build(node) {
@@ -594,6 +598,7 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
       },
       async onClose(answer) {
         if (answer !== "save") return;
+        if (save) return save(labels);
         const result = await post("labels", { sessionId: session.id, labels });
         if (!result.ok) return notify(errorText(result, "Could not change the labels."));
         notify(labels.length === 0 ? "Removed the labels" : `Labels: ${labels.join(", ")}`);
@@ -745,6 +750,7 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
     /** The shown session's target, as `setTarget` last set it. */
     target: () => target,
     run,
+    editLabels,
     /** Open the actions menu for a sidebar row's session; `findRow()` finds the row again after a redraw. */
     openForRow(session, rowNode, findRow) {
       openMenu(row, session, rowNode, {
