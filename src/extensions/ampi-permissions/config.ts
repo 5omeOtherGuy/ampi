@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { parseMmrGuardedFilesAllowlist } from "../ampi-core/guarded-files.js";
+import { type MmrGuardedFilesAllowlistEntry, parseMmrGuardedFilesAllowlist } from "../ampi-core/guarded-files.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { type MmrPermissionRule, parseMmrPermissionRules } from "../ampi-core/permissions.js";
 
@@ -17,8 +17,8 @@ export interface MmrPermissionsSettings {
   /** The project's reject and ask rules. */
   readonly projectRules: readonly MmrPermissionRule[];
   readonly userRules: readonly MmrPermissionRule[];
-  /** The user's `ampi.guardedFiles.allowlist`: absolute paths and globs, `~/` expanded, that guarded files may change without asking. */
-  readonly guardedFilesAllowlist: readonly string[];
+  /** The user's `ampi.guardedFiles.allowlist`: absolute globs and exact paths, `~/` expanded, that guarded files may change without asking. */
+  readonly guardedFilesAllowlist: readonly MmrGuardedFilesAllowlistEntry[];
   /** Problems to show the user once per session. */
   readonly warnings: readonly string[];
 }
@@ -68,7 +68,7 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
   let failClosed: string | undefined;
   let projectRules: MmrPermissionRule[] = [];
   let userRules: MmrPermissionRule[] = [];
-  let guardedFilesAllowlist: readonly string[] = [];
+  let guardedFilesAllowlist: readonly MmrGuardedFilesAllowlistEntry[] = [];
 
   const files: ["user" | "project", string | undefined][] = [
     ["user", options.userFile],
@@ -94,7 +94,7 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
         enabled = true;
         const allowlist = ampi.guardedFiles.allowlist;
         if (!Array.isArray(allowlist)) {
-          warnings.push(`Ignoring ampi.guardedFiles.allowlist in ${filePath}: expected a list of paths, so every guarded file asks.`);
+          warnings.push(`Ignoring ampi.guardedFiles.allowlist in ${filePath}: expected a list of globs and paths, so every guarded file asks.`);
         } else {
           const parsed = parseMmrGuardedFilesAllowlist(allowlist);
           guardedFilesAllowlist = parsed.entries;

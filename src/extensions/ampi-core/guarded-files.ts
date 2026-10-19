@@ -358,7 +358,7 @@ export function mmrGuardedToolPaths(toolName: string, input: unknown): { raw: st
 export function findMmrGuardedFiles(
   toolName: string,
   input: unknown,
-  allowlist: readonly string[],
+  allowlist: readonly MmrGuardedFilesAllowlistEntry[],
   environment: MmrGuardedFilesEnvironment = {},
 ): MmrGuardedFile[] {
   const targets = mmrGuardedToolPaths(toolName, input);
@@ -380,27 +380,34 @@ function allowlistKey(env: Pick<Resolved, "platform" | "fold">, text: string): s
   return env.fold ? slashed.toLowerCase() : slashed;
 }
 
-function allowlistEntryMatches(env: Resolved, entry: string, filePath: string): boolean {
+function allowlistEntryMatches(env: Resolved, entry: MmrGuardedFilesAllowlistEntry, filePath: string): boolean {
   const candidate = allowlistKey(env, filePath);
-  const pattern = allowlistKey(env, entry);
-  if (pattern === candidate) return true;
+  if (typeof entry !== "string") return allowlistKey(env, entry.path) === candidate;
   try {
-    return matchGlob(pattern, candidate);
+    return matchGlob(allowlistKey(env, entry), candidate);
   } catch {
     return false;
   }
 }
 
+/**
+ * One allowlist entry: a string is a glob; `{ path }` is one exact path,
+ * compared only for equality, so `?`, `*`, `[` and `{` in it are plain
+ * characters. "Always Allow This Path" saves the second form.
+ */
+export type MmrGuardedFilesAllowlistEntry = string | { readonly path: string };
+
 /** A parsed `ampi.guardedFiles.allowlist`: its usable entries (with `~/` expanded) and what was wrong with the others. */
 export interface MmrGuardedFilesAllowlist {
-  readonly entries: readonly string[];
+  readonly entries: readonly MmrGuardedFilesAllowlistEntry[];
   readonly problems: readonly { readonly index: number; readonly problem: string }[];
 }
 
 /**
- * Read an `ampi.guardedFiles.allowlist` value. An entry is an absolute path
- * or glob (`~/` at the start stands for the home directory); one that is not
- * a string, not absolute or not a valid glob is left out with a problem.
+ * Read an `ampi.guardedFiles.allowlist` value. An entry is an absolute glob
+ * or an exact `{ "path": ... }` (`~/` at the start of either stands for the
+ * home directory); one that is neither, not absolute or not a valid glob is
+ * left out with a problem.
  */
 export function parseMmrGuardedFilesAllowlist(
   value: readonly unknown[],
@@ -409,17 +416,22 @@ export function parseMmrGuardedFilesAllowlist(
   const platform = environment.platform ?? process.platform;
   const p = platform === "win32" ? path.win32 : path.posix;
   const home = environment.homeDir ?? homedir();
-  const entries: string[] = [];
+  const entries: MmrGuardedFilesAllowlistEntry[] = [];
   const problems: { index: number; problem: string }[] = [];
   value.forEach((item, index) => {
-    if (typeof item !== "string") {
-      problems.push({ index, problem: "expected a string" });
+    const exact = isRecord(item) ? item.path : undefined;
+    if (typeof item !== "string" && typeof exact !== "string") {
+      problems.push({ index, problem: 'expected a glob string or { "path": "..." }' });
       return;
     }
-    let entry = item;
+    let entry = typeof item === "string" ? item : (exact as string);
     if (entry.startsWith("~/") || (platform === "win32" && entry.startsWith("~\\"))) entry = `${home.replace(/[\\/]+$/, "")}/${entry.slice(2)}`;
     if (!p.isAbsolute(entry)) {
       problems.push({ index, problem: "expected an absolute path" });
+      return;
+    }
+    if (typeof item !== "string") {
+      entries.push({ path: entry });
       return;
     }
     try {

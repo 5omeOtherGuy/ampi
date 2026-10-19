@@ -303,6 +303,11 @@ function savedForms(filePath) {
   return [...new Set([filePath, real])];
 }
 
+/** The exact allowlist entries "Always Allow This Path" saves for those forms. */
+function exact(forms) {
+  return forms.map((form) => ({ path: form }));
+}
+
 describe("ampi-permissions guarded files: the dialog", () => {
   it("asks before write changes .env, with the tool, the path and its category", async () => {
     const t = await setupPermissions(modules, { user: ON, answers: ["Allow Once"] });
@@ -351,7 +356,7 @@ describe("ampi-permissions guarded files: the dialog", () => {
     const forms = savedForms(path.join(cwd, ".env"));
     assert.deepEqual(settingsOf(t), {
       theme: "dark",
-      ampi: { permissions: [{ tool: "read", action: "allow" }], guardedFiles: { allowlist: ["/srv/keep/**", ...forms] } },
+      ampi: { permissions: [{ tool: "read", action: "allow" }], guardedFiles: { allowlist: ["/srv/keep/**", ...exact(forms)] } },
     });
     assert.ok(t.notifications.some((n) => n.level === "info" && n.message.includes("ampi.guardedFiles.allowlist")));
     assert.equal(await t.call("write", { path: ".env", content: "B=2\n" }), undefined);
@@ -365,12 +370,28 @@ describe("ampi-permissions guarded files: the dialog", () => {
     symlinkSync(elsewhere, path.join(cwd, "linked"));
     const lexical = path.join(cwd, "linked", ".env");
     const real = path.join(realpathSync(elsewhere), ".env");
-    const t = await setupPermissions(modules, { user: { ampi: { guardedFiles: { allowlist: [lexical] } } }, cwd, answers: ["Always Allow This Path"] });
+    const t = await setupPermissions(modules, { user: { ampi: { guardedFiles: { allowlist: [{ path: lexical }] } } }, cwd, answers: ["Always Allow This Path"] });
     assert.equal(await t.call("write", { path: "linked/.env", content: "" }), undefined);
     assert.equal(t.selects.length, 1, "the real path behind the link is not on the allowlist");
-    assert.deepEqual(settingsOf(t).ampi.guardedFiles.allowlist, [lexical, real]);
+    assert.deepEqual(settingsOf(t).ampi.guardedFiles.allowlist, exact([lexical, real]));
     assert.equal(await t.call("write", { path: "linked/.env", content: "" }), undefined);
     assert.equal(t.selects.length, 1);
+  });
+
+  it("saves a path with glob characters so it covers only itself", async () => {
+    const cwd = tempDir();
+    const t = await setupPermissions(modules, { user: ON, cwd, answers: ["Always Allow This Path", "Reject", "Always Allow This Path"] });
+    assert.equal(await t.call("write", { path: ".env.?", content: "" }), undefined);
+    assert.equal((await t.call("write", { path: ".env.x", content: "" })).block, true, "a ? in the saved path is no wildcard");
+    const slug = path.join("app", "[[...slug]]", ".env");
+    mkdirSync(path.join(cwd, path.dirname(slug)), { recursive: true });
+    assert.equal(await t.call("write", { path: slug, content: "" }), undefined);
+    assert.equal(t.selects.length, 3);
+    assert.deepEqual(settingsOf(t).ampi.guardedFiles.allowlist, exact([...savedForms(path.join(cwd, ".env.?")), ...savedForms(path.join(cwd, slug))]));
+    assert.equal(t.notifications.filter((n) => n.level === "warning").length, 0, "no saved entry is skipped");
+    assert.equal(await t.call("write", { path: slug, content: "" }), undefined);
+    assert.equal(await t.call("write", { path: ".env.?", content: "" }), undefined);
+    assert.equal(t.selects.length, 3, "both saved paths run without asking");
   });
 
   it("allows once with an error when the user settings file holds no JSON object", async () => {
@@ -386,7 +407,7 @@ describe("ampi-permissions guarded files: the dialog", () => {
 describe("ampi-permissions guarded files: the allowlist", () => {
   it("lets an exact path and a glob through, and nothing else", async () => {
     const cwd = tempDir();
-    const allowlist = [...savedForms(path.join(cwd, ".env")), `${realpathSync(cwd)}/config/**/.env*`, `${cwd}/config/**/.env*`];
+    const allowlist = [...exact(savedForms(path.join(cwd, ".env"))), `${realpathSync(cwd)}/config/**/.env*`, `${cwd}/config/**/.env*`];
     const t = await setupPermissions(modules, { user: { ampi: { guardedFiles: { allowlist } } }, cwd });
     assert.equal(await t.call("write", { path: ".env", content: "" }), undefined);
     assert.equal(await t.call("write", { path: "config/staging/.env.local", content: "" }), undefined);
@@ -414,17 +435,17 @@ describe("ampi-permissions guarded files: the allowlist", () => {
 
   it("skips entries that are not strings, not absolute or not valid globs, naming their index", async () => {
     const cwd = tempDir();
-    const allowlist = [3, "relative/.env", "/srv/[z-a]/x", ...savedForms(path.join(cwd, ".env"))];
+    const allowlist = [3, "relative/.env", "/srv/[z-a]/x", { glob: "/srv/**" }, { path: "relative/.env" }, ...exact(savedForms(path.join(cwd, ".env")))];
     const t = await setupPermissions(modules, { user: { ampi: { guardedFiles: { allowlist } } }, cwd });
     const warning = t.notifications.find((n) => n.level === "warning")?.message ?? "";
-    for (const index of [0, 1, 2]) assert.match(warning, new RegExp(`ampi\\.guardedFiles\\.allowlist\\[${index}\\]`));
-    assert.doesNotMatch(warning, /allowlist\[3\]/);
+    for (const index of [0, 1, 2, 3, 4]) assert.match(warning, new RegExp(`ampi\\.guardedFiles\\.allowlist\\[${index}\\]`));
+    assert.doesNotMatch(warning, /allowlist\[5\]/);
     assert.equal(await t.call("write", { path: ".env", content: "" }), undefined);
   });
 
   it("ignores a project's allowlist with one warning, and a project's allowlist does not turn the gate on", async () => {
     const cwd = tempDir();
-    const project = { ampi: { guardedFiles: { allowlist: savedForms(path.join(cwd, ".env")) } } };
+    const project = { ampi: { guardedFiles: { allowlist: exact(savedForms(path.join(cwd, ".env"))) } } };
     const t = await setupPermissions(modules, { user: ON, project, cwd });
     const warnings = t.notifications.filter((n) => n.level === "warning" && n.message.includes("ampi.guardedFiles"));
     assert.equal(warnings.length, 1);

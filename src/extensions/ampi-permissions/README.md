@@ -70,7 +70,7 @@ Add your own rules; they come before the defaults:
 | --- | --- | --- |
 | `ampi.permissions` | unset | List of rules; present turns the gate on |
 | `ampi.dangerouslyAllowAll` | unset | `true` (user settings only) lets every call run without asking; `false` turns the gate on |
-| `ampi.guardedFiles.allowlist` | unset | User settings only: paths and globs guarded files may change without asking; present turns the gate on |
+| `ampi.guardedFiles.allowlist` | unset | User settings only: globs and exact `{ "path": ... }` entries guarded files may change without asking; present turns the gate on |
 
 ### Rules
 
@@ -186,13 +186,18 @@ Each path is checked as written (made absolute) and with its symbolic links foll
 The dialog lists the tool and each guarded path with its category; a patch that touches several guarded paths asks once for all of them:
 
 - **Allow Once** runs this call (a delegate program still has its say).
-- **Always Allow This Path** adds each listed path to `ampi.guardedFiles.allowlist` in the user settings, keeping every other key and entry, and runs the call. For a path reached through a link it saves the link's target as well. If the file cannot be written, ampi says so and allows this call only.
+- **Always Allow This Path** adds each listed path to `ampi.guardedFiles.allowlist` in the user settings as an exact `{ "path": ... }` entry, keeping every other key and entry, and runs the call. For a path reached through a link it saves the link's target as well. If the file cannot be written, ampi says so and allows this call only.
 - **Reject**, closing the dialog, and interrupting the turn block the call with a reason that names each path and its category.
 
-`ampi.guardedFiles.allowlist` is a list of absolute paths or globs (`*` within one folder name, `**` across folders, `?`, `{a,b}`), read from the user settings only; `~/` at the start is the home directory. A path passes when every guarded form of it (as written, and with links followed) matches an entry exactly or as a glob. On Windows entries may use `/` or `\`, and on macOS and Windows they compare case-insensitively. An entry that is not a string, not absolute or not a valid glob is skipped with a warning. A project's `ampi.guardedFiles` is ignored with a warning.
+`ampi.guardedFiles.allowlist` is read from the user settings only and takes two kinds of entry, both absolute, with `~/` at the start standing for the home directory:
+
+- A string is a glob: `*` within one folder name, `**` across folders, `?`, `{a,b}`, `[a-z]`. A literal `?`, `*`, `[` or `{` cannot be escaped in it.
+- `{ "path": "..." }` is one exact path, compared only for equality, so those characters in it are plain characters. "Always Allow This Path" saves this kind.
+
+A path passes when every guarded form of it (as written, and with links followed) matches an entry. On Windows entries may use `/` or `\`, and on macOS and Windows they compare case-insensitively. An entry of neither kind, not absolute, or not a valid glob is skipped with a warning. A project's `ampi.guardedFiles` is ignored with a warning.
 
 ```json
-{ "ampi": { "guardedFiles": { "allowlist": ["~/work/app/.env", "~/work/app/.pi/**"] } } }
+{ "ampi": { "guardedFiles": { "allowlist": ["~/work/app/.pi/**", { "path": "~/work/app/.env" }] } } }
 ```
 
 Shell commands are not checked: the files a `bash`, `shell_command` or `powershell` command writes are not known before it runs. ampi's defaults ask about commands that write to a file, and your own rules can go further, for example `{ "tool": "bash", "matches": { "command": "*.env*" }, "action": "reject" }`.

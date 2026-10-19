@@ -211,7 +211,11 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       return findMmrGuardedFiles(event.toolName, event.input, settings.guardedFilesAllowlist, { cwd: ctx.cwd, agentDir: agentDir() });
     }
 
-    /** Add the guarded forms of each path, and the path itself, to the user's `ampi.guardedFiles.allowlist`. */
+    /**
+     * Add the guarded forms of each path, and the path itself, to the user's
+     * `ampi.guardedFiles.allowlist` as exact `{ path }` entries, so glob
+     * characters in a name match only themselves.
+     */
     function allowPaths(files: readonly MmrGuardedFile[], ctx: ExtensionContext): void {
       const paths = [...new Set(files.flatMap((file) => [file.path, ...file.guardedForms]))];
       const file = userFile();
@@ -221,7 +225,7 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
           const ampi = isRecord(existing.ampi) ? existing.ampi : {};
           const guarded = isRecord(ampi.guardedFiles) ? ampi.guardedFiles : {};
           const allowlist: unknown[] = Array.isArray(guarded.allowlist) ? guarded.allowlist : [];
-          const added = paths.filter((entry) => !allowlist.includes(entry));
+          const added = paths.filter((entry) => !allowlist.some((item) => isRecord(item) && item.path === entry)).map((entry) => ({ path: entry }));
           return { ...existing, ampi: { ...ampi, guardedFiles: { ...guarded, allowlist: [...allowlist, ...added] } } };
         });
       } catch (error) {
