@@ -625,13 +625,18 @@ function runAmpiChild(args, { cwd, env, forward }) {
  * Answer a completion script: `ampi __complete <shell> -- <words...>`. The
  * shell would print anything on stderr over the command line being edited,
  * so stderr is silenced, Pi included when a session id or skill name loads
- * it; a value that cannot be listed is not offered.
+ * it; a value that cannot be listed is not offered. An error nothing handles,
+ * such as a promise Pi leaves rejected, ends the process with exit 0 once
+ * stdout is flushed instead of printing a stack trace.
  *
  * @param {string[]} args The command line after `__complete`.
  * @returns {Promise<number>}
  */
 async function runCompletion(args) {
   process.stderr.write = /** @type {typeof process.stderr.write} */ (() => true);
+  const quit = () => process.stdout.write("", () => process.exit(0));
+  process.on("uncaughtException", quit);
+  process.on("unhandledRejection", quit);
   // Listing sessions or skills never installs packages or refreshes model catalogues.
   process.env.PI_OFFLINE = "1";
   // A shell that stops reading early closes the pipe.
