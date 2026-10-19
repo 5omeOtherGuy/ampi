@@ -1,10 +1,11 @@
 // `ampi threads …` and `ampi last` (packages/ampi-cli/src/threads.js): each
 // command against a temporary agent directory whose sessions are written
 // through Pi's SessionManager on a fixed clock, with hand-written expected
-// output; new session ids; prefix resolution and delete refusals; and the
-// thread index file shared with ampi-threads, read and written from both
-// sides. The last suite spawns the command for the exit codes and the
-// confirmation question.
+// output; new session ids; prefix resolution and delete refusals; the thread
+// index file shared with ampi-threads, read and written from both sides; and
+// the refusals and warnings for a session another live process has open,
+// from live registry entries in a temporary directory. The last suite spawns
+// the command for the exit codes and the confirmation question.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -111,7 +112,7 @@ async function createAgentDir(name) {
 }
 
 /** Run a thread command in /work/demo at NOW, collecting its output. */
-async function run(args, { env = {}, columns = 80, confirm } = {}) {
+async function run(args, { env = {}, columns = 80, confirm, registry = {} } = {}) {
   let out = "";
   let err = "";
   const questions = [];
@@ -134,6 +135,7 @@ async function run(args, { env = {}, columns = 80, confirm } = {}) {
       if (confirm === undefined) throw new Error(`unexpected question: ${question}`);
       return confirm;
     },
+    ...registry,
   });
   return { result, out, err, questions };
 }
@@ -705,6 +707,109 @@ describe("ampi threads: changing sessions", () => {
     // The index is unchanged, so ampi-threads still reads every record in it.
     assert.equal(readFileSync(threadIndexPath(agentDir), "utf8"), index);
     assert.deepEqual(Object.keys(await store.list()).sort(), [A, B].sort());
+  });
+});
+
+describe("ampi threads: sessions another process has open", () => {
+  let agentDir;
+  let fileA;
+  const registry = path.join(temporary, "held-registry");
+  const holder = (pid, sessionPath, fields = {}) =>
+    writeFileSync(
+      path.join(registry, `${pid}.json`),
+      JSON.stringify({
+        version: 2,
+        pid,
+        procStart: null,
+        kind: "tui",
+        sessionId: null,
+        sessionPath,
+        cwd: DEMO,
+        title: null,
+        mode: "high",
+        status: { phase: "idle", label: "" },
+        startedAt: "2026-10-18T09:00:00.000Z",
+        updatedAt: "2026-10-18T09:00:00.000Z",
+        gui: null,
+        ...fields,
+      }),
+    );
+  const alive = (pids) => ({ registryDir: registry, isAlive: (pid) => pids.includes(pid), procStart: () => null });
+  before(async () => {
+    ({ agentDir } = await createAgentDir("held"));
+    fileA = sessionFile(agentDir, DEMO, "2026-10-18T08:50:00.000Z", A);
+  });
+  const reset = () => {
+    rmSync(registry, { recursive: true, force: true });
+    mkdirSync(registry, { recursive: true });
+  };
+
+  it("refuses to rename or delete it, with or without --yes, naming the process and leaving the file as it was", async () => {
+    reset();
+    holder(4242, fileA);
+    const content = readFileSync(fileA, "utf8");
+    const renamed = await run(["threads", "rename", A, "Taken"], { registry: alive([4242]) });
+    assert.deepEqual(renamed.result, { code: 1 });
+    assert.equal(renamed.err, `ampi: process 4242 (tui) has ${A} open; quit it first, or rename the session there (with /name in a terminal).\n`);
+    for (const args of [
+      ["threads", "delete", A],
+      ["threads", "delete", A, "--yes"],
+    ]) {
+      const deleted = await run(args, { registry: alive([4242]), confirm: true });
+      assert.deepEqual(deleted.result, { code: 1 }, args.join(" "));
+      assert.deepEqual(deleted.questions, [], "refused before the question");
+      assert.equal(deleted.err, `ampi: process 4242 (tui) has ${A} open; quit it first. Nothing was deleted.\n`);
+    }
+    assert.equal(readFileSync(fileA, "utf8"), content);
+  });
+
+  it("names ampi app, not its worker, for a session the app hosts, and the own session comes first", async () => {
+    reset();
+    holder(6001, fileA, { kind: "app-session", ownerPid: 6000 });
+    const deleted = await run(["threads", "delete", "019a0000-aaaa-7000-8000-000000000001", "-y"], { registry: alive([6001]) });
+    assert.equal(deleted.err, `ampi: ampi app (process 6000) has ${A} open; quit it first. Nothing was deleted.\n`);
+    const own = await run(["threads", "delete", A, "-y"], { registry: alive([6001]), env: { PI_SESSION_ID: A } });
+    assert.equal(own.err, `ampi: ${A} is the session this command runs in; it cannot delete itself.\n`);
+    assert.ok(existsSync(fileA));
+  });
+
+  it("warns before continuing it, through threads continue, continue --last and last, and still opens it", async () => {
+    reset();
+    holder(5001, fileA, { kind: "execute" });
+    const warning = `ampi: process 5001 (execute) also has ${A} open; two processes writing one session file can lose messages.\n`;
+    for (const args of [["threads", "continue", "019a0000-aaaa-7000-8000-000000000001"], ["threads", "continue", "--last"], ["last"]]) {
+      const { result, err } = await run(args, { registry: alive([5001]) });
+      assert.deepEqual(result, { piArgs: ["--session", fileA] }, args.join(" "));
+      assert.equal(err, warning, args.join(" "));
+    }
+  });
+
+  it("archives, labels and colors it, which touch only the thread index", async () => {
+    reset();
+    holder(4242, fileA);
+    const content = readFileSync(fileA, "utf8");
+    for (const args of [["threads", "archive", A], ["threads", "unarchive", A], ["threads", "label", A, "held"], ["threads", "color", A, "green"]]) {
+      const { result, err } = await run(args, { registry: alive([4242]) });
+      assert.deepEqual(result, { code: 0 }, args.join(" "));
+      assert.equal(err, "", args.join(" "));
+    }
+    assert.deepEqual(readThreadIndex(threadIndexPath(agentDir))[A], { labels: ["parser", "held"], color: "green" });
+    assert.equal(readFileSync(fileA, "utf8"), content);
+  });
+
+  it("goes ahead when the holding process has ended, or when a live process has another session open", async () => {
+    reset();
+    holder(4242, fileA);
+    holder(4343, sessionFile(agentDir, DEMO, "2026-10-16T09:00:00.000Z", B));
+    const renamed = await run(["threads", "rename", A, "Free again"], { registry: alive([4343]) });
+    assert.deepEqual(renamed.result, { code: 0 });
+    assert.equal(renamed.err, "");
+    assert.ok(!existsSync(path.join(registry, "4242.json")), "the ended process's entry is removed");
+    const opened = await run(["threads", "continue", A], { registry: alive([4343]) });
+    assert.equal(opened.err, "");
+    const deleted = await run(["threads", "delete", A, "--yes"], { registry: alive([4343]) });
+    assert.deepEqual(deleted.result, { code: 0 });
+    assert.ok(!existsSync(fileA));
   });
 });
 

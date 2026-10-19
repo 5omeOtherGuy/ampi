@@ -54,6 +54,7 @@ ampi -m high          # same session as: pi -e npm:@skippermissions/ampi --ampi-
 git diff | ampi -x "review this change"   # one run, only the final answer on stdout
 ampi app --open       # every session on this machine in one local web page
 ampi doctor           # check Node.js, Pi, ampi, search tools, credentials and data files
+ampi top              # the sessions running on this machine, live
 ampi --help
 ```
 

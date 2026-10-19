@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "review" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -28,13 +28,15 @@ import { isLogLevel } from "./log.js";
  * @typedef {object} AmpiRoute
  * @property {AmpiCommand} command What the bin does: print help, print versions, start Pi with
  *   ampi, run one of Pi's own commands, serve every session from one page (`app`), run a session
- *   for `ampi app` (`app-worker`, internal and not in the help), or fail.
+ *   for `ampi app` (`app-worker`, internal and not in the help), list the running sessions (`top`),
+ *   or fail.
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
  * @property {string[]} [devArgs] The command line after `dev`, when `command` is `"dev"`.
  * @property {string[]} [toolsArgs] The command line after `tools` (or `tool`), when `command` is `"tools"`.
  * @property {boolean} [open] `ampi app --open`: open the page in a browser.
+ * @property {string[]} [topArgs] The command line after `top`, when `command` is `"top"`.
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
  * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
  * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
@@ -192,6 +194,7 @@ function routeCommand(args) {
     if (args.length === 1 || (args.length === 2 && args[1] === "--open")) return { command: "app", piArgs: [], open: args.length === 2 };
     return { command: "error", piArgs: [], error: "ampi app takes only --open." };
   }
+  if (args[0] === "top") return { command: "top", piArgs: [], topArgs: args.slice(1) };
   if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], skillArgs: args.slice(1) };
   if (args[0] === "mcp") return { command: "mcp", piArgs: [], mcpArgs: args.slice(1) };
   if (args[0] === "doctor") return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
@@ -456,6 +459,8 @@ Commands:
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, continue those nothing else has open, and
                                 join those a terminal runs with its web GUI on
+  top [--json|--stream-jsonl]   Show the ampi sessions running on this machine and follow them;
+                                --json prints them once, --stream-jsonl a JSON line per change
   doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
                                 credentials and ampi's data files, and say how to fix problems;
                                 installs nothing

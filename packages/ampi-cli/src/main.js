@@ -459,6 +459,8 @@ export async function runAmpi(argv) {
         log,
       });
     }
+    case "top":
+      return runTop(route.topArgs ?? [], log);
     case "app":
       return runAppProcess(route.open === true, log);
     case "app-worker":
@@ -705,6 +707,82 @@ async function confirm(question) {
   });
   prompt.close();
   return /^y(?:es)?$/i.test(String(answer).trim());
+}
+
+/** The signals that end `ampi top`, each after it restores the terminal. */
+const TOP_SIGNALS = /** @type {const} */ (["SIGINT", "SIGTERM", "SIGHUP"]);
+
+/**
+ * Run `ampi top` on this process's terminal: stdin's keys in raw mode when it
+ * is a terminal, stdout's size, SIGINT, SIGTERM and SIGHUP, and a watcher on the
+ * live registry.
+ *
+ * @param {string[]} topArgs
+ * @param {import("./log.js").Logger} log
+ * @returns {Promise<number>}
+ */
+async function runTop(topArgs, log) {
+  // A reader that stops early (`ampi top --stream-jsonl | head -1`) closes the pipe: stop quietly.
+  // A terminal that hung up fails the write that restores it: nothing is left to restore, so exit as SIGHUP does.
+  process.stdout.on("error", (error) => {
+    const { code } = /** @type {NodeJS.ErrnoException} */ (error);
+    if (code === "EIO") process.exit(129);
+    if (code !== "EPIPE") throw error;
+    process.exit(0);
+  });
+  const [pi, { runTopCommand, watchLiveRegistry }, { liveRegistryDir }] = await Promise.all([
+    import(PI_PACKAGE_NAME),
+    import("./top.js"),
+    import("./live-registry.js"),
+  ]);
+  const { stdin, stdout } = process;
+  return runTopCommand(topArgs, {
+    dir: liveRegistryDir(piAgentDir(pi)),
+    now: () => Date.now(),
+    get columns() {
+      return stdout.columns ?? 80;
+    },
+    get rows() {
+      return stdout.rows ?? 24;
+    },
+    isTTY: stdout.isTTY === true,
+    home: os.homedir(),
+    out: (text) => stdout.write(text),
+    log,
+    watch: watchLiveRegistry,
+    interval: (callback, ms) => {
+      const handle = setInterval(callback, ms);
+      return () => clearInterval(handle);
+    },
+    keys: (onKey) => {
+      if (stdin.isTTY !== true) return () => {};
+      /** @param {string} chunk */
+      const listener = (chunk) => onKey(chunk);
+      stdin.setRawMode(true);
+      stdin.setEncoding("utf8");
+      stdin.on("data", listener);
+      stdin.resume();
+      return () => {
+        stdin.off("data", listener);
+        stdin.setRawMode(false);
+        stdin.pause();
+      };
+    },
+    onResize: (onResize) => {
+      stdout.on("resize", onResize);
+      return () => stdout.off("resize", onResize);
+    },
+    onSignal: (onSignal) => {
+      for (const signal of TOP_SIGNALS) process.on(signal, onSignal);
+      return () => {
+        for (const signal of TOP_SIGNALS) process.off(signal, onSignal);
+      };
+    },
+    onExit: (onExit) => {
+      process.on("exit", onExit);
+      return () => process.off("exit", onExit);
+    },
+  });
 }
 
 /**

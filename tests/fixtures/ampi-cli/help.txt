@@ -25,6 +25,8 @@ Commands:
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, continue those nothing else has open, and
                                 join those a terminal runs with its web GUI on
+  top [--json|--stream-jsonl]   Show the ampi sessions running on this machine and follow them;
+                                --json prints them once, --stream-jsonl a JSON line per change
   doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
                                 credentials and ampi's data files, and say how to fix problems;
                                 installs nothing

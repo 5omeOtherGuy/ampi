@@ -264,6 +264,23 @@ describe("ampi argv router: starting Pi", () => {
       assert.deepEqual(route.piArgs, []);
     }
   });
+
+  it("routes top with the rest of its command line, and sends top after -- to Pi as the message", () => {
+    for (const argv of [["top"], ["top", "--stream-jsonl"], ["top", "--json", "-m", "high", "--help"]]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "top", argv.join(" "));
+      assert.deepEqual(route.topArgs, argv.slice(1));
+      assert.deepEqual(route.piArgs, []);
+    }
+    for (const argv of [
+      ["--", "top"],
+      ["fix", "top"],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi", argv.join(" "));
+      assert.deepEqual(route.piArgs, argv);
+    }
+  });
 });
 
 describe("ampi argv router: help, version and errors", () => {
