@@ -549,7 +549,8 @@ export async function runAmpi(argv) {
           };
         },
         out: (text) => process.stdout.write(text),
-        err: (text) => process.stderr.write(text),
+        log,
+        progress: writeProgress,
       });
     }
   }

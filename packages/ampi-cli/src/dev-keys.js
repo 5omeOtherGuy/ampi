@@ -27,7 +27,8 @@ import { createPiInputSplitter, loadThroughPi, readPiSettings } from "./pi-compa
  * @property {(stop: (signal: "SIGTERM" | "SIGHUP") => void) => () => void} [onSignal] Call `stop` on
  *   SIGTERM or SIGHUP while the terminal is in Pi's input mode; returns the function that stops listening.
  * @property {(text: string) => void} out Writes to stdout.
- * @property {(text: string) => void} err Writes to stderr.
+ * @property {import("./log.js").Logger} log For the command's diagnostics.
+ * @property {(text: string) => void} progress Writes the start line to stderr: progress shown at every log level.
  *
  * @typedef {{ keys: string[], event?: string, command?: string | null, pending?: string | null, paste?: true, unknown?: true }} DevKeyRecord
  *   One line, as the key reader of `src/cli-dev-keys.ts` reports it.
@@ -117,7 +118,7 @@ export async function runDevKeysCommand(argv, host) {
   try {
     ({ values } = parseArgs({ args: [...argv], options: OPTIONS, allowPositionals: false, strict: true }));
   } catch (error) {
-    host.err(`ampi: dev keys: ${error instanceof Error ? error.message : String(error)}\nRun ampi dev keys --help for the options.\n`);
+    host.log.error(`dev keys: ${error instanceof Error ? error.message : String(error)}\nRun ampi dev keys --help for the options.`);
     return 2;
   }
   if (values.help) {
@@ -125,9 +126,9 @@ export async function runDevKeysCommand(argv, host) {
     return 0;
   }
   if (host.stdinIsTTY && !host.stdoutIsTTY) {
-    host.err(
-      "ampi: dev keys: stdout must be the terminal too, since the terminal's input mode is set through it; " +
-        "copy the lines from the terminal, or pipe recorded input into ampi dev keys.\n",
+    host.log.error(
+      "dev keys: stdout must be the terminal too, since the terminal's input mode is set through it; " +
+        "copy the lines from the terminal, or pipe recorded input into ampi dev keys.",
     );
     return 2;
   }
@@ -138,7 +139,7 @@ export async function runDevKeysCommand(argv, host) {
   const reader = keymap
     ? createKeyReader({ settings: readPiSettings(host.pi, host.cwd), cwd: host.cwd, keymap: true, now: host.now })
     : createKeyReader({ keymap: false, now: host.now });
-  for (const problem of reader.problems) host.err(`ampi: keymap: ${problem}\n`);
+  for (const problem of reader.problems) host.log.warn(`keymap: ${problem}`);
 
   /** @type {number | undefined} When the last Ctrl+C was pressed, while no other key came after it. */
   let ctrlCAt;
@@ -176,7 +177,7 @@ async function loadKeyReaderFactory(host) {
   const ampi = await host.locateAmpi();
   const tooOld = () => {
     const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
-    host.err(`ampi: ${which} is too old for dev keys; update @skippermissions/ampi (or ampi-cli).\n`);
+    host.log.error(`${which} is too old for dev keys; update @skippermissions/ampi (or ampi-cli).`);
   };
   const entry = ampi === undefined ? undefined : path.join(ampi.root, DEV_KEYS_ENTRY);
   if (entry === undefined || !existsSync(entry)) {
@@ -189,7 +190,7 @@ async function loadKeyReaderFactory(host) {
     const received = /** @type {{ createKeyReader?: DevKeyReaderFactory } | undefined} */ (await loadThroughPi(host.pi, entry, DEV_KEYS_EVENT));
     factory = received?.createKeyReader;
   } catch (error) {
-    host.err(`ampi: could not load ampi's dev keys: ${error instanceof Error ? error.message : String(error)}\n`);
+    host.log.error(`could not load ampi's dev keys: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
   if (typeof factory !== "function") {
@@ -234,19 +235,19 @@ function readTerminal(host, read) {
     const onEnd = () => void finish(0, false);
     host.stdin.once("end", onEnd);
     unwatch = host.onSignal?.((signal) => void finish(SIGNAL_EXIT_CODES[signal], false)) ?? unwatch;
-    host.err("ampi dev keys: press keys to see how ampi reads them; Ctrl+C twice or Ctrl+D quits.\n");
+    host.progress("ampi dev keys: press keys to see how ampi reads them; Ctrl+C twice or Ctrl+D quits.\n");
     try {
       terminal.start((chunk) => {
         if (done) return;
         try {
           if (read(chunk)) void finish(0, true);
         } catch (error) {
-          host.err(`ampi: dev keys: ${error instanceof Error ? error.message : String(error)}\n`);
+          host.log.error(`dev keys: ${error instanceof Error ? error.message : String(error)}`);
           void finish(1, false);
         }
       });
     } catch (error) {
-      host.err(`ampi: dev keys: could not set up the terminal: ${error instanceof Error ? error.message : String(error)}\n`);
+      host.log.error(`dev keys: could not set up the terminal: ${error instanceof Error ? error.message : String(error)}`);
       void finish(1, false);
     }
   });
@@ -281,7 +282,7 @@ function readStream(host, read) {
       try {
         if (read(chunk)) finish(0);
       } catch (error) {
-        host.err(`ampi: dev keys: ${error instanceof Error ? error.message : String(error)}\n`);
+        host.log.error(`dev keys: ${error instanceof Error ? error.message : String(error)}`);
         finish(1);
       }
     });
@@ -296,7 +297,7 @@ function readStream(host, read) {
     };
     /** @param {Error} error */
     const onError = (error) => {
-      host.err(`ampi: dev keys: could not read stdin: ${error.message}\n`);
+      host.log.error(`dev keys: could not read stdin: ${error.message}`);
       finish(1);
     };
     stdin.on("data", onData);

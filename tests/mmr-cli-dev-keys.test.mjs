@@ -10,6 +10,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { formatDevKeysHelp, runDevKeysCommand } from "../packages/ampi-cli/src/dev-keys.js";
+import { createLogger } from "../packages/ampi-cli/src/log.js";
 import { cleanupLoadedSource, getPreparedSourceRoot } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -102,7 +103,8 @@ function createHost({ stdinIsTTY = false, stdoutIsTTY = stdinIsTTY, ampi, out } 
       return () => terminalCalls.push("unwatch signals");
     },
     out: out ?? ((text) => stdout.push(text)),
-    err: (text) => stderr.push(text),
+    log: createLogger({ stderr: (text) => stderr.push(text) }),
+    progress: (text) => stderr.push(text),
   };
   return {
     host,
