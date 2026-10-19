@@ -169,15 +169,16 @@ describe("mode registry validation", () => {
     assert.equal(Object.isFrozen(stored), true);
   });
 
-  it("refuses C1 controls, format characters and edge whitespace in the label, description and source", () => {
+  it("refuses C1 controls, line and paragraph separators, format characters and edge whitespace in the label, description and source", () => {
     for (const field of ["label", "description", "source"]) {
-      for (const disguised of ["a\u0085b", "a\u009bb", "a‮b", "a⁦b", "a​b", "a؜b", "\tab"]) {
+      for (const disguised of ["a\u0085b", "a\u009bb", "a\u2028b", "a\u2029b", "a‮b", "a⁦b", "a​b", "a؜b", "\tab"]) {
         refuses({ key: "d", [field]: disguised }, new RegExp(`${field} must be one line without control or format characters`));
       }
       for (const padded of [" ab", "ab ", "ab ", "　ab"]) refuses({ key: "d", [field]: padded }, new RegExp(`${field} must not start or end with whitespace`));
     }
-    registry.registerMmrMode({ key: "d", label: "Prüfen ✓", description: "Reads a change — and reports it", source: "@scope/modes", color: "#d97706" });
+    registry.registerMmrMode({ key: "d", label: "Prüfen ✓", description: "Reads a change\u00a0— and reports it", source: "@scope/modes", color: "#d97706" });
     assert.equal(registry.getMmrRegisteredMode("d").label, "Prüfen ✓");
+    assert.equal(registry.getMmrRegisteredMode("d").description, "Reads a change\u00a0— and reports it", "a no-break space is ordinary text");
   });
 
   it("caps the description at 200, the source at 100 and promptAppend at 4000 characters", () => {

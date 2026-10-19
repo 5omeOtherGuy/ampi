@@ -95,9 +95,10 @@ const BASE_MODES: readonly MmrLockedModeKey[] = ["low", "medium", "high", "ultra
 const THINKING_LEVELS: readonly MmrRegisteredModeThinkingLevel[] = ["low", "medium", "high", "xhigh"];
 const KEY_PATTERN = /^[a-z0-9-]+$/;
 const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
-// C0 and C1 controls, DEL, and format characters (bidi overrides and
-// isolates, zero-width characters), which could disguise a label in a list.
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]|\p{Cf}/u;
+// C0 and C1 controls, DEL, line and paragraph separators (U+2028, U+2029),
+// which break a line, and format characters (bidi overrides and isolates,
+// zero-width characters), which could disguise a label in a list.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]|[\p{Cf}\p{Zl}\p{Zp}]/u;
 
 interface ModeStore {
   /** By lowercase key, in registration order. */
