@@ -155,6 +155,9 @@ describe("fast speed per session", () => {
     assert.equal(speed.getMmrSpeed(), "fast");
     await startSession({ cwd: project({ ampi: { speed: "fast" } }), entries: [speedEntry("standard")], flags: { "ampi-fast": true } });
     assert.equal(speed.getMmrSpeed(), "standard");
+    // `--ampi-fast=true` as a host passes it without reading the flag's type.
+    await startSession({ cwd: project({ ampi: { speed: "standard" } }), flags: { "ampi-fast": "true" } });
+    assert.equal(speed.getMmrSpeed(), "fast");
   });
 
   it("reads ampi.speed with the project file winning over the global one", async () => {

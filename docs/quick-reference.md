@@ -203,7 +203,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | --- | --- | --- |
 | Start a session | `ampi` | Same as `pi -e npm:@skippermissions/ampi` |
 | Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`, which also takes a registered mode's key or label; `--mode text`, `json`, `rpc` stay Pi's output format |
-| Start at fast speed | `ampi --fast` | Becomes `--ampi-fast`; also with `-x` |
+| Start at fast speed | `ampi --fast` | Becomes `--ampi-fast=true`; also with `-x` |
 | Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; a subagent's records name the tool call that started it in `parent_tool_use_id`; `--stream-json-thinking` adds thinking blocks |
 | Send several messages to one session | `producer \| ampi -x --stream-json --stream-json-input` | One JSON user message per stdin line, `"steer": true` to redirect the run in progress; a result record after each run |

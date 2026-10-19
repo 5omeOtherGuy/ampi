@@ -290,6 +290,12 @@ describe("ampi execute mode: the command", { concurrency: true }, () => {
     assert.equal(threads[0].archived, undefined);
   });
 
+  it("sends the message that follows --fast to the model", async () => {
+    const result = await runAmpi(["-x", "--fast", "fix it"], "");
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "Echo: fix it\n");
+  });
+
   it("exits 1 with the error on stderr when the agent fails", async () => {
     const result = await runAmpi(["-x", "please fail"], "");
     assert.equal(result.status, 1);
