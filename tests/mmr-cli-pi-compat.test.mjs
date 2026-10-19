@@ -118,6 +118,35 @@ describe("Pi surface used by the ampi command", () => {
     const decision = decideAmpiLoad({ piArgs: [], pi: sources, cwd: project, packageNameAt: (start) => readPackageAt(start)?.name });
     assert.equal(decision.load, false);
   });
+
+  it("counts a project's packages only once Pi trusts the project, or when told to", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    // A fresh checkout whose settings name a package of its own called @skippermissions/ampi.
+    const checkout = path.join(dir, "checkout");
+    const entry = path.join(checkout, "vendor", "ampi", "src", "index.ts");
+    writeJson(path.join(checkout, "vendor", "ampi", "package.json"), { name: "@skippermissions/ampi", version: "6.6.6", pi: { extensions: ["./src/index.ts"] } });
+    touch(entry);
+    writeJson(path.join(checkout, ".pi", "settings.json"), { packages: ["../vendor/ampi"] });
+    /** @param {{ readOnly?: boolean, projectTrusted?: boolean }} [options] */
+    const lists = async (options) => (await listPiExtensionSources(pi, checkout, options)).enabled.some((found) => found.path === entry);
+
+    assert.equal(existsSync(path.join(agentDir, "trust.json")), false, "no trust decision stored yet");
+    const before = readdirSync(agentDir).sort();
+    assert.equal(await lists(), false);
+    assert.equal(await lists({ readOnly: true }), false);
+    assert.deepEqual(readdirSync(agentDir).sort(), before, "deciding trust writes nothing");
+    assert.equal(await lists({ projectTrusted: true }), true, "--approve");
+    assert.equal(await lists({ readOnly: true, projectTrusted: true }), true);
+
+    new pi.ProjectTrustStore(agentDir).set(checkout, true);
+    try {
+      assert.equal(await lists(), true);
+      assert.equal(await lists({ readOnly: true }), true);
+      assert.equal(await lists({ projectTrusted: false }), false, "--no-approve");
+    } finally {
+      new pi.ProjectTrustStore(agentDir).set(checkout, null);
+    }
+  });
 });
 
 describe("Pi surface used by ampi doctor", () => {
@@ -194,6 +223,41 @@ describe("Pi surface used by ampi doctor", () => {
     } finally {
       rmSync(user);
       rmSync(path.dirname(projectFile), { recursive: true });
+    }
+  });
+
+  it("honours Pi's stored trust decision in read-only mode without taking Pi's trust-file lock", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const checkout = path.join(dir, "trust-checkout");
+    const entry = path.join(checkout, "vendor", "ampi", "src", "index.ts");
+    writeJson(path.join(checkout, "vendor", "ampi", "package.json"), { name: "@skippermissions/ampi", version: "6.6.6", pi: { extensions: ["./src/index.ts"] } });
+    touch(entry);
+    writeJson(path.join(checkout, ".pi", "settings.json"), { packages: ["../vendor/ampi"] });
+    const lists = async () => (await listPiExtensionSources(pi, checkout, { readOnly: true })).enabled.some((found) => found.path === entry);
+    const trustFile = path.join(agentDir, "trust.json");
+    // Pi's store keys decisions by canonical path; a parent's decision covers the checkout until a closer one says otherwise.
+    const parent = realpathSync(dir);
+    const canonical = realpathSync(checkout);
+    /** @type {[string, boolean, boolean][]} The stored file, the decision, and whether Pi's store reads it. */
+    const cases = [
+      [`\uFEFF${JSON.stringify({ [parent]: true })}`, true, true],
+      [JSON.stringify({ [parent]: true, [canonical]: false }), false, true],
+      [JSON.stringify({ [parent]: false, [canonical]: true }), true, true],
+      [JSON.stringify({ [canonical]: null, [path.join(canonical, "vendor")]: true }), false, true],
+      // Pi's store refuses these; the read-only listing treats them as untrusted.
+      ["{", false, false],
+      ["[]", false, false],
+    ];
+    try {
+      for (const [stored, expected, piReads] of cases) {
+        writeFileSync(trustFile, stored);
+        if (piReads) assert.equal(new pi.ProjectTrustStore(agentDir).get(checkout) ?? false, expected, `Pi decides the same for ${stored}`);
+        const before = snapshot(agentDir);
+        assert.equal(await lists(), expected, stored);
+        assert.equal(snapshot(agentDir), before, `reading ${stored} writes nothing`);
+      }
+    } finally {
+      rmSync(trustFile, { force: true });
     }
   });
 

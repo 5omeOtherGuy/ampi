@@ -126,8 +126,9 @@ Options:
 The command only reads, and makes no network request. It installs nothing (Pi downloads
 rg and fd itself on first use when it is online), writes no file, runs no credential
 command and refreshes no sign-in. It starts no program, except that Pi runs its configured
-npm command (npm unless settings name another) for its global directory (root -g) when an
-npm package in Pi's settings is not installed yet.
+npm command (npm unless your settings, or those of a project Pi trusts, name another) for
+its global directory (root -g) when an npm package in Pi's settings is not installed yet.
+An untrusted project's settings are not read for this check.
 
 Exit status: 0 when no check fails, 1 when one does, 2 on a usage error.
 

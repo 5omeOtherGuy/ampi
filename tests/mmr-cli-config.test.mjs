@@ -3,7 +3,7 @@
 // with the settings' overrides, and the settings file opens in the editor.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -74,9 +74,9 @@ describe("ampi config", () => {
   after(() => rmSync(dir, { recursive: true, force: true }));
 
   // HOME is the test directory: ampi-tui and ampi-threads read their switches from ~/.pi/agent/settings.json.
-  const run = (args, env = {}) =>
+  const run = (args, env = {}, cwd = project) =>
     spawnSync(process.execPath, [bin, "config", ...args], {
-      cwd: project,
+      cwd,
       encoding: "utf8",
       env: {
         ...process.env,
@@ -150,6 +150,39 @@ describe("ampi config", () => {
     assert.equal(result.status, 1);
     assert.equal(result.stdout, "");
     assert.match(result.stderr, /ampi 0\.0\.1 is too old for config keymap; update @skippermissions\/ampi/);
+  });
+
+  it("loads a project's own ampi only once Pi trusts the project", () => {
+    // A fresh checkout whose settings name a package of its own called @skippermissions/ampi.
+    const checkout = path.join(dir, "checkout");
+    const vendored = path.join(checkout, "vendor", "ampi");
+    const marker = path.join(dir, "project-ampi-ran");
+    mkdirSync(path.join(vendored, "src"), { recursive: true });
+    writeFileSync(path.join(vendored, "package.json"), JSON.stringify({ name: "@skippermissions/ampi", version: "6.6.6", pi: { extensions: ["./src/index.ts"] } }));
+    writeFileSync(path.join(vendored, "src", "index.ts"), "export default function () {}\n");
+    writeFileSync(
+      path.join(vendored, "src", "config-keymap.ts"),
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "");\nexport default function () {}\n`,
+    );
+    mkdirSync(path.join(checkout, ".pi"), { recursive: true });
+    writeFileSync(path.join(checkout, ".pi", "settings.json"), JSON.stringify({ packages: ["../vendor/ampi"] }));
+
+    const untrusted = run(["keymap"], {}, checkout);
+    assert.equal(untrusted.status, 0, untrusted.stderr);
+    assert.equal(untrusted.stdout, readFileSync(path.join(fixtures, "config-keymap.jsonc"), "utf8"), "the command's own ampi");
+    assert.equal(existsSync(marker), false, "the project's code did not run");
+
+    // Pi's trust store: the decision for the directory's real path.
+    const trustFile = path.join(agentDir, "trust.json");
+    writeFileSync(trustFile, JSON.stringify({ [realpathSync(checkout)]: true }));
+    try {
+      const trusted = run(["keymap"], {}, checkout);
+      assert.equal(trusted.status, 1);
+      assert.match(trusted.stderr, /the ampi package did not provide it/);
+      assert.equal(existsSync(marker), true, "a trusted project's ampi loads");
+    } finally {
+      rmSync(trustFile);
+    }
   });
 
   it("opens the user settings file in $EDITOR, or the project's with --workspace", () => {

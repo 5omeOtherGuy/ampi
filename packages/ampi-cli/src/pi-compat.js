@@ -173,20 +173,23 @@ export async function createPiModelLookup(pi) {
 
 /**
  * What Pi will load besides `-e` arguments, read without installing anything.
- * Project settings are read as if the project were trusted: once trust is
- * granted Pi loads them. `readOnly` reads the settings files without Pi's
- * file locks, which create a lock directory next to each settings file, and
- * lists a package source that is not installed as missing whether or not
- * PI_OFFLINE is set: the next online start installs it.
+ * The project's settings (its `packages`, `extensions` and `npmCommand`)
+ * count only when Pi trusts the project (see piProjectTrusted), or when
+ * `projectTrusted` says so, as Pi's `--approve` and `--no-approve` do: an
+ * untrusted project can neither point the command at its own code nor choose
+ * the program Pi's package lookup runs. `readOnly` reads the settings files
+ * without Pi's file locks, which create a lock directory next to each
+ * settings file, and lists a package source that is not installed as missing
+ * whether or not PI_OFFLINE is set: the next online start installs it.
  *
  * @param {any} pi The `@earendil-works/pi-coding-agent` module.
  * @param {string} cwd
- * @param {{ readOnly?: boolean }} [options]
+ * @param {{ readOnly?: boolean, projectTrusted?: boolean }} [options]
  * @returns {Promise<PiExtensionSources>}
  */
-export async function listPiExtensionSources(pi, cwd, { readOnly = false } = {}) {
+export async function listPiExtensionSources(pi, cwd, { readOnly = false, projectTrusted } = {}) {
   const agentDir = pi.getAgentDir();
-  const settingsManager = readOnly ? readOnlyPiSettingsManager(pi, cwd) : pi.SettingsManager.create(cwd, agentDir, { projectTrusted: true });
+  const settingsManager = readOnly ? readOnlyPiSettingsManager(pi, cwd, { projectTrusted }) : piSettingsManager(pi, cwd, { projectTrusted });
   const packageManager = new pi.DefaultPackageManager({ cwd, agentDir, settingsManager });
   /** @type {string[]} */
   const missing = [];
@@ -226,14 +229,16 @@ const REMOTE_PACKAGE_SOURCE = /^(?:npm:|git:|git@|https?:|ssh:)/;
 /**
  * Pi's `SettingsManager` over the user and project settings files, reading
  * them without the lock Pi takes and never writing: a manager for reports
- * that must leave Pi's configuration directory as it is. Project settings are
- * read as if the project were trusted.
+ * that must leave Pi's configuration directory as it is. The project's
+ * settings are read when Pi trusts the project (see piProjectTrusted), or as
+ * `projectTrusted` says.
  *
  * @param {any} pi
  * @param {string} cwd
+ * @param {{ projectTrusted?: boolean }} [options]
  * @returns {any}
  */
-function readOnlyPiSettingsManager(pi, cwd) {
+function readOnlyPiSettingsManager(pi, cwd, { projectTrusted } = {}) {
   /** @type {Record<string, string>} */
   const files = { global: piSettingsPath(pi, cwd, "user"), project: piSettingsPath(pi, cwd, "project") };
   const storage = {
@@ -248,7 +253,9 @@ function readOnlyPiSettingsManager(pi, cwd) {
       fn(current);
     },
   };
-  return pi.SettingsManager.fromStorage(storage, { projectTrusted: true });
+  const trusted =
+    projectTrusted ?? piProjectTrusted(pi, cwd, () => pi.SettingsManager.fromStorage(storage, { projectTrusted: false }), { readOnly: true });
+  return pi.SettingsManager.fromStorage(storage, { projectTrusted: trusted });
 }
 
 /**
@@ -263,7 +270,8 @@ function readOnlyPiSettingsManager(pi, cwd) {
  */
 export function readPiSettingsErrors(pi, cwd) {
   /** @type {{ scope: "global" | "project", error: Error }[]} */
-  const errors = readOnlyPiSettingsManager(pi, cwd).drainErrors();
+  // Parsing the project's file to report its errors honours none of its settings.
+  const errors = readOnlyPiSettingsManager(pi, cwd, { projectTrusted: true }).drainErrors();
   return errors.map(({ scope, error }) => {
     const where = /line (\d+) column (\d+)/.exec(error.message);
     const message =
@@ -442,26 +450,89 @@ export function capturePiJsonOutput(convert) {
 }
 
 /**
- * Pi's settings for `cwd`, with the project's settings read only when Pi would
- * read them: the project has nothing that needs trust, its stored trust
- * decision is yes, or there is none and the user setting
+ * Whether Pi trusts the project in `cwd` without asking: the project has
+ * nothing that needs trust, its stored trust decision (for it or a parent
+ * directory) is yes, or there is none and the user setting
  * `defaultProjectTrust` is `"always"`. Pi asks first when the setting is
  * `"ask"`, which counts as not trusted here. An extension can also decide
  * trust through Pi's `project_trust` event; that needs the extensions loaded,
- * so it is not followed here. createPiSessionServices hands it to SDK sessions.
+ * so it is not followed here. Every settings manager this module builds over
+ * a project's settings takes this decision, so an untrusted project's
+ * settings never reach the command.
+ *
+ * With `readOnly`, the trust file is read without the lock Pi's trust store
+ * takes, and a missing or unreadable file counts as no decision.
  *
  * @param {any} pi
  * @param {string} cwd
+ * @param {() => any} userSettings A `SettingsManager` that reads only the user settings, made when needed.
+ * @param {{ readOnly?: boolean }} [options]
+ * @returns {boolean}
+ */
+function piProjectTrusted(pi, cwd, userSettings, { readOnly = false } = {}) {
+  if (!pi.hasTrustRequiringProjectResources(cwd)) return true;
+  const agentDir = pi.getAgentDir();
+  const trustPath = path.join(agentDir, "trust.json");
+  /** @type {boolean | null} */
+  let decision = null;
+  if (readOnly) decision = readPiTrustDecision(trustPath, cwd);
+  // Without a trust file there is no decision; reading one would first create Pi's configuration directory.
+  else if (existsSync(trustPath)) decision = new pi.ProjectTrustStore(agentDir).get(cwd);
+  return decision ?? userSettings().getDefaultProjectTrust() === "always";
+}
+
+/**
+ * The trust decision Pi's trust file holds for `cwd` or its closest parent
+ * directory, matched as Pi's trust store matches it: keys are canonical
+ * (symlink-free) absolute paths, and only `true` or `false` decides. Reads
+ * the file without taking Pi's lock; a missing or unreadable file is no
+ * decision.
+ *
+ * @param {string} trustPath
+ * @param {string} cwd
+ * @returns {boolean | null}
+ */
+function readPiTrustDecision(trustPath, cwd) {
+  /** @type {unknown} */
+  let stored;
+  try {
+    stored = JSON.parse(readFileSync(trustPath, "utf8").replace(/^\uFEFF/, ""));
+  } catch (error) {
+    // No file is no decision; a file Pi's own store would refuse counts as
+    // untrusted, so a broken file never lets a project's settings through.
+    return /** @type {NodeJS.ErrnoException} */ (error).code === "ENOENT" ? null : false;
+  }
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return false;
+  const decisions = /** @type {Record<string, unknown>} */ (stored);
+  let dir = path.resolve(cwd);
+  try {
+    dir = realpathSync(dir);
+  } catch {
+    // Pi keeps the resolved path when it cannot be canonicalized.
+  }
+  for (;;) {
+    const decision = decisions[dir];
+    if (decision === true || decision === false) return decision;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Pi's settings for `cwd`, with the project's settings read only when Pi
+ * trusts the project (see piProjectTrusted), or as `projectTrusted` says.
+ * createPiSessionServices hands it to SDK sessions.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @param {{ projectTrusted?: boolean }} [options]
  * @returns {any} Pi's `SettingsManager`.
  */
-export function piSettingsManager(pi, cwd) {
+export function piSettingsManager(pi, cwd, { projectTrusted } = {}) {
   const agentDir = pi.getAgentDir();
-  /** @type {boolean | null} */
-  const decision = new pi.ProjectTrustStore(agentDir).get(cwd);
-  const projectTrusted =
-    !pi.hasTrustRequiringProjectResources(cwd) ||
-    (decision ?? pi.SettingsManager.create(cwd, agentDir, { projectTrusted: false }).getDefaultProjectTrust() === "always");
-  return pi.SettingsManager.create(cwd, agentDir, { projectTrusted });
+  const trusted = projectTrusted ?? piProjectTrusted(pi, cwd, () => pi.SettingsManager.create(cwd, agentDir, { projectTrusted: false }));
+  return pi.SettingsManager.create(cwd, agentDir, { projectTrusted: trusted });
 }
 
 /**

@@ -606,7 +606,7 @@ Exit status: `0` on success; `1` when a server is not connected or unknown, a ch
 ampi doctor --json   # {"checks":[{"id","status","summary","hint"}]}, the hint only when not ok
 ```
 
-- **It only reads.** It installs nothing, writes no file (Pi's settings are read without Pi's lock files), makes no network request and starts no program of its own: programs are found by looking for executable files in the PATH directories. Pi itself runs its configured npm command (`npm` unless its settings name another) for its global directory (`root -g`) when an npm package in its settings is not installed yet.
+- **It only reads.** It installs nothing, writes no file (Pi's settings are read without Pi's lock files), makes no network request and starts no program of its own: programs are found by looking for executable files in the PATH directories. Pi itself runs its configured npm command (`npm` unless your settings, or those of a project Pi trusts, name another) for its global directory (`root -g`) when an npm package in its settings is not installed yet. The settings of a project Pi does not trust are not read for this check.
 - **Credentials.** A model counts when its provider has a key or token in Pi's `auth.json` or a provider environment variable. An OAuth token counts as stored and is not refreshed; a key given as a `!command` counts without the command being run. Keys and tokens are never printed. Models that only an extension registers are not counted.
 - **Search tools.** Pi looks for `rg` and `fd` in `bin` in its configuration directory first, then on PATH (`fd` also as `fdfind`, its Debian name), and downloads the missing ones into that `bin` directory on first use when it is online. Without network access, install them with the system package manager (`ripgrep` and `fd-find` on Debian and Ubuntu).
 - **ampi.** The check makes the decision ampi-cli makes when it starts (see [If ampi is also installed as a Pi package](#if-ampi-is-also-installed-as-a-pi-package)); an ampi that Pi's settings list but Pi has not installed yet counts, since Pi installs it on its next start.
@@ -673,7 +673,7 @@ The command loads ampi only when Pi would not load it anyway, and otherwise prin
 
 Loading ampi twice would register every ampi tool, command and flag twice, and Pi refuses to start in that case. With `--no-extensions` (`-ne`), Pi skips everything but `-e` arguments, so the command adds its own ampi.
 
-Project settings count even before you trust the project: once you grant trust, Pi loads the project's ampi.
+Project settings count only once Pi trusts the project: a saved trust decision for it or a parent directory, `defaultProjectTrust` set to `"always"` in your settings, or `--approve` (`-a`) on the command line (`--no-approve` makes them not count). So a project you have not trusted cannot replace your ampi with its own code: `ampi review`, `config keymap`, `dev keys` and `threads search` use the command's own ampi there. When Pi asks about trust at startup and you grant it in a project whose settings also name ampi, that first start has ampi twice (see above); once the decision is saved, the next start leaves ampi to Pi.
 
 ### Diagnostics and colour
 

@@ -4,7 +4,7 @@
 // spawned with piped stdin in a temporary home and agent directory.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -392,9 +392,9 @@ describe("ampi dev keys: usage and loading", () => {
 
 describe("ampi dev keys: the executable", () => {
   // HOME is the test directory: ampi-tui and ampi-threads read their switches from ~/.pi/agent/settings.json.
-  const run = (args, input, env = {}) =>
+  const run = (args, input, env = {}, cwd = project) =>
     spawnSync(process.execPath, [bin, "dev", "keys", ...args], {
-      cwd: project,
+      cwd,
       input,
       encoding: "utf8",
       env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1", ...env },
@@ -417,6 +417,40 @@ describe("ampi dev keys: the executable", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("loads a project's own ampi only once Pi trusts the project", () => {
+    writeKeymap(undefined);
+    // A fresh checkout whose settings list an extension of its own, a package called @skippermissions/ampi.
+    const checkout = path.join(dir, "checkout");
+    const vendored = path.join(checkout, "tools", "ampi");
+    const marker = path.join(dir, "project-ampi-ran");
+    mkdirSync(path.join(vendored, "src"), { recursive: true });
+    writeFileSync(path.join(vendored, "package.json"), JSON.stringify({ name: "@skippermissions/ampi", version: "6.6.6", pi: { extensions: ["./src/index.ts"] } }));
+    writeFileSync(path.join(vendored, "src", "index.ts"), "export default function () {}\n");
+    writeFileSync(
+      path.join(vendored, "src", "cli-dev-keys.ts"),
+      `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "");\nexport default function () {}\n`,
+    );
+    mkdirSync(path.join(checkout, ".pi"), { recursive: true });
+    writeFileSync(path.join(checkout, ".pi", "settings.json"), JSON.stringify({ extensions: ["../tools/ampi"] }));
+
+    const untrusted = run([], "\x13", {}, checkout);
+    assert.equal(untrusted.status, 0, untrusted.stderr);
+    assert.deepEqual(parseLines(untrusted.stdout), [press(["ctrl+s"], "mode.toggle")], "the command's own ampi");
+    assert.equal(existsSync(marker), false, "the project's code did not run");
+
+    // Pi's trust store: the decision for the directory's real path.
+    const trustFile = path.join(agentDir, "trust.json");
+    writeFileSync(trustFile, JSON.stringify({ [realpathSync(checkout)]: true }));
+    try {
+      const trusted = run([], "\x13", {}, checkout);
+      assert.equal(trusted.status, 1);
+      assert.equal(trusted.stdout, "");
+      assert.equal(existsSync(marker), true, "a trusted project's ampi loads");
+    } finally {
+      rmSync(trustFile);
+    }
   });
 
   it("says when the ampi Pi loads is too old, and prints nothing on stdout", () => {
