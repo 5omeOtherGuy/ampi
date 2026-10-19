@@ -25,12 +25,14 @@ export const MMR_SUBAGENTS_OWNED_TOOLS: ReadonlyArray<
   | "oracle"
   | "librarian"
   | "reviewer"
+  | "view_media"
 > = [
   "Task",
   "finder",
   "oracle",
   "librarian",
   "reviewer",
+  "view_media",
 ];
 export const AMPI_SUBAGENTS_OWNED_TOOLS = MMR_SUBAGENTS_OWNED_TOOLS;
 
@@ -53,6 +55,7 @@ export interface MmrSubagentsCapabilities {
   Task?: MmrSubagentsCapability;
   librarian?: MmrSubagentsCapability;
   reviewer?: MmrSubagentsCapability;
+  viewMedia?: MmrSubagentsCapability;
 }
 
 function readCapability(value: MmrSubagentsCapability | undefined): boolean {
@@ -78,6 +81,8 @@ function isCapabilityActive(capabilities: MmrSubagentsCapabilities, name: string
       return readCapability(capabilities.librarian);
     case "reviewer":
       return readCapability(capabilities.reviewer);
+    case "view_media":
+      return readCapability(capabilities.viewMedia);
     default:
       return false;
   }

@@ -1,8 +1,8 @@
 /**
  * Child-process extension scoping for spawned subagent workers.
  *
- * Each spawned subagent (`finder`, `oracle`, `librarian`, `Task`) launches a
- * child `pi` process that, by default, performs FULL extension discovery from
+ * Each spawned subagent (`finder`, `oracle`, `librarian`, `media`, `Task`)
+ * launches a child `pi` process that, by default, performs FULL extension discovery from
  * the user's global settings — loading every extension of every configured
  * package even though a given worker only needs a few of them. Re-transpiling
  * the unneeded extension graphs dominates child startup.
@@ -51,6 +51,7 @@ import { isRecord } from "../ampi-core/internal/json.js";
  *                   nested model-backed `history-reader` assembly is also
  *                   owned by ampi-history.
  *  - librarian    — GitHub repository tools owned by ampi-github.
+ *  - media        — read (built-in), which carries the images; only ampi-core needed.
  *  - task-subagent— read/bash/edit/write/skill (built-in) + read_web_page/
  *                   web_search (ampi-web) + finder (ampi-workers) + task_list
  *                   (ampi-tasks).
@@ -59,6 +60,7 @@ export const MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS: Readonly<Record<string, readonl
   finder: ["ampi-core"],
   oracle: ["ampi-core", "ampi-web", "ampi-history"],
   librarian: ["ampi-core", "ampi-github"],
+  media: ["ampi-core"],
   "task-subagent": ["ampi-core", "ampi-web", "ampi-workers", "ampi-tasks"],
 };
 

@@ -105,7 +105,7 @@ describe("mmr-subagents package wiring", () => {
     assert.equal(root.MMR_SUBAGENTS_FEATURE_GATE, "mmr-subagents");
     assert.deepEqual(
       [...root.MMR_SUBAGENTS_OWNED_TOOLS].sort(),
-      ["Task", "finder", "librarian", "oracle", "reviewer"],
+      ["Task", "finder", "librarian", "oracle", "reviewer", "view_media"],
     );
     assert.equal(root.MMR_ASYNC_TASKS_PROVIDER_NAME, "mmr-async-tasks");
     assert.equal(root.MMR_ASYNC_TASKS_FEATURE_GATE, "mmr-async-tasks");
@@ -208,14 +208,14 @@ describe("mmr-subagents package wiring", () => {
 });
 
 describe("mmr-subagents extension factory", () => {
-  it("registers the finder, oracle, Task, librarian, and reviewer Pi tools plus the read-result normalizer", async () => {
+  it("registers the finder, oracle, Task, librarian, reviewer, and view_media Pi tools plus the read-result normalizer", async () => {
     const { createMmrWorkersExtension } = await importSource("extensions/ampi-workers/index.ts");
     const { pi, tools, handlers } = makePi();
     createMmrWorkersExtension()(pi);
     const names = tools.map((tool) => tool.name).sort();
     assert.deepEqual(
       names,
-      ["Task", "finder", "librarian", "oracle", "reviewer", "start_task", "task_cancel", "task_poll", "task_wait"],
+      ["Task", "finder", "librarian", "oracle", "reviewer", "start_task", "task_cancel", "task_poll", "task_wait", "view_media"],
       "mmr-workers registers the blocking worker tools and the background task tools",
     );
     assert.equal(typeof handlers.get("tool_result"), "function", "finder installs a read-result normalizer");

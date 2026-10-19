@@ -18,6 +18,7 @@ function readStringField(value: unknown, key: string): string | undefined {
 function askedField(toolName: string): string {
   if (toolName === "finder" || toolName === "librarian") return "query";
   if (toolName === "reviewer") return "diff_description";
+  if (toolName === "view_media") return "objective";
   return "task";
 }
 

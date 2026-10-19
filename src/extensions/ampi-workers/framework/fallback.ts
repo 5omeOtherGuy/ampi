@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { MmrModelPreference } from "../../ampi-core/types.js";
+import { listMissingMmrModelInput } from "../../ampi-core/model-resolver.js";
+import type { MmrModelInputKind, MmrModelPreference } from "../../ampi-core/types.js";
 import type { MmrWorkerOutcomeStatus, MmrWorkerResult } from "./runner.js";
 
 /**
@@ -69,6 +70,8 @@ const SUBSCRIPTION_BACKED_PROVIDERS: ReadonlySet<string> = new Set([
 export interface MmrWorkerFallbackRegisteredModel {
   provider: string;
   id: string;
+  /** Input kinds the model accepts (Pi's `Model.input`). */
+  input?: readonly string[];
 }
 
 /** Minimal `ctx.modelRegistry` surface used to build candidates. */
@@ -163,18 +166,22 @@ function thinkingLevelFor(modelId: string, preferences: readonly MmrModelPrefere
  * registry, excluding the failing route, ranked by the profile fallback
  * chain. The highest-ranked chain match is flagged as the preference match. Each
  * candidate carries its billing route type so the prompt can show it
- * before the user commits.
+ * before the user commits. With `requiredInput` (the profile's), a model
+ * that lacks one of those input kinds is left out, since the resolver would
+ * refuse it.
  */
 export function buildMmrWorkerFallbackCandidates<TModel extends MmrWorkerFallbackRegisteredModel>(args: {
   registry: MmrWorkerFallbackRegistry<TModel>;
   preferences: readonly MmrModelPreference[];
   failingProvider?: string;
   failingModel?: string;
+  requiredInput?: readonly MmrModelInputKind[];
 }): MmrWorkerFallbackCandidate[] {
   const preferences = args.preferences ?? [];
   const seen = new Set<string>();
   const authenticated = safeGetAll(args.registry)
     .filter((model) => safeHasConfiguredAuth(args.registry, model))
+    .filter((model) => listMissingMmrModelInput(model, args.requiredInput).length === 0)
     // Exclude the failing route. When the route was a bare model id (no
     // provider qualifier), exclude by model id alone so every provider
     // variant of the failing model is dropped.
@@ -431,6 +438,8 @@ export async function runMmrWorkerWithModelFallback(args: {
   classifyOutcome: (result: MmrWorkerResult) => MmrWorkerOutcomeStatus;
   run: (runArgs: MmrWorkerFallbackRunArgs) => Promise<MmrWorkerFallbackRunOutput>;
   failureThreshold?: number;
+  /** The profile's `requiredInput`: only models that accept these kinds are offered. */
+  requiredInput?: readonly MmrModelInputKind[];
 }): Promise<MmrWorkerFallbackOutcome> {
   const threshold = args.failureThreshold ?? MMR_WORKER_FALLBACK_FAILURE_THRESHOLD;
   const scopeKey = mmrWorkerFallbackScopeKey({
@@ -466,6 +475,7 @@ export async function runMmrWorkerWithModelFallback(args: {
     preferences: args.candidatePreferences,
     ...(failingProvider !== undefined ? { failingProvider } : {}),
     ...(failingModel !== undefined ? { failingModel } : {}),
+    ...(args.requiredInput !== undefined ? { requiredInput: args.requiredInput } : {}),
   });
   const choice = await promptMmrWorkerFallback({
     ctx: args.ctx,

@@ -206,6 +206,42 @@ describe("mmr-core subagent profile registry", () => {
     assert.equal(Object.isFrozen(MMR_MODES.low.modelPreferences), false, "freezing the profile must leave the mode table alone");
   });
 
+  it("exposes a 'media' profile that reads images with read on image-capable fast routes", async () => {
+    const { getMmrSubagentProfile } = await importSource(MODULE);
+    const profile = getMmrSubagentProfile("media");
+    assert.ok(profile, "media profile must be registered");
+    assert.equal(profile.name, "media");
+    assert.equal(profile.displayName, "View Media");
+    assert.deepEqual([...profile.tools], ["read"]);
+    assert.equal(profile.maxTurns, 3);
+    assert.equal(profile.thinkingLevel, "low");
+    assert.equal(profile.promptRoute, "standalone");
+    assert.equal(profile.baseMode, undefined);
+    assert.equal(profile.promptBuilder, "media");
+    assert.equal(profile.backgroundable, false, "view_media answers inline and never runs in the background");
+    assert.equal(profile.allowMcp, false);
+    assert.equal(profile.allowToolbox, false);
+    assert.equal(profile.enforceLockedMode, false);
+    assert.equal(profile.persistSubagentState, false);
+    assert.deepEqual([...profile.requiredInput], ["image"]);
+    assert.equal(profile.denyTools, undefined);
+    // Finder's routes in finder's order: each model lists image input in Pi's catalogue.
+    assert.deepEqual(
+      profile.modelPreferences.map((preference) => ({ ...preference, ...(preference.providers ? { providers: [...preference.providers] } : {}) })),
+      [
+        { model: "gemini-3.5-flash", providers: ["antigravity"] },
+        { model: "gpt-5.4-mini" },
+        { model: "claude-haiku-4-5" },
+      ],
+    );
+  });
+
+  it("declares requiredInput on the media profile only", async () => {
+    const { getMmrSubagentProfile, listMmrSubagentProfiles } = await importSource(MODULE);
+    const withInput = listMmrSubagentProfiles().filter((name) => getMmrSubagentProfile(name).requiredInput !== undefined);
+    assert.deepEqual(withInput, ["media"]);
+  });
+
   it("returns undefined for an unknown profile name", async () => {
     const { getMmrSubagentProfile } = await importSource(MODULE);
     assert.equal(getMmrSubagentProfile("does-not-exist"), undefined);
@@ -219,6 +255,11 @@ describe("mmr-core subagent profile registry", () => {
     assert.deepEqual(a, b, "list ordering must be deterministic");
     assert.ok(a.includes("finder"), "finder must appear in the list");
     assert.ok(a.includes("librarian"), "librarian must appear in the list");
+    assert.deepEqual(
+      [...a],
+      ["finder", "history-reader", "title", "oracle", "reviewer", "media", "librarian", "task-subagent"],
+      "the built-in profiles, in table order",
+    );
   });
 
   it("profiles are deep-frozen; mutation throws in strict mode", async () => {

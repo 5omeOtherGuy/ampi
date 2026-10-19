@@ -18,7 +18,7 @@ The npm package name is `@skippermissions/ampi`; `ampi` is the name you see in c
 - **Auth-probing route resolution.** For each preferred model, ampi enumerates the provider routes that could serve it, probes each for registration and configured auth (`hasConfiguredAuth` / OAuth checks), and applies the first route that is registered, authenticated, and accepted by Pi. Skipped routes keep a recorded reason ("not registered", "registered but not authenticated", and so on).
 - **Subscription-first ordering.** Routes are grouped subscription/OAuth providers first, then API-key providers, then everything else, and ordered within each group by a fixed provider priority — so a Claude or Codex subscription is preferred over a metered API key for the same model, without you wiring it up per mode.
 - **Quota-aware session fallback.** When the active route fails at the end of a turn, ampi classifies the error per provider — usage limit, rate limit, overload, silent capacity stall, or hard quota — and distinguishes transient conditions (retryable, may self-heal) from hard ones. When it warrants, it surfaces an explicit fallback prompt instead of quietly changing your model.
-- **Subagents and background fleets.** Built-in workers (`finder`, `oracle`, `librarian`, `Task`, `reviewer`) run as separate Pi subprocesses with their own resolved routes; work can be launched in the background with a live TUI task board and `task_poll` / `task_wait` / `task_cancel` controls. Custom Markdown subagents (`sa__*`) can be imported with scoped tools and models.
+- **Subagents and background fleets.** Built-in workers (`finder`, `oracle`, `librarian`, `Task`, `reviewer`, `view_media`) run as separate Pi subprocesses with their own resolved routes; work can be launched in the background with a live TUI task board and `task_poll` / `task_wait` / `task_cancel` controls. Custom Markdown subagents (`sa__*`) can be imported with scoped tools and models.
 - **Opt-in reach.** Web search/page reading, read-only GitHub tools, and prior-session recall are separate extensions, off by default, and gated behind explicit environment flags.
 
 ## Install
@@ -179,7 +179,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-patch` | On | Path-safe `apply_patch` editing |
 | `ampi-shell` | On | Amp-compatible background shell tools: `shell_command` leaves long commands running, `shell_command_status` follows them, `shell_command_kill` stops them (`ampiShell.enabled: false` turns it off) |
 | `ampi-tasks` | On | Session-local `task_list` planning widget, and `ask_user_choice` for putting a decision to you as a list of answers |
-| `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, gated `librarian`, background fleets |
+| `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, `view_media`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
 | `ampi-permissions` | Off | Opt-in approval for risky tool calls: rules allow, reject or ask, ampi's defaults let reads, tests and builds run, and a dialog asks about the rest (`ampi.permissions` turns it on) |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, Amp-compatible chords, and a short intro on first start that "ampi show welcome" replays (`ampiTui.enabled: false` restores Pi's) |

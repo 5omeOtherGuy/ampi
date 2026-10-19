@@ -1,6 +1,6 @@
 # ampi-workers
 
-The merged worker extension. Owns the blocking worker tools `Task`, `finder`, `oracle`, `librarian` AND the background task surface (`background: true` on finder/librarian/Task, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`, the session-scoped registry, and the live fleet dashboard), behind the single `ampi-workers` feature gate. The pre-merge gate ids (`mmr-subagents`, `mmr-async-tasks`, `mmr-subagents.async-tasks`) remain accepted aliases.
+The merged worker extension. Owns the blocking worker tools `Task`, `finder`, `oracle`, `librarian`, `reviewer`, `view_media` AND the background task surface (`background: true` on finder/librarian/Task, the deprecated `start_task` alias, `task_poll`/`task_wait`/`task_cancel`, the session-scoped registry, and the live fleet dashboard), behind the single `ampi-workers` feature gate. The pre-merge gate ids (`mmr-subagents`, `mmr-async-tasks`, `mmr-subagents.async-tasks`) remain accepted aliases.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMAP.md`](ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md). Framework boundary: [`../../../docs/subagent-framework.md`](../../../docs/subagent-framework.md).
 
@@ -8,7 +8,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| On | `finder`, `oracle`, `Task`, `librarian` (gated); background runs via `background: true`; `start_task` (deprecated alias), `task_poll`, `task_wait`, `task_cancel`; fleet dashboard | `ampi-github` active for `librarian` | `/ampi-status`, fleet dashboard, tool result `details`, subagent fixtures |
+| On | `finder`, `oracle`, `Task`, `librarian` (gated), `reviewer`, `view_media`; background runs via `background: true`; `start_task` (deprecated alias), `task_poll`, `task_wait`, `task_cancel`; fleet dashboard | `ampi-github` active for `librarian` | `/ampi-status`, fleet dashboard, tool result `details`, subagent fixtures |
 
 ## When to use it
 
@@ -16,6 +16,7 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 - Read-only code search across the workspace via `finder`.
 - Standalone advisory worker for plans, reviews, debugging via `oracle`.
 - Remote GitHub repository research via `librarian` (when `ampi-github` is active).
+- Questions about screenshots, diagrams and other images via `view_media`, answered by a worker on a model that accepts images.
 - User-authored Markdown subagents enabled through config as `sa__*` tools (Pi-owned roots; `.claude/agents` is import-only).
 
 ## Background runs (v2 surface)
@@ -54,6 +55,7 @@ Deferred repository-provider variants of `librarian` beyond GitHub (Bitbucket, �
 | `librarian` | standalone, gated on `ampi-github` | read-only GitHub repository tools                                                                               |
 | `Task`      | mode-derived from parent mode    | `[read, bash, edit, write, read_web_page, web_search, finder, skill, task_list]` minus `denyTools` |
 | `reviewer`  | standalone                       | `[read, grep, find, bash]`; one child per [review check](#review-checks) as well |
+| `view_media` | standalone (`media` profile), model needs image input | `[read]` |
 
 The internal `history-reader` profile is used by `ampi-history.read_session`; it is not a model-visible Pi tool. See `ampi-core` for the profile table.
 
@@ -91,7 +93,7 @@ and `worker-usage-format.ts`. Implementation lives in themed subdirectories:
   binding registry, invocation/outcome helpers, and worker-model fallback.
 - `profiles/` — built-in worker prompt builders (`prompts.ts`).
 - `builtin-workers/` — the concrete `finder`, `oracle`, `librarian`,
-  `reviewer`, and `Task` tools.
+  `reviewer`, `view_media`, and `Task` tools.
 - `background/` — async-task registry, tools, schemas, formatting,
   projection, delivery, and dispatch.
 - `rendering/` — one-line worker rows and their trail, the inline
@@ -147,6 +149,20 @@ Concrete prompts live in [`profiles/prompts.ts`](profiles/prompts.ts):
 - Parameters: `{ query: string, context?: string }`. The worker prompt is remote-repository research only; local workspace work should use direct tools or `finder`.
 - Parent spawn passes resolver-selected `--model`, effective read-only GitHub `--tools`, and exact system-prompt replacement.
 - Status values: `success`, `validation-error`, `provider-gated`, `activation-error`, `context-window-exhausted`, `aborted`, `spawn-error`, `worker-error`, `empty-output`. A clean exit before the agent loop is normalized to `worker-error`.
+
+### View media
+
+`view_media` lets the session look at images through a worker, whatever its own model supports: it hands one to four image files and an objective to a child on a fast model that accepts images, the child reads them with Pi's `read` (which sends an image file to the model as an attachment), and its final answer is the tool result.
+
+- Tool name `view_media`; profile `media` (display name `View Media`). Standalone; builder `media`.
+- Parameters: `{ paths: string[], objective: string }`, 1 to 4 paths, `additionalProperties: false`. A path is relative to the working directory or absolute; paths outside the working directory are allowed, as with `read`, and `~` is not expanded.
+- Content check: before anything spawns, each path in order must exist, be a regular file and hold a PNG, JPEG, GIF, WebP or BMP image as Pi's `detectSupportedImageMimeTypeFromFile` reads it from the file's first bytes. The file name never counts: a PNG named `shot.txt` passes, a PDF named `x.png` does not. The first path that fails ends the call with an error that names it as given. An animated PNG is refused, because Pi does not recognise it as an image and `read` would not send it as one.
+- Images only for now: Pi's message content carries text and images, so PDF, audio and video files are refused with a message that says so. There is no size limit beyond what `read` does: it resizes an image to the model's limits.
+- Profile: `tools: [read]`, thinking `low`, `maxTurns: 3`, `requiredInput: ["image"]`, `backgroundable: false`, `allowMcp: false`, `allowToolbox: false`. Routes: finder's `antigravity/gemini-3.5-flash` → `gpt-5.4-mini` → `claude-haiku-4-5`, each of which lists image input in Pi's model catalogue. The resolver still checks every route at run time and skips one whose registered model has no `image` in its `input` (a `model.skipped` warning with the reason `no image input`).
+- Settings: `ampiCore.subagentModelPreferences.media` replaces the routes; `/ampi-config` sets it (subagent → `media`). A text-only model named there is skipped the same way.
+- With no image-capable route the call fails before spawning: `view_media: no model with image input is available. Set ampiCore.subagentModelPreferences.media to a model that accepts images (/ampi-config can set it). Tried: <provider/model: reason; …>.` After repeated worker errors, the fallback offer lists only models with image input.
+- Contract `strict-delegated`: parameter and path errors are structured results (`details.status: "validation-error"`), resolution fails closed (`activation-error`), the parent passes `--tools read`, and the child keeps only `ampi-core` loaded.
+- Always blocking: no `background`, `group` or `notify` parameters and no background binding. Not in any subagent profile's tools, so `Task` children do not get it.
 
 ### Task
 
@@ -230,6 +246,7 @@ Every worker call is one Amp-compatible line in the transcript: a status glyph, 
 | `oracle` | `Consulting oracle` | `Consulted oracle` | `task` |
 | `librarian` | `Researching with librarian` | `Researched with librarian` | `query` |
 | `reviewer` | `Reviewing changes` | `Reviewed changes` | `diff_description` |
+| `view_media` | `Viewing media` | `Viewed media` | `objective` |
 | `Task` | `Running subagent (<profile>)` | `Subagent (<profile>) finished` | `description` |
 | `sa__<name>` | `Running subagent (<name>)` | `Subagent (<name>) finished` | `task` |
 
@@ -315,11 +332,13 @@ A pinned `aboveEditor` widget renders the current board — running, finished, a
 
 ## Configuration
 
-Subagent model preferences are configured through `ampi-core`'s `/ampi-config` flow and stored under `ampiCore.subagentModelPreferences`. The child-CLI runner has no separate settings surface.
+Subagent model preferences are configured through `ampi-core`'s `/ampi-config` flow and stored under `ampiCore.subagentModelPreferences` (for example `ampiCore.subagentModelPreferences.media` for `view_media`). The child-CLI runner has no separate settings surface.
 
 ## Diagnostics and troubleshooting
 
 - **`librarian` stays `gated`.** `ampi-github` is not active or its read-only GitHub tools are not registered by `ampi-github` itself. Enable GitHub access (`AMPI_GITHUB_ENABLE=true`, legacy `MMR_GITHUB_ENABLE=true` still accepted, or `ampiGithub.enabled=true`) and restart Pi.
+- **`view_media` says no model with image input is available.** None of the `media` routes is registered, authenticated and image-capable. Name a model that accepts images in `ampiCore.subagentModelPreferences.media` (`/ampi-config`); the error lists each route tried and why it was skipped.
+- **`view_media` refuses a file.** It reads PNG, JPEG, GIF, WebP and BMP images only, judged by content, so renaming a file changes nothing; PDFs, audio and video are not supported yet.
 - **`Task` activation failed.** Parent mode is `free` or missing; Task only runs from a locked mode. Check `/ampi-status` for `Mode:`.
 - **Worker reported `subagentActivationError`.** Profile/route mismatch (unknown profile, no model route, explicit `--model` or `--tools` mismatch, invalid `--ampi-parent-mode`). The reason appears in stderr as `ampi: subagent activation failed: <reason>` and in `details.subagentActivationError`.
 - **Worker exited 0 but the parent reported failure.** The runner intentionally detects the activation-failure stderr marker and converts it to a hard failure even on exit-0. This is fail-closed behavior, not a bug.
@@ -334,7 +353,7 @@ Extension surface:
 - `createMmrSubagentsFeatureGateProvider(capabilities?)` — feature-gate provider; active flags flip the gate to `enabled`.
 - `createMmrSubagentsToolProvider(capabilities?)` — exact-name provider; active flags claim `{ kind: "active" }`; inactive return `gated`.
 - `AMPI_SUBAGENTS_PROVIDER_NAME`, `AMPI_SUBAGENTS_FEATURE_GATE`, `AMPI_SUBAGENTS_OWNED_TOOLS` (legacy `MMR_SUBAGENTS_*` aliases remain exported).
-- `MmrSubagentsCapabilities` — per-tool flags (`finder`, `oracle`, `Task`, `librarian`); booleans or zero-argument predicates (so `librarian` can reflect live ampi-github tool registration state).
+- `MmrSubagentsCapabilities` — per-tool flags (`finder`, `oracle`, `Task`, `librarian`, `reviewer`, `viewMedia`); booleans or zero-argument predicates (so `librarian` can reflect live ampi-github tool registration state).
 
 Tool-specific (`create<X>Tool(deps?)` / `register<X>Tool(pi, deps?)` plus constants, schemas, prompt helpers, types):
 
@@ -367,7 +386,7 @@ Keep the profile as the single source of truth and reuse the shared framework:
 
 Prompt routes:
 
-- **Standalone** — focused workers whose role is specific to one capability (`finder`, `oracle`, `librarian`, `history-reader`). The profile still owns active tools and model/thinking policy.
+- **Standalone** — focused workers whose role is specific to one capability (`finder`, `oracle`, `librarian`, `reviewer`, `media`, `history-reader`). The profile still owns active tools and model/thinking policy.
 - **Mode-derived** — broad workers (`Task`) that inherit a parent locked-mode prompt assembly through `baseMode` and append a worker-role block.
 
 ### Framework-only surfaces

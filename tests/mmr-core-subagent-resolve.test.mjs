@@ -808,3 +808,114 @@ describe("resolveMmrSubagentInvocation", () => {
     assert.equal(result.promptBaseMode, "high");
   });
 });
+
+describe("profile requiredInput", () => {
+  const TEXT = ["text"];
+  const TEXT_AND_IMAGE = ["text", "image"];
+
+  it("skips an earlier text-only route and selects the first model with image input", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("media");
+    const registry = makeRegistry([
+      // Registered without an input array: treated as text only.
+      { provider: "antigravity", id: "gemini-3.5-flash" },
+      { provider: "openai-codex", id: "gpt-5.4-mini", input: TEXT },
+      { provider: "claude-subscription", id: "claude-haiku-4-5", input: TEXT_AND_IMAGE },
+    ]);
+
+    const result = resolveMmrSubagentInvocation({ profile, registry, registeredTools: ["read", "bash"] });
+    assert.equal(result.ok, true);
+    assert.equal(result.modelArg, "claude-subscription/claude-haiku-4-5");
+    assert.equal(result.selected.thinkingLevel, "low");
+    assert.deepEqual([...result.workerTools], ["read"]);
+    const skipped = result.diagnostics.filter((d) => d.code === "model.skipped");
+    assert.ok(skipped.every((d) => d.severity === "warning"));
+    const messages = skipped.map((d) => d.message);
+    assert.ok(messages.includes("Skipped antigravity/gemini-3.5-flash: no image input"), messages.join("\n"));
+    assert.ok(messages.includes("Skipped openai-codex/gpt-5.4-mini: no image input"), messages.join("\n"));
+    assert.ok(messages.includes("Skipped github-copilot/gpt-5.4-mini: not registered"), messages.join("\n"));
+  });
+
+  it("fails with model.no-route when every registered model is text only", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("media");
+    const registry = makeRegistry([
+      { provider: "openai-codex", id: "gpt-5.4-mini", input: TEXT },
+      { provider: "anthropic", id: "claude-haiku-4-5", input: TEXT },
+    ]);
+
+    const result = resolveMmrSubagentInvocation({ profile, registry });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "model.no-route");
+    assert.match(result.message, /^Subagent "media" could not resolve any model route\. Tried: /);
+    assert.match(result.message, /openai-codex\/gpt-5\.4-mini: no image input/);
+    assert.match(result.message, /anthropic\/claude-haiku-4-5: no image input/);
+    assert.equal(result.modelArg, undefined);
+  });
+
+  it("refuses a settings override that names a text-only model", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("media");
+    const registry = makeRegistry([
+      { provider: "faux", id: "faux-1", input: TEXT },
+      // An image-capable profile default stays unused: the override replaces the preferences.
+      { provider: "claude-subscription", id: "claude-haiku-4-5", input: TEXT_AND_IMAGE },
+    ]);
+
+    const result = resolveMmrSubagentInvocation({
+      profile,
+      registry,
+      modelPreferencesOverride: [{ model: "faux-1", providers: ["faux"] }],
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "model.no-route");
+    assert.equal(result.message, 'Subagent "media" could not resolve any model route. Tried: faux/faux-1: no image input.');
+  });
+
+  it("leaves profiles without requiredInput selecting text-only models", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const registry = makeRegistry([{ provider: "openai-codex", id: "gpt-5.4-mini", input: TEXT }]);
+
+    const result = resolveMmrSubagentInvocation({ profile: getMmrSubagentProfile("finder"), registry });
+    assert.equal(result.ok, true);
+    assert.equal(result.modelArg, "openai-codex/gpt-5.4-mini");
+    assert.ok(result.diagnostics.every((d) => !d.message.includes("input")));
+  });
+
+  it("fails child activation whose explicit --model has no image input", async () => {
+    const { resolveMmrSubagentInvocation } = await importSource(RESOLVER);
+    const { getMmrSubagentProfile } = await importSource(PROFILES);
+    const profile = getMmrSubagentProfile("media");
+    const childArgs = {
+      profile,
+      registeredTools: ["read", "bash", "grep"],
+      invocationContext: "child-activation",
+      explicitModel: "openai-codex/gpt-5.4-mini",
+      explicitTools: ["read"],
+    };
+
+    // Another route has image input: the explicit text-only route disagrees with it.
+    const mismatch = resolveMmrSubagentInvocation({
+      ...childArgs,
+      registry: makeRegistry([
+        { provider: "openai-codex", id: "gpt-5.4-mini", input: TEXT },
+        { provider: "claude-subscription", id: "claude-haiku-4-5", input: TEXT_AND_IMAGE },
+      ]),
+    });
+    assert.equal(mismatch.ok, false);
+    assert.equal(mismatch.code, "model.mismatch");
+    assert.match(mismatch.message, /--model openai-codex\/gpt-5\.4-mini, but the profile resolves to claude-subscription\/claude-haiku-4-5/);
+
+    // No route has image input: nothing resolves at all.
+    const noRoute = resolveMmrSubagentInvocation({
+      ...childArgs,
+      registry: makeRegistry([{ provider: "openai-codex", id: "gpt-5.4-mini", input: TEXT }]),
+    });
+    assert.equal(noRoute.ok, false);
+    assert.equal(noRoute.code, "model.no-route");
+  });
+});

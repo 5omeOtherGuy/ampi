@@ -15,8 +15,12 @@
 // (its task text contains "Review the following diff:") answers with a clean
 // report in the reviewer's format, or with one finding at `<path>:1-1` when the
 // task text contains "faux-finding <path>"; a review check whose body says
-// "please fail" fails like any other prompt that does. No network, no
-// credentials.
+// "please fail" fails like any other prompt that does. A prompt containing
+// "view media <path>" calls `view_media` with that path and a fixed objective,
+// then answers with the tool result's text. A media worker child (its task text
+// lists "Images to read") calls `read` on the first listed path, then answers
+// with a fixed sentence saying whether the read result held an image block.
+// No network, no credentials.
 import { writeFile } from "node:fs";
 import { fauxAssistantMessage, fauxProvider, fauxThinking, fauxToolCall } from "@earendil-works/pi-ai";
 
@@ -59,6 +63,21 @@ export default function fauxModel(pi: any): void {
         return fauxAssistantMessage(`Review finished.\n${headings.map((line) => `- ${line.slice(4)}`).join("\n")}`);
       }
       return fauxAssistantMessage(fauxToolCall("reviewer", { diff_description: "uncommitted changes" }, { id: "call_review" }), {
+        stopReason: "toolUse",
+      });
+    }
+    if (prompt.includes("Images to read (absolute paths")) {
+      if (last?.role === "toolResult") {
+        const sawImage = Array.isArray(last.content) && last.content.some((part: any) => part.type === "image");
+        return fauxAssistantMessage(sawImage ? "The media worker saw an image block in the read result." : "The media worker found no image block in the read result.");
+      }
+      const first = /^1\. (.+) \(image\/[a-z]+\)$/m.exec(prompt);
+      return fauxAssistantMessage(fauxToolCall("read", { path: first?.[1] ?? "" }, { id: "call_media_read" }), { stopReason: "toolUse" });
+    }
+    const media = /view media (\S+)/.exec(prompt);
+    if (media) {
+      if (last?.role === "toolResult") return fauxAssistantMessage(textOf(last.content).trim());
+      return fauxAssistantMessage(fauxToolCall("view_media", { paths: [media[1]], objective: "Describe what the image shows." }, { id: "call_view_media" }), {
         stopReason: "toolUse",
       });
     }

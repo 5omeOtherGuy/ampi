@@ -709,7 +709,7 @@ const NAMED_TOOLS: Record<string, Verbs & { object?: string }> = {
  * `tool-renderers.ts`); here they are only named so a run of calls never
  * folds one into a group.
  */
-const WORKER_TOOLS = new Set(["finder", "oracle", "librarian", "reviewer", "Task", "start_task", "task_poll", "task_wait", "task_cancel"]);
+const WORKER_TOOLS = new Set(["finder", "oracle", "librarian", "reviewer", "view_media", "Task", "start_task", "task_poll", "task_wait", "task_cancel"]);
 
 function isWorkerTool(toolName: string): boolean {
   return WORKER_TOOLS.has(toolName) || toolName.startsWith("sa__");

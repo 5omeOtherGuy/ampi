@@ -39,7 +39,7 @@ describe("mmr-workers merged extension", () => {
     createMmrWorkersExtension()(pi);
     assert.deepEqual(
       [...tools.keys()].sort(),
-      ["Task", "finder", "librarian", "oracle", "reviewer", "start_task", "task_cancel", "task_poll", "task_wait"],
+      ["Task", "finder", "librarian", "oracle", "reviewer", "start_task", "task_cancel", "task_poll", "task_wait", "view_media"],
     );
     assert.equal(typeof handlers.get("session_shutdown"), "function");
   });

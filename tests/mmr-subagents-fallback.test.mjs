@@ -15,7 +15,7 @@ beforeEach(async () => {
 // A registry stub matching the minimal surface the candidate builder uses.
 function makeRegistry(models) {
   return {
-    getAll: () => models.map((m) => ({ provider: m.provider, id: m.id })),
+    getAll: () => models.map((m) => ({ provider: m.provider, id: m.id, ...(m.input ? { input: m.input } : {}) })),
     hasConfiguredAuth: (m) => models.find((x) => x.provider === m.provider && x.id === m.id)?.auth ?? false,
     isUsingOAuth: (m) => models.find((x) => x.provider === m.provider && x.id === m.id)?.oauth ?? false,
   };
@@ -110,6 +110,26 @@ describe("buildMmrWorkerFallbackCandidates (#9)", () => {
     });
     assert.deepEqual(candidates.map((c) => c.model), ["gpt-5.5"]);
   });
+
+  it("offers the media profile only models with image input", async () => {
+    const { getMmrSubagentProfile } = await importSource("extensions/ampi-core/subagent-profiles.ts");
+    const profile = getMmrSubagentProfile("media");
+    const registry = makeRegistry([
+      { provider: "openai", id: "gpt-5.4-mini", auth: true, input: ["text"] },
+      { provider: "anthropic", id: "claude-haiku-4-5", auth: true, input: ["text", "image"] },
+      { provider: "custom", id: "no-input-array", auth: true },
+      { provider: "google", id: "gemini-3.5-flash", auth: true, input: ["image", "text"] },
+    ]);
+    const candidates = mod.buildMmrWorkerFallbackCandidates({
+      registry,
+      preferences: profile.modelPreferences,
+      requiredInput: profile.requiredInput,
+    });
+    assert.deepEqual(candidates.map((c) => `${c.provider}/${c.model}`), ["google/gemini-3.5-flash", "anthropic/claude-haiku-4-5"]);
+    // Without requiredInput every authenticated model is offered, as before.
+    const unfiltered = mod.buildMmrWorkerFallbackCandidates({ registry, preferences: profile.modelPreferences });
+    assert.equal(unfiltered.length, 4);
+  });
 });
 
 describe("failure counting + override scope (#9)", () => {
@@ -175,6 +195,38 @@ const baseArgs = (overrides) => ({
   candidatePreferences: CANDIDATE_PREFS,
   classifyOutcome,
   ...overrides,
+});
+
+describe("runMmrWorkerWithSharedFallback", () => {
+  it("prompts a media worker's fallback only with models that have image input", async () => {
+    const { runMmrWorkerWithSharedFallback } = await importSource("extensions/ampi-workers/framework/worker-fallback-run.ts");
+    const failed = { exitCode: 1, signal: null, aborted: false, agentStarted: true, finalOutput: "", truncatedFinalOutput: "", stderr: "provider error" };
+    const offered = [];
+    const args = {
+      ctx: {
+        hasUI: true,
+        ui: { select: async (_title, options) => { offered.push(options); return undefined; } },
+        modelRegistry: {
+          getAll: () => [
+            { provider: "anthropic", id: "claude-haiku-4-5", input: ["text", "image"] },
+            { provider: "openai", id: "gpt-5.4-mini", input: ["text"] },
+            { provider: "openai", id: "gpt-5.5", input: ["text", "image"] },
+          ],
+          hasConfiguredAuth: () => true,
+        },
+      },
+      sessionId: "media-session",
+      toolName: "view_media",
+      profileName: "media",
+      candidatePreferences: [{ model: "claude-haiku-4-5" }],
+      run: async () => ({ result: failed, route: "anthropic/claude-haiku-4-5" }),
+    };
+    await runMmrWorkerWithSharedFallback(args);
+    await runMmrWorkerWithSharedFallback(args);
+    assert.equal(offered.length, 1, "the second same-route failure prompts");
+    assert.equal(offered[0].length, 1);
+    assert.match(offered[0][0], /openai\/gpt-5\.5/);
+  });
 });
 
 describe("runMmrWorkerWithModelFallback orchestrator (#9)", () => {

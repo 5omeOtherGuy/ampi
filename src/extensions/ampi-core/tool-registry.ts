@@ -52,6 +52,7 @@ const DEFAULT_TOOL_CATALOG: Record<string, { owner: string }> = {
   oracle: { owner: "ampi-workers" },
   librarian: { owner: "ampi-workers" },
   reviewer: { owner: "ampi-workers" },
+  view_media: { owner: "ampi-workers" },
   start_task: { owner: "ampi-workers" },
   task_poll: { owner: "ampi-workers" },
   task_wait: { owner: "ampi-workers" },

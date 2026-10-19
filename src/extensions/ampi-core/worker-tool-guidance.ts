@@ -30,9 +30,9 @@
  */
 
 /** Worker tools that delegate work to a subagent. */
-const WORKER_DELEGATION_TOOL_NAMES = ["Task", "finder", "librarian", "oracle", "reviewer"] as const;
+const WORKER_DELEGATION_TOOL_NAMES = ["Task", "finder", "librarian", "oracle", "reviewer", "view_media"] as const;
 
-/** Worker surfaces that can run in the background (`oracle` cannot). */
+/** Worker surfaces that can run in the background (`oracle` and `view_media` cannot). */
 const BACKGROUND_CAPABLE_TOOL_NAMES = ["Task", "finder", "librarian", "reviewer", "start_task"] as const;
 
 /** Background orchestration tools. */

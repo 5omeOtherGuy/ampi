@@ -58,6 +58,7 @@ export const MMR_SMART_TOOL_NAMES = [
   "painter",
   "finder",
   "reviewer",
+  "view_media",
   "read_mcp_resource",
 ] satisfies string[];
 
@@ -66,6 +67,7 @@ export const MMR_RUSH_TOOL_NAMES = [
   "grep",
   "find",
   "finder",
+  "view_media",
   "bash",
   "shell_command",
   "shell_command_status",
@@ -125,6 +127,7 @@ export const MMR_DEEP_TOOL_NAMES = [
   "task_cancel",
   "finder",
   "reviewer",
+  "view_media",
   "task_list",
   "ask_user_choice",
   "painter",
