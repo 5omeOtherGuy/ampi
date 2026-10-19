@@ -566,10 +566,13 @@ Exit status: `0` allow, `1` reject, `3` ask or delegate, `2` on a usage error, `
 `ampi permissions edit` writes the rules in the text form, with a few comment lines at the top, to a new private temporary file and opens it in Pi's external editor, as `ampi config edit` does. When the editor exits, the rules are written back to `ampi.permissions`, keeping every other key, only when every line is valid; otherwise each problem is printed as `line N: <problem>`, nothing is written, and the edited file is kept so you can fix it and run `ampi permissions edit < <file>`. When stdin is not a terminal, the rules are read from it and no editor opens. Unchanged rules write nothing.
 
 - Text without rules removes `ampi.permissions` (and an `ampi` object left empty). That turns ampi-permissions off unless `ampi.dangerouslyAllowAll: false`, `ampi.guardedFiles.allowlist` or the other settings file keeps it on; `"permissions": []` keeps it on with ampi's defaults only.
+- Empty stdin (no text at all, not even a comment) is refused and writes nothing, since it is more likely a redirect from a missing or empty file than a wish to remove every rule; send `# no rules` to remove them from a script.
 - When the stored rules hold something the text form cannot write exactly, or the list holds an invalid entry or is not a list, `edit` does not start; change the JSON with `ampi config edit`.
 - A project's `allow` and `delegate` rules are written with a warning, because sessions ignore them.
 
 `ampi permissions add <action> <tool> [--<field> <pattern>]...` inserts one rule at the front of `ampi.permissions`, so it wins over the older ones, and prints it. Existing entries stay as they are, invalid ones included. Your shell has already removed one level of quotes, so the literal rule applies to each word as it arrives: `--count 42` matches the number, `--count '"42"'` the string. An invalid rule exits `2` and writes nothing.
+
+`edit` and `add` write through ampi's shared settings writer, which rewrites the whole settings file as formatted JSON (two-space indentation and a trailing newline): every other key and value stays, but your own spacing and line breaks in the file do not. The write is atomic, refuses a symbolic link and never overwrites a file that is not valid JSON.
 
 Running sessions keep the rules they read at start; the next session reads the change. Exit status of `list`, `edit` and `add`: `0` on success, `1` when the settings cannot be read or written or a line has a problem, `2` on a usage error.
 
