@@ -11,9 +11,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "./extensions/ampi-core/internal/json.js";
 import { createMmrSessionIndex } from "./extensions/ampi-core/session-catalog.js";
-import { includesCaseInsensitive, matchesMmrThreadIndexFilters, parseSessionQuery, resolveParentSessionId } from "./extensions/ampi-core/session-query.js";
+import { matchesMmrThreadIndexFilters, matchMmrSessionRow, parseSessionQuery, resolveParentSessionId } from "./extensions/ampi-core/session-query.js";
 import type { MmrModelPrice } from "./extensions/ampi-core/session-usage.js";
-import type { MmrThreadRecord } from "./extensions/ampi-core/thread-index.js";
+import { isMmrThreadSnoozed, isMmrThreadUnread, type MmrThreadRecord } from "./extensions/ampi-core/thread-index.js";
 import {
   type MmrContextSectionId,
   type MmrPriceLookup,
@@ -32,8 +32,10 @@ import { formatMmrSessionCost } from "./extensions/ampi-tui/editor/prompt-box.js
  * `ampi threads usage` and `ampi usage`.
  *
  * The command lists Pi's sessions and reads the thread index and session
- * entries itself; search evaluates the query on them with the parser and
- * matchers that `find_session` uses. The results stay on this machine, so
+ * entries itself; search evaluates the query on them with ampi-core's
+ * parser and its session row matcher (`matchMmrSessionRow`), the one the web
+ * GUI's Activity page and Search Threads dialog use, and evaluates the
+ * filters that need entries or git itself. The results stay on this machine, so
  * nothing is redacted and session directories are matched as they are. The
  * reports use the same analysis and cost summary as the Analyze Context and
  * Thread Cost overlays, so the numbers agree.
@@ -83,9 +85,10 @@ const FIND_SESSION_ONLY = /^(?:offset|sort):/i;
  * `before:` and `updated_before:` compare the last update, `created_after:`
  * and `created_before:` the creation time; `cwd:` and `project:` match part
  * of the session directory; `repo:` its git remote; `file:`, `model:`,
- * `provider:`, `tool:` and `has:` the session's entries; `label:`, `pinned:`
- * and `archived:` the thread index, with Pi's entry labels counting for
- * `label:` too.
+ * `provider:`, `tool:` and `has:` the session's entries; `label:`, `pinned:`,
+ * `archived:` and `is:` the thread index, with Pi's entry labels counting for
+ * `label:` too. `is:live` needs the live registry, which search does not
+ * read, so it is reported `unavailable` and ignored.
  */
 export async function searchMmrThreads(input: MmrThreadSearchInput): Promise<MmrThreadSearchResult> {
   const query = parseSessionQuery(input.query, input.now);
@@ -97,11 +100,12 @@ export async function searchMmrThreads(input: MmrThreadSearchInput): Promise<Mmr
   ];
   const { threads } = input;
   if (!threads) {
-    for (const token of query.appliedFilterTokens) {
-      if (/^(?:pinned|archived):/i.test(token)) problems.push({ filter: token, kind: "unavailable" });
+    for (const token of [...query.appliedFilterTokens, ...query.isTokens]) {
+      if (/^(?:pinned|archived|is):/i.test(token) && !/^is:live$/i.test(token)) problems.push({ filter: token, kind: "unavailable" });
     }
   }
-  const indexQuery = threads ? query : { ...query, pinned: undefined, archived: undefined };
+  for (const token of query.isTokens) if (/^is:live$/i.test(token)) problems.push({ filter: token, kind: "unavailable" });
+  const rowQuery = { ...query, label: [], is: threads ? query.is.filter((flag) => flag !== "live") : [], ...(threads ? {} : { pinned: undefined, archived: undefined }) };
 
   const idsByPath = new Map(input.sessions.map((session) => [session.path, session.id]));
   const sessionIndex = createMmrSessionIndex({ listSessions: async () => [...input.sessions], openSession: (file) => SessionManager.open(file) });
@@ -110,20 +114,27 @@ export async function searchMmrThreads(input: MmrThreadSearchInput): Promise<Mmr
   const startsWith = (id: string | undefined, prefix: string) => id?.toLowerCase().startsWith(prefix.toLowerCase()) === true;
 
   const matchOne = async (session: SessionInfo): Promise<MmrThreadSearchMatch | undefined> => {
-    if (query.id && !startsWith(session.id, query.id)) return undefined;
+    const record = threads && Object.hasOwn(threads, session.id) ? threads[session.id] : undefined;
+    const modified = session.modified.getTime();
+    const row = {
+      id: session.id,
+      title: session.name ?? "",
+      name: session.name,
+      firstMessage: session.firstMessage,
+      text: session.allMessagesText,
+      cwd: session.cwd,
+      labels: [],
+      modified: session.modified,
+      archived: record?.archived !== undefined,
+      snoozed: isMmrThreadSnoozed(record, modified),
+      pinned: record?.pinned === true,
+      live: false,
+      unread: isMmrThreadUnread(record, modified),
+    };
+    if (!matchMmrSessionRow(rowQuery, row)) return undefined;
     if (query.parent && !startsWith(resolveParentSessionId(session.parentSessionPath, idsByPath), query.parent)) return undefined;
-    if (query.name && !includesCaseInsensitive(session.name ?? "", query.name)) return undefined;
-    if (query.modifiedAfter && session.modified < query.modifiedAfter) return undefined;
-    if (query.modifiedBefore && session.modified > query.modifiedBefore) return undefined;
     if (query.createdAfter && session.created < query.createdAfter) return undefined;
     if (query.createdBefore && session.created > query.createdBefore) return undefined;
-    const cwd = session.cwd.toLowerCase();
-    if (![...query.cwd, ...query.project].every((part) => cwd.includes(part))) return undefined;
-    const text = [session.name ?? "", session.firstMessage, session.allMessagesText].join("\n");
-    if (!query.terms.every((term) => includesCaseInsensitive(text, term))) return undefined;
-
-    const record = threads && Object.hasOwn(threads, session.id) ? threads[session.id] : undefined;
-    if (!matchesMmrThreadIndexFilters({ ...indexQuery, label: [] }, record)) return undefined;
     if (query.repo.length > 0) {
       const identity = session.cwd ? await gitIdentity.resolve(session.cwd).catch(() => undefined) : undefined;
       if (!identity || !query.repo.every((token) => matchesRepoToken(identity, token))) return undefined;

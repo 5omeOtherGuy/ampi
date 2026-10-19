@@ -185,6 +185,13 @@ describe("ampi threads search: matching", () => {
     assert.deepEqual(await ids("parser", "pinned:false"), [CHILD]);
   });
 
+  it("reads is:pinned and is:archived from the thread index, as the web GUI's search does", async () => {
+    assert.deepEqual(await ids("is:pinned"), [PARENT]);
+    assert.deepEqual(await ids("release", "is:archived"), [NOTES]);
+    assert.deepEqual(await ids("is:pinned", "is:archived"), []);
+    assert.deepEqual(await ids("is:snoozed"), []);
+  });
+
   it("matches label: in the thread index and in Pi's label entries", async () => {
     assert.deepEqual(await ids("label:parser"), [PARENT]);
     assert.deepEqual(await ids("label:checkpoint"), [CHILD]);
@@ -287,6 +294,17 @@ describe("ampi threads search: errors", () => {
   it("refuses a value it cannot read", async () => {
     await usageError(["after:soon"], /^ampi: after:soon has a value search cannot read; after: takes a date/);
     await usageError(["pinned:maybe"], /pinned: takes true or false/);
+    await usageError(["is:open"], /^ampi: is:open has a value search cannot read; is: takes archived, snoozed, pinned, live or unread/);
+  });
+
+  it("ignores is:live with a note: search does not read which sessions run", async () => {
+    const { result, out, err } = await run(["threads", "search", "--json", "parser", "is:live"]);
+    assert.deepEqual(result, { code: 0 });
+    assert.deepEqual(
+      out.trimEnd().split("\n").map((line) => JSON.parse(line).id),
+      [CHILD, PARENT],
+    );
+    assert.equal(err, "ampi: is:live is ignored: search does not read which sessions are running.\n");
   });
 
   it("ignores offset: and sort: with any value, and projectRef:, with a note", async () => {

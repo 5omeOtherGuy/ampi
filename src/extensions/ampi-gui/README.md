@@ -41,9 +41,10 @@ Even when on, it starts only in an interactive terminal session (Pi's `tui` mode
 | Token file | File | `<agentDir>/data/ampi/live/<pid>.token`: the access token, while the GUI serves; see [Security model](#security-model) |
 | `POST /api/send`, `/api/dequeue`, `/api/steer-next`, `/api/interrupt` | Page endpoints | What the composer sends; see [Commands](#commands) |
 | `GET /api/sessions`, `GET /api/sessions/<id>` | Page endpoints | The sidebar's sessions and the read-only view of one; see [Sessions](#sessions) |
+| `GET /feed`; `GET /api/feed`, `GET /api/search` | Page and endpoints | The Activity page and the Search Threads dialog; see [Activity and Search](#activity-and-search) |
 | `POST /api/markdown`, `/api/archive`, `/api/pin`, `/api/color`, `/api/labels`, `/api/snooze`, `/api/unread`, `/api/cost`, `/api/running`, `/api/rename`, `/api/delete`; `GET /api/export` | Page endpoints | The title bar's [More Actions](#more-actions); see [Commands](#commands) |
-| `ampi_gui_prefs` | Cookie | The page's preferences (sidebar width, sidebar open, Full Width), shared by every ampi page on this machine; see [More Actions](#more-actions) |
-| Ctrl+B (⌘B on macOS), `/`, `?` and the rest of [Keyboard](#keyboard) | Page keys | Show or hide the sidebar, search the sessions, list every key in the Keymap overlay |
+| `ampi_gui_prefs` | Cookie | The page's preferences (sidebar width, sidebar open, Full Width, Activity's default time window and status), shared by every ampi page on this machine; see [More Actions](#more-actions) and [Activity and Search](#activity-and-search) |
+| Ctrl+B (⌘B on macOS), `/`, Ctrl+Shift+K (⇧⌘K), `?` and the rest of [Keyboard](#keyboard) | Page keys | Show or hide the sidebar, filter the sidebar, search every session, list every key in the Keymap overlay |
 
 The palette lists the command as `thread open in browser`.
 
@@ -127,7 +128,51 @@ The sidebar lists Pi's saved sessions from every project in the session director
 - Each row shows the session's disc, its title and how long ago it was active (`now`, `5m`, `3h`, `2d`, `3w`, `4mo`, `1y`). The disc has the colour set in the thread index, or one picked from the session id, so a session keeps its colour. It spins while the session this terminal runs is working. An unread session has a dot on its disc and a bolder title. A small dot after the title marks a session another running process has open (from the live registry): a terminal session, with or without its own GUI, or a print, JSON or RPC run.
 - The search field (`/` focuses it) keeps the sessions whose title, project name or working directory contain every word typed, in all groups; Esc clears it.
 - The list reloads after each turn, when the session changes, when the window gets focus and once a minute.
+- The sidebar's header has a search button that opens [Search Threads](#search-threads), and its footer an **Activity** tile that opens [Activity](#activity).
 - **Opening another session shows it read-only.** Its transcript is read from its file without changing it, the title bar shows its title, project and mode, and in place of the composer a banner says to open it in the terminal to continue (or, if another terminal runs it, to continue there). Only the Pi process that runs a session writes to it, so the page never becomes a second writer. The banner's link, or the session's own row, goes back to this terminal's session. The address names the session shown (`#/s/<session id>`), so the browser's Back button returns to the previous one.
+
+### Activity and Search
+
+#### Activity
+
+`/feed` (the sidebar's **Activity** tile, or the `Open Activity` command) lists every session in the sidebar that was active in a time window, newest first, grouped by day: Today, Yesterday, then the weekday and date in your browser's language and time zone. Each row shows the session's disc, its title, and how long ago it was active with its project; a click opens it as the sidebar would. The title bar reads Activity, and its link button copies the page's address.
+
+The filter column on the left (above the sessions on a narrow screen) has four parts:
+
+| Filter | Choices |
+| --- | --- |
+| Search | a query in the [search syntax](#search-syntax) |
+| Time | Last 24h, Last 72h, Last 7d, All Time, by last activity; a session active exactly 24 or 72 hours ago is inside the window |
+| Status | All; Active (neither archived nor snoozed); Archived; Snoozed (snoozed and not archived) |
+| Projects | All, then each working directory with the number of its sessions that pass the other filters; No project for sessions without one |
+
+- The filters are in the address (`/feed?time=7d&status=active&project=…&q=label%3Adocs`), so Back and Forward step through them and a copied link opens the same view. The time window and status are always written, so changing a default leaves earlier addresses as they were; only `/feed` on its own opens with your defaults.
+- Right-click a Time or Status choice (or press the context menu key on it) for **Use as default** and **Reset default**. The default is stored with the page's other preferences in the `ampi_gui_prefs` cookie, so every ampi page on this machine shares it. The built-in defaults are Last 24h and All.
+- A filter in the query that needs more than the list knows is named above the sessions instead of being dropped silently; see [Search syntax](#search-syntax).
+- In `ampi app`, Activity takes the session page's place, and opening a row opens that session at `/s/<id>`; on a terminal's own page the terminal's session keeps running while Activity is shown.
+
+#### Search Threads
+
+Mod+Shift+K, the sidebar's search button or the `Search threads` command opens a dialog over the page: a field and a link to this section. With the field empty it lists the latest sessions; as you type it lists the sessions that match, newest first, at most 50. Each result shows the title with its project on the right, how long ago it was active with **Archived**, **Snoozed** and **Live** badges (Live: a running Pi has it open), and the first two lines of its first message. Up and Down move the selection, Enter or a click opens the session, and Esc closes the dialog.
+
+#### Search syntax
+
+Activity's Search field and Search Threads take the session search language of `find_session` and `ampi threads search`, evaluated on the list's rows by the same matcher (`matchMmrSessionRow` in ampi-core's `session-query.ts`) that `ampi threads search` uses. Words and `"quoted phrases"` must all appear in the title, the session name or the first message; matching ignores case.
+
+| Key | A session matches when |
+| --- | --- |
+| `label:<text>` | one of its labels contains the text |
+| `project:<text>`, `cwd:<text>` | its working directory contains the text |
+| `is:archived`, `is:snoozed`, `is:pinned`, `is:unread` | it is archived, snoozed, pinned or unread in the thread index |
+| `is:live` | a running Pi has it open: this terminal, another terminal, or a worker of `ampi app` |
+| `pinned:true\|false`, `archived:true\|false` | the flag is set, or not |
+| `after:<date>`, `before:<date>` (`since:`, `until:`, `updated_before:`) | its last activity is on or after, or on or before, the date: `YYYY-MM-DD`, `today`, `yesterday`, `week`, `month`, `7d`, `2w` |
+| `id:<id>` | its id is or starts with this |
+| `name:<text>` | its session name contains the text |
+
+The rows do not carry the transcript, the git remote, the parent or the creation date, so `provider:`, `model:`, `tool:`, `file:`, `has:`, `repo:`, `parent:`, `created_after:`, `created_before:`, `offset:`, `sort:` and `projectRef:` are reported back as not applied, as are keys search does not know and those whose data only a hosted service keeps (`commit:`, `pr:`, `author:`); `ampi threads search` evaluates most of them. A value that does not parse (`after:soon`, `is:open`) is reported too. The results ignore both kinds.
+
+`GET /api/feed?time=24h|72h|7d|all&status=all|active|archived|snoozed&project=<cwd>|none&q=<query>&tz=<IANA zone>&locale=<language tag>` answers `{ applied, projects, total, days }`: `applied` holds the filters used with `unsupported` and `invalid` (the query's filters the results ignore), `projects` is `[{ cwd, label, count }]` (most sessions first), `total` the number of sessions shown, and `days` is `[{ date, label, sessions }]` with `date` as `YYYY-MM-DD` and the sidebar's row objects, newest first. `GET /api/search?q=<query>&limit=1-200` (default 50) answers `{ applied, total, results }`, each result a row with `project` and `preview`. Both read the list only, and answer 400 with an `error` for a value they do not take (`time=1h`, `limit=0`, an unknown time zone).
 
 ### The composer
 
@@ -151,7 +196,7 @@ Text typed here goes to the same Pi session as the terminal, the way the termina
 
 ### Keyboard
 
-The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctrl elsewhere; the overlay names the keys as your platform does. Plain keys (letters, `/`, `?`, arrows) do nothing while you type in a field; keys with Ctrl, Alt or ⌘ work there too, and so does Esc Esc. A modal (a question, Rename, the Keymap overlay) keeps every key to itself. Two-key sequences (`g g`, Esc Esc) take the second key within 1.5 seconds.
+The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctrl elsewhere; the overlay names the keys as your platform does. Plain keys (letters, `/`, `?`, arrows) do nothing while you type in a field; keys with Ctrl, Alt or ⌘ work there too, and so does Esc Esc. A modal (a question, Rename, the Keymap overlay, Search Threads) keeps every key to itself. Two-key sequences (`g g`, Esc Esc) take the second key within 1.5 seconds.
 
 | Key | Where | Does |
 | --- | --- | --- |
@@ -162,6 +207,7 @@ The page's keys, listed in the Keymap overlay (`?`). Mod is ⌘ on macOS and Ctr
 | `?` or Alt+Shift+/ | Anywhere | Show the Keymap overlay |
 | Mod+B | Anywhere | Show or hide the sidebar |
 | `/` | Anywhere | Open the sidebar and focus its search |
+| Mod+Shift+K | Anywhere | Open [Search Threads](#search-threads) |
 | Down, `j`, Ctrl+N / Up, `k`, Ctrl+P | A focused sidebar row or group | Move to the next / previous row or group |
 | Enter | A focused sidebar row or group | Show the session, or open or close the group |
 | `m` | A focused sidebar row | Open the row's actions menu |
