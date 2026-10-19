@@ -660,6 +660,27 @@ function patchTextFiles(patchText: string): { path: string; op: string; added: n
   return files;
 }
 
+/**
+ * Every path an `apply_patch` text adds, updates or deletes, a move's source
+ * and its target both, trimmed, in patch order and without repeats. Reads
+ * the headers at least as loosely as the patch parser does (lines split at
+ * `\n` alone, so a `\r` is trimmed off or stays inside the path as it does
+ * there; any spacing after the colon; a move line anywhere after a header),
+ * so it finds every path that parser does.
+ */
+export function patchTextPaths(patchText: string): string[] {
+  const paths = new Set<string>();
+  let inFile = false;
+  for (const line of patchText.split("\n")) {
+    const header = /^\*\*\* (?:Add|Update|Delete) File:(.*)$/s.exec(line);
+    const move = header ? undefined : /^\*\*\* Move to:(.*)$/s.exec(line);
+    const found = (header ?? (inFile ? move : undefined))?.[1]?.trim();
+    if (header) inFile = true;
+    if (found) paths.add(found);
+  }
+  return [...paths];
+}
+
 // ---------------------------------------------------------------------------
 // Tool classification
 // ---------------------------------------------------------------------------

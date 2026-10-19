@@ -1,5 +1,5 @@
 // A loaded ampi-permissions extension against temporary settings files, for
-// the delegate and subagent suites: mock Pi, an event bus that records
+// the delegate, subagent and guarded file suites: mock Pi, an event bus that records
 // approval events, a dialog that answers from a list, and an optional
 // subagent state set before session_start, as ampi-core does in a child.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -61,13 +61,15 @@ function createBus() {
 
 /**
  * Load the extension. `user` and `project` are the settings objects written
- * to the agent directory and `<cwd>/.pi/settings.json`; `answers` are what
+ * to the agent directory and `<cwd>/.pi/settings.json` (`userText` is written
+ * as it is, for a user settings file that is no JSON object); `answers` are what
  * the dialog returns, in order; `subagent` makes this session a child.
  */
 export async function setupPermissions(modules, options = {}) {
-  const { user, project, trusted = true, hasUI = true, answers = [], subagent = false, overrides = {} } = options;
+  const { user, userText, project, trusted = true, hasUI = true, answers = [], subagent = false, overrides = {} } = options;
   const agentDir = tempDir();
   if (user !== undefined) writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify(user));
+  if (userText !== undefined) writeFileSync(path.join(agentDir, "settings.json"), userText);
   const cwd = options.cwd ?? tempDir();
   if (project !== undefined) {
     mkdirSync(path.join(cwd, ".pi"), { recursive: true });
@@ -92,7 +94,7 @@ export async function setupPermissions(modules, options = {}) {
   let next = 0;
   const call = (toolName, input) =>
     mock.handlers.get("tool_call")({ type: "tool_call", toolCallId: `call-${++next}`, toolName, input }, context.ctx);
-  return { cwd, bus, selects, notifications: context.notifications, controller, call };
+  return { cwd, agentDir, bus, selects, notifications: context.notifications, controller, call };
 }
 
 /** Set environment variables for one test; the returned function restores them. */

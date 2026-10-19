@@ -1,5 +1,7 @@
+import { homedir } from "node:os";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir, type ToolCallEvent, type ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+import { findMmrGuardedFiles, type MmrGuardedFile } from "../ampi-core/guarded-files.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { rewriteJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
 import { MMR_PERMISSIONS_DEFAULT_RULES } from "../ampi-core/permission-defaults.js";
@@ -29,12 +31,20 @@ import {
   runMmrPermissionsDelegate,
 } from "./delegate.js";
 import {
+  formatMmrGuardedFilesDialogTitle,
+  formatMmrGuardedFilesDismissedReason,
+  formatMmrGuardedFilesNoUiReason,
+  formatMmrGuardedFilesRejectReason,
+  formatMmrGuardedFilesSubagentReason,
   formatMmrPermissionsDelegateWarning,
   formatMmrPermissionsDialogTitle,
   formatMmrPermissionsFeedbackReason,
   formatMmrPermissionsNoUiReason,
   formatMmrPermissionsRejectReason,
   formatMmrPermissionsSubagentReason,
+  MMR_GUARDED_FILES_ALWAYS_ALLOW,
+  MMR_GUARDED_FILES_DIALOG_OPTIONS,
+  MMR_GUARDED_FILES_REJECT,
   MMR_PERMISSIONS_ABORTED_REASON,
   MMR_PERMISSIONS_ALLOW_ALWAYS,
   MMR_PERMISSIONS_ALLOW_ONCE,
@@ -47,7 +57,14 @@ import {
 
 const FEATURE_GATES: ReadonlySet<string> = new Set(["ampi-permissions", "mmr-permissions"]);
 
-const INERT: MmrPermissionsSettings = Object.freeze({ enabled: false, allowAll: false, projectRules: [], userRules: [], warnings: [] });
+const INERT: MmrPermissionsSettings = Object.freeze({
+  enabled: false,
+  allowAll: false,
+  projectRules: [],
+  userRules: [],
+  guardedFilesAllowlist: [],
+  warnings: [],
+});
 
 export interface MmrPermissionsFactoryOverrides {
   /** Pi's agent directory, which holds the user settings file; `getAgentDir()` unless given. */
@@ -62,8 +79,8 @@ export interface MmrPermissionsFactoryOverrides {
   delegateSpawn?: MmrPermissionsDelegateSpawn;
 }
 
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+function plural(count: number, noun: string, nouns = `${noun}s`): string {
+  return `${count} ${count === 1 ? noun : nouns}`;
 }
 
 function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): MmrFeatureGateProvider {
@@ -73,9 +90,13 @@ function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): M
       if (!FEATURE_GATES.has(gate)) return undefined;
       const settings = getSettings();
       if (!settings.enabled) {
-        return { gate, status: "disabled", reason: "off; set ampi.permissions, or ampi.dangerouslyAllowAll to false, in settings to turn it on" };
+        return {
+          gate,
+          status: "disabled",
+          reason: "off; set ampi.permissions, ampi.dangerouslyAllowAll to false, or ampi.guardedFiles.allowlist in settings to turn it on",
+        };
       }
-      let reason = `on: ${plural(settings.projectRules.length, "project rule")}, ${plural(settings.userRules.length, "user rule")}, ${plural(MMR_PERMISSIONS_DEFAULT_RULES.length, "default rule")}`;
+      let reason = `on: ${plural(settings.projectRules.length, "project rule")}, ${plural(settings.userRules.length, "user rule")}, ${plural(MMR_PERMISSIONS_DEFAULT_RULES.length, "default rule")}, ${plural(settings.guardedFilesAllowlist.length, "guarded file allowlist entry", "guarded file allowlist entries")}`;
       if (settings.allowAll) reason += "; ampi.dangerouslyAllowAll is true, so every tool call runs without asking";
       else if (isMmrPermissionsSessionAllowAll()) reason += "; every tool call is allowed for this session";
       if (settings.failClosed) reason += `; every tool call asks because ${settings.failClosed}`;
@@ -85,9 +106,10 @@ function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings): M
 }
 
 /**
- * ampi-permissions: asks before risky tool calls. Inert until the user's or
- * the trusted project's settings set `ampi.permissions` or
- * `ampi.dangerouslyAllowAll: false`.
+ * ampi-permissions: asks before risky tool calls and before changes to
+ * guarded files. Inert until the user's or the trusted project's settings
+ * set `ampi.permissions` or `ampi.dangerouslyAllowAll: false`, or the user's
+ * set `ampi.guardedFiles.allowlist`.
  */
 export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOverrides = {}) {
   return function ampiPermissionsExtension(pi: ExtensionAPI): void {
@@ -171,13 +193,71 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       }
     }
 
-    function ask(event: ToolCallEvent, decision: MmrPermissionDecision, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
+    /** Run one dialog in the queue, with the approval events around it. */
+    function inQueue<T>(event: ToolCallEvent, dialog: () => Promise<T>): Promise<T> {
       const requestId = event.toolCallId;
       // Waiting in the queue already counts as waiting for approval.
       emitApproval({ phase: "request", requestId });
-      const turn = queue.then(() => askUser(event, decision, ctx));
+      const turn = queue.then(dialog);
       queue = turn.catch(() => undefined);
       return turn.finally(() => emitApproval({ phase: "answer", requestId }));
+    }
+
+    function ask(event: ToolCallEvent, decision: MmrPermissionDecision, ctx: ExtensionContext): Promise<ToolCallEventResult | undefined> {
+      return inQueue(event, () => askUser(event, decision, ctx));
+    }
+
+    function guardedFiles(event: ToolCallEvent, ctx: ExtensionContext): MmrGuardedFile[] {
+      return findMmrGuardedFiles(event.toolName, event.input, settings.guardedFilesAllowlist, { cwd: ctx.cwd, agentDir: agentDir() });
+    }
+
+    /** Add the guarded forms of each path, and the path itself, to the user's `ampi.guardedFiles.allowlist`. */
+    function allowPaths(files: readonly MmrGuardedFile[], ctx: ExtensionContext): void {
+      const paths = [...new Set(files.flatMap((file) => [file.path, ...file.guardedForms]))];
+      const file = userFile();
+      try {
+        rewriteJsonSettingsFile(file, (existing) => {
+          if (!isRecord(existing)) throw new Error("it does not hold a JSON object");
+          const ampi = isRecord(existing.ampi) ? existing.ampi : {};
+          const guarded = isRecord(ampi.guardedFiles) ? ampi.guardedFiles : {};
+          const allowlist: unknown[] = Array.isArray(guarded.allowlist) ? guarded.allowlist : [];
+          const added = paths.filter((entry) => !allowlist.includes(entry));
+          return { ...existing, ampi: { ...ampi, guardedFiles: { ...guarded, allowlist: [...allowlist, ...added] } } };
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(
+          `Could not save ${paths.join(", ")} to ampi.guardedFiles.allowlist in ${file} (${message}). This call runs once; the next change there asks again.`,
+          "error",
+        );
+        return;
+      }
+      ctx.ui.notify(`Saved ${paths.join(", ")} to ampi.guardedFiles.allowlist in ${file}; changes there no longer ask.`, "info");
+      load(ctx);
+    }
+
+    /** The guarded file dialog; `undefined` when the call may go on to the rules. */
+    async function askGuarded(
+      event: ToolCallEvent,
+      files: readonly MmrGuardedFile[],
+      ctx: ExtensionContext,
+    ): Promise<ToolCallEventResult | undefined> {
+      if (allowedWithoutAsking()) return undefined;
+      if (ctx.signal?.aborted) return { block: true, reason: MMR_PERMISSIONS_ABORTED_REASON };
+      const title = formatMmrGuardedFilesDialogTitle(event.toolName, files, Math.max(20, columns() - 2), { cwd: ctx.cwd, home: homedir() });
+      const choice = await ctx.ui.select(title, [...MMR_GUARDED_FILES_DIALOG_OPTIONS], { signal: ctx.signal });
+      if (ctx.signal?.aborted) return { block: true, reason: MMR_PERMISSIONS_ABORTED_REASON };
+      switch (choice) {
+        case MMR_PERMISSIONS_ALLOW_ONCE:
+          return undefined;
+        case MMR_GUARDED_FILES_ALWAYS_ALLOW:
+          allowPaths(files, ctx);
+          return undefined;
+        case MMR_GUARDED_FILES_REJECT:
+          return { block: true, reason: formatMmrGuardedFilesRejectReason(event.toolName, files) };
+        default:
+          return { block: true, reason: formatMmrGuardedFilesDismissedReason(event.toolName, files) };
+      }
     }
 
     /**
@@ -247,13 +327,26 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
             { context },
           );
       if (decision.action === "reject") return { block: true, reason: formatMmrPermissionsRejectReason(event.toolName, decision) };
+      // Guarded files ask even when a rule allows the tool. A yes here stands
+      // in for the approval a rule asks for, so a call shows one dialog at most.
+      const guarded = guardedFiles(event, ctx);
+      let approved = false;
+      if (guarded.length > 0) {
+        if (context === "subagent") return { block: true, reason: formatMmrGuardedFilesSubagentReason(event.toolName, guarded) };
+        if (!ctx.hasUI) return { block: true, reason: formatMmrGuardedFilesNoUiReason(event.toolName, guarded) };
+        const answer = await inQueue(event, () => askGuarded(event, guarded, ctx));
+        if (answer) return answer;
+        // An answer in the queue may have allowed everything.
+        if (allowedWithoutAsking()) return undefined;
+        approved = true;
+      }
       if (decision.action === "delegate") {
         const answer = await delegate(event, decision, context, ctx);
         if (answer === undefined) return undefined;
         if (!("action" in answer)) return answer;
         decision = answer;
       }
-      if (decision.action === "allow") return undefined;
+      if (decision.action === "allow" || approved) return undefined;
       // A subagent never opens a dialog: nobody is there to answer it.
       if (context === "subagent") return { block: true, reason: formatMmrPermissionsSubagentReason(event.toolName, decision) };
       if (!ctx.hasUI) return { block: true, reason: formatMmrPermissionsNoUiReason(event.toolName, decision) };

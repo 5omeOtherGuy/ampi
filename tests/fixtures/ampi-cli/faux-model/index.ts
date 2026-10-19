@@ -2,9 +2,11 @@
 // "Echo: <prompt>", or fails when the prompt contains "please fail". For a
 // prompt containing "list files" it first thinks and calls `bash` with `ls`,
 // then answers with the listing. For "read file <path>" it calls Pi's `read`
-// tool with that path, then answers "Read it."; a compaction summary request,
-// whose prompt starts with "<conversation>" or "# Conversation" and may quote
-// such a prompt, gets the echo instead. For "wait on <fifo>" it calls `bash`
+// tool with that path, then answers "Read it."; for "write file <path>" it
+// calls Pi's `write` tool with that path and a one-line content, then answers
+// "Wrote it." whether the call ran or was blocked. A compaction summary
+// request, whose prompt starts with "<conversation>" or "# Conversation" and
+// may quote such a prompt, gets the echo instead of either. For "wait on <fifo>" it calls `bash`
 // with `cat <fifo>`, which blocks until something writes the FIFO, then answers
 // "Waited: <output>". For a prompt starting with "run: <command>" it calls
 // `bash` with that command, then answers "Ran: <output>". A message containing
@@ -48,10 +50,19 @@ export default function fauxModel(pi: any): void {
       });
     }
     const read = /read file (\S+)/.exec(prompt);
+    const write = /write file (\S+)/.exec(prompt);
     // Not in a compaction summary request, which quotes the conversation:
     // "<conversation>" opens the history summary, "# Conversation" the summary
     // of a split turn's prefix.
-    if (read && !prompt.startsWith("<conversation>") && !prompt.startsWith("# Conversation")) {
+    const summary = prompt.startsWith("<conversation>") || prompt.startsWith("# Conversation");
+    if (write && !summary) {
+      if (last?.role === "toolResult") return fauxAssistantMessage("Wrote it.");
+      return fauxAssistantMessage(
+        fauxToolCall("write", { path: write[1], content: "WRITTEN_BY=faux\n" }, { id: `call_write_${context.messages.length}` }),
+        { stopReason: "toolUse" },
+      );
+    }
+    if (read && !summary) {
       if (last?.role === "toolResult") return fauxAssistantMessage("Read it.");
       return fauxAssistantMessage(fauxToolCall("read", { path: read[1] }, { id: `call_read_${context.messages.length}` }), {
         stopReason: "toolUse",

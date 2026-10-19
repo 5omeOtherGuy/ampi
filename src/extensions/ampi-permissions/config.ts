@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
+import { parseMmrGuardedFilesAllowlist } from "../ampi-core/guarded-files.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { type MmrPermissionRule, parseMmrPermissionRules } from "../ampi-core/permissions.js";
 
 /** The permission settings of one session, read from the user's and the trusted project's settings files. */
 export interface MmrPermissionsSettings {
-  /** `ampi.permissions` is present, or `ampi.dangerouslyAllowAll` is `false`, in either file. */
+  /**
+   * `ampi.permissions` is present, or `ampi.dangerouslyAllowAll` is `false`,
+   * in either file, or the user's `ampi.guardedFiles.allowlist` is present.
+   */
   readonly enabled: boolean;
   /** The user's `ampi.dangerouslyAllowAll` is `true`. */
   readonly allowAll: boolean;
@@ -13,6 +17,8 @@ export interface MmrPermissionsSettings {
   /** The project's reject and ask rules. */
   readonly projectRules: readonly MmrPermissionRule[];
   readonly userRules: readonly MmrPermissionRule[];
+  /** The user's `ampi.guardedFiles.allowlist`: absolute paths and globs, `~/` expanded, that guarded files may change without asking. */
+  readonly guardedFilesAllowlist: readonly string[];
   /** Problems to show the user once per session. */
   readonly warnings: readonly string[];
 }
@@ -52,7 +58,8 @@ function readSettingsFile(filePath: string, warnings: string[]): Record<string, 
  * Load the permission settings. A project can only tighten what the user
  * set: its reject and ask rules apply ahead of the user's, while its allow
  * and delegate rules and a `dangerouslyAllowAll: true` are ignored with a
- * warning.
+ * warning. Guarded files are the user's alone: a project's
+ * `ampi.guardedFiles` is ignored with a warning.
  */
 export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOptions): MmrPermissionsSettings {
   const warnings: string[] = [];
@@ -61,6 +68,7 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
   let failClosed: string | undefined;
   let projectRules: MmrPermissionRule[] = [];
   let userRules: MmrPermissionRule[] = [];
+  let guardedFilesAllowlist: readonly string[] = [];
 
   const files: ["user" | "project", string | undefined][] = [
     ["user", options.userFile],
@@ -76,6 +84,26 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
     else if (allow === true && scope === "user") allowAll = true;
     else if (allow === true) warnings.push(`Ignoring ampi.dangerouslyAllowAll in ${filePath}: project settings can only add restrictions.`);
     else if (allow !== undefined) warnings.push(`Ignoring ampi.dangerouslyAllowAll in ${filePath}: expected true or false.`);
+
+    if (Object.hasOwn(ampi, "guardedFiles")) {
+      if (scope === "project") {
+        warnings.push(`Ignoring ampi.guardedFiles in ${filePath}: guarded files can only be allowed in the user settings.`);
+      } else if (!isRecord(ampi.guardedFiles)) {
+        warnings.push(`Ignoring ampi.guardedFiles in ${filePath}: expected an object.`);
+      } else if (Object.hasOwn(ampi.guardedFiles, "allowlist")) {
+        enabled = true;
+        const allowlist = ampi.guardedFiles.allowlist;
+        if (!Array.isArray(allowlist)) {
+          warnings.push(`Ignoring ampi.guardedFiles.allowlist in ${filePath}: expected a list of paths, so every guarded file asks.`);
+        } else {
+          const parsed = parseMmrGuardedFilesAllowlist(allowlist);
+          guardedFilesAllowlist = parsed.entries;
+          for (const { index, problem } of parsed.problems) {
+            warnings.push(`Skipping ampi.guardedFiles.allowlist[${index}] in ${filePath}: ${problem}.`);
+          }
+        }
+      }
+    }
 
     if (!Object.hasOwn(ampi, "permissions")) continue;
     enabled = true;
@@ -101,5 +129,5 @@ export function loadMmrPermissionsSettings(options: LoadMmrPermissionsSettingsOp
     }
   }
 
-  return { enabled, allowAll, ...(failClosed ? { failClosed } : {}), projectRules, userRules, warnings };
+  return { enabled, allowAll, ...(failClosed ? { failClosed } : {}), projectRules, userRules, guardedFilesAllowlist, warnings };
 }
