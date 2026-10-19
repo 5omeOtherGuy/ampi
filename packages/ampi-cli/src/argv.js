@@ -422,8 +422,7 @@ function readOptions(args) {
           error ??= "--dangerously-allow-all takes no value.";
           break;
         }
-        // With its value attached: Pi's parser takes the argument after an extension flag it
-        // does not know yet as that flag's value, which would swallow a message that follows.
+        // With its value attached, as for --fast.
         if (!options.dangerouslyAllowAll) piArgs.push("--ampi-dangerously-allow-all=true");
         options.dangerouslyAllowAll = true;
         break;
@@ -622,7 +621,7 @@ Options:
   --dangerously-allow-all
       Let every tool call run without asking for approval, in subagents too: ampi-permissions
       skips its rules and guarded files for this run. The same as Pi's
-      --ampi-dangerously-allow-all. Without it, execute mode refuses calls that need approval.
+      --ampi-dangerously-allow-all=true. Without it, execute mode refuses calls that need approval.
   -x, --execute
       Run the message once without the terminal UI, print only the final assistant message
       and exit. The message is the argument, stdin, or the argument, a newline and stdin.

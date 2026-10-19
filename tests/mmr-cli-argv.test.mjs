@@ -98,6 +98,10 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual([route.options.execute, route.options.dangerouslyAllowAll], [true, true]);
     assert.deepEqual(parseArgs(route.piArgs).messages, ["fix it"]);
     assert.deepEqual(routeAmpiArgv(["--dangerously-allow-all"]).piArgs, ["--ampi-dangerously-allow-all=true"]);
+    // Beside --fast, both with their values attached, so neither takes the message.
+    const both = routeAmpiArgv(["--fast", "--dangerously-allow-all", "fix it"]);
+    assert.deepEqual(both.piArgs, ["--ampi-fast=true", "--ampi-dangerously-allow-all=true", "fix it"]);
+    assert.deepEqual(parseArgs(both.piArgs).messages, ["fix it"]);
     // After --, it is part of the message.
     const passed = routeAmpiArgv(["--", "--dangerously-allow-all"]);
     assert.deepEqual(passed.piArgs, ["--", "--dangerously-allow-all"]);
