@@ -195,8 +195,13 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       const asked = new Set<MmrPermissionDecision>();
       const shell = MMR_PERMISSIONS_SHELL_TOOLS.includes(event.toolName) && isRecord(event.input);
       for (const part of parts) {
-        if (part.action !== "delegate" || part.rule?.to === undefined) continue;
-        const program = part.rule.to;
+        if (part.action !== "delegate") continue;
+        const program = part.rule?.to;
+        // A delegate rule always names a program; one that does not asks.
+        if (program === undefined) {
+          asked.add(part);
+          continue;
+        }
         const input = shell && part.command !== undefined ? { ...(event.input as Record<string, unknown>), command: part.command } : event.input;
         const outcome = await runMmrPermissionsDelegate({
           program,
