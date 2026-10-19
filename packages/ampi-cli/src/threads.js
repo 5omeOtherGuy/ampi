@@ -8,9 +8,8 @@ import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createPiModelLookup, listPiSessions, loadThroughPi, piAgentDir, readPiSessionEntries, setPiSessionName } from "./pi-compat.js";
 import { runImportCommand } from "./import/index.js";
-import { formatThreadMarkdown } from "./thread-markdown.js";
+import { createPiModelLookup, listPiSessions, loadThroughPi, piAgentDir, readPiSessionEntries, setPiSessionName } from "./pi-compat.js";
 import {
   isThreadColor,
   readThreadIndex,
@@ -20,6 +19,7 @@ import {
   updateThreadRecord,
   validateThreadLabels,
 } from "./thread-index.js";
+import { formatThreadMarkdown } from "./thread-markdown.js";
 
 /**
  * @typedef {import("./thread-index.js").ThreadRecord} ThreadRecord

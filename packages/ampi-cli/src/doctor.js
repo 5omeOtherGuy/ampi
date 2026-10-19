@@ -8,9 +8,9 @@
 import { accessSync, constants, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { liveRegistryDir } from "./live-registry.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt } from "./packages.js";
 import { countPiCredentialedModels, listPiExtensionSources, piAgentDir, piBinDir, readPiSettingsErrors } from "./pi-compat.js";
-import { liveRegistryDir } from "./live-registry.js";
 import { readThreadIndex, threadIndexPath } from "./thread-index.js";
 import { satisfiesRange } from "./versions.js";
 
