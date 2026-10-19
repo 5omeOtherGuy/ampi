@@ -96,7 +96,8 @@ export function readWorkerRun(details) {
 function blockingTrailOf(details) {
   if (readWorkerRun(details)?.runMode !== "blocking") return undefined;
   const run = /** @type {Record<string, any>} */ (details);
-  const trail = Array.isArray(run.trail) ? run.trail : Array.isArray(run.snapshot?.trail) ? run.snapshot.trail : [];
+  const trail = Array.isArray(run.trail) ? run.trail : Array.isArray(run.snapshot?.trail) ? run.snapshot.trail : undefined;
+  if (trail === undefined) return undefined;
   return trail.filter(
     (/** @type {unknown} */ item) =>
       isRecord(item) && TRAIL_ITEM_TYPES.has(item.type) && (item.type !== "tool" || (typeof item.toolCallId === "string" && typeof item.toolName === "string")),
@@ -216,7 +217,9 @@ export function createStreamJsonEncoder({ thinking, now, context }) {
 
   /**
    * The outermost call a reader has seen as a tool_use, for a tool that another
-   * tool may have called (a codemode script, for example).
+   * tool may have called (a codemode script, for example). When no call in the
+   * chain was shown (a worker a command ran, for example), the outermost call
+   * id is used, so the child's records still name the call that owns them.
    *
    * @param {string} toolCallId
    */

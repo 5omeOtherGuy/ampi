@@ -579,6 +579,34 @@ describe("ampi stream JSON: subagent records from worker progress", () => {
     const update = (trail, snapshotTrail) => ({ ...progress("f", [], { toolName: "finder" }), partialResult: { content: [], details: details(trail, snapshotTrail) } });
     assert.deepEqual(summaryOf(childRecordsOf([update(undefined, [said("From the snapshot.")])])), ["From the snapshot."]);
     assert.deepEqual(childRecordsOf([update({ length: 1, 0: said("Not a list.") }, "nor this")]), []);
+    // A bad update changes nothing: the next valid trail streams only its new items.
+    const first = said("First.");
+    assert.deepEqual(
+      summaryOf(childRecordsOf([update([first]), update({ length: 1, 0: said("Not a list.") }, "nor this"), update([first, said("Second.")])])),
+      ["First.", "Second."],
+    );
+  });
+
+  it("names the outermost call of a worker whose call chain the stream never showed as a tool_use", () => {
+    const hidden = { extra: { parentToolCallId: "toolu_command" }, id: "toolu_command/1" };
+    const events = run(
+      "run it",
+      workerTurn(
+        [],
+        [
+          { type: "tool_execution_start", toolCallId: hidden.id, toolName: "Task", args: {}, parentToolCallId: "toolu_command" },
+          progress(hidden.id, [prompted(), said("Hidden child.")], { extra: hidden.extra }),
+          finished(hidden.id, [prompted(), said("Hidden child."), toolItem("call_h", "completed", { resultPreview: "h" })], { extra: hidden.extra }),
+        ],
+      ),
+      finalTurn(),
+    );
+    const { records } = encode(events);
+    assertSchema(records);
+    const children = records.filter((record) => typeof record.parent_tool_use_id === "string");
+    assert.equal(children.length, 3);
+    assert.ok(children.every((record) => record.parent_tool_use_id === "toolu_command"));
+    assert.ok(!records.some((record) => record.message?.content?.some((block) => block.type === "tool_use" && block.id === "toolu_command")));
   });
 
   it("streams nothing for tools without the envelope and for background and internal runs", () => {
