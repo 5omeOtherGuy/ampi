@@ -94,8 +94,9 @@ Usage: ampi review [options] [description...]
 
 The words of the description say which changes to review, as you would ask for them, for
 example "the changes on this branch" or "the last commit". Without one, the uncommitted
-changes are reviewed. The reviewer works out the diff itself, and every review check under
-.agents/checks/ whose directory holds a changed file runs as its own reviewer.
+changes are reviewed. The reviewer works out the diff itself (nothing is read from stdin), and
+every review check under .agents/checks/ whose directory holds a changed file runs as its own
+reviewer.
 
 Options:
 

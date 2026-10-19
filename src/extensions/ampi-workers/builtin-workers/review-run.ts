@@ -13,15 +13,15 @@ import type { MmrModelPreference } from "../../ampi-core/types.js";
 import type { MmrSubagentRunner } from "../framework/runner.js";
 import { resolveEffectiveRunner } from "../framework/worker-fallback-run.js";
 import { resolveWorkerModelPreferencesOverride } from "../framework/worker-tool-factory.js";
-import { ampiReviewSummary, parseAmpiReviewFindings, type AmpiReviewFinding } from "../review/findings.js";
+import { type AmpiReviewFinding, ampiReviewSummary, parseAmpiReviewFindings } from "../review/findings.js";
 import {
-  createReviewerRunPreparer,
-  readAmpiReviewerReports,
-  REVIEWER_SUBAGENT_PROFILE,
   type AmpiReviewerReports,
+  createReviewerRunPreparer,
+  REVIEWER_SUBAGENT_PROFILE,
   type ReviewerCheckStatus,
   type ReviewerDetails,
   type ReviewerToolDeps,
+  readAmpiReviewerReports,
 } from "./reviewer.js";
 
 export const AMPI_REVIEW_RUN_COMMAND = "ampi-review-run";
@@ -230,7 +230,10 @@ export function registerAmpiReviewRunCommand(pi: ExtensionAPI, deps: ReviewerToo
       const requestFile = pi.getFlag(AMPI_REVIEW_REQUEST_FLAG);
       const outputFile = pi.getFlag(AMPI_REVIEW_OUTPUT_FLAG);
       if (typeof requestFile !== "string" || requestFile === "" || typeof outputFile !== "string" || outputFile === "") {
-        ctx.ui.notify(`/${AMPI_REVIEW_RUN_COMMAND} runs a review for the ampi review shell command; to review changes, run ampi review in a shell or ask for a review.`, "info");
+        const notice = `/${AMPI_REVIEW_RUN_COMMAND} runs a review for the ampi review shell command; to review changes, run ampi review in a shell or ask for a review.`;
+        // Without a UI (print or JSON mode) a notification shows nothing, so the error is the message.
+        if (!ctx.hasUI) throw new Error(notice);
+        ctx.ui.notify(notice, "info");
         return;
       }
       const outcome = await runAmpiReviewRequest(requestFile, ctx, pi, deps);

@@ -439,7 +439,7 @@ describe("ampi review: /ampi-review-run in a session", () => {
   };
 
   /** Register the command in a mocked Pi and run it with these flags; the runner answers per run. */
-  async function runCommand(flags, answer, request) {
+  async function runCommand(flags, answer, request, hasUI = false) {
     const dir = mkdtempSync(path.join(temporary, "command-"));
     const requestFile = path.join(dir, "request.json");
     const outputFile = path.join(dir, "output.json");
@@ -459,7 +459,7 @@ describe("ampi review: /ampi-review-run in a session", () => {
       buildSystemPrompt: () => "SP",
       loadSubagentModelPreferences: () => ({ subagentModelPreferences: { reviewer: [{ model: "faux-1", providers: ["faux"], thinkingLevel: "high" }] } }),
     });
-    const context = createMockExtensionContext({ cwd: "/repo", hasUI: false, models: [{ provider: "faux", id: "faux-1", name: "Faux One" }] });
+    const context = createMockExtensionContext({ cwd: "/repo", hasUI, models: [{ provider: "faux", id: "faux-1", name: "Faux One" }] });
     await commands.get("ampi-review-run").handler("", context.ctx);
     const outcome = existsSync(outputFile) ? JSON.parse(readFileSync(outputFile, "utf8")) : undefined;
     return { outcome, calls, notifications: context.notifications };
@@ -542,11 +542,13 @@ describe("ampi review: /ampi-review-run in a session", () => {
   });
 
   it("only says what runs it when typed in a session without the flags", async () => {
-    const typed = await runCommand(false, () => assert.fail("no review runs"), undefined);
+    const typed = await runCommand(false, () => assert.fail("no review runs"), undefined, true);
     assert.equal(typed.outcome, undefined);
     assert.equal(typed.calls.length, 0);
     assert.equal(typed.notifications.length, 1);
     assert.match(typed.notifications[0].message, /runs a review for the ampi review shell command/);
+    // Without a UI a notification shows nothing, so the notice becomes the command's error.
+    await assert.rejects(runCommand(false, () => assert.fail("no review runs"), undefined), /runs a review for the ampi review shell command/);
   });
 
   it("registers its command and both flags with descriptions", () => {

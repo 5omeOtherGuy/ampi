@@ -189,7 +189,7 @@ ampi review --json -f src/parser.ts -i "focus on error handling" > review.json
 ampi review --checks-only -c naming -l ci
 ```
 
-The words after `review` are the diff description, joined with single spaces; the reviewer works out the diff from it, as the `reviewer` tool does in a session. Without one, the uncommitted changes are reviewed (the reviewer is asked for `uncommitted changes`, which the JSON document reports as `diff`). `ampi -- review …` still starts a session with the words as its first message.
+The words after `review` are the diff description, joined with single spaces; the reviewer works out the diff from it, as the `reviewer` tool does in a session; nothing is read from stdin, so `git diff | ampi review` reviews the uncommitted changes, not the piped text. Without one, the uncommitted changes are reviewed (the reviewer is asked for `uncommitted changes`, which the JSON document reports as `diff`). `ampi -- review …` still starts a session with the words as its first message.
 
 | Option | What it does |
 | --- | --- |
