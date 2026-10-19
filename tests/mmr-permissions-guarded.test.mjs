@@ -562,6 +562,16 @@ describe("ampi-permissions guarded files: rules, runs without UI and subagents",
     );
   });
 
+  it("names where a link leads in the reason", async () => {
+    const cwd = realpathSync(tempDir());
+    mkdirSync(path.join(cwd, ".git", "hooks"), { recursive: true });
+    symlinkSync(path.join(".git", "hooks", "pre-commit"), path.join(cwd, "notes.txt"));
+    const t = await setupPermissions(modules, { user: ON, cwd, hasUI: false });
+    const { reason } = await t.call("write", { path: "notes.txt", content: "" });
+    const expected = `The write call changes a guarded file: ${path.join(cwd, "notes.txt")}, which leads to ${path.join(cwd, ".git", "hooks", "pre-commit")} (Git internals). `;
+    assert.ok(reason.startsWith(expected), reason);
+  });
+
   it("refuses in a subagent child with the guarded reason and no dialog", async () => {
     const restore = setEnv(NO_SEAMS);
     try {

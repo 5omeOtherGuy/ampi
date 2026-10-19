@@ -5,8 +5,8 @@ import { formatMmrPermissionRule, type MmrPermissionDecision } from "../ampi-cor
 
 /**
  * The words of the approval dialog, of the guarded file dialog and of the
- * reasons a blocked tool call gives the agent. The option labels are Amp-compatible; every sentence is
- * ampi's own.
+ * reasons a blocked tool call gives the agent. The option labels are
+ * Amp-compatible; every sentence is ampi's own.
  */
 
 export const MMR_PERMISSIONS_DIALOG_TITLE = "Approval Required";
@@ -133,7 +133,7 @@ export function formatMmrGuardedFilesDialogTitle(
 function guardedList(files: readonly MmrGuardedFile[]): string {
   const items = files.map((file) => {
     const target = linkTarget(file);
-    return `${file.path}${target === undefined ? "" : `, which leads to ${target},`} (${file.category.description})`;
+    return `${file.path}${target === undefined ? "" : `, which leads to ${target}`} (${file.category.description})`;
   });
   return `${files.length === 1 ? "a guarded file" : "guarded files"}: ${items.join("; ")}`;
 }
