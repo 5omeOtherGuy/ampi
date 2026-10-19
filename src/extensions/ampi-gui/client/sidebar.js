@@ -1,7 +1,7 @@
 // The session sidebar: groups from GET /api/sessions, a search filter, a
-// drag handle that resizes it, and the keys that toggle and search it. The
-// pure helpers at the top are exported for tests; mountSidebar wires them
-// to the page.
+// drag handle that resizes it, and the moves its keys make (commands.js
+// binds them). The pure helpers at the top are exported for tests;
+// mountSidebar wires them to the page.
 
 import { appPath, hostWorking, statusIconLabel } from "./app-mode.js";
 
@@ -69,17 +69,6 @@ export function clampSidebarWidth(width) {
   return Math.round(Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, width)));
 }
 
-/**
- * The shell's keys: mod+b (Ctrl+B, or ⌘B on macOS) toggles the sidebar
- * anywhere; `/` focuses the search unless the user is typing in a field.
- */
-export function shortcutFor(event, { mac = false, inField = false } = {}) {
-  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-  if (mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") return "toggle-sidebar";
-  if (event.key === "/" && !inField && !event.ctrlKey && !event.metaKey && !event.altKey) return "focus-search";
-  return undefined;
-}
-
 // ---------------------------------------------------------------------------
 // Page wiring
 
@@ -130,7 +119,7 @@ function store(key, value) {
  * Mount the sidebar. `app` carries `data-sidebar="open|closed"`; below
  * 768 px the open sidebar is an overlay sheet over the page.
  */
-export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
+export function mountSidebar({ app, now = () => Date.now() }) {
   const $ = (id) => document.getElementById(id);
   const sidebar = $("sidebar");
   const list = $("session-list");
@@ -221,19 +210,6 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
   });
   handle.addEventListener("dblclick", () => store("ampi-gui-sidebar-width", String(setWidth(SIDEBAR_WIDTH.default))));
 
-  document.addEventListener("keydown", (event) => {
-    const inField = Boolean(event.target.closest?.("input, textarea, select, [contenteditable]"));
-    const action = shortcutFor(event, { mac, inField });
-    if (action === "toggle-sidebar") {
-      event.preventDefault();
-      toggle({ focus: narrow.matches });
-    } else if (action === "focus-search") {
-      event.preventDefault();
-      if (!open) setOpen(true);
-      search.focus();
-      search.select();
-    }
-  });
   search.addEventListener("input", draw);
   search.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || search.value === "") return;
@@ -375,9 +351,45 @@ export function mountSidebar({ app, mac = false, now = () => Date.now() }) {
     empty.hidden = groups.length > 0;
   }
 
+  /** The rows and group headers the sidebar's focus mode steps through, top to bottom. */
+  const items = () => [...list.querySelectorAll("a.session-row, .group-header")];
+
   setOpen(open);
   return {
-    toggle,
+    /** Show or hide the sidebar; a sheet takes focus. */
+    toggle() {
+      toggle({ focus: narrow.matches });
+    },
+    /** Open the sidebar and select its search text. */
+    focusSearch() {
+      if (!open) setOpen(true);
+      search.focus();
+      search.select();
+    },
+    /** Focus the row or group header `step` places from the focused one; the list ends where it ends. */
+    move(step) {
+      const all = items();
+      const index = all.indexOf(document.activeElement);
+      const next = all[index < 0 ? 0 : Math.min(all.length - 1, Math.max(0, index + step))];
+      next?.focus();
+      next?.scrollIntoView({ block: "nearest" });
+    },
+    /** The row `step` places from the shown session's row, in the list's order; the first or last when none is shown. */
+    adjacentRow(step) {
+      const rows = [...list.querySelectorAll("a.session-row")];
+      const index = rows.findIndex((row) => row.getAttribute("aria-current") === "page");
+      return rows[index < 0 ? (step > 0 ? 0 : rows.length - 1) : index + step] ?? null;
+    },
+    /** The row of session `id`, or `null` when it is not drawn. */
+    row: (id) => list.querySelector(`a.session-row[data-id="${CSS.escape(id)}"]`),
+    /** The listed session `id`, as GET /api/sessions has it. */
+    session: (id) => data.groups.flatMap((group) => group.sessions).find((session) => session.id === id) ?? null,
+    /** Whether focus is in the list: the sidebar's keys apply. */
+    hasFocus: () => list.contains(document.activeElement),
+    /** Close the sheet (narrow screens only). */
+    closeSheet() {
+      if (narrow.matches && open) setOpen(false);
+    },
     /** Replace the listed sessions with a GET /api/sessions answer. */
     setData(next) {
       data = next;

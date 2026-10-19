@@ -104,7 +104,7 @@ Owned by `ampi-tasks` (`mmr-tasks` runtime id).
 | Web search/page reads | `AMPI_WEB_ENABLE=true` (legacy `MMR_WEB_ENABLE` still accepted) or `ampiWeb.enabled=true` | `web_search`, `read_web_page` |
 | GitHub repository reads | `AMPI_GITHUB_ENABLE=true` (legacy `MMR_GITHUB_ENABLE` still accepted) | `read_github`, `list_directory_github`, `glob_github`, `search_github`, `commit_search`, `diff_github`, `list_repositories` |
 | Prior local Pi sessions | `AMPI_HISTORY_ENABLE=true` (legacy `MMR_HISTORY_ENABLE` still accepted) | `find_session`, `read_session` |
-| Web GUI for the running session | `AMPI_GUI_ENABLE=true` or `ampiGui.enabled=true` | A `Web GUI: http://127.0.0.1:<port>/?t=<token>` link at session start and the `thread open in browser` command; a live transcript and a composer (Enter steers, Ctrl+Enter queues, Esc Esc interrupts); local only |
+| Web GUI for the running session | `AMPI_GUI_ENABLE=true` or `ampiGui.enabled=true` | A `Web GUI: http://127.0.0.1:<port>/?t=<token>` link at session start and the `thread open in browser` command; a live transcript and a composer (Enter steers, Ctrl+Enter queues, Esc Esc interrupts); page keys such as Ctrl+B (sidebar), `/` (search), Ctrl+Alt+Up/Down (previous or next session) and `?`, which lists them all; local only |
 | Every session in one web page | `ampi app` (`--open` opens the link) | One page at `http://127.0.0.1:<port>/` listing every session with where it runs; sessions nothing else has open continue there, and so do those a terminal runs with its web GUI on; the others are read-only; local only |
 
 Optional secrets stay in the environment:

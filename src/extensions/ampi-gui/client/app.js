@@ -18,9 +18,13 @@ import {
   parseAppPath,
   routeFromHistory,
   sessionBase,
+  shareableUrl,
 } from "./app-mode.js";
+import { createCommandRegistry, DEFAULT_COMMANDS } from "./commands.js";
 import { mountComposer } from "./composer.js";
 import { mountDialogs } from "./dialogs.js";
+import { keymapGroups, mountKeymap } from "./keymap.js";
+import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountTitlebar } from "./titlebar.js";
 import {
@@ -119,7 +123,7 @@ async function composerPost(route, body) {
 
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const composer = mountComposer({ root: $("composer-area"), post: composerPost, mac });
-const sidebar = mountSidebar({ app, mac });
+const sidebar = mountSidebar({ app });
 
 let toastTimer = 0;
 /** A toast at the top centre; `level` is an extension's notify type (`info`, `warning` or `error`). */
@@ -794,6 +798,115 @@ async function startApp() {
   refreshSessions();
   navigate(parseAppPath(location.pathname)?.id ?? null, { replace: true });
 }
+
+// ---------------------------------------------------------------------------
+// Keys: commands.js names the actions and their keys, keys.js picks the
+// command for a key press, and these are the page's actions they run.
+
+const commands = createCommandRegistry(DEFAULT_COMMANDS);
+const keys = createKeyDispatcher({ commands: () => commands.list(), mac });
+/** A session page, not ampi app's home page. */
+const onThreadPage = () => !appMode || shownId !== null;
+const keymap = mountKeymap({ dialog: $("keymap-dialog"), groups: () => keymapGroups(commands.list(), { threadPage: onThreadPage(), mac }) });
+
+/** The actions menu's target for a listed session: the title bar's when it is the one shown. */
+function sessionTarget(id) {
+  const shown = titlebar.target();
+  if (shown?.id === id) return shown;
+  const row = sidebar.session(id);
+  return row && { id, title: row.title, archived: row.archived ?? false, live: false, actions: sessionList.actions };
+}
+
+/**
+ * Focus the previous or next message (only the user's with `userOnly`) from
+ * the focused one, the newest when none is; past the newest, the prompt.
+ */
+function moveMessage(step, userOnly) {
+  const messages = [...transcript.querySelectorAll(userOnly ? ".msg.user" : ".msg")].filter((node) => !node.hidden);
+  const current = document.activeElement?.closest?.(".msg");
+  let next;
+  if (!current || !transcript.contains(current)) next = step < 0 ? messages.at(-1) : undefined;
+  else if (step < 0) next = messages.findLast((node) => node.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_FOLLOWING);
+  else next = messages.find((node) => node.compareDocumentPosition(current) & Node.DOCUMENT_POSITION_PRECEDING);
+  if (next) {
+    next.tabIndex = -1;
+    next.focus({ preventScroll: true });
+    next.scrollIntoView({ block: "nearest" });
+  } else if (current && step > 0 && composer.writable()) composer.focus();
+}
+
+const ui = {
+  goHome() {
+    if (appMode) {
+      if (shownId !== null) navigate(null);
+    } else location.hash = "";
+  },
+  back: () => history.back(),
+  forward: () => history.forward(),
+  focusTitleBar() {
+    const controls = [...document.querySelectorAll(".titlebar button")];
+    controls.find((control) => !control.disabled && control.getClientRects().length > 0)?.focus();
+  },
+  async copyUrl() {
+    try {
+      await navigator.clipboard.writeText(shareableUrl(location.href));
+      notify("Copied the page address");
+    } catch {
+      notify("The browser did not allow copying to the clipboard.");
+    }
+  },
+  showKeymap: () => keymap.open(),
+  toggleSidebar: () => sidebar.toggle(),
+  focusSidebarFilter: () => sidebar.focusSearch(),
+  moveSidebar: (step) => sidebar.move(step),
+  openSidebarItem: () => document.activeElement?.click(),
+  openSessionMenu: (session) => titlebar.openForRow(session, sidebar.row(session.id), () => sidebar.row(session.id)),
+  adjacentSession: (step) => sidebar.adjacentRow(step)?.click(),
+  sessionAction: (action, session) => titlebar.run(action, session, document.activeElement),
+  interrupt: () => composer.interrupt(),
+  moveMessage,
+  focusPrompt() {
+    sidebar.closeSheet();
+    composer.focus();
+  },
+};
+
+/** What the commands' `when` and `run` read (see commands.js). */
+function keyState() {
+  const inSidebar = sidebar.hasFocus();
+  const row = inSidebar ? document.activeElement.closest?.("a.session-row") : null;
+  return {
+    threadPage: onThreadPage(),
+    contexts: inSidebar ? ["sidebar", "global"] : ["global"],
+    session: titlebar.target(),
+    focusedSession: row ? sessionTarget(row.dataset.id) : null,
+    interruptible: composer.interruptible(),
+    writable: composer.writable(),
+    promptEmpty: composer.isEmpty(),
+    promptFocused: composer.hasFocus(),
+    ui,
+  };
+}
+
+// On the document, after the components' own handlers: a key one of them took (defaultPrevented) is left alone.
+document.addEventListener("keydown", (event) => {
+  // A modal (a question, the rename dialog, the keymap) keeps every key, also one pressed while focus has fallen out of it.
+  if (document.querySelector("dialog[open]")) return keys.reset();
+  const state = keyState();
+  const result = keys.handle(event, state);
+  if (result?.kind === "run") {
+    event.preventDefault();
+    result.command.run(state, { chord: result.chord });
+  } else if (result?.kind === "pending") {
+    if (result.consume) event.preventDefault();
+    const hint = result.commands.find((command) => command.hint)?.hint;
+    if (hint) composer.hint(hint, SEQUENCE_MS);
+  } else if (result?.kind === "swallow") event.preventDefault();
+  else if (result?.kind === "unavailable" && hasCommandModifier(result.chord)) {
+    event.preventDefault();
+    if (result.reason) notify(result.reason);
+  }
+});
 
 /** Whether `ampi app` serves this page: a session server answers 404. */
 async function isApp() {
