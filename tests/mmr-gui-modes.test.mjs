@@ -280,6 +280,8 @@ describe("ampi-gui POST /api/mode, /api/model and /api/fast", () => {
 
   it("answers 409 while a turn runs, and sends nothing", async () => {
     const session = await startSession();
+    const runs = [];
+    commandRegistry.registerMmrCommand({ id: "speed.toggleFast", noun: "speed", verb: "use fast", description: "Fast", run: (ctx) => runs.push(ctx.sessionId) });
     session.context.state.idle = false;
     try {
       const mode = await post(session.port, "/api/mode", { mode: "high" });
@@ -287,8 +289,12 @@ describe("ampi-gui POST /api/mode, /api/model and /api/fast", () => {
       assert.equal(mode.body.state, "busy");
       const model = await post(session.port, "/api/model", { provider: "anthropic", id: "claude-opus-4-8" });
       assert.equal(model.status, 409);
+      const fast = await post(session.port, "/api/fast", {});
+      assert.equal(fast.status, 409, "fast speed waits for the turn too");
+      assert.equal(fast.body.state, "busy");
       assert.equal(session.mock.calls.sendUserMessage.length, 0);
       assert.equal(session.mock.calls.setModel.length, 0);
+      assert.deepEqual(runs, []);
     } finally {
       await session.close();
     }
@@ -344,7 +350,23 @@ describe("ampi-gui POST /api/mode, /api/model and /api/fast", () => {
       // In free, another model changes no mode, so the lock does not apply.
       const again = await post(session.port, "/api/model", { provider: "openai-codex", id: "gpt-5.6-sol" });
       assert.equal(again.status, 200);
-      assert.equal((await post(session.port, "/api/model", { provider: "nobody", id: "none" })).status, 409);
+    } finally {
+      await session.close();
+    }
+  });
+
+  it("tells a model the registry does not know from one Pi has no credentials for", async () => {
+    const session = await startSession();
+    // The registry knows both models; Pi can sign in to the first only.
+    session.context.ctx.modelRegistry.getAvailable = () => [MODELS[0]];
+    try {
+      const unknown = await post(session.port, "/api/model", { provider: "nobody", id: "none" });
+      assert.equal(unknown.status, 400);
+      assert.equal(unknown.body.error, "There is no model nobody/none.");
+      const signedOut = await post(session.port, "/api/model", { provider: "anthropic", id: "claude-opus-4-8" });
+      assert.equal(signedOut.status, 409);
+      assert.equal(signedOut.body.error, "Pi has no credentials for anthropic/claude-opus-4-8.");
+      assert.equal(session.mock.calls.setModel.length, 0);
     } finally {
       await session.close();
     }
@@ -360,6 +382,43 @@ describe("ampi-gui POST /api/mode, /api/model and /api/fast", () => {
       assert.equal(result.status, 200);
       assert.deepEqual(runs, ["s-1"]);
     } finally {
+      await session.close();
+    }
+  });
+
+  it("refuses a second change while fast speed is still switching, and fast speed while the mode is locked passes", async () => {
+    const session = await startSession({ state: modeState("medium", { locked: true }) });
+    const pending = [];
+    const finish = () => {
+      for (const resolve of pending.splice(0)) resolve();
+    };
+    const runs = [];
+    commandRegistry.registerMmrCommand({
+      id: "speed.toggleFast",
+      noun: "speed",
+      verb: "use fast",
+      description: "Fast",
+      // The first run waits until the test lets it finish; a second one, if it ran at all, would not.
+      run: (ctx) => {
+        runs.push(ctx.sessionId);
+        return runs.length === 1 ? new Promise((resolve) => pending.push(resolve)) : undefined;
+      },
+    });
+    try {
+      const first = post(session.port, "/api/fast", {});
+      while (runs.length === 0) await new Promise(setImmediate);
+      const second = await post(session.port, "/api/fast", {});
+      assert.equal(second.status, 409);
+      assert.equal(second.body.error, "Another change is still under way.");
+      const mode = await post(session.port, "/api/mode", { mode: "high", override: true });
+      assert.equal(mode.status, 409, "a mode change waits for it too");
+      assert.equal(mode.body.state, "busy");
+      finish();
+      assert.equal((await first).status, 200, "the lock does not apply to fast speed");
+      assert.deepEqual(runs, ["s-1"]);
+      assert.equal(session.mock.calls.sendUserMessage.length, 0);
+    } finally {
+      finish();
       await session.close();
     }
   });
@@ -488,7 +547,14 @@ describe("ampi-gui mode picker helpers", () => {
     assert.equal(rowsWritable(locked), false);
     assert.equal(pickerNotice({ ...locked, lockReason: null }).text, "The mode is locked.");
     assert.equal(pickerNotice(locked, { override: true }).kind, "override");
+    assert.match(pickerNotice(locked, { override: true }).text, /as \/mode does/);
     assert.equal(rowsWritable(locked, { override: true }), true);
+    // Past Change anyway the Models tab still warns about free, and names no override for /model, which needs none.
+    const models = pickerNotice(locked, { tab: "models", override: true });
+    assert.equal(models.kind, "free");
+    assert.match(models.text, /^Your next choice overrides the lock and switches this session from medium to free:/);
+    assert.doesNotMatch(models.text, /\/model/);
+    assert.equal(rowsWritable(locked, { tab: "models", override: true }), true);
     assert.equal(pickerNotice(DATA, { tab: "models" }).kind, "free", "a model switches medium to free");
     assert.match(pickerNotice(DATA, { tab: "models" }).text, /from medium to free/);
     // In free a model changes no mode: neither the lock nor the warning applies.
@@ -515,6 +581,8 @@ describe("ampi-gui mode picker helpers", () => {
     assert.match(model, /&#60;p&#62;\/x&#38;y/);
     assert.match(model, /aria-disabled="true"/);
     assert.doesNotMatch(fastOptionHtml({ on: false, available: false, reason: "<i>no</i>" }, 2), /<i>/);
+    assert.doesNotMatch(fastOptionHtml({ on: false, available: true, reason: null }, 2), /aria-disabled/);
+    assert.match(fastOptionHtml({ on: false, available: true, reason: null }, 2, { readOnly: true }), /aria-disabled="true"/);
   });
 
   it("opens from Change Mode… in the palette, and from Ctrl+S only in the prompt before the mode is locked", async () => {
@@ -532,5 +600,113 @@ describe("ampi-gui mode picker helpers", () => {
     assert.equal(locked.state, "unavailable");
     assert.match(locked.reason, /Change Mode… in the palette/);
     assert.equal(change.when({ ...page, modes: { locked: true } }).state, "available", "the palette keeps the override one step away");
+  });
+});
+
+describe("ampi-gui mode picker: the dialog in a document", () => {
+  const PAGE =
+    '<dialog class="mode-picker" id="mode-picker"><div class="mode-picker-head"><input class="mode-picker-input"><kbd class="mode-picker-key"></kbd>' +
+    '<div class="mode-picker-tabs" role="tablist"><button type="button" role="tab" data-tab="modes">Modes</button><button type="button" role="tab" data-tab="models">Models</button></div></div>' +
+    '<div class="mode-picker-notice" role="status" hidden><span class="mode-picker-notice-text"></span><button class="button mode-picker-override" type="button" hidden>Change anyway</button></div>' +
+    '<div class="mode-picker-body"><div class="mode-picker-list" role="listbox"></div><p class="mode-picker-empty" hidden></p></div></dialog>';
+  const MODES = {
+    current: "medium",
+    locked: false,
+    lockReason: null,
+    model: "openai-codex/gpt-5.6-sol",
+    fast: { on: false, available: true, reason: null },
+    modes: [
+      { key: "medium", label: "Medium", description: "Most tasks", color: null, agentModel: null, oracleModel: null, available: true, reason: null },
+      { key: "free", label: "Free", description: "Pi's own controls", color: null, agentModel: null, oracleModel: null, available: true, reason: null },
+    ],
+    models: [],
+  };
+  const settle = () => new Promise(setImmediate);
+
+  /** A linkedom page with the picker open on `source`; the global document is the page's while `run` runs. */
+  async function withPicker(source, run) {
+    const { mountModePicker } = await importSource("extensions/ampi-gui/client/mode-picker.js");
+    const { parseHTML } = await import("linkedom");
+    const { window, document } = parseHTML(`<!doctype html><html><body>${PAGE}</body></html>`);
+    window.HTMLElement.prototype.focus = () => {};
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+    const dialog = document.getElementById("mode-picker");
+    dialog.showModal = () => {
+      dialog.open = true;
+    };
+    dialog.close = () => {
+      dialog.open = false;
+    };
+    const saved = globalThis.document;
+    globalThis.document = document;
+    try {
+      const picker = mountModePicker({ dialog, notify: () => {} });
+      picker.open(null, source);
+      await settle();
+      const input = dialog.querySelector(".mode-picker-input");
+      const key = (name) => input.dispatchEvent(Object.assign(new window.Event("keydown", { bubbles: true }), { key: name }));
+      await run({ dialog, key, picker });
+    } finally {
+      globalThis.document = saved;
+    }
+  }
+
+  it("shows a lock the server reports after the picker loaded as it shows a loaded one, with Change anyway", async () => {
+    const answers = [MODES, { ...MODES, locked: true, lockReason: LOCK_REASON }];
+    const changes = [];
+    const source = {
+      load: async () => ({ ok: true, body: answers.shift() }),
+      change: async (route, body) => {
+        changes.push([route, body]);
+        return { ok: false, body: { state: "locked", error: LOCK_REASON } };
+      },
+      busy: () => null,
+    };
+    await withPicker(source, async ({ dialog, key }) => {
+      assert.equal(dialog.querySelector(".mode-picker-notice").hidden, true, "unlocked when it opened");
+      key("ArrowDown");
+      key("Enter");
+      await settle();
+      assert.deepEqual(changes, [["mode", { mode: "free" }]]);
+      assert.equal(dialog.open, true);
+      const notice = dialog.querySelector(".mode-picker-notice");
+      assert.equal(notice.hidden, false);
+      assert.equal(notice.dataset.kind, "locked");
+      assert.equal(dialog.querySelector(".mode-picker-notice-text").textContent, "The session has a message.");
+      assert.equal(dialog.querySelector(".mode-picker-override").hidden, false);
+      assert.equal(dialog.querySelector('[data-kind="mode"]').getAttribute("aria-disabled"), "true", "the rows are read-only again");
+    });
+  });
+
+  it("keeps the Fast row read-only while a turn runs", async () => {
+    let busy = "Pi is working on a turn.";
+    const changes = [];
+    const source = {
+      load: async () => ({ ok: true, body: MODES }),
+      change: async (route) => {
+        changes.push(route);
+        return { ok: true, body: { fast: true } };
+      },
+      busy: () => busy,
+    };
+    await withPicker(source, async ({ dialog, key, picker }) => {
+      const fast = () => dialog.querySelector('[data-kind="fast"]');
+      assert.equal(fast().getAttribute("aria-disabled"), "true");
+      key("ArrowDown");
+      key("ArrowDown");
+      assert.equal(fast().getAttribute("aria-selected"), "true");
+      key("Enter");
+      await settle();
+      assert.deepEqual(changes, [], "nothing is sent while the turn runs");
+      // The turn ends: the page redraws the picker, and Fast can be chosen again.
+      busy = null;
+      picker.refresh();
+      assert.equal(fast().hasAttribute("aria-disabled"), false);
+      key("ArrowDown");
+      key("ArrowDown");
+      key("Enter");
+      await settle();
+      assert.deepEqual(changes, ["fast"]);
+    });
   });
 });

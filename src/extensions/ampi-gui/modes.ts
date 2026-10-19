@@ -23,11 +23,11 @@ import type { MmrGuiBridge } from "./bridge.js";
  * | `/api/model` | `{ provider, id, override? }`     | selects a model through `pi.setModel`; ampi-core then leaves a locked mode for `free`, as for Pi's own `/model` |
  * | `/api/fast`  | `{}`                              | runs the `speed.toggleFast` command |
  *
- * `mode` and `model` answer 409 while a turn runs, while another change is
- * under way, and while the session's mode is locked, unless `override` is
- * true: the page's explicit way past the lock, as `/mode` is in the
- * terminal. A model change in `free` changes no mode, so the lock does not
- * apply to it.
+ * All three answer 409 while a turn runs and while another change is under
+ * way. `mode` and `model` also answer 409 while the session's mode is
+ * locked, unless `override` is true: the page's explicit way past the lock,
+ * as `/mode` is in the terminal. A model change in `free` changes no mode,
+ * and fast speed changes none either, so the lock does not apply to them.
  */
 
 /** A model a mode would run, or one the registry lists. */
@@ -227,6 +227,7 @@ export function createMmrGuiModeCommands(
       if (typeof provider !== "string" || typeof id !== "string" || provider === "" || id === "") return invalid("Name the model by its provider and id.");
       const ctx = bridge.context();
       if (!ctx) return conflict("The session has ended.");
+      if (!ctx.modelRegistry.find(provider, id)) return invalid(`There is no model ${provider}/${id}.`);
       const model = ctx.modelRegistry.getAvailable().find((candidate) => candidate.provider === provider && candidate.id === id);
       if (!model) return conflict(`Pi has no credentials for ${provider}/${id}.`);
       const state = getMmrModeState();
@@ -247,9 +248,16 @@ export function createMmrGuiModeCommands(
       if (!ctx) return conflict("The session has ended.");
       const command = getMmrCommand(MMR_TOGGLE_FAST_COMMAND_ID);
       if (!command) return conflict("This session has no fast speed.");
+      const refused = refusal(ctx, undefined, false);
+      if (refused) return refused;
       const availability = command.availability?.(ctx) ?? { state: "available" };
       if (availability.state !== "available") return conflict(availability.reason ?? "Fast speed is not available now.");
-      await command.run(ctx);
+      changing = true;
+      try {
+        await command.run(ctx);
+      } finally {
+        changing = false;
+      }
       return ok({ fast: getMmrSpeed() === "fast" });
     },
   };

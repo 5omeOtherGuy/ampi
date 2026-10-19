@@ -388,6 +388,9 @@ function drawTitle() {
   $("mode-label").textContent = session.mode ?? "";
   $("mode").hidden = !session.mode;
   $("mode").dataset.ampiMode = session.mode ?? "";
+  // A registered mode's colour, as the picker's rows have it: set through the CSSOM, which the page's style policy allows.
+  if (session.modeColor) $("mode").style.setProperty("--ampi-mode-tint", session.modeColor);
+  else $("mode").style.removeProperty("--ampi-mode-tint");
   $("mode").disabled = !modeChangeable();
   $("mode").setAttribute("aria-label", session.mode ? `Mode ${session.mode}` : "Mode");
   $("mode").title = modeChangeable() ? "Change mode" : "This session's mode cannot change here";

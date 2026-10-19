@@ -57,7 +57,8 @@ export function modelGroups(data, query = "") {
 /**
  * What the notice under the header says, or `null`: `{ kind, text, action }`.
  * `kind` is `busy`, `locked` (with Change anyway as `action`), `override`
- * after it, or `free` on the Models tab while a mode other than free runs.
+ * after it on the Modes tab, or `free` on the Models tab while a mode other
+ * than free runs, before the lock or past it.
  */
 export function pickerNotice(data, { tab = "modes", busy = null, override = false } = {}) {
   if (!data) return null;
@@ -67,11 +68,13 @@ export function pickerNotice(data, { tab = "modes", busy = null, override = fals
     const reason = data.lockReason ? `${data.lockReason[0].toUpperCase()}${data.lockReason.slice(1).replace(/\.?$/, ".")}` : "The mode is locked.";
     return { kind: "locked", text: reason, action: "Change anyway" };
   }
-  if (data.locked && leavesMode) {
-    return { kind: "override", text: `Your next choice overrides the lock, as ${tab === "modes" ? "/mode" : "/model"} does in the terminal.`, action: null };
-  }
   if (tab === "models" && data.current !== null && data.current !== "free") {
-    return { kind: "free", text: `Choosing a model switches this session from ${data.current} to free: ampi's routing, mode prompt and tool rules stop until you choose a mode again.`, action: null };
+    // Past Change anyway it still warns: the session drops to free either way.
+    const choosing = data.locked ? "Your next choice overrides the lock and switches" : "Choosing a model switches";
+    return { kind: "free", text: `${choosing} this session from ${data.current} to free: ampi's routing, mode prompt and tool rules stop until you choose a mode again.`, action: null };
+  }
+  if (data.locked && leavesMode) {
+    return { kind: "override", text: "Your next choice overrides the lock, as /mode does in the terminal.", action: null };
   }
   return null;
 }
@@ -120,12 +123,12 @@ export function modelOptionHtml(row, index, { readOnly = false } = {}) {
   ].join("");
 }
 
-/** The Fast row: fast speed on or off, with why it cannot be turned on. */
-export function fastOptionHtml(fast, index) {
+/** The Fast row: fast speed on or off, with why it cannot be turned on. `readOnly` (a turn runs) marks it aria-disabled. */
+export function fastOptionHtml(fast, index, { readOnly = false } = {}) {
   const note = fast.available ? "Ask the provider for priority serving: answers sooner, costs more" : (fast.reason ?? "Not available now");
   return [
     `<div class="mode-picker-option mode-picker-fast" role="option" id="mode-picker-option-${index}" data-index="${index}" data-kind="fast"`,
-    ` aria-selected="false"${fast.available ? "" : ' aria-disabled="true"'}>`,
+    ` aria-selected="false"${fast.available && !readOnly ? "" : ' aria-disabled="true"'}>`,
     `<span class="mode-picker-main"><span class="mode-picker-line"><span class="mode-picker-name">Fast</span></span>`,
     `<span class="mode-picker-description">${escapeHtml(note)}</span></span>`,
     `<span class="mode-picker-state" data-on="${fast.on}">${fast.on ? "On" : "Off"}</span>`,
@@ -160,6 +163,7 @@ export function mountModePicker({ dialog, notify, mac = false }) {
   let returnFocus = null;
   let pointer = null;
   let working = false;
+  let anchor = null;
 
   const options = () => ({ tab, busy: source?.busy() ?? null, override });
 
@@ -202,8 +206,10 @@ export function mountModePicker({ dialog, notify, mac = false }) {
         rows.push({ kind: "mode", row, enabled: !readOnly && row.available });
       }
       if (data.fast && input.value.trim() === "") {
-        html.push(fastOptionHtml(data.fast, rows.length));
-        rows.push({ kind: "fast", row: data.fast, enabled: data.fast.available });
+        // Fast speed changes no mode, so only a running turn makes it read-only, not the lock.
+        const turnRuns = Boolean(options().busy);
+        html.push(fastOptionHtml(data.fast, rows.length, { readOnly: turnRuns }));
+        rows.push({ kind: "fast", row: data.fast, enabled: data.fast.available && !turnRuns });
       }
     } else {
       for (const group of modelGroups(data, input.value)) {
@@ -227,8 +233,9 @@ export function mountModePicker({ dialog, notify, mac = false }) {
     setActive(rows.length === 0 ? -1 : Math.max(0, input.value.trim() === "" ? current : 0));
   }
 
-  function place(anchor) {
-    // Under the anchor, its right edges lined up, inside the window; a phone shows it as a sheet (CSS).
+  function place() {
+    // Under the anchor, its right edges lined up, inside the window; a phone shows it as a sheet (CSS),
+    // which the inline position would outrank, so a narrow window clears it.
     const box = anchor?.getBoundingClientRect?.();
     if (!box || window.innerWidth < 768) {
       dialog.style.left = "";
@@ -268,16 +275,30 @@ export function mountModePicker({ dialog, notify, mac = false }) {
     overrideButton.hidden = true;
   }
 
+  /** Read the modes again, keeping the tab and the search; whether the picker shows the new answer. */
+  async function reload() {
+    const result = await source.load();
+    if (!result.ok || !dialog.open) return false;
+    data = result.body;
+    draw();
+    return true;
+  }
+
   async function change(route, body, done) {
     working = true;
-    const result = await source.change(route, override ? { ...body, override: true } : body);
-    working = false;
-    if (!result.ok) {
+    try {
+      const result = await source.change(route, override ? { ...body, override: true } : body);
+      if (result.ok) {
+        close();
+        done?.(result.body);
+        return;
+      }
+      // The mode locked after the picker read it: show the lock as on opening, with Change anyway.
+      if (result.body?.state === "locked" && (await reload())) return;
       showError(result.body?.error ?? "Pi did not take that.");
-      return;
+    } finally {
+      working = false;
     }
-    close();
-    done?.(result.body);
   }
 
   function choose(index) {
@@ -359,19 +380,24 @@ export function mountModePicker({ dialog, notify, mac = false }) {
     event.preventDefault();
     close();
   });
+  // A resized window moves the popover with its anchor, or turns it into the sheet.
+  dialog.ownerDocument.defaultView?.addEventListener("resize", () => {
+    if (dialog.open) place();
+  });
 
   return {
     /** Open under `anchor` on `initialTab`, reading and changing the modes through `next`; open already, close it. */
-    open(anchor, next, { initialTab = "modes" } = {}) {
+    open(at, next, { initialTab = "modes" } = {}) {
       if (dialog.open) return close();
       returnFocus = document.activeElement;
+      anchor = at;
       source = next;
       tab = initialTab;
       override = false;
       pointer = null;
       input.value = "";
       dialog.showModal();
-      place(anchor);
+      place();
       input.focus();
       load();
     },

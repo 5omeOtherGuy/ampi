@@ -105,6 +105,8 @@ export interface MmrGuiSessionInfo {
   model: string | null;
   /** The live session only: whether its mode is locked, so the mode picker shows it read-only. */
   modeLocked?: boolean;
+  /** The live session in a registered mode only: that mode's `#rrggbb`, which tints the title bar's mode button. */
+  modeColor?: string;
 }
 
 export interface MmrGuiSnapshot {
@@ -315,6 +317,7 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       mode: mode?.registeredMode?.label ?? mode?.mode ?? null,
       model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null,
       modeLocked: isMmrModeLocked(),
+      ...(mode?.registeredMode ? { modeColor: mode.registeredMode.color } : {}),
     };
   }
 
