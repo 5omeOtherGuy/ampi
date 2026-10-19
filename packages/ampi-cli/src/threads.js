@@ -9,6 +9,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { runImportCommand } from "./import/index.js";
+import { findLiveOwner, liveRegistryDir } from "./live-registry.js";
 import { createPiModelLookup, listPiSessions, loadThroughPi, piAgentDir, readPiSessionEntries, setPiSessionName } from "./pi-compat.js";
 import {
   isThreadColor,
@@ -36,6 +37,10 @@ import { formatThreadMarkdown } from "./thread-markdown.js";
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package
  *   whose search `threads search` runs: the one Pi loads from its settings, else the CLI's own.
+ * @property {string} [registryDir] The live registry, which says what other processes have a session
+ *   open; defaults to the one in Pi's agent directory.
+ * @property {(pid: number) => boolean} [isAlive] Whether a process runs; defaults to a signal-0 probe.
+ * @property {(pid: number) => number | null} [procStart] A process's start time; defaults to /proc/<pid>/stat.
  * @property {() => Promise<any>} [loadSqlite] Imports `node:sqlite` for `threads import opencode`; tests replace it.
  *
  * @typedef {{ code: number } | { piArgs: string[] }} ThreadsResult Exit with `code`, or start Pi with `piArgs`.
@@ -367,8 +372,13 @@ export function cut(text, width) {
   return `${kept.trimEnd()}…`;
 }
 
-/** @param {string} text @param {number} width */
-const padEnd = (text, width) => text + " ".repeat(Math.max(0, width - visibleWidth(text)));
+/**
+ * `text` padded with spaces to `width` terminal columns.
+ *
+ * @param {string} text
+ * @param {number} width
+ */
+export const padEnd = (text, width) => text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 
 /**
  * The listing as a table: id, title, time since the last activity, message
@@ -549,6 +559,54 @@ async function withSession(host, query, action) {
 }
 
 /**
+ * The live entry of another process that has `session` open, from ampi-core's
+ * live registry, or undefined.
+ *
+ * @param {ThreadsHost} host
+ * @param {PiSessionInfo} session
+ */
+function liveHolder(host, session) {
+  return findLiveOwner(session.path, {
+    dir: host.registryDir ?? liveRegistryDir(piAgentDir(host.pi)),
+    isAlive: host.isAlive,
+    procStart: host.procStart,
+    exceptPid: process.pid,
+  });
+}
+
+/**
+ * The process that holds a session, as the messages name it. A session
+ * `ampi app` hosts runs in a worker the app started, so the app is named: it
+ * is the process the user started and can quit.
+ *
+ * @param {import("./live-registry.js").LiveEntry} holder
+ */
+const describeHolder = (holder) =>
+  holder.kind === "app-session" && holder.ownerPid !== undefined ? `ampi app (process ${holder.ownerPid})` : `process ${holder.pid} (${holder.kind})`;
+
+/**
+ * Open `session` through Pi's `--session`, warning first when another live
+ * process has it open: Pi does not lock session files.
+ *
+ * @param {ThreadsHost} host
+ * @param {PiSessionInfo} session
+ * @returns {Outcome}
+ */
+function openSession(host, session) {
+  /** @type {import("./live-registry.js").LiveEntry | undefined} */
+  let holder;
+  try {
+    holder = liveHolder(host, session);
+  } catch {
+    // An unreadable registry only costs the warning.
+  }
+  if (holder) {
+    host.log.warn(`${describeHolder(holder)} also has ${session.id} open; two processes writing one session file can lose messages.`);
+  }
+  return { piArgs: ["--session", session.path] };
+}
+
+/**
  * Print the id of a new session. Nothing is written: Pi creates the session
  * file with the first message sent under the id.
  *
@@ -578,7 +636,7 @@ function create(host, values, positionals) {
  */
 async function continueSession(host, query) {
   const resolved = await resolveSession(host, query);
-  if ("session" in resolved) return { piArgs: ["--session", resolved.session.path] };
+  if ("session" in resolved) return openSession(host, resolved.session);
   if (resolved.missing === undefined || !COMPLETE_ID.test(resolved.missing)) return resolved;
   host.log.info(`no session has the id ${resolved.missing}; a new session starts under it in this directory.`);
   return { piArgs: ["--session-id", resolved.missing] };
@@ -953,7 +1011,7 @@ async function continueLast(host) {
   const threads = readIndexForListing(host);
   const session = (await listSessions(host, "workspace")).find((info) => recordOf(threads, info.id)?.archived === undefined);
   if (!session) return { code: 1, message: "no session to continue in this directory (archived sessions are skipped)." };
-  return { piArgs: ["--session", session.path] };
+  return openSession(host, session);
 }
 
 /**
@@ -965,6 +1023,13 @@ async function rename(host, [query, ...words]) {
   const title = words.join(" ").replace(/\s+/g, " ").trim();
   if (query === undefined || !title) return usage("threads rename takes a session id and a title.");
   return withSession(host, query, (session) => {
+    const holder = liveHolder(host, session);
+    if (holder) {
+      return {
+        code: 1,
+        message: `${describeHolder(holder)} has ${session.id} open; quit it first, or rename the session there (with /name in a terminal).`,
+      };
+    }
     setPiSessionName(host.pi, session.path, title);
     try {
       // As --title does: the title is the user's, not one to generate.
@@ -1053,6 +1118,9 @@ async function remove(host, query, yes) {
     if (session.id === host.env.PI_SESSION_ID) {
       return { code: 1, message: `${session.id} is the session this command runs in; it cannot delete itself.` };
     }
+    // Checked before the question, so --yes cannot delete a file another process writes.
+    const holder = liveHolder(host, session);
+    if (holder) return { code: 1, message: `${describeHolder(holder)} has ${session.id} open; quit it first. Nothing was deleted.` };
     if (!yes && !(await host.confirm(`Delete session ${session.id} (${threadTitle(session)})? [y/N] `))) {
       return { code: 1, message: "nothing was deleted." };
     }

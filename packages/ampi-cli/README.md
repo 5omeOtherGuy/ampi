@@ -30,6 +30,7 @@ ampi config edit         # open Pi's settings file in your editor
 ampi tools list -m high  # the tools a high mode session declares to the model
 ampi review              # review the uncommitted changes with the reviewer and the review checks
 ampi app --open          # every session on this machine in one web page
+ampi top                 # the sessions running on this machine, live
 ampi skill list          # the skills Pi loads in this directory
 ampi skill add ./skills  # install skills into this project's .agents/skills
 ampi dev keys            # what ampi reads for each key press, and the command it maps to
@@ -287,11 +288,11 @@ ID                                    Title                    Updated  Messages
 | `threads context <id>` (`analyze-context`) | Prints what fills the session's context window as JSON, section by section, as the `thread analyze context` overlay shows it. The fields are below. |
 | `threads usage <id>` | Prints the session's title and its total cost, in the format of the prompt box's cost gauge, with a note when some models have no price. `--details` adds a table of input, output, cache read and cache write tokens and the cost per model ("unknown" without a price), and the number of tool calls per tool. `--start <time>` and `--end <time>` count only the entries from `--start` on and before `--end`. `--json` prints the fields below. |
 | `usage` | Prints the cost and tokens of every session on this machine, in every directory, from `--start` up to, not including, `--end`: by default the 30 days up to now (without `--start`, the 30 days before `--end`). The text gives the range, the total cost, the number of sessions with usage in the range and the token totals; `--details` adds the per-model table and the ten most expensive sessions with their id, title, cost and directory. `--json` prints the fields below. |
-| `threads rename <id> <title>` (`r`) | Sets Pi's session name, as `/name` does, and records the title as typed by you. |
+| `threads rename <id> <title>` (`r`) | Sets Pi's session name, as `/name` does, and records the title as typed by you. Refused while another process has the session open (below). |
 | `threads archive <id>`, `threads unarchive <id>` | Archives the session in the thread index, or takes it out of the archive. |
 | `threads label <id> <label...>` | Adds labels to the ones the session has: 1 to 32 lowercase letters, digits or hyphens each, at most 20 per session. |
 | `threads color <id> <color>` | Sets the session's color in the thread index: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`, `gray` or an RGB hex color such as `#3f2d1d`, stored in lowercase. `none` removes it. Any other value is a usage error. |
-| `threads delete <id>` | Asks `[y/N]` on stderr and reads the answer from stdin, then deletes the session file and its thread index record. `-y`/`--yes` skips the question. Run from the agent's own shell, it refuses to delete the session it runs in. |
+| `threads delete <id>` | Asks `[y/N]` on stderr and reads the answer from stdin, then deletes the session file and its thread index record. `-y`/`--yes` skips the question. Run from the agent's own shell, it refuses to delete the session it runs in; it also refuses, before asking and even with `--yes`, while another process has the session open (below). |
 
 - **Search queries.** A query is words and `"quoted phrases"` plus `key:value` filters. A session matches when it contains every word and phrase (in its name, first message or any message text) and passes every filter. Matching ignores case. A quoted phrase is always text, even when it contains a colon: in a shell, `ampi threads search '"Error: ENOENT"'`. A word ending in a colon, such as `TypeError:`, is text too, unless the word is a key. A key that search does not know, a key without a value (`archived:`), a key such as `commit:`, `pr:` or `author:` whose data only a hosted service has, a value it cannot read (`after:soon`) and an empty query are usage errors that name the problem. When the thread index cannot be read, `pinned:` and `archived:` are ignored with a note on stderr. `offset:`, `sort:` and `projectRef:` belong to `find_session` and are ignored the same way. The search comes from the ampi that Pi loads, as for `config keymap`; an ampi too old to have it is reported with status `1`.
 
@@ -328,8 +329,9 @@ ID                                    Title                    Updated  Messages
   | `measuredTokens` | Present when a response after the latest compaction or context edit recorded its usage: the tokens the provider counted then, plus estimates for the messages after it, as Pi counts the context it shows. After a context edit Pi shows an estimate of the whole context instead, which this field leaves out. |
   | `systemPromptRecorded` | `false` when the branch holds no recorded system prompt yet (Pi records it with the first request); the prompt and tool sections are then 0, and a note goes to stderr. |
 - **Costs.** An entry costs what the provider reported and Pi recorded, else its tokens at the model's list price from Pi's model catalogue or `models.json`, as the prompt box's gauge counts them. A model with neither is "unknown" and left out of the totals, and a total is unknown only when every model is. ampi keeps no account and no credits, so there are no balances or plan limits to show. The catalogue is read offline: prices that only a refreshed catalogue has are not used, and nothing authenticates or calls a model. Sessions labelled `imported` in the thread index count as unknown, never as free. `threads usage --json` prints `threadID`, `title`, `start` and `end` (ISO 8601, or `null` without the option), `cost` (dollars, `null` when unknown), `unknownCostModels`, `models` (`{model, cost, inputTokens, outputTokens, cacheReadInputTokens, cacheCreationInputTokens}`, `cost` `null` when unknown; compaction and branch summaries appear as `session summaries`) and `toolCalls` (`{name: count}`). `usage --json` prints `start`, `end`, `cost`, `unknownCostModels`, `sessionCount`, the four token totals, `models` in the same form and `sessions`: every session with usage in the range, the most expensive first, as `{threadID, title, cwd, cost}`. Like search, the context and cost reports come from the ampi that Pi loads; an ampi too old to have them is reported with status `1`. Times are ISO 8601 dates or times, such as `2026-10-01` (midnight UTC) or `2026-10-01T09:30:00Z`; a time without `Z` or an offset, such as `2026-10-01T09:30`, is local time. A malformed time, a date the calendar does not have (`2026-02-30`) or a `--start` after `--end` is a usage error.
+- **Sessions open elsewhere.** Pi does not lock session files, so the commands check ampi's live registry (see [`ampi top`](#top)) first. `threads rename` and `threads delete` refuse, with status `1` and the file untouched, a session that another running process has open, and name that process's pid and kind: quit it first, or rename the session there with `/name`. A session `ampi app` runs is reported as the app's, since quitting the app is what frees it. `threads continue`, `continue --last` and `ampi last` print a warning naming the other process and open the session anyway. `archive`, `unarchive`, `label` and `color` change only the thread index and are not checked.
 - **Ids.** `<id>` is a session id, or its first characters as the list prints them; a leading `@` is ignored. An exact id wins. A prefix that several sessions share is refused, and the matching ids are listed. Ids are looked up in every directory.
-- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined or a change fails, or when the ampi in use is too old for a command, `2` on a usage error, including a search query it cannot use and a malformed time. `ampi threads --help` lists the commands and options.
+- **Exit status.** `0` on success, `1` when no session or several match the id, when a delete is declined, a change fails or another process has the session open for a rename or delete, or when the ampi in use is too old for a command, `2` on a usage error, including a search query it cannot use and a malformed time. `ampi threads --help` lists the commands and options.
 - **The thread index.** Archive dates, labels, colors and the title source are stored in `<agent dir>/data/ampi/threads/index.json`, the file ampi-threads keeps. If it cannot be read, listings go on without it and say so on stderr; `archive`, `unarchive`, `label` and `color` stop with status `1`, and `rename` and `delete` change the session and report on stderr that the index was left as it was. ampi-threads sets a damaged file aside the next time Pi starts with ampi.
 
 ## Import
@@ -411,6 +413,68 @@ A session that runs in a terminal with ampi's web GUI on (`ampiGui.enabled: true
 - `ampi -x` runs stay read-only: they serve no web GUI.
 - When the terminal quits or switches to another session, the page shows the session as it then is: read-only from its file, or not running, ready to start in the app. If the terminal's server stops answering while its entry is still there, the page says the session stopped and offers to open it again.
 - To reach a terminal's GUI, the app reads its access token from the token file next to the terminal's live registry entry, readable only by your user (see [ampi-gui's security model](../../src/extensions/ampi-gui/README.md#security-model)). A token file that is missing or does not match the entry leaves the session read-only.
+
+## Top
+
+`ampi top` shows the ampi sessions running on this machine right now, in every directory, as the live registry ampi-core keeps lists them ([live registry](../../src/extensions/ampi-core/README.md#live-registry)).
+
+```bash
+ampi top                                   # full screen, follows changes; q quits
+ampi top --json | jq '.sessions[].cwd'     # one snapshot
+ampi top --stream-jsonl > sessions.jsonl   # a line now and one per change, until Ctrl+C
+```
+
+```text
+2 sessions running
+
+Status           Title               Mode    Directory   Kind  Up     PID
+───────────────  ──────────────────  ──────  ──────────  ────  ───  ─────
+● Running Tools  Fix the flaky test  high    ~/src/ampi  tui   12m  48211
+Idle             Release notes       medium  /work/demo  -x    40s  48390
+```
+
+The first line counts the running sessions; the row of `ampi app` itself is listed but not counted. With nothing running it says so instead of showing the table.
+
+| Column | Shows |
+| --- | --- |
+| Status | The agent's status, such as `Thinking` or `Running Tools`, with `●` before it while the agent works; `Idle`; `-` when unknown |
+| Title | The session's name or generated title; `app` for `ampi app`; `-` when it has none |
+| Mode | The ampi mode key, or `-` |
+| Directory | The working directory, `~` for your home directory; long paths are cut in the middle |
+| Kind | `tui` (a terminal), `-x` (an execute, JSON or RPC run), `app` (`ampi app`) or `hosted` (a session `ampi app` runs) |
+| Up | Time since the session started in that process: `12s`, `5m`, `3h`, `2d` |
+| PID | The process |
+
+Working sessions come first, then the rest; within each, the most recently updated first.
+
+- **Full screen.** When stdout is a terminal, `ampi top` takes over the screen (the alternate screen, cursor hidden) and draws again whenever the registry changes, the terminal is resized, or a second passes (so Up stays current). `q`, Esc or Ctrl+C quits with status `0`, as do SIGINT and SIGTERM; the screen and cursor are restored on every way out. Titles and directories are cut to the width, and rows that do not fit the height end in a line counting them.
+- **Redirected.** Without a terminal and without a flag, it prints the count and the table once, titles and directories whole, and exits `0`.
+- **`--json`.** Prints one record, the same as a stream line below, and exits `0`.
+- **`--stream-jsonl`.** Prints one record at once, then another each time the list of sessions changes (`time` alone does not count), until SIGINT, SIGTERM or the reader closing the pipe, and exits `0`. A rewrite that changes nothing prints nothing.
+- **Usage errors.** An unknown option, an argument, or `--json` with `--stream-jsonl` exits `2`.
+- **Not a message.** `ampi top` runs this command; `ampi -- top` sends the word `top` to Pi as the first message.
+
+The record is experimental: its shape is ampi's own and may change in a minor release.
+
+```json
+{"type":"sessions","time":"2026-10-18T10:00:00.000Z","sessions":[{"pid":48211,"kind":"tui","ownerPid":null,"sessionId":"019a3c71-5e0b-7c2a-9d41-0b6f2c8e1a10","sessionPath":"/home/me/.pi/agent/sessions/--home-me-src-ampi--/2026-10-18T09-48-00-000Z_019a3c71-5e0b-7c2a-9d41-0b6f2c8e1a10.jsonl","cwd":"/home/me/src/ampi","title":"Fix the flaky test","mode":"high","status":{"phase":"runningTools","label":"Running Tools"},"startedAt":"2026-10-18T09:48:00.000Z","updatedAt":"2026-10-18T09:59:58.000Z","gui":false}]}
+```
+
+| Field | Value |
+| --- | --- |
+| `type` | Always `"sessions"` |
+| `time` | When the record was made, ISO 8601 |
+| `sessions` | Every running session, in the table's order, each with the fields below |
+| `pid`, `kind` | The process and its kind: `tui`, `execute`, `app` or `app-session` |
+| `ownerPid` | For `app-session`, the pid of the `ampi app` that runs it; otherwise `null` |
+| `sessionId`, `sessionPath` | Pi's session id and file; `null` when unknown, and `sessionPath` is `null` for `app` |
+| `cwd` | The working directory |
+| `title`, `mode` | The title and the ampi mode key, or `null` |
+| `status` | `{phase, label}`: `phase` is `idle`, `sending`, `thinking`, `streaming`, `runningTools`, `compacting`, `waitingApproval`, `cancelling` or `error`, and `label` its words (empty when idle); `null` when unknown |
+| `startedAt`, `updatedAt` | When the session started in that process, and the process's last update of its entry, ISO 8601 |
+| `gui` | `true` while a web GUI serves the session |
+
+No output ever contains a GUI's port, its access token or the token's hash. A rename with Pi's `/name` shows up with the process's next update of its entry, such as the next change of status. Entries of processes that have ended are skipped and their files removed, as every reader of the registry does; sessions without a file (`--no-session`, subagent workers) are never listed.
 
 ## Keymap and settings
 
