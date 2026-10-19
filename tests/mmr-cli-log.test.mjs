@@ -106,7 +106,12 @@ describe("ampi log: settings", () => {
   });
 
   it("refuses an unknown level in AMPI_LOG_LEVEL", () => {
-    assert.deepEqual(readLogSettings({}, { AMPI_LOG_LEVEL: "loud" }, cwd), { error: 'AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud".' });
+    assert.deepEqual(readLogSettings({}, { AMPI_LOG_LEVEL: "loud" }, cwd), { level: "info", error: 'AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud".' });
+    assert.deepEqual(readLogSettings({ logFile: "ampi.log" }, { AMPI_LOG_LEVEL: "loud" }, cwd), {
+      level: "info",
+      file: path.join(cwd, "ampi.log"),
+      error: 'AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud".',
+    });
   });
 });
 
@@ -201,6 +206,13 @@ describe("ampi log: the command", { concurrency: true }, () => {
     const env = await runAmpi(["--help"], { env: { AMPI_LOG_LEVEL: "loud" } });
     assert.equal(env.status, 2);
     assert.equal(env.stderr, 'ampi: AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud".\nRun ampi --help for the supported options.\n');
+  });
+
+  it("writes the usage error for an unknown AMPI_LOG_LEVEL to --log-file as well", async () => {
+    const result = await runAmpi(["--log-file", "ampi.log", "--help"], { env: { AMPI_LOG_LEVEL: "loud" } });
+    assert.equal(result.status, 2);
+    assert.equal(result.stderr, 'ampi: AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud".\nRun ampi --help for the supported options.\n');
+    assert.match(result.log("ampi.log"), /^\S+ error AMPI_LOG_LEVEL must be error, warn, info or debug, not "loud"\.\\nRun ampi --help for the supported options\.\n$/);
   });
 
   it("logs the route and Pi's arguments at debug, with the message text left out", async () => {

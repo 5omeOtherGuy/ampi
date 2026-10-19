@@ -34,18 +34,21 @@ export function isLogLevel(value) {
 /**
  * The level and log file for a run: `--log-level` and `--log-file` win over
  * `AMPI_LOG_LEVEL` and `AMPI_LOG_FILE`; an empty variable counts as unset.
- * A relative file is resolved against `cwd`.
+ * A relative file is resolved against `cwd`. An unknown level in
+ * `AMPI_LOG_LEVEL` comes back as `error`, with the level `info` and the file,
+ * so the usage error reaches the log file too.
  *
  * @param {{ logLevel?: string, logFile?: string }} options Read from the command line (argv.js checks the level).
  * @param {NodeJS.ProcessEnv} env
  * @param {string} cwd
- * @returns {LogSettings | { error: string }}
+ * @returns {LogSettings & { error?: string }}
  */
 export function readLogSettings({ logLevel, logFile }, env, cwd) {
-  const level = logLevel ?? (env.AMPI_LOG_LEVEL || "info");
-  if (!isLogLevel(level)) return { error: `AMPI_LOG_LEVEL must be error, warn, info or debug, not "${level}".` };
+  const wanted = logLevel ?? (env.AMPI_LOG_LEVEL || "info");
+  const level = isLogLevel(wanted) ? wanted : "info";
   const file = logFile ?? (env.AMPI_LOG_FILE || undefined);
-  return file === undefined ? { level } : { level, file: path.resolve(cwd, file) };
+  const settings = file === undefined ? { level } : { level, file: path.resolve(cwd, file) };
+  return level === wanted ? settings : { ...settings, error: `AMPI_LOG_LEVEL must be error, warn, info or debug, not "${wanted}".` };
 }
 
 /**

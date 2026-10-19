@@ -390,8 +390,8 @@ async function runPiJson(pi, args, extensionFactories, thinking, outputOf, log) 
 export async function runAmpi(argv) {
   const route = routeAmpiArgv(argv);
   const settings = readLogSettings(route.options, process.env, process.cwd());
-  const log = createLogger("error" in settings ? {} : settings);
-  const error = route.error ?? ("error" in settings ? settings.error : undefined);
+  const log = createLogger(settings);
+  const error = route.error ?? settings.error;
   if (error !== undefined) {
     log.error(`${error}\n${route.usageHint ?? "Run ampi --help for the supported options."}`);
     return 2;
