@@ -34,7 +34,8 @@ import { cut, padEnd } from "./threads.js";
  * @property {(onKey: (chunk: string) => void) => () => void} keys Reads stdin in raw mode when it is a
  *   terminal; the returned function leaves raw mode. Does nothing otherwise.
  * @property {(onResize: () => void) => () => void} onResize
- * @property {(onSignal: (signal: string) => void) => () => void} onSignal SIGINT and SIGTERM.
+ * @property {(onSignal: (signal: string) => void) => () => void} onSignal SIGINT, SIGTERM and SIGHUP, with
+ *   the signal's name.
  * @property {(onExit: () => void) => () => void} onExit Runs synchronously when the process exits.
  *
  * @typedef {object} TopSession One session as `--json` and `--stream-jsonl` print it.
@@ -94,7 +95,8 @@ Options:
 
   --json            Print the list once as one JSON object and exit
   --stream-jsonl    Print the list as one JSON line now and another each time it changes,
-                    until Ctrl+C, SIGTERM or the reader closes the pipe (experimental format)
+                    until Ctrl+C, SIGTERM, SIGHUP or the reader closes the pipe (experimental
+                    format)
   -h, --help        Print this help and exit
 
 Kinds: tui (a terminal session), -x (an execute, JSON or RPC run), app (ampi app itself),
@@ -246,7 +248,7 @@ export function formatTopLines(entries, { now, columns, rows = Number.POSITIVE_I
   const cells = sorted.map((entry) => [
     entry.status === null ? "-" : isBusy(entry) ? `${TOP_BUSY_MARKER} ${oneLine(entry.status.label)}` : oneLine(entry.status.label) || TOP_IDLE_WORD,
     entry.kind === "app" ? "app" : entry.title === null ? "-" : oneLine(entry.title).trim() || "-",
-    entry.mode ?? "-",
+    oneLine(entry.mode ?? "").trim() || "-",
     shortenHome(oneLine(entry.cwd), home),
     KIND_WORDS[entry.kind],
     formatUptime(entry.startedAt, now),
@@ -490,7 +492,8 @@ function follow(host, read, view) {
         if (view.close) closers.push(view.close);
       }
       closers.push(host.onExit(() => finish(0)));
-      closers.push(host.onSignal(() => finish(0)));
+      // A hangup (the terminal closed) exits as a shell reports it, 128 + 1, once the terminal is restored.
+      closers.push(host.onSignal((signal) => finish(signal === "SIGHUP" ? 129 : 0)));
       if (view.keys) {
         closers.push(
           host.keys((chunk) => {

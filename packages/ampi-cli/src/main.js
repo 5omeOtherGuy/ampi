@@ -709,10 +709,13 @@ async function confirm(question) {
   return /^y(?:es)?$/i.test(String(answer).trim());
 }
 
+/** The signals that end `ampi top`, each after it restores the terminal. */
+const TOP_SIGNALS = /** @type {const} */ (["SIGINT", "SIGTERM", "SIGHUP"]);
+
 /**
  * Run `ampi top` on this process's terminal: stdin's keys in raw mode when it
- * is a terminal, stdout's size, SIGINT and SIGTERM, and a watcher on the live
- * registry.
+ * is a terminal, stdout's size, SIGINT, SIGTERM and SIGHUP, and a watcher on the
+ * live registry.
  *
  * @param {string[]} topArgs
  * @param {import("./log.js").Logger} log
@@ -720,8 +723,11 @@ async function confirm(question) {
  */
 async function runTop(topArgs, log) {
   // A reader that stops early (`ampi top --stream-jsonl | head -1`) closes the pipe: stop quietly.
+  // A terminal that hung up fails the write that restores it: nothing is left to restore, so exit as SIGHUP does.
   process.stdout.on("error", (error) => {
-    if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
+    const { code } = /** @type {NodeJS.ErrnoException} */ (error);
+    if (code === "EIO") process.exit(129);
+    if (code !== "EPIPE") throw error;
     process.exit(0);
   });
   const [pi, { runTopCommand, watchLiveRegistry }, { liveRegistryDir }] = await Promise.all([
@@ -767,11 +773,9 @@ async function runTop(topArgs, log) {
       return () => stdout.off("resize", onResize);
     },
     onSignal: (onSignal) => {
-      process.on("SIGINT", onSignal);
-      process.on("SIGTERM", onSignal);
+      for (const signal of TOP_SIGNALS) process.on(signal, onSignal);
       return () => {
-        process.off("SIGINT", onSignal);
-        process.off("SIGTERM", onSignal);
+        for (const signal of TOP_SIGNALS) process.off(signal, onSignal);
       };
     },
     onExit: (onExit) => {

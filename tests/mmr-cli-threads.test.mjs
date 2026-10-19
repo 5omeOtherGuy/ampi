@@ -1,11 +1,11 @@
 // `ampi threads …` and `ampi last` (packages/ampi-cli/src/threads.js): each
 // command against a temporary agent directory whose sessions are written
 // through Pi's SessionManager on a fixed clock, with hand-written expected
-// output; new session ids; prefix resolution and delete refusals; and the
-// thread index file shared with ampi-threads, read and written from both
-// sides; the refusals and warnings for a session another live process has
-// open, from live registry entries in a temporary directory. The last suite spawns the command for the exit codes and the
-// confirmation question.
+// output; new session ids; prefix resolution and delete refusals; the thread
+// index file shared with ampi-threads, read and written from both sides; and
+// the refusals and warnings for a session another live process has open,
+// from live registry entries in a temporary directory. The last suite spawns
+// the command for the exit codes and the confirmation question.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

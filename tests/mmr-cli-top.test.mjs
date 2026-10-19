@@ -278,6 +278,26 @@ describe("ampi top: the table", () => {
     assert.equal(cutMiddle("abc", 1), "…");
   });
 
+  it("prints control characters in status, title, mode and directory as spaces, so each row stays one line", () => {
+    const lines = formatTopLines(
+      [
+        entry({
+          pid: 7000,
+          status: { phase: "idle", label: "Idle\x1b[2J" },
+          title: "Two\nlines",
+          mode: "hi\x1b[31mgh",
+          cwd: "/work/a\rb",
+          startedAt: "2026-10-18T09:59:00.000Z",
+          updatedAt: "2026-10-18T09:59:00.000Z",
+        }),
+      ],
+      { now: NOW, columns: 140, home: HOME },
+    );
+    assert.equal(lines.length, 5);
+    assert.equal(lines[4], "Idle [2J  Two lines  hi [31mgh  /work/a b  tui   1m  7000");
+    for (const line of lines) assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f]/, JSON.stringify(line));
+  });
+
   it("ends the rows that do not fit the screen with a line counting them", () => {
     const lines = formatTopLines([...ENTRIES], { now: NOW, columns: 80, rows: 8, home: HOME });
     assert.equal(lines.length, 8);
@@ -437,20 +457,21 @@ describe("ampi top: the full-screen view", () => {
     "● Streaming  Port the release scripts to the new runner  high  /work/demo  tui   30s  4242",
   ]);
 
-  for (const [name, quit] of [
-    ["q", (fire) => fire.keys("q")],
-    ["Esc", (fire) => fire.keys("\x1b")],
-    ["Ctrl+C", (fire) => fire.keys("\x03")],
-    ["SIGTERM", (fire) => fire.signal("SIGTERM")],
+  for (const [name, quit, code] of [
+    ["q", (fire) => fire.keys("q"), 0],
+    ["Esc", (fire) => fire.keys("\x1b"), 0],
+    ["Ctrl+C", (fire) => fire.keys("\x03"), 0],
+    ["SIGTERM", (fire) => fire.signal("SIGTERM"), 0],
+    ["SIGHUP", (fire) => fire.signal("SIGHUP"), 129],
   ]) {
-    it(`draws on the alternate screen and restores the terminal on ${name}`, async () => {
+    it(`draws on the alternate screen and restores the terminal on ${name}, exiting ${code}`, async () => {
       const { host, state, fire } = fakeHost(registryDir([session]), { columns: 100 });
       const done = runTopCommand([], host);
       assert.ok(state.raw, "raw mode while it runs");
       fire.keys("\x1b[A");
       fire.keys("\x1b[B");
       quit(fire);
-      assert.equal(await done, 0);
+      assert.equal(await done, code);
       assert.equal(state.out, ENTER + FRAME + LEAVE, "arrow keys neither quit nor draw");
       assert.equal(state.raw, false);
       assert.deepEqual(state.closed.sort(), ["exit", "interval", "keys", "resize", "signal", "watch"]);
@@ -638,7 +659,7 @@ describe("ampi top: the executable", () => {
     }
   });
 
-  it("streams until SIGTERM and exits 0, and stops quietly when the reader closes the pipe", async () => {
+  it("streams until SIGTERM and exits 0 or SIGHUP and exits 129, and stops quietly when the reader closes the pipe", async () => {
     mkdirSync(live, { recursive: true });
     writeEntry(live, own);
     const firstLine = (child) =>
@@ -660,6 +681,13 @@ describe("ampi top: the executable", () => {
     const stopped = exited(streamed);
     streamed.kill("SIGTERM");
     assert.deepEqual(await stopped, { code: 0, signal: null });
+
+    // Handled, not the default action, which would end the process by the signal.
+    const hungUp = spawn(process.execPath, [bin, "top", "--stream-jsonl"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
+    await firstLine(hungUp);
+    const hangup = exited(hungUp);
+    hungUp.kill("SIGHUP");
+    assert.deepEqual(await hangup, { code: 129, signal: null });
 
     const closing = spawn(process.execPath, [bin, "top", "--stream-jsonl"], { cwd: home, env, stdio: ["ignore", "pipe", "pipe"] });
     await firstLine(closing);

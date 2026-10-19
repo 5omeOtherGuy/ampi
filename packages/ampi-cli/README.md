@@ -447,10 +447,10 @@ The first line counts the running sessions; the row of `ampi app` itself is list
 
 Working sessions come first, then the rest; within each, the most recently updated first.
 
-- **Full screen.** When stdout is a terminal, `ampi top` takes over the screen (the alternate screen, cursor hidden) and draws again whenever the registry changes, the terminal is resized, or a second passes (so Up stays current). `q`, Esc or Ctrl+C quits with status `0`, as do SIGINT and SIGTERM; the screen and cursor are restored on every way out. Titles and directories are cut to the width, and rows that do not fit the height end in a line counting them.
+- **Full screen.** When stdout is a terminal, `ampi top` takes over the screen (the alternate screen, cursor hidden) and draws again whenever the registry changes, the terminal is resized, or a second passes (so Up stays current). `q`, Esc or Ctrl+C quits with status `0`, as do SIGINT and SIGTERM, and SIGHUP (the terminal closing) with status `129`; the screen and cursor are restored on every way out. Titles and directories are cut to the width, and rows that do not fit the height end in a line counting them.
 - **Redirected.** Without a terminal and without a flag, it prints the count and the table once, titles and directories whole, and exits `0`.
 - **`--json`.** Prints one record, the same as a stream line below, and exits `0`.
-- **`--stream-jsonl`.** Prints one record at once, then another each time the list of sessions changes (`time` alone does not count), until SIGINT, SIGTERM or the reader closing the pipe, and exits `0`. A rewrite that changes nothing prints nothing.
+- **`--stream-jsonl`.** Prints one record at once, then another each time the list of sessions changes (`time` alone does not count), until SIGINT, SIGTERM or the reader closing the pipe, and exits `0` (`129` on SIGHUP). A rewrite that changes nothing prints nothing.
 - **Usage errors.** An unknown option, an argument, or `--json` with `--stream-jsonl` exits `2`.
 - **Not a message.** `ampi top` runs this command; `ampi -- top` sends the word `top` to Pi as the first message.
 
