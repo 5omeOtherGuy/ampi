@@ -102,6 +102,7 @@ Important files:
 - `tool-registry.ts` — exact-name tool provider registry, allowlists, and deferred registrations.
 - `glob.ts` — the shared glob matcher (`*`, `**`, `?`, braces, a safe character-class subset), used for repository paths and tool names.
 - `tool-disable.ts` — the `ampi.tools.disable` matcher (exact names, globs, `builtin:<name>` for Pi's own built-in tools) and how it applies to resolved tool sets.
+- `subtree-guidance.ts`, `subtree-guidance-hooks.ts` — guidance from subfolders: which `AGENTS.md` files a `read` below the working directory adds, the once-per-folder record in session entries, and the `tool_result` wiring.
 - `skill-paths.ts` — the skill folders ampi adds through `resources_discover`: `.claude/skills` up to the repository root (with project trust), `~/.claude/skills`, and `ampi.skills.path`.
 - `feature-gates.ts` — feature-gate provider registry for opt-in siblings.
 - `request-policy.ts` — per-mode provider-request and thinking-level policy.

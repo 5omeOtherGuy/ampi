@@ -9,6 +9,7 @@ import type {
 import { Type, type Static } from "typebox";
 import { MMR_BACKGROUND_RUN_PARAMETER_FIELDS } from "../background/background-dispatch.js";
 import { getMmrSubagentState } from "../../ampi-core/runtime.js";
+import { isMmrSubtreeGuidanceText } from "../../ampi-core/subtree-guidance.js";
 import { checkMmrToolParams } from "../../ampi-core/tool-params.js";
 import { registerAmpiOwnedTool } from "../../ampi-core/owned-tools.js";
 import {
@@ -363,6 +364,11 @@ export function addLineNumbersToFinderReadText(text: string, offset = 1): string
     .join("\n");
 }
 
+/**
+ * Number the text blocks of a read result inside a finder child. Subfolder
+ * guidance that ampi-core (which loads first) appended to the result is not
+ * file text, so it keeps its own lines.
+ */
 export function maybeNumberFinderReadToolResult(
   event: ToolResultEvent,
 ): { content?: ToolResultEvent["content"] } | undefined {
@@ -373,7 +379,7 @@ export function maybeNumberFinderReadToolResult(
   if (text === undefined) return undefined;
   return {
     content: event.content.map((entry) => {
-      if (entry.type !== "text") return entry;
+      if (entry.type !== "text" || isMmrSubtreeGuidanceText(entry.text)) return entry;
       return { ...entry, text: addLineNumbersToFinderReadText(entry.text, getReadOffset(event.input)) };
     }),
   };

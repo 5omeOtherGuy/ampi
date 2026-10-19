@@ -585,6 +585,11 @@ export interface MmrCoreSettings {
    */
   modeLock?: boolean;
   /**
+   * Add the AGENTS.md guidance of subfolders to Pi's `read` results (default
+   * `true`; see `subtree-guidance.ts`). `false` turns it off.
+   */
+  subtreeGuidance?: boolean;
+  /**
    * `ampi.tools.disable`: tool names, `*` globs and `builtin:<name>` entries
    * for tools to turn off (see `tool-disable.ts`). The user and project lists
    * are combined.

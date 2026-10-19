@@ -165,6 +165,26 @@ Pi reads skills from its own locations (`.pi/skills`, `~/.agents/skills`, projec
 
 `skill-sources.ts` (`classifyMmrSkillSource`) reads the `sourceInfo` Pi attaches to each skill and its path, and gives every surface that lists skills the same answer: a group (`user`, `project`, `package` with the package's source, `settings`, or `temporary` for `--skill` and `-e`) and an origin (`pi`, `agents` for `~/.agents/skills` and project `.agents/skills`, `claude` for `.claude/skills`). The folders above reach Pi as temporary extension paths, so they are grouped by their path: `~/.claude/skills` is `user`, another `.claude/skills` is `project`, and `ampi.skills.path` entries are `settings`. ampi-tui's Skills dialog shows the groups as headings; the `ampi skill` command prints them as labels (`agents-user`, `package:npm:…`), from a plain-JS copy, with a test that runs both over one fixture set.
 
+### Guidance from subfolders
+
+Pi loads its context files (`AGENTS.md` and the like) once, at startup: the agent directory's, the working directory's and those of its parents. A rule file in a subfolder, such as `src/feature/AGENTS.md`, never reaches the model unless the model reads it. ampi-core closes that gap on reads: when the model reads a file below the working directory with Pi's `read` tool, ampi-core appends the guidance files of the subfolders on the way to that file to the tool result.
+
+```text
+Instructions from src/feature/AGENTS.md (they apply to files under src/feature/):
+
+<the file's text>
+```
+
+- Each subfolder from the working directory's child down to the read file's own directory contributes the one file Pi would take there: the first regular file of `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, `CLAUDE.MD`. Outermost folders come first, each in its own text block after the file's content. Image reads get them too; failed reads do not.
+- A file in the working directory itself, or outside it, gets nothing: Pi has already loaded those files. Reading a guidance file itself adds no copy of it.
+- Each folder's guidance is added once per session branch. ampi-core records the folders in an `ampi-core.subtree-guidance` custom session entry and rebuilds the set from the current branch when a session starts, resumes or forks and after `/tree` moves to another point. After a compaction it writes a reset entry, so the next read in a folder adds its guidance again: the results that carried it may have been summarised.
+- A guidance file longer than 32 KiB is cut after its last whole line within that size, with a note that the rest was left out.
+- Worker children that load ampi-core get the guidance on their own reads, in the child's session: workers that append to Pi's prompt (finder, oracle, custom subagents without an isolated context) do; workers that replace the prompt run with `--no-context-files` and get none. finder's line numbers leave the guidance unnumbered.
+- It applies in every mode, `free` included: it adds context and enforces nothing.
+- `ampiCore.subtreeGuidance: false` (or `ampi.core.subtreeGuidance`) turns it off; a value that is not `true` or `false` is ignored with a settings warning. It is also off when Pi runs without context files: with `--no-context-files` / `-nc` on the command line (`pi`, `ampi`, and worker children), or when the first prompt after Pi loads its resources (at startup and on `/reload`) comes without context files although Pi's own discovery found some at that load. A session hosted through Pi's SDK, as `ampi app` does, has only the second signal, so there it stays on in a project with no context file of its own.
+- The guidance lands in the conversation, not the system prompt, so `ampi-threads`' context analysis counts it under messages, not under AGENTS.md files.
+- Limits: only Pi's `read` tool triggers it (not `grep`, the shell, or reads a `codemode` script makes), the guidance arrives with the first read in a folder rather than before the model works there, and `@file` includes and glob front matter in guidance files are not supported.
+
 ### Auto-compaction
 
 Locked modes compact the conversation once it fills 90% of the context window. After a run has fully settled (Pi's `agent_settled`, with no retry or queued message left), ampi reads `getContextUsage()` and, at or above the threshold, calls `ctx.compact()` once. The window is the active model's, after the mode's context profile cap, so Medium compacts at 270k of its 300k profile. While it runs, the prompt box status reads `Auto-Compacting`.
@@ -315,6 +335,7 @@ Common symptoms:
 - **Settings warning naming a block.** The block was discarded but the rest of the file (and the sibling file) still loaded. Fix the shape against the example in [`../../../README.md`](../../../README.md#settings). A `toolAliases` warning means the deprecated alias setting was found and ignored.
 - **Tool stays `missing` / `deferred`.** `Tool resolution:` shows each request's provider and chosen tool. Resolution is identity-only: `missing` means no extension has claimed it and Pi has not registered the name; `deferred` means the catalog credits an owner that has not shipped/registered the concrete tool.
 - **Locked mode refused to activate.** The resolver returned zero active tools; the previous state is kept. Inspect `Tool resolution:` on the previous state.
+- **A subfolder's `AGENTS.md` never shows up.** It arrives only with a `read` of a file in that folder or below it, once per session branch. Check that `ampiCore.subtreeGuidance` is not `false`, that Pi does not run with `-nc`, and that the file is below the working directory, not in it.
 - **Feature gate `missing` / `disabled` / `gated`.** `missing` = no provider claimed it; `disabled` = owner loaded but off or no active capability; `gated` names the prerequisite (e.g. `librarian` waits on source-owned `ampi-github` tools).
 
 All diagnostic codes come from `getMmrPolicyDiagnostics(state)` so `/ampi-status` and mode-change warning notifications stay in sync. Full list: [`docs/ampi-core-api.md`](../../../docs/ampi-core-api.md#policy-diagnostics).

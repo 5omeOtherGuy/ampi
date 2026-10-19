@@ -1,6 +1,7 @@
 /**
- * Pure helper: extract explicit `--model`, `--tools`, and
- * `--ampi-parent-mode` / legacy `--mmr-parent-mode` values from a Pi-style argv slice
+ * Pure helper: extract explicit `--model`, `--tools`,
+ * `--ampi-parent-mode` / legacy `--mmr-parent-mode` and `--no-context-files`
+ * values from a Pi-style argv slice
  * (`process.argv.slice(2)`) so subagent activation can distinguish
  * runner-supplied flags from Pi's own default/restored/native model
  * selection and parent-mode metadata.
@@ -17,6 +18,9 @@
  *    `--ampi-parent-mode=<value>` for mode-derived workers that need to
  *    validate parent-mode-specific model preferences in the child process.
  *    The legacy `--mmr-parent-mode` spelling is also accepted.
+ *  - `--no-context-files` or `-nc` — a switch that turns off Pi's AGENTS.md
+ *    and CLAUDE.md loading. Pi gives extensions no value for it, so
+ *    subfolder guidance (`subtree-guidance.ts`) reads it here.
  *
  * The helper deliberately does not validate values, does not consult
  * the Pi model registry, and does not split `<provider>/<id>` /
@@ -43,6 +47,8 @@ export interface ExplicitWorkerCliFlags {
    * `--ampi-parent-mode` spelling when the preferred flag is absent.
    */
   parentMode?: string;
+  /** True when `--no-context-files` or `-nc` is on argv; always set by the extractor. */
+  noContextFiles?: boolean;
 }
 
 function parseToolsValue(raw: string): string[] {
@@ -57,6 +63,7 @@ export function extractExplicitWorkerCliFlags(argv: readonly string[]): Explicit
   let tools: string[] | undefined;
   let parentMode: string | undefined;
   let legacyParentMode: string | undefined;
+  let noContextFiles = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -113,7 +120,9 @@ export function extractExplicitWorkerCliFlags(argv: readonly string[]): Explicit
       legacyParentMode = arg.slice("--mmr-parent-mode=".length);
       continue;
     }
+
+    if (arg === "--no-context-files" || arg === "-nc") noContextFiles = true;
   }
 
-  return { explicitModel: model, explicitTools: tools, parentMode: parentMode ?? legacyParentMode };
+  return { explicitModel: model, explicitTools: tools, parentMode: parentMode ?? legacyParentMode, noContextFiles };
 }
