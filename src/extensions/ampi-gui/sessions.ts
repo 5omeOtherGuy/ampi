@@ -133,6 +133,16 @@ export function mmrGuiProjectLabel(cwd: string, home = homedir()): string {
   return path.basename(cwd) || cwd;
 }
 
+/**
+ * The mode a session's file names: the registered mode's key when it ran
+ * one (its label is known only while its extension is loaded), else the
+ * mode key; `null` without a saved mode.
+ */
+export function persistedModeName(branch: readonly unknown[]): string | null {
+  const saved = findLatestPersistedModeState(branch);
+  return saved ? (saved.registeredModeKey ?? saved.mode) : null;
+}
+
 function rowTitle(info: SessionInfo): string {
   const first = info.firstMessage ? [{ type: "user" as const, id: "", text: info.firstMessage, images: 0, timestamp: 0 }] : [];
   return mmrGuiSessionTitle(info.name, first);
@@ -351,7 +361,7 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
           id: info.id,
           title: row.title,
           cwd: info.cwd,
-          mode: findLatestPersistedModeState(branch)?.mode ?? null,
+          mode: persistedModeName(branch),
           model: null,
         },
         row,

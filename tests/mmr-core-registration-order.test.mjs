@@ -59,7 +59,7 @@ describe("mmr-core registration order", () => {
   // by Map#set. Record one chronological log of every registration call via a
   // proxy and pin the exact global sequence the slim wiring shell must emit:
   // flags -> commands -> shortcuts -> lifecycle hooks -> subfolder guidance
-  // hooks -> live registry hooks.
+  // hooks -> live registry hooks -> the mode registry's shutdown hook.
   it("registers everything in one stable chronological sequence", async () => {
     const extension = (await importSource("extensions/ampi-core/index.ts")).default;
     const { pi } = createMockPi();
@@ -145,6 +145,8 @@ describe("mmr-core registration order", () => {
       "hook:session_compact_failed",
       "hook:turn_end",
       "hook:agent_settled",
+      // The mode registry empties itself when the session shuts down.
+      "hook:session_shutdown",
     ]);
   });
 });

@@ -14,10 +14,10 @@ import {
   readMmrKeymapSettings,
   resolveMmrKeymap,
 } from "../../ampi-core/keymap.js";
+import { getMmrModeName } from "../../ampi-core/mode-registry.js";
 import type { MmrPromptHistory } from "../../ampi-core/prompt-history.js";
 import { getMmrModeState, onMmrStateChanged } from "../../ampi-core/runtime.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../../ampi-core/thread-index.js";
-import type { MmrModeKey } from "../../ampi-core/types.js";
 import { pickMmrThreadMention } from "../editor/mentions.js";
 import { openMmrHelpKeymap, openMmrKeymapJson } from "../overlays/help-keymap.js";
 import {
@@ -152,8 +152,8 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
   let resolved: MmrResolvedKeymap | undefined;
   let quitPending = false;
   let modeDial: MmrModeDial | undefined;
-  /** The mode the dial last chose, and the dial's switches, one after another. */
-  let dialMode: MmrModeKey | undefined;
+  /** The mode the dial last chose (a built-in or registered key), and the dial's switches, one after another. */
+  let dialMode: string | undefined;
   let dialSwitches: Promise<void> = Promise.resolve();
   let promptHistoryOpen = false;
   let threadSwitcherOpen = false;
@@ -382,7 +382,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     // session refuses here as ampi-core's cycle and picker do.
     const state = getMmrModeState();
     if (state?.modeLock?.locked) {
-      current.ui.notify(`Mode stays ${state.mode}: ${state.modeLock.reason}. /mode <key> still switches it.`, "warning");
+      current.ui.notify(`Mode stays ${getMmrModeName(state)}: ${state.modeLock.reason}. /mode <key> still switches it.`, "warning");
       return;
     }
     if (modeDial && !modeDial.isClosed()) {
@@ -410,11 +410,13 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
    * overlap: ampi-core tells its own model changes from native ones by a flag
    * that one switch would clear while another is still changing the model,
    * which drops the mode to free. Turns made meanwhile collapse into the
-   * latest one.
+   * latest one. A registered mode counts as active only under its own key,
+   * not its base mode's.
    */
   function switchToDialMode(): Promise<void> {
     const mode = dialMode;
-    if (mode === undefined || mode === getMmrModeState()?.mode) return Promise.resolve();
+    const state = getMmrModeState();
+    if (mode === undefined || (state && mode === getMmrModeName(state))) return Promise.resolve();
     return new Promise((resolve) => {
       let settled = false;
       const settle = () => {

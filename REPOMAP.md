@@ -103,6 +103,7 @@ Important files:
 - `index.ts` — Pi extension entry point.
 - `modes.ts` — mode table (`low`, `medium`, `high`, `ultra`, `free`), migration aliases, and metadata.
 - `mode-controller.ts` — shared state manager for mode transitions and UI updates.
+- `mode-registry.ts` — modes other extensions register, through the API or over `pi.events`: validation, the `globalThis`-anchored store, resolution by key or label, and the bus protocol (`ampi-core:register-mode`, `ampi-core:unregister-mode`, `ampi-core:modes-ready`).
 - `model-resolver.ts` — provider-neutral preference expansion and route selection.
 - `routing.ts` — resolves the active mode from settings and flags.
 - `tool-registry.ts` — exact-name tool provider registry, allowlists, and deferred registrations.

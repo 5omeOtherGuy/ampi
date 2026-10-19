@@ -13,7 +13,8 @@
  * - Stable: supported public API. Removing or renaming a Stable export is
  *   a breaking change — it requires a semver-major bump and a `CHANGELOG.md`
  *   migration note. Covers mode keys/definitions, the model resolver,
- *   routing, feature gates, settings loaders, the thread status model,
+ *   routing, feature gates, settings loaders, the thread status model, the
+ *   mode registry other extensions add modes through,
  *   the `createMmr*Extension` factories, the public tool
  *   `create*`/`register*` functions, and the public type surface.
  *
@@ -167,6 +168,27 @@ export type {
 } from "./extensions/ampi-core/thread-status.js";
 export { MMR_EVENT_APPROVAL, onMmrApproval } from "./extensions/ampi-core/runtime.js";
 export type { MmrApprovalEvent } from "./extensions/ampi-core/runtime.js";
+// --- ampi-core: modes other extensions register (Stable) ---
+export {
+  MMR_EVENT_MODES_READY,
+  MMR_EVENT_REGISTER_MODE,
+  MMR_EVENT_UNREGISTER_MODE,
+  getMmrRegisteredMode,
+  listMmrModes,
+  onMmrModesChanged,
+  registerMmrMode,
+  resolveMmrRegisteredMode,
+  unregisterMmrMode,
+} from "./extensions/ampi-core/mode-registry.js";
+export type {
+  MmrModesChange,
+  MmrModesChangedEvent,
+  MmrModesChangedListener,
+  MmrRegisteredMode,
+  MmrRegisteredModeDefinition,
+  MmrRegisteredModeThinkingLevel,
+} from "./extensions/ampi-core/mode-registry.js";
+export type { MmrRegisteredModeInfo } from "./extensions/ampi-core/types.js";
 // --- ampi-core: tool permission rules (Stable) ---
 export {
   MMR_PERMISSIONS_SHELL_TOOLS,
@@ -894,6 +916,17 @@ export {
   getMmrPolicyDiagnostics as getAmpiPolicyDiagnostics,
 } from "./extensions/ampi-core/diagnostics.js";
 export {
+  MMR_EVENT_MODES_READY as AMPI_EVENT_MODES_READY,
+  MMR_EVENT_REGISTER_MODE as AMPI_EVENT_REGISTER_MODE,
+  MMR_EVENT_UNREGISTER_MODE as AMPI_EVENT_UNREGISTER_MODE,
+  getMmrRegisteredMode as getAmpiRegisteredMode,
+  listMmrModes as listAmpiModes,
+  onMmrModesChanged as onAmpiModesChanged,
+  registerMmrMode as registerAmpiMode,
+  resolveMmrRegisteredMode as resolveAmpiRegisteredMode,
+  unregisterMmrMode as unregisterAmpiMode,
+} from "./extensions/ampi-core/mode-registry.js";
+export {
   createMmrFeatureGateRegistry as createAmpiFeatureGateRegistry,
 } from "./extensions/ampi-core/feature-gates.js";
 export {
@@ -1151,6 +1184,15 @@ export {
 export {
   MMR_SUBAGENTS_ASYNC_TASK_TOOLS as AMPI_SUBAGENTS_ASYNC_TASK_TOOLS,
 } from "./extensions/ampi-workers/provider.js";
+export type {
+  MmrModesChange as AmpiModesChange,
+  MmrModesChangedEvent as AmpiModesChangedEvent,
+  MmrModesChangedListener as AmpiModesChangedListener,
+  MmrRegisteredMode as AmpiRegisteredMode,
+  MmrRegisteredModeDefinition as AmpiRegisteredModeDefinition,
+  MmrRegisteredModeThinkingLevel as AmpiRegisteredModeThinkingLevel,
+} from "./extensions/ampi-core/mode-registry.js";
+export type { MmrRegisteredModeInfo as AmpiRegisteredModeInfo } from "./extensions/ampi-core/types.js";
 export type {
   MmrCommandAvailability as AmpiCommandAvailability,
   MmrCommandAvailabilityState as AmpiCommandAvailabilityState,

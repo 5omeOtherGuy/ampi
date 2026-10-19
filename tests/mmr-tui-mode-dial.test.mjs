@@ -6,12 +6,14 @@ import { pathToFileURL } from "node:url";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
+import { createMockExtensionContext } from "./helpers/pi-stub.mjs";
 import { createAnsiTheme, expectFixture, plain } from "./helpers/tui-render.mjs";
 
 after(cleanupLoadedSource);
 
 let dialModule;
 let runtime;
+let modeRegistry;
 const theme = createAnsiTheme();
 const KEY = { ctrlS: "\x13", right: "\x1b[C", left: "\x1b[D", up: "\x1b[A", down: "\x1b[B", tab: "\t", esc: "\x1b", ctrlC: "\x03" };
 /** Pi gives the dial 58 columns on an 80- or a 140-column terminal. */
@@ -21,6 +23,8 @@ before(async () => {
   dialModule = await importSource("extensions/ampi-tui/overlays/mode-dial.ts");
   // The dial reads the mode state through the shared runtime singleton.
   runtime = await import(pathToFileURL(path.join(getPreparedSourceRoot(), "extensions/ampi-core/runtime.ts")).href);
+  // The registry lives on globalThis, so any copy of the module reaches the dial's.
+  modeRegistry = await importSource("extensions/ampi-core/mode-registry.ts");
 });
 
 const ROUTES = {
@@ -29,7 +33,11 @@ const ROUTES = {
   high: { agent: "anthropic/claude-opus-4-8 · xhigh", oracle: "openai-codex/gpt-5.6-sol · high" },
   ultra: { agent: undefined, oracle: "openai-codex/gpt-5.6-sol · high" },
   free: { agent: "faux/faux-1", oracle: undefined },
+  review: { agent: "anthropic/claude-opus-4-8 · xhigh", oracle: "openai-codex/gpt-5.6-sol · high" },
+  sketch: { agent: "faux/faux-1 · medium", oracle: "openai-codex/gpt-5.6-sol · high" },
 };
+const REVIEW = { key: "review", label: "Review", color: "#d97706", baseMode: "high", description: "Reads a change and reports what is wrong" };
+const SKETCH = { key: "sketch", color: "#22c55e", baseMode: "low", source: "sketch-modes" };
 
 /** A dial on `mode` with a fake clock, recording applied modes, closes and redraws. */
 function setup({ mode = "medium", terminalRows } = {}) {
@@ -250,6 +258,90 @@ describe("ampi-tui mode dial keys", () => {
   });
 });
 
+describe("ampi-tui mode dial with registered modes", () => {
+  beforeEach(() => {
+    modeRegistry.__resetMmrModesForTests();
+    modeRegistry.registerMmrMode(REVIEW);
+    modeRegistry.registerMmrMode(SKETCH);
+  });
+
+  afterEach(() => {
+    modeRegistry.__resetMmrModesForTests();
+    runtime.setMmrModeState(undefined);
+  });
+
+  it("opens on the list when the mode is a registered one, with its row selected", () => {
+    const t = setup({ mode: "review" });
+    assert.equal(t.dial.getView(), "list");
+    assert.equal(t.dial.getMode(), "review");
+    assert.deepEqual(t.applied, []);
+    assert.equal(setup({ mode: "free" }).dial.getView(), "dial", "free keeps the dial");
+  });
+
+  it("lists the ring modes, the registered modes in order, then free, each name in its own colour", () => {
+    const lines = setup({ mode: "review" }).dial.render(WIDTH);
+    for (const line of lines) assert.equal(visibleWidth(line), WIDTH);
+    expectFixture("ampi-tui-mode-dial", `list-registered-${WIDTH}`, lines);
+    const text = plain(lines);
+    assert.deepEqual(
+      text.slice(1, 8).map((line) => line.slice(2).replace(/ +│$/, "")),
+      [
+        "   Low  Quick, focused work on small, clear changes",
+        "   Medium  Balanced default for everyday coding",
+        "   High  Demanding work, with extra reasoning",
+        "   Ultra  Maximum effort for the hardest problems",
+        " ‣ Review  Reads a change and reports what is wrong",
+        "   sketch  sketch-modes",
+        "   Free  Stock Pi: your own model, no ampi routing",
+      ],
+    );
+    // The test theme writes colours in the 256-colour palette: #d97706 is 172, #22c55e is 41.
+    assert.match(lines[5], /\x1b\[38;5;172m\x1b\[1m ‣ Review/, "Review in #d97706, bold as the current row");
+    assert.match(lines[6], /\x1b\[38;5;41m {3}sketch/, "sketch in #22c55e");
+    assert.doesNotMatch(lines[6], /\x1b\[1m/);
+    assert.doesNotMatch(text.join("\n"), /[█▁▂▃▄▅▆▇]/, "seven rows fit without a scrollbar");
+  });
+
+  it("fits a narrow terminal, cutting the second column first", () => {
+    const lines = setup({ mode: "sketch" }).dial.render(30);
+    for (const line of lines) assert.equal(visibleWidth(line), 30);
+    expectFixture("ampi-tui-mode-dial", "list-registered-30", lines);
+    assert.match(plain(lines)[5], /│ {4}Review {2}Reads a change… │/);
+  });
+
+  it("scrolls on a short terminal, keeping the registered row in view beside the scrollbar", () => {
+    const t = setup({ mode: "review", terminalRows: 12 });
+    const lines = t.dial.render(WIDTH);
+    expectFixture("ampi-tui-mode-dial", "list-registered-short", lines);
+    const text = plain(lines);
+    assert.equal(text.length, 5, "three rows between the borders");
+    assert.match(text[3], /‣ Review/);
+    assert.match(text.slice(1, 4).join("\n"), /[█▁▂▃▄▅▆▇]/, "a scrollbar shows that more rows exist");
+  });
+
+  it("moves through every row with ↑/↓, applying registered keys, and turns from one onto medium", () => {
+    const t = setup({ mode: "ultra" });
+    t.send(KEY.tab, KEY.down, KEY.down, KEY.down, KEY.down, KEY.up);
+    assert.deepEqual(t.applied, ["review", "sketch", "free", "sketch"], "↓ stops at free");
+    t.send(KEY.ctrlS);
+    assert.equal(t.applied.length, 4, "the list does not turn");
+    t.send(KEY.tab);
+    assert.match(plain(t.dial.render(WIDTH))[7], /│ sketch-modes +│/, "the dial shows the registered mode's second column");
+    t.send(KEY.ctrlS);
+    assert.equal(t.applied.at(-1), "medium");
+  });
+
+  it("opens from the active registered mode, as Ctrl+S does", async () => {
+    runtime.setMmrModeState({ mode: "high", registeredMode: { key: "review", label: "Review", color: "#d97706", source: "extension" } });
+    const { ctx, overlays } = createMockExtensionContext();
+    void dialModule.openMmrModeDial(ctx, { apply: () => {}, setTimer: () => undefined, clearTimer: () => {}, offsetY: () => -5 });
+    const dial = overlays.at(-1).component;
+    assert.equal(dial.getMode(), "review");
+    assert.equal(dial.getView(), "list");
+    dial.close();
+  });
+});
+
 describe("ampi-tui mode route reader", () => {
   let home;
   let previousHome;
@@ -294,5 +386,26 @@ describe("ampi-tui mode route reader", () => {
     assert.deepEqual(read("high"), { agent: "faux/faux-1 · xhigh", oracle: "faux/faux-1 · high" }, "settings override the mode's models");
     assert.equal(read("low").agent, undefined, "no low model is registered");
     assert.deepEqual(read("free"), { agent: "faux/faux-1", oracle: undefined }, "free names Pi's own model and has no oracle");
+  });
+
+  it("resolves a registered mode from its own preferences, or else its base mode's", () => {
+    const models = [
+      { provider: "openai-codex", id: "gpt-5.6-sol" },
+      { provider: "faux", id: "faux-1" },
+    ];
+    mkdirSync(path.join(home, ".pi/agent"), { recursive: true });
+    writeFileSync(path.join(home, ".pi/agent/settings.json"), JSON.stringify({ ampiCore: { modelPreferences: { high: ["faux/faux-1"] } } }));
+    modeRegistry.__resetMmrModesForTests();
+    modeRegistry.registerMmrMode({ ...REVIEW, thinkingLevel: "medium" });
+    modeRegistry.registerMmrMode({ ...SKETCH, modelPreferences: [{ model: "gpt-5.6-sol", providers: ["openai-codex"] }] });
+    try {
+      runtime.setMmrModeState({ mode: "high", modelApplied: true, provider: "openai-codex", model: "gpt-5.6-sol", thinkingLevel: "xhigh" });
+      const read = dialModule.createMmrModeRouteReader({ cwd: home, model: undefined, modelRegistry: registry(models) });
+      assert.equal(read("review").agent, "faux/faux-1 · medium", "the base mode's configured models, at the registered level");
+      assert.equal(read("sketch").agent, "openai-codex/gpt-5.6-sol · medium", "its own models");
+      assert.equal(read("high").agent, "openai-codex/gpt-5.6-sol · xhigh", "high is the active mode");
+    } finally {
+      modeRegistry.__resetMmrModesForTests();
+    }
   });
 });

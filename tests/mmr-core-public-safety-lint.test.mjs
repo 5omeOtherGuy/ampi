@@ -195,6 +195,7 @@ describe("Phase B public-safety lint: applied to Phase B surfaces", () => {
       "src/extensions/ampi-painter/README.md",
       "src/extensions/ampi-core/builtin-tool-guidance.ts",
       "src/extensions/ampi-core/tool-disable.ts",
+      "src/extensions/ampi-core/mode-registry.ts",
       "src/extensions/ampi-core/subtree-guidance.ts",
       "src/extensions/ampi-core/subtree-guidance-hooks.ts",
       "src/extensions/ampi-core/README.md",

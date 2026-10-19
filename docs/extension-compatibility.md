@@ -45,7 +45,55 @@ If your extension registers a name `ampi` also owns (e.g. `handoff`, `Task`), Pi
 
 ### Mode/model/tool-replacing extensions — Supported (free), not composable in locked modes
 
-`preset` (sets model + tools), interactive `tools` (enable/disable), `plan-mode`, and any extension that calls `setModel`/`setThinkingLevel` take over the model/tool state that locked modes own. By design, a native model/thinking change **drops you to `free`**, where the extension then controls model and tools. This is intentional: two systems cannot both own the locked mode profile. Use these in `free` mode.
+`preset` (sets model + tools), interactive `tools` (enable/disable), `plan-mode`, and any extension that calls `setModel`/`setThinkingLevel` take over the model/tool state that locked modes own. By design, a native model/thinking change **drops you to `free`**, where the extension then controls model and tools. This is intentional: two systems cannot both own the locked mode profile. Use these in `free` mode. An extension that wants a locked mode with its own model, thinking level, tools or prompt text can [register a mode](#adding-a-mode-of-your-own--supported) instead of taking the state over.
+
+### Adding a mode of your own — Supported
+
+An extension can register a mode built on one of the locked modes. It shows in `ampi-tui`'s mode list after the built-in modes, with its label in its own colour, is chosen with `/mode`, `--ampi-mode`, `ampi -m` or `ampiCore.defaultMode` by key or label, and is restored when the session resumes. Everything the definition leaves out comes from its base mode. Fields, limits and the reload rule: [registered modes](../src/extensions/ampi-core/README.md#registered-modes).
+
+Without importing ampi, over Pi's event bus. Send the definition when the extension loads and again whenever ampi-core emits `ampi-core:modes-ready`, so it arrives in either load order:
+
+```ts
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const proofread = {
+  key: "proofread",
+  label: "Proofread",
+  description: "Checks prose for clarity and typos, without editing code",
+  color: "#0ea5e9",
+  source: "proofread-mode",
+  baseMode: "low",
+  thinkingLevel: "medium",
+  tools: ["read", "grep", "find"],
+  promptAppend: "Report each problem with its file and line; change nothing.",
+};
+
+export default function proofreadMode(pi: ExtensionAPI): void {
+  const register = () => pi.events.emit("ampi-core:register-mode", proofread);
+  pi.events.on("ampi-core:modes-ready", register);
+  register();
+}
+```
+
+With ampi as a dependency, through the API. `registerAmpiMode` throws on a definition it refuses and returns a function that removes the mode:
+
+```ts
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerAmpiMode } from "@skippermissions/ampi";
+
+export default function proofreadMode(_pi: ExtensionAPI): void {
+  registerAmpiMode({
+    key: "proofread",
+    label: "Proofread",
+    color: "#0ea5e9",
+    source: "proofread-mode",
+    baseMode: "low",
+    modelPreferences: [{ model: "gpt-5.5", providers: ["openai-codex"] }],
+  });
+}
+```
+
+Register from the factory: ampi-core empties the registry when a session shuts down, and Pi runs the factory again for the next one. A refused bus registration shows as a warning at the next session start and in `/ampi-status`. Subagent workers run in the base mode; they do not load your extension.
 
 ### Custom providers / models — Supported when named to match; otherwise free or per-mode preferences
 
@@ -88,6 +136,7 @@ Your own subagent/`Task`-style extension runs in the parent session like any oth
 | Rendering / built-in overrides | Supported | use anywhere |
 | Name collisions with ampi tools | Supported (last-writer) | use a distinct name |
 | `preset` / `tools` / `plan-mode` / native `setModel` | Drops to `free` | use in `free` |
+| A mode of your own | Supported as a registered mode | register it over `pi.events` or with `registerAmpiMode` |
 | Custom providers/models | Supported if family/provider matches | else `ampiCore.modelPreferences` or `free` |
 | Input transforms | Supported | use anywhere |
 | System-prompt append | Supported | use anywhere |

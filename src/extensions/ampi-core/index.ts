@@ -7,7 +7,7 @@ import { MMR_FAST_FLAG } from "./speed.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
   pi.registerFlag("ampi-mode", {
-    description: "Start with an ampi mode: low, medium, high, ultra, or free",
+    description: "Start with an ampi mode: low, medium, high, ultra, free, or a registered mode's key or label",
     type: "string",
   });
 
@@ -44,11 +44,19 @@ export default function mmrCoreExtension(pi: ExtensionAPI): void {
   // Registration order is observable and load-bearing (pinned by
   // tests/mmr-core-registration-order.test.mjs): flags, then the commands and
   // shortcuts, then the lifecycle hooks, then the live registry's hooks (after
-  // the mode is resolved at session start). The controller owns all shared
-  // mutable mode state; the registration modules talk to it through accessors
-  // only.
+  // the mode is resolved at session start), then the mode registry's
+  // shutdown hook. The controller owns all shared mutable mode state; the
+  // registration modules talk to it through accessors only.
   const controller = createMmrModeController(pi);
   registerMmrCommands(pi, controller);
   registerMmrLifecycleHooks(pi, controller);
   registerMmrLiveRegistry(pi);
+  // Registered modes belong to the session's extension runtime: Pi runs every
+  // factory again after a reload or a session replacement.
+  pi.on("session_shutdown", async () => {
+    controller.shutdown();
+  });
+  // The controller listens for mode registrations over pi.events from here
+  // on; extensions loaded before ampi-core send theirs again now.
+  controller.getModeRegistryEvents().emitReady();
 }

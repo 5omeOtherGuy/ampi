@@ -222,7 +222,11 @@ export function resolveMmrEditToolFamily(provider: string, setting: MmrEditTools
  * `write`; without one, the list has no file-editing tool.
  */
 export function getMmrModeToolNames(key: MmrModeKey, family?: MmrEditToolFamily): string[] {
-  const tools = MMR_MODES[key].tools;
+  return withMmrEditToolFamily(MMR_MODES[key].tools, family);
+}
+
+/** A tool list with the family's editing tools right after `write`; unchanged without a family. */
+export function withMmrEditToolFamily(tools: readonly string[], family?: MmrEditToolFamily): string[] {
   if (!family) return [...tools];
   return tools.flatMap((name) => (name === "write" ? [name, ...MMR_EDIT_TOOL_FAMILY_TOOLS[family]] : [name]));
 }

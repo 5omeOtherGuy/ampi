@@ -7,6 +7,7 @@ import {
   registerMmrCommand,
   unregisterMmrCommand,
 } from "../ampi-core/command-registry.js";
+import { getMmrModeName } from "../ampi-core/mode-registry.js";
 import { getMmrModeState } from "../ampi-core/runtime.js";
 import { listMmrSessionsInScope, type MmrSessionScope } from "../ampi-core/session-catalog.js";
 import { MMR_THREAD_SLASH_COMMAND } from "../ampi-core/thread-index.js";
@@ -146,6 +147,12 @@ async function switchThroughHistory(ctx: ExtensionCommandContext, direction: Mmr
   await switchToSession(ctx, target, direction);
 }
 
+/** The session's mode for the Markdown header: a registered mode by its key. */
+function liveModeName(): string | undefined {
+  const state = getMmrModeState();
+  return state ? getMmrModeName(state) : undefined;
+}
+
 /** Copy the current branch of the session as Markdown, with a notice either way. */
 async function copyMarkdown(host: MmrThreadCommandHost, ctx: ExtensionContext): Promise<void> {
   const header = ctx.sessionManager.getHeader();
@@ -153,7 +160,7 @@ async function copyMarkdown(host: MmrThreadCommandHost, ctx: ExtensionContext): 
   // session's name may sit on another branch.
   const markdown = formatMmrThreadMarkdown([...(header ? [header] : []), ...ctx.sessionManager.getBranch()], {
     title: ctx.sessionManager.getSessionName(),
-    mode: getMmrModeState()?.mode,
+    mode: liveModeName(),
   });
   try {
     await host.copyText(markdown);

@@ -6,6 +6,11 @@ export interface ResolveMmrModeSelectionInput {
   persistedMode?: string;
   settingsMode?: string;
   defaultMode?: MmrModeKey;
+  /**
+   * Look up a name no built-in key or alias matched among the registered
+   * modes. Without it only built-in names resolve.
+   */
+  resolveRegistered?: (name: string) => { key: string; baseMode: MmrModeKey } | undefined;
 }
 
 interface SourceEntry {
@@ -32,7 +37,7 @@ export function resolveMmrModeSelection(input: ResolveMmrModeSelectionInput): Mm
     { source: "settings", rejectedName: "settings", invalidDescription: "settings", value: input.settingsMode },
   ];
 
-  let selected: { mode: MmrModeKey; source: MmrModeSelectionSource } | undefined;
+  let selected: { mode: MmrModeKey; source: MmrModeSelectionSource; registeredModeKey?: string } | undefined;
 
   for (const entry of sources) {
     const candidate = normalizeMode(entry.value);
@@ -43,6 +48,11 @@ export function resolveMmrModeSelection(input: ResolveMmrModeSelectionInput): Mm
         warnings.push(`Legacy ampi mode "${candidate}" maps to "${mode}".`);
       }
       if (!selected) selected = { mode, source: entry.source };
+      continue;
+    }
+    const registered = input.resolveRegistered?.(candidate);
+    if (registered) {
+      if (!selected) selected = { mode: registered.baseMode, source: entry.source, registeredModeKey: registered.key };
       continue;
     }
     warnings.push(`Ignoring invalid ${entry.invalidDescription} ampi mode "${candidate}".`);

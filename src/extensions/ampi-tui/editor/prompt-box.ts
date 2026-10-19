@@ -19,7 +19,8 @@ import { isMmrThreadMentionKey } from "./mentions.js";
  * ```
  *
  * - Top border, right: the session cost so far (dim) and the active ampi
- *   mode in its colour, with `↯` in front while fast speed is in effect.
+ *   mode in its colour (a registered mode's label in the colour it
+ *   registered), with `↯` in front while fast speed is in effect.
  * - Bottom border, left: the turn status (a wave glyph while busy, the
  *   label, a detail such as a token count or tool name, then a key hint).
  * - Bottom border, right: the working directory and git branch (dim). When
@@ -47,6 +48,12 @@ export const MMR_MODE_LABEL_COLORS: Readonly<Record<string, readonly [number, nu
   ultra: [0xd8, 0xb3, 0xff],
 };
 
+/** `#rrggbb` as a truecolor triple; `undefined` for anything else. */
+export function parseMmrHexColor(color: string): readonly [number, number, number] | undefined {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  return match ? [Number.parseInt(match[1], 16), Number.parseInt(match[2], 16), Number.parseInt(match[3], 16)] : undefined;
+}
+
 /** Glyphs the status slot cycles through while a turn runs, one step per {@link MMR_STATUS_WAVE_INTERVAL_MS}. */
 export const MMR_STATUS_WAVE_FRAMES = ["∼", "≈", "≋"] as const;
 export const MMR_STATUS_WAVE_INTERVAL_MS = 200;
@@ -67,8 +74,10 @@ export function formatMmrSessionCost(cost: number | undefined): string {
 
 /** What the borders show. */
 export interface MmrPromptBoxSlots {
-  /** Active ampi mode key; no label when undefined. */
+  /** Active ampi mode key, or a registered mode's label; no label when undefined. */
   mode?: string;
+  /** Truecolor of the label; without it a built-in key takes its colour from {@link MMR_MODE_LABEL_COLORS}. */
+  modeColor?: readonly [number, number, number];
   /** Fast speed is in effect for the current model: the mode label starts with the fast marker. */
   fast?: boolean;
   /** Formatted cost gauge; hidden when undefined. */
@@ -179,8 +188,8 @@ function line(text: string): Segment {
   return { text, token: "border" };
 }
 
-function modeSegment(mode: string, fast: boolean): Segment {
-  const rgb = MMR_MODE_LABEL_COLORS[mode];
+function modeSegment(mode: string, color: MmrPromptBoxSlots["modeColor"], fast: boolean): Segment {
+  const rgb = color ?? MMR_MODE_LABEL_COLORS[mode];
   const text = fast ? `${MMR_FAST_MARKER}${mode}` : mode;
   return rgb ? { text, rgb } : { text, token: "border" };
 }
@@ -190,7 +199,7 @@ export function renderMmrPromptBoxTopBorder(width: number, slots: MmrPromptBoxSl
   if (width < 2) return paint([line("─".repeat(Math.max(0, width)))], theme, slots.overlay);
   const room = width - 3; // corners and at least one line cell
   const gauge: Segment[] = slots.gauge ? [line(" "), { text: slots.gauge, token: "dim" }, line(" ─")] : [];
-  const mode: Segment[] = slots.mode ? [line(" "), modeSegment(slots.mode, slots.fast === true), line(" ─")] : [];
+  const mode: Segment[] = slots.mode ? [line(" "), modeSegment(slots.mode, slots.modeColor, slots.fast === true), line(" ─")] : [];
   let right = [...gauge, ...mode];
   if (widthOf(right) > room) right = mode;
   if (widthOf(right) > room) right = [];

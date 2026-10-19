@@ -17,11 +17,11 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`ROADMA
 
 ## Status and enablement
 
-Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `medium`. The selected mode is persisted as an `ampi-core.mode-state` custom session entry on every explicit change. Legacy names normalize at input boundaries: `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`.
+Active by default. Mode resolution: `--ampi-mode` flag → restored session state → `ampiCore.defaultMode` setting → default `medium`. Each source names a built-in key or alias, or a [registered mode](#registered-modes) by key or label; a name that matches nothing is skipped with a warning and the next source is tried. The selected mode is persisted as an `ampi-core.mode-state` custom session entry on every explicit change. Legacy names normalize at input boundaries: `rush` → `low`, `smart` → `medium`, `deep` → `high`, and `fable` → `ultra`.
 
 Mode lock: once the session has a user message (counted from the session entries at session start, and on the first `input` event), the mode is fixed. The cycle and picker shortcuts, and `ampi-tui`'s mode dial, then refuse with "the mode is fixed once a session has messages; start a new session to change it", `ampi-tui` hides the palette's `mode.use.*` rows, and `MmrModeState.modeLock` reads `{ enabled: true, locked: true, reason }` (`isMmrModeLocked()` for short). `/mode <key>` is the explicit override and says so when it changes a locked session's mode; native Pi model or thinking changes still release to `free`; the `Alt+D` thinking toggle and a session-fallback route keep the mode and are unaffected. `ampiCore.modeLock: false` turns the lock off.
 
-Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level; `Alt+R` toggles [fast speed](#fast-speed). While an extension owns ampi's terminal chrome, as `ampi-tui` does by default, both cycle keys do nothing in ampi-core and its `Alt+R` only says why fast speed is unavailable: `ampi-tui` takes `Ctrl+S` for its mode dial and binds `Alt+R` through the command registry. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
+Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode or a registered mode (listed after `ultra`, before `free`); `Ctrl+S` cycles `low → medium → high → ultra` while excluding `free` and registered modes (from a registered mode it continues from its base mode) (`Ctrl+Space` still cycles but is deprecated and will be removed in a later minor release); `Alt+D` toggles the thinking level; `Alt+R` toggles [fast speed](#fast-speed). While an extension owns ampi's terminal chrome, as `ampi-tui` does by default, both cycle keys do nothing in ampi-core and its `Alt+R` only says why fast speed is unavailable: `ampi-tui` takes `Ctrl+S` for its mode dial and binds `Alt+R` through the command registry. These are Amp-compatible keys: Pi binds `Ctrl+S` and `Alt+D` to actions an extension may override (picker save actions and delete-word-forward, which stays on `Alt+Delete`), so Pi lists both overrides under extension issues at startup. Subagent execution uses a separate profile via `--ampi-subagent <name>` (see [Subagent profiles](#subagent-profiles)).
 
 ## Behavior
 
@@ -38,6 +38,48 @@ Shortcuts: `Ctrl+Shift+S` / `Alt+M` pick any canonical mode; `Ctrl+S` cycles `lo
 - **Fail-closed** before any Pi mutation when a locked mode would resolve zero active tools or no usable model.
 - **Footer**: locked modes draw a two-line footer (cwd, branch, session name; token usage, cost, context use, model and mode); `free` restores Pi's footer. While another extension owns ampi's terminal chrome (`registerMmrChromeOwner`, used by [`ampi-tui`](../ampi-tui/README.md)), core leaves the footer slot to it.
 - **Auto-switch to `free`** with a warning when native Pi model selection (`/model`, model-cycle) or the native thinking-cycle (`shift+tab`) is used from a locked mode. ampi does not undo the user's native change; it disables request/prompt/tool policy and restores the baseline minus `ampi`-owned tools. Use `alt+d` for the in-mode thinking toggle that does not release.
+
+### Registered modes
+
+Another extension can add a mode of its own: a key, a label, a one-line description and a label colour, on top of one of the four locked modes. It is chosen like a built-in mode, with `/mode`, `--ampi-mode`, `ampi -m` or `ampiCore.defaultMode`, by key or by label, in any case.
+
+Register through the API when the extension depends on ampi:
+
+```ts
+import { registerAmpiMode } from "@skippermissions/ampi";
+
+export default function (pi) {
+  registerAmpiMode({ key: "review", label: "Review", color: "#d97706", baseMode: "high" });
+}
+```
+
+Or over `pi.events`, without importing ampi. ampi-core listens from its factory on, so the definition must be emitted at load and again whenever ampi-core asks:
+
+```ts
+export default function (pi) {
+  const register = () => pi.events.emit("ampi-core:register-mode", { key: "review", color: "#d97706", baseMode: "high" });
+  pi.events.on("ampi-core:modes-ready", register);
+  register();
+}
+```
+
+| Event | Payload | Sent by |
+| --- | --- | --- |
+| `ampi-core:register-mode` | a definition (below) | the registering extension |
+| `ampi-core:unregister-mode` | `{ key }` | the registering extension |
+| `ampi-core:modes-ready` | `{ version: 1 }` | ampi-core, from its factory and at the start of each session |
+
+- **Load order.** Pi's event bus keeps nothing, so a definition sent before ampi-core loads is lost; `ampi-core:modes-ready` from ampi-core's factory asks for it again. An extension loaded after ampi-core is heard directly. Either way the mode is registered before ampi-core resolves the session's mode at `session_start`, which runs after every extension has loaded. Answer `ampi-core:modes-ready` synchronously.
+- **Definition.** `key` (required): 1 to 32 lowercase letters, digits and dashes. `color` (required): `#rrggbb`, stored in lowercase. `label`: up to 24 characters, defaults to the key. `description`: one line of up to 200 characters. `source`: who registered it, for example the package name, up to 100 characters; shown as `extension` when unset. `label`, `description` and `source` hold no control or format characters (such as bidi overrides or zero-width characters) and no leading or trailing whitespace. `baseMode`: `low`, `medium` (the default), `high` or `ultra`. Optional overrides: `modelPreferences` (replaces the base mode's effective preferences, the user's `ampiCore.modelPreferences[<base>]` included), `thinkingLevel` (`low`, `medium`, `high` or `xhigh`), `tools` (exact Pi tool names replacing the base mode's list) and `promptAppend` (text added after ampi's system prompt while the mode is active, up to 4000 characters).
+- **Refused definitions.** A key equal to a built-in key or alias (`low`, `medium`, `high`, `ultra`, `free`, `rush`, `smart`, `deep`, `fable`) or to one of Pi's output modes (`text`, `json`, `rpc`); a label equal to any of those; a key or label another registration already uses as its key or label, compared case-insensitively; a different definition for a key another registration holds, unless both name the same `source`; anything outside the limits above. `registerAmpiMode` throws; a refused bus registration is shown once as a warning at the next session start or message, and listed in `/ampi-status` under `Mode registration warnings:`.
+- **Re-registering.** Registering the same definition again changes nothing, so an extension that answers `ampi-core:modes-ready` again does not fail. A different definition replaces the held one in place only when both name the same `source`. Neither the API nor the event bus says which extension is calling, so a definition without a `source` never replaces another one: two extensions that both leave it out cannot overwrite each other's mode. When the active mode is replaced, ampi-core applies the new definition at once (model, thinking level, tools, label and base mode).
+- **Reload and session replacement.** Pi runs every extension's factory again after `/reload`, `/new`, a resume or a fork, and sends `session_shutdown` first. ampi-core empties the registry on `session_shutdown`; the modes come back as the extensions load again. A mode whose extension no longer loads is therefore gone, not stale. Register from the factory (or `session_start`), not at module load.
+- **Base mode.** A registered mode runs as its base mode: request policy, context cap, prompt route, feature gates, subagent routes, auto-compaction and the edit-tool family all come from it, and `MmrModeState.mode` holds the base key. `MmrModeState.registeredMode` (`{ key, label, color, source }`) names the registered mode. Its own tool list goes through the same path as a built-in one: the edit tool follows `write`, `lockedModeExtraTools` and `ampi.tools.disable` apply, and the mode does not start when its own list resolves no active tool. The `Alt+D` toggle works on the base mode's presets and starts from the definition's `thinkingLevel`; a toggle already made for that base mode in the session wins.
+- **Resolution.** Built-in keys and aliases resolve first, exactly as before; then registered keys and labels, case-insensitively. `/mode` without arguments lists the registered modes after the built-in ones, and its completions offer their keys.
+- **Lock, status and footer.** The mode lock treats a registered mode as a mode of its own: switching from `review` to its base `high` is a switch, and the lock notice names `review`. `/ampi-status` shows `Mode: <label> (<key>)` and a `Registered mode:` line with the key, label, source and base mode. ampi-core's footer shows the registered key.
+- **Persistence.** The `ampi-core.mode-state` entry keeps the base key in `mode` and adds `registeredModeKey`, at state version 1, so an older ampi resumes such a session in the base mode. A resumed session whose registered mode is not registered any more runs in the saved base mode, with a notice naming both.
+- **Unregistered during a session.** When the active registered mode goes away, the session switches to its base mode and a notice says so.
+- **Children.** Subagent workers get the base key as `--ampi-parent-mode`; they do not load the registering extension. The live registry also records the base key.
 
 ### Fast speed
 
@@ -348,7 +390,7 @@ All diagnostic codes come from `getMmrPolicyDiagnostics(state)` so `/ampi-status
 
 ## Public API
 
-Re-exported from `ampi`. Canonical catalog: [`../../../docs/ampi-core-api.md`](../../../docs/ampi-core-api.md). Package-root re-exports: [`../../../docs/public-api.md`](../../../docs/public-api.md).
+Re-exported from `ampi`, among others the mode registry: `registerAmpiMode`, `unregisterAmpiMode`, `listAmpiModes`, `getAmpiRegisteredMode`, `resolveAmpiRegisteredMode`, `onAmpiModesChanged` and the `AMPI_EVENT_*_MODE*` event names (each also under its `Mmr*` name). Canonical catalog: [`../../../docs/ampi-core-api.md`](../../../docs/ampi-core-api.md). Package-root re-exports: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 

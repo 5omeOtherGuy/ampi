@@ -189,6 +189,30 @@ describe("ampi-gui sessions: reading", () => {
     }
   });
 
+  it("names a saved session's registered mode by its key, and reads an older entry by its mode", async () => {
+    const { createMmrGuiSessions, persistedModeName } = await load();
+    const saved = (data) => [{ type: "custom", id: "m1", customType: "ampi-core.mode-state", data }];
+    assert.equal(persistedModeName(saved({ version: 1, mode: "high", registeredModeKey: "review" })), "review");
+    assert.equal(persistedModeName(saved({ version: 1, mode: "high" })), "high");
+    assert.equal(persistedModeName([]), null);
+
+    const dir = mkdtempSync(path.join(tmpdir(), "ampi-gui-sessions-"));
+    try {
+      const file = path.join(dir, "s-review.jsonl");
+      writeFileSync(file, sessionFile("s-review").replace('"mode":"high"', '"mode":"high","registeredModeKey":"review"'));
+      const sessions = createMmrGuiSessions({
+        source: { listSessions: async () => [{ ...info("s-review", "/work/app", HOUR), path: file }] },
+        current: () => undefined,
+        threadIndex: () => undefined,
+        now: () => NOW,
+        home: "/home/someone",
+      });
+      assert.equal((await sessions.view("s-review")).session.mode, "review");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("lists every session as unarchived when the thread index cannot be read", async () => {
     const { createMmrGuiSessions } = await load();
     const sessions = createMmrGuiSessions({

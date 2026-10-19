@@ -11,7 +11,20 @@ import {
   isMmrModeKey,
   MMR_HOTKEY_MODE_KEYS,
   resolveMmrEditToolFamily,
+  withMmrEditToolFamily,
 } from "./modes.js";
+import {
+  clearMmrModes,
+  connectMmrModeRegistryEvents,
+  getMmrModeName,
+  getMmrRegisteredMode,
+  listMmrModes,
+  type MmrModeRegistryEvents,
+  type MmrRegisteredMode,
+  onMmrModesChanged,
+  resolveMmrModeName,
+  resolveMmrRegisteredMode,
+} from "./mode-registry.js";
 import { formatActivationFailure, formatZeroToolActivationFailure } from "./activation-errors.js";
 import { resolveAndApplyMmrModel } from "./model-resolver.js";
 import { shouldDropToolForFreeMode, type ToolInfoLike } from "./owned-tools.js";
@@ -34,6 +47,7 @@ import {
   getMmrManagedModelOverride,
   getMmrModeState,
   getMmrSubagentState,
+  getMmrToolRegistry,
   isMmrManagedModelUpdateActive,
   recordMmrModeEvent,
   resolveMmrFeatureGates,
@@ -64,6 +78,7 @@ import type {
   MmrModeSelectionSource,
   MmrModeState,
   MmrModelPreference,
+  MmrRegisteredModeInfo,
   MmrRejectedModeSource,
 } from "./types.js";
 
@@ -76,6 +91,10 @@ const MMR_MODE_LOCK_REASON = "the mode is fixed once a session has messages; sta
 /** Whether the session entries hold a user message (Pi's `message` entry with role `user`). */
 function hasMmrUserMessage(entries: readonly unknown[]): boolean {
   return entries.some((entry) => isRecord(entry) && entry.type === "message" && isRecord(entry.message) && entry.message.role === "user");
+}
+
+function toRegisteredModeInfo(mode: MmrRegisteredMode): MmrRegisteredModeInfo {
+  return { key: mode.key, label: mode.label, color: mode.color, source: mode.source };
 }
 
 export interface ApplyModeOptions {
@@ -92,6 +111,11 @@ export interface ApplyModeOptions {
    * cycle and picker shortcuts leave it unset and are refused while locked.
    */
   overrideModeLock?: boolean;
+  /**
+   * Run this registered mode: `modeKey` must be its base mode, whose policy
+   * applies with the registration's overrides.
+   */
+  registeredMode?: MmrRegisteredMode;
 }
 
 export interface MmrBaseline {
@@ -176,6 +200,14 @@ export interface MmrModeController {
   matchDisabledTool(name: string): string | undefined;
   /** Every registered tool `ampi.tools.disable` turns off, with the entry that matched. */
   listDisabledTools(): { tool: string; entry: string }[];
+  /** Mode registrations over the event bus, and the refused ones not reported yet. */
+  getModeRegistryEvents(): MmrModeRegistryEvents;
+  /**
+   * The session is shutting down (a reload, a session replacement or quit):
+   * stop following the mode registry and empty it. Pi runs every extension's
+   * factory again for the next session, and registrations come back then.
+   */
+  shutdown(): void;
 }
 
 export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
@@ -222,6 +254,12 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   // session has a user message. Both are re-read at every session start.
   let modeLockEnabled = true;
   let sessionHasUserMessage = false;
+  // Mode registrations sent over pi.events; listening from the factory on.
+  const modeRegistryEvents = connectMmrModeRegistryEvents(pi);
+  let stopFollowingModes: (() => void) | undefined;
+  // The context of the latest session start or mode apply, to fall back to
+  // the base mode when the active registered mode is unregistered.
+  let lastCtx: ExtensionContext | undefined;
 
   function currentModeLock(): MmrModeLock {
     return modeLockEnabled && sessionHasUserMessage
@@ -229,7 +267,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       : { enabled: modeLockEnabled, locked: false };
   }
 
-  function notifyModeLocked(ctx: ExtensionContext, mode: MmrModeKey): void {
+  function notifyModeLocked(ctx: ExtensionContext, mode: string): void {
     ctx.ui.notify(`Mode stays ${mode}: ${MMR_MODE_LOCK_REASON}. /mode <key> still switches it.`, "warning");
   }
 
@@ -316,15 +354,20 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
 
   // The mode's tools plus the settings and provider extras, less the tools
   // `ampi.tools.disable` turns off.
+  // A registered mode's own `toolNames` replace the mode's list; the edit
+  // tool family, the extras and `ampi.tools.disable` apply all the same.
   function resolveLockedModeTools(
     modeKey: MmrLockedModeKey,
     editTools: MmrEditToolFamilyDecision,
     allTools: readonly ToolInfoLike[],
     cwd: string,
+    toolNames?: readonly string[],
   ): ReturnType<typeof resolveMmrTools> {
     const availableTools = allTools.map((tool) => tool.name);
-    const baseToolNames = getMmrModeToolNames(modeKey, editTools.family);
-    const baseResolution = resolveMmrTools(modeKey, availableTools, editTools.family);
+    const baseToolNames = toolNames ? withMmrEditToolFamily(toolNames, editTools.family) : getMmrModeToolNames(modeKey, editTools.family);
+    const baseResolution = toolNames
+      ? getMmrToolRegistry().resolve(baseToolNames, availableTools)
+      : resolveMmrTools(modeKey, availableTools, editTools.family);
     const settingsExtraNames = excludeReservedSubagentNames(selectExtraToolNames(
       modeKey,
       configuredLockedModeExtraTools,
@@ -460,14 +503,20 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   async function applyMode(modeKey: MmrModeKey, ctx: ExtensionContext, options: ApplyModeOptions): Promise<MmrModeState | undefined> {
     // Refuse before anything changes, so a refused cycle also keeps a
     // session-fallback route in place.
+    // A registered mode and its base mode are different modes to the lock.
     const currentState = getMmrModeState();
-    if (!options.overrideModeLock && currentState && currentState.mode !== modeKey && currentModeLock().locked) {
-      if (options.notify) notifyModeLocked(ctx, currentState.mode);
+    const registered = modeKey === "free" ? undefined : options.registeredMode;
+    const targetName = registered?.key ?? modeKey;
+    if (!options.overrideModeLock && currentState && getMmrModeName(currentState) !== targetName && currentModeLock().locked) {
+      if (options.notify) notifyModeLocked(ctx, getMmrModeName(currentState));
       return currentState;
     }
 
+    lastCtx = ctx;
     clearMmrManagedModelOverride();
-    const mode = getMmrMode(modeKey);
+    const baseMode = getMmrMode(modeKey);
+    // Activation messages name a registered mode by its label.
+    const mode = registered ? { ...baseMode, displayName: registered.label } : baseMode;
 
     if (mode.key === "free") {
       return applyFreeMode(ctx, options);
@@ -480,19 +529,29 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     // apply (override or the mode default), force every candidate to it so the
     // active and fallback routes agree with the wire reasoning effort, and use
     // it as the mode thinking level passed to model resolution.
+    //
+    // A registered mode's thinking level is where its base mode's toggle
+    // starts; a toggle already made for that base mode in this session wins.
+    // On a base mode without a toggle (`low`) it still sets the level.
     const toggleableKey: MmrToggleableModeKey | undefined = isToggleableMmrMode(mode.key) ? mode.key : undefined;
     const toggleLevel: MmrToggleThinkingLevel | undefined = toggleableKey
-      ? (modeThinkingOverrides[toggleableKey] ?? getDefaultToggleThinkingLevel(toggleableKey))
+      ? (modeThinkingOverrides[toggleableKey] ?? registered?.thinkingLevel ?? getDefaultToggleThinkingLevel(toggleableKey))
       : undefined;
-    const effectiveThinkingLevel: ThinkingLevel | undefined = toggleLevel ?? mode.thinkingLevel;
+    const policyLevel: MmrToggleThinkingLevel | undefined = toggleLevel ?? registered?.thinkingLevel;
+    const effectiveThinkingLevel: ThinkingLevel | undefined = policyLevel ?? mode.thinkingLevel;
 
-    const configuredPreferences = configuredModelPreferences[mode.key] ?? mode.modelPreferences;
-    const modelPreferences = toggleLevel
-      ? configuredPreferences.map((preference) => ({ ...preference, thinkingLevel: toggleLevel }))
+    // A registered mode's own preferences replace the base mode's effective
+    // ones (the user's `ampiCore.modelPreferences` override included).
+    const configuredPreferences: MmrModelPreference[] = registered?.modelPreferences
+      ? [...registered.modelPreferences]
+      : (configuredModelPreferences[mode.key] ?? mode.modelPreferences);
+    const modelPreferences = policyLevel
+      ? configuredPreferences.map((preference) => ({ ...preference, thinkingLevel: policyLevel }))
       : configuredPreferences;
     const previousState = getMmrModeState();
 
     const allTools = pi.getAllTools();
+    const ownTools = registered?.tools;
     // Base resolution drives the fail-closed activation check: only the mode's
     // own allowlist may satisfy (or fail) activation. User extras are merged
     // afterward so a typo'd or missing extra can never abort, nor mask a mode
@@ -500,8 +559,10 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     // chosen, so it leaves out the provider-dependent file-editing tool. It
     // also runs before `ampi.tools.disable` applies, so turning tools off
     // never aborts a mode switch.
-    const baseResolution = resolveMmrTools(mode.key, allTools.map((tool) => tool.name));
-    if (mode.tools.length > 0 && baseResolution.activeTools.length === 0) {
+    const baseResolution = ownTools
+      ? getMmrToolRegistry().resolve(ownTools, allTools.map((tool) => tool.name))
+      : resolveMmrTools(mode.key, allTools.map((tool) => tool.name));
+    if ((ownTools ?? mode.tools).length > 0 && baseResolution.activeTools.length === 0) {
       if (options.notify) ctx.ui.notify(formatZeroToolActivationFailure(mode, baseResolution, previousState), "error");
       updateMmrStatus(ctx, previousState);
       return previousState;
@@ -537,7 +598,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // settings extras so a custom subagent can only ever enter a mode through
       // this scope-aware provider.
       const editTools = resolveMmrEditToolFamily(modelResolution.selectedProvider ?? "", configuredEditTools);
-      const toolResolution = resolveLockedModeTools(mode.key as MmrLockedModeKey, editTools, allTools, ctx.cwd);
+      const toolResolution = resolveLockedModeTools(mode.key as MmrLockedModeKey, editTools, allTools, ctx.cwd, ownTools);
       lockedModeCwd = ctx.cwd;
       pi.setActiveTools(toolResolution.activeTools);
 
@@ -555,8 +616,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // `context.registered-exceeds-profile` diagnostic stays quiet.
       const selectedModel = registeredModel ? withMmrModeContextCap(mode.key, registeredModel) : undefined;
       const basePolicy = clampPolicyToRegisteredModel(MMR_REQUEST_POLICIES[mode.key], selectedModel);
-      activePolicy = toggleableKey && toggleLevel
-        ? applyMmrThinkingLevelToPolicy(toggleableKey, basePolicy, toggleLevel)
+      activePolicy = policyLevel
+        ? applyMmrThinkingLevelToPolicy(mode.key, basePolicy, policyLevel)
         : basePolicy;
       const registeredContextWindow = typeof selectedModel?.contextWindow === "number" && Number.isFinite(selectedModel.contextWindow)
         ? selectedModel.contextWindow
@@ -578,6 +639,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         settingsFilesRead,
         settingsWarnings,
         modeLock: currentModeLock(),
+        ...(registered ? { registeredMode: toRegisteredModeInfo(registered) } : {}),
       });
       setMmrModeState(state);
       publishStateChange();
@@ -604,7 +666,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
         const modelLine = `\nResolved model: ${resolvedModel}`;
         const targetLine = `\nModel preference order: ${state.requestedModels.join(" → ") || state.targetModel || "none"}`;
         const suffix = warnings.length > 0 ? `\nWarnings:\n- ${warnings.join("\n- ")}` : "";
-        ctx.ui.notify(`MMR mode activated: ${mode.displayName} (${mode.key})${targetLine}${modelLine}${suffix}`, warnings.length > 0 ? "warning" : "info");
+        const name = registered ? `${registered.key}, based on ${mode.key}` : mode.key;
+        ctx.ui.notify(`MMR mode activated: ${mode.displayName} (${name})${targetLine}${modelLine}${suffix}`, warnings.length > 0 ? "warning" : "info");
       }
 
       return state;
@@ -636,24 +699,78 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     modeLockEnabled = loadedSettings.settings.modeLock !== false;
     sessionHasUserMessage = hasMmrUserMessage(entries);
 
+    lastCtx = ctx;
+    stopFollowingModes ??= onMmrModesChanged((event) => {
+      if (event.change === "unregistered") fallBackFromUnregisteredMode(event.key);
+      else followReplacedMode(event.key);
+    });
+
+    // Every extension has loaded by now, so registered modes resolve here. A
+    // saved registered mode that is gone leaves the saved base mode.
     const persisted = findLatestPersistedModeState(entries);
+    const savedRegistered = persisted?.registeredModeKey;
+    const savedRegisteredMissing = savedRegistered !== undefined && !getMmrRegisteredMode(savedRegistered);
     const selection = resolveMmrModeSelection({
       flagValue: readPreferredFlag(pi, "ampi-mode", "mmr-mode"),
-      persistedMode: persisted?.mode,
+      persistedMode: savedRegistered && !savedRegisteredMissing ? savedRegistered : persisted?.mode,
       settingsMode: loadedSettings.settings.defaultMode,
       defaultMode: DEFAULT_MMR_MODE,
+      resolveRegistered: (name) => {
+        const registered = resolveMmrRegisteredMode(name);
+        return registered ? { key: registered.key, baseMode: registered.baseMode } : undefined;
+      },
     });
 
     notifyWarnings(ctx, selection.warnings);
+    if (savedRegisteredMissing && selection.source === "session") {
+      ctx.ui.notify(`Mode "${savedRegistered}" is not registered any more; this session continues in its base mode ${selection.mode}.`, "warning");
+    }
     await applyMode(selection.mode, ctx, {
       source: selection.source,
       persist: selection.source === "flag",
       notify: selection.source === "flag",
       rejectedSources: selection.rejectedSources,
       overrideModeLock: true,
+      registeredMode: selection.registeredModeKey ? getMmrRegisteredMode(selection.registeredModeKey) : undefined,
     });
     // A failed apply keeps the previous session's state; give it this session's lock.
     publishModeLock();
+  }
+
+  // The active registered mode was registered again with a new definition:
+  // apply it now, so its base mode, model, thinking level, tools and label follow.
+  function followReplacedMode(key: string): void {
+    const state = getMmrModeState();
+    const registered = getMmrRegisteredMode(key);
+    const ctx = lastCtx;
+    if (!ctx || !registered || state?.registeredMode?.key !== registered.key) return;
+    void applyMode(registered.baseMode, ctx, { source: state.source, persist: true, notify: false, overrideModeLock: true, registeredMode: registered })
+      .catch(() => undefined);
+  }
+
+  // The active registered mode went away (its extension unregistered it, or
+  // was reloaded without it): run its base mode instead, and say so.
+  function fallBackFromUnregisteredMode(key: string): void {
+    const state = getMmrModeState();
+    if (!state?.registeredMode || state.registeredMode.key !== key) return;
+    const ctx = lastCtx;
+    const dropField = () => {
+      const now = getMmrModeState();
+      if (now?.registeredMode?.key !== key) return;
+      const { registeredMode: _dropped, ...rest } = now;
+      setMmrModeState(rest);
+      publishStateChange();
+    };
+    if (!ctx) {
+      dropField();
+      return;
+    }
+    void applyMode(state.mode, ctx, { source: state.source, persist: true, notify: false, overrideModeLock: true })
+      .catch(() => undefined)
+      .then(() => {
+        dropField();
+        ctx.ui.notify(`Mode "${key}" is not registered any more; this session continues in its base mode ${state.mode}.`, "warning");
+      });
   }
 
   function noteUserMessage(): void {
@@ -741,9 +858,13 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     }
   }
 
-  /** Resolve the locked mode's tools and feature gates again and apply them; `state` is the live locked state. */
+  /**
+   * Resolve the locked mode's tools and feature gates again and apply them;
+   * `state` is the live locked state. A registered mode keeps its own tool list.
+   */
   function reapplyLockedModeTools(state: MmrModeState & { mode: MmrLockedModeKey }, editTools: MmrEditToolFamilyDecision, cwd: string): void {
-    const tools = resolveLockedModeTools(state.mode, editTools, pi.getAllTools(), cwd);
+    const registered = state.registeredMode ? getMmrRegisteredMode(state.registeredMode.key) : undefined;
+    const tools = resolveLockedModeTools(state.mode, editTools, pi.getAllTools(), cwd, registered?.tools);
     pi.setActiveTools(tools.activeTools);
     setMmrModeState({
       ...state,
@@ -802,16 +923,25 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   async function selectModeFromShortcut(ctx: ExtensionContext): Promise<void> {
     if (ctx.hasUI === false) return;
 
-    const currentMode = getMmrModeState()?.mode;
+    const state = getMmrModeState();
+    const currentMode = state ? getMmrModeName(state) : undefined;
     if (currentMode && currentModeLock().locked) {
       notifyModeLocked(ctx, currentMode);
       return;
     }
     const title = currentMode ? `MMR mode (current: ${currentMode})` : "MMR mode";
-    const choice = await ctx.ui.select(title, [...MMR_HOTKEY_MODE_KEYS]);
-    if (!choice || !isMmrModeKey(choice)) return;
+    // Registered modes come after the ring modes and before `free`.
+    const choices = [
+      ...CYCLABLE_MMR_MODE_KEYS,
+      ...listMmrModes().map((mode) => mode.key),
+      ...MMR_HOTKEY_MODE_KEYS.filter((mode) => mode === "free"),
+    ];
+    const choice = await ctx.ui.select(title, choices);
+    if (!choice) return;
+    const resolved = isMmrModeKey(choice) ? { mode: choice } : resolveMmrModeName(choice);
+    if (!resolved) return;
 
-    await applyMode(choice, ctx, { source: "command", persist: true, notify: true });
+    await applyMode(resolved.mode, ctx, { source: "command", persist: true, notify: true, registeredMode: resolved.registered });
   }
 
   function getNextCycledMode(): MmrModeKey {
@@ -862,22 +992,25 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       return;
     }
     const modeKey: MmrToggleableModeKey = state.mode;
+    // A registered mode keeps running; the toggle state is its base mode's.
+    const registered = state.registeredMode ? getMmrRegisteredMode(state.registeredMode.key) : undefined;
+    const name = registered?.key ?? modeKey;
     const previous = modeThinkingOverrides[modeKey];
     const next = getOtherToggleThinkingLevel(modeKey, state.thinkingLevel);
     modeThinkingOverrides[modeKey] = next;
     // notify:false keeps the toggle quiet — no full "mode activated" banner or
     // deferred-tool warnings on every press; a concise line is emitted below.
-    const applied = await applyMode(modeKey, ctx, { source: "command", persist: true, notify: false });
+    const applied = await applyMode(modeKey, ctx, { source: "command", persist: true, notify: false, registeredMode: registered });
     if (!applied || applied.mode !== modeKey || applied.thinkingLevel !== next) {
       // Re-apply did not land the toggled level (model not applied, zero active
       // tools, etc.); roll the override back so it matches the still-active state.
       if (previous === undefined) delete modeThinkingOverrides[modeKey];
       else modeThinkingOverrides[modeKey] = previous;
-      if (ctx.hasUI !== false) ctx.ui.notify(`MMR thinking toggle failed for ${modeKey}.`, "error");
+      if (ctx.hasUI !== false) ctx.ui.notify(`MMR thinking toggle failed for ${name}.`, "error");
       return;
     }
     if (ctx.hasUI !== false) {
-      ctx.ui.notify(`MMR thinking: ${modeKey} → ${next}${formatToggleBudget(applied.effectiveMaxOutputTokens)}`, "info");
+      ctx.ui.notify(`MMR thinking: ${name} → ${next}${formatToggleBudget(applied.effectiveMaxOutputTokens)}`, "info");
     }
   }
 
@@ -937,5 +1070,15 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     matchDisabledTool: (name) =>
       toolDisableMatcher.entries.length === 0 ? undefined : matchMmrDisabledTool(toolDisableMatcher, name, pi.getAllTools()),
     listDisabledTools: () => listMmrDisabledTools(toolDisableMatcher, pi.getAllTools()),
+    getModeRegistryEvents: () => modeRegistryEvents,
+    shutdown: () => {
+      // Stop first, so emptying the registry is not taken for an
+      // unregistration during the session.
+      stopFollowingModes?.();
+      stopFollowingModes = undefined;
+      lastCtx = undefined;
+      modeRegistryEvents.dispose();
+      clearMmrModes();
+    },
   };
 }

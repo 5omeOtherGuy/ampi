@@ -34,7 +34,8 @@ function getRequestPolicyForState(state: MmrModeState) {
   // does not encode. Derive the displayed policy from the applied level so
   // the Thinking/Context lines reflect the current in-mode toggle rather than
   // the static default.
-  if (isToggleableMmrMode(state.mode) && isMmrToggleThinkingLevel(state.thinkingLevel)) {
+  // A registered mode's own thinking level reaches the policy on any base mode.
+  if ((isToggleableMmrMode(state.mode) || state.registeredMode) && isMmrToggleThinkingLevel(state.thinkingLevel)) {
     return applyMmrThinkingLevelToPolicy(state.mode, policy, state.thinkingLevel);
   }
   return policy;
@@ -78,6 +79,22 @@ export interface FormatMmrStatusOptions {
   permissions?: MmrFeatureGateDecision;
   /** The session's speed and the model it applies to; adds a `Speed:` line. */
   speed?: { speed: MmrSpeed; provider?: string; model?: string };
+  /** Mode registrations over the event bus that were refused. */
+  modeRegistryWarnings?: readonly string[];
+}
+
+function formatModeRegistryWarnings(warnings: FormatMmrStatusOptions["modeRegistryWarnings"]): string | undefined {
+  if (!warnings || warnings.length === 0) return undefined;
+  return ["Mode registration warnings:", ...warnings.map((message) => `  - ${message}`)].join("\n");
+}
+
+function formatModeLines(state: MmrModeState): string[] {
+  const registered = state.registeredMode;
+  if (!registered) return [`Mode: ${state.displayName} (${state.mode})`];
+  return [
+    `Mode: ${registered.label} (${registered.key})`,
+    `Registered mode: ${registered.key}, label ${registered.label}, from ${registered.source}, base mode ${state.mode}`,
+  ];
 }
 
 function formatPermissions(decision: MmrFeatureGateDecision | undefined): string | undefined {
@@ -312,7 +329,7 @@ function installMmrFooter(ctx: ExtensionContext, state: MmrModeState): void {
 
         let left = statsParts.join(" ");
         if (visibleWidth(left) > width) left = truncateToWidth(left, width, "...");
-        const right = sanitizeFooterText(`${formatFooterModelName(state.model || "no-model")} • ${state.mode}`);
+        const right = sanitizeFooterText(`${formatFooterModelName(state.model || "no-model")} • ${state.registeredMode?.key ?? state.mode}`);
         const leftWidth = visibleWidth(left);
         const rightWidth = visibleWidth(right);
         const minPadding = 2;
@@ -538,6 +555,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
       formatPermissions(options.permissions),
       formatSettingsFilesRead(state),
       formatSettingsWarnings(state),
+      formatModeRegistryWarnings(options.modeRegistryWarnings),
       `Policy warnings: ${formatPolicyWarnings(state)}`,
       `State version: ${state.version}`,
       `Applied at: ${state.appliedAt}`,
@@ -546,7 +564,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
   }
 
   return joinLines([
-    `Mode: ${state.displayName} (${state.mode})`,
+    ...formatModeLines(state),
     `Selected source: ${state.source}`,
     formatRejectedSources(state),
     formatModeLock(state),
@@ -573,6 +591,7 @@ export function formatMmrStatus(state: MmrModeState | undefined, options: Format
     formatPermissions(options.permissions),
     formatSettingsFilesRead(state),
     formatSettingsWarnings(state),
+    formatModeRegistryWarnings(options.modeRegistryWarnings),
     `Policy warnings: ${formatPolicyWarnings(state)}`,
     formatDiagnosticsBySeverity(state),
     `State version: ${state.version}`,

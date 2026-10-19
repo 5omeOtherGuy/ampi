@@ -11,15 +11,18 @@ Fast lookup for AMP Code-style modes, tools, optional gates, and common troubles
 | Demanding implementation/debugging | `/mode high` | GPT-5.6 Sol, extra-high reasoning, full prompt body |
 | Maximum-effort work | `/mode ultra` | GPT-5.6 Sol, Pi `xhigh` reasoning, full prompt body |
 | Stock Pi behavior | `/mode free` | Releases ampi locks and removes ampi-owned tools |
+| A mode another extension added | `/mode review` or `/mode Review` | Key or label, any case; runs as its base mode with its own overrides ([registered modes](../src/extensions/ampi-core/README.md#registered-modes)) |
 
 ```text
 /mode              # show current mode
 /mode high         # switch mode; after the first message, an explicit override of the lock
+/mode Review       # a registered mode, by key or label in any case; /mode lists registered modes after the built-in ones
 /ampi-status        # concise locked-mode status, including the mode lock
 /ampi-status debug  # model preference candidates, tool resolution, policy details
 Ctrl+S              # mode dial, until the first message: further presses or ←/→ turn low → medium → high → ultra;
-                    # Tab lists all modes (without ampi-tui: cycles directly; Ctrl+Space is a deprecated alias that only works then)
-Ctrl+Shift+S        # mode picker (Alt+M fallback), until the first message
+                    # Tab lists all modes, registered ones between ultra and free; from a registered mode Ctrl+S opens that list
+                    # (without ampi-tui: cycles directly, skipping registered modes; Ctrl+Space is a deprecated alias that only works then)
+Ctrl+Shift+S        # mode picker (Alt+M fallback), until the first message; lists registered modes after ultra
 Alt+D               # toggle the active mode's thinking preset (medium, high, ultra); Alt+R before 0.4.0
 Alt+R               # toggle fast speed (OpenAI and OpenAI Codex models; about 2x the price, 2.5x for gpt-5.5)
 ```
@@ -199,7 +202,7 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | I want to... | Run | Notes |
 | --- | --- | --- |
 | Start a session | `ampi` | Same as `pi -e npm:@skippermissions/ampi` |
-| Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`; `--mode text`, `json`, `rpc` stay Pi's output format |
+| Start in a mode | `ampi -m high` | `-m`/`--mode` become `--ampi-mode`, which also takes a registered mode's key or label; `--mode text`, `json`, `rpc` stay Pi's output format |
 | Start at fast speed | `ampi --fast` | Becomes `--ampi-fast`; also with `-x` |
 | Run one message and print the answer | `ampi -x "list the npm scripts"` | Only the final assistant message goes to stdout; exit status 0, 1 (failure) or 2 (usage error) |
 | Get the run as JSON records | `ampi -x "list files" --stream-json` | One JSON record per line, compatible with Claude Code's stream-json; a subagent's records name the tool call that started it in `parent_tool_use_id`; `--stream-json-thinking` adds thinking blocks |

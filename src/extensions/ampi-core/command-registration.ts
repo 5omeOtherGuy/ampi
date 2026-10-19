@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { runMmrConfigFlow } from "./config-flow.js";
-import { formatMmrModeList, MMR_MODE_KEYS, resolveMmrModeKey } from "./modes.js";
+import { formatMmrModeList, MMR_MODE_KEYS } from "./modes.js";
+import { getMmrModeName, listMmrModes, resolveMmrModeName } from "./mode-registry.js";
 import { getMmrModeHistory, getMmrModeState, isMmrModeLocked, resolveMmrFeatureGates } from "./runtime.js";
 import { showMmrChangelogCommand } from "./changelog.js";
 import { getMmrChromeOwner } from "./chrome-owner.js";
@@ -10,8 +11,24 @@ import type { MmrModeController } from "./mode-controller.js";
 
 const MMR_MODE_PICKER_SHORTCUTS = ["ctrl+shift+s", "alt+m"] as const;
 
+/** Built-in keys, then registered keys. */
+function listModeNames(): string[] {
+  return [...MMR_MODE_KEYS, ...listMmrModes().map((mode) => mode.key)];
+}
+
 function modeCompletions(prefix: string) {
-  return MMR_MODE_KEYS.filter((mode) => mode.startsWith(prefix)).map((mode) => ({ value: mode, label: mode }));
+  return listModeNames().filter((mode) => mode.startsWith(prefix)).map((mode) => ({ value: mode, label: mode }));
+}
+
+/** `/mode` lines for the registered modes, after the built-in ones. */
+function formatRegisteredModeList(): string {
+  const modes = listMmrModes();
+  if (modes.length === 0) return "";
+  const lines = modes.map((mode) => {
+    const label = mode.label === mode.key ? "" : ` "${mode.label}"`;
+    return `${mode.key}${label} — based on ${mode.baseMode}; from ${mode.source}${mode.description ? ` — ${mode.description}` : ""}`;
+  });
+  return `\n\nRegistered modes:\n${lines.join("\n")}`;
 }
 
 function parseMmrStatusDebugFlag(args: unknown): boolean {
@@ -40,21 +57,33 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
     handler: async (args, ctx) => {
       const requested = args.trim();
       if (!requested || requested === "list") {
-        ctx.ui.notify(`Available ampi modes:\n${formatMmrModeList()}\n\nCurrent:\n${formatMmrStatus(getMmrModeState())}`, "info");
+        ctx.ui.notify(
+          `Available ampi modes:\n${formatMmrModeList()}${formatRegisteredModeList()}\n\nCurrent:\n${formatMmrStatus(getMmrModeState())}`,
+          "info",
+        );
         return;
       }
 
-      const mode = resolveMmrModeKey(requested);
-      if (!mode) {
-        ctx.ui.notify(`Unknown ampi mode "${requested}". Available modes: ${MMR_MODE_KEYS.join(", ")}`, "error");
+      // Built-in keys and aliases first, then registered keys and labels.
+      const resolved = resolveMmrModeName(requested);
+      if (!resolved) {
+        ctx.ui.notify(`Unknown ampi mode "${requested}". Available modes: ${listModeNames().join(", ")}`, "error");
         return;
       }
+      const name = resolved.registered?.key ?? resolved.mode;
 
       // `/mode` is the explicit way to change a locked session's mode.
-      const overridesLock = isMmrModeLocked() && getMmrModeState()?.mode !== mode;
-      const state = await controller.applyMode(mode, ctx, { source: "command", persist: true, notify: true, overrideModeLock: true });
-      if (overridesLock && state?.mode === mode) {
-        ctx.ui.notify(`/mode overrode the mode lock: this session now runs in ${mode}.`, "info");
+      const current = getMmrModeState();
+      const overridesLock = isMmrModeLocked() && (current ? getMmrModeName(current) : undefined) !== name;
+      const state = await controller.applyMode(resolved.mode, ctx, {
+        source: "command",
+        persist: true,
+        notify: true,
+        overrideModeLock: true,
+        registeredMode: resolved.registered,
+      });
+      if (overridesLock && state && getMmrModeName(state) === name) {
+        ctx.ui.notify(`/mode overrode the mode lock: this session now runs in ${name}.`, "info");
       }
     },
   });
@@ -73,6 +102,7 @@ export function registerMmrCommands(pi: ExtensionAPI, controller: MmrModeControl
             disabledBySetting: controller.listDisabledTools(),
             permissions: resolveMmrFeatureGates(["ampi-permissions"])[0],
             speed: { speed: getMmrSpeed(), provider: ctx.model?.provider, model: ctx.model?.id },
+            modeRegistryWarnings: controller.getModeRegistryEvents().listWarnings(),
           }),
           "info",
         );

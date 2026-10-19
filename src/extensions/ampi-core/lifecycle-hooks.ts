@@ -5,6 +5,7 @@ import { buildPromptAssemblyObservation } from "./diagnostics.js";
 import { refuseMmrImportedSessionBash, refuseMmrImportedSessionInput } from "./imported-session.js";
 import { readPreferredEnv } from "./internal/env.js";
 import { isRecord } from "./internal/json.js";
+import { getMmrRegisteredMode } from "./mode-registry.js";
 import { assembleActiveSurface } from "./prompt-assembly.js";
 import { applyMmrRequestPolicy, buildMmrSubagentOutputPolicy } from "./request-policy.js";
 import {
@@ -101,6 +102,9 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   };
 
   pi.on("session_start", async (_event, ctx) => {
+    // Extensions that register modes over pi.events send them again now,
+    // before the mode is resolved below.
+    controller.getModeRegistryEvents().emitReady();
     captureSessionIdentity(ctx);
 
     const subagentFlag = readPreferredStringFlag(pi, "ampi-subagent", "mmr-subagent");
@@ -124,6 +128,7 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
 
     controller.captureBaseline(ctx, { force: true });
     await controller.resolveInitialMode(ctx);
+    notifyWarnings(ctx, controller.getModeRegistryEvents().takeWarnings());
     // Covers resume/reload/fork: if a restored active model came back with its
     // uncapped window, reassert the active mode's context cap. No-op when the
     // cap is already in effect or the mode does not cap (`free`).
@@ -255,8 +260,11 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
       setMmrModeState({ ...state, promptAssembly: observation });
     }
 
-    if (surface.systemPrompt === event.systemPrompt) return;
-    return { systemPrompt: surface.systemPrompt };
+    // A registered mode's own text follows ampi's assembled prompt.
+    const promptAppend = state.registeredMode ? getMmrRegisteredMode(state.registeredMode.key)?.promptAppend : undefined;
+    const systemPrompt = promptAppend ? `${surface.systemPrompt}\n\n${promptAppend}` : surface.systemPrompt;
+    if (systemPrompt === event.systemPrompt) return;
+    return { systemPrompt };
   });
 
   pi.on("tool_call", async (event) => {
@@ -309,6 +317,7 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // A tool refresh held back by a managed model update (a session fallback
     // applied at session start) runs before the turn's tools are read.
     controller.flushToolRefresh();
+    notifyWarnings(ctx, controller.getModeRegistryEvents().takeWarnings());
     // Reassert the active mode's context cap before Pi runs its pre-prompt
     // compaction check, in case a provider (re)registration (e.g. `/login`)
     // transiently re-resolved the active model to its uncapped window. Native

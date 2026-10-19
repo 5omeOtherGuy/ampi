@@ -6,13 +6,19 @@ import { getMmrCommand } from "../ampi-core/command-registry.js";
 import { getMmrGuiHost } from "../ampi-core/gui-host.js";
 import { findMmrLiveOwner, type MmrLiveEntry, type MmrLiveRegistryOptions, readMmrLiveToken } from "../ampi-core/live-registry.js";
 import { getMmrPromptQueue, removeMmrQueuedPrompt } from "../ampi-core/prompt-queue.js";
+import { getMmrModeName } from "../ampi-core/mode-registry.js";
 import { getMmrModeState } from "../ampi-core/runtime.js";
-import { findLatestPersistedModeState } from "../ampi-core/state.js";
 import { getMmrThreadIndex, type MmrThreadRecord, type MmrThreadRecordPatch } from "../ampi-core/thread-index.js";
 import { getMmrThreadReports } from "../ampi-core/thread-reports.js";
 import type { MmrGuiBridge } from "./bridge.js";
 import { MMR_GUI_LOOPBACK, mmrGuiCookieName } from "./server.js";
-import type { MmrGuiSessions } from "./sessions.js";
+import { type MmrGuiSessions, persistedModeName } from "./sessions.js";
+
+/** The live session's mode for Copy as Markdown: a registered mode by its key. */
+function liveModeName(): string | undefined {
+  const state = getMmrModeState();
+  return state ? getMmrModeName(state) : undefined;
+}
 
 /**
  * What the web GUI's composer can do to the running session. Every write
@@ -207,14 +213,14 @@ async function markdownOf(bridge: MmrGuiBridge, sessions: MmrGuiSessions, target
     const header = manager.getHeader();
     return reports.markdown([...(header ? [header] : []), ...manager.getBranch()], {
       title: manager.getSessionName(),
-      mode: getMmrModeState()?.mode,
+      mode: liveModeName(),
     });
   }
   if (target.live) return conflict("The session has ended.");
   const { header, branch } = await sessions.read(target.info);
   return reports.markdown([...(header ? [header] : []), ...branch], {
     title: target.info.name,
-    mode: findLatestPersistedModeState(branch)?.mode,
+    mode: persistedModeName(branch) ?? undefined,
   });
 }
 

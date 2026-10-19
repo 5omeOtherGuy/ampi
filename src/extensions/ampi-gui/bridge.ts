@@ -96,7 +96,10 @@ export interface MmrGuiSessionInfo {
   id: string;
   title: string;
   cwd: string;
-  /** ampi mode key, e.g. `medium`, or `null` outside a locked mode. */
+  /**
+   * ampi mode key, e.g. `medium`, a registered mode's label (its key for a
+   * session read from its file), or `null` outside a locked mode.
+   */
   mode: string | null;
   /** `provider/model`, or `null` when none is selected. */
   model: string | null;
@@ -306,7 +309,8 @@ export function createMmrGuiBridge(pi: ExtensionAPI, options: MmrGuiBridgeOption
       id: manager.getSessionId(),
       title: mmrGuiSessionTitle(manager.getSessionName(), firstItem ? [firstItem] : []),
       cwd: ctx.cwd,
-      mode: mode?.mode ?? null,
+      // A registered mode shows by its label.
+      mode: mode?.registeredMode?.label ?? mode?.mode ?? null,
       model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null,
     };
   }

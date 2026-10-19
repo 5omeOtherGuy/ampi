@@ -114,6 +114,8 @@ Mode selection precedence: `--ampi-mode` flag → restored session state → `am
 
 Model IDs above are the shipped defaults; you can override the preference list per mode and per subagent in settings.
 
+Other extensions can add modes of their own, each built on one of the four locked modes and chosen by key or label like a built-in one; see [registered modes](src/extensions/ampi-core/README.md#registered-modes).
+
 The file-editing tool follows the resolved route rather than the mode: OpenAI-family routes (`openai`, `openai-codex`, `azure`) get `apply_patch`, every other route gets Pi's `edit`, and every locked mode keeps `write`. Set `ampiCore.editTools` to `"patch"` or `"edit"` to use one family everywhere; `/ampi-status` shows which is active and why.
 
 A session keeps the mode it had when you sent its first message. From then on `Ctrl+S` (the mode dial), the mode picker and the palette leave the mode as it is: the keys say why, and the palette hides its `mode use` rows. `/mode <key>` still switches it as an explicit override, and a native Pi model or thinking change still drops to `free`. To work in another mode, start a new session; to switch at any time as before, set `"ampiCore": { "modeLock": false }`.

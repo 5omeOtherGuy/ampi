@@ -271,6 +271,20 @@ describe("ampi-gui bridge", () => {
     assert.equal(bridge.snapshot().queue, null);
   });
 
+  it("names the mode in the session info, a registered mode by its label", async () => {
+    const { setMmrModeState } = await importSource("extensions/ampi-core/runtime.ts");
+    const { bridge, ctx } = await setup();
+    bridge.start(ctx);
+    try {
+      setMmrModeState({ mode: "high" });
+      assert.equal(bridge.snapshot().session.mode, "high");
+      setMmrModeState({ mode: "high", registeredMode: { key: "review", label: "Review", color: "#d97706", source: "extension" } });
+      assert.equal(bridge.snapshot().session.mode, "Review");
+    } finally {
+      setMmrModeState(undefined);
+    }
+  });
+
   it("shows an interruption the user asked for as cancelling", async () => {
     const { bridge, ctx, fire } = await setup();
     bridge.start(ctx);
