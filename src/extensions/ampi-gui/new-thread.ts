@@ -1,5 +1,8 @@
+import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { MmrLiveEntry } from "../ampi-core/live-registry.js";
 import { checkMmrThreadLabels, MMR_THREAD_LABEL_MAX_LENGTH, MMR_THREAD_LABELS_MAX } from "../ampi-core/thread-index.js";
 import { MMR_GUI_MAX_PROMPT_LENGTH } from "./commands.js";
@@ -12,10 +15,12 @@ import { mmrGuiProjectLabel, type MmrGuiSessionRow } from "./sessions.js";
  * | Route | Answer |
  * | --- | --- |
  * | `GET /api/directories?q=` | `{ directories, typed }`: the working directories of the catalogued sessions and of the live processes, most recently used first, each `{ path, label, git, branch, lastUsed, sessions }`; `q` keeps those whose path or name holds every word of it. `typed` is the directory `q` names when it is an absolute path, `~` or `~/…`, to a directory not listed, else `null` (`~name` searches for `name`) |
- * | `POST /api/threads` | `{ prompt, cwd, mode?, labels? }` checked by {@link parseMmrGuiNewThread}; see `hub.ts` |
+ * | `POST /api/threads` | `{ prompt, cwd, mode?, labels?, worktree? }` checked by {@link parseMmrGuiNewThread}; see `hub.ts` |
  *
- * Git is read from the files, never by running `git`: the `.git` directory
- * or file of the directory or its nearest parent, and its `HEAD`.
+ * The directory list reads Git from the files, never by running `git`: the
+ * `.git` directory or file of the directory or its nearest parent, and its
+ * `HEAD`. Only New Worktree runs `git`, on an explicit create
+ * ({@link createMmrGuiWorktree}).
  */
 
 /** The most directories `GET /api/directories` lists. */
@@ -27,6 +32,8 @@ export interface MmrGuiNewThread {
   /** A mode key the worker starts in, or `null` for the mode a new session in `cwd` starts in. */
   mode: string | null;
   labels: string[];
+  /** Whether the thread starts in a new Git worktree of `cwd`'s checkout. */
+  worktree: boolean;
 }
 
 export type MmrGuiNewThreadCheck = { ok: true; value: MmrGuiNewThread } | { ok: false; status: number; body: { error: string } };
@@ -76,14 +83,15 @@ export function checkMmrGuiLabels(labels: unknown): string[] | string {
 /**
  * Check a `POST /api/threads` body: a prompt of 1 to 100,000 characters, an
  * absolute path to an existing directory, a mode `modes` lists whose models
- * are set up (or none), and labels the thread index takes. A mode that is
+ * are set up (or none), labels the thread index takes, and `worktree` as a
+ * boolean (or none). A mode that is
  * listed but has no usable model answers 409 with its reason.
  */
 export async function parseMmrGuiNewThread(
   body: unknown,
   { modes, pathKind = mmrGuiPathKind }: { modes: Pick<MmrGuiModes, "modes">; pathKind?: (file: string) => Promise<MmrGuiPathKind> },
 ): Promise<MmrGuiNewThreadCheck> {
-  const { prompt, cwd, mode, labels } = record(body);
+  const { prompt, cwd, mode, labels, worktree } = record(body);
   if (typeof prompt !== "string" || prompt.trim() === "") return invalid("Type a prompt for the new thread.");
   if (prompt.length > MMR_GUI_MAX_PROMPT_LENGTH) return invalid("The prompt is too long.");
   if (typeof cwd !== "string" || cwd === "") return invalid("Choose a directory for the new thread.");
@@ -98,7 +106,11 @@ export async function parseMmrGuiNewThread(
   }
   const checked = checkMmrGuiLabels(labels);
   if (typeof checked === "string") return invalid(checked);
-  return { ok: true, value: { prompt: prompt.trim(), cwd: path.resolve(cwd), mode: typeof mode === "string" ? mode : null, labels: checked } };
+  if (worktree !== undefined && typeof worktree !== "boolean") return invalid("worktree must be true or false.");
+  return {
+    ok: true,
+    value: { prompt: prompt.trim(), cwd: path.resolve(cwd), mode: typeof mode === "string" ? mode : null, labels: checked, worktree: worktree === true },
+  };
 }
 
 /**
@@ -185,4 +197,93 @@ export async function listMmrGuiDirectories(input: MmrGuiDirectoryInput): Promis
       ? await describe(typedPath, null, known.get(typedPath)?.ids.size ?? 0)
       : null;
   return { directories, typed };
+}
+
+/** The longest kebab-case part of a worktree's slug, before its random suffix. */
+const SLUG_WORDS_MAX = 32;
+
+/** How long `git` may take to create a worktree. */
+export const MMR_GUI_WORKTREE_TIMEOUT_MS = 30_000;
+
+/**
+ * A worktree's slug: the prompt's first words in kebab case (ASCII letters
+ * and digits, accents dropped, at most 32 characters, cut between words when
+ * one fits), `thread` when no word is left, then `-` and four hex characters.
+ */
+export function mmrGuiWorktreeSlug(prompt: string, suffix: string = randomBytes(2).toString("hex")): string {
+  const words = prompt
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/['\u2019]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  let base = "";
+  for (const word of words) {
+    const next = base === "" ? word : `${base}-${word}`;
+    if (next.length > SLUG_WORDS_MAX) {
+      if (base === "") base = word.slice(0, SLUG_WORDS_MAX);
+      break;
+    }
+    base = next;
+  }
+  return `${base || "thread"}-${suffix}`;
+}
+
+/** `child_process.execFile`'s shape as New Worktree calls it: never through a shell. */
+export type MmrGuiExecFile = (
+  file: string,
+  args: readonly string[],
+  options: { timeout: number; windowsHide: boolean },
+) => Promise<{ stdout: string; stderr: string }>;
+
+const execFileText = promisify(execFile);
+const runFile: MmrGuiExecFile = (file, args, options) => execFileText(file, [...args], { ...options, encoding: "utf8" });
+
+export type MmrGuiWorktreeResult = { ok: true; path: string; branch: string } | { ok: false; status: number; body: { error: string } };
+
+/** What `git` said on stderr: its `fatal:` and `error:` lines when it wrote any. */
+function gitMessage(error: unknown): string {
+  const failure = error as { stderr?: unknown; killed?: boolean; message?: unknown };
+  if (failure.killed) return `git did not finish within ${MMR_GUI_WORKTREE_TIMEOUT_MS / 1000} seconds.`;
+  const text = String(failure.stderr ?? "").trim();
+  const lines = text.split("\n").filter((line) => /^(fatal|error):/.test(line));
+  return (lines.length > 0 ? lines.join("\n") : text) || String(failure.message ?? "git failed.");
+}
+
+/**
+ * Create a worktree for a new thread started in `cwd`: from the checkout's
+ * current `HEAD`, on a new branch `ampi/<slug>`, at
+ * `<parent of the main checkout>/<its name>-worktrees/<slug>`. Runs `git`
+ * twice through `execFile` with fixed arguments: `rev-parse` to find the
+ * checkout (400 outside one), then `worktree add` (409 with git's message
+ * when it fails). ampi never removes the worktrees it creates.
+ */
+export async function createMmrGuiWorktree(
+  cwd: string,
+  prompt: string,
+  { run = runFile, suffix }: { run?: MmrGuiExecFile; suffix?: string } = {},
+): Promise<MmrGuiWorktreeResult> {
+  const options = { timeout: MMR_GUI_WORKTREE_TIMEOUT_MS, windowsHide: true };
+  let top: string;
+  let common: string;
+  try {
+    const { stdout } = await run("git", ["-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], options);
+    [top = "", common = ""] = stdout.split("\n").map((line) => line.trim());
+  } catch (error) {
+    if ((error as { code?: unknown }).code === "ENOENT") return { ok: false, status: 409, body: { error: "New Worktree needs git, and git is not on PATH." } };
+    return { ok: false, status: 400, body: { error: `${cwd} is not in a Git checkout, so it has no worktrees.` } };
+  }
+  if (top === "") return { ok: false, status: 400, body: { error: `${cwd} is not in a Git checkout, so it has no worktrees.` } };
+  // Worktrees of a worktree go beside the main checkout's, which owns the shared Git directory.
+  const root = path.basename(common) === ".git" ? path.dirname(common) : top;
+  const slug = mmrGuiWorktreeSlug(prompt, suffix);
+  const branch = `ampi/${slug}`;
+  const target = path.join(path.dirname(root), `${path.basename(root)}-worktrees`, slug);
+  try {
+    await run("git", ["-C", cwd, "worktree", "add", "-b", branch, "--", target, "HEAD"], options);
+  } catch (error) {
+    return { ok: false, status: 409, body: { error: gitMessage(error) } };
+  }
+  return { ok: true, path: target, branch };
 }

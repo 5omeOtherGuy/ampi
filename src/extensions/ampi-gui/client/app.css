@@ -3274,6 +3274,64 @@ details[open] > summary .chevron {
   width: min(37.5rem, 100vw - 1rem);
 }
 
+/* A Git checkout's active row: Current or New Worktree, as the mode picker's tabs look. */
+.worktree-choice {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--ampi-radius-md);
+  background: var(--ampi-accent);
+  font-size: var(--ampi-text-sm);
+}
+
+.place-option[aria-selected="true"] .worktree-choice {
+  display: inline-flex;
+}
+
+.worktree-choice-segment {
+  padding: 2px 10px;
+  border-radius: var(--ampi-radius-sm);
+  color: var(--ampi-muted-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.place-picker:not([data-worktree="true"]) [data-choice="current"],
+.place-picker[data-worktree="true"] [data-choice="worktree"] {
+  background: var(--ampi-surface-bg);
+  color: var(--ampi-fg);
+  box-shadow: 0 1px 2px light-dark(#0b0d0b1f, #00000066);
+}
+
+.worktree-choice kbd {
+  margin: 0 4px;
+}
+
+/* The directory pill's branch: New Worktree, or the branch of the worktree just created. */
+.pill .pill-detail {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--ampi-font-mono);
+}
+
+.pill .pill-detail[hidden] {
+  display: none;
+}
+
+.pill:has(.pill-detail:not([hidden])) {
+  max-width: 24rem;
+}
+
+/* The checkout's name stays readable; the branch takes the ellipsis. */
+.pill:has(.pill-detail:not([hidden])) #pill-directory-label {
+  flex: none;
+  max-width: 50%;
+}
+
 .place-picker .mode-picker-body {
   overflow-x: hidden;
 }
@@ -3312,5 +3370,23 @@ details[open] > summary .chevron {
 
   .place-picker {
     width: 100vw;
+  }
+
+  /* A Git checkout's Current | New Worktree control goes under its name instead of squeezing it. */
+  .place-option:has(.worktree-choice) {
+    flex-wrap: wrap;
+  }
+
+  .place-option:has(.worktree-choice) .mode-picker-main {
+    flex-basis: 10rem;
+  }
+
+  .worktree-choice {
+    order: 1;
+    margin-left: auto;
+  }
+
+  .pill:has(.pill-detail:not([hidden])) {
+    max-width: 100%;
   }
 }

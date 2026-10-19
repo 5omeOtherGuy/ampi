@@ -9,6 +9,10 @@
 // | `background` | Mod+Shift+Enter                          | the prompt clears, a toast links the thread |
 // | `another`    | Ctrl+Alt+Enter (⌃⌘Enter on macOS)        | a fresh composer: prompt, labels and mode reset, a toast links the thread |
 //
+// On a Git checkout, the directory picker's active row offers Current or
+// New Worktree (Tab switches); New Worktree has the hub create a worktree
+// for the thread, and the pill then shows its branch.
+//
 // POST /api/threads starts the thread (hub.ts). The helpers before
 // `mountNewThread` are pure, so tests load them in Node.
 
@@ -85,10 +89,30 @@ export function newThreadTransition(state, event) {
 }
 
 /** The `POST /api/threads` body, or the reason the composer cannot create yet. */
-export function threadRequest({ prompt, cwd, mode, labels }) {
+export function threadRequest({ prompt, cwd, mode, labels, worktree = false }) {
   if (prompt.trim() === "") return { error: "Write a prompt first." };
   if (!cwd) return { error: "Choose a directory first." };
-  return { body: { prompt, cwd, ...(mode ? { mode } : {}), labels: [...labels] } };
+  return { body: { prompt, cwd, ...(mode ? { mode } : {}), labels: [...labels], ...(worktree ? { worktree: true } : {}) } };
+}
+
+/** The directory pill's second part: New Worktree while that is chosen, the branch of the worktree just created, or nothing. */
+export function directoryPillDetail(directory) {
+  return directory?.worktree ? "New Worktree" : (directory?.createdBranch ?? "");
+}
+
+/**
+ * The composer's directory once the hub created `worktree` (`{ path, branch }`)
+ * for a thread in `from`: that worktree, named as `from` was (its folder
+ * repeats the slug the branch shows), with its branch on the pill.
+ */
+export function directoryAfterWorktree(worktree, from = null) {
+  const label = from?.label ?? worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
+  return { path: worktree.path, label, git: true, branch: worktree.branch, worktree: false, createdBranch: worktree.branch };
+}
+
+/** What a screen reader hears of a Git checkout's Current or New Worktree choice. */
+export function worktreeChoiceText(worktree) {
+  return worktree ? "New worktree; Tab for the checkout itself" : "The checkout itself; Tab for a new worktree";
 }
 
 /**
@@ -113,17 +137,29 @@ const CHECK = '<svg class="icon mode-picker-check" viewBox="0 0 16 16" aria-hidd
 /**
  * One directory row as HTML; every text in it is escaped. A typed path
  * reads `Use <path>`; a listed one its name over its path, with its Git
- * branch and how many threads ran there.
+ * branch and how many threads ran there. A Git checkout's row also holds
+ * the Current or New Worktree control, which shows while the row is active
+ * (`worktree` is the choice it starts with).
  */
-export function directoryOptionHtml(entry, index, { checked = false, typed = false } = {}) {
+export function directoryOptionHtml(entry, index, { checked = false, typed = false, worktree = false } = {}) {
   const title = typed ? `Use ${entry.path}` : entry.label;
   const branch = entry.git ? `<span class="place-branch" title="Git branch">${BRANCH}${escapeHtml(entry.branch ?? "Git")}</span>` : "";
+  const choice = entry.git
+    ? [
+        '<span class="worktree-choice" aria-hidden="true">',
+        '<span class="worktree-choice-segment" data-choice="current">Current</span>',
+        '<span class="worktree-choice-segment" data-choice="worktree">New Worktree</span>',
+        "<kbd>Tab</kbd></span>",
+        `<span class="visually-hidden worktree-choice-text">${worktreeChoiceText(worktree)}</span>`,
+      ].join("")
+    : "";
   return [
     `<div class="mode-picker-option place-option" role="option" id="place-option-${index}" data-index="${index}" aria-selected="false"${checked ? ' aria-current="true"' : ""}>`,
     `<span class="mode-picker-main"><span class="mode-picker-line"><span class="mode-picker-name">${escapeHtml(title)}</span></span>`,
     typed ? "" : `<span class="mode-picker-description">${escapeHtml(entry.path)}</span>`,
     "</span>",
     `<span class="place-meta">${branch}${typed ? "" : `<span>${threadCount(entry.sessions)}</span>`}</span>`,
+    choice,
     checked ? CHECK : "",
     "</div>",
   ].join("");
@@ -147,8 +183,11 @@ export function executorOptionHtml(hostname, index = 0) {
  * The executor and directory pickers share one popover under their pill:
  * a field, a key chip and a list. `open(anchor, view)` takes `{ label,
  * placeholder, key, load(query) → Promise<{ sections: [{ label, rows:
- * [{ html, value }] }], empty }>, choose(value) }`; typing loads again,
- * Up and Down move, Enter or a click chooses, Esc or a click outside closes.
+ * [{ html, value }] }], empty }>, choose(value), toggle?(value, on?) }`;
+ * typing loads again, Up and Down move, Enter or a click chooses, Esc or a
+ * click outside closes. Tab calls `toggle` with the active row's value; a
+ * click on a `[data-choice]` part of a row calls it with that choice
+ * (`worktree` or not) before choosing the row.
  */
 function mountPlacePicker(dialog, mac) {
   const input = dialog.querySelector(".mode-picker-input");
@@ -229,11 +268,18 @@ function mountPlacePicker(dialog, mac) {
     } else if (event.key === "Enter") {
       event.preventDefault();
       choose(active);
-    } else if (event.key === "Tab") event.preventDefault();
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      if (active >= 0) view.toggle?.(values[active]);
+    }
   });
   list.addEventListener("click", (event) => {
     const option = event.target.closest?.('[role="option"]');
-    if (option) choose(Number(option.dataset.index));
+    if (!option) return;
+    const index = Number(option.dataset.index);
+    const segment = event.target.closest?.("[data-choice]");
+    if (segment) view.toggle?.(values[index], segment.dataset.choice === "worktree");
+    choose(index);
   });
   dialog.addEventListener("click", (event) => {
     if (event.target !== dialog) return;
@@ -384,7 +430,12 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
   let hostname = "";
   /** The thread the composer was opened from: `{ id, cwd }`, or `null`. */
   let from = null;
-  /** The chosen directory: `{ path, label }`, or `null` until one is known. */
+  /**
+   * The chosen directory: `{ path, label, git?, branch?, worktree?,
+   * createdBranch? }` (`worktree`: start the thread in a new worktree of
+   * it; `createdBranch`: the composer created it as a worktree), or `null`
+   * until one is known.
+   */
   let directory = null;
   /** The chosen mode key, and the modes answer it is described by. */
   let mode = null;
@@ -406,7 +457,10 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
   function drawPills() {
     executorPill.title = `Runs on this machine${hostname ? ` (${hostname})` : ""} · ${chordLabels("ctrl+m", { mac })[0]}`;
     $("#pill-directory-label").textContent = directory?.label ?? "Choose a directory";
-    directoryPill.title = `${directory?.path ?? "No directory chosen"} · ${chordLabels("ctrl+j", { mac })[0]}`;
+    const detail = directoryPillDetail(directory);
+    $("#pill-directory-detail").hidden = detail === "";
+    $("#pill-directory-branch").textContent = detail;
+    directoryPill.title = `${directory?.path ?? "No directory chosen"}${detail ? ` · ${detail}` : ""} · ${chordLabels("ctrl+j", { mac })[0]}`;
     const row = modes?.modes.find((candidate) => candidate.key === mode);
     $("#pill-mode-label").textContent = row?.label ?? mode ?? "Mode";
     modePill.dataset.ampiMode = mode ?? "";
@@ -414,7 +468,7 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
     else modePill.style.removeProperty("--ampi-mode-tint");
     modePill.title = `Mode ${row?.label ?? mode ?? ""} · ${chordLabels("ctrl+s", { mac })[0]}`;
     modePill.setAttribute("aria-label", `Mode: ${row?.label ?? mode ?? "default"}`);
-    directoryPill.setAttribute("aria-label", `Directory: ${directory?.path ?? "none chosen"}`);
+    directoryPill.setAttribute("aria-label", `Directory: ${directory?.path ?? "none chosen"}${detail ? `, ${detail}` : ""}`);
     labelList.replaceChildren(
       ...labels.map((label) => {
         const item = document.createElement("li");
@@ -485,7 +539,7 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
 
   async function create(variant) {
     if (state.phase === "creating") return;
-    const request = threadRequest({ prompt: field.value, cwd: directory?.path, mode, labels });
+    const request = threadRequest({ prompt: field.value, cwd: directory?.path, mode, labels, worktree: directory?.worktree });
     if (request.error) {
       state = newThreadTransition(state, { type: "failed", error: request.error });
       drawSubmit();
@@ -502,10 +556,13 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
     }
     state = newThreadTransition(state, { type: "created", sessionId: result.body.sessionId });
     const { effect } = state;
+    const { worktree } = result.body;
+    if (worktree) directory = directoryAfterWorktree(worktree, directory);
     reset(effect.reset);
     if (result.body.warning) notify(result.body.warning, "warning");
     if (effect.open) return openThread(effect.open);
-    notify("Started a new thread.", "info", { label: "Open it", href: threadHref(effect.toast), open: () => openThread(effect.toast) });
+    const started = worktree ? `Started a new thread on ${worktree.branch}.` : "Started a new thread.";
+    notify(started, "info", { label: "Open it", href: threadHref(effect.toast), open: () => openThread(effect.toast) });
     field.focus();
   }
 
@@ -520,14 +577,26 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
   }
 
   function openDirectory() {
+    // Current or New Worktree, for whichever Git checkout is chosen; the dialog's attribute shows it.
+    let worktree = Boolean(directory?.worktree);
+    const showWorktree = () => {
+      pickerDialog.dataset.worktree = String(worktree);
+      for (const node of pickerDialog.querySelectorAll(".worktree-choice-text")) node.textContent = worktreeChoiceText(worktree);
+    };
+    showWorktree();
     picker.open(directoryPill, {
       label: "Directory",
       placeholder: "Find a directory, or type a path…",
       key: "ctrl+j",
+      toggle(entry, on = !worktree) {
+        if (!entry?.git) return;
+        worktree = on;
+        showWorktree();
+      },
       async load(query) {
         const answer = await directories(query);
         let index = 0;
-        const row = (entry, typed = false) => ({ html: directoryOptionHtml(entry, index++, { typed, checked: !typed && entry.path === directory?.path }), value: entry });
+        const row = (entry, typed = false) => ({ html: directoryOptionHtml(entry, index++, { typed, worktree, checked: !typed && entry.path === directory?.path }), value: entry });
         const typed = answer.typed ? [row(answer.typed, true)] : [];
         return {
           sections: [
@@ -538,7 +607,7 @@ export function mountNewThread({ root, pickerDialog, modePicker, editLabels, pos
         };
       },
       choose(entry) {
-        directory = { path: entry.path, label: entry.label };
+        directory = { path: entry.path, label: entry.label, git: entry.git, branch: entry.branch, worktree: entry.git && worktree };
         drawPills();
         field.focus();
       },
