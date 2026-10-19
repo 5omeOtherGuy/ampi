@@ -672,7 +672,19 @@ else a delegated part makes it `delegate`, else an asking part makes it ask.
 A line of several parts carries every part's decision in `parts`, so a caller
 can run each delegated part's program. The engine never runs one itself.
 `formatMmrPermissionRule` writes a rule as one line
-(`ask bash --command 'git push*'`). `setMmrPermissionsSessionAllowAll` and
+(`ask bash --command 'git push*'`), and `parseMmrPermissionRulesText` reads
+lines of that form back, one rule per line with `#` comments, reporting each
+problem as `line N: <problem>`. The two are each other's inverse: for every
+rule `findMmrPermissionRuleTextProblem` finds nothing wrong with, parsing the
+formatted line gives an equal rule (strings that read as literals are quoted,
+control characters are written as escapes in double quotes). For the others,
+such as an input field named `context`, `to` or `message` or a list of
+objects, the line is only a summary. `splitMmrPermissionWords`,
+`mmrPermissionWordsFromArgs`, `readMmrPermissionWords` and
+`parseMmrPermissionRuleWords` are the steps underneath, for words a shell has
+already split. These are ampi-core exports used by `ampi permissions`, not
+package-root exports; the text form is described in the
+[`ampi` command's README](../packages/ampi-cli/README.md#the-text-form). `setMmrPermissionsSessionAllowAll` and
 `isMmrPermissionsSessionAllowAll` hold the session-wide "allow all" answer
 on a process global. Matching rules and the defaults are described in the
 [`ampi-permissions` README](../src/extensions/ampi-permissions/README.md).

@@ -27,6 +27,7 @@ ampi threads             # list this directory's sessions
 ampi usage               # cost and tokens of the last 30 days
 ampi config keymap       # every command id with its keys, as JSONC
 ampi config edit         # open Pi's settings file in your editor
+ampi permissions list    # the permission rules, one per line
 ampi tools list -m high  # the tools a high mode session declares to the model
 ampi review              # review the uncommitted changes with the reviewer and the review checks
 ampi app --open          # every session on this machine in one web page
@@ -501,6 +502,79 @@ The output is valid JSON once the `//` comments are removed. Copy the entries yo
 `ampi config edit` opens Pi's user settings file (`settings.json` in Pi's configuration directory) in your editor; `--workspace` opens the project's `.pi/settings.json` instead (`--global` names the default). The editor is the one Pi opens the prompt in: the `externalEditor` setting, else `$VISUAL`, else `$EDITOR`, else `nano` (`notepad` on Windows). A missing settings directory is created, so the editor can save the file.
 
 Exit status: `0` on success, `1` when the keymap cannot be loaded or the editor exits with an error, `2` on a usage error. Every other `ampi config` command line, such as `ampi config` alone, runs Pi's own `config` command.
+
+## Permissions
+
+`ampi permissions` shows and changes the rules of [ampi-permissions](../../src/extensions/ampi-permissions/README.md), which sit as JSON under `ampi.permissions` in Pi's settings files, and says what a session decides about a tool call. `ampi permission` is the same command group, and `ls` is short for `list`. Every subcommand works on Pi's user settings file (`settings.json` in Pi's configuration directory) unless `--workspace` names the project's `.pi/settings.json`.
+
+```bash
+ampi permissions list                                    # the user's rules, one per line
+ampi permissions add ask bash --command 'git push*'      # put a rule first
+ampi permissions test bash --command 'git push origin main'
+ampi permissions edit                                    # the rules as text in your editor
+```
+
+### The text form
+
+Each rule is one line, the form the gate also uses in its block reasons and dialog titles:
+
+```text
+<action> <tool> [--<field> <pattern>]... [--context thread|subagent] [--to <program>] [--message <text>]
+```
+
+```text
+ask bash --command 'git push*'
+reject bash --command 'rm -rf *' --message 'Use the clean script.'
+allow bash --command '/^docker (ps|images)\b/'
+delegate bash --command 'git *' --to 'node ~/bin/approve.mjs --strict'
+allow 'mcp__*' --context subagent
+```
+
+- `<action>` is `allow`, `reject`, `ask` or `delegate`; `<tool>` is a glob over the tool name. Each `--<field> <pattern>` matches one input field with a glob, a `/regex/flags` or a literal, as in the JSON. `--a.b` names the nested field `b` of `a`, and a repeated field matches when any of its patterns does (a list in the JSON).
+- Words split as in a shell, but nothing is expanded: spaces and tabs separate words, single quotes keep everything literal, a backslash keeps the next character, and inside double quotes `\n`, `\t`, `\r`, `\\` and `\"` are escapes while any other backslash stays (`"\d+"` keeps it). `|`, `$`, `*` and `#` inside a word are ordinary characters. `--field=value` works too.
+- A bare `true`, `false`, `null` or JSON number is that value; quoted (`'42'`) it is a string.
+- A line whose first non-blank character is `#` is a comment; blank lines are skipped.
+- `context`, `to` and `message` are the rule's own options, so an input field with one of those names can only be matched in the JSON settings (`ampi config edit`).
+
+`list` prints each rule so that reading the line back gives the same rule. A rule the text form cannot write exactly (an input field named `context`, `to` or `message`, a field name with a dot or another character an option name cannot hold, a list inside a list, a list that holds objects, a list of one entry) is printed as a `#` comment holding its JSON.
+
+### list
+
+`ampi permissions list` prints the rules in the order sessions try them; `--json` prints the stored JSON list instead, `--builtin` ampi's default rules, which come after every settings file's. An invalid entry is skipped with a warning on stderr. With `--workspace` the command also says when Pi does not trust the project (sessions then do not read its rules) and which of its `allow` and `delegate` rules sessions ignore. No rules print nothing; a note on stderr says so.
+
+### test
+
+`ampi permissions test <tool> [--<field> <value>]...` builds the call's input from the options, with the same nesting, list and literal rules as the text form, and decides it as a session in this directory would, without running anything:
+
+1. `ampi.dangerouslyAllowAll: true` in the user settings allows every call; so does a gate that no setting turns on (source `off`).
+2. A `reject` rule blocks the call.
+3. A change to a guarded file asks (`edit` and `write` `path`, the paths in `apply_patch`'s `patchText`, `painter`'s `output_path`), unless `ampi.guardedFiles.allowlist` covers it.
+4. Otherwise the first matching rule decides: the project's `reject` and `ask` rules, read only when Pi trusts the project, then the user's rules, then ampi's defaults. No match allows.
+
+A shell line (`bash`, `shell_command`) is judged per simple command, and each part is printed under the line's decision. A `delegate` rule's program is not run: the decision reads `delegate to <program>`. `--context subagent` decides for a subagent child, which refuses a call that would ask. `--workspace` decides with the project's file and ampi's defaults only, as if Pi trusted the project, leaving the user's settings out. `--json` prints one object: `decision`, `source` (`project`, `user`, `default`, `guarded`, `allow-all`, `off` or `none`) and, when they apply, `rule`, `category` and `files` (guarded files), `command`, `reason`, `parts` and `subagentRefuses`. `-q` prints nothing.
+
+```bash
+ampi permissions test write --path .env --json
+# {"decision":"ask","source":"guarded","category":{"key":"env-file","description":"environment file"},"files":[...]}
+ampi permissions test bash --command 'npm test' -q && echo runs without asking
+```
+
+Exit status: `0` allow, `1` reject, `3` ask or delegate, `2` on a usage error, `4` when the ampi package cannot decide (too old, or its rules do not load). `--context`, `--to`, `--message`, `--workspace`, `--json`, `--quiet` and `--help` are the command's own, so an input field with one of those names cannot be given.
+
+### edit and add
+
+`ampi permissions edit` writes the rules in the text form, with a few comment lines at the top, to a new private temporary file and opens it in Pi's external editor, as `ampi config edit` does. When the editor exits, the rules are written back to `ampi.permissions`, keeping every other key, only when every line is valid; otherwise each problem is printed as `line N: <problem>`, nothing is written, and the edited file is kept so you can fix it and run `ampi permissions edit < <file>`. When stdin is not a terminal, the rules are read from it and no editor opens. Unchanged rules write nothing.
+
+- Text without rules removes `ampi.permissions` (and an `ampi` object left empty). That turns ampi-permissions off unless `ampi.dangerouslyAllowAll: false`, `ampi.guardedFiles.allowlist` or the other settings file keeps it on; `"permissions": []` keeps it on with ampi's defaults only.
+- Empty stdin (no text at all, not even a comment) is refused and writes nothing, since it is more likely a redirect from a missing or empty file than a wish to remove every rule; send `# no rules` to remove them from a script.
+- When the stored rules hold something the text form cannot write exactly, or the list holds an invalid entry or is not a list, `edit` does not start; change the JSON with `ampi config edit`.
+- A project's `allow` and `delegate` rules are written with a warning, because sessions ignore them.
+
+`ampi permissions add <action> <tool> [--<field> <pattern>]...` inserts one rule at the front of `ampi.permissions`, so it wins over the older ones, and prints it. Existing entries stay as they are, invalid ones included. Your shell has already removed one level of quotes, so the literal rule applies to each word as it arrives: `--count 42` matches the number, `--count '"42"'` the string. An invalid rule exits `2` and writes nothing.
+
+`edit` and `add` write through ampi's shared settings writer, which rewrites the whole settings file as formatted JSON (two-space indentation and a trailing newline): every other key and value stays, but your own spacing and line breaks in the file do not. The write is atomic, refuses a symbolic link and never overwrites a file that is not valid JSON.
+
+Running sessions keep the rules they read at start; the next session reads the change. Exit status of `list`, `edit` and `add`: `0` on success, `1` when the settings cannot be read or written or a line has a problem, `2` on a usage error.
 
 ## Tools
 

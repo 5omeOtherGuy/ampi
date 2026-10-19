@@ -42,6 +42,7 @@ The gate applies in every mode, Free included: it is your safety setting, not a 
 | Guarded file dialog | `Guarded File Modification` with the tool and each guarded path with its category; options `Allow Once`, `Always Allow This Path`, `Reject` |
 | Prompt box | Reads `Waiting for Approval` while a dialog is open; the terminal title and notification fire as for any approval (`ampi-tui`) |
 | Web GUI | Shows its approval note while a dialog is open; you answer in the terminal (`ampi-gui`) |
+| `ampi permissions` | `list`, `test`, `edit` and `add` on the command line: the rules as text, and what a session here decides about a call ([ampi-cli](../../../packages/ampi-cli/README.md#permissions)) |
 
 ## Configuration
 
@@ -94,7 +95,7 @@ Patterns:
 - `true`, `false`, numbers and `null` compare strictly.
 - A field the input does not have never matches.
 
-Rules are shown in one line, as in warnings and block reasons: `<action> <tool> --<field> <pattern>...`, for example `ask bash --command 'git push*'`.
+Rules are shown in one line, as in warnings and block reasons, for example `ask bash --command 'git push*'`. `ampi permissions` lists, edits and adds rules in that form; [its text form](../../../packages/ampi-cli/README.md#the-text-form) describes the quoting and literals.
 
 Settings are read when a session starts and again after the dialog writes them.
 
@@ -270,7 +271,7 @@ Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
 ## Developer notes
 
-- `index.ts` loads settings at `session_start`, registers the feature-gate provider and the `tool_call` gate, and runs the dialog queue; `config.ts` reads the settings files; `gate.ts` holds the dialog words and block reasons (a public-safety lint surface).
+- `index.ts` loads settings at `session_start`, registers the feature-gate provider and the `tool_call` gate, and runs the dialog queue; `decide.ts` is what the gate decides before any dialog or delegate program (allow-all, the gate being off, the rules, guarded files), which `ampi permissions test` runs too; `config.ts` reads the settings files; `gate.ts` holds the dialog words and block reasons (a public-safety lint surface).
 - `delegate.ts` resolves and runs delegate programs (timeout, output limits, process-group kill); the gate passes it an injectable timer and spawn for tests (`delegateTimer`, `delegateSpawn`, `delegateTimeoutMs`).
 - The rule engine and the defaults live in ampi-core (`permissions.ts`, `permission-defaults.ts`) so workers can evaluate rules without importing this extension. The engine never starts a process: for a shell line it reports each part's decision in `parts`, and the gate runs the programs. The session override and the project-trust answer are on process globals for the same reason; the worker runner writes them into a child's environment as `AMPI_PERMISSIONS_ALLOW_ALL=1` and `AMPI_PERMISSIONS_PROJECT_RULES=1` and removes each when its answer does not hold. Only a child reads them.
 - The gate emits `mmr-core:approval` (`phase: "request"` when a call starts waiting, `"answer"` when it is decided); `ampi-tui`'s status feed and `ampi-gui`'s bridge turn them into the `waitingApproval` phase.
