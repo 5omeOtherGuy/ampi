@@ -1,5 +1,6 @@
 import { type ClientRequest, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import type { MmrGuiHubSession, MmrGuiHubStartRequest } from "../ampi-core/gui-host.js";
+import { isMmrImportedSession, MMR_IMPORTED_SESSION_NOTICE } from "../ampi-core/imported-session.js";
 import {
   findMmrLiveOwner,
   type MmrLiveEntry,
@@ -65,6 +66,9 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *   waits at most {@link MMR_GUI_HUB_START_TIMEOUT_MS} and then answers 504
  *   without sending; the start goes on, and once the worker is ready the
  *   session is hosted, so sending again reaches it.
+ * - **imported**: `ampi threads import` wrote it (`isMmrImportedSession`),
+ *   so it is read-only wherever it is open: as elsewhere, from the file,
+ *   with 409 for `events` and every POST, and no worker is started.
  *
  * One writer per session file: the hub never starts a worker for a file
  * another live process names in the live registry (it checks just before
@@ -93,8 +97,8 @@ export interface MmrGuiHubOptions {
   clientDir: string;
   /** Starts a worker for a saved session (the hub host's `startSession`). */
   startSession(request: MmrGuiHubStartRequest): Promise<MmrGuiHubSession>;
-  /** The session list (rows with `host`), its read-only views and the catalogue. */
-  sessions: Pick<MmrGuiSessions, "list" | "view" | "find">;
+  /** The session list (rows with `host`), its read-only views, the catalogue and the saved entries. */
+  sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read">;
   /** The session server's commands; the hub serves `markdown` and `archive` from them as they are. */
   commands: MmrGuiCommands;
   /** Where the live registry is and how to probe its processes. */
@@ -150,7 +154,8 @@ type SessionState =
   | { state: "hosted"; worker: HubWorker }
   | { state: "terminal"; upstream: Upstream }
   | { state: "elsewhere"; kind: MmrLiveKind; pid: number; gui?: boolean }
-  | { state: "not-running" };
+  | { state: "not-running" }
+  | { state: "imported" };
 
 /** A failed start, answered with this status and body. */
 class StartError extends Error {
@@ -177,6 +182,7 @@ function elsewhere(kind: MmrLiveKind, pid: number, gui?: boolean) {
 /** What a request that cannot act now answers, by state. */
 function describe(state: Unhosted): Record<string, unknown> {
   if (state.state === "elsewhere") return elsewhere(state.kind, state.pid, state.gui);
+  if (state.state === "imported") return { state: "imported", error: MMR_IMPORTED_SESSION_NOTICE };
   return { state: "not-running", error: "Nothing runs this session now. Sending a message starts it." };
 }
 
@@ -422,6 +428,8 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
 
     let state = await stateOf(info.path, id);
     if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, rest, post?.raw);
+    // ampi-core refuses every prompt in an imported session, so it never gets a worker.
+    if (isMmrImportedSession((await sessions.read(info)).branch)) state = { state: "imported" };
     if (post) {
       if (state.state !== "not-running" || rest !== "send") return sendJson(res, 409, describe(state));
       const { text } = record(post.json);
@@ -439,9 +447,11 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     if (rest !== "transcript" && rest !== "session") return send(res, 404, "Not found");
     const view = await viewMmrGuiSession(sessions, id);
     if (!view) return sendJson(res, 404, { error: "No such session." });
-    // Read again: a worker may have started while the file was read.
-    state = await stateOf(info.path, id);
-    if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, rest);
+    if (state.state !== "imported") {
+      // Read again: a worker may have started while the file was read.
+      state = await stateOf(info.path, id);
+      if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, rest);
+    }
     return sendJson(res, 200, rest === "session" ? { ...view.session, state } : { ...view, state });
   }
 

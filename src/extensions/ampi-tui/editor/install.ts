@@ -102,7 +102,7 @@ export function createMmrPromptBoxInstall(
   /**
    * What the session's model usage cost so far, counting the entries whose
    * cost is known, as `thread show cost` does; `undefined` while no entry
-   * records usage.
+   * records a known cost, as in a session imported from another agent.
    */
   function sessionCost(): number | undefined {
     const entries = ctx?.sessionManager.getEntries() ?? [];
@@ -113,7 +113,8 @@ export function createMmrPromptBoxInstall(
         const usage = readMmrEntryUsage(entry);
         if (!usage) continue;
         const price = usage.provider && usage.model ? ctx?.modelRegistry.find(usage.provider, usage.model)?.cost : undefined;
-        cost = (cost ?? 0) + (mmrEntryCost(usage, price) ?? 0);
+        const entryCost = mmrEntryCost(usage, price);
+        if (entryCost !== undefined) cost = (cost ?? 0) + entryCost;
       }
       costCache = { length: entries.length, last, cost };
     }

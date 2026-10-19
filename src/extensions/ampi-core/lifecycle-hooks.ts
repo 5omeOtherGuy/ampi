@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { maybeShowMmrChangelogOnSessionStart } from "./changelog.js";
 import { buildPromptAssemblyObservation } from "./diagnostics.js";
+import { refuseMmrImportedSessionBash, refuseMmrImportedSessionInput } from "./imported-session.js";
 import { readPreferredEnv } from "./internal/env.js";
 import { isRecord } from "./internal/json.js";
 import { assembleActiveSurface } from "./prompt-assembly.js";
@@ -300,6 +301,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   });
 
   pi.on("input", async (_event, ctx) => {
+    // An imported session is read-only, whatever host sent the prompt.
+    if (refuseMmrImportedSessionInput(ctx)) return { action: "handled" };
     // The first user message fixes the session's mode.
     controller.noteUserMessage();
     // Reassert the active mode's context cap before Pi runs its pre-prompt
@@ -310,6 +313,12 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
     // profile window. No-op for `free` and when the cap is already in effect.
     await controller.reassertActiveModelInvariants(ctx);
   });
+
+  // `!` commands, RPC `bash` and compaction add entries without an input event.
+  pi.on("user_bash", (_event, ctx) => {
+    refuseMmrImportedSessionBash(ctx);
+  });
+  pi.on("session_before_compact", (_event, ctx) => (refuseMmrImportedSessionInput(ctx) ? { cancel: true } : undefined));
 
   pi.on("thinking_level_select", async (event, ctx) => {
     // Thinking changes have no source field, so the transaction guard is the only

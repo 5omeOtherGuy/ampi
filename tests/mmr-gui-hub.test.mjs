@@ -50,11 +50,13 @@ afterEach(() => {
   delete globalThis[hostKey];
 });
 
-/** A saved session file: a header, a prompt and a reply. */
-function sessionFile(id, prompt) {
+/** A saved session file: a header, a prompt and a reply; an imported one starts with the import entry. */
+function sessionFile(id, prompt, { imported = false } = {}) {
+  const importEntry = { type: "custom", id: "e0", parentId: null, timestamp: "2026-10-18T09:00:00.500Z", customType: "ampi-import", data: { agent: "claude-code", sourceId: "src-1" } };
   return [
     { type: "session", version: 3, id, timestamp: "2026-10-18T09:00:00.000Z", cwd: "/work/lib" },
-    { type: "message", id: "e1", parentId: null, timestamp: "2026-10-18T09:00:01.000Z", message: { role: "user", content: [{ type: "text", text: prompt }], timestamp: 1 } },
+    ...(imported ? [importEntry] : []),
+    { type: "message", id: "e1", parentId: imported ? "e0" : null, timestamp: "2026-10-18T09:00:01.000Z", message: { role: "user", content: [{ type: "text", text: prompt }], timestamp: 1 } },
     { type: "message", id: "e2", parentId: "e1", timestamp: "2026-10-18T09:00:02.000Z", message: { role: "assistant", content: [{ type: "text", text: "Saved reply" }], timestamp: 2, stopReason: "stop" } },
   ]
     .map((entry) => JSON.stringify(entry))
@@ -192,9 +194,9 @@ async function startHub({ upstream = {} } = {}) {
     },
     procStart: () => null,
   };
-  const infos = ["s-c", "s-held", "s-rec", "s-busy"].map((id) => {
+  const infos = ["s-c", "s-held", "s-rec", "s-busy", "s-imp"].map((id) => {
     const file = path.join(dir, `${id}.jsonl`);
-    writeFileSync(file, sessionFile(id, `Prompt of ${id}`));
+    writeFileSync(file, sessionFile(id, `Prompt of ${id}`, { imported: id === "s-imp" }));
     return { path: file, id, cwd: "/work/lib", created: new Date(NOW - 60_000), modified: new Date(NOW - 60_000), messageCount: 2, firstMessage: `Prompt of ${id}`, allMessagesText: "" };
   });
   const byId = Object.fromEntries(infos.map((info) => [info.id, info]));
@@ -639,6 +641,32 @@ describe("ampi app hub: one writer per session file", () => {
       assert.equal((await ctx.post("/s/s-held/api/interrupt", {})).status, 409);
       const transcript = (await send(ctx.port, { target: "/s/s-held/api/transcript", headers: ctx.headers() })).json();
       assert.deepEqual(transcript.state, { state: "elsewhere", kind: "tui", pid: TERMINAL_PID, gui: false }, "a terminal without the GUI");
+
+      assert.deepEqual(ctx.starts, [], "startSession was never called");
+      assert.deepEqual(readFileSync(file), bytes, "the file is unchanged");
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it("never starts a worker for an imported session, which is read-only wherever it is open", async () => {
+    const ctx = await startHub({ upstream: { "s-imp": { port: 1 } } });
+    try {
+      const file = ctx.byId["s-imp"].path;
+      const bytes = readFileSync(file);
+      const notice =
+        "This session was imported from another coding agent and is read-only. To continue the work, start a new session and mention this one with @@, or ask the agent to use find_session and read_session.";
+
+      const transcript = (await send(ctx.port, { target: "/s/s-imp/api/transcript", headers: ctx.headers() })).json();
+      assert.deepEqual(transcript.state, { state: "imported" });
+      assert.equal(transcript.items.length, 2, "the transcript comes from the file");
+      const sent = await ctx.post("/s/s-imp/api/send", { text: "carry on" });
+      assert.equal(sent.status, 409);
+      assert.deepEqual(sent.json(), { state: "imported", error: notice });
+      assert.equal((await send(ctx.port, { target: "/s/s-imp/api/events", headers: ctx.headers() })).status, 409);
+
+      ctx.hold("s-imp", TERMINAL_PID);
+      assert.deepEqual((await ctx.post("/s/s-imp/api/send", { text: "carry on" })).json().state, "imported", "open in a terminal, it is still imported");
 
       assert.deepEqual(ctx.starts, [], "startSession was never called");
       assert.deepEqual(readFileSync(file), bytes, "the file is unchanged");

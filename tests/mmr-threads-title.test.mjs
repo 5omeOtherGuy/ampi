@@ -181,6 +181,13 @@ describe("thread titles", () => {
     assert.equal(runs[0].model, "anthropic/claude-haiku-4-5");
   });
 
+  it("never titles a session imported from another agent", async () => {
+    const t = setup({ entries: [{ type: "custom", customType: "ampi-import", data: { agent: "claude-code" } }, user(REQUEST)] });
+    await t.run();
+    assert.equal(runs.length, 0);
+    assert.deepEqual(t.named, []);
+  });
+
   it("skips first prompts shorter than three words", async () => {
     const t = setup({ entries: [user("fix it")] });
     await t.run();

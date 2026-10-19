@@ -9,6 +9,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { createPiModelLookup, listPiSessions, loadThroughPi, piAgentDir, readPiSessionEntries, setPiSessionName } from "./pi-compat.js";
+import { runImportCommand } from "./import/index.js";
 import { formatThreadMarkdown } from "./thread-markdown.js";
 import {
   isThreadColor,
@@ -152,6 +153,8 @@ Commands:
                                 cyan, gray or #rrggbb; none removes it
   delete <id>                   Delete the session file after asking for confirmation
       -y, --yes                 Delete without asking
+  import detect|claude          Copy other coding agents' conversations on this machine into
+                                read-only sessions; ampi threads import --help has the options
 
   ampi last                     Open the most recent session of this directory that is not archived
   ampi usage                    Print the cost and tokens of every session of the last 30 days
@@ -445,6 +448,8 @@ export async function runThreadsCommand(argv, host) {
  */
 async function dispatch(argv, host) {
   const [command, ...rest] = argv;
+  // `threads import` has subcommands, options and help of its own.
+  if (command === "threads" && rest[0] === "import") return runImportCommand(rest.slice(1), host);
   if (rest.includes("--help") || rest.includes("-h") || rest[0] === "help") {
     host.out(formatThreadsHelp());
     return { code: 0 };

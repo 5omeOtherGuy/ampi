@@ -13,6 +13,7 @@ import {
   checkPiSkillDir,
   createPiModelLookup,
   createPiSessionServices,
+  createPiSessionWriter,
   isPiProjectTrusted,
   listPiExtensionSources,
   listPiMcpServers,
@@ -206,6 +207,31 @@ describe("Pi session calls used by the thread commands", () => {
       [["message", "m1", "custom"]],
     );
     assert.equal(readFileSync(legacyFile, "utf8"), legacy);
+  });
+
+  it("writes a new session under a given id where Pi lists it, once it has a message", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    for (const [env, folder] of [
+      [{}, path.join(agentDir, "sessions", "--work-imported--")],
+      [{ PI_CODING_AGENT_SESSION_DIR: custom }, custom],
+    ]) {
+      const writer = createPiSessionWriter(pi, { cwd: "/work/imported", env, id: "s-imported" });
+      assert.equal(writer.getSessionId(), "s-imported");
+      assert.equal(path.dirname(writer.getSessionFile()), folder);
+      writer.appendCustomEntry("probe", { kept: true });
+      writer.appendSessionInfo("Imported");
+      assert.equal(existsSync(writer.getSessionFile()), false, "no file before the first message");
+      writer.appendMessage({ role: "user", content: "Hello", timestamp: Date.parse("2026-10-01T09:00:00.000Z") });
+      const [listed] = (await listPiSessions(pi, { cwd: "/work/imported", env, scope: "workspace" })).filter((session) => session.id === "s-imported");
+      assert.deepEqual(
+        { path: listed.path, name: listed.name, modified: listed.modified.toISOString(), messageCount: listed.messageCount },
+        { path: writer.getSessionFile(), name: "Imported", modified: "2026-10-01T09:00:00.000Z", messageCount: 1 },
+      );
+      assert.deepEqual(
+        readPiSessionEntries(pi, writer.getSessionFile()).map((entry) => entry.type),
+        ["custom", "session_info", "message"],
+      );
+    }
   });
 });
 

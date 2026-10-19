@@ -69,6 +69,29 @@ export async function listPiSessions(pi, { cwd, env, scope }) {
 }
 
 /**
+ * @typedef {object} PiSessionWriter The parts of Pi's `SessionManager` that write a new session.
+ * @property {() => string} getSessionId
+ * @property {() => string} getSessionFile
+ * @property {(message: object) => string} appendMessage Appends a user, assistant or tool result message.
+ * @property {(name: string) => string} appendSessionInfo Names the session.
+ * @property {(customType: string, data: unknown) => string} appendCustomEntry
+ */
+
+/**
+ * Start a new session of `cwd` in the session directory Pi uses for it (as
+ * `listPiSessions` finds it), under `id` when one is given. Pi creates the
+ * file with the first user or assistant message and appends every entry
+ * after it; entries before it are written along with it.
+ *
+ * @param {any} pi
+ * @param {{ cwd: string, env: NodeJS.ProcessEnv, id?: string }} options
+ * @returns {PiSessionWriter}
+ */
+export function createPiSessionWriter(pi, { cwd, env, id }) {
+  return pi.SessionManager.create(cwd, piSessionDir(pi, cwd, env), id === undefined ? undefined : { id });
+}
+
+/**
  * Set a session's name (a `session_info` entry appended to its file).
  *
  * @param {any} pi
