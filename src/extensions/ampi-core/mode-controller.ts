@@ -143,6 +143,12 @@ export interface MmrModeController {
    * after a session fallback switched providers). No-op otherwise.
    */
   refreshEditTools(state: MmrModeState | undefined): void;
+  /**
+   * Resolve the locked mode's tools and feature gates again, after a tool
+   * provider's answer changed (`MMR_EVENT_TOOL_RULES_CHANGED`). Waits for a
+   * mode apply in progress to end. No-op in `free` and in subagent workers.
+   */
+  refreshModeTools(): void;
   captureBaseline(
     ctx: ExtensionContext,
     options?: { force?: boolean; model?: Parameters<ExtensionAPI["setModel"]>[0]; thinkingLevel?: ThinkingLevel },
@@ -200,6 +206,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
   let baseline: MmrBaseline | undefined;
   let activePolicy: MmrRequestPolicy | undefined;
   let applyingMmrMode = false;
+  // A tool provider asked for a refresh while a mode was being applied.
+  let toolRefreshPending = false;
   let modeCycleQueue: Promise<void> = Promise.resolve();
   let thinkingToggleQueue: Promise<void> = Promise.resolve();
   // Per-mode, session-scoped thinking-level overrides for Medium, High, and
@@ -419,6 +427,8 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       }
     } finally {
       applyingMmrMode = false;
+      // Free mode resolves no locked tools, so a refresh asked for meanwhile has nothing to do.
+      toolRefreshPending = false;
     }
 
     if (options.nativeControlOptOut) {
@@ -604,7 +614,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // If Pi ever delivers those events asynchronously, this defer is what
       // keeps the guard correct; revisit if event delivery semantics change.
       await Promise.resolve();
-      applyingMmrMode = false;
+      endApplyingMmrMode();
     }
   }
 
@@ -725,16 +735,13 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       // provider/id leaves the thinking level unchanged, so the fire-and-forget
       // `thinking_level_select` path is not exercised here.)
       await Promise.resolve();
-      applyingMmrMode = false;
+      endApplyingMmrMode();
     }
   }
 
-  function refreshEditTools(state: MmrModeState | undefined): void {
-    if (!state?.editTools || state.mode === "free" || !lockedModeCwd || getMmrSubagentState()) return;
-    const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
-    if (editTools.family === state.editTools.family && editTools.provider === state.editTools.provider) return;
-
-    const tools = resolveLockedModeTools(state.mode, editTools, pi.getAllTools(), lockedModeCwd);
+  /** Resolve the locked mode's tools and feature gates again and apply them; `state` is the live locked state. */
+  function reapplyLockedModeTools(state: MmrModeState & { mode: MmrLockedModeKey }, editTools: MmrEditToolFamilyDecision, cwd: string): void {
+    const tools = resolveLockedModeTools(state.mode, editTools, pi.getAllTools(), cwd);
     pi.setActiveTools(tools.activeTools);
     setMmrModeState({
       ...state,
@@ -745,9 +752,45 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
       deferredTools: [...tools.deferredTools],
       gatedTools: [...tools.gatedTools],
       disabledTools: [...tools.disabledTools],
-      resolution: { ...state.resolution, toolDecisions: tools.decisions.map((decision) => ({ ...decision })) },
+      resolution: {
+        ...state.resolution,
+        toolDecisions: tools.decisions.map((decision) => ({ ...decision })),
+        featureGateDecisions: resolveMmrFeatureGates(getMmrMode(state.mode).featureGates ?? []),
+      },
     });
     publishStateChange();
+  }
+
+  function refreshEditTools(state: MmrModeState | undefined): void {
+    // A refresh held back during a managed model update runs with the next
+    // state change; it covers the edit tool family too.
+    if (toolRefreshPending && !applyingMmrMode && !isMmrManagedModelUpdateActive()) {
+      refreshModeTools();
+      return;
+    }
+    if (!state?.editTools || state.mode === "free" || !lockedModeCwd || getMmrSubagentState()) return;
+    const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
+    if (editTools.family === state.editTools.family && editTools.provider === state.editTools.provider) return;
+    reapplyLockedModeTools(state as MmrModeState & { mode: MmrLockedModeKey }, editTools, lockedModeCwd);
+  }
+
+  function refreshModeTools(): void {
+    if (applyingMmrMode || isMmrManagedModelUpdateActive()) {
+      // The apply in progress may already have resolved its tools; run once it ends.
+      toolRefreshPending = true;
+      return;
+    }
+    toolRefreshPending = false;
+    const state = getMmrModeState();
+    if (!state?.editTools || state.mode === "free" || !lockedModeCwd || getMmrSubagentState()) return;
+    const editTools = resolveMmrEditToolFamily(state.provider, configuredEditTools);
+    reapplyLockedModeTools(state as MmrModeState & { mode: MmrLockedModeKey }, editTools, lockedModeCwd);
+  }
+
+  /** Clear the apply guard, then run a tool refresh that arrived during the apply. */
+  function endApplyingMmrMode(): void {
+    applyingMmrMode = false;
+    if (toolRefreshPending) refreshModeTools();
   }
 
   async function selectModeFromShortcut(ctx: ExtensionContext): Promise<void> {
@@ -851,6 +894,7 @@ export function createMmrModeController(pi: ExtensionAPI): MmrModeController {
     switchLockedModeToFreeForNativeControl,
     reassertActiveModelInvariants,
     refreshEditTools,
+    refreshModeTools,
     captureBaseline,
     selectModeFromShortcut,
     cycleModeFromShortcut,

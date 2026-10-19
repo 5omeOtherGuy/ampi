@@ -4,7 +4,7 @@
  * Collapsed, every call is one line: a status glyph and the activity title
  * from `activity.ts` ("✓ Read src/index.ts L1-120", "✗ Ran npm test (exit
  * code: 1)"). Expanded (Pi's global tool expansion, Ctrl+O), ampi draws a
- * card for shell commands, file edits, reads, searches and MCP tools: the
+ * card for shell commands, file edits, reads, searches, painter and MCP tools: the
  * command with its output, the edited path with a numbered diff, or the
  * arguments and result of a generic tool. Other tools that bring their own
  * renderers (ampi's task list, other extensions' tools) keep their own card
@@ -76,6 +76,7 @@ const OWN_CARDS = new Set([
   "find",
   "ls",
   "apply_patch",
+  "painter",
 ]);
 
 /** Tools whose expanded card starts with the `$ command` line. */
@@ -447,6 +448,31 @@ function genericArgs(args: unknown, indent: string, width: number, theme: Render
   });
 }
 
+/** painter's card: the prompt, the reference images and the saved file, or the error. Values wrap, so a long path stays whole. */
+function painterCardBody(row: Row, indent: string, width: number, failure: boolean, errorLines: () => string[]): string[] {
+  const { theme, state } = row;
+  const args = record(row.args);
+  const show = (p: string) => displayPath(p, { cwd: row.context.cwd, home: row.home });
+  const field = (name: string, value: string): string[] => {
+    const lead = `${name}: `;
+    const room = Math.max(10, width - visibleWidth(indent) - lead.length);
+    const wrapped = value.split("\n").flatMap((line) => wrapTextWithAnsi(line, room));
+    const styled = wrapped.map((line, i) => `${i === 0 ? theme.fg("muted", lead) : " ".repeat(lead.length)}${theme.fg("toolOutput", line)}`);
+    return limitedLines(styled, CARD_OUTPUT_LINES, indent, width, theme, (line) => line);
+  };
+  const lines: string[] = [];
+  const prompt = cleanText(typeof args.prompt === "string" ? args.prompt : "").trim();
+  if (prompt !== "") lines.push(...field("Prompt", prompt));
+  const references = Array.isArray(args.reference_images)
+    ? args.reference_images.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  if (references.length > 0) lines.push(...field("References", references.map((entry) => show(cleanText(entry))).join(", ")));
+  const saved = record(state.result?.details).path;
+  if (typeof saved === "string" && !failure) lines.push(...field("Saved to", show(saved)));
+  if (failure) lines.push(...errorLines());
+  return lines;
+}
+
 /** Body lines of an expanded card. */
 function renderBody(row: Row, width: number): string[] {
   const { toolName, context, theme, state } = row;
@@ -476,6 +502,8 @@ function renderBody(row: Row, width: number): string[] {
     case "find":
     case "ls":
       return failure ? errorLines() : mutedLines(outputLines);
+    case "painter":
+      return painterCardBody(row, indent, width, failure, errorLines);
     default: {
       const lines = genericArgs(row.args, indent, width, theme);
       if (outputLines.length > 0) lines.push(...(failure ? errorLines() : mutedLines(outputLines)));

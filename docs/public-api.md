@@ -558,6 +558,27 @@ their limits.
 
 ---
 
+## `ampi-painter`
+
+Image generation, off by default: `painter` makes or edits one image per
+call with an image model of the user's providers. `ampiPainter.enabled: true`
+(or `AMPI_PAINTER_ENABLE=1`) turns it on; `ampiPainter.model` picks the
+model. See [`ampi-painter`](../src/extensions/ampi-painter/README.md) for
+the model choice, where images are saved and the limits.
+
+### Re-exports from the package root
+
+| Export | Kind | Notes |
+| --- | --- | --- |
+| `createMmrPainterExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `modelRegistry` and `store` (data folder, clock, temp-file suffix) overrides. |
+| `loadMmrPainterSettings` | function | Reads `ampiPainter.*` from the settings files, then `AMPI_PAINTER_ENABLE`. |
+
+### Re-exported types
+
+`MmrPainterSettings` (`enabled`, `model`), `MmrPainterFactoryOverrides`.
+
+---
+
 ## `ampi-permissions`
 
 Approval for risky tool calls, inert until `ampi.permissions` or

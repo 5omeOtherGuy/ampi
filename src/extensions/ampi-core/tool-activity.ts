@@ -932,6 +932,17 @@ export function classifyToolCall(toolName: string, rawArgs: unknown, options: Cl
         ...(detail ? { detail, detailSeparator: " → " } : {}),
       };
     }
+    case "painter": {
+      // The prompt while the image is made; the saved file's name once it is.
+      const saved = text(details.path);
+      return {
+        kind: "tool",
+        toolName,
+        present: "Painting",
+        past: "Painted",
+        object: saved ? path.basename(saved) : firstLine(text(args.prompt) ?? ""),
+      };
+    }
     default:
       break;
   }

@@ -9,6 +9,7 @@ import { assembleActiveSurface } from "./prompt-assembly.js";
 import { applyMmrRequestPolicy, buildMmrSubagentOutputPolicy } from "./request-policy.js";
 import {
   MMR_EVENT_SESSION_IDENTITY_CHANGED,
+  MMR_EVENT_TOOL_RULES_CHANGED,
   getMmrManagedModelOverride,
   getMmrModeState,
   getMmrSessionIdentity,
@@ -359,4 +360,8 @@ export function registerMmrLifecycleHooks(pi: ExtensionAPI, controller: MmrModeC
   // A route change published outside a mode apply (a session fallback to
   // another provider) can call for the other edit tool family.
   onMmrStateChanged(pi, (state) => controller.refreshEditTools(state));
+
+  // A tool provider's answer changed after the mode was applied (ampi-painter
+  // finds its image model only after session start).
+  pi.events.on(MMR_EVENT_TOOL_RULES_CHANGED, () => controller.refreshModeTools());
 }

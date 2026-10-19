@@ -82,12 +82,12 @@ export function activityRunRecord(message: ActivityRunMessage): ActivityRunRecor
 
 /**
  * A call that keeps its own row: a subagent call, a question to the user (its
- * row shows the question and the answer), or a call whose result shows an
- * image where `images` says images can be shown, as the image is drawn below
- * the call.
+ * row shows the question and the answer), an image painter makes (its row
+ * names the saved file), or a call whose result shows an image where `images`
+ * says images can be shown, as the image is drawn below the call.
  */
 export function standsAlone(toolName: string, result: { content?: unknown } | undefined, images: boolean): boolean {
-  if (toolName === "ask_user_choice" || classifyToolCall(toolName, {}).kind === "subagent") return true;
+  if (toolName === "ask_user_choice" || toolName === "painter" || classifyToolCall(toolName, {}).kind === "subagent") return true;
   const content = result?.content;
   return images && Array.isArray(content) && content.some((block) => isRecord(block) && block.type === "image");
 }

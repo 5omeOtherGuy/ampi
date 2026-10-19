@@ -97,6 +97,15 @@ export const MMR_EVENT_SESSION_IDENTITY_CHANGED = "mmr-core:session-identity-cha
  */
 export const MMR_EVENT_APPROVAL = "mmr-core:approval";
 
+/**
+ * Pi event-bus topic a tool provider emits when its answer for a tool it
+ * claims changed after the mode was applied, for example once an
+ * asynchronous check finished. ampi-core then resolves the locked mode's
+ * tools again, so the active tool set and `/ampi-status` follow the new
+ * answer. No payload. Emit it with `notifyMmrToolRulesChanged(pi)`.
+ */
+export const MMR_EVENT_TOOL_RULES_CHANGED = "mmr-core:tool-rules-changed";
+
 export interface MmrApprovalEvent {
   phase: "request" | "answer";
   requestId: string;
@@ -243,6 +252,11 @@ export function onMmrApproval(pi: MmrEventBusHost, handler: (event: MmrApprovalE
     handler({ phase: event.phase, requestId: event.requestId });
   });
   return typeof dispose === "function" ? dispose : () => {};
+}
+
+/** Ask ampi-core to resolve the locked mode's tools again; see `MMR_EVENT_TOOL_RULES_CHANGED`. */
+export function notifyMmrToolRulesChanged(pi: { events: { emit(eventName: string, data: unknown): void } }): void {
+  pi.events.emit(MMR_EVENT_TOOL_RULES_CHANGED, undefined);
 }
 
 /**

@@ -215,6 +215,33 @@ describe("ampi-tui activity: tool calls", () => {
     assert.equal(titleText(mod, kill({ running: true })), "Stopped pid 4242, still running");
   });
 
+  it("names a painter call by its prompt while it runs and by the saved file once done", async () => {
+    const mod = await load();
+    const args = { prompt: "A red fox in the snow\nwatercolour", background: "opaque" };
+    const painting = mod.classifyToolCall("painter", args, options);
+    assert.equal(painting.kind, "tool");
+    assert.equal(titleText(mod, painting, "running"), "Painting A red fox in the snow …");
+    const saved = mod.classifyToolCall("painter", args, {
+      ...options,
+      result: {
+        content: [{ type: "text", text: "Saved the image to /x/data/ampi/painter/s1/2026-10-19T08-00-00-000Z-1.png." }],
+        details: { path: "/x/data/ampi/painter/s1/2026-10-19T08-00-00-000Z-1.png", model: "fakeimg/img-1" },
+      },
+    });
+    assert.equal(titleText(mod, saved), "Painted 2026-10-19T08-00-00-000Z-1.png");
+    const failed = mod.classifyToolCall("painter", args, {
+      ...options,
+      result: { content: [{ type: "text", text: "fakeimg/img-1 could not make the image: quota" }] },
+    });
+    assert.equal(titleText(mod, failed, "error"), "Painted A red fox in the snow …");
+    assert.equal(mod.resultStatus(true, { content: [{ type: "text", text: "The painter call was cancelled; no image was saved." }] }), "cancelled");
+    // A painter call keeps its own row, image or not, so it never folds into a group of reads.
+    const runs = await importSource("extensions/ampi-core/activity-runs.ts");
+    assert.equal(runs.standsAlone("painter", undefined, false), true);
+    assert.equal(runs.standsAlone("painter", { content: [{ type: "text", text: "Saved." }] }, false), true);
+    assert.equal(runs.standsAlone("read", undefined, false), false);
+  });
+
   it("follows a leading cd into the directory it names", async () => {
     const mod = await load();
     const read = mod.classifyToolCall("bash", { command: `cd ${CWD}/pkg && cat a.ts` }, options);

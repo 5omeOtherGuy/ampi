@@ -140,6 +140,39 @@
    src/new-file.ts +2
    1 +  export const created = true;
    2 +  export default created;
+=== painter running · collapsed ===
+
+ ⠋ Painting A lighthouse icon, flat style …
+=== painter running · expanded ===
+
+ ⠋ Painting A lighthouse icon, flat style …
+=== painter saved · collapsed ===
+
+ ✓ Painted icon.png
+=== painter saved · expanded ===
+
+ ✓ Painted icon.png
+   Prompt: Turn the sketch into a clean app icon: a lighthouse on a rock, flat
+           colours, a thick outline and a soft shadow under the rock
+   References: design/sketch.png, ~/Pictures/palette.jpg
+   Saved to: assets/icon.png
+=== painter saved to the agent directory · collapsed ===
+
+ ✓ Painted 2026-10-19T00-51-13-427Z-1.png
+=== painter saved to the agent directory · expanded ===
+
+ ✓ Painted 2026-10-19T00-51-13-427Z-1.png
+   Prompt: A lighthouse icon
+   Saved to: ~/.pi/agent/data/ampi/painter/01a151a3-83c9-746d-977c-e8f99643562b/
+             2026-10-19T00-51-13-427Z-1.png
+=== painter error · collapsed ===
+
+ ✗ Painted A lighthouse icon
+=== painter error · expanded ===
+
+ ✗ Painted A lighthouse icon
+   Prompt: A lighthouse icon
+   fakeimg/img-1 could not make the image: the request was refused
 === mcp tool · collapsed ===
 
  ✓ Ran docs/search · tool rendering
