@@ -222,6 +222,10 @@ function eventKey(event) {
   }
   if (EVENT_KEYS[event.key]) return EVENT_KEYS[event.key];
   if (/^F([1-9]|1[0-2])$/.test(event.key)) return event.key.toLowerCase();
+  // On a non-Latin layout Ctrl+B types a local letter; the binding names the Latin one at that position.
+  if ((event.ctrlKey || event.metaKey) && /^\p{L}$/u.test(event.key) && !/^[a-z]$/i.test(event.key) && /^Key[A-Z]$/.test(event.code ?? "")) {
+    return event.code.slice(3).toLowerCase();
+  }
   if ([...event.key].length === 1) return event.key.toLowerCase();
   return null;
 }
@@ -235,10 +239,9 @@ export function eventChord(event, { mac = false } = {}) {
   if (!event?.key || event.isComposing || NOT_KEYS.has(event.key)) return null;
   const key = eventKey(event);
   if (!key) return null;
-  return comboId(
-    { key, ctrl: Boolean(event.ctrlKey), alt: Boolean(event.altKey), shift: Boolean(event.shiftKey), meta: Boolean(event.metaKey), mod: false },
-    mac,
-  );
+  // A symbol key is already the symbol Shift typed, on this layout: `/` is Shift+7 on a German keyboard and stays `/`.
+  const shift = Boolean(event.shiftKey) && (isLetter(key) || isNamed(key));
+  return comboId({ key, ctrl: Boolean(event.ctrlKey), alt: Boolean(event.altKey), shift, meta: Boolean(event.metaKey), mod: false }, mac);
 }
 
 /** Whether a canonical combo holds Ctrl, Alt or Meta: only those fire while a field has focus. */
@@ -311,7 +314,9 @@ export function findConflicts(commands, { mac = false, overrides = {} } = {}) {
  *
  * `state.contexts` lists the contexts that listen, most specific first
  * (default `["global"]`). A wrong key after a plain first key (`g`, `esc`)
- * counts as a new press.
+ * counts as a new press. The key after `ctrl+g` completes or is swallowed
+ * also in a field. A held key's repeats neither start nor complete a
+ * sequence.
  */
 export function createKeyDispatcher({ commands, mac = false, now = () => Date.now(), windowMs = SEQUENCE_MS, overrides = {} }) {
   let pending = null;
@@ -351,23 +356,25 @@ export function createKeyDispatcher({ commands, mac = false, now = () => Date.no
       }
       const combo = eventChord(event, { mac });
       if (!combo) return null;
-      if (inTextField(event.target) && !hasCommandModifier(combo) && combo !== "esc") {
-        pending = null;
-        return null;
-      }
+      const typed = inTextField(event.target) && !hasCommandModifier(combo) && combo !== "esc";
+      if (event.repeat && pending?.prefix === combo) return hasCommandModifier(combo) ? { kind: "swallow" } : null;
       const list = bindings(state.contexts ?? ["global"]);
       const at = now();
-      if (pending) {
+      if (pending && !event.repeat) {
         const { prefix, since } = pending;
         pending = null;
-        if (at - since <= windowMs) {
+        if (at - since <= windowMs && (!typed || hasCommandModifier(prefix))) {
           const second = exact(list, `${prefix} ${combo}`, state);
           if (second?.kind === "run") return second;
           if (hasCommandModifier(prefix)) return second ?? { kind: "swallow" };
         }
       }
+      if (typed) {
+        pending = null;
+        return null;
+      }
       const result = exact(list, combo, state);
-      if (result?.kind === "run") return result;
+      if (result?.kind === "run" || event.repeat) return result;
       const waiting = list.filter((binding) => binding.id.startsWith(`${combo} `) && availabilityOf(binding.command, state).state === "available");
       if (waiting.length > 0) {
         pending = { prefix: combo, since: at };

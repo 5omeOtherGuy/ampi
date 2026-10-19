@@ -65,6 +65,23 @@ describe("ampi-gui keys: chords", () => {
     assert.equal(chordId("G"), "shift+g", "a lone capital letter means shift");
   });
 
+  it("takes a symbol as typed on a layout where it needs Shift, without shifting it again", async () => {
+    const { eventChord } = await keys();
+    // German and French keyboards type / with Shift on another key, and = with Shift+0.
+    assert.equal(eventChord(press("/", { shiftKey: true, code: "Digit7" })), "/");
+    assert.equal(eventChord(press("/", { shiftKey: true, code: "Period" })), "/");
+    assert.equal(eventChord(press("=", { shiftKey: true, code: "Digit0" })), "=");
+    assert.equal(eventChord(press("?", { shiftKey: true, code: "Minus" })), "?");
+  });
+
+  it("names a Ctrl or ⌘ letter by its Latin key on a non-Latin layout", async () => {
+    const { eventChord } = await keys();
+    assert.equal(eventChord(press("и", { ctrlKey: true, code: "KeyB" })), "ctrl+b");
+    assert.equal(eventChord(press("У", { ctrlKey: true, shiftKey: true, code: "KeyE" })), "ctrl+shift+e");
+    assert.equal(eventChord(press("β", { metaKey: true, code: "KeyB" }), { mac: true }), "meta+b");
+    assert.equal(eventChord(press("и", { code: "KeyB" })), "и", "without Ctrl or ⌘ the letter is what it types");
+  });
+
   it("ignores dead keys, bare modifiers and input methods", async () => {
     const { eventChord } = await keys();
     assert.equal(eventChord(press("Dead", { code: "Quote" })), null);
@@ -139,6 +156,35 @@ describe("ampi-gui keys: dispatcher", () => {
     assert.equal(dispatcher.handle(press("Shift", { shiftKey: true })), null, "a bare modifier neither runs nor breaks a sequence");
   });
 
+  it("finds the sidebar search with / and the keymap with ? on any layout", async () => {
+    const { createKeyDispatcher } = await keys();
+    const { createCommandRegistry, DEFAULT_COMMANDS } = await commandsModule();
+    const registry = createCommandRegistry(DEFAULT_COMMANDS);
+    const dispatcher = createKeyDispatcher({ commands: () => registry.list(), now: () => 0 });
+    assert.equal(dispatcher.handle(press("/", { shiftKey: true, code: "Digit7" })).command.id, "focus-sidebar-filter", "German Shift+7");
+    assert.equal(dispatcher.handle(press("/", { code: "Slash" })).command.id, "focus-sidebar-filter", "US /");
+    assert.equal(dispatcher.handle(press("?", { shiftKey: true, code: "Slash" })).command.id, "show-keymap", "US Shift+/");
+  });
+
+  it("lets a held key repeat single keys but never start or finish a sequence", async () => {
+    const { createKeyDispatcher } = await keys();
+    const home = command("go-home", ["g g"]);
+    const interrupt = command("thread.interrupt", ["esc esc"]);
+    const down = command("sidebar-down", ["j"]);
+    const pr = command("open-pr", ["ctrl+g p"]);
+    const dispatcher = createKeyDispatcher({ commands: () => [home, interrupt, down, pr], now: () => 0 });
+    assert.equal(dispatcher.handle(press("g")).kind, "pending");
+    assert.equal(dispatcher.handle(press("g", { repeat: true })), null, "holding g does not go home");
+    assert.equal(dispatcher.handle(press("g", { repeat: true })), null);
+    assert.equal(dispatcher.handle(press("g")).command, home, "a second press after the hold still does");
+    assert.equal(dispatcher.handle(press("Escape")).kind, "pending");
+    assert.equal(dispatcher.handle(press("Escape", { repeat: true })), null, "holding Esc does not interrupt");
+    assert.equal(dispatcher.handle(press("j", { repeat: true })).command, down, "a held j keeps moving");
+    assert.equal(dispatcher.handle(press("g", { ctrlKey: true })).kind, "pending");
+    assert.deepEqual(dispatcher.handle(press("g", { ctrlKey: true, repeat: true })), { kind: "swallow" }, "a held Ctrl+G stays off the browser");
+    assert.equal(dispatcher.handle(press("p")).command, pr);
+  });
+
   it("fires only Ctrl, Alt or Meta chords and Esc while a field has focus", async () => {
     const { createKeyDispatcher } = await keys();
     const list = [command("sidebar-down", ["j"]), command("focus-prompt", ["ctrl+shift+a"]), command("show-keymap", ["?", "alt+shift+/"]), command("thread.interrupt", ["esc esc"])];
@@ -150,6 +196,19 @@ describe("ampi-gui keys: dispatcher", () => {
     assert.equal(dispatcher.handle(press("Escape", { field: true })).kind, "pending");
     assert.equal(dispatcher.handle(press("Escape", { field: true })).command.id, "thread.interrupt", "Esc Esc interrupts from the composer");
     assert.equal(dispatcher.handle(press("j")).command.id, "sidebar-down", "outside a field the letter is a key");
+  });
+
+  it("finishes or swallows the key after Ctrl+G also in a field", async () => {
+    const { createKeyDispatcher } = await keys();
+    const list = [command("open-pr", ["ctrl+g p"]), command("go-home", ["g g"])];
+    const dispatcher = createKeyDispatcher({ commands: () => list, now: () => 0 });
+    assert.equal(dispatcher.handle(press("g", { field: true, ctrlKey: true })).kind, "pending");
+    assert.equal(dispatcher.handle(press("p", { field: true })).command.id, "open-pr");
+    dispatcher.handle(press("g", { field: true, ctrlKey: true }));
+    assert.deepEqual(dispatcher.handle(press("x", { field: true })), { kind: "swallow" }, "a wrong key is not typed");
+    assert.equal(dispatcher.handle(press("p", { field: true })), null, "after that p types again");
+    dispatcher.handle(press("g"));
+    assert.equal(dispatcher.handle(press("g", { field: true })), null, "a plain sequence does not finish in a field");
   });
 
   it("leaves a key another handler took, and forgets the sequence", async () => {
