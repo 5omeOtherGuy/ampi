@@ -137,7 +137,8 @@ describe("ampi-gui palette: sections", () => {
     const sections = paletteSections(DEFAULT_COMMANDS, sessionState(), "");
     const byName = Object.fromEntries(sections.map((section) => [section.section, section.rows.map((row) => row.title)]));
     assert.deepEqual(Object.keys(byName), ["Global", "Thread", "Thread Panes", "Navigation"]);
-    assert.deepEqual(byName.Global.slice(0, 7), [
+    assert.deepEqual(byName.Global.slice(0, 8), [
+      "New Thread…",
       "Search Threads…",
       "Switch Thread…",
       "Open Activity",
@@ -188,12 +189,16 @@ describe("ampi-gui palette: sections", () => {
   });
 
   it("offers to send the text as a message only when no command matches it well", async () => {
-    const { paletteSections, SEND_TITLE } = await palette();
+    const { paletteSections, SEND_TITLE, NEW_THREAD_TITLE } = await palette();
     const { DEFAULT_COMMANDS } = await commandsModule();
     const prose = paletteSections(DEFAULT_COMMANDS, sessionState(), "please fix the parser");
     assert.deepEqual(prose[0], {
       section: "Message",
-      rows: [{ kind: "message", id: "send-message", title: SEND_TITLE, text: "please fix the parser", state: "available" }],
+      rows: [
+        { kind: "message", id: "send-message", title: SEND_TITLE, text: "please fix the parser", state: "available" },
+        // A terminal's own page: starting a thread needs ampi app.
+        { kind: "new-thread", id: "new-thread-message", title: NEW_THREAD_TITLE, text: "please fix the parser", state: "unavailable", reason: "Needs ampi app" },
+      ],
     });
     assert.equal(prose.length, 1);
 

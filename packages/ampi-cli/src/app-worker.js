@@ -10,7 +10,9 @@
 // processes can read.
 //
 // parent → worker
-//   { type: "start", token, session: { path } | { cwd } }  open a saved session, or start one in cwd
+//   { type: "start", token, session: { path } | { cwd }, mode? }
+//                                                           open a saved session, or start one in cwd; a
+//                                                           mode key starts it in that mode, as `ampi -m`
 //   { type: "stop" }                                        dispose the session and exit 0
 // worker → parent
 //   { type: "ready", pid, port, sessionId, sessionPath }    the GUI listens on 127.0.0.1:<port>
@@ -156,15 +158,17 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
  * The target of a start message, or undefined when it is malformed.
  *
  * @param {Record<string, any>} message
- * @returns {{ token: string, path?: string, cwd?: string } | undefined}
+ * @returns {{ token: string, path?: string, cwd?: string, mode?: string } | undefined}
  */
 function parseStart(message) {
-  const { token, session } = message;
+  const { token, session, mode } = message;
   if (typeof token !== "string" || token === "" || !isObject(session)) return undefined;
+  if (mode !== undefined && (typeof mode !== "string" || mode === "")) return undefined;
   const hasPath = typeof session.path === "string" && session.path !== "";
   const hasCwd = typeof session.cwd === "string" && session.cwd !== "";
   if (hasPath === hasCwd) return undefined;
-  return hasPath ? { token, path: path.resolve(session.path) } : { token, cwd: path.resolve(session.cwd) };
+  const target = hasPath ? { token, path: path.resolve(session.path) } : { token, cwd: path.resolve(session.cwd) };
+  return mode === undefined ? target : { ...target, mode };
 }
 
 /**
@@ -242,7 +246,9 @@ export async function runAppWorker(options) {
   /** @param {Record<string, any>} message @returns {Promise<number>} */
   async function serve(message) {
     const start = parseStart(message);
-    if (start === undefined) return await fail("bad-start", "The start message needs a token and either session.path or session.cwd.");
+    if (start === undefined) {
+      return await fail("bad-start", "The start message needs a token and either session.path or session.cwd, and a mode, if any, as a key.");
+    }
 
     /** @type {any} */
     let sessionManager;
@@ -283,7 +289,9 @@ export async function runAppWorker(options) {
     });
     // ampi's extensions read settings relative to the working directory.
     chdir(cwd);
-    runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: createAmpiAppUIContext(), connectMcp: true, pi });
+    // A mode is applied as the `--ampi-mode` flag, so the session starts in it before its first message.
+    const ampiMode = start.mode === undefined ? {} : { ampiMode: start.mode };
+    runtime = await createSession({ cwd, sessionManager, mode: "rpc", uiContext: createAmpiAppUIContext(), connectMcp: true, pi, ...ampiMode });
     if (port === undefined) {
       /** @type {string[]} */
       const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);

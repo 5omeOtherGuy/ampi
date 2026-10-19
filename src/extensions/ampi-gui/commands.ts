@@ -148,7 +148,7 @@ export function readMmrGuiGitBranch(cwd: string): Promise<string | null> {
 }
 
 /** POST a command to another process's GUI server with its token, as the hub forwards requests. */
-function postToMmrGui(port: number, token: string, route: string, body: unknown): Promise<MmrGuiCommandResult> {
+export function postToMmrGui(port: number, token: string, route: string, body: unknown): Promise<MmrGuiCommandResult> {
   const payload = Buffer.from(JSON.stringify(body));
   return new Promise((resolve) => {
     const gone = () => resolve({ status: 502, body: { error: "The process that has this session open did not answer." } });

@@ -1,6 +1,6 @@
-// The mode picker: a popover under the title bar's mode button (and, later,
-// the new-thread composer's mode pill) that lists ampi's modes and Pi's
-// models. A search field filters the list; Tab switches between the Modes
+// The mode picker: a popover under the title bar's mode button (and the
+// new-thread composer's mode pill, which lists the modes only) that lists
+// ampi's modes and Pi's models. A search field filters the list; Tab switches between the Modes
 // and Models tabs; Up and Down move, Enter chooses, Esc closes. It reads
 // GET /api/modes each time it opens and changes the session through
 // POST /api/mode, /api/model and /api/fast (modes.ts on the server).
@@ -152,6 +152,9 @@ export function mountModePicker({ dialog, notify, mac = false }) {
   const noticeText = dialog.querySelector(".mode-picker-notice-text");
   const overrideButton = dialog.querySelector(".mode-picker-override");
   const tabs = [...dialog.querySelectorAll('[role="tab"]')];
+  const tabList = dialog.querySelector(".mode-picker-tabs");
+  /** The new-thread composer chooses a mode only: no Models tab. */
+  let modesOnly = false;
   dialog.querySelector(".mode-picker-key").textContent = chordLabels("ctrl+s", { mac }).join(" ");
 
   let source = null;
@@ -336,7 +339,7 @@ export function mountModePicker({ dialog, notify, mac = false }) {
     if (event.isComposing) return;
     if (event.key === "Tab" && event.target === input) {
       event.preventDefault();
-      switchTab(PICKER_TABS[(PICKER_TABS.indexOf(tab) + 1) % PICKER_TABS.length]);
+      if (!modesOnly) switchTab(PICKER_TABS[(PICKER_TABS.indexOf(tab) + 1) % PICKER_TABS.length]);
     } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && event.target === input) {
       event.preventDefault();
       if (rows.length > 0) setActive(Math.max(0, Math.min(rows.length - 1, active + (event.key === "ArrowDown" ? 1 : -1))));
@@ -386,13 +389,15 @@ export function mountModePicker({ dialog, notify, mac = false }) {
   });
 
   return {
-    /** Open under `anchor` on `initialTab`, reading and changing the modes through `next`; open already, close it. */
-    open(at, next, { initialTab = "modes" } = {}) {
+    /** Open under `at` on `initialTab` (the Modes tab alone with `only: "modes"`), reading and changing the modes through `next`; open already, close it. */
+    open(at, next, { initialTab = "modes", only = null } = {}) {
       if (dialog.open) return close();
       returnFocus = document.activeElement;
       anchor = at;
       source = next;
-      tab = initialTab;
+      modesOnly = only === "modes";
+      tabList.hidden = modesOnly;
+      tab = modesOnly ? "modes" : initialTab;
       override = false;
       pointer = null;
       input.value = "";

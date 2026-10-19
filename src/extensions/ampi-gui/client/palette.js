@@ -3,17 +3,18 @@
 // commands with fuzzy.js; Up and Down move, Enter runs, Esc closes and focus
 // goes back where it was. A command that cannot run now is listed dimmed
 // with its reason. Text that matches no command well is offered as a
-// message to the session shown. Switch Thread (Mod+P) uses the same card to
+// message to the session shown, and as the prompt of a new thread. Switch Thread (Mod+P) uses the same card to
 // pick another session. The helpers before `mountPalette` are pure, so
 // tests load them in Node.
 
-import { listedSessions, PALETTE_SECTIONS } from "./commands.js";
+import { listedSessions, NEEDS_APP, PALETTE_SECTIONS } from "./commands.js";
 import { fuzzyRank, GOOD_MATCH } from "./fuzzy.js";
 import { availabilityOf, chordId, chordLabels, eventChord, keysOf } from "./keys.js";
 import { relativeTime } from "./sidebar.js";
 
-/** The fallback row's title. */
+/** The fallback rows' titles. */
 export const SEND_TITLE = "Send as a message to this thread";
+export const NEW_THREAD_TITLE = "Start a new thread with this text";
 
 /** How the palette lists `command`: `{ title, section }`, or `null` when it leaves it out. */
 export function paletteEntry(command) {
@@ -39,8 +40,10 @@ function sendBlocked(state) {
  * its commands in registration order. With a query, the matching commands
  * form one Commands section ranked across every section: the ones that can
  * run first, each part best match first. When no command matches well (see
- * GOOD_MATCH), a Message section with the row `{ kind: "message", title,
- * text, state, reason? }` comes before it.
+ * GOOD_MATCH), a Message section comes before it with two rows: `{ kind:
+ * "message", title, text, state, reason? }`, which sends the text to the
+ * session shown, and `{ kind: "new-thread", … }`, which opens the
+ * new-thread composer with it (`ampi app` only).
  */
 export function paletteSections(commands, state, query = "", { mac = false } = {}) {
   const rows = [];
@@ -75,7 +78,8 @@ export function paletteSections(commands, state, query = "", { mac = false } = {
   if (!ranked.some((match) => match.quality >= GOOD_MATCH)) {
     const reason = sendBlocked(state);
     const row = { kind: "message", id: "send-message", title: SEND_TITLE, text, state: reason ? "unavailable" : "available", ...(reason ? { reason } : {}) };
-    sections.unshift({ section: "Message", rows: [row] });
+    const start = { kind: "new-thread", id: "new-thread-message", title: NEW_THREAD_TITLE, text, state: state.app ? "available" : "unavailable", ...(state.app ? {} : { reason: NEEDS_APP }) };
+    sections.unshift({ section: "Message", rows: [row, start] });
   }
   return sections;
 }
@@ -121,9 +125,9 @@ function element(tag, className, text) {
  * Wire the palette. `commands()` lists the registry; `state()` is what the
  * commands' `when` and `run` read, taken when the palette opens;
  * `openSession(id)` shows a session; `send(text)` sends a message to the
- * session shown.
+ * session shown; `startThread(text)` opens the new-thread composer with it.
  */
-export function mountPalette({ dialog, commands, state, openSession, send, mac = false, now = () => Date.now() }) {
+export function mountPalette({ dialog, commands, state, openSession, send, startThread, mac = false, now = () => Date.now() }) {
   const input = dialog.querySelector(".palette-input");
   const list = dialog.querySelector(".palette-list");
   const empty = dialog.querySelector(".palette-empty");
@@ -157,7 +161,7 @@ export function mountPalette({ dialog, commands, state, openSession, send, mac =
     if (row.state !== "available") option.setAttribute("aria-disabled", "true");
     const label = element("span", "palette-label");
     label.append(element("span", "palette-title", row.title));
-    const note = row.reason ?? (row.kind === "message" ? row.text : row.description);
+    const note = row.reason ?? (row.kind === "message" || row.kind === "new-thread" ? row.text : row.description);
     if (note) label.append(element("span", "palette-description", note));
     option.append(label);
     if (row.chips?.length) {
@@ -214,6 +218,7 @@ export function mountPalette({ dialog, commands, state, openSession, send, mac =
     close();
     if (row.kind === "session") openSession(row.id);
     else if (row.kind === "message") send(row.text);
+    else if (row.kind === "new-thread") startThread(row.text);
     else commands().find((command) => command.id === row.id)?.run(at, { chord: null });
   }
 

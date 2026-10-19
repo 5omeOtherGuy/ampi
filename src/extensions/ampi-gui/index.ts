@@ -6,6 +6,8 @@ import { type ExtensionAPI, type ExtensionContext, SessionManager } from "@earen
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
 import { getMmrGuiHost, type MmrGuiSessionHost } from "../ampi-core/gui-host.js";
 import { flushMmrLiveEntry, readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
+import { getMmrModeName } from "../ampi-core/mode-registry.js";
+import { getMmrModeState } from "../ampi-core/runtime.js";
 import { listMmrSessionsInScope } from "../ampi-core/session-catalog.js";
 import { createMmrGuiBridge } from "./bridge.js";
 import { createMmrGuiCommands, createMmrGuiExporter } from "./commands.js";
@@ -96,8 +98,12 @@ export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
             sessions,
             commands,
             exportSession,
-            // The app's own session lends its model registry and settings to the new-thread view.
-            modes: () => describeMmrGuiModes(ctx, { live: false }),
+            // The app's own session lends its model registry and settings to the new-thread view,
+            // and its mode, which the user's settings chose, is the one a new thread starts in.
+            modes: () => {
+              const state = getMmrModeState();
+              return { ...describeMmrGuiModes(ctx, { live: false }), current: state ? getMmrModeName(state) : null };
+            },
             registry: { dir: overrides.registryDir },
           });
         } catch (error) {
