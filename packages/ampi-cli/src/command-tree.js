@@ -372,6 +372,7 @@ const PERMISSIONS = command("permissions", "List, test, edit or add the rules of
 const AMPI_OPTIONS = [
   valued("--mode", "Start in an ampi mode, or set Pi's output mode", { short: ["-m"], kind: MODE_OR_OUTPUT, shortKind: "mode" }),
   option("--fast", "Start at fast speed (priority serving)"),
+  option("--dangerously-allow-all", "Let every tool call run without asking"),
   option("--execute", "Run the message once and print the answer", { short: ["-x"] }),
   option("--stream-json", "Print stream JSON records (execute mode)"),
   option("--stream-json-thinking", "Stream JSON with thinking blocks"),
