@@ -37,7 +37,11 @@ const program = (file, ...args) => [node, file, ...args].map(quoted).join(" ");
 const exit0 = script("exit0.mjs", "process.exit(0);\n");
 const exit2 = script("exit2.mjs", "process.exit(2);\n");
 const exit3 = script("exit3.mjs", "process.exit(3);\n");
-const rejectStdout = script("reject-stdout.mjs", 'process.stdout.write("\\n  Only\\u0007 echo ok may run here.\\nsecond line\\n");\nprocess.exit(1);\n');
+// A bell, bidi overrides and isolates, a right-to-left mark and a zero-width space, all removed.
+const rejectStdout = script(
+  "reject-stdout.mjs",
+  'process.stdout.write("\\n  Only\\u0007 echo\\u202e ok\\u2066 may\\u200b run here.\\u200f\\u2069\\nsecond line\\n");\nprocess.exit(1);\n',
+);
 const rejectStderr = script("reject-stderr.mjs", 'process.stderr.write("Not on this branch.\\n");\nprocess.exit(1);\n');
 const rejectSilent = script("reject-silent.mjs", "process.exit(1);\n");
 const rejectLong = script("reject-long.mjs", 'process.stdout.write("y".repeat(600) + "\\n");\nprocess.exit(1);\n');
@@ -151,7 +155,7 @@ describe("ampi-permissions delegate: exit codes", () => {
     assert.equal(await t.call("write", { path: "big.txt", content: "z".repeat(4 * 1024 * 1024) }), undefined);
   });
 
-  it("rejects on exit 1 with the first non-empty line of stdout, else stderr, without control characters", async () => {
+  it("rejects on exit 1 with the first non-empty line of stdout, else stderr, without control or format characters", async () => {
     const t = await setupPermissions(modules, {
       user: ON([
         delegateBash(program(rejectStdout), "echo a"),
@@ -224,6 +228,29 @@ describe("ampi-permissions delegate: exit codes", () => {
         {
           message:
             'ampi-permissions: the delegate program "ampi-no-such-check --strict" was not found on PATH, so its calls ask for approval as an ask rule would.',
+          level: "warning",
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("skips a relative PATH entry, so the program checked is the program run", async () => {
+    const binDir = tempDir();
+    const onPath = path.join(binDir, "ampi-check");
+    writeFileSync(onPath, `#!${node}\n${readFileSync(recorder, "utf8")}`);
+    chmodSync(onPath, 0o755);
+    const file = recordFile();
+    // Relative to this process's directory, where the lookup would check it, not to the session's.
+    const restore = setEnv({ PATH: path.relative(process.cwd(), binDir) });
+    try {
+      const t = await setupPermissions(modules, { user: ON([delegateBash(`ampi-check ${file}`)]), hasUI: false });
+      assert.equal((await t.call("bash", { command: "echo ok" })).block, true);
+      assert.deepEqual(runs(file), []);
+      assert.deepEqual(t.notifications, [
+        {
+          message: `ampi-permissions: the delegate program "ampi-check ${file}" was not found on PATH, so its calls ask for approval as an ask rule would.`,
           level: "warning",
         },
       ]);

@@ -69,12 +69,15 @@ function isExecutableFile(candidate: string): boolean {
   }
 }
 
-/** A bare program name on `PATH`: the first existing, executable regular file. */
+/**
+ * A bare program name on `PATH`: the first existing, executable regular file
+ * in an absolute directory, so the file checked is the file that runs.
+ */
 function findOnPath(name: string, env: NodeJS.ProcessEnv): string | undefined {
   const extensions = process.platform === "win32" ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")] : [""];
   for (const dir of (env.PATH ?? "").split(path.delimiter)) {
-    // An empty entry would mean the working directory; a program is never looked up there.
-    if (dir.length === 0) continue;
+    // An empty or relative entry would depend on the working directory; a program is never looked up there.
+    if (!path.isAbsolute(dir)) continue;
     for (const extension of extensions) {
       const candidate = path.join(dir, `${name}${extension}`);
       if (isExecutableFile(candidate)) return candidate;
@@ -110,10 +113,10 @@ export function resolveMmrPermissionsDelegateProgram(
   return found ? { file: found, args } : { problem: "was not found on PATH" };
 }
 
-/** The first non-empty line, without control characters, cut to the reason limit. */
+/** The first non-empty line, without control or format characters (bidi controls among them), cut to the reason limit. */
 function firstLine(text: string): string | undefined {
   for (const line of text.split(/\r?\n/)) {
-    const clean = line.replace(/\p{Cc}/gu, "").trim();
+    const clean = line.replace(/[\p{Cc}\p{Cf}]/gu, "").trim();
     if (clean.length > 0) return Array.from(clean).slice(0, MMR_PERMISSIONS_DELEGATE_REASON_LIMIT).join("");
   }
   return undefined;
