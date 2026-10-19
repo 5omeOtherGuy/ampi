@@ -53,6 +53,7 @@ Deferred repository-provider variants of `librarian` beyond GitHub (Bitbucket, �
 | `oracle`    | standalone                       | `[read, grep, find, web_search, read_web_page, read_session, find_session]` (child intersects with registered) |
 | `librarian` | standalone, gated on `ampi-github` | read-only GitHub repository tools                                                                               |
 | `Task`      | mode-derived from parent mode    | `[read, bash, edit, write, read_web_page, web_search, finder, skill, task_list]` minus `denyTools` |
+| `reviewer`  | standalone                       | `[read, grep, find, bash]`; one child per [review check](#review-checks) as well |
 
 The internal `history-reader` profile is used by `ampi-history.read_session`; it is not a model-visible Pi tool. See `ampi-core` for the profile table.
 
@@ -157,6 +158,30 @@ Concrete prompts live in [`profiles/prompts.ts`](profiles/prompts.ts):
 - Status values: `success`, `validation-error`, `activation-error`, `aborted`, `spawn-error`, `worker-error`, `no-agent-start`, `empty-output`. Task uses the `prefer-usable-output` policy: nonzero exit with usable final text still classifies as `success`.
 - Execution mode: `Task` declares `executionMode: "sequential"` (issue #8) because a Task child can run `bash`/`edit`/`write` in the workspace. Pi serializes the whole assistant tool-call batch when any called tool is sequential. The read-only research workers (`finder`, `oracle`, `librarian`) stay parallel-eligible, so independent read-only subagent research can still run concurrently.
 
+### Review checks
+
+Review checks are standing review rules kept in the repository. Each one is a Markdown file directly in a `.agents/checks/` directory, anywhere in the repository; when `reviewer` runs, every check that applies to the change runs as one more reviewer child, and its outcome is listed after the main report.
+
+```md
+---
+name: http-input-validation
+description: New HTTP handlers validate their input
+---
+Look at every HTTP handler the diff adds or changes. Each one must validate
+the request body, query and path parameters before it uses them: a schema,
+explicit type and range checks, or a shared validator. Report a handler that
+reads raw input without validation as a `bug`, with the line range of the
+handler and the input it trusts.
+```
+
+- **Where checks live.** `<dir>/.agents/checks/<stem>.md`. The directory that contains `.agents` is the check's scope: `.agents/checks/*.md` at the root covers the whole repository, `packages/api/.agents/checks/*.md` covers `packages/api`. Checks are found among the tracked files plus the untracked files that are not ignored (`git ls-files` with a pathspec, or `jj file list` with the matching fileset in a Jujutsu repository), so ignored folders such as `node_modules` never contribute one. Without version control only `<cwd>/.agents/checks/*.md` is read.
+- **Front matter.** Optional, between a leading `---` line and the next `---` line: `name` (defaults to the file stem) and `description`; other keys are ignored and CRLF files are fine. The body after it is the instructions the check child applies. Front matter that cannot be read (no closing `---`, a line that is not `key: value`) does not stop the check: it runs under its file stem and the report carries a warning naming the file.
+- **Which checks run.** The parent resolves the changed files where that is cheap: an uncommitted description (`uncommitted changes`, `working tree changes`, `local changes` and a few similar phrases) reads `git status` with untracked files (`jj diff --name-only` in Jujutsu); a single revision or range git accepts (`HEAD~1`, `A..B`, `A...B`) reads `git diff --name-only`. A single revision diffs against the working tree, so `HEAD` with uncommitted edits still selects checks by the uncommitted files; when that diff is empty (`HEAD` or a commit SHA with a clean tree) the commit itself is read with `<rev>^!`. A check runs when its scope holds at least one changed file. For any other description, and for a revision that still yields no files, the changed files are unknown, so every check runs and each child is told to keep to files under its scope.
+- **Parameters.** `checks_only: true` skips the main review (and fails when no check applies); `check_filter: ["name", …]` runs only the named checks (an unknown name fails and lists the available ones); `check_scope: "packages/api"` runs only the checks defined in that directory, relative to the working directory, or below it (compared as real paths, so a working directory reached through a symlink works).
+- **Runs.** Each check child uses the `reviewer` profile, model preferences, fallback and system prompt; only its task text differs (the diff description, the check and its scope, the changed files under that scope when known, and its description and body). At most 4 reviewer children run at once, the main review included. Cancelling the call cancels the running children and never starts the pending ones. `background: true` runs the whole set as one background task.
+- **Results.** The main report comes first, then a `Checks` section with a heading per check, `<name> (<scope>): N findings`, `0 counted findings (see report)` or `failed: <reason>`, each answering check's full report below its heading, then the front-matter warnings. The count only labels the heading: a finding is a line of the check's report, after its `Findings` heading when it has one, that starts with a `<file path>:<startLine>-<endLine>` or `<file path>:<line>` location, compliments included. Findings in other shapes (a table row, a labelled location) are not counted, so a zero count never claims the check passed; the report below it says. The call fails only when every run failed. `details.checks` lists each check's `name`, `scope`, `file`, `status` (`no-issues`, meaning no counted finding, `findings`, `failed`), `findings`, `failureReason`, `warning` and `changedFiles`; `details.mainReview` holds the main review's outcome or `skipped`. While the call runs, progress is re-sent whenever a check starts or settles. The worker row stays one line, with `(N checks)` after the request, and lists each check with its outcome when expanded.
+- **Empty descriptions.** `reviewer` still rejects an empty `diff_description`; the plain functions in `review/checks.ts` read an empty description as the uncommitted changes, for callers outside the tool.
+
 ### Custom Markdown subagents
 
 - Pi-owned roots: `<cwd>/.pi/subagents` (project) and `~/.pi/agent/subagents` (global). `.claude/agents` is scanned only as an *import candidate source* by the setup/import flow; it is never auto-registered. Scans are bounded to local-agent scale (100 definitions / 1000 Markdown files by default), skip symlink roots/entries, and recheck realpath containment under the configured root before reading.
@@ -209,7 +234,7 @@ Every worker call is one Amp-compatible line in the transcript: a status glyph, 
 | `sa__<name>` | `Running subagent (<name>)` | `Subagent (<name>) finished` | `task` |
 
 - Glyphs: a spinner while the worker runs, `✓` done, `✗` failed, `⊘` cancelled. The spinner is ampi-core's braille spinner (`ampi-core/spinner.ts`): it starts on `⠋`, steps every 200 ms and stays on `⠋` with `NO_ANIMATION` set or `ampiTui.animations: false`. `(<profile>)` appears when a `Task` call sets `capabilityProfile`. A multi-line request shows its first line and ` …`.
-- Expanding tool output (Pi's Ctrl+O, or Alt+T with `ampi-tui`) draws, indented under the row: a failure's diagnostic in red (a provider note on a run that still answered in yellow), the full request, wrapped and cut after 5 lines, when the row shows only part of it, the worker's latest 8 trail events in dim text (child tool calls with their glyph and what they acted on, the worker's own text, shell commands), with `… N earlier events` above them, a fallback notice, and, once the worker finished, its answer as Markdown, cut after 20 lines with `… N more lines`, and a dim usage line (turns, tokens, context use, model).
+- Expanding tool output (Pi's Ctrl+O, or Alt+T with `ampi-tui`) draws, indented under the row: a failure's diagnostic in red (a provider note on a run that still answered in yellow), the full request, wrapped and cut after 5 lines, when the row shows only part of it, the worker's latest 8 trail events in dim text (child tool calls with their glyph and what they acted on, the worker's own text, shell commands), with `… N earlier events` above them, a reviewer's review checks under `Review checks` (`✓ <name> · <scope> · 0 counted findings (see report)`, `! … · 2 findings`, `✗ … · failed: <reason>`), a fallback notice, and, once the worker finished, its answer as Markdown, cut after 20 lines with `… N more lines`, and a dim usage line (turns, tokens, context use, model).
 - The worker's prompt echo and an answer repeated as the last trail event are left out; thinking stays hidden.
 - Rows use theme colours for text only, never a background.
 - With `ampi-tui` on, these renderers still draw the rows, collapsed and expanded, so they look the same either way; `ampi-tui` never folds a worker call into a group of other tool calls.

@@ -80,6 +80,24 @@
    Finding 20: check the retry path.
    … 4 more lines
    3 turns ↑12k ↓1.8k 3.5%/400k                          gpt-5.4-mini • reviewer
+=== reviewer done with review checks · collapsed ===
+
+ ✓ Reviewed changes · uncommitted changes (3 checks)
+=== reviewer done with review checks · expanded ===
+
+ ✓ Reviewed changes · uncommitted changes (3 checks)
+   ✓ bash git status --porcelain
+   ✓ read packages/api/handler.ts
+   Review checks
+   ✓ house-style · repository root · 0 counted findings (see report)
+   ! input-validation · packages/api · 2 findings
+   ✗ changelog · repository root · failed: worker exited with code 1: The scrip…
+   Main summary: the handler change looks right.
+
+   Checks
+
+   ### input-validation (packages/api): 2 findings
+   3 turns ↑12k ↓1.8k 3.5%/400k                          gpt-5.4-mini • reviewer
 === custom subagent done · collapsed ===
 
  ✓ Subagent (security_audit) finished · Audit the token handling

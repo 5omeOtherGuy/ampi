@@ -9,6 +9,7 @@ import { Markdown, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@eare
 import type { MmrWorkerTrailItem, MmrWorkerUsageStats } from "../framework/runner.js";
 import { compactOneLine, formatWorkerStatusLine, type SubagentTheme } from "./subagent-render-format.js";
 import { isRecord } from "../../ampi-core/internal/json.js";
+import { AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL } from "../review/checks.js";
 import { finalAssistantTrailIndex, formatToolArguments, isWorkerPromptEcho, structuredArgsFromPreview } from "./tool-argument-display.js";
 import {
   WORKER_ROW_ANSWER_LINES,
@@ -23,6 +24,42 @@ import {
 
 function clip(line: string, width: number): string {
   return truncateToWidth(line, Math.max(1, width), "…");
+}
+
+/** One review check below a reviewer row, read from `details.checks`. */
+export interface WorkerRowCheck {
+  name: string;
+  /** Scope directory relative to the repository root; `.` for the root. */
+  scope: string;
+  status: "pending" | "running" | "no-issues" | "findings" | "failed";
+  findings: number;
+  failureReason?: string;
+}
+
+const CHECK_STATUSES: ReadonlySet<string> = new Set(["pending", "running", "no-issues", "findings", "failed"]);
+
+/** The well-formed entries of a `details.checks` array, or `undefined` when there are none. */
+export function readWorkerRowChecks(value: unknown): WorkerRowCheck[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const checks = value.flatMap((entry): WorkerRowCheck[] => {
+    if (!isRecord(entry) || typeof entry.name !== "string" || typeof entry.scope !== "string") return [];
+    if (typeof entry.status !== "string" || !CHECK_STATUSES.has(entry.status)) return [];
+    const findings = typeof entry.findings === "number" && Number.isFinite(entry.findings) ? entry.findings : 0;
+    return [{
+      name: entry.name,
+      scope: entry.scope,
+      status: entry.status as WorkerRowCheck["status"],
+      findings,
+      ...(typeof entry.failureReason === "string" ? { failureReason: entry.failureReason } : {}),
+    }];
+  });
+  return checks.length > 0 ? checks : undefined;
+}
+
+/** Collapsed-row tail for a row with review checks: `(3 checks)`. */
+export function workerRowChecksTail(checks: readonly WorkerRowCheck[] | undefined): string | undefined {
+  if (!checks || checks.length === 0) return undefined;
+  return `(${checks.length} ${checks.length === 1 ? "check" : "checks"})`;
 }
 
 /** Everything one row draws, already resolved from the result. */
@@ -56,6 +93,8 @@ export interface WorkerRowView {
   /** Diagnostic colour: `error` for a failed run, `warning` for a note on a finished one. */
   diagnosticColor?: string;
   fallbackNotice?: string;
+  /** Review checks, listed after the trail when expanded. */
+  checks?: readonly WorkerRowCheck[];
 }
 
 /** `<pad><glyph> <phrase> · <detail> <tail>`, before it is clipped to the width. */
@@ -127,9 +166,31 @@ function trailEventLine(item: MmrWorkerTrailItem, spinner: string | undefined): 
   }
 }
 
+/**
+ * The trail item that repeats the answer. A reviewer row with review checks
+ * answers with the main report followed by its `Checks` section, so there
+ * the last assistant item repeats the answer when the answer starts with it.
+ */
+function duplicateAnswerIndex(view: Pick<WorkerRowView, "trail" | "output" | "checks">): number | undefined {
+  const output = view.output ?? "";
+  const exact = finalAssistantTrailIndex(view.trail, output);
+  if (exact !== undefined || !view.checks) return exact;
+  for (let index = view.trail.length - 1; index >= 0; index -= 1) {
+    const item = view.trail[index];
+    if (item?.type !== "assistant") continue;
+    // Long trail texts are cut and end in "…".
+    const text = item.text.trim().replace(/…$/, "");
+    return text.length > 0 && output.trim().startsWith(text) ? index : undefined;
+  }
+  return undefined;
+}
+
 /** The latest {@link WORKER_ROW_TRAIL_EVENTS} trail events, after "… N earlier events" when some are left out. */
-export function workerTrailLines(view: Pick<WorkerRowView, "trail" | "workerPrompt" | "output" | "suppressDuplicateFinalOutput">, spinner?: string): string[] {
-  const duplicate = view.suppressDuplicateFinalOutput ? finalAssistantTrailIndex(view.trail, view.output ?? "") : undefined;
+export function workerTrailLines(
+  view: Pick<WorkerRowView, "trail" | "workerPrompt" | "output" | "suppressDuplicateFinalOutput" | "checks">,
+  spinner?: string,
+): string[] {
+  const duplicate = view.suppressDuplicateFinalOutput ? duplicateAnswerIndex(view) : undefined;
   const lines: string[] = [];
   view.trail.forEach((item, index) => {
     if (index === duplicate) return;
@@ -140,6 +201,39 @@ export function workerTrailLines(view: Pick<WorkerRowView, "trail" | "workerProm
   const hidden = lines.length - WORKER_ROW_TRAIL_EVENTS;
   if (hidden <= 0) return lines;
   return [`… ${hidden} earlier ${hidden === 1 ? "event" : "events"}`, ...lines.slice(hidden)];
+}
+
+function checkOutcome(check: WorkerRowCheck): string {
+  switch (check.status) {
+    case "no-issues":
+      return AMPI_REVIEW_NO_COUNTED_FINDINGS_LABEL;
+    case "findings":
+      return `${check.findings} ${check.findings === 1 ? "finding" : "findings"}`;
+    case "failed":
+      return `failed${check.failureReason ? `: ${check.failureReason}` : ""}`;
+    case "running":
+      return "running";
+    default:
+      return "waiting";
+  }
+}
+
+/** `Review checks`, then one line per check: its glyph, name, scope and outcome. */
+export function workerCheckLines(checks: readonly WorkerRowCheck[] | undefined, spinner?: string): string[] {
+  if (!checks || checks.length === 0) return [];
+  const glyph = (check: WorkerRowCheck): string => {
+    if (check.status === "running") return workerRowGlyph("running", spinner);
+    if (check.status === "pending") return "○";
+    if (check.status === "findings") return "!";
+    return workerRowGlyph(check.status === "failed" ? "error" : "done");
+  };
+  return [
+    "Review checks",
+    ...checks.map((check) => {
+      const scope = check.scope === "." ? "repository root" : check.scope;
+      return `${glyph(check)} ${check.name} · ${scope} · ${compactOneLine(checkOutcome(check), 200)}`;
+    }),
+  ];
 }
 
 function limited(lines: readonly string[], max: number): { shown: string[]; more: string | undefined } {
@@ -173,6 +267,7 @@ export function workerRowBody(view: WorkerRowView, theme: SubagentTheme, pad: st
     if (more) out.push(clip(`${indent}${theme.fg("muted", more)}`, width));
   }
   out.push(...workerTrailLines(view, spinner).map((line) => dim(line)));
+  out.push(...workerCheckLines(view.checks, spinner).map((line) => dim(line)));
   if (view.fallbackNotice?.trim()) out.push(clip(`${indent}${theme.fg("warning", compactOneLine(view.fallbackNotice, 400))}`, width));
   if (!view.finished) return out;
   const answer = view.output?.trim();

@@ -7,8 +7,9 @@
 //
 //   1. The tool definition advertises name `reviewer`, a snippet, a
 //      schema-only full description, and a
-//      `{ diff_description, files?, instructions? }` params shape plus the
-//      shared background run fields.
+//      `{ diff_description, files?, instructions?, checks_only?,
+//      check_filter?, check_scope? }` params shape plus the shared
+//      background run fields.
 //   2. The description states the diff-description contract (the worker
 //      generates the diff itself), blocking-by-default + background: true,
 //      and never references the deprecated start_task alias.
@@ -112,6 +113,11 @@ describe("reviewer tool definition", () => {
     assert.equal(params.properties.diff_description.type, "string");
     assert.equal(params.properties.files.type, "array");
     assert.equal(params.properties.instructions.type, "string");
+    // Review-check fields (tests/mmr-workers-review-checks.test.mjs covers their behavior).
+    assert.equal(params.properties.checks_only.type, "boolean");
+    assert.equal(params.properties.check_filter.type, "array");
+    assert.equal(params.properties.check_filter.items.type, "string");
+    assert.equal(params.properties.check_scope.type, "string");
     // Shared v2 background-run fields are part of the public schema.
     assert.equal(params.properties.background.type, "boolean");
     assert.equal(params.properties.group.type, "string");
@@ -129,6 +135,8 @@ describe("reviewer tool definition", () => {
     assert.match(tool.description, /WHEN TO USE THIS TOOL/);
     assert.match(tool.description, /WHEN NOT TO USE THIS TOOL/);
     assert.match(tool.description, /read-only/i);
+    assert.match(tool.description, /\.agents\/checks\//);
+    assert.match(tool.description, /checks_only, check_filter and check_scope/);
     assert.doesNotMatch(tool.description, /start_task/);
   });
 
@@ -191,6 +199,7 @@ describe("reviewer worker system prompt", () => {
     // Guardrails.
     assert.match(prompt, /more than 2 times/i);
     assert.match(prompt, /untracked/i);
+    assert.match(prompt, /In a Jujutsu repository \(one with a `\.jj` directory\), get the diff from `jj diff --git`/);
     assert.match(prompt, /Do not edit or modify files/i);
     assert.match(prompt, /Do not re-read files/i);
     assert.match(prompt, /more than 100 changed files or is more than 10,000 lines/);

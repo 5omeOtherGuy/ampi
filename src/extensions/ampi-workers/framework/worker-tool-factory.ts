@@ -543,7 +543,7 @@ export function createWorkerRunPreparer<TParams, TDetails, TRun = void>(
 }
 
 /** Synthetic aborted worker result for runs finalized without a runner payload. */
-function syntheticAbortedWorkerResult(prompt: string, cwd: string, errorMessage?: string): MmrWorkerResult {
+export function syntheticAbortedWorkerResult(prompt: string, cwd: string, errorMessage?: string): MmrWorkerResult {
   return {
     messages: [],
     finalOutput: "",
@@ -583,9 +583,16 @@ export function createWorkerTool<TParams, TDetails, TRun = void>(
     effectiveRunner: MmrSubagentRunner;
     /** Per-execute settings/override resolution (per-tool precedence). */
     resolveModelPreferencesOverride(cwd: string): readonly MmrModelPreference[] | undefined;
+    /**
+     * Run preparer the blocking execute uses instead of the spec's own.
+     * A tool that wraps its prepared run (the reviewer adds its check
+     * children) passes the same preparer its background surface uses, so
+     * both surfaces still share one preparation path.
+     */
+    prepareRun?: MmrWorkerRunPreparer<TDetails>;
   },
 ): ToolDefinition {
-  const prepareRun = createWorkerRunPreparer(spec, deps, factoryOptions);
+  const prepareRun = factoryOptions.prepareRun ?? createWorkerRunPreparer(spec, deps, factoryOptions);
   return {
     name: spec.toolName,
     label: spec.toolName,

@@ -62,6 +62,8 @@ export interface SubagentProgressDetails {
    * `tools`. Other subagents leave it unset.
    */
   fallbackNotice?: string;
+  /** The reviewer's review checks (`ReviewerCheckDetails[]`); read through `readWorkerRowChecks`. */
+  checks?: unknown;
 }
 
 /**

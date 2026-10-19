@@ -136,7 +136,7 @@ describe("background-agent derivation", () => {
     assert.deepEqual(literals, ["Task", "finder", "reviewer", "librarian"]);
     assert.match(
       schemas.START_TASK_PARAMETERS.properties.agent.description,
-      /Task \{prompt,description\}, finder \{query\}, reviewer \{diff_description,files\?,instructions\?\}, librarian \{query,context\?\}/,
+      /Task \{prompt,description\}, finder \{query\}, reviewer \{diff_description,files\?,instructions\?,checks_only\?,check_filter\?,check_scope\?\}, librarian \{query,context\?\}/,
     );
   });
 });
