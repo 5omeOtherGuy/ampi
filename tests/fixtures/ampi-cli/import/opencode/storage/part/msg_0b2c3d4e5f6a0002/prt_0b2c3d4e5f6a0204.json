@@ -1,0 +1,1 @@
+{ "id": "prt_0b2c3d4e5f6a0204", "sessionID": "ses_0b2c3d4e5f6aJsonStore01", "messageID": "msg_0b2c3d4e5f6a0002", "type": "step-finish", "tokens": { "input": 640, "output": 25, "reasoning": 0, "cache": { "read": 0, "write": 0 } }, "cost": 0.002 }

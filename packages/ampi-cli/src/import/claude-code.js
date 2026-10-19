@@ -6,21 +6,16 @@
 // entry types are bookkeeping, apart from the titles some of them record.
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { IMPORT_API, importedUsage, isObject, tokenCount, userContent } from "./messages.js";
 
 /** The agent name in the import records, the custom entry and the output. */
 export const CLAUDE_CODE_AGENT = "claude-code";
 /** The provider of imported assistant messages: no Pi provider has that name, so Pi never treats them as its own turns. */
-export const IMPORT_PROVIDER = "claude-code-import";
-export const IMPORT_API = "imported";
+const IMPORT_PROVIDER = "claude-code-import";
 
 /**
- * @typedef {{ id: string, file: string, modified: Date }} SourceSession A session file and when it last changed.
- *
- * @typedef {object} Conversion A session converted into Pi messages.
- * @property {string | undefined} cwd The working directory the session ran in.
- * @property {string | undefined} title The title Claude Code recorded: one set by the user, else a generated one.
- * @property {number | undefined} started The first message's time, in milliseconds.
- * @property {{ role: string }[]} messages Pi user, assistant and tool result messages, in order.
+ * @typedef {import("./messages.js").SourceSession} SourceSession
+ * @typedef {import("./messages.js").Conversion} Conversion
  */
 
 /** Claude Code's session ids are the file names: letters, digits, dots, hyphens and underscores. */
@@ -73,9 +68,6 @@ export function listClaudeCodeSessions(dir) {
   return sessions;
 }
 
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-
 /**
  * A Pi image from a Claude Code image block, or "(image)" when the block
  * holds no base64 data (a URL, or nothing).
@@ -107,27 +99,18 @@ function convertResultContent(content) {
 }
 
 /**
- * Pi's usage from Claude Code's token counts. Pi's usage always holds a
- * cost; it is left at zero here, which ampi's reports read as unknown,
- * because the provider of imported messages has no price.
+ * Pi's usage from Claude Code's token counts.
  *
  * @param {unknown} usage
  */
 function convertUsage(usage) {
-  const count = (/** @type {unknown} */ value) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
   const source = isObject(usage) ? usage : {};
-  const input = count(source.input_tokens);
-  const output = count(source.output_tokens);
-  const cacheRead = count(source.cache_read_input_tokens);
-  const cacheWrite = count(source.cache_creation_input_tokens);
-  return {
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    totalTokens: input + output + cacheRead + cacheWrite,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  };
+  return importedUsage({
+    input: tokenCount(source.input_tokens),
+    output: tokenCount(source.output_tokens),
+    cacheRead: tokenCount(source.cache_read_input_tokens),
+    cacheWrite: tokenCount(source.cache_creation_input_tokens),
+  });
 }
 
 /**
@@ -236,11 +219,7 @@ export function convertClaudeCodeSession(text) {
         parts.push(convertImage(block));
       }
     }
-    if (parts.length > 0) {
-      const textOnly = parts.every((/** @type {any} */ part) => part.type === "text");
-      const content = textOnly ? parts.map((/** @type {any} */ part) => part.text).join("\n\n") : parts;
-      messages.push({ role: "user", content, timestamp: time });
-    }
+    if (parts.length > 0) messages.push({ role: "user", content: userContent(parts), timestamp: time });
     openAssistant = "";
   }
   // An assistant line can hold only blocks Pi has no form for.

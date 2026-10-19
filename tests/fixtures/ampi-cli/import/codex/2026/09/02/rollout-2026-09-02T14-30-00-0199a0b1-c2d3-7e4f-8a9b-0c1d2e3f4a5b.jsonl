@@ -1,0 +1,7 @@
+{"timestamp":"2026-09-02T14:30:00.000Z","type":"session_meta","payload":{"id":"0199a0b1-c2d3-7e4f-8a9b-0c1d2e3f4a5b","timestamp":"2026-09-02T14:30:00.000Z","cwd":"/work/notes","originator":"codex_cli_rs","cli_version":"0.40.0"}}
+{"timestamp":"2026-09-02T14:30:00.500Z","type":"turn_context","payload":{"cwd":"/work/notes","model":"gpt-5","approval_policy":"never","sandbox_policy":{"type":"read-only"}}}
+{"timestamp":"2026-09-02T14:30:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Summarize the README"}]}}
+{"timestamp":"2026-09-02T14:30:03.000Z","type":"response_item","payload":{"type":"function_call","name":"read_file","arguments":"README.md","call_id":"call_9"}}
+{"timestamp":"2026-09-02T14:30:03.500Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_9","output":"# Notes\nA place for meeting notes."}}
+{"timestamp":"2026-09-02T14:30:06.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"It is a folder for meeting notes."}]}}
+{"timestamp":"2026-09-02T14:30:06.100Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":500,"cached_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":0,"total_tokens":530},"last_token_usage":{"input_tokens":500,"cached_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":0,"total_tokens":530}}}}

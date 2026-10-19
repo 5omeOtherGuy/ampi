@@ -36,6 +36,7 @@ import {
  * @property {(question: string) => Promise<boolean>} confirm Asks a yes/no question; true for yes.
  * @property {() => Promise<{ root: string, version?: string } | undefined>} locateAmpi The ampi package
  *   whose search `threads search` runs: the one Pi loads from its settings, else the CLI's own.
+ * @property {() => Promise<any>} [loadSqlite] Imports `node:sqlite` for `threads import opencode`; tests replace it.
  *
  * @typedef {{ code: number } | { piArgs: string[] }} ThreadsResult Exit with `code`, or start Pi with `piArgs`.
  * @typedef {{ code: number, message?: string } | { piArgs: string[] }} Outcome A result, with an error to print.
@@ -153,8 +154,8 @@ Commands:
                                 cyan, gray or #rrggbb; none removes it
   delete <id>                   Delete the session file after asking for confirmation
       -y, --yes                 Delete without asking
-  import detect|claude          Copy other coding agents' conversations on this machine into
-                                read-only sessions; ampi threads import --help has the options
+  import [command]              Copy Claude Code, Codex and OpenCode conversations on this machine
+                                into read-only sessions; ampi threads import --help has the options
 
   ampi last                     Open the most recent session of this directory that is not archived
   ampi usage                    Print the cost and tokens of every session of the last 30 days

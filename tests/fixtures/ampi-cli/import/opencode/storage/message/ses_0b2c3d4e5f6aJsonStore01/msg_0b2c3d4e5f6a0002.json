@@ -1,0 +1,12 @@
+{
+  "id": "msg_0b2c3d4e5f6a0002",
+  "sessionID": "ses_0b2c3d4e5f6aJsonStore01",
+  "role": "assistant",
+  "time": { "created": 1787209209000, "completed": 1787209210000 },
+  "modelID": "gpt-4.1",
+  "providerID": "openai",
+  "mode": "build",
+  "path": { "cwd": "/work/legacy", "root": "/work/legacy" },
+  "cost": 0.002,
+  "tokens": { "input": 640, "output": 25, "reasoning": 0, "cache": { "read": 0, "write": 0 } }
+}
