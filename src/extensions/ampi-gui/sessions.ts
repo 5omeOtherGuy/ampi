@@ -5,7 +5,13 @@ import { type FileEntry, migrateSessionEntries, parseSessionEntries, type Sessio
 import type { MmrLiveKind } from "../ampi-core/live-registry.js";
 import { dedupeMmrSessionsById, type MmrSessionSource } from "../ampi-core/session-catalog.js";
 import { findLatestPersistedModeState } from "../ampi-core/state.js";
-import { getMmrThreadIndex, type MmrThreadIndex, type MmrThreadRecord } from "../ampi-core/thread-index.js";
+import {
+  getMmrThreadIndex,
+  isMmrThreadSnoozed,
+  isMmrThreadUnread,
+  type MmrThreadIndex,
+  type MmrThreadRecord,
+} from "../ampi-core/thread-index.js";
 import { getMmrThreadReports } from "../ampi-core/thread-reports.js";
 import type { MmrGuiSessionInfo } from "./bridge.js";
 import { buildMmrGuiTranscript, type MmrGuiGroup, type MmrGuiItem, mmrGuiSessionTitle } from "./view-model.js";
@@ -14,8 +20,10 @@ import { buildMmrGuiTranscript, type MmrGuiGroup, type MmrGuiItem, mmrGuiSession
  * The sessions the web GUI's sidebar lists, and read-only views of them.
  *
  * Sessions are Pi's own sessions on disk, from ampi-core's session
- * catalogue; whether one is archived or pinned, and its colour, come from
- * the thread index that `ampi-threads` registers. The session this process
+ * catalogue; whether one is archived, pinned, snoozed or unread, its labels
+ * and its colour come from the thread index that `ampi-threads` registers
+ * (`isMmrThreadSnoozed` and `isMmrThreadUnread` there say how a snooze or
+ * read date compares with the last activity). The session this process
  * runs is always listed, even before Pi has saved it, and is marked `live`;
  * a session that another running Pi serves (the live registry) is marked
  * `elsewhere`.
@@ -24,9 +32,10 @@ import { buildMmrGuiTranscript, type MmrGuiGroup, type MmrGuiItem, mmrGuiSession
  *
  * | Group                | Holds |
  * | -------------------- | ----- |
- * | `pinned`             | pinned sessions that are not archived |
+ * | `pinned`             | pinned sessions that are not archived or snoozed |
  * | `project:<cwd>`      | the other sessions active in the last 72 hours, or running, one group per working directory, the group with the newest session first |
- * | `inactive-72h`       | the rest that are not archived |
+ * | `inactive-72h`       | the rest that are not archived or snoozed |
+ * | `snoozed`            | snoozed sessions that are not archived |
  * | `archived`           | archived sessions |
  *
  * Empty groups are left out. Reading a session never writes it: the file is
@@ -48,8 +57,14 @@ export interface MmrGuiSessionRow {
   messageCount: number;
   /** The colour set in the thread index (a name or `#rrggbb`), or `null` for the colour hashed from the id. */
   color: string | null;
+  /** The session's labels from the thread index, in their order. */
+  labels: string[];
   pinned: boolean;
   archived: boolean;
+  /** Snoozed, and no message came after the snooze. */
+  snoozed: boolean;
+  /** Marked unread, or active since a page last opened it. */
+  unread: boolean;
   /** This process runs the session. */
   live: boolean;
   /** Another running Pi serves the session. */
@@ -70,7 +85,7 @@ export interface MmrGuiRowHost {
 
 export interface MmrGuiSessionGroup {
   id: string;
-  kind: "pinned" | "project" | "inactive" | "archived";
+  kind: "pinned" | "project" | "inactive" | "snoozed" | "archived";
   label: string;
   /** The working directory of a project group. */
   cwd?: string;
@@ -81,8 +96,13 @@ export interface MmrGuiSessionList {
   /** The id of the session this process runs. */
   currentId: string | null;
   groups: MmrGuiSessionGroup[];
-  /** Which More Actions work: archiving needs the thread index, Markdown its formatter. */
-  actions: { archive: boolean; markdown: boolean };
+  /**
+   * Which More Actions work: `archive` says the thread index is there, which
+   * archiving, pinning, colours, labels, snoozing and unread marks need;
+   * `markdown` that ampi-threads' formatter is, for copying and exporting as
+   * Markdown; `cost` that its cost report is and `ampiThreads.showCosts` is on.
+   */
+  actions: { archive: boolean; markdown: boolean; cost: boolean };
 }
 
 /** A session as the page shows it read-only. */
@@ -122,6 +142,18 @@ function byActivity(a: MmrGuiSessionRow, b: MmrGuiSessionRow): number {
   return b.modified.localeCompare(a.modified) || a.id.localeCompare(b.id);
 }
 
+/** A row's fields from the thread index, for a session last active at `modified` (epoch ms). */
+function indexFields(record: MmrThreadRecord | undefined, modified: number) {
+  return {
+    color: record?.color ?? null,
+    labels: [...(record?.labels ?? [])],
+    pinned: record?.pinned === true,
+    archived: record?.archived !== undefined,
+    snoozed: isMmrThreadSnoozed(record, modified),
+    unread: isMmrThreadUnread(record, modified),
+  };
+}
+
 /** The sidebar's groups for a catalogue listing and the thread index; see the module comment. */
 export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup[] {
   const { current, threads, now } = input;
@@ -137,9 +169,7 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
       cwd: info.cwd,
       modified: info.modified.toISOString(),
       messageCount: info.messageCount,
-      color: record?.color ?? null,
-      pinned: record?.pinned === true,
-      archived: record?.archived !== undefined,
+      ...indexFields(record, info.modified.getTime()),
       live,
       elsewhere: !live && elsewhere.has(path.resolve(info.path)),
       ...(hosts ? { host: hosts.get(path.resolve(info.path)) ?? null } : {}),
@@ -154,9 +184,8 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
       cwd: current.cwd,
       modified: new Date(now).toISOString(),
       messageCount: 0,
-      color: record?.color ?? null,
-      pinned: record?.pinned === true,
-      archived: record?.archived !== undefined,
+      // No message yet: no activity a snooze or a read date could be older than.
+      ...indexFields(record, 0),
       live: true,
       elsewhere: false,
     });
@@ -165,10 +194,12 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
 
   const pinned: MmrGuiSessionRow[] = [];
   const inactive: MmrGuiSessionRow[] = [];
+  const snoozed: MmrGuiSessionRow[] = [];
   const archived: MmrGuiSessionRow[] = [];
   const projects = new Map<string, MmrGuiSessionRow[]>();
   for (const row of rows) {
     if (row.archived) archived.push(row);
+    else if (row.snoozed) snoozed.push(row);
     else if (row.pinned) pinned.push(row);
     else if (row.live || row.elsewhere || now - Date.parse(row.modified) <= MMR_GUI_INACTIVE_AFTER_MS) {
       const group = projects.get(row.cwd) ?? [];
@@ -184,12 +215,22 @@ export function groupMmrGuiSessions(input: MmrGuiGroupInput): MmrGuiSessionGroup
     groups.push({ id: `project:${cwd}`, kind: "project", label: mmrGuiProjectLabel(cwd, input.home), cwd, sessions });
   }
   if (inactive.length > 0) groups.push({ id: "inactive-72h", kind: "inactive", label: "Inactive Last 72h", sessions: inactive });
+  if (snoozed.length > 0) groups.push({ id: "snoozed", kind: "snoozed", label: "Snoozed", sessions: snoozed });
   if (archived.length > 0) groups.push({ id: "archived", kind: "archived", label: "Archived", sessions: archived });
   return groups;
 }
 
-/** A session file's header and current branch, the way Pi reads them, without writing the file. */
-export function readMmrGuiSessionEntries(text: string): { header: FileEntry | undefined; branch: FileEntry[] } {
+/** A session file as Pi reads it, without writing the file. */
+export interface MmrGuiSessionEntries {
+  header: FileEntry | undefined;
+  /** The current branch, oldest first. */
+  branch: FileEntry[];
+  /** Every entry in file order, the header and abandoned branches included. */
+  entries: FileEntry[];
+}
+
+/** A session file's header, current branch and every entry, the way Pi reads them, without writing the file. */
+export function readMmrGuiSessionEntries(text: string): MmrGuiSessionEntries {
   const entries = parseSessionEntries(text);
   // Upgrades old entry shapes in memory only.
   migrateSessionEntries(entries);
@@ -210,7 +251,7 @@ export function readMmrGuiSessionEntries(text: string): { header: FileEntry | un
     branch.push(node);
     node = node.parentId ? byId.get(node.parentId) : undefined;
   }
-  return { header, branch: branch.reverse() };
+  return { header, branch: branch.reverse(), entries };
 }
 
 export interface MmrGuiSessionsOptions {
@@ -232,10 +273,14 @@ export interface MmrGuiSessions {
   list(): Promise<MmrGuiSessionList>;
   /** A session's catalogue record, by exact id. */
   find(id: string): Promise<SessionInfo | undefined>;
-  /** A saved session's header and current branch, read without writing. */
-  read(info: SessionInfo): Promise<{ header: FileEntry | undefined; branch: FileEntry[] }>;
+  /** A saved session's file as text. */
+  text(info: SessionInfo): Promise<string>;
+  /** A saved session's header, current branch and every entry, read without writing. */
+  read(info: SessionInfo): Promise<MmrGuiSessionEntries>;
   /** The read-only view of a saved session, or `undefined` for an unknown id. */
   view(id: string): Promise<MmrGuiSessionView | undefined>;
+  /** Forget the cached catalogue, after a session was renamed or deleted. */
+  invalidate(): void;
 }
 
 export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSessions {
@@ -277,14 +322,22 @@ export function createMmrGuiSessions(options: MmrGuiSessionsOptions): MmrGuiSess
       return {
         currentId: current?.id || null,
         groups: await groups(),
-        actions: { archive: threadIndex() !== undefined, markdown: getMmrThreadReports()?.markdown !== undefined },
+        actions: {
+          archive: threadIndex() !== undefined,
+          markdown: getMmrThreadReports()?.markdown !== undefined,
+          cost: getMmrThreadReports()?.showCosts === true,
+        },
       };
     },
     async find(id) {
       return (await catalogue()).find((info) => info.id === id);
     },
+    text: (info) => readText(info.path),
     async read(info) {
       return readMmrGuiSessionEntries(await readText(info.path));
+    },
+    invalidate() {
+      cache = undefined;
     },
     async view(id) {
       const info = await sessions.find(id);

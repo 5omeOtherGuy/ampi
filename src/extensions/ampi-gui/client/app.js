@@ -18,6 +18,7 @@ import {
   parseAppPath,
   routeFromHistory,
   sessionBase,
+  sessionPageUrl,
   shareableUrl,
 } from "./app-mode.js";
 import { createCommandRegistry, DEFAULT_COMMANDS } from "./commands.js";
@@ -25,6 +26,7 @@ import { mountComposer } from "./composer.js";
 import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
+import { createPrefs } from "./prefs.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountTitlebar } from "./titlebar.js";
 import {
@@ -64,7 +66,7 @@ let liveSession = { id: "", title: "", cwd: "", mode: null };
 /** The saved session shown read-only (GET /api/sessions/<id>), or `null` while the page shows the live one. */
 let viewing = null;
 /** The last GET /api/sessions answer. */
-let sessionList = { currentId: null, groups: [], actions: { archive: false, markdown: false } };
+let sessionList = { currentId: null, groups: [], actions: { archive: false, markdown: false, cost: false } };
 /** Whether `ampi app` serves the page. */
 let appMode = false;
 /** Where the shown session's own requests go (`sessionBase`). */
@@ -123,7 +125,13 @@ async function composerPost(route, body) {
 
 const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const composer = mountComposer({ root: $("composer-area"), post: composerPost, mac });
-const sidebar = mountSidebar({ app });
+/** The sidebar's width and state and Full Width, shared by every ampi page on this machine. */
+const prefs = createPrefs();
+const setFullWidth = (full) => {
+  app.dataset.width = full ? "full" : "column";
+};
+setFullWidth(prefs.get("fullWidth"));
+const sidebar = mountSidebar({ app, prefs });
 
 let toastTimer = 0;
 /** A toast at the top centre; `level` is an extension's notify type (`info`, `warning` or `error`). */
@@ -138,7 +146,16 @@ function notify(text, level = "info") {
   }, 4000);
 }
 
-const titlebar = mountTitlebar({ post, notify, onChanged: () => refreshSessions() });
+const titlebar = mountTitlebar({
+  post,
+  notify,
+  mac,
+  prefs,
+  setFullWidth,
+  onChanged: () => refreshSessions(),
+  onDeleted: (id) => sessionDeleted(id),
+  pageUrl: (id) => sessionPageUrl(location.href, { app: appMode, id, liveId: liveSession.id }),
+});
 // Extensions' questions in a session ampi app runs; the session that asked answers them.
 const dialogs = mountDialogs({ dialog: $("ask-dialog"), post: postTo, answerUrl: () => `${base}dialog`, notify });
 
@@ -340,10 +357,31 @@ function drawTitle() {
   const disc = $("title-disc");
   paintDisc(disc, session.id, row?.color ?? null);
   disc.dataset.busy = String(busy && !viewing);
-  titlebar.setTarget(
-    session.id ? { id: session.id, title, archived: row?.archived ?? false, live: !viewing, actions: sessionList.actions } : null,
-  );
+  titlebar.setTarget(session.id ? actionTarget(session.id, title, row, !viewing) : null);
   sidebar.select(session.id);
+}
+
+/**
+ * More Actions' view of a session (see titlebar.js `menuItems`): its row in
+ * the list, `live` when this page follows it live, `held` when any live
+ * process has it open.
+ */
+function actionTarget(id, title, row, live) {
+  return {
+    id,
+    title,
+    archived: row?.archived ?? false,
+    pinned: row?.pinned ?? false,
+    snoozed: row?.snoozed ?? false,
+    unread: row?.unread ?? false,
+    color: row?.color ?? null,
+    labels: row?.labels ?? [],
+    live,
+    elsewhere: row?.elsewhere ?? false,
+    ...(appMode ? { host: row?.host ?? null } : {}),
+    held: live || Boolean(row?.elsewhere) || Boolean(row?.host),
+    actions: sessionList.actions,
+  };
 }
 
 function setSession(session) {
@@ -452,7 +490,11 @@ const handlers = {
     drawItems(touched);
     if (!viewing) drawFolds();
   },
-  turn_end: () => refreshSessions(),
+  // A turn that ends in view is read; the list shows the new activity either way.
+  turn_end: () => {
+    refreshSessions();
+    if (!viewing) markRead(appMode ? shownId : liveSession.id);
+  },
   queue: (data) => composer.setQueue(data),
   dialog: (data) => dialogs.add(data),
   dialog_closed: (data) => dialogs.closed(data),
@@ -544,6 +586,43 @@ async function refreshSessions() {
   return listing;
 }
 
+/** The id of the session the page shows, or `null` on ampi app's home page. */
+function shownSessionId() {
+  if (appMode) return shownId;
+  return viewing ? viewing.session.id : liveSession.id || null;
+}
+
+function listedRow(id) {
+  return sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === id);
+}
+
+/**
+ * The page shows session `id`, so it has read it: its unread mark goes and
+ * its read date moves on (409 without ampi-threads). Skipped until Pi has
+ * saved the session (no listed row, or no messages), so a page left unused
+ * records nothing. The read date is now, after all of the session's
+ * activity, so the row is marked read here instead of reloading the list.
+ */
+async function markRead(id) {
+  if (!id || document.visibilityState !== "visible") return;
+  if (listing) await listing;
+  const row = listedRow(id);
+  if (!row || row.messageCount === 0) return;
+  const result = await post("unread", { sessionId: id, unread: false });
+  if (!result.ok || !row.unread) return;
+  row.unread = false;
+  sidebar.setData(sessionList);
+}
+
+document.addEventListener("visibilitychange", () => markRead(shownSessionId()));
+
+/** A session was deleted: leave its page, then reload the list. */
+function sessionDeleted(id) {
+  if (appMode && shownId === id) navigate(null);
+  else if (!appMode && viewing?.session.id === id) location.hash = "";
+  refreshSessions();
+}
+
 /** The session id in the address (`#/s/<id>`), or `null` for the live session. */
 function routeId() {
   const match = /^#\/s\/([^/]+)$/.exec(location.hash);
@@ -565,6 +644,7 @@ function showLive() {
   drawChrome();
   chat.scrollTop = chat.scrollHeight;
   composer.focus();
+  markRead(liveSession.id);
 }
 
 async function showSession(id) {
@@ -590,6 +670,7 @@ async function showSession(id) {
   chat.scrollTop = 0;
   jump.hidden = atBottom();
   chat.focus({ preventScroll: true });
+  markRead(id);
 }
 
 /** Draw a session read from its file (`{ session, items, groups }`) in place of the live transcript. */
@@ -710,6 +791,7 @@ async function openSession(id, { keepScroll = false } = {}) {
   }
   chat.scrollTop = keepScroll ? scroll : chat.scrollHeight;
   jump.hidden = atBottom();
+  if (response.ok) markRead(id);
   if (keepScroll) return;
   if (access === "live" || access === "dormant") composer.focus();
   else chat.focus({ preventScroll: true });
@@ -814,7 +896,7 @@ function sessionTarget(id) {
   const shown = titlebar.target();
   if (shown?.id === id) return shown;
   const row = sidebar.session(id);
-  return row && { id, title: row.title, archived: row.archived ?? false, live: false, actions: sessionList.actions };
+  return row && actionTarget(id, row.title, row, row.live === true);
 }
 
 /**
@@ -930,6 +1012,7 @@ async function start() {
     composer.focus();
     refreshSessions();
     if (routeId()) route();
+    else markRead(liveSession.id);
   } catch {
     setPhaseLabel("Disconnected");
     $("status-detail").textContent = "Could not reach Pi";

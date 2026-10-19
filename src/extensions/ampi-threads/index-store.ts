@@ -14,7 +14,7 @@ import type {
 /**
  * The thread index on disk: one JSON file under Pi's agent directory,
  * `<agentDir>/data/ampi/threads/index.json`, shaped
- * `{ "version": 1, "threads": { "<session id>": { archived?, labels?, color?, pinned?, titleSource? } } }`.
+ * `{ "version": 1, "threads": { "<session id>": { archived?, labels?, color?, pinned?, titleSource?, snoozed?, unread?, readAt? } } }`.
  *
  * - Writes go to a temp file that is renamed over the index, so a reader
  *   never sees half a file.
@@ -108,6 +108,9 @@ function isThreadRecord(value: unknown): value is MmrThreadRecord {
   if (value.color !== undefined && typeof value.color !== "string") return false;
   if (value.pinned !== undefined && typeof value.pinned !== "boolean") return false;
   if (value.titleSource !== undefined && !TITLE_SOURCES.has(value.titleSource as MmrThreadTitleSource)) return false;
+  if (value.snoozed !== undefined && typeof value.snoozed !== "string") return false;
+  if (value.unread !== undefined && typeof value.unread !== "boolean") return false;
+  if (value.readAt !== undefined && typeof value.readAt !== "string") return false;
   return true;
 }
 
@@ -159,6 +162,9 @@ function applyPatch(current: MmrThreadRecord | undefined, patch: MmrThreadRecord
     (value) => TITLE_SOURCES.has(value as MmrThreadTitleSource),
     'titleSource must be "model" or "user".',
   );
+  set("snoozed", patch.snoozed, validDate, "snoozed must be a date string such as 2026-01-31T12:00:00.000Z.");
+  set("unread", patch.unread, (value) => typeof value === "boolean", "unread must be true or false.");
+  set("readAt", patch.readAt, validDate, "readAt must be a date string such as 2026-01-31T12:00:00.000Z.");
   if (patch.labels === null) delete next.labels;
   else if (patch.labels !== undefined) {
     const labels = validateMmrThreadLabels(patch.labels);
@@ -267,6 +273,13 @@ export function createMmrThreadIndexStore(options: MmrThreadIndexStoreOptions = 
         else threads.delete(sessionId);
         save(threads);
         return record;
+      });
+    },
+    remove(sessionId) {
+      return withMmrThreadsFileLock(filePath, async () => {
+        checkSessionId(sessionId);
+        const threads = new Map(await load());
+        if (threads.delete(sessionId)) save(threads);
       });
     },
   };

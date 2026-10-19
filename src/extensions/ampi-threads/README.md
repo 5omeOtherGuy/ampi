@@ -113,13 +113,14 @@ A session's title is its Pi session name: the terminal title, the Switch Thread 
 One file per Pi agent directory, `<agentDir>/data/ampi/threads/index.json` (`~/.pi/agent` by default, or `PI_CODING_AGENT_DIR`), following [`docs/data-storage-conventions.md`](../../../docs/data-storage-conventions.md):
 
 ```json
-{ "version": 1, "threads": { "<session id>": { "archived": "2026-10-18T10:00:00.000Z", "labels": ["bug-fix"], "color": "blue", "pinned": true, "titleSource": "user" } } }
+{ "version": 1, "threads": { "<session id>": { "archived": "2026-10-18T10:00:00.000Z", "labels": ["bug-fix"], "color": "blue", "pinned": true, "titleSource": "user", "snoozed": "2026-10-18T11:00:00.000Z", "unread": true, "readAt": "2026-10-18T09:30:00.000Z" } } }
 ```
 
 - Every field is optional; a session without any has no entry.
 - Labels: at most 20 per session, each 1 to 32 lowercase letters, digits or hyphens. Repeated labels are stored once.
 - Colours: `blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`, `gray`, or `#rrggbb`.
 - `titleSource` is `model` or `user`.
+- `snoozed`, `unread` and `readAt` are written by the web GUI's More Actions ([`ampi-gui`](../ampi-gui/README.md#more-actions)). `snoozed` is when the session was snoozed: it counts as snoozed while its last message is not newer. `unread` is `true` when you marked it unread; `readAt` is when a page last showed it, and a message newer than that makes it unread too. `ampi threads archive`, `label`, `color` and `rename` keep them as they are, as they keep every field they do not change.
 - Writes go to a temp file that is renamed over the index, so a crash never leaves half a file.
 - A file that is not a valid index is moved aside to `index.json.<random>.corrupt` and never overwritten. ampi warns once and starts with an empty index.
 - A file with a newer `version` is left alone; every change fails until ampi is updated.
@@ -196,7 +197,7 @@ Cost:
 
 - Every entry that records model usage counts, as in Pi's own session totals: responses, tool results with usage, `usage` entries such as cache warming, and compaction and branch summaries. Abandoned branches count too, since they were paid for.
 - An entry costs what Pi recorded for it. When the provider recorded no cost, its tokens are priced at the model's prices from Pi's model registry (base rates per million tokens, without long-context tiers). A model with neither is "unknown"; the total counts the rest.
-- `ampi-tui`'s cost gauge sums the same entries the same way, so it shows the same total.
+- `ampi-tui`'s cost gauge sums the same entries the same way, so it shows the same total. So do the web GUI's Cost & Usage, for any saved session (through the reports seam's `costOfEntries`), and `ampi threads usage`: every one of them calls `summarizeMmrThreadCost` in `ampi-core/thread-reports.ts`.
 
 Context:
 

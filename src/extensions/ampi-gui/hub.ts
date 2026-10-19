@@ -9,7 +9,7 @@ import {
   readMmrLiveEntries,
   readMmrLiveToken,
 } from "../ampi-core/live-registry.js";
-import type { MmrGuiCommands } from "./commands.js";
+import { MMR_GUI_SESSION_ACTIONS, type MmrGuiCommands, type MmrGuiExporter } from "./commands.js";
 import {
   formatMmrGuiEvent,
   isMmrGuiSessionId,
@@ -22,6 +22,7 @@ import {
   readMmrGuiBody,
   send,
   sendJson,
+  sendMmrGuiExport,
   startMmrGuiHttpServer,
   viewMmrGuiSession,
 } from "./server.js";
@@ -39,8 +40,10 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | `GET /api/app` | `{ app: true }`; a session server answers 404, which is how the page tells the two apart |
  * | `GET /api/events` | an event stream with `sessions` (no `id`, data `{}`) each time a worker starts or stops, so the page reads the list again |
  * | `GET /api/sessions`, `/api/sessions/<id>` | the session list, each row with `host`, and the read-only view |
- * | `POST /api/markdown`, `/api/archive` | as on a session server, for any session |
- * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for any other |
+ * | `GET /api/export` | as on a session server, for any session |
+ * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
+ * | `POST /api/rename` | forwarded to the server that runs the session live (a worker or a terminal's GUI); 409 for another holder; a session nothing runs is renamed in its file |
+ * | `POST /api/delete` | 409 for a session a worker runs or is starting; otherwise as on a session server |
  * | `/s/<id>/api/<rest>` | the session's own routes; see below |
  *
  * A session is in one of four states:
@@ -99,8 +102,10 @@ export interface MmrGuiHubOptions {
   startSession(request: MmrGuiHubStartRequest): Promise<MmrGuiHubSession>;
   /** The session list (rows with `host`), its read-only views, the catalogue and the saved entries. */
   sessions: Pick<MmrGuiSessions, "list" | "view" | "find" | "read">;
-  /** The session server's commands; the hub serves `markdown` and `archive` from them as they are. */
+  /** The session server's commands; the hub serves the More Actions (`MMR_GUI_SESSION_ACTIONS`) from them. */
   commands: MmrGuiCommands;
+  /** `GET /api/export`, as on a session server. */
+  exportSession: MmrGuiExporter;
   /** Where the live registry is and how to probe its processes. */
   registry?: MmrLiveRegistryOptions;
   /** The hub's own process; its entry names no file. Defaults to this process. */
@@ -458,25 +463,36 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
   async function hubCommand(request: MmrGuiRequest): Promise<void> {
     const { req, res, rawPath } = request;
     const name = rawPath.startsWith("/api/") ? rawPath.slice("/api/".length) : "";
-    if (name !== "markdown" && name !== "archive" && name !== "rename") {
+    if (!MMR_GUI_SESSION_ACTIONS.includes(name)) {
       req.resume();
       return send(res, 404, "Not found");
     }
     const post = await readPost(request);
     if (!post) return;
-    if (name !== "rename") {
-      const command = options.commands[name];
+    const run = async () => {
+      const command = Object.hasOwn(options.commands, name) ? options.commands[name] : undefined;
       if (!command) return send(res, 404, "Not found");
       const result = await command(post.json);
-      return sendJson(res, result.status, result.body);
-    }
+      sendJson(res, result.status, result.body);
+    };
+    if (name !== "rename" && name !== "delete") return run();
     const { sessionId } = record(post.json);
     if (typeof sessionId !== "string" || sessionId === "") return sendJson(res, 400, { error: "Name the session by its id." });
     const info = await sessions.find(sessionId);
     if (!info) return sendJson(res, 404, { error: "No such session." });
+    // A worker that is starting has no live entry yet: it already counts as the session's writer.
+    if (starting.has(sessionId)) return sendJson(res, 409, { error: "The session is starting here; try again in a moment." });
     const state = await stateOf(info.path, sessionId);
+    if (name === "delete") {
+      if (state.state === "hosted") return sendJson(res, 409, { error: "ampi app runs this session; it cannot delete it while it runs." });
+      // Every other holder has a live entry, which the command checks.
+      return run();
+    }
+    // The process that runs the session renames it; one nobody runs is renamed in its file.
     if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, "rename", post.raw);
-    return sendJson(res, 409, { error: "Rename this session where it runs; ampi app renames only the sessions it shows live." });
+    if (state.state === "elsewhere" && !state.gui) return sendJson(res, 409, { ...describe(state), error: `Process ${state.pid} (${state.kind}) has this session open; rename it there.` });
+    // Another app's worker has a web GUI: the command forwards the rename to it.
+    return run();
   }
 
   async function route(request: MmrGuiRequest): Promise<void> {
@@ -502,6 +518,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       const view = await viewMmrGuiSession(sessions, rawPath.slice("/api/sessions/".length));
       return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
     }
+    if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
     return send(res, 404, "Not found");
   }
 

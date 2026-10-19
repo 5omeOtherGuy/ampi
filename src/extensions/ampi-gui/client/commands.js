@@ -64,6 +64,27 @@ function archiveAvailability(state, archived) {
   return target.archived === archived ? unavailable(archived ? "This session is archived already" : "This session is not archived") : AVAILABLE;
 }
 
+/** Available for a target session, unless `need` (a key of the list's `actions`) is missing; `what` says what needs it. */
+function sessionAvailability(state, need, what) {
+  const target = targetOf(state);
+  if (!target) return unavailable("No session is shown");
+  if (need && !target.actions?.[need]) return unavailable(`${what} needs ampi-threads`);
+  return AVAILABLE;
+}
+
+/** A More Actions entry as a command on the focused or shown session: `action` is the menu's (titlebar.js `run`). */
+function sessionCommand(id, title, action, description, { keys = [], need, what = title, section = "Thread", when } = {}) {
+  return {
+    id,
+    title,
+    section,
+    keys,
+    description,
+    when: when ?? ((state) => sessionAvailability(state, need, what)),
+    run: (state) => state.ui.sessionAction(action, targetOf(state)),
+  };
+}
+
 /** The commands the page has now. */
 export const DEFAULT_COMMANDS = [
   // Global
@@ -166,7 +187,7 @@ export const DEFAULT_COMMANDS = [
     section: "Sidebar",
     context: "sidebar",
     keys: ["m"],
-    description: "The focused session's actions: copy, rename, archive",
+    description: "The focused session's More Actions",
     when: (state) => (state.focusedSession ? AVAILABLE : unavailable("Focus a session first")),
     run: (state) => state.ui.openSessionMenu(state.focusedSession),
   },
@@ -225,24 +246,51 @@ export const DEFAULT_COMMANDS = [
     when: (state) => (state.threadPage && state.promptEmpty && !state.promptFocused ? AVAILABLE : HIDDEN),
     run: (state, { chord }) => state.ui.moveMessage(chord.endsWith("up") ? -1 : 1, false),
   },
+  // More Actions, for the session focused in the sidebar, else the one shown.
+  sessionCommand("thread.copyMarkdown", "Copy as Markdown", "markdown", "Copy the session to the clipboard as Markdown", {
+    need: "markdown",
+    what: "Copying",
+  }),
+  sessionCommand("copy-session-id", "Copy session ID", "copy-id", "Copy the session's id"),
+  sessionCommand("copy-resume-command", "Copy resume command", "copy-resume", "Copy the ampi threads continue command that resumes the session in a terminal"),
+  sessionCommand("export-markdown", "Export as Markdown file", "export-markdown", "Download the session's current branch as a Markdown file", {
+    need: "markdown",
+    what: "Exporting as Markdown",
+  }),
+  sessionCommand("export-json", "Export as JSON file", "export-json", "Download the session and every entry of its file as JSON, as ampi threads export prints it"),
+  sessionCommand("show-running-in", "Show where the session runs", "running", "The process that runs the session, its phase, directory and Git branch"),
+  sessionCommand("thread.showCost", "Show cost & usage", "cost", "What the session cost so far, per model", {
+    when: (state) => {
+      const target = targetOf(state);
+      if (!target) return unavailable("No session is shown");
+      return target.actions?.cost ? AVAILABLE : unavailable("Costs need ampi-threads with ampiThreads.showCosts on");
+    },
+  }),
+  sessionCommand("toggle-pin", "Pin or unpin session", "pin", "Keep the session at the top of the sidebar, or stop", {
+    keys: ["ctrl+g i"],
+    need: "archive",
+    what: "Pinning",
+  }),
   {
     id: "thread.rename",
     title: "Rename session",
     section: "Thread",
     keys: [],
-    description: "Give the session this page runs a new title",
-    when: (state) => (state.session?.live ? AVAILABLE : state.session ? unavailable("Rename it in the terminal that runs it") : HIDDEN),
-    run: (state) => state.ui.sessionAction("rename", state.session),
+    description: "Give the session a new title; a session another process runs is renamed there",
+    when: (state) => (targetOf(state) ? AVAILABLE : HIDDEN),
+    run: (state) => state.ui.sessionAction("rename", targetOf(state)),
   },
-  {
-    id: "thread.copyMarkdown",
-    title: "Copy as Markdown",
-    section: "Thread",
-    keys: [],
-    description: "Copy the shown session to the clipboard as Markdown",
-    when: (state) => (state.session?.actions?.markdown ? AVAILABLE : state.session ? unavailable("Copying needs ampi-threads") : HIDDEN),
-    run: (state) => state.ui.sessionAction("markdown", state.session),
-  },
+  sessionCommand("edit-labels", "Edit labels", "labels", "Add or remove the session's labels", { need: "archive", what: "Labels" }),
+  sessionCommand("set-color", "Set session color", "color-menu", "Pick the colour of the session's disc", { need: "archive", what: "Colours" }),
+  sessionCommand("toggle-unread", "Mark as unread or read", "unread", "Mark the session unread, or read again", {
+    need: "archive",
+    what: "Unread marks",
+  }),
+  sessionCommand("toggle-snooze", "Snooze or unsnooze session", "snooze", "Move the session to Snoozed until its next message, or back", {
+    keys: ["ctrl+g z"],
+    need: "archive",
+    what: "Snoozing",
+  }),
   {
     id: "thread.unarchive",
     title: "Unarchive session",
@@ -252,6 +300,17 @@ export const DEFAULT_COMMANDS = [
     when: (state) => archiveAvailability(state, false),
     run: (state) => state.ui.sessionAction("archive", targetOf(state)),
   },
+  sessionCommand("delete-session", "Delete session", "delete", "Delete the session's file and thread metadata, after asking", {
+    when: (state) => {
+      const target = targetOf(state);
+      if (!target) return unavailable("No session is shown");
+      return target.held ? unavailable("Close the session where it runs before deleting it") : AVAILABLE;
+    },
+  }),
+  sessionCommand("report-bug", "Report a bug", "report-bug", "Open ampi's issue forms on GitHub in a new tab", {
+    section: "Global",
+    when: () => AVAILABLE,
+  }),
 
   // Thread Panes
   {
@@ -262,5 +321,13 @@ export const DEFAULT_COMMANDS = [
     description: "Close the sidebar sheet and put the cursor in the composer",
     when: (state) => (!state.threadPage ? HIDDEN : state.writable ? AVAILABLE : unavailable("This session is read-only here")),
     run: (state) => state.ui.focusPrompt(),
+  },
+  {
+    id: "toggle-full-width",
+    title: "Toggle full width",
+    section: "Thread Panes",
+    keys: [],
+    description: "Let the transcript and the composer use the whole width of the page; remembered on this machine",
+    run: (state) => state.ui.sessionAction("full-width", null),
   },
 ];

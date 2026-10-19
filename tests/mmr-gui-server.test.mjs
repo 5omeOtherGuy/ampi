@@ -243,7 +243,7 @@ describe("ampi-gui server: static files", () => {
     const css = await send({ path: "/client/tokens.css", headers: cookie() });
     assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
     assert.match(css.body, /--ampi-bg: light-dark\(/);
-    for (const file of ["sidebar.js", "titlebar.js", "transcript.js", "commands.js", "keys.js", "keymap.js"]) {
+    for (const file of ["sidebar.js", "titlebar.js", "transcript.js", "commands.js", "keys.js", "keymap.js", "prefs.js"]) {
       const res = await send({ path: `/client/${file}`, headers: cookie() });
       assert.equal(res.status, 200, file);
       assert.equal(res.headers["content-type"], "text/javascript; charset=utf-8", file);
@@ -443,7 +443,7 @@ describe("ampi-gui server: sessions", () => {
     assert.equal(res.headers["content-type"], "application/json; charset=utf-8");
     const list = JSON.parse(res.body);
     assert.equal(list.currentId, "s-1");
-    assert.deepEqual(list.actions, { archive: true, markdown: true });
+    assert.deepEqual(list.actions, { archive: true, markdown: true, cost: false }, "ampi-threads' stand-in shows no costs");
     assert.deepEqual(
       list.groups.map((group) => [group.id, group.sessions.map((row) => [row.id, row.title, row.live])]),
       [
@@ -504,13 +504,12 @@ describe("ampi-gui server: More Actions", () => {
     assert.equal(threads["s-saved"], undefined);
   });
 
-  it("renames only the session this process runs, as the user's title", async () => {
+  // Renaming other sessions, held or not, is in tests/mmr-gui-actions.test.mjs.
+  it("renames the session this process runs through Pi, as the user's title", async () => {
     const res = await command("rename", { sessionId: "s-1", name: "  Parser   review " });
     assert.equal(res.status, 200);
     assert.deepEqual(renamed, ["Parser review"]);
     assert.equal(threads["s-1"].titleSource, "user");
-    const other = await command("rename", { sessionId: "s-saved", name: "Other" });
-    assert.equal(other.status, 409, "another session's file is written only where it runs");
     assert.equal((await command("rename", { sessionId: "s-1", name: "   " })).status, 400);
     assert.equal((await command("rename", { sessionId: "s-1", name: "x".repeat(201) })).status, 400);
     assert.equal((await command("rename", { name: "No id" })).status, 400);

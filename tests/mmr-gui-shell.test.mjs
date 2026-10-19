@@ -88,26 +88,107 @@ describe("ampi-gui sidebar helpers", () => {
 });
 
 describe("ampi-gui More Actions", () => {
-  it("offers copy, rename and archive for the live session", async () => {
+  const ALL = { archive: true, markdown: true, cost: true };
+  const labels = (items) => items.map((item) => (item.separator ? "---" : `${item.label}${item.disabled ? " (disabled)" : ""}`));
+
+  it("lists every action in its group, with an icon each and the keys of pin, snooze and archive", async () => {
     const { menuItems } = await titlebar();
-    const items = menuItems({ live: true, archived: false, actions: { archive: true, markdown: true } });
+    const items = menuItems({ id: "s", title: "T", live: false, held: false, actions: ALL });
+    assert.deepEqual(labels(items), [
+      "Copy",
+      "Export",
+      "---",
+      "Running in",
+      "Cost & Usage",
+      "---",
+      "Pin",
+      "Rename…",
+      "Labels…",
+      "Color",
+      "---",
+      "Mark as Unread",
+      "Snooze",
+      "---",
+      "Archive",
+      "Delete",
+      "---",
+      "Full Width",
+      "Report Bug…",
+    ]);
+    for (const item of items.filter((entry) => !entry.separator)) assert.ok(item.icon, item.label);
+    const keys = Object.fromEntries(items.filter((item) => item.keys).map((item) => [item.action, item.keys]));
+    assert.deepEqual(keys, { pin: "ctrl+g i", snooze: "ctrl+g z", archive: "mod+shift+e" });
+    assert.equal(items.find((item) => item.action === "delete").destructive, true);
+    assert.equal(items.find((item) => item.action === "report-bug").href, "https://github.com/5omeOtherGuy/ampi/issues/new/choose");
+    assert.equal(items.find((item) => item.action === "full-width").checked, false);
+  });
+
+  it("names the state each toggle changes to, and disables Delete for a session a process holds", async () => {
+    const { menuItems } = await titlebar();
+    const items = menuItems(
+      { id: "s", title: "T", live: true, held: true, pinned: true, unread: true, snoozed: true, archived: true, actions: ALL },
+      { fullWidth: true },
+    );
+    for (const label of ["Unpin", "Mark as Read", "Unsnooze", "Unarchive"]) assert.ok(labels(items).includes(label), label);
+    const remove = items.find((item) => item.action === "delete");
+    assert.equal(remove.disabled, true);
+    assert.match(remove.hint, /where it runs/);
+    assert.equal(items.find((item) => item.action === "full-width").checked, true);
+    assert.equal(items.find((item) => item.submenu === "running").detail, "This terminal");
+  });
+
+  it("leaves out what the thread index backs without ampi-threads, and disables Cost & Usage without costs", async () => {
+    const { menuItems, submenuItems } = await titlebar();
+    const bare = menuItems({ id: "s", title: "T", actions: { archive: false, markdown: false, cost: false } });
+    assert.deepEqual(labels(bare), ["Copy", "Export", "---", "Running in", "Cost & Usage (disabled)", "---", "Rename…", "---", "Delete", "---", "Full Width", "Report Bug…"]);
     assert.deepEqual(
-      items.map((item) => (item.separator ? "---" : `${item.label}${item.disabled ? " (disabled)" : ""}`)),
-      ["Copy as Markdown", "Rename…", "---", "Archive"],
+      submenuItems("copy", { actions: { markdown: false } }).map((item) => item.label),
+      ["Session ID", "Resume Command", "Page URL"],
+    );
+    assert.deepEqual(
+      submenuItems("export", { actions: { markdown: false } }).map((item) => item.label),
+      ["JSON File"],
     );
   });
 
-  it("disables rename for another session, offers unarchive, and leaves out what the server cannot do", async () => {
-    const { menuItems } = await titlebar();
-    const saved = menuItems({ live: false, archived: true, actions: { archive: true, markdown: true } });
-    const rename = saved.find((item) => item.action === "rename");
-    assert.equal(rename.disabled, true);
-    assert.match(rename.hint, /terminal/);
-    assert.equal(saved.at(-1).label, "Unarchive");
-    const bare = menuItems({ live: true, archived: false, actions: { archive: false, markdown: false } });
+  it("offers Copy, Export and Color submenus, the session's colour checked and Reset for a set one", async () => {
+    const { submenuItems, resumeCommand, runningHint } = await titlebar();
+    const { THREAD_COLORS } = await sidebar();
     assert.deepEqual(
-      bare.map((item) => item.action),
-      ["rename"],
+      submenuItems("copy", { actions: ALL }).map((item) => [item.label, item.keys]),
+      [
+        ["Markdown", undefined],
+        ["Session ID", undefined],
+        ["Resume Command", undefined],
+        ["Page URL", "mod+shift+c"],
+      ],
+    );
+    assert.deepEqual(
+      submenuItems("export", { actions: ALL }).map((item) => item.action),
+      ["export-markdown", "export-json"],
+    );
+    const colors = submenuItems("color", { color: "green", actions: ALL });
+    assert.deepEqual(
+      colors.filter((item) => item.swatch).map((item) => item.value),
+      THREAD_COLORS,
+    );
+    assert.deepEqual(
+      colors.filter((item) => item.checked).map((item) => item.label),
+      ["Green"],
+    );
+    assert.deepEqual(colors.at(-1), { action: "color", value: null, label: "Reset", checked: false });
+    assert.equal(submenuItems("color", { color: null, actions: ALL }).at(-1).checked, true);
+    assert.equal(resumeCommand("019a"), "ampi threads continue 019a");
+    assert.deepEqual(
+      [
+        runningHint({ live: true }),
+        runningHint({ elsewhere: true }),
+        runningHint({}),
+        runningHint({ host: null }),
+        runningHint({ host: { kind: "execute" } }),
+        runningHint({ host: { kind: "app-session" } }),
+      ],
+      ["This terminal", "Elsewhere", "Not running", "Not running", "ampi -x", "ampi app"],
     );
   });
 });

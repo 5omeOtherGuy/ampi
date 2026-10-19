@@ -523,6 +523,17 @@ describe("ampi threads: changing sessions", () => {
     assert.equal(tooMany.err, "ampi: a session takes at most 20 labels, not 21.\n");
   });
 
+  it("keeps the snooze, unread and read dates the web GUI writes when it archives and labels a session", async () => {
+    const gui = { snoozed: "2026-10-18T09:30:00.000Z", unread: true, readAt: "2026-10-18T09:00:00.000Z" };
+    await store.update("release-notes", gui);
+    assert.deepEqual((await run(["threads", "archive", "release-notes"])).result, { code: 0 });
+    assert.deepEqual((await run(["threads", "label", "release-notes", "notes"])).result, { code: 0 });
+    assert.deepEqual(await store.get("release-notes"), { ...gui, archived: new Date(NOW).toISOString(), labels: ["notes"] });
+    assert.deepEqual((await run(["threads", "unarchive", "release-notes"])).result, { code: 0 });
+    assert.deepEqual(await store.get("release-notes"), { ...gui, labels: ["notes"] });
+    updateThreadRecord(threadIndexPath(agentDir), "release-notes", null);
+  });
+
   it("accepts and refuses the same labels as ampi-threads, with the same reasons", async () => {
     const { validateMmrThreadLabels } = await importSource("extensions/ampi-threads/index-store.ts");
     const outcome = (validate, labels) => {

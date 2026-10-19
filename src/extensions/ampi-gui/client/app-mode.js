@@ -29,6 +29,20 @@ export function shareableUrl(href) {
   return url.href;
 }
 
+/**
+ * The address of session `id`'s page on the server at `href`, never with
+ * the access token: `/s/<id>` in app mode; on a terminal's own page `/` for
+ * the session it runs (`liveId`) and `/#/s/<id>` for the others.
+ */
+export function sessionPageUrl(href, { app, id, liveId }) {
+  const url = new URL(href);
+  url.search = "";
+  url.hash = "";
+  url.pathname = app ? appPath(id) : "/";
+  if (!app && id && id !== liveId) url.hash = `#/s/${encodeURIComponent(id)}`;
+  return url.href;
+}
+
 /** The page's address for a session, or `/` for the home page. */
 export function appPath(id) {
   return id ? `/s/${encodeURIComponent(id)}` : "/";

@@ -3,7 +3,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 import type { MmrGuiBridge } from "./bridge.js";
-import type { MmrGuiCommands } from "./commands.js";
+import type { MmrGuiCommands, MmrGuiExporter } from "./commands.js";
 import type { MmrGuiSessions } from "./sessions.js";
 
 /**
@@ -30,12 +30,16 @@ import type { MmrGuiSessions } from "./sessions.js";
  *   explicit content type.
  * - `GET /api/sessions` lists the sessions for the sidebar and
  *   `GET /api/sessions/<id>` reads one read-only; neither writes anything.
+ *   `GET /api/export?sessionId=<id>&format=markdown|json` answers a
+ *   session as a file to download (`Content-Disposition: attachment`).
  */
 
 export interface MmrGuiServerOptions {
   bridge: MmrGuiBridge;
   /** Handlers of the POST routes, by the name after `/api/`. */
   commands: MmrGuiCommands;
+  /** `GET /api/export`: a session as a Markdown or JSON file. */
+  exportSession: MmrGuiExporter;
   /** The sidebar's session list and the read-only views of other sessions. */
   sessions: Pick<MmrGuiSessions, "list" | "view">;
   token: string;
@@ -108,6 +112,16 @@ export function send(res: ServerResponse, status: number, body: string, headers:
 
 export function sendJson(res: ServerResponse, status: number, value: unknown): void {
   send(res, status, JSON.stringify(value), { "Content-Type": "application/json; charset=utf-8" });
+}
+
+/** Answer `GET /api/export?sessionId=&format=`: the file as an attachment, or the exporter's JSON error. */
+export async function sendMmrGuiExport(res: ServerResponse, url: URL, exportSession: MmrGuiExporter): Promise<void> {
+  const result = await exportSession(url.searchParams.get("sessionId") ?? "", url.searchParams.get("format") ?? "");
+  if (!("text" in result)) return sendJson(res, result.status, result.body);
+  send(res, 200, result.text, {
+    "Content-Type": result.contentType,
+    "Content-Disposition": `attachment; filename="${result.filename}"`,
+  });
 }
 
 /** One event-stream event; the hub's own events have no `id`, so they leave the replay position alone. */
@@ -352,6 +366,7 @@ export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiS
       const view = await viewMmrGuiSession(options.sessions, rawPath.slice("/api/sessions/".length));
       return view ? sendJson(res, 200, view) : sendJson(res, 404, { error: "No such session." });
     }
+    if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
     return send(res, 404, "Not found");
   }
 
