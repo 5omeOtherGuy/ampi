@@ -379,6 +379,12 @@ function readOptions(args) {
     // A group of short flags such as `-ne` is Pi's, not ampi's: pass it as written.
     const ours = (optionsPerArg.get(token.index) ?? 0) === 1 && (token.name in OPTIONS || token.rawName === "-v");
     if (!ours) {
+      // Pi reads any value on a boolean extension flag as true, so a value on
+      // its allow-all form other than `true` is refused rather than passed on.
+      if (token.rawName === "--ampi-dangerously-allow-all" && token.inlineValue === true && token.value !== "true") {
+        error ??= "--ampi-dangerously-allow-all takes no value other than true.";
+        break;
+      }
       passRaw(token.index);
       if (token.inlineValue === false) passRaw(token.index + 1);
       continue;

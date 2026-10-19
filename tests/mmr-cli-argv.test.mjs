@@ -118,6 +118,16 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("refuses Pi's allow-all form with a value other than true", () => {
+    for (const value of ["false", "", "yes"]) {
+      const route = routeAmpiArgv(["-x", `--ampi-dangerously-allow-all=${value}`, "fix it"]);
+      assert.equal(route.command, "error", value);
+      assert.equal(route.error, "--ampi-dangerously-allow-all takes no value other than true.");
+      assert.deepEqual(route.piArgs, []);
+    }
+    assert.deepEqual(routeAmpiArgv(["-x", "--ampi-dangerously-allow-all=true", "fix it"]).piArgs, ["--ampi-dangerously-allow-all=true", "fix it"], "the true form passes through");
+  });
+
   it("reads -x/--execute, --timings and --no-archive-after-execute and keeps them away from Pi", () => {
     const plain = routeAmpiArgv(["fix", "it"]).options;
     assert.deepEqual([plain.execute, plain.timings, plain.archive], [false, false, true]);
