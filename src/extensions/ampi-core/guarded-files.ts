@@ -15,8 +15,9 @@ import { patchTextPaths } from "./tool-activity.js";
  *
  * Unlike the rule engine in `permissions.ts`, this module reads the
  * filesystem: it follows symbolic links with `realpath`, and `readlink` for
- * links whose target does not exist yet, so a link that points into `~/.ssh`
- * is caught. Everything it reads from the machine (home, platform, temp
+ * links whose target does not exist yet (resolving their targets one name at
+ * a time, as the system does), so a link that points into `~/.ssh` is
+ * caught. Everything it reads from the machine (home, platform, temp
  * directory, cwd, Pi's agent directory, environment variables, `realpath`,
  * `readlink`) can be injected, so Windows and macOS cases run anywhere.
  */
@@ -83,7 +84,7 @@ const ENV_TEMPLATES: ReadonlySet<string> = new Set([".env.example", ".env.sample
 const DATABASE = /\.(db|sqlite|sqlite3)$/;
 const UNIX_SYSTEM_ROOTS = ["/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/boot", "/var", "/opt"];
 const MACOS_SYSTEM_ROOTS = ["/private/etc", "/private/var", "/System", "/Library", "/Applications"];
-/** Links followed in a row before a path counts as one that cannot be followed, as Linux's own limit. */
+/** Links followed for one path before it counts as one that cannot be followed, as Linux's own limit. */
 const MAX_LINKS = 40;
 
 interface Resolved {
@@ -196,9 +197,9 @@ function isStrictlyUnder(candidate: string, root: string): boolean {
  * ancestor joined with the rest, where a dangling link on the way is read and
  * its target followed the same way, since a write through it creates that
  * target. `undefined` for a link that cannot be followed: a loop, more than
- * `MAX_LINKS` links in a row, or one whose folder or target cannot be read.
+ * `MAX_LINKS` links to follow, or one whose folder or target cannot be read.
  */
-function realForm(env: Pick<Resolved, "path" | "realpath" | "readlink">, filePath: string, links = 0): string | undefined {
+function realForm(env: Pick<Resolved, "path" | "realpath" | "readlink">, filePath: string, budget = { links: MAX_LINKS }): string | undefined {
   const p = env.path;
   const rest: string[] = [];
   let current = filePath;
@@ -215,14 +216,13 @@ function realForm(env: Pick<Resolved, "path" | "realpath" | "readlink">, filePat
       // Not a link: walk up to its folder.
     }
     if (target !== undefined) {
-      if (links >= MAX_LINKS) return undefined;
       let folder: string;
       try {
         folder = env.realpath(p.dirname(current));
       } catch {
         return undefined;
       }
-      const real = realForm(env, p.resolve(folder, target), links + 1);
+      const real = followLink(env, folder, target, budget);
       return real === undefined ? undefined : p.join(real, ...rest.reverse());
     }
     const parent = p.dirname(current);
@@ -230,6 +230,53 @@ function realForm(env: Pick<Resolved, "path" | "realpath" | "readlink">, filePat
     rest.push(p.basename(current));
     current = parent;
   }
+}
+
+/**
+ * Where a link with `target` in the real folder `folder` leads, resolved as
+ * the system resolves it: one name at a time from the folder (or from the
+ * target's root), each name followed when it is a link before the next one
+ * applies, so a `..` leaves the folder the name before it leads to, not the
+ * folder that name sits in. A missing name is kept as it is, as the folder a
+ * write would create. Every dangling link followed counts against `budget`.
+ */
+function followLink(
+  env: Pick<Resolved, "path" | "realpath" | "readlink">,
+  folder: string,
+  target: string,
+  budget: { links: number },
+): string | undefined {
+  if (budget.links <= 0) return undefined;
+  budget.links -= 1;
+  const p = env.path;
+  const root = p.parse(target).root;
+  // `folder` is real, so resolving it against the target's bare root follows no link.
+  let resolved = root === "" ? folder : p.resolve(folder, root);
+  for (const name of target.slice(root.length).split(p.sep === "\\" ? /[\\/]/ : "/")) {
+    if (name === "" || name === ".") continue;
+    if (name === "..") {
+      resolved = p.dirname(resolved);
+      continue;
+    }
+    const next = p.join(resolved, name);
+    try {
+      resolved = env.realpath(next);
+      continue;
+    } catch {
+      // Missing, or a link that does not lead anywhere yet.
+    }
+    let inner: string | undefined;
+    try {
+      inner = env.readlink(next);
+    } catch {
+      resolved = next;
+      continue;
+    }
+    const followed = followLink(env, resolved, inner, budget);
+    if (followed === undefined) return undefined;
+    resolved = followed;
+  }
+  return resolved;
 }
 
 function names(candidate: string): string[] {

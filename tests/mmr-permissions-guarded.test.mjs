@@ -264,6 +264,58 @@ describe("ampi-permissions guarded files: classification", () => {
     }
   });
 
+  it("follows a dangling link's target one name at a time, as the system does", () => {
+    const root = realpathSync(tempDir("ampi-guarded-"));
+    const home = path.join(root, "home");
+    const project = path.join(home, "work", "repo");
+    const hook = path.join(project, ".git", "hooks", "pre-commit");
+    mkdirSync(path.join(home, ".ssh"), { recursive: true });
+    mkdirSync(path.join(project, ".git", "hooks"), { recursive: true });
+    const link = (target, name) => symlinkSync(target, path.join(project, name));
+    link(".git/hooks", "d");
+    link("..", "up");
+    link("d", "e");
+    // Targets are written out, since `path.join` would drop the `..`. The
+    // `..` applies to the folder `d` leads to, not to the project.
+    link("d/../hooks/pre-commit", "notes.txt");
+    link("up/../.ssh/authorized_keys", "notes.md");
+    link("./d/./../hooks/./pre-commit", "dots.txt");
+    link(`${project}/d/../hooks/pre-commit`, "absolute.txt");
+    link("e/../hooks/pre-commit", "twice.txt");
+    link("notes.txt", "chain.txt");
+    link("e/../hooks", "hooks2");
+    link("hooks2/../hooks/pre-commit", "nested.txt");
+    link("missing/../../../.ssh/rc", "gone.txt");
+    link("chain.txt/../../../../../.ssh/rc", "through.txt");
+    const env = { platform: "linux", homeDir: home, cwd: project, tempDir: path.join(root, "tmp"), agentDir: path.join(root, "agent"), env: {} };
+    const cases = [
+      ["notes.txt", "git", hook],
+      ["notes.md", "ssh", path.join(home, ".ssh", "authorized_keys")],
+      ["dots.txt", "git", hook],
+      ["absolute.txt", "git", hook],
+      ["twice.txt", "git", hook],
+      ["chain.txt", "git", hook],
+      ["nested.txt", "git", hook],
+      ["gone.txt", "ssh", path.join(home, ".ssh", "rc")],
+      ["through.txt", "ssh", path.join(home, ".ssh", "rc")],
+    ];
+    for (const [raw, category, real] of cases) {
+      const file = guarded.classifyMmrGuardedFile(raw, "pi", env);
+      assert.equal(file?.category.key, category, raw);
+      assert.equal(file.realPath, real, raw);
+      assert.deepEqual(file.guardedForms, [real], raw);
+    }
+  });
+
+  it("counts every dangling link followed for one path against the limit", () => {
+    const project = realpathSync(tempDir("ampi-guarded-"));
+    // Each link names the next twice, so following them all would take 2^30 steps.
+    for (let i = 0; i < 30; i += 1) symlinkSync(`l${i + 1}/../l${i + 1}`, path.join(project, `l${i}`));
+    symlinkSync("missing", path.join(project, "l30"));
+    const env = { ...LINUX, cwd: project, realpath: undefined, readlink: undefined };
+    assert.equal(guarded.classifyMmrGuardedFile("l0/x", "plain", env)?.category.key, "unresolved-link");
+  });
+
   it("guards a link that cannot be followed", () => {
     const project = realpathSync(tempDir("ampi-guarded-"));
     symlinkSync("loop", path.join(project, "loop"));
