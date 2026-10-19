@@ -145,7 +145,7 @@ const editorTheme = {
 async function startSession(entries, { idle = true } = {}) {
   const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
   const mock = createMockPi();
-  createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(mock.pi);
+  createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(mock.pi);
   const context = createMockExtensionContext({ hasUI: true, entries, idle });
   await mock.handlers.get("session_start")({ type: "session_start", reason: "startup" }, context.ctx);
   const tui = fakeTui();
@@ -246,7 +246,7 @@ describe("ampi-tui message navigation in a session", () => {
   it("registers the edit slash command only for an interactive session", async () => {
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const mock = createMockPi();
-    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(mock.pi);
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(mock.pi);
     const print = createMockExtensionContext({ hasUI: false });
     await mock.handlers.get("session_start")({ type: "session_start", reason: "startup" }, print.ctx);
     assert.equal(mock.commands.has("ampi-edit-message"), false, "print, JSON and RPC runs do not list it");

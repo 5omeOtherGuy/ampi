@@ -177,7 +177,7 @@ describe("ampi.terminal.detailsExpandedByDefault", () => {
    */
   async function start({ setting, reason = "startup", editorFocused = true }) {
     const mock = createMockPi({ settings: { hideThinkingBlock: true } });
-    tuiExtension.createMmrTuiExtension({ loadSettings: () => ({ enabled: true, detailsExpandedByDefault: setting }) })(mock.pi);
+    tuiExtension.createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false, detailsExpandedByDefault: setting }) })(mock.pi);
     const context = createMockExtensionContext();
     let toggles = 0;
     const editor = { actionHandlers: new Map([["app.thinking.toggle", () => (toggles += 1)]]), handleInput() {}, render: () => [] };

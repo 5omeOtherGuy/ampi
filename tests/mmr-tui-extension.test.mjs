@@ -13,12 +13,16 @@ isolateAnimationEnv();
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-/** `beforeCreate` runs after the source is loaded, e.g. to start mock timers the import must not see. */
+/**
+ * `beforeCreate` runs after the source is loaded, e.g. to start mock timers the import must not see.
+ * The intro stays shut unless a case turns it on: it would open over every fresh session and record
+ * itself under the agent directory (tests/mmr-tui-intro.test.mjs covers it).
+ */
 async function loadExtension(settings, beforeCreate) {
   const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
   beforeCreate?.();
   const mock = createMockPi();
-  createMmrTuiExtension({ loadSettings: () => settings })(mock.pi);
+  createMmrTuiExtension({ loadSettings: () => ({ intro: false, ...settings }) })(mock.pi);
   return mock;
 }
 
@@ -367,6 +371,7 @@ describe("ampi-tui settings", () => {
         notifications: { enabled: true, system: true, sound: false },
         detailsExpandedByDefault: false,
         alwaysIncludePaths: [],
+        intro: true,
       });
     });
   });
@@ -418,6 +423,19 @@ describe("ampi-tui settings", () => {
       writeProject({ ampi: { tui: { enabled: true } } });
       assert.equal(load(), true);
       writeProject({ ampiTui: { enabled: "no" } });
+      assert.equal(load(), false, "a non-boolean value is ignored, so the global value stands");
+    });
+  });
+
+  it("reads ampiTui.intro, where only false keeps the intro shut and the project file wins", async () => {
+    const { loadMmrTuiSettings } = await importSource("extensions/ampi-tui/config.ts");
+    await withDirs(({ home, cwd, writeGlobal, writeProject }) => {
+      const load = () => loadMmrTuiSettings(cwd, { homeDirectory: home, env: {} }).intro;
+      writeGlobal({ ampiTui: { intro: false } });
+      assert.equal(load(), false);
+      writeProject({ ampi: { tui: { intro: true } } });
+      assert.equal(load(), true, "the nested project setting wins");
+      writeProject({ ampiTui: { intro: "no" } });
       assert.equal(load(), false, "a non-boolean value is ignored, so the global value stands");
     });
   });

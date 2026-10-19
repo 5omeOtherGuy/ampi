@@ -104,6 +104,8 @@ export interface MmrTuiKeysOptions {
   readonly onEscape?: () => boolean;
   /** Opens the Mention Thread picker for `thread.mention`; resolves with the reference to insert. */
   readonly pickThread?: (ctx: ExtensionContext) => Promise<string | undefined>;
+  /** The `ampi.showWelcome` command ran. */
+  readonly onShowWelcome?: (ctx: ExtensionContext) => void;
 }
 
 export interface MmrTuiKeys {
@@ -180,6 +182,7 @@ export function createMmrTuiKeys(pi: ExtensionAPI, options: MmrTuiKeysOptions = 
     openExtensions: (current) => openReport(() => openMmrExtensions(current, buildMmrExtensionList(pi.getCommands(), pi.getAllTools()))),
     openVersion: (current) => openReport(() => openMmrVersion(current, readMmrVersionInfo())),
     openMcpInfo: (current) => openReport(() => openMmrMcpInfo(current, readMmrMcpInfo(pi, current))),
+    openIntro: options.onShowWelcome,
     onInterrupt: options.onInterrupt,
     toggleHelp: options.onToggleHelp,
   };

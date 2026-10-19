@@ -13,6 +13,7 @@ import { createMmrPromptQueue } from "./editor/queue.js";
 import { createMmrStatusFeed } from "./editor/status-feed.js";
 import { canMmrSetDetailsExpanded, setMmrDetailsExpanded } from "./keys/commands.js";
 import { createMmrTuiKeys } from "./keys/install.js";
+import { createMmrIntroLauncher } from "./overlays/intro.js";
 import { createMmrMessageNavigation } from "./transcript/navigation.js";
 import { installToolRenderers } from "./transcript/tool-renderers.js";
 
@@ -24,6 +25,8 @@ const DETAILS_DEFAULT_REASONS: ReadonlySet<string> = new Set(["startup", "new", 
 
 export interface MmrTuiFactoryOverrides {
   loadSettings?: () => MmrTuiSettings;
+  /** File that records the onboarding intro as seen; defaults to `<agentDir>/data/ampi/tui/intro.json`. */
+  introRecordPath?: string;
 }
 
 export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
@@ -80,7 +83,9 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       onToggleHelp: () => promptBox.toggleHelp(),
       onKeyCommand: () => promptBox.closeHelp(),
       onEscape: () => navigation.clear(),
+      onShowWelcome: (ctx) => void intro.open(ctx).catch(() => {}),
     });
+    const intro = createMmrIntroLauncher({ settings, keymap: () => keys.keymap(), recordPath: overrides.introRecordPath });
 
     pi.on("session_start", (event, ctx) => {
       // Only the interactive terminal has chrome to own. Print, JSON and RPC
@@ -117,10 +122,13 @@ export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
       titleNotify.start(ctx);
       expandDetailsFor = settings.detailsExpandedByDefault && DETAILS_DEFAULT_REASONS.has(event.reason) ? ctx : undefined;
       expandDetailsWhenReady();
+      // Last, so the intro names the keys of the keymap just resolved and opens over the finished screen.
+      intro.start(ctx);
     });
 
     pi.on("session_shutdown", (event, ctx) => {
       expandDetailsFor = undefined;
+      intro.stop();
       navigation.stop();
       keys.stop();
       queue.stop();

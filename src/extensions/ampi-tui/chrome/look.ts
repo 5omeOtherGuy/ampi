@@ -7,6 +7,15 @@ import { keepMmrTuiTheme } from "../theme/select.js";
 import { createMmrTuiMessageStyle, type MmrUserMessageSelected } from "../transcript/messages.js";
 import { buildMmrWelcomeCard, isMmrKeyInput, MmrWelcomeHeader, type MmrWelcomeCard } from "./welcome.js";
 
+/**
+ * Whether the session has no messages yet. Pi records the startup model and
+ * thinking level before `session_start`; only a message means the session
+ * is already under way.
+ */
+export function isMmrFreshSession(ctx: Pick<ExtensionContext, "sessionManager">): boolean {
+  return !ctx.sessionManager.getEntries().some((entry) => entry.type === "message");
+}
+
 export interface MmrTuiLook {
   /** Apply the theme, message styling and welcome header to an interactive session. */
   start(ctx: ExtensionContext): void;
@@ -58,9 +67,7 @@ export function installMmrTuiLook(
 
       const card = pendingCard;
       pendingCard = undefined;
-      // Pi records the startup model and thinking level before session_start;
-      // only a message means the session is already under way.
-      const fresh = !ctx.sessionManager.getEntries().some((entry) => entry.type === "message");
+      const fresh = isMmrFreshSession(ctx);
       // With animations off the mark rests on its first frame.
       const animate = fresh && !isMmrAnimationDisabled({ cwd: ctx.cwd });
       ctx.ui.setHeader((tui, theme) => {

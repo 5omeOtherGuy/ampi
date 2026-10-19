@@ -38,7 +38,7 @@ describe("ampi's default commands", () => {
       createStore: () => store,
       createHistoryStore: () => ({ read: async () => [], append: async () => {} }),
     })(threads.pi);
-    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(tui.pi);
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(tui.pi);
     const { ctx } = createMockExtensionContext({ hasUI: true });
     for (const mock of [threads, tui]) await mock.handlers.get("session_start")({ type: "session_start", reason: "startup" }, ctx);
     try {

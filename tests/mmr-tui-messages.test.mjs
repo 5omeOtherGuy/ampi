@@ -138,7 +138,7 @@ describe("ampi-tui transcript styling in a session", () => {
   it("installs on load, hides the collapsed-thinking label, draws in the session theme, and restores on shutdown", async () => {
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const { pi, handlers } = createMockPi();
-    createMmrTuiExtension({ loadSettings: () => ({ enabled: true }) })(pi);
+    createMmrTuiExtension({ loadSettings: () => ({ enabled: true, intro: false }) })(pi);
     assert.notEqual(UserMessageComponent.prototype.rebuild, originalRebuild, "the patch is in before any session starts");
     assert.deepEqual(
       new UserMessageComponent("hi").render(20).map(stripOsc133),

@@ -222,7 +222,7 @@ describe("ampi-tui welcome card from the changelog", () => {
   async function startTui(settings, { entries = startupEntries } = {}) {
     const { createMmrTuiExtension } = await importSource("extensions/ampi-tui/index.ts");
     const mock = createMockPi();
-    createMmrTuiExtension({ loadSettings: () => settings })(mock.pi);
+    createMmrTuiExtension({ loadSettings: () => ({ intro: false, ...settings }) })(mock.pi);
     const context = createMockExtensionContext({ hasUI: true, entries });
     return { ...mock, ...context };
   }

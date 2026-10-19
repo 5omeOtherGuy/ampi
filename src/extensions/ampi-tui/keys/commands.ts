@@ -60,6 +60,8 @@ export interface MmrTuiCommandHost {
   openVersion(ctx: ExtensionContext): void;
   /** Open the MCP Servers dialog. */
   openMcpInfo(ctx: ExtensionContext): void;
+  /** Open the onboarding intro. */
+  openIntro?(ctx: ExtensionContext): void;
   /** Called when `thread.interrupt` stops the running turn. */
   onInterrupt?(): void;
   /** Open or close the shortcuts help in the prompt box. */
@@ -395,6 +397,15 @@ export function createMmrTuiCommands(host: MmrTuiCommandHost): MmrCommandDefinit
       description: "Show the ampi and Pi versions",
       // Outside the terminal UI there is no dialog: a notification says it.
       run: (ctx) => (ctx.mode === "tui" ? host.openVersion(ctx) : ctx.ui.notify(formatMmrVersionNotice(readMmrVersionInfo()), "info")),
+    },
+    {
+      id: "ampi.showWelcome",
+      noun: "ampi",
+      verb: "show welcome",
+      description: "Replay the short tour of ampi that opens on first start",
+      keywords: ["intro", "onboarding", "tour"],
+      availability: terminalOnly,
+      run: (ctx) => host.openIntro?.(ctx),
     },
     {
       id: "skills.list",
