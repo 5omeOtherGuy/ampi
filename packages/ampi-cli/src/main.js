@@ -161,7 +161,8 @@ async function startPi({ piArgs, options }, log) {
   }
   const decision = decideAmpiLoad({
     piArgs: args,
-    pi: await listPiExtensionSources(pi, cwd),
+    // A project's settings count once Pi trusts it, or when --approve or --no-approve decides.
+    pi: await listPiExtensionSources(pi, cwd, { projectTrusted: parsed.projectTrustOverride }),
     cwd,
     packageNameAt: (start) => readPackageAt(start)?.name,
   });
@@ -701,7 +702,8 @@ async function runAppWorkerProcess(log) {
 /**
  * The ampi that `ampi` runs in `cwd`: the one Pi loads from its settings or
  * extension directories when there is one (as `startPi` decides), else the
- * CLI's own.
+ * CLI's own. A project's settings count only once Pi trusts the project, so an
+ * untrusted project cannot make the command run its code.
  *
  * @param {any} pi
  * @param {string} cwd

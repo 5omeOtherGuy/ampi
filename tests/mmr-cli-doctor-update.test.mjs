@@ -434,6 +434,43 @@ describe("ampi doctor: spawned", () => {
     assert.equal(result.status, 0);
   });
 
+  it("runs a project's npmCommand for Pi's package lookup only once Pi trusts the project", () => {
+    const dir = freshDir("spawn");
+    const agentDir = path.join(dir, "agent");
+    const fakeBin = path.join(dir, "bin");
+    const pathLog = path.join(dir, "path-npm.jsonl");
+    const projectLog = path.join(dir, "project-npm.jsonl");
+    /** An npm that logs its arguments and answers `root -g` with an empty directory. */
+    const fakeNpm = (log) =>
+      `#!/usr/bin/env node\nrequire("node:fs").appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + "\\n");\nprocess.stdout.write(${JSON.stringify(path.join(dir, "global"))} + "\\n");\n`;
+    write(path.join(fakeBin, "npm"), fakeNpm(pathLog), 0o755);
+    // An npm package Pi has not installed, so its lookup asks npm for the global directory.
+    write(path.join(agentDir, "settings.json"), JSON.stringify({ packages: ["npm:@probe/not-installed"] }));
+    const project = path.join(dir, "project");
+    write(path.join(project, "tools", "npm"), fakeNpm(projectLog), 0o755);
+    write(path.join(project, ".pi", "settings.json"), JSON.stringify({ npmCommand: [path.join(project, "tools", "npm")] }));
+    const logged = (file) => {
+      try {
+        return readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+      } catch {
+        return [];
+      }
+    };
+    const env = { HOME: path.join(dir, "home"), PI_CODING_AGENT_DIR: agentDir, PATH: `${fakeBin}${path.delimiter}${nodeDir}` };
+
+    const untrusted = runDoctor(["--json"], env, project);
+    assert.equal(untrusted.stderr, "");
+    assert.deepEqual(logged(projectLog), [], "the untrusted project's npmCommand did not run");
+    assert.deepEqual(logged(pathLog), [["root", "-g"]], "the lookup ran npm from PATH");
+
+    // Pi's trust store: the decision for the directory's real path.
+    write(path.join(agentDir, "trust.json"), JSON.stringify({ [realpathSync(project)]: true }));
+    const trusted = runDoctor(["--json"], env, project);
+    assert.equal(trusted.stderr, "");
+    assert.deepEqual(logged(projectLog), [["root", "-g"]], "a trusted project's npmCommand runs");
+    assert.deepEqual(logged(pathLog), [["root", "-g"]]);
+  });
+
   it("counts a provider key from the environment without printing it, and fails without one", () => {
     const dir = freshDir("spawn");
     const env = { HOME: path.join(dir, "home"), PI_CODING_AGENT_DIR: path.join(dir, "agent") };
