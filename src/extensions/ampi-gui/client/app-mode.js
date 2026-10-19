@@ -17,6 +17,18 @@ export function sessionBase(app, id) {
   return app && id ? `/s/${encodeURIComponent(id)}/api/` : "/api/";
 }
 
+/**
+ * The page's address to copy: as shown, but never with the access token,
+ * which only the link Pi prints carries (`?t=`).
+ */
+export function shareableUrl(href) {
+  const url = new URL(href);
+  url.searchParams.delete("t");
+  // An empty fragment (`/#`, left by the live session's row) is dropped.
+  if (!url.hash) url.hash = "";
+  return url.href;
+}
+
 /** The page's address for a session, or `/` for the home page. */
 export function appPath(id) {
   return id ? `/s/${encodeURIComponent(id)}` : "/";

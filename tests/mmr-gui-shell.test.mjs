@@ -1,5 +1,6 @@
 // ampi-gui shell helpers: session disc colours, relative times, the sidebar
-// search, the sidebar width, the shell's keys and the More Actions entries.
+// search, the sidebar width and the More Actions entries (the page's keys
+// are in mmr-gui-keys.test.mjs).
 // Pure functions from the client modules; the page wiring is checked in a
 // browser.
 
@@ -11,7 +12,6 @@ after(cleanupLoadedSource);
 
 const sidebar = () => importSource("extensions/ampi-gui/client/sidebar.js");
 const titlebar = () => importSource("extensions/ampi-gui/client/titlebar.js");
-const key = (key, mods = {}) => ({ key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...mods });
 
 describe("ampi-gui sidebar helpers", () => {
   it("keeps a session's set colour and hashes the others onto the named colours, never gray", async () => {
@@ -84,20 +84,6 @@ describe("ampi-gui sidebar helpers", () => {
     assert.equal(clampSidebarWidth(300.6), 301);
     assert.equal(clampSidebarWidth(5000), SIDEBAR_WIDTH.max);
     assert.equal(clampSidebarWidth(Number.NaN), 256, "a stored width that is not a number");
-  });
-
-  it("toggles the sidebar on mod+b and focuses the search on / outside text fields", async () => {
-    const { shortcutFor } = await sidebar();
-    assert.equal(shortcutFor(key("b", { ctrlKey: true })), "toggle-sidebar");
-    assert.equal(shortcutFor(key("B", { ctrlKey: true }), { inField: true }), "toggle-sidebar", "also while typing");
-    assert.equal(shortcutFor(key("b", { metaKey: true })), undefined, "⌘B is not mod+b off macOS");
-    assert.equal(shortcutFor(key("b", { metaKey: true }), { mac: true }), "toggle-sidebar");
-    assert.equal(shortcutFor(key("b", { ctrlKey: true }), { mac: true }), undefined);
-    assert.equal(shortcutFor(key("b", { ctrlKey: true, shiftKey: true })), undefined);
-    assert.equal(shortcutFor(key("b")), undefined);
-    assert.equal(shortcutFor(key("/")), "focus-search");
-    assert.equal(shortcutFor(key("/"), { inField: true }), undefined, "a slash typed into the composer stays there");
-    assert.equal(shortcutFor(key("/", { ctrlKey: true })), undefined);
   });
 });
 

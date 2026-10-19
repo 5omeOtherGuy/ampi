@@ -1,5 +1,6 @@
-// ampi-gui composer helpers: which key does what, the Esc Esc chord, the
-// send request, the queued-message bubbles and the send/stop button. Pure
+// ampi-gui composer helpers: which key does what in the text area (Esc Esc
+// is in mmr-gui-keys.test.mjs), the send request, the queued-message
+// bubbles and the send/stop button. Pure
 // functions from the client module; the page wiring is checked in a browser.
 
 import assert from "node:assert/strict";
@@ -20,37 +21,8 @@ describe("ampi-gui composer keys", () => {
     assert.equal(composerKeyAction(key("Enter", { shiftKey: true })), null, "Shift+Enter is a line break");
     assert.equal(composerKeyAction(key("Enter", { altKey: true })), null);
     assert.equal(composerKeyAction(key("Enter", { isComposing: true })), null, "Enter confirms the input method's text");
-    assert.equal(composerKeyAction(key("Escape")), "escape");
+    assert.equal(composerKeyAction(key("Escape")), null, "Esc Esc is the thread.interrupt command");
     assert.equal(composerKeyAction(key("a")), null);
-  });
-
-  it("counts a second Escape within the chord window as Esc Esc, and only once", async () => {
-    const { createEscapeChord, ESCAPE_CHORD_MS } = await load();
-    let now = 10_000;
-    const chord = createEscapeChord(() => now);
-    assert.equal(chord.press(), false);
-    now += ESCAPE_CHORD_MS;
-    assert.equal(chord.press(), true, "the window's last millisecond still counts");
-    assert.equal(chord.press(), false, "a third press starts a new chord");
-    now += ESCAPE_CHORD_MS + 1;
-    assert.equal(chord.press(), false, "too late: this press starts over");
-    now += 10;
-    assert.equal(chord.press(), true);
-    chord.press();
-    chord.reset();
-    assert.equal(chord.press(), false, "reset forgets the first press");
-  });
-
-  it("counts Escape toward Esc Esc only while the live composer is usable", async () => {
-    const { escapeCounts } = await load();
-    const inside = (selector) => ({ closest: (query) => (query === selector ? {} : null) });
-    const live = { busy: true, usable: true };
-    assert.equal(escapeCounts(key("Escape", { target: inside("") }), live), true);
-    assert.equal(escapeCounts(key("Escape"), { busy: true, usable: false }), false, "another session is shown, or the sidebar sheet covers the page");
-    assert.equal(escapeCounts(key("Escape"), { busy: false, usable: true }), false, "no turn to interrupt");
-    assert.equal(escapeCounts(key("Escape", { target: inside("dialog[open]") }), live), false, "this Escape closes a dialog");
-    assert.equal(escapeCounts(key("Escape", { defaultPrevented: true }), live), false, "a field or menu took it");
-    assert.equal(escapeCounts(key("Enter"), live), false);
   });
 });
 

@@ -2,48 +2,15 @@
 // button, and the queued messages above it. The helpers at the top are pure,
 // so tests run them without a browser; `mountComposer` wires them to the page.
 
-/** Window for the second Escape of Esc Esc, as for the terminal's key chords. */
-export const ESCAPE_CHORD_MS = 1500;
-
 /**
  * What a key press in the text area does: `send` (Enter), `queue`
- * (Ctrl+Enter, or ⌘+Enter), `escape`, or `null` for typing as usual
- * (Shift+Enter is a line break; Enter while an input method composes
- * belongs to it).
+ * (Ctrl+Enter, or ⌘+Enter), or `null` for typing as usual (Shift+Enter is
+ * a line break; Enter while an input method composes belongs to it). Esc
+ * Esc is the `thread.interrupt` command (commands.js).
  */
 export function composerKeyAction(event) {
-  if (event.key === "Escape") return "escape";
   if (event.key !== "Enter" || event.isComposing || event.shiftKey || event.altKey) return null;
   return event.ctrlKey || event.metaKey ? "queue" : "send";
-}
-
-/** Counts Escape presses: `press()` is true for the second one within `windowMs` of the first. */
-export function createEscapeChord(now = () => Date.now(), windowMs = ESCAPE_CHORD_MS) {
-  let first;
-  return {
-    press() {
-      const at = now();
-      if (first !== undefined && at - first <= windowMs) {
-        first = undefined;
-        return true;
-      }
-      first = at;
-      return false;
-    },
-    reset() {
-      first = undefined;
-    },
-  };
-}
-
-/**
- * Whether a key press counts toward Esc Esc: an Escape nothing else took,
- * while the live session's turn runs and its composer can be used. An Escape
- * that closes a dialog, and any Escape while another session or the sidebar
- * sheet covers the composer, does not count.
- */
-export function escapeCounts(event, { busy, usable }) {
-  return event.key === "Escape" && !event.defaultPrevented && busy && usable && !event.target?.closest?.("dialog[open]");
 }
 
 /**
@@ -97,14 +64,13 @@ function icon(name) {
  * Wire the composer. `post(route, body)` resolves `{ ok, body }`; the
  * returned object takes the session's status and queue as they change.
  */
-export function mountComposer({ root, post, mac = false, now }) {
+export function mountComposer({ root, post, mac = false }) {
   const field = root.querySelector("#prompt");
   const submit = root.querySelector("#submit");
   const queueList = root.querySelector("#queue");
   const notice = root.querySelector("#composer-notice");
   const approval = root.querySelector("#approval-note");
   const attach = root.querySelector("#attach");
-  const chord = createEscapeChord(now);
   let busy = false;
   let queued = 0;
   let connected = false;
@@ -185,23 +151,6 @@ export function mountComposer({ root, post, mac = false, now }) {
     grow();
     refresh();
   });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    // The sidebar sheet makes the page around the composer inert, and an open modal takes every Escape,
-    // also one pressed while focus has fallen out of it.
-    if (!escapeCounts(event, { busy, usable: enabled && !root.closest("[inert]") && !document.querySelector("dialog[open]") })) {
-      chord.reset();
-      return;
-    }
-    if (chord.press()) {
-      showNotice("");
-      interrupt();
-    } else {
-      const hint = "Press Esc again to interrupt";
-      showNotice(hint);
-      setTimeout(() => notice.textContent === hint && showNotice(""), ESCAPE_CHORD_MS);
-    }
-  });
   submit.addEventListener("click", () => {
     if (submit.dataset.mode === "stop") interrupt();
     else sendTyped(false);
@@ -263,7 +212,6 @@ export function mountComposer({ root, post, mac = false, now }) {
   return {
     setStatus(status) {
       busy = status.busy;
-      if (!busy) chord.reset();
       phase = status.phase;
       showApproval();
       refresh();
@@ -281,7 +229,24 @@ export function mountComposer({ root, post, mac = false, now }) {
     /** Hidden behind another session's read-only view, Esc Esc must not interrupt the live turn. */
     setEnabled(value) {
       enabled = value;
-      chord.reset();
+    },
+    /**
+     * Whether Esc Esc may interrupt: a turn runs and the composer is in view.
+     * The sidebar sheet makes the page around it inert.
+     */
+    interruptible: () => busy && enabled && !root.closest("[inert]"),
+    /** Whether the prompt takes text for the session shown. */
+    writable: () => enabled && locked === null,
+    isEmpty: () => field.value.trim() === "",
+    hasFocus: () => document.activeElement === field,
+    interrupt() {
+      showNotice("");
+      interrupt();
+    },
+    /** Say `text` under the composer for `ms`, as the first Esc of Esc Esc does. */
+    hint(text, ms) {
+      showNotice(text);
+      setTimeout(() => notice.textContent === text && showNotice(""), ms);
     },
     /** Turn the composer off with a reason shown under it (`ampi app`, a session that cannot be continued), or on again with `null`. */
     setLocked(reason) {
