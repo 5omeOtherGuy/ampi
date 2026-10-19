@@ -4,8 +4,8 @@
 // command module or the help names a command or option the tree lacks; the
 // four scripts, syntax-checked by each shell that is installed; and spawned
 // `ampi __complete` and `ampi completions` runs in a temporary home and agent
-// directory, offline, for session ids, MCP server names and what a static
-// completion loads.
+// directory, offline, for session ids, MCP server names, what a static
+// completion loads and a Pi package that fails outside the completion.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -49,6 +49,7 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const bin = path.join(repoRoot, "packages", "ampi-cli", "bin", "ampi.js");
 const guard = path.join(import.meta.dirname, "fixtures", "ampi-cli", "offline-guard.mjs");
 const recorder = path.join(import.meta.dirname, "fixtures", "ampi-cli", "module-recorder.mjs");
+const failingPi = path.join(import.meta.dirname, "fixtures", "ampi-cli", "failing-pi.mjs");
 
 const temporary = realpathSync(mkdtempSync(path.join(tmpdir(), "ampi-cli-completions-")));
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -204,6 +205,11 @@ describe("ampi completion resolver", () => {
     assert.deepEqual(values(await complete("ampi skill --json l")), ["list"]);
   });
 
+  it("completes the values of tools' and skill's options before the subcommand", async () => {
+    assert.deepEqual(values(await complete("ampi tools -m ")), ["low", "medium", "high", "ultra", "free"]);
+    assert.deepEqual(await complete("ampi skill --target "), { path: "directory", prefix: "" });
+  });
+
   it("asks the shell for a path for file and directory values", async () => {
     assert.deepEqual(await complete("ampi --mcp-config "), { path: "file", prefix: "" });
     assert.deepEqual(await complete("ampi --log-file=./lo"), { path: "file", prefix: "--log-file=" });
@@ -278,10 +284,17 @@ describe("ampi __complete output", () => {
         { value: "has space" },
         { value: "semi;colon" },
         { value: ":file" },
+        { value: "#hash" },
+        { value: "@splat" },
+        { value: "~tilde" },
+        { value: "=equals" },
+        { value: "%percent" },
+        { value: "--%" },
+        { value: "ok.name:1" },
         { value: "b2", description: `${"x".repeat(200)}` },
       ],
     });
-    assert.equal(text, `a1\ttwo lines and [31mred [0m\nb2\t${"x".repeat(79)}…\n`);
+    assert.equal(text, `a1\ttwo lines and [31mred [0m\nok.name:1\nb2\t${"x".repeat(79)}…\n`);
   });
 
   it("answers a malformed request with nothing and exit 0", async () => {
@@ -412,8 +425,10 @@ function findTreeDrift(tree) {
   compareCommands(["threads", "import"], usageSubcommands(formatImportHelp(), "threads import"));
   compareAliases(["tools"], TOOL_ALIASES);
   compareCommands(["tools"], usageSubcommands(formatToolsHelp(), "tools"));
+  compareTable(["tools"], TOOL_OPTIONS);
   for (const name of usageSubcommands(formatToolsHelp(), "tools")) compareTable(["tools", name], TOOL_OPTIONS);
   compareAliases(["skill"], SKILL_ALIASES);
+  compareTable(["skill"], SKILL_OPTIONS);
   compareCommands(["skill"], [...Object.keys(SKILL_COMMANDS), ...usageSubcommands(formatSkillHelp(), "skill")]);
   for (const [name, spec] of Object.entries(SKILL_COMMANDS)) {
     compareTable(["skill", name], Object.fromEntries([...spec.options, "help"].map((option) => [option, SKILL_OPTIONS[option]])));
@@ -454,6 +469,22 @@ describe("ampi command tree", () => {
     const copy = structuredClone(COMMAND_TREE);
     copy.commands.push({ name: "frobnicate", aliases: [], description: "", args: [], commands: [], options: [] });
     assert.deepEqual(findTreeDrift(copy), ["ampi frobnicate: offered, but starts Pi with a message"]);
+  });
+
+  it("hides exactly the internal and refused commands and options", () => {
+    const hidden = [];
+    const walk = (node, names) => {
+      for (const option of node.options) if (option.hidden === true) hidden.push([...names, option.name].join(" "));
+      for (const child of node.commands) {
+        if (child.hidden === true) hidden.push([...names, child.name].join(" "));
+        walk(child, [...names, child.name]);
+      }
+    };
+    walk(COMMAND_TREE, []);
+    assert.deepEqual(
+      hidden.sort(),
+      ["__complete", "mcp login", "mcp logout", "mcp remote", "app --worker", "--settings-file", "threads new --visibility"].sort(),
+    );
   });
 
   it("is plain JSON", () => {
@@ -630,6 +661,22 @@ describe("ampi __complete, spawned", () => {
         [],
         words.join(" "),
       );
+    }
+  });
+
+  it("exits 0 with nothing on stderr when Pi rejects a promise or throws outside the completion", () => {
+    const { home, agentDir, project } = sandbox("failing-pi");
+    for (const failure of ["reject", "throw"]) {
+      const result = runBin(["__complete", "bash", "--", "ampi", "skill", "info", ""], {
+        cwd: project,
+        home,
+        agentDir,
+        env: { AMPI_TEST_PI_FAILURE: failure },
+        preload: [failingPi],
+      });
+      assert.equal(result.status, 0, failure);
+      assert.equal(result.stderr, "", failure);
+      assert.equal(result.stdout, "", failure);
     }
   });
 
