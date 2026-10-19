@@ -696,12 +696,15 @@ function describeSearchProblem({ filter, kind }) {
       ? "true or false"
       : /^has:/i.test(key)
         ? "tools or errors"
-        : /^(?:after|since|before|until|(?:modified|updated|created)_(?:after|before)):/i.test(key)
-          ? "a date: YYYY-MM-DD, today, yesterday, week, month, or a count of days or weeks such as 7d or 2w"
-          : undefined;
+        : /^is:/i.test(key)
+          ? "archived, snoozed, pinned, live or unread"
+          : /^(?:after|since|before|until|(?:modified|updated|created)_(?:after|before)):/i.test(key)
+            ? "a date: YYYY-MM-DD, today, yesterday, week, month, or a count of days or weeks such as 7d or 2w"
+            : undefined;
     return `${filter} ${filter.endsWith(":") ? "has no value" : "has a value search cannot read"}${expected === undefined ? "" : `; ${key} takes ${expected}`}.`;
   }
-  if (/^(?:pinned|archived):/i.test(key)) return `${filter} is ignored: the thread index cannot be read.`;
+  if (/^is:live$/i.test(filter)) return `${filter} is ignored: search does not read which sessions are running.`;
+  if (/^(?:pinned|archived|is):/i.test(key)) return `${filter} is ignored: the thread index cannot be read.`;
   if (/^projectRef:/i.test(key)) return `${filter} is ignored: projectRef: refers to find_session results; use cwd: or project:.`;
   return `${filter} is ignored: it applies to find_session only; search sorts by the latest update and takes --limit.`;
 }

@@ -1,12 +1,25 @@
 import type { MmrThreadRecord } from "./thread-index.js";
 
 /**
- * The session search language shared by `find_session` (ampi-history) and
- * `ampi threads search`: bare words and quoted phrases plus `key:value`
- * filters. Parsing is pure; each caller evaluates the filters it can.
+ * The session search language shared by `find_session` (ampi-history),
+ * `ampi threads search` and the web GUI's Activity page and Search Threads
+ * dialog: bare words and quoted phrases plus `key:value` filters. Parsing is
+ * pure; each caller evaluates the filters it can.
+ *
+ * `matchMmrSessionRow` evaluates the filters a session list row can answer:
+ * words and phrases, `id:`, `name:`, `label:`, `project:`, `cwd:`, `is:`,
+ * `pinned:`, `archived:` and the last-activity dates (`after:`, `before:`
+ * and their aliases). `ampi threads search` and the web GUI both use it;
+ * `unevaluatedMmrSessionRowFilters` names the rest, which need the
+ * transcript or other data, so a caller that cannot evaluate them reports
+ * them instead of ignoring them.
  */
 
 export type SessionSortKey = "modified" | "created";
+
+/** The flags `is:` takes. */
+export const MMR_SESSION_FLAGS = ["archived", "snoozed", "pinned", "live", "unread"] as const;
+export type MmrSessionFlag = (typeof MMR_SESSION_FLAGS)[number];
 
 export interface SessionQuery {
   terms: string[];
@@ -57,6 +70,9 @@ export interface SessionQuery {
   labelTokens: string[];
   has: string[];
   hasTokens: string[];
+  /** One entry per `is:<flag>` token, lowercased; every flag must hold. */
+  is: MmrSessionFlag[];
+  isTokens: string[];
   /** Number of sorted matches to skip before returning results. */
   offset: number;
   /** Result sorting key. */
@@ -82,7 +98,7 @@ const HOSTED_FILTER_KEYS = new Set(["commit", "pr", "author"]);
 const FILTER_KEYS = new Set([
   "id", "name", "parent", "pinned", "archived",
   "after", "since", "modified_after", "before", "until", "modified_before", "updated_before", "created_after", "created_before",
-  "file", "repo", "project", "cwd", "projectref", "project-ref", "provider", "model", "tool", "label", "has", "offset", "sort",
+  "file", "repo", "project", "cwd", "projectref", "project-ref", "provider", "model", "tool", "label", "has", "is", "offset", "sort",
   ...HOSTED_FILTER_KEYS,
 ]);
 
@@ -185,6 +201,8 @@ export function parseSessionQuery(query: string, now = new Date()): SessionQuery
     labelTokens: [],
     has: [],
     hasTokens: [],
+    is: [],
+    isTokens: [],
     offset: 0,
     sort: "modified",
     unsupportedFilters: [],
@@ -257,6 +275,14 @@ export function parseSessionQuery(query: string, now = new Date()): SessionQuery
       } else {
         parsed.invalidFilters.push(`has:${value}`);
       }
+    } else if (key === "is") {
+      const flag = value.toLowerCase();
+      if ((MMR_SESSION_FLAGS as readonly string[]).includes(flag)) {
+        parsed.is.push(flag as MmrSessionFlag);
+        parsed.isTokens.push(`is:${value}`);
+      } else {
+        parsed.invalidFilters.push(`is:${value}`);
+      }
     } else if (key === "offset") {
       const offset = parseOffset(value);
       if (offset === undefined) parsed.invalidFilters.push(`offset:${value}`);
@@ -310,4 +336,78 @@ export function matchesMmrThreadIndexFilters(
   if (query.pinned !== undefined && (record?.pinned === true) !== query.pinned) return false;
   const labels = (record?.labels ?? []).map((label) => label.toLowerCase());
   return query.label.every((token) => labels.some((label) => label.includes(token)));
+}
+
+/** What `matchMmrSessionRow` reads of a session. */
+export interface MmrSessionRowFields {
+  id: string;
+  /** The title a list shows (the session name, else its first message). */
+  title: string;
+  /** Pi's session name, when it has one. */
+  name?: string;
+  firstMessage?: string;
+  /** More text that words and phrases may match, such as every message's text. */
+  text?: string;
+  /** The working directory. */
+  cwd: string;
+  /** Labels from the thread index. */
+  labels: readonly string[];
+  /** Last activity. */
+  modified: Date;
+  archived: boolean;
+  snoozed: boolean;
+  pinned: boolean;
+  /** A running Pi process has the session open. */
+  live: boolean;
+  unread: boolean;
+}
+
+/**
+ * Whether a session row passes the query's words, phrases and the filters
+ * listed at the top of this module. Matching ignores case: words and phrases
+ * must each appear in the title, name, first message or `text`; `id:` is the
+ * id or its start; `name:` part of the name; each `label:` part of one
+ * label; each `project:` and `cwd:` part of the working directory; each
+ * `is:` flag must hold; `pinned:` and `archived:` compare the flag; `after:`
+ * and `before:` bound the last activity, both ends included.
+ */
+export function matchMmrSessionRow(query: SessionQuery, row: MmrSessionRowFields): boolean {
+  if (query.id && !row.id.toLowerCase().startsWith(query.id.toLowerCase())) return false;
+  if (query.name && !includesCaseInsensitive(row.name ?? "", query.name)) return false;
+  if (query.modifiedAfter && row.modified < query.modifiedAfter) return false;
+  if (query.modifiedBefore && row.modified > query.modifiedBefore) return false;
+  if (query.pinned !== undefined && row.pinned !== query.pinned) return false;
+  if (query.archived !== undefined && row.archived !== query.archived) return false;
+  if (!query.is.every((flag) => row[flag])) return false;
+  const cwd = row.cwd.toLowerCase();
+  if (![...query.cwd, ...query.project].every((part) => cwd.includes(part))) return false;
+  const labels = row.labels.map((label) => label.toLowerCase());
+  if (!query.label.every((token) => labels.some((label) => label.includes(token)))) return false;
+  const text = [row.title, row.name ?? "", row.firstMessage ?? "", row.text ?? ""].join("\n");
+  return query.terms.every((term) => includesCaseInsensitive(text, term));
+}
+
+/** Keys `matchMmrSessionRow` leaves to its caller even when they parse. */
+const UNEVALUATED_ROW_KEYS = /^(?:parent|created_after|created_before|offset|sort):/i;
+
+/**
+ * The query's filters `matchMmrSessionRow` does not evaluate, as typed:
+ * those that need a session's entries (`file:`, `provider:`, `model:`,
+ * `tool:`, `has:`), its git remote (`repo:`), its parent or creation date,
+ * `find_session`'s `projectRef:`, `offset:` and `sort:`, and the keys the
+ * parser does not know or that need a hosted service (`unsupportedFilters`).
+ * Filters whose value did not parse are in `invalidFilters`, not here.
+ */
+export function unevaluatedMmrSessionRowFilters(query: SessionQuery): string[] {
+  return [
+    ...query.appliedFilterTokens.filter((token) => UNEVALUATED_ROW_KEYS.test(token)),
+    ...query.fileTokens,
+    ...query.repoTokens,
+    ...query.projectRefTokens,
+    ...query.providerTokens,
+    ...query.modelTokens,
+    ...query.toolTokens,
+    ...query.hasTokens,
+    ...query.unsupportedFilters,
+  ];
 }

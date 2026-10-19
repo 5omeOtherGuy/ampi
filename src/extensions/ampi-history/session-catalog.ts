@@ -267,7 +267,15 @@ export async function searchSessionsWithDiagnostics(
   options: SearchSessionsOptions,
 ): Promise<SessionSearchResult> {
   const { limit, now = new Date(), index, redactionEnabled = true } = options;
-  const query = parseSessionQuery(queryText, now);
+  const parsed = parseSessionQuery(queryText, now);
+  // find_session reads no live or snooze state: `is:` stays an unsupported key here.
+  const isFlags = [...parsed.isTokens, ...parsed.invalidFilters.filter((token) => /^is:./i.test(token))];
+  const query: SessionQuery = {
+    ...parsed,
+    is: [],
+    unsupportedFilters: [...parsed.unsupportedFilters, ...isFlags],
+    invalidFilters: parsed.invalidFilters.filter((token) => !isFlags.includes(token)),
+  };
   const requestedOffset = Math.max(0, Math.trunc(options.offset ?? query.offset));
   const diagnostics = buildQueryDiagnostics(query, redactionEnabled);
 
