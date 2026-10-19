@@ -1,9 +1,10 @@
 // ampi-gui floating controls: the conversation outline's rows and the jump
-// button's unread dot. Pure functions from the client module; the popover
-// and the buttons are checked in a browser.
+// button's unread dot as pure functions, and the outline popover and the
+// End key on a linkedom page; layout is checked in a browser.
 
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
+import { parseHTML } from "linkedom";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 
 after(cleanupLoadedSource);
@@ -61,5 +62,88 @@ describe("ampi-gui jump button dot", () => {
     const { nextUnread } = await controls();
     assert.equal(nextUnread(true, { atBottom: true }), false);
     assert.equal(nextUnread(false, { atBottom: true, changed: true }), false);
+  });
+});
+
+describe("ampi-gui outline popover", () => {
+  /** A linkedom page with the outline mounted over `rows`; the global document and window are the page's while `run` runs. */
+  async function withOutline(rows, run) {
+    const { endJumps, mountOutline } = await controls();
+    const { window, document } = parseHTML(
+      '<!doctype html><html><body><div id="chat"></div><button id="outline"></button><div id="outline-menu" role="menu" hidden></div><textarea id="prompt"></textarea></body></html>',
+    );
+    let active = document.body;
+    Object.defineProperty(document, "activeElement", { get: () => active, configurable: true });
+    window.HTMLElement.prototype.focus = function focus() {
+      active = this;
+    };
+    const saved = { document: globalThis.document, window: globalThis.window };
+    globalThis.document = document;
+    globalThis.window = window;
+    try {
+      const menu = document.getElementById("outline-menu");
+      const outline = mountOutline({ button: document.getElementById("outline"), menu, scroller: document.getElementById("chat"), rows: () => rows });
+      // The page's own End listener, added after the outline as the page adds it.
+      const jumps = [];
+      document.addEventListener("keydown", (event) => jumps.push(endJumps(event)));
+      const end = (target) => target.dispatchEvent(Object.assign(new window.Event("keydown", { bubbles: true, cancelable: true }), { key: "End" }));
+      const texts = () => [...menu.querySelectorAll('[role="menuitem"]')].map((option) => option.querySelector(".outline-text").textContent);
+      await run({ document, menu, outline, jumps, end, texts, active: () => active });
+    } finally {
+      globalThis.document = saved.document;
+      globalThis.window = saved.window;
+    }
+  }
+
+  const row = (id, text) => ({ id, anchor: `m-${id}`, text, age: "1m" });
+
+  it("leaves End to the open outline, which moves to its last row without scrolling the chat", async () => {
+    await withOutline([row("u1", "first"), row("u2", "second")], async ({ document, menu, outline, jumps, end, active }) => {
+      end(document.body);
+      assert.deepEqual(jumps, [true], "End on the page jumps to the newest output");
+      end(document.getElementById("prompt"));
+      assert.deepEqual(jumps, [true, false], "End in the prompt is the field's");
+      outline.setCount(2);
+      outline.toggle();
+      assert.equal(menu.hidden, false);
+      end(menu.querySelector('[role="menuitem"]'));
+      assert.deepEqual(jumps, [true, false, false], "the outline used End");
+      assert.equal(active().dataset.anchor, "m-u2");
+    });
+  });
+
+  it("redraws its rows when the count of your messages changes while it is open, keeping the focused row", async () => {
+    const rows = [row("u1", "first"), row("u2", "second")];
+    await withOutline(rows, async ({ menu, outline, texts, active }) => {
+      outline.setCount(2);
+      outline.toggle();
+      assert.deepEqual(texts(), ["first", "second"]);
+      const focused = menu.querySelector('[data-anchor="m-u1"]');
+      focused.focus();
+      rows.push(row("u3", "third"));
+      outline.setCount(3);
+      assert.deepEqual(texts(), ["first", "second", "third"]);
+      assert.equal(active().dataset.anchor, "m-u1", "focus stays on the row it was on");
+      const drawn = menu.querySelector('[data-anchor="m-u1"]');
+      outline.setCount(3);
+      assert.equal(menu.querySelector('[data-anchor="m-u1"]'), drawn, "the same count draws nothing");
+      rows.splice(0, 1);
+      outline.setCount(2);
+      assert.deepEqual(texts(), ["second", "third"]);
+      assert.equal(active().dataset.anchor, "m-u3", "a row that is gone hands focus to the newest");
+    });
+  });
+
+  it("leaves a closed outline's rows to the next open", async () => {
+    const rows = [row("u1", "first"), row("u2", "second")];
+    await withOutline(rows, async ({ menu, outline, texts }) => {
+      outline.setCount(2);
+      rows.push(row("u3", "third"));
+      outline.setCount(3);
+      assert.equal(menu.hidden, true);
+      assert.deepEqual(texts(), []);
+      outline.toggle();
+      assert.deepEqual(texts(), ["first", "second", "third"]);
+    });
   });
 });

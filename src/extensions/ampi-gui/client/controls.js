@@ -45,6 +45,11 @@ export function nextUnread(unread, { atBottom, changed = false }) {
   return unread || changed;
 }
 
+/** Whether End jumps the chat to the newest output: focus is not in a text field, and no menu (the outline) used the key. */
+export function endJumps(event) {
+  return event.key === "End" && !event.defaultPrevented && !event.target.closest?.("input, textarea, [contenteditable]");
+}
+
 /**
  * Wire the outline. `rows()` answers `outlineRows(...)` for the session
  * shown; `scroller` is the chat, whose viewport decides which rows are in
@@ -62,9 +67,14 @@ export function mountOutline({ button, menu, scroller, rows }) {
     }
   }
 
-  function open() {
+  /** How many rows the open outline shows. */
+  let drawn = 0;
+
+  function draw() {
+    const rowsNow = rows();
+    drawn = rowsNow.length;
     menu.replaceChildren(
-      ...rows().map((row) => {
+      ...rowsNow.map((row) => {
         const option = document.createElement("button");
         option.type = "button";
         option.tabIndex = -1;
@@ -80,9 +90,13 @@ export function mountOutline({ button, menu, scroller, rows }) {
         return option;
       }),
     );
+    markInView();
+  }
+
+  function open() {
+    draw();
     menu.hidden = false;
     button.setAttribute("aria-expanded", "true");
-    markInView();
     const list = options();
     (list.find((option) => option.dataset.inView === "true") ?? list.at(-1))?.focus();
   }
@@ -130,10 +144,16 @@ export function mountOutline({ button, menu, scroller, rows }) {
   scroller.addEventListener("scroll", () => menu.hidden || markInView(), { passive: true });
 
   return {
-    /** Show the button only for two or more of your messages. */
+    /** Show the button only for two or more of your messages, and redraw an open outline whose count changed. */
     setCount(count) {
       button.hidden = count < 2;
       if (button.hidden) close(false);
+      else if (!menu.hidden && count !== drawn) {
+        // Focus stays on the row it was on, or the newest one when that row is gone.
+        const focused = menu.contains(document.activeElement) ? document.activeElement.dataset.anchor : null;
+        draw();
+        if (focused !== null) (options().find((option) => option.dataset.anchor === focused) ?? options().at(-1))?.focus();
+      }
     },
     toggle() {
       if (button.hidden) return;

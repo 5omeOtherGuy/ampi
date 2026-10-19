@@ -312,10 +312,19 @@ export function mountSelectionActions({ transcript, scroller, chip, item, compos
     return wrapped;
   }
 
+  /** Whether the range takes visible text from `node`: one that ends at offset 0 of the next part (a triple click) touches that part without taking any. */
+  function takesText(range, node) {
+    if (node.nodeType !== TEXT) return [...node.childNodes].some((child) => takesText(range, child));
+    if (!range.intersectsNode(node)) return false;
+    const from = node === range.startContainer ? range.startOffset : 0;
+    const to = node === range.endContainer ? range.endOffset : node.nodeValue.length;
+    return /\S/.test(node.nodeValue.slice(from, to));
+  }
+
   /** The Markdown source of the messages' parts when the selection covers each of them whole and nothing else, else `null`. */
   function wholeSources(range) {
     const units = [...transcript.querySelectorAll('.msg.user .bubble, .msg.assistant .part[data-kind="text"]')].filter(
-      (unit) => !unit.closest("[hidden]") && range.intersectsNode(unit),
+      (unit) => !unit.closest("[hidden]") && range.intersectsNode(unit) && takesText(range, unit),
     );
     if (units.length === 0) return null;
     const squash = (text) => text.replace(/\s+/g, "");
@@ -441,16 +450,22 @@ export function mountSelectionActions({ transcript, scroller, chip, item, compos
   document.addEventListener("selectionchange", schedule);
   scroller.addEventListener("scroll", () => chip.hidden || schedule(), { passive: true });
   window.addEventListener("resize", () => chip.hidden || schedule());
-  // A press on the chip keeps the selection (and focus) where they are and acts at once, for the mouse and touch alike.
+  // A press on the chip keeps the selection (and focus) where they are. The action waits for the event that lets
+  // the page write to the clipboard: lifting a finger or pen, a mouse's click, or Enter or Space (a click of detail 0).
+  let pressedWith = "";
+  const act = (event) => {
+    const button = event.target.closest?.("button[data-action]");
+    if (button) actions[button.dataset.action]();
+  };
   chip.addEventListener("pointerdown", (event) => {
     event.preventDefault();
-    const button = event.target.closest?.("button[data-action]");
-    if (button && event.button === 0) actions[button.dataset.action]();
+    pressedWith = event.pointerType;
   });
-  // Enter or Space on a focused chip button.
+  chip.addEventListener("pointerup", (event) => {
+    if (event.pointerType !== "mouse") act(event);
+  });
   chip.addEventListener("click", (event) => {
-    const button = event.target.closest?.("button[data-action]");
-    if (button && event.detail === 0) actions[button.dataset.action]();
+    if (event.detail === 0 || pressedWith === "mouse") act(event);
   });
 
   return {

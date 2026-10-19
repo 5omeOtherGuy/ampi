@@ -1,8 +1,8 @@
 // ampi-gui selection actions: the HTML-to-Markdown converter behind "copy
 // as Markdown" and "reply", the text fragment a copied link carries, the
-// quote a reply puts in the prompt, and the message anchors links point at.
-// Pure functions from the client modules; the page wiring is checked in a
-// browser.
+// quote a reply puts in the prompt, and the message anchors links point at,
+// as pure functions; the chip's presses and the whole-part copy on a
+// linkedom page with a stand-in selection. Layout is checked in a browser.
 
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
@@ -136,5 +136,131 @@ describe("ampi-gui message anchors", () => {
     assert.equal(anchorItemId("/s/session-id"), null, "a session route is no message");
     assert.equal(anchorItemId("transcript"), null, "another element's id is no message");
     assert.equal(anchorItemId("m-"), null);
+  });
+});
+
+describe("ampi-gui selection chip", () => {
+  const PAGE =
+    '<div id="chat"><div id="transcript"><article class="msg assistant" data-id="a1" id="m-a1">' +
+    '<div class="part" data-kind="text" data-part="0"><div class="prose"><p>Some <strong>bold</strong> text</p></div></div>' +
+    '<div class="part" data-kind="text" data-part="1"><div class="prose"><p>Next part</p></div></div>' +
+    '</article></div></div><div id="chip"><button type="button" data-action="markdown">c copy</button></div>';
+  const SOURCES = ["Some __bold__ text", "Next part"];
+
+  /** The transcript's text nodes in document order. */
+  function textNodes(node, out = []) {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) out.push(child);
+      else textNodes(child, out);
+    }
+    return out;
+  }
+
+  /**
+   * A stand-in for the browser's Range from (`texts[from]`, `startOffset`)
+   * to (`texts[to]`, `endOffset`): a node intersects it when it holds one of
+   * those text nodes, as a browser answers for boundaries in text nodes.
+   */
+  function textRange(document, root, texts, [from, startOffset], [to, endOffset]) {
+    const inside = texts.slice(from, to + 1);
+    return {
+      startContainer: texts[from],
+      startOffset,
+      endContainer: texts[to],
+      endOffset,
+      commonAncestorContainer: root,
+      intersectsNode: (node) => inside.some((text) => node === text || node.contains(text)),
+      toString: () => inside.map((text, index) => text.nodeValue.slice(index === 0 ? startOffset : 0, index === inside.length - 1 ? endOffset : undefined)).join(""),
+      cloneContents: () => {
+        const fragment = document.createDocumentFragment();
+        for (const part of root.querySelectorAll(".part")) if (inside.some((text) => part.contains(text))) fragment.append(part.cloneNode(true));
+        return fragment;
+      },
+    };
+  }
+
+  /** A linkedom page with the selection actions mounted and `range(texts)` selected; the globals are the page's while `run` runs. */
+  async function withChip(range, run) {
+    const { mountSelectionActions } = await selection();
+    const { window, document } = parseHTML(`<!doctype html><html><body>${PAGE}</body></html>`);
+    const transcript = document.getElementById("transcript");
+    const selected = range(document, transcript.querySelector(".msg"), textNodes(transcript));
+    document.getSelection = () => ({ isCollapsed: false, rangeCount: 1, getRangeAt: () => selected, toString: () => selected.toString() });
+    const copied = [];
+    const saved = { document: globalThis.document, window: globalThis.window, navigator: Object.getOwnPropertyDescriptor(globalThis, "navigator") };
+    globalThis.document = document;
+    globalThis.window = window;
+    Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async (text) => copied.push(text) } }, configurable: true });
+    try {
+      const actions = mountSelectionActions({
+        transcript,
+        scroller: document.getElementById("chat"),
+        chip: document.getElementById("chip"),
+        item: (id) => (id === "a1" ? { type: "assistant", parts: SOURCES.map((text) => ({ type: "text", text })) } : undefined),
+        composer: { writable: () => true, quote: () => {} },
+        linkReason: () => null,
+        notify: () => {},
+      });
+      const button = document.querySelector('#chip [data-action="markdown"]');
+      const fire = (type, props) => {
+        const event = Object.assign(new window.Event(type, { bubbles: true, cancelable: true }), props);
+        button.dispatchEvent(event);
+        return event;
+      };
+      await run({ actions, copied, fire });
+    } finally {
+      globalThis.document = saved.document;
+      globalThis.window = saved.window;
+      Object.defineProperty(globalThis, "navigator", saved.navigator);
+    }
+  }
+
+  const firstPart = (document, root, texts) => textRange(document, root, texts, [0, 0], [2, texts[2].nodeValue.length]);
+  const settle = () => new Promise(setImmediate);
+
+  it("keeps the selection on a press and copies on the click a mouse ends it with", async () => {
+    await withChip(firstPart, async ({ copied, fire }) => {
+      assert.equal(fire("pointerdown", { pointerType: "mouse", button: 0 }).defaultPrevented, true, "the press keeps the selection");
+      fire("pointerup", { pointerType: "mouse", button: 0 });
+      await settle();
+      assert.deepEqual(copied, [], "nothing is copied before the click");
+      fire("click", { detail: 1 });
+      await settle();
+      assert.deepEqual(copied, ["Some __bold__ text"]);
+    });
+  });
+
+  it("copies once when a finger lifts, before the click a tap ends with", async () => {
+    await withChip(firstPart, async ({ copied, fire }) => {
+      assert.equal(fire("pointerdown", { pointerType: "touch", button: 0 }).defaultPrevented, true);
+      await settle();
+      assert.deepEqual(copied, [], "nothing is copied on touching down");
+      fire("pointerup", { pointerType: "touch", button: 0 });
+      fire("click", { detail: 1 });
+      await settle();
+      assert.deepEqual(copied, ["Some __bold__ text"]);
+    });
+  });
+
+  it("copies on Enter or Space, a click of detail 0", async () => {
+    await withChip(firstPart, async ({ copied, fire }) => {
+      fire("click", { detail: 0 });
+      await settle();
+      assert.deepEqual(copied, ["Some __bold__ text"]);
+    });
+  });
+
+  it("copies a part's own source when the selection ends at offset 0 of the next part", async () => {
+    // A triple click on the first part's paragraph.
+    const tripleClick = (document, root, texts) => textRange(document, root, texts, [0, 0], [3, 0]);
+    await withChip(tripleClick, async ({ actions, copied }) => {
+      await actions.copyMarkdown();
+      assert.deepEqual(copied, ["Some __bold__ text"]);
+    });
+    const both = (document, root, texts) => textRange(document, root, texts, [0, 0], [3, texts[3].nodeValue.length]);
+    await withChip(both, async ({ actions, copied }) => {
+      await actions.copyMarkdown();
+      assert.deepEqual(copied, ["Some __bold__ text\n\nNext part"], "both parts whole copy both sources");
+    });
   });
 });

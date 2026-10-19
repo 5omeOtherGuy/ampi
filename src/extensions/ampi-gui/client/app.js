@@ -27,7 +27,7 @@ import {
 } from "./app-mode.js";
 import { createCommandRegistry, DEFAULT_COMMANDS } from "./commands.js";
 import { mountComposer } from "./composer.js";
-import { mountOutline, nextUnread, outlineRows } from "./controls.js";
+import { endJumps, mountOutline, nextUnread, outlineRows } from "./controls.js";
 import { mountDialogs } from "./dialogs.js";
 import { keymapGroups, mountKeymap } from "./keymap.js";
 import { createKeyDispatcher, hasCommandModifier, SEQUENCE_MS } from "./keys.js";
@@ -265,10 +265,7 @@ jump.addEventListener("click", () => {
   chat.focus({ preventScroll: true });
 });
 document.addEventListener("keydown", (event) => {
-  // End jumps to the newest output when focus is not in a text field.
-  if (event.key === "End" && !event.target.closest?.("input, textarea, [contenteditable]")) {
-    chat.scrollTop = chat.scrollHeight;
-  }
+  if (endJumps(event)) chat.scrollTop = chat.scrollHeight;
 });
 
 // ---------------------------------------------------------------------------
