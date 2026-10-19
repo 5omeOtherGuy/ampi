@@ -289,6 +289,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 | `fullscreenCopyOnSelect` | Pi's own setting (default `true`): copy transcript text as soon as you select it with the mouse, in fullscreen mode only. Set it to `false` to stop copying on select | `false` |
 | `ampi.permissions` | Turns on [`ampi-permissions`](../src/extensions/ampi-permissions/README.md): rules that allow, reject, ask or delegate to a program before tool calls, ahead of ampi's defaults (reads, tests and builds run; other shell commands ask), optionally only in the main session or in subagents (`context`). `[]` uses the defaults only. A trusted project adds only `reject` and `ask` rules. Applies in Free mode too | `[{ "tool": "bash", "matches": { "command": "git push*" }, "action": "ask" }]` |
 | `ampi.dangerouslyAllowAll` | `true` in the user settings lets every tool call run without asking (the dialog's "Allow All for Every Session" sets it); `false` turns `ampi-permissions` on. A project's `true` is ignored | `false` |
+| `ampi.guardedFiles.allowlist` | User settings only: absolute paths and globs (`~/` allowed) that `edit`, `write`, `apply_patch` and `painter` may change without the guarded file dialog (keys, `.env`, `.git`, `.pi`, system directories, ...); "Always Allow This Path" adds to it. Present turns `ampi-permissions` on, with its default rules. A project's value is ignored | `["~/work/app/.env"]` |
 
 ## Tool status words
 
