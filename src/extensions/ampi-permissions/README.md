@@ -180,7 +180,7 @@ process.stdin.on("end", () => {
 Subagent children evaluate the same settings as the main session, with `context: "subagent"`: a rule with `context: "subagent"` applies only there, one with `context: "thread"` only in the main session, and one without `context` in both.
 
 - A child never opens a dialog. A call that would ask, by a rule, ampi's defaults or a delegate program, is blocked with a reason that says the user has to approve it, that a subagent cannot ask, and that the call has to run in the main session or be allowed by a rule in `ampi.permissions`. The child reports that to the agent that started it.
-- `Task` children load the gate through their extension list; `reviewer` and custom subagents load every extension, so they have it too. `finder`, `oracle` and `librarian` have no shell or edit tools and run without it.
+- `Task` children load the gate through their extension list; `reviewer` and custom subagents load every extension, so they have it too. `finder`, `oracle`, `librarian` and `view_media` have no shell or edit tools and run without it.
 - A child takes two answers from the session that starts it. When you allowed all for that session, every call in the child runs too. When that session reads the project's rules, so does the child, even if the child, in print or JSON mode, decides project trust differently; project rules only tighten, so that is safe. A child passes both answers on to the subagents it starts.
 - A child takes these answers when it starts: allowing all in the main session later does not reach a child that is already running.
 

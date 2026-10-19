@@ -57,7 +57,7 @@ import { isRecord } from "../ampi-core/internal/json.js";
  *                   (ampi-tasks). ampi-permissions owns no tool but gates the
  *                   child's bash/edit/write calls with the user's rules.
  *
- * finder, oracle and librarian have no shell or edit tools, so they leave out
+ * finder, oracle, librarian and media have no shell or edit tools, so they leave out
  * ampi-permissions. Profiles without an entry (reviewer, custom subagents)
  * load it through full discovery.
  */
