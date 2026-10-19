@@ -278,8 +278,10 @@ describe("ampi-gui bridge", () => {
     try {
       setMmrModeState({ mode: "high" });
       assert.equal(bridge.snapshot().session.mode, "high");
+      assert.equal(bridge.snapshot().session.modeColor, undefined, "a built-in mode carries no tint of its own");
       setMmrModeState({ mode: "high", registeredMode: { key: "review", label: "Review", color: "#d97706", source: "extension" } });
       assert.equal(bridge.snapshot().session.mode, "Review");
+      assert.equal(bridge.snapshot().session.modeColor, "#d97706", "a registered mode's colour reaches the page");
     } finally {
       setMmrModeState(undefined);
     }
