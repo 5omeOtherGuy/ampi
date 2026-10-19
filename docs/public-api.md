@@ -591,9 +591,9 @@ rules, the defaults and the dialog. The rule engine itself is in ampi-core
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `createMmrPermissionsExtension` | function | Factory producing the Pi extension; accepts `agentDir` and `columns` overrides. |
+| `createMmrPermissionsExtension` | function | Factory producing the Pi extension; accepts `agentDir` and `columns` overrides, and `delegateTimeoutMs`, `delegateTimer` and `delegateSpawn` for delegate programs. |
 | `loadMmrPermissionsSettings` | function | Reads `ampi.permissions` and `ampi.dangerouslyAllowAll` from a user file and an optional trusted project file. |
-| `formatMmrPermissionsNoUiReason` | function | The block reason for a call that needs approval in a run that cannot ask. |
+| `formatMmrPermissionsNoUiReason` | function | The block reason for a call that needs approval in a run that cannot ask (a subagent child gives its own reason). |
 
 ### Re-exported types
 

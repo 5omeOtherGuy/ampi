@@ -130,7 +130,7 @@ Important files:
 - `prompt-history.ts` — seam for prompt history: `ampi-threads` registers its store, `ampi-tui`'s picker reads it through `getMmrPromptHistory`, per workspace or across all of them.
 - `thread-reports.ts` — seam for the cost and context reports and the Markdown export: `ampi-threads` registers them with `ampiThreads.showCosts`, `ampi-tui`'s overlays and cost gauge and `ampi-gui`'s More Actions (Markdown, and any session's cost through `costOfEntries`) read them through `getMmrThreadReports`. It also holds `summarizeMmrThreadCost` (cost per model from a session's usage and the model prices), which `ampi-threads` (`cost`, `costOfEntries`) and the `ampi` command share.
 - `tool-activity.ts` — pure classification of tool calls into activities (verb, object, diff stat, exit code) and the one-phrase summary of a run of them, shared by `ampi-tui`'s tool rows and `ampi-gui`'s transcript.
-- `permissions.ts`, `permission-defaults.ts` — the pure permission rule engine (validation, glob and `/regex/` matching, shell lines split into simple commands, project-user-default order, the rule text form), ampi's default rules, the session-wide "allow all" override, used by `ampi-permissions`.
+- `permissions.ts`, `permission-defaults.ts` — the pure permission rule engine (validation, glob and `/regex/` matching, shell lines split into simple commands with each part's decision, project-user-default order, the rule text form, delegate program lines split into words), ampi's default rules, the session-wide "allow all" override and the project-trust answer, and the helper that writes both into a worker child's environment, used by `ampi-permissions` and the worker runner.
 - `activity-runs.ts` — pure rules for where a run of consecutive tool calls ends (text, user and summary messages, subagent and image calls), shared by `ampi-tui`'s activity groups and `ampi-gui`'s work groups.
 - `spinner.ts`, `animation.ts` — the running glyph every running row draws (a braille cellular automaton stepped every 200 ms), and `isMmrAnimationDisabled` (`NO_ANIMATION`, `ampiTui.animations: false`), which stills it and the other animations.
 - `skill-sources.ts` — pure classification of where Pi found a skill (user, project, package, settings, temporary; Pi's or an `.agents` directory) from its `sourceInfo`, for every surface that lists skills.
@@ -236,7 +236,7 @@ Layout (top level holds the extension entry, ownership, and compatibility surfac
 
 - `index.ts` — Pi extension entry point and provider registration.
 - `provider.ts` — unified tool-provider and feature-gate-provider factories.
-- `child-extension-scope.ts` — per-profile child-process extension keep-sets.
+- `child-extension-scope.ts` — per-profile child-process extension keep-sets (`Task` keeps `ampi-permissions` so its shell and edit calls are gated).
 - `worker-model-metadata.ts`, `worker-result-shaping.ts`, `worker-usage-format.ts` — compatibility re-exports of helpers that moved to `ampi-core` (kept for one release).
 - `framework/` — the worker execution framework: `runner.ts` (child-CLI subagent runner and worker lifecycle), `worker-tool-factory.ts` (the declarative factory the worker tools are generated from), `worker-host-impl.ts` (the `ampi-core` worker-host seam implementation), `worker-binding-registry.ts`, run invocation/outcome helpers, and the session-scoped worker-model fallback.
 - `profiles/` — `prompts.ts`, the built-in worker prompt builders.
@@ -272,9 +272,9 @@ Terminal look and keys for interactive sessions, on by default (`ampiTui.enabled
 
 ### `src/extensions/ampi-permissions/`
 
-Approval for risky tool calls, off until `ampi.permissions` (or `ampi.dangerouslyAllowAll: false`) is set in the user's or a trusted project's settings. A `tool_call` gate evaluates the rules with `ampi-core/permissions.ts` in every mode and asks through Pi's select dialog; owns no tools.
+Approval for risky tool calls, off until `ampi.permissions` (or `ampi.dangerouslyAllowAll: false`) is set in the user's or a trusted project's settings. A `tool_call` gate evaluates the rules with `ampi-core/permissions.ts` in every mode and asks through Pi's select dialog; owns no tools. It also runs in subagent children (context `subagent`), where whatever would ask is refused with a reason for the parent; `Task` children keep it in their extension list, `reviewer` and custom subagents load it through full discovery.
 
-- `index.ts` (entry point: settings at `session_start`, the feature-gate provider, the gate, the one-at-a-time dialog queue, the `mmr-core:approval` events, the "every session" settings write), `config.ts` (reads the user and trusted project settings; projects only tighten), `gate.ts` (dialog words and block reasons), `README.md`.
+- `index.ts` (entry point: settings at `session_start`, the parent's answers a child reads from its environment, the feature-gate provider, the gate, delegate programs part by part, the one-at-a-time dialog queue, the `mmr-core:approval` events, the "every session" settings write), `config.ts` (reads the user and trusted project settings; projects only tighten), `delegate.ts` (resolves and runs delegate programs: JSON on stdin, exit codes, timeout, output limits, process-group kill), `gate.ts` (dialog words and block reasons, the subagent refusal included), `README.md`.
 
 ### `src/extensions/ampi-threads/`
 

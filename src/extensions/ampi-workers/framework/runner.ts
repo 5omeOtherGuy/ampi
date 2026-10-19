@@ -10,6 +10,7 @@ import {
   MMR_SUBAGENT_MODEL_PREFERENCES_ENV,
   serializeMmrSubagentModelPreferencesEnv,
 } from "../../ampi-core/subagent-model-override-env.js";
+import { writeMmrPermissionsChildEnv } from "../../ampi-core/permissions.js";
 import { extractMmrSubagentActivationFailure } from "../../ampi-core/subagent-resolver.js";
 import type { MmrModelPreference } from "../../ampi-core/types.js";
 import { buildMmrWorkerArgs, resolveMmrWorkerPiInvocation } from "./runner-invocation.js";
@@ -317,6 +318,10 @@ export async function runMmrSubagentWorker(
       childEnv[AMPI_SUBAGENT_MODEL_PREFERENCES_ENV] = overrideEnv;
       delete childEnv[MMR_SUBAGENT_MODEL_PREFERENCES_ENV];
     }
+    // The parent's permission answers ("allow all" for this session, reading
+    // the project's rules) as they stand now; an inherited value never passes
+    // on unless this process holds the same answer.
+    writeMmrPermissionsChildEnv(childEnv);
     const proc = spawnImpl(command, args, {
       cwd: options.cwd,
       shell: false,

@@ -15,6 +15,9 @@ import { type ShellToken, tokenizeShell } from "./tool-activity.js";
  * Shell tools (`bash`, `shell_command`) are judged per simple command: the
  * line is split at `;`, `&&`, `||`, `|`, `&` and newlines, and each part is
  * evaluated with the input's `command` replaced by that part's text.
+ *
+ * A `delegate` decision only names the program; running it is the caller's
+ * job (`ampi-permissions` does it), so this module never starts a process.
  */
 
 export type MmrPermissionAction = "allow" | "reject" | "ask" | "delegate";
@@ -58,6 +61,12 @@ export interface MmrPermissionDecision {
   readonly command?: string;
   /** Why ampi asks when no rule asked (an opaque or unreadable command). */
   readonly reason?: string;
+  /**
+   * For a shell line of more than one simple command: every part's decision,
+   * in line order, each with its `command`. A `delegate` decision for such a
+   * line means at least one part waits for its program and none is rejected.
+   */
+  readonly parts?: readonly MmrPermissionDecision[];
 }
 
 export interface MmrPermissionRuleSources {
@@ -144,6 +153,39 @@ export function matchesMmrPermissionRule(
 }
 
 // ---------------------------------------------------------------------------
+// Delegate programs
+// ---------------------------------------------------------------------------
+
+export interface MmrPermissionProgramWord {
+  /** The word with quotes and escapes removed. */
+  readonly value: string;
+  /** The word as written in `to`, quotes included. */
+  readonly raw: string;
+}
+
+/**
+ * Split a delegate rule's `to` into the program and its arguments, the way a
+ * shell would split a simple command, but without running one: operators,
+ * redirections, subshells, `$(...)`, backticks, variables and brace
+ * expansions are problems, because nothing would expand or run them.
+ */
+export function parseMmrPermissionProgram(to: string): { words?: MmrPermissionProgramWord[]; problem?: string } {
+  const tokens = tokenizeShell(to);
+  if (!tokens) return { problem: "ampi cannot read this program line (a comment, a heredoc or unbalanced quotes)" };
+  const operator = tokens.find((token) => token.type === "op");
+  if (operator) return { problem: `a program and its arguments only, without operators or redirections (found ${operator.value})` };
+  if (tokens.some((token) => token.type === "word" && token.opaque === true)) {
+    return { problem: "a program and its arguments only, without a subshell, $(...) or backticks" };
+  }
+  const words = tokens.map((token) => ({ value: token.value, raw: to.slice(token.start, token.end) }));
+  if (words.some((word) => expandsAtRunTime(word.raw))) {
+    return { problem: "variables, $'...' quoting and brace expansions are not expanded; write the value out" };
+  }
+  if (words.length === 0) return { problem: "a delegate rule needs to: the program to run" };
+  return { words };
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -194,6 +236,10 @@ export function validateMmrPermissionRule(value: unknown): string[] {
   }
   if (value.action === "delegate") {
     if (typeof value.to !== "string" || value.to.trim().length === 0) problems.push("a delegate rule needs to: the program to run");
+    else {
+      const program = parseMmrPermissionProgram(value.to);
+      if (program.problem !== undefined) problems.push(`to: ${program.problem}`);
+    }
   } else if (value.to !== undefined) {
     problems.push("to is allowed only on a delegate rule");
   }
@@ -443,19 +489,25 @@ function evaluateShellLine(
     if (decision.action === "ask") return decision;
     return { action: "ask", command: part.text, reason: "this command runs a subshell or command substitution" };
   });
-  const rejected = decisions.find((decision) => decision.action === "reject");
-  if (rejected) return rejected;
-  const pending = decisions.find((decision) => decision.action !== "allow");
-  if (!pending) return { action: "allow" };
-  if (parts.length === 1) return pending;
-  return pending.action === "ask" ? pending : { ...pending, action: "ask" };
+  if (parts.length === 1) {
+    const [only] = decisions as [MmrPermissionDecision];
+    return only.action === "allow" ? ALLOW : only;
+  }
+  // A rejected part decides without running any program; delegated parts
+  // come next, since one of their programs may still reject the line.
+  const decided =
+    decisions.find((decision) => decision.action === "reject") ??
+    decisions.find((decision) => decision.action === "delegate") ??
+    decisions.find((decision) => decision.action === "ask");
+  return { ...(decided ?? ALLOW), parts: decisions };
 }
 
 /**
  * Decide a tool call: the first matching rule of the project, then the user,
  * then ampi's defaults; no match allows. Shell lines are judged per simple
- * command (see the module comment): any rejected part rejects the line, all
- * allowed parts allow it, anything else asks.
+ * command (see the module comment): any rejected part rejects the line; else
+ * a delegated part makes the line `delegate`, with every part's decision in
+ * `parts`; else any asking part asks; else the line is allowed.
  */
 export function evaluateMmrPermission(
   call: MmrPermissionCall,
@@ -488,4 +540,37 @@ export function setMmrPermissionsSessionAllowAll(value: boolean): void {
 /** Whether the user allowed every tool call for this session. */
 export function isMmrPermissionsSessionAllowAll(): boolean {
   return (globalThis as Record<string, unknown>)[SESSION_ALLOW_ALL_KEY] === true;
+}
+
+const PROJECT_TRUSTED_KEY = "__pi_ampi_permissions_project_trusted_v1__";
+
+/**
+ * Whether this session reads the project's permission rules: Pi trusts the
+ * project, or (in a subagent child) the parent did. Kept on a process global
+ * like the session override, so the worker runner can pass it on.
+ */
+export function setMmrPermissionsProjectTrusted(value: boolean): void {
+  (globalThis as Record<string, unknown>)[PROJECT_TRUSTED_KEY] = value;
+}
+
+/** Whether this session reads the project's permission rules. */
+export function isMmrPermissionsProjectTrusted(): boolean {
+  return (globalThis as Record<string, unknown>)[PROJECT_TRUSTED_KEY] === true;
+}
+
+/** Set to `1` in a worker child's environment while the parent allows every tool call. */
+export const AMPI_PERMISSIONS_ALLOW_ALL_ENV = "AMPI_PERMISSIONS_ALLOW_ALL";
+/** Set to `1` in a worker child's environment while the parent reads the project's rules. */
+export const AMPI_PERMISSIONS_PROJECT_RULES_ENV = "AMPI_PERMISSIONS_PROJECT_RULES";
+
+/**
+ * Write this process's permission answers into a worker child's environment:
+ * each variable is `1` while its answer holds and removed otherwise, so a
+ * value inherited from this process never reaches a child on its own.
+ */
+export function writeMmrPermissionsChildEnv(env: Record<string, string | undefined>): void {
+  if (isMmrPermissionsSessionAllowAll()) env[AMPI_PERMISSIONS_ALLOW_ALL_ENV] = "1";
+  else delete env[AMPI_PERMISSIONS_ALLOW_ALL_ENV];
+  if (isMmrPermissionsProjectTrusted()) env[AMPI_PERMISSIONS_PROJECT_RULES_ENV] = "1";
+  else delete env[AMPI_PERMISSIONS_PROJECT_RULES_ENV];
 }

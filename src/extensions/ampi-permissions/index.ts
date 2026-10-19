@@ -4,9 +4,14 @@ import { isRecord } from "../ampi-core/internal/json.js";
 import { rewriteJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
 import { MMR_PERMISSIONS_DEFAULT_RULES } from "../ampi-core/permission-defaults.js";
 import {
+  AMPI_PERMISSIONS_ALLOW_ALL_ENV,
+  AMPI_PERMISSIONS_PROJECT_RULES_ENV,
   evaluateMmrPermission,
   isMmrPermissionsSessionAllowAll,
+  MMR_PERMISSIONS_SHELL_TOOLS,
+  type MmrPermissionContext,
   type MmrPermissionDecision,
+  setMmrPermissionsProjectTrusted,
   setMmrPermissionsSessionAllowAll,
 } from "../ampi-core/permissions.js";
 import {
@@ -18,10 +23,18 @@ import {
 import type { MmrFeatureGateProvider } from "../ampi-core/types.js";
 import { loadMmrPermissionsSettings, type MmrPermissionsSettings } from "./config.js";
 import {
+  type MmrPermissionsDelegateSpawn,
+  type MmrPermissionsDelegateTimer,
+  MMR_PERMISSIONS_DELEGATE_TIMEOUT_MS,
+  runMmrPermissionsDelegate,
+} from "./delegate.js";
+import {
+  formatMmrPermissionsDelegateWarning,
   formatMmrPermissionsDialogTitle,
   formatMmrPermissionsFeedbackReason,
   formatMmrPermissionsNoUiReason,
   formatMmrPermissionsRejectReason,
+  formatMmrPermissionsSubagentReason,
   MMR_PERMISSIONS_ABORTED_REASON,
   MMR_PERMISSIONS_ALLOW_ALWAYS,
   MMR_PERMISSIONS_ALLOW_ONCE,
@@ -41,6 +54,12 @@ export interface MmrPermissionsFactoryOverrides {
   agentDir?: () => string;
   /** Columns the dialog title may use; the terminal's width unless given. */
   columns?: () => number;
+  /** How long a delegate program may take; 10 seconds unless given. */
+  delegateTimeoutMs?: number;
+  /** Starts a delegate program's timeout; `setTimeout` unless given. */
+  delegateTimer?: MmrPermissionsDelegateTimer;
+  /** Starts a delegate program; `child_process.spawn` unless given. */
+  delegateSpawn?: MmrPermissionsDelegateSpawn;
 }
 
 function plural(count: number, noun: string): string {
@@ -76,15 +95,22 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
     const columns = overrides.columns ?? (() => process.stdout.columns || 80);
     let settings = INERT;
     let warned = new Set<string>();
+    /** Delegate programs already warned about this session. */
+    let programsWarned = new Set<string>();
     /** Dialogs run one at a time; this is the end of the line. */
     let queue: Promise<unknown> = Promise.resolve();
 
     const userFile = () => path.join(agentDir(), "settings.json");
 
     function load(ctx: ExtensionContext): void {
+      // A subagent child also reads the project's rules when its parent did:
+      // a child in print or JSON mode may not decide trust as its parent did,
+      // and project rules can only tighten.
+      const trusted = ctx.isProjectTrusted() || (getMmrSubagentState() !== undefined && process.env[AMPI_PERMISSIONS_PROJECT_RULES_ENV] === "1");
+      setMmrPermissionsProjectTrusted(trusted);
       settings = loadMmrPermissionsSettings({
         userFile: userFile(),
-        projectFile: ctx.isProjectTrusted() ? path.join(ctx.cwd, ".pi", "settings.json") : undefined,
+        projectFile: trusted ? path.join(ctx.cwd, ".pi", "settings.json") : undefined,
       });
       const fresh = settings.warnings.filter((warning) => !warned.has(warning));
       for (const warning of fresh) warned.add(warning);
@@ -154,31 +180,82 @@ export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOv
       return turn.finally(() => emitApproval({ phase: "answer", requestId }));
     }
 
+    /**
+     * Run the programs of a `delegate` decision, part by part in line order.
+     * A program that rejects ends the call; otherwise the first part that
+     * asks, by its rule or its program, decides; otherwise the call runs.
+     */
+    async function delegate(
+      event: ToolCallEvent,
+      decision: MmrPermissionDecision,
+      context: MmrPermissionContext,
+      ctx: ExtensionContext,
+    ): Promise<ToolCallEventResult | MmrPermissionDecision | undefined> {
+      const parts = decision.parts ?? [decision];
+      const asked = new Set<MmrPermissionDecision>();
+      const shell = MMR_PERMISSIONS_SHELL_TOOLS.includes(event.toolName) && isRecord(event.input);
+      for (const part of parts) {
+        if (part.action !== "delegate") continue;
+        const program = part.rule?.to;
+        // A delegate rule always names a program; one that does not asks.
+        if (program === undefined) {
+          asked.add(part);
+          continue;
+        }
+        const input = shell && part.command !== undefined ? { ...(event.input as Record<string, unknown>), command: part.command } : event.input;
+        const outcome = await runMmrPermissionsDelegate({
+          program,
+          request: { tool: event.toolName, input, context, cwd: ctx.cwd },
+          timeoutMs: overrides.delegateTimeoutMs ?? MMR_PERMISSIONS_DELEGATE_TIMEOUT_MS,
+          ...(overrides.delegateTimer ? { timer: overrides.delegateTimer } : {}),
+          ...(overrides.delegateSpawn ? { spawn: overrides.delegateSpawn } : {}),
+          ...(ctx.signal ? { signal: ctx.signal } : {}),
+        });
+        if (outcome.kind === "aborted") return { block: true, reason: MMR_PERMISSIONS_ABORTED_REASON };
+        if (outcome.kind === "reject") return { block: true, reason: outcome.reason };
+        if (outcome.kind === "allow") continue;
+        if (outcome.kind === "failed" && !programsWarned.has(program)) {
+          programsWarned.add(program);
+          ctx.ui.notify(formatMmrPermissionsDelegateWarning(program, outcome.problem), "warning");
+        }
+        asked.add(part);
+      }
+      const asking = parts.find((part) => part.action === "ask" || asked.has(part));
+      return asking ? { ...asking, action: "ask" } : undefined;
+    }
+
     registerMmrFeatureGateProvider(createFeatureGateProvider(() => settings));
 
     pi.on("session_start", async (event, ctx) => {
       // A new, resumed or forked session starts asking again; a reload keeps the answer.
       if (event.reason !== "reload") setMmrPermissionsSessionAllowAll(false);
+      // A subagent child takes its parent's "allow all" answer from the environment.
+      if (getMmrSubagentState() && process.env[AMPI_PERMISSIONS_ALLOW_ALL_ENV] === "1") setMmrPermissionsSessionAllowAll(true);
       warned = new Set();
-      // Subagent workers are not gated yet.
-      if (getMmrSubagentState()) {
-        settings = INERT;
-        return;
-      }
+      programsWarned = new Set();
       load(ctx);
     });
 
     pi.on("tool_call", async (event, ctx) => {
-      if (!settings.enabled || getMmrSubagentState() || allowedWithoutAsking()) return undefined;
-      const decision: MmrPermissionDecision = settings.failClosed
+      if (!settings.enabled || allowedWithoutAsking()) return undefined;
+      const context: MmrPermissionContext = getMmrSubagentState() ? "subagent" : "thread";
+      let decision: MmrPermissionDecision = settings.failClosed
         ? { action: "ask", reason: settings.failClosed }
         : evaluateMmrPermission(
             { toolName: event.toolName, input: event.input },
             { project: settings.projectRules, user: settings.userRules },
+            { context },
           );
-      if (decision.action === "allow") return undefined;
       if (decision.action === "reject") return { block: true, reason: formatMmrPermissionsRejectReason(event.toolName, decision) };
-      // `delegate` asks until delegate programs are supported.
+      if (decision.action === "delegate") {
+        const answer = await delegate(event, decision, context, ctx);
+        if (answer === undefined) return undefined;
+        if (!("action" in answer)) return answer;
+        decision = answer;
+      }
+      if (decision.action === "allow") return undefined;
+      // A subagent never opens a dialog: nobody is there to answer it.
+      if (context === "subagent") return { block: true, reason: formatMmrPermissionsSubagentReason(event.toolName, decision) };
       if (!ctx.hasUI) return { block: true, reason: formatMmrPermissionsNoUiReason(event.toolName, decision) };
       return ask(event, decision, ctx);
     });

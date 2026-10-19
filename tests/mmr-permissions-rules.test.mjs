@@ -305,10 +305,27 @@ describe("permission evaluation", () => {
     assert.equal(action({ toolName: "powershell", input: { command: "Get-ChildItem; Remove-Item x" } }, { user: [allowLs] }), "allow");
   });
 
-  it("keeps a single part's delegate but asks for a delegate among several parts", () => {
+  it("reports every part's decision when a part of a line delegates", () => {
     const delegate = { tool: "bash", matches: { command: "make *" }, action: "delegate", to: "check" };
-    assert.equal(action(bash("make all"), { user: [delegate] }), "delegate");
-    assert.equal(action(bash("ls && make all"), { user: [delegate] }), "ask");
+    const single = rules.evaluateMmrPermission(bash("make all"), { user: [delegate] });
+    assert.deepEqual(single, { action: "delegate", rule: delegate, source: "user", command: "make all" });
+
+    const line = rules.evaluateMmrPermission(bash("ls && make all && rm -rf build"), { user: [delegate] });
+    assert.equal(line.action, "delegate", "a delegated part comes before an asking one, since its program may reject");
+    assert.equal(line.rule, delegate);
+    assert.deepEqual(
+      line.parts.map((part) => [part.command, part.action, part.source]),
+      [
+        ["ls", "allow", "default"],
+        ["make all", "delegate", "user"],
+        ["rm -rf build", "ask", "default"],
+      ],
+    );
+    const reject = { tool: "bash", matches: { command: "rm *" }, action: "reject" };
+    assert.equal(action(bash("make all && rm -rf build"), { user: [reject, delegate] }), "reject", "a rejected part decides first");
+    assert.equal(action(bash("make $(x)"), { user: [delegate] }), "ask", "an opaque part asks instead of delegating");
+    assert.equal(action(bash("ls && pwd")), "allow");
+    assert.equal(rules.evaluateMmrPermission(bash("ls && git push")).parts.length, 2, "an asking line lists its parts too");
   });
 
   it("exports the splitter: parts keep their original text and say whether they are opaque", () => {

@@ -1,6 +1,6 @@
 # ampi-permissions
 
-Asks before risky tool calls: rules in your settings allow, reject or ask about each call, and an approval dialog lets you decide the ones that ask.
+Asks before risky tool calls: rules in your settings allow, reject or ask about each call, or hand it to a program you name, and an approval dialog lets you decide the ones that ask.
 
 Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../../ROADMAP.md`](../../../ROADMAP.md). Public API: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 
@@ -8,13 +8,14 @@ Package overview: [`../../../README.md`](../../../README.md). Planning: [`../../
 
 | Default | Provides | Requires | Diagnostics |
 | --- | --- | --- | --- |
-| Off (inert until configured) | A `tool_call` gate, the approval dialog, ampi's default rules | `ampi.permissions` or `ampi.dangerouslyAllowAll: false` in settings | `/ampi-status` (`Permissions:` line), warnings at session start |
+| Off (inert until configured) | A `tool_call` gate in sessions and subagents, the approval dialog, delegate programs, ampi's default rules | `ampi.permissions` or `ampi.dangerouslyAllowAll: false` in settings | `/ampi-status` (`Permissions:` line), warnings at session start |
 
 ## When to use it
 
 - You want shell commands that change things (`rm`, `git push`, installs, deploys) to wait for your yes, while reads, tests and builds run on their own.
 - You want hard rules: never run a command, never touch a path, with a reason the agent sees.
 - A project should be able to add restrictions for everyone who trusts it, but never remove yours.
+- You have your own checker (a script, a policy tool) that should decide some calls.
 
 ## Status and enablement
 
@@ -25,7 +26,7 @@ Default: off. The extension loads with the package but does nothing until a sett
 
 in the user settings (`<agentDir>/settings.json`, normally `~/.pi/agent/settings.json`) or in a project's `.pi/settings.json` that Pi trusts. A project may turn it on, because that only tightens.
 
-The gate applies in every mode, Free included: it is your safety setting, not a mode policy. It also applies to calls another tool makes (codemode scripts, nested calls). Subagent workers are not gated yet; they run as before.
+The gate applies in every mode, Free included: it is your safety setting, not a mode policy. It also applies to calls another tool makes (codemode scripts, nested calls), and to subagent children, which refuse what would ask instead of opening a dialog (see [Subagents](#subagents)).
 
 `/ampi-status` shows `Permissions: enabled` with the number of project, user and default rules, or `disabled` with how to turn it on. The feature gate ids are `ampi-permissions` and `mmr-permissions`.
 
@@ -76,7 +77,7 @@ A rule is an object:
 | `matches` | no | Input field name to pattern; every named field must match |
 | `action` | yes | `allow`, `reject`, `ask` or `delegate` |
 | `context` | no | `thread` (the main session) or `subagent`; without it the rule applies everywhere |
-| `to` | `delegate` only | The program a `delegate` rule hands the decision to |
+| `to` | `delegate` only | The program and its arguments that decide the call (see [Delegate programs](#delegate-programs)); user rules only |
 | `message` | `reject` only | The reason the agent sees when the rule rejects a call |
 
 Patterns:
@@ -100,14 +101,15 @@ Settings are read when a session starts and again after the dialog writes them.
 2. Otherwise the first matching rule decides, in this order: the trusted project's rules, the user's rules, ampi's defaults.
 3. No matching rule allows the call.
 
-`allow` lets the call run. `reject` blocks it with the rule's `message`, or a reason that quotes the rule. `ask` opens the dialog. `delegate` asks for now; delegate programs come in a later change.
+`allow` lets the call run. `reject` blocks it with the rule's `message`, or a reason that quotes the rule. `ask` opens the dialog. `delegate` runs the rule's program, whose exit code allows, rejects or asks.
 
 ### Shell commands
 
 For `bash` and `shell_command`, the `command` is split into simple commands at `;`, `&&`, `||`, `|`, `&` and newlines, and each part is checked on its own, with `command` replaced by that part's text:
 
-- Any rejected part rejects the whole line, with that rule's reason.
-- The line runs without asking only when every part is allowed; otherwise it asks.
+- Any rejected part rejects the whole line, with that rule's reason, and no delegate program runs.
+- Otherwise each part a `delegate` rule decides runs that rule's program once, with `command` set to the part's text, in line order. The first program that rejects rejects the line, and the later ones do not run.
+- The line runs without asking only when every part is allowed, by a rule or by its program; otherwise it asks.
 - A part with a subshell, `$(...)` or backticks asks unless a rule rejects it, because ampi does not look inside them.
 - A line ampi cannot split (heredocs, comments, unbalanced quotes) asks unless a rule rejects the whole line.
 
@@ -140,7 +142,47 @@ A trusted project's `reject` and `ask` rules apply ahead of yours. Its `allow` a
 
 ### Runs without a UI
 
-In print and JSON runs nothing can ask, so a call that needs approval is blocked with a reason that says so and names the rule. Add an `allow` rule for calls such runs should make.
+In print and JSON runs nothing can ask, so a call that needs approval is blocked with a reason that says so and names the rule. Add an `allow` rule for calls such runs should make. Delegate programs run as in any session; one that asks ends in the same reason.
+
+### Delegate programs
+
+A `delegate` rule's `to` names a program and its arguments, split into words as a shell would split a simple command:
+
+```json
+{ "tool": "bash", "matches": { "command": "git *" }, "action": "delegate", "to": "node ~/bin/approve.mjs --strict" }
+```
+
+- `to` is one program, never a shell line: operators (`|`, `&&`, `;`), redirections, subshells, `$(...)`, backticks, variables and brace expansions make the rule invalid, and it is skipped with a warning at session start. Quotes work as in a shell.
+- A leading `~` or `~/` in any word expands to your home directory. A first word with a `/` is a path, relative to the session's working directory; a bare name is the first executable file of that name in an absolute `PATH` directory (relative entries are skipped).
+- Keep the program and any script it runs outside the project, for example under `~/bin`, and name them by an absolute or `~` path: the agent may be able to change files in the working directory.
+- The program starts without a shell, in the session's working directory, with the environment Pi runs with. It reads one line of JSON on stdin, then end of input: `{ "tool": ..., "input": ..., "context": "thread" | "subagent", "cwd": ... }`. For a shell line, `input.command` is the one part the rule matched.
+- Exit `0` allows the call. Exit `1` rejects it: the first non-empty line of stdout, or of stderr when stdout has none, is the reason the agent sees (control and format characters, bidi controls among them, removed; at most 500 characters). Exit `2` asks, as an `ask` rule does.
+- Any other exit code, a crash, a program that cannot be found or started, and one that takes longer than 10 seconds also ask, and the session shows one warning per program that says what went wrong.
+- On a timeout, or when you interrupt the turn, ampi kills the program and the processes it started (its process group, where the platform has one). An interrupted turn blocks the call. ampi keeps the first 64 KiB of stdout and of stderr and reads and drops the rest, so a talkative program never stalls.
+- Only your user rules delegate: a project's `delegate` rules are ignored with a warning, so a project cannot run a program of its choosing. A program's answer opens no dialog and sets no approval status; only a dialog that opens does.
+
+An example program, `~/bin/echo-only.mjs`, that lets `echo ok` run and rejects every other command:
+
+```js
+let text = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => (text += chunk));
+process.stdin.on("end", () => {
+  const call = JSON.parse(text);
+  if (call.input.command === "echo ok") process.exit(0);
+  console.log(`Only echo ok may run here, not: ${call.input.command}`);
+  process.exit(1);
+});
+```
+
+### Subagents
+
+Subagent children evaluate the same settings as the main session, with `context: "subagent"`: a rule with `context: "subagent"` applies only there, one with `context: "thread"` only in the main session, and one without `context` in both.
+
+- A child never opens a dialog. A call that would ask, by a rule, ampi's defaults or a delegate program, is blocked with a reason that says the user has to approve it, that a subagent cannot ask, and that the call has to run in the main session or be allowed by a rule in `ampi.permissions`. The child reports that to the agent that started it.
+- `Task` children load the gate through their extension list; `reviewer` and custom subagents load every extension, so they have it too. `finder`, `oracle`, `librarian` and `view_media` have no shell or edit tools and run without it.
+- A child takes two answers from the session that starts it. When you allowed all for that session, every call in the child runs too. When that session reads the project's rules, so does the child, even if the child, in print or JSON mode, decides project trust differently; project rules only tighten, so that is safe. A child passes both answers on to the subagents it starts.
+- A child takes these answers when it starts: allowing all in the main session later does not reach a child that is already running.
 
 ## Diagnostics and troubleshooting
 
@@ -148,6 +190,8 @@ In print and JSON runs nothing can ask, so a call that needs approval is blocked
 - **Every call asks.** `ampi.permissions` is not a list; the session-start warning names the file.
 - **A rule has no effect.** An invalid rule is skipped with a warning at session start that says what is wrong. An earlier rule may match first: project rules, then yours, then the defaults.
 - **A harmless command asks.** It writes to a file, runs a subshell, uses a variable or brace expansion, or is not on the default list. Add an `allow` rule for it.
+- **A delegate rule asks every time.** The program failed; the warning at its first call says how (`exited with code 3`, `timed out after 10 s`, `was not found on PATH`). Run it by hand with a JSON line on stdin to check it.
+- **A subagent says a call needs approval.** Children cannot ask. Run the call in the main session, add an `allow` rule (with `context: "subagent"` to limit it to children), or allow all for the session before starting the subagent.
 
 ## Public API
 
@@ -161,8 +205,9 @@ Canonical catalog: [`../../../docs/public-api.md`](../../../docs/public-api.md).
 ## Developer notes
 
 - `index.ts` loads settings at `session_start`, registers the feature-gate provider and the `tool_call` gate, and runs the dialog queue; `config.ts` reads the settings files; `gate.ts` holds the dialog words and block reasons (a public-safety lint surface).
-- The rule engine and the defaults live in ampi-core (`permissions.ts`, `permission-defaults.ts`) so workers can evaluate rules without importing this extension. The session override is on a process global for the same reason.
+- `delegate.ts` resolves and runs delegate programs (timeout, output limits, process-group kill); the gate passes it an injectable timer and spawn for tests (`delegateTimer`, `delegateSpawn`, `delegateTimeoutMs`).
+- The rule engine and the defaults live in ampi-core (`permissions.ts`, `permission-defaults.ts`) so workers can evaluate rules without importing this extension. The engine never starts a process: for a shell line it reports each part's decision in `parts`, and the gate runs the programs. The session override and the project-trust answer are on process globals for the same reason; the worker runner writes them into a child's environment as `AMPI_PERMISSIONS_ALLOW_ALL=1` and `AMPI_PERMISSIONS_PROJECT_RULES=1` and removes each when its answer does not hold. Only a child reads them.
 - The gate emits `mmr-core:approval` (`phase: "request"` when a call starts waiting, `"answer"` when it is decided); `ampi-tui`'s status feed and `ampi-gui`'s bridge turn them into the `waitingApproval` phase.
 - Settings files are read following symbolic links, as Pi does; the write refuses a symbolic link, as every ampi settings writer does.
-- Not covered yet: delegate programs and subagent workers, and guarded files. Shell commands that write files are matched only by rules, so a command ampi does not know can still write anywhere once allowed.
-- Tests: `tests/mmr-permissions-rules.test.mjs` (matching, validation, evaluation, shell splitting, defaults) and `tests/mmr-permissions-gate.test.mjs` (settings, trust, the dialog, no-UI runs, approval status).
+- Not covered yet: guarded files. Shell commands that write files are matched only by rules, so a command ampi does not know can still write anywhere once allowed.
+- Tests: `tests/mmr-permissions-rules.test.mjs` (matching, validation, evaluation, shell splitting, defaults), `tests/mmr-permissions-gate.test.mjs` (settings, trust, the dialog, no-UI runs, approval status), `tests/mmr-permissions-delegate.test.mjs` (delegate programs: exit codes, input, lookup, limits, shell lines, project rules) and `tests/mmr-permissions-subagents.test.mjs` (contexts, child refusals, the environment signals, the runner, which children load the gate).

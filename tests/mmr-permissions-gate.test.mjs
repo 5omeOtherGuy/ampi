@@ -1,5 +1,7 @@
 // ampi-permissions: the tool_call gate, its settings and project trust, the
 // approval dialog, runs without UI, and the approval status it drives.
+// Delegate programs and subagent children have their own suites
+// (mmr-permissions-delegate, mmr-permissions-subagents).
 import assert from "node:assert/strict";
 import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -410,21 +412,6 @@ describe("ampi-permissions: where the gate applies", () => {
       { phase: "request", requestId: "parent-1/1" },
       { phase: "answer", requestId: "parent-1/1" },
     ]);
-  });
-
-  it("is inert in a subagent worker", async () => {
-    const t = await setup({ user: ON });
-    runtime.setMmrSubagentState({
-      profile: "finder",
-      provider: "openai-codex",
-      model: "gpt-5.4-mini",
-      thinkingLevel: "minimal",
-      promptRoute: "standalone",
-      activeTools: ["bash"],
-      activatedAt: "2026-10-18T00:00:00.000Z",
-    });
-    assert.equal(await t.call("bash", { command: "rm -rf build" }), undefined);
-    assert.equal(t.selects.length, 0);
   });
 });
 
