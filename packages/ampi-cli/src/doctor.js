@@ -125,8 +125,9 @@ Options:
 
 The command only reads, and makes no network request. It installs nothing (Pi downloads
 rg and fd itself on first use when it is online), writes no file, runs no credential
-command and refreshes no sign-in. It starts no program, except that Pi asks npm for its
-global directory (npm root -g) when an npm package in Pi's settings is not installed yet.
+command and refreshes no sign-in. It starts no program, except that Pi runs its configured
+npm command (npm unless settings name another) for its global directory (root -g) when an
+npm package in Pi's settings is not installed yet.
 
 Exit status: 0 when no check fails, 1 when one does, 2 on a usage error.
 
@@ -473,7 +474,7 @@ function checkModels(models) {
   if ("error" in models) return result("models", "fail", `Pi's credentials cannot be read: ${models.error}`, "Fix Pi's auth.json or move it aside, then sign in again with /login.");
   if (models.models === 0) return result("models", "fail", "no model has credentials", login);
   const count = (/** @type {number} */ n, /** @type {string} */ word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  return result("models", "ok", `${count(models.models, "model")} from ${count(models.providers, "provider")} have credentials`);
+  return result("models", "ok", `credentials for ${count(models.models, "model")} from ${count(models.providers, "provider")}`);
 }
 
 /** @param {DoctorFacts["ampiData"]} data */

@@ -254,7 +254,7 @@ describe("ampi doctor: checks through an injected host", () => {
       hint: "Run /login in a session, or set a provider's API key variable (Pi's docs/providers.md lists them).",
     });
     const some = (await checksOf({ pi: { credentialedModels: async () => ({ models: 1, providers: 1 }) } })).models;
-    assert.deepEqual(some, { id: "models", status: "ok", summary: "1 model from 1 provider have credentials" });
+    assert.deepEqual(some, { id: "models", status: "ok", summary: "credentials for 1 model from 1 provider" });
   });
 
   it("reports the ampi that comes with ampi-cli when Pi loads none", async () => {
@@ -443,7 +443,7 @@ describe("ampi doctor: spawned", () => {
     assert.match(without.stdout, /^fail {2}models {5}no model has credentials$/m);
 
     const withKey = runDoctor([], { ...env, ANTHROPIC_API_KEY: key }, dir);
-    assert.match(withKey.stdout, /^ok {4}models {5}\d+ models? from 1 provider have credentials$/m);
+    assert.match(withKey.stdout, /^ok {4}models {5}credentials for \d+ models? from 1 provider$/m);
     for (const text of [withKey.stdout, withKey.stderr, without.stdout, without.stderr]) assert.ok(!text.includes(key));
   });
 });
