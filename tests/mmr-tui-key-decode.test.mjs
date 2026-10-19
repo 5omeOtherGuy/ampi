@@ -5,10 +5,11 @@ import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
 after(cleanupLoadedSource);
 
 let decode;
+let decodeEvent;
 let format;
 
 before(async () => {
-  ({ decodeMmrTerminalKeys: decode } = await importSource("extensions/ampi-tui/keys/decode.ts"));
+  ({ decodeMmrTerminalKeys: decode, decodeMmrTerminalKeyEvent: decodeEvent } = await importSource("extensions/ampi-tui/keys/decode.ts"));
   const { formatMmrKeyChord } = await importSource("extensions/ampi-core/keymap.ts");
   format = (combos) => combos.map((combo) => formatMmrKeyChord({ leader: false, combos: [combo] })).join(" ");
 });
@@ -110,5 +111,55 @@ describe("ampi-tui key decoder", () => {
     assert.equal(keys("\x1b[57399u"), undefined, "kitty keypad keys have no keymap name");
     assert.equal(keys("\x1b[<0;10;5M"), undefined, "mouse reports are not keys");
     assert.equal(keys(""), undefined);
+  });
+});
+
+/** The decoded event as `[event, keys]`, or undefined. */
+function keyEvent(data) {
+  const decoded = decodeEvent(data);
+  return decoded === undefined ? undefined : [decoded.event, format(decoded.combos)];
+}
+
+describe("ampi-tui key decoder: event types", () => {
+  // Kitty reports with an event field, in the forms pi-tui classifies (CSI-u, ~ and the cursor letters).
+  const SAMPLES = [
+    ["\x1b[115;5u", "press", "ctrl+s"],
+    ["\x1b[115;5:1u", "press", "ctrl+s"],
+    ["\x1b[115;5:2u", "repeat", "ctrl+s"],
+    ["\x1b[115;5:3u", "release", "ctrl+s"],
+    ["\x1b[27;1:3u", "release", "esc"],
+    ["\x1b[3;1:2~", "repeat", "delete"],
+    ["\x1b[3;1:3~", "release", "delete"],
+    ["\x1b[1;5:2A", "repeat", "ctrl+up"],
+    ["\x1b[1;1:3D", "release", "left"],
+    ["\x1b[1;1:3H", "release", "home"],
+    ["\x1b[1;2:3F", "release", "shift+end"],
+    ["\x1b[57441;2:3u", "release", ""],
+  ];
+
+  it("reports press, repeat and release, with the released key's combos", () => {
+    for (const [data, event, combos] of SAMPLES) assert.deepEqual(keyEvent(data), [event, combos], JSON.stringify(data));
+    assert.deepEqual(keyEvent("\x13"), ["press", "ctrl+s"]);
+    assert.deepEqual(keyEvent("\x1b\x1b"), ["press", "esc esc"]);
+    assert.deepEqual(keyEvent("\x1b\x1b[99;5:2u"), ["repeat", "ctrl+alt+c"], "an Alt prefix keeps the repeat");
+    assert.equal(keyEvent("\x1b\x1b[99;5:3u"), undefined, "an Alt prefix on a release is not a key, as before");
+    assert.equal(keyEvent("\x1b[2~"), undefined);
+    assert.equal(keyEvent("\x1b[200~x\x1b[201~"), undefined);
+  });
+
+  it("classifies releases and repeats as pi-tui does", async () => {
+    const { isKeyRelease, isKeyRepeat } = await import("@earendil-works/pi-tui");
+    for (const [data, event] of SAMPLES) {
+      assert.equal(isKeyRelease(data), event === "release", `isKeyRelease(${JSON.stringify(data)})`);
+      assert.equal(isKeyRepeat(data), event === "repeat", `isKeyRepeat(${JSON.stringify(data)})`);
+    }
+  });
+
+  it("leaves decodeMmrTerminalKeys as it was: no keys for a release", () => {
+    for (const [data, event] of SAMPLES) {
+      const keysOf = decode(data);
+      if (event === "release") assert.deepEqual(keysOf, [], JSON.stringify(data));
+      else assert.deepEqual(keysOf, decodeEvent(data).combos, JSON.stringify(data));
+    }
   });
 });

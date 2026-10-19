@@ -33,6 +33,13 @@ Commands:
   without ampi's options; config keymap and config edit are ampi's. update goes to Pi's
   update unchanged when it has Pi's arguments, such as --extensions or a package source.
 
+Developer commands:
+
+  dev keys [--raw] [--no-keymap]
+                                Print what ampi reads for each key press and the command its
+                                keymap would run, one JSON line per key; ampi dev keys --help
+                                has more
+
 Options:
 
   -m, --mode <mode>

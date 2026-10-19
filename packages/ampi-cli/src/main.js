@@ -12,7 +12,7 @@ import { buildExecuteArgs, createRunExtension, EXECUTE_NO_MESSAGE_ERROR, isExecu
 import { applyColorToEnv, createLogger, readLogSettings } from "./log.js";
 import { createMcpConfigExtension, readMcpConfigFlag } from "./mcp-config.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt, resolveInstalledPackage } from "./packages.js";
-import { capturePiJsonOutput, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources, piAgentDir } from "./pi-compat.js";
+import { capturePiJsonOutput, createPiInputTerminal, exitWithCodeAfterPiRpc, feedPiRpcInput, hidePipedStdinFromPi, listPiExtensionSources, piAgentDir } from "./pi-compat.js";
 import { createStatsOutput, createStreamJsonOutput, createToolOutput } from "./run-output.js";
 import { createStreamJsonEncoder, readStreamJsonContext } from "./stream-json.js";
 import { createStreamJsonInputDriver } from "./stream-json-input.js";
@@ -520,6 +520,36 @@ export async function runAmpi(argv) {
         locateAmpi: () => locateLoadedAmpi(pi, cwd),
         out: (text) => process.stdout.write(text),
         log,
+      });
+    }
+    case "dev": {
+      // Only `dev keys` reaches here (see argv.js). Nothing it does needs the network.
+      process.env.PI_OFFLINE = "1";
+      const [pi, tui, { runDevKeysCommand }] = await Promise.all([import(PI_PACKAGE_NAME), import("@earendil-works/pi-tui"), import("./dev-keys.js")]);
+      // A reader that stops early (`ampi dev keys < keys.txt | head -1`) closes the pipe: stop quietly.
+      process.stdout.on("error", (error) => {
+        if (/** @type {NodeJS.ErrnoException} */ (error).code !== "EPIPE") throw error;
+        process.exit(0);
+      });
+      const cwd = process.cwd();
+      return runDevKeysCommand((route.devArgs ?? []).slice(1), {
+        pi,
+        cwd,
+        locateAmpi: () => locateLoadedAmpi(pi, cwd),
+        stdin: process.stdin,
+        stdinIsTTY: process.stdin.isTTY === true,
+        stdoutIsTTY: process.stdout.isTTY === true,
+        now: () => performance.now(),
+        createTerminal: () => createPiInputTerminal(tui),
+        onSignal: (stop) => {
+          const signals = /** @type {const} */ (["SIGTERM", "SIGHUP"]);
+          for (const signal of signals) process.once(signal, stop);
+          return () => {
+            for (const signal of signals) process.removeListener(signal, stop);
+          };
+        },
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
       });
     }
   }

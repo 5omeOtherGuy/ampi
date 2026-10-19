@@ -13,6 +13,8 @@ import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages
 import {
   checkPiSkillDir,
   countPiCredentialedModels,
+  createPiInputSplitter,
+  createPiInputTerminal,
   createPiModelLookup,
   createPiSessionServices,
   createPiSessionWriter,
@@ -497,6 +499,32 @@ describe("Pi calls used by the config commands", () => {
     const read = piSettingsManager(pi, trusted);
     assert.equal(read.isProjectTrusted(), true);
     assert.deepEqual(read.getSettings().ampi, { keymap: { "thread.new": "alt+t" } });
+  });
+});
+
+describe("pi-tui's terminal input, as dev keys uses it", () => {
+  it("has the terminal whose input mode the command sets, without starting it", async () => {
+    const tui = await import("@earendil-works/pi-tui");
+    for (const method of ["start", "stop", "drainInput"]) {
+      assert.equal(typeof tui.ProcessTerminal.prototype[method], "function", `ProcessTerminal.${method}`);
+    }
+    const terminal = createPiInputTerminal(tui);
+    assert.deepEqual(Object.keys(terminal).sort(), ["drain", "start", "stop"]);
+  });
+
+  it("splits input into key sequences, and a bracketed paste into one chunk with its markers", async () => {
+    const tui = await import("@earendil-works/pi-tui");
+    const chunks = [];
+    const splitter = createPiInputSplitter(tui, (chunk) => chunks.push(chunk));
+    splitter.write("\x18t\x1b\x1b");
+    assert.deepEqual(chunks, ["\x18", "t", "\x1b\x1b"]);
+    splitter.write("\x1b[200~two\nlines\x1b[201~\x1bd\x1b[115;5:3u");
+    assert.deepEqual(chunks.slice(3), ["\x1b[200~two\nlines\x1b[201~", "\x1bd", "\x1b[115;5:3u"]);
+    // A lone Esc waits for what may follow; the end of the input hands it on.
+    splitter.write("\x1b");
+    assert.equal(chunks.length, 6);
+    splitter.end();
+    assert.deepEqual(chunks.slice(6), ["\x1b"]);
   });
 });
 

@@ -231,6 +231,18 @@ describe("ampi argv router: starting Pi", () => {
     assert.deepEqual(edit.piArgs, []);
   });
 
+  it("keeps dev keys for ampi, and leaves every other message starting with dev to Pi", () => {
+    const keys = routeAmpiArgv(["dev", "keys", "--raw"]);
+    assert.equal(keys.command, "dev");
+    assert.deepEqual(keys.devArgs, ["keys", "--raw"]);
+    assert.deepEqual(keys.piArgs, []);
+    for (const argv of [["dev"], ["dev", "server", "is", "down"], ["dev", "--raw"]]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi", argv.join(" "));
+      assert.deepEqual(route.piArgs, argv);
+    }
+  });
+
   it("routes tools and its alias tool with the rest of the command line, -m included", () => {
     for (const group of ["tools", "tool"]) {
       const route = routeAmpiArgv([group, "list", "-m", "high", "--json"]);

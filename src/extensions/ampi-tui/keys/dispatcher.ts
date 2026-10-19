@@ -72,6 +72,8 @@ export interface MmrKeyDispatcher {
   cancel(): void;
   setKeymap(keymap: Pick<MmrResolvedKeymap, "byChord" | "leader">): void;
   isPending(): boolean;
+  /** The pending prefix as canonical keys (`ctrl+x`, `esc`, `ctrl+c`), or `undefined`; a lapsed deadline clears it first. */
+  pendingKeys(): string | undefined;
   /** Canonical first keys of every chord, plus the leader and `esc`: the keys the host must see raw. */
   rawKeys(): ReadonlySet<string>;
 }
@@ -215,6 +217,10 @@ export function createMmrKeyDispatcher(options: MmrKeyDispatcherOptions): MmrKey
     isPending() {
       expireIfDue();
       return pending !== undefined;
+    },
+    pendingKeys() {
+      expireIfDue();
+      return pending?.keys.join(" ");
     },
     rawKeys() {
       return table.raw;

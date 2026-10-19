@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "update" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "update" | "dev" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -32,6 +32,7 @@ import { isLogLevel } from "./log.js";
  * @property {string[]} piArgs Arguments handed to Pi's `main()` when `command` is `"pi"`.
  * @property {string[]} [threadArgs] The command line from `threads`, `last` or `usage` on, when `command` is `"threads"`.
  * @property {string[]} [configArgs] The command line after `config`, when `command` is `"config"`.
+ * @property {string[]} [devArgs] The command line after `dev`, when `command` is `"dev"`.
  * @property {string[]} [toolsArgs] The command line after `tools` (or `tool`), when `command` is `"tools"`.
  * @property {boolean} [open] `ampi app --open`: open the page in a browser.
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
@@ -58,6 +59,9 @@ const UPDATE_HELP_FLAGS = new Set(["-h", "--help"]);
 
 /** The `config` subcommands ampi runs itself. */
 const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
+
+/** The developer commands, `ampi dev <command>`. */
+const DEV_COMMANDS = new Set(["keys"]);
 
 const OPTIONS = /** @type {const} */ ({
   mode: { type: "string", short: "m" },
@@ -193,6 +197,8 @@ function routeCommand(args) {
   if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1));
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) return { command: "config", piArgs: [], configArgs: args.slice(1) };
+  // `dev keys` is ampi's; `ampi dev` followed by anything else is a message for Pi.
+  if (args[0] === "dev" && DEV_COMMANDS.has(args[1] ?? "")) return { command: "dev", piArgs: [], devArgs: args.slice(1) };
   if (PI_COMMANDS.has(args[0] ?? "")) return { command: "pi-command", piArgs: args };
   return undefined;
 }
@@ -455,6 +461,13 @@ Commands:
   Pi's own commands (install, remove, uninstall, list, config, auth) run unchanged,
   without ampi's options; config keymap and config edit are ampi's. update goes to Pi's
   update unchanged when it has Pi's arguments, such as --extensions or a package source.
+
+Developer commands:
+
+  dev keys [--raw] [--no-keymap]
+                                Print what ampi reads for each key press and the command its
+                                keymap would run, one JSON line per key; ampi dev keys --help
+                                has more
 
 Options:
 
