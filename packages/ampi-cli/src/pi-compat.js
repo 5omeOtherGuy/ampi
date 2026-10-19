@@ -169,15 +169,19 @@ export async function createPiModelLookup(pi) {
 /**
  * What Pi will load besides `-e` arguments, read without installing anything.
  * Project settings are read as if the project were trusted: once trust is
- * granted Pi loads them.
+ * granted Pi loads them. `readOnly` reads the settings files without Pi's
+ * file locks, which create a lock directory next to each settings file, and
+ * lists a package source that is not installed as missing whether or not
+ * PI_OFFLINE is set: the next online start installs it.
  *
  * @param {any} pi The `@earendil-works/pi-coding-agent` module.
  * @param {string} cwd
+ * @param {{ readOnly?: boolean }} [options]
  * @returns {Promise<PiExtensionSources>}
  */
-export async function listPiExtensionSources(pi, cwd) {
+export async function listPiExtensionSources(pi, cwd, { readOnly = false } = {}) {
   const agentDir = pi.getAgentDir();
-  const settingsManager = pi.SettingsManager.create(cwd, agentDir, { projectTrusted: true });
+  const settingsManager = readOnly ? readOnlyPiSettingsManager(pi, cwd) : pi.SettingsManager.create(cwd, agentDir, { projectTrusted: true });
   const packageManager = new pi.DefaultPackageManager({ cwd, agentDir, settingsManager });
   /** @type {string[]} */
   const missing = [];
@@ -185,6 +189,14 @@ export async function listPiExtensionSources(pi, cwd) {
     missing.push(source);
     return "skip";
   });
+  if (readOnly) {
+    // With PI_OFFLINE set, Pi skips missing sources without asking; an online start installs them.
+    /** @type {{ source: string, installedPath?: string }[]} */
+    const configured = packageManager.listConfiguredPackages();
+    for (const { source, installedPath } of configured) {
+      if (installedPath === undefined && REMOTE_PACKAGE_SOURCE.test(source) && !missing.includes(source)) missing.push(source);
+    }
+  }
   /** @type {{ path: string, enabled: boolean, metadata: { source: string, origin: string } }[]} */
   const extensions = resolved.extensions;
   return {
@@ -201,6 +213,130 @@ export async function listPiExtensionSources(pi, cwd) {
       }
     },
   };
+}
+
+/** Package sources Pi installs itself (npm and git), as opposed to local paths. */
+const REMOTE_PACKAGE_SOURCE = /^(?:npm:|git:|git@|https?:|ssh:)/;
+
+/**
+ * Pi's `SettingsManager` over the user and project settings files, reading
+ * them without the lock Pi takes and never writing: a manager for reports
+ * that must leave Pi's configuration directory as it is. Project settings are
+ * read as if the project were trusted.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {any}
+ */
+function readOnlyPiSettingsManager(pi, cwd) {
+  /** @type {Record<string, string>} */
+  const files = { global: piSettingsPath(pi, cwd, "user"), project: piSettingsPath(pi, cwd, "project") };
+  const storage = {
+    withLock: (/** @type {string} */ scope, /** @type {(current: string | undefined) => unknown} */ fn) => {
+      /** @type {string | undefined} */
+      let current;
+      try {
+        current = readFileSync(files[scope], "utf8");
+      } catch (error) {
+        if (/** @type {NodeJS.ErrnoException} */ (error).code !== "ENOENT") throw error;
+      }
+      fn(current);
+    },
+  };
+  return pi.SettingsManager.fromStorage(storage, { projectTrusted: true });
+}
+
+/**
+ * The settings files Pi cannot load in `cwd`, read as Pi reads them (without
+ * writing anything): the user settings and the project's, whether or not Pi
+ * trusts the project. A JSON error names its line and column but never quotes
+ * the file.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @returns {{ scope: "user" | "project", path: string, message: string }[]}
+ */
+export function readPiSettingsErrors(pi, cwd) {
+  /** @type {{ scope: "global" | "project", error: Error }[]} */
+  const errors = readOnlyPiSettingsManager(pi, cwd).drainErrors();
+  return errors.map(({ scope, error }) => {
+    const where = /line (\d+) column (\d+)/.exec(error.message);
+    const message =
+      error instanceof SyntaxError ? (where ? `invalid JSON at line ${where[1]}, column ${where[2]}` : "invalid JSON") : error.message;
+    const which = scope === "global" ? "user" : "project";
+    return { scope: which, path: piSettingsPath(pi, cwd, which), message };
+  });
+}
+
+/**
+ * The directory Pi keeps the `fd` and `rg` it downloads in, and looks in
+ * before PATH: `bin` in its configuration directory. Pi does not export its
+ * own function for it from the package root.
+ *
+ * @param {any} pi
+ * @returns {string}
+ */
+export function piBinDir(pi) {
+  return path.join(pi.getAgentDir(), "bin");
+}
+
+/**
+ * How many models Pi's catalogue offers with credentials, and from how many
+ * providers: credentials in Pi's `auth.json` or a provider's environment
+ * variable, as Pi checks them. Offline whatever PI_OFFLINE says, and read
+ * only: `auth.json` is read once without Pi's lock, an OAuth token counts as
+ * it is stored (it is never refreshed), and a key given as a `!command` counts
+ * without the command being run. Pi's own credential store would run it.
+ * Models that only an extension registers are not counted.
+ *
+ * @param {any} pi
+ * @returns {Promise<{ models: number, providers: number }>}
+ */
+export async function countPiCredentialedModels(pi) {
+  const file = path.join(pi.getAgentDir(), "auth.json");
+  /** @type {Record<string, { type: string, key?: unknown }>} */
+  let stored = {};
+  /** @type {string} */
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== "ENOENT") throw error;
+  }
+  if (text.trim() !== "") {
+    /** @type {unknown} */
+    let parsed;
+    try {
+      parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
+    } catch {
+      // JSON.parse quotes the text around an error, which may be a key.
+      throw new Error(`${file} is not valid JSON`);
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${file} does not hold an object`);
+    stored = /** @type {typeof stored} */ (parsed);
+  }
+  const credentials = {
+    read: async (/** @type {string} */ providerId) => {
+      const credential = Object.hasOwn(stored, providerId) ? stored[providerId] : undefined;
+      if (credential === null || typeof credential !== "object") return undefined;
+      if (credential.type === "api_key" && typeof credential.key === "string" && credential.key.startsWith("!")) {
+        return { ...credential, key: "(command not run)" };
+      }
+      return credential;
+    },
+    list: async () => Object.entries(stored).map(([providerId, credential]) => ({ providerId, type: credential?.type })),
+    modify: async () => {
+      throw new Error("the credential store is read only here");
+    },
+    delete: async () => {
+      throw new Error("the credential store is read only here");
+    },
+  };
+  const runtime = await pi.ModelRuntime.create({ credentials, allowModelNetwork: false, refreshOnCreate: false });
+  // Without a refresh on create, the availability snapshot (ModelRegistry.getAvailable) starts empty; this call fills it.
+  /** @type {{ provider: string }[]} */
+  const available = await runtime.getAvailable();
+  return { models: available.length, providers: new Set(available.map((model) => model.provider)).size };
 }
 
 /**

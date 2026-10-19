@@ -4,13 +4,15 @@
 // every `ampi` start failing or loading ampi twice.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { decideAmpiLoad, readPackageAt } from "../packages/ampi-cli/src/packages.js";
 import {
   checkPiSkillDir,
+  countPiCredentialedModels,
   createPiModelLookup,
   createPiSessionServices,
   createPiSessionWriter,
@@ -23,6 +25,7 @@ import {
   parsePiFrontmatter,
   parsePiMcpList,
   piAgentDir,
+  piBinDir,
   piExternalEditorCommand,
   piSettingsManager,
   piMcpUsesOAuth,
@@ -33,6 +36,7 @@ import {
   readPiSessionEntries,
   readPiSessionSkills,
   readPiSettings,
+  readPiSettingsErrors,
   setPiSessionName,
   trustPiProject,
 } from "../packages/ampi-cli/src/pi-compat.js";
@@ -110,6 +114,127 @@ describe("Pi surface used by the ampi command", () => {
 
     const decision = decideAmpiLoad({ piArgs: [], pi: sources, cwd: project, packageNameAt: (start) => readPackageAt(start)?.name });
     assert.equal(decision.load, false);
+  });
+});
+
+describe("Pi surface used by ampi doctor", () => {
+  const savedEnv = { agentDir: process.env.PI_CODING_AGENT_DIR, offline: process.env.PI_OFFLINE };
+  const dir = mkdtempSync(path.join(tmpdir(), "ampi-cli-pi-doctor-"));
+  const agentDir = path.join(dir, "agent");
+  const project = path.join(dir, "project");
+  /** Every entry under `root` with its size and modification time, and `root`'s own. */
+  const snapshot = (root) => {
+    const lines = [`. ${statSync(root).mtimeMs}`];
+    const walk = (current) => {
+      for (const name of readdirSync(current).sort()) {
+        const file = path.join(current, name);
+        const stat = statSync(file);
+        lines.push(`${path.relative(root, file)} ${stat.size} ${stat.mtimeMs}`);
+        if (stat.isDirectory()) walk(file);
+      }
+    };
+    walk(root);
+    return lines.join("\n");
+  };
+
+  before(() => {
+    mkdirSync(agentDir, { recursive: true });
+    mkdirSync(project, { recursive: true });
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.PI_OFFLINE = "1";
+  });
+
+  after(() => {
+    for (const [name, value] of [
+      ["PI_CODING_AGENT_DIR", savedEnv.agentDir],
+      ["PI_OFFLINE", savedEnv.offline],
+    ]) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("names the bin directory Pi's own getBinDir returns", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const distDir = path.dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+    const config = await import(pathToFileURL(path.join(distDir, "config.js")).href);
+    assert.equal(piBinDir(pi), config.getBinDir());
+    assert.equal(piBinDir(pi), path.join(agentDir, "bin"));
+  });
+
+  it("reports the settings files Pi's own SettingsManager fails to load, without writing", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    assert.deepEqual(readPiSettingsErrors(pi, project), []);
+    const user = path.join(agentDir, "settings.json");
+    const projectFile = path.join(project, ".pi", "settings.json");
+    writeFileSync(user, '{ "theme": "dark", }');
+    mkdirSync(path.dirname(projectFile), { recursive: true });
+    writeFileSync(projectFile, "[");
+    try {
+      const before = snapshot(dir);
+      const ours = readPiSettingsErrors(pi, project);
+      assert.equal(snapshot(dir), before);
+      assert.deepEqual(
+        ours.map(({ scope, path: file }) => [scope, file]),
+        [
+          ["user", user],
+          ["project", projectFile],
+        ],
+      );
+      /** @type {{ scope: string, path?: string }[]} */
+      const theirs = pi.SettingsManager.create(project, agentDir).drainErrors();
+      assert.deepEqual(
+        theirs.map(({ scope, path: file }) => [scope === "global" ? "user" : scope, file]),
+        ours.map(({ scope, path: file }) => [scope, file]),
+      );
+    } finally {
+      rmSync(user);
+      rmSync(path.dirname(projectFile), { recursive: true });
+    }
+  });
+
+  it("counts the models Pi's own registry offers with credentials, without running a !command key or refreshing", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const auth = path.join(agentDir, "auth.json");
+    const marker = path.join(dir, "command-ran");
+    const literal = ["compat", "probe", "key"].join("-");
+    // An expired OAuth token: counted as it is stored, never refreshed.
+    const oauth = { type: "oauth", access: ["probe", "access"].join("-"), refresh: ["probe", "refresh"].join("-"), expires: 1 };
+    writeFileSync(auth, JSON.stringify({ openai: { type: "api_key", key: literal }, anthropic: oauth }));
+    try {
+      const runtime = await pi.ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
+      /** @type {{ provider: string }[]} */
+      const available = await runtime.getAvailable();
+      const expected = { models: available.length, providers: new Set(available.map((model) => model.provider)).size };
+      assert.ok(expected.providers >= 2, "both stored providers have models");
+      assert.deepEqual(await countPiCredentialedModels(pi), expected);
+
+      const command = `!${process.execPath} -e "require('fs').writeFileSync('${marker}', '')"`;
+      writeFileSync(auth, JSON.stringify({ openai: { type: "api_key", key: command }, anthropic: oauth }));
+      const before = snapshot(dir);
+      assert.deepEqual(await countPiCredentialedModels(pi), expected);
+      assert.equal(existsSync(marker), false, "the command did not run");
+      assert.equal(snapshot(dir), before);
+    } finally {
+      rmSync(auth, { force: true });
+    }
+  });
+
+  it("lists a configured package Pi has not installed as missing in read-only mode, even offline", async () => {
+    const pi = await import("@earendil-works/pi-coding-agent");
+    const settings = path.join(agentDir, "settings.json");
+    const source = "git:github.com/5omeOtherGuy/ampi";
+    writeFileSync(settings, JSON.stringify({ packages: [source] }));
+    try {
+      // Offline, Pi skips a missing source without reporting it.
+      assert.deepEqual((await listPiExtensionSources(pi, project)).missing, []);
+      const before = snapshot(dir);
+      assert.deepEqual((await listPiExtensionSources(pi, project, { readOnly: true })).missing, [source]);
+      assert.equal(snapshot(dir), before);
+    } finally {
+      rmSync(settings);
+    }
   });
 });
 

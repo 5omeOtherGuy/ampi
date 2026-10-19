@@ -12,7 +12,7 @@ Status: released. Versioned on its own, next to [`@skippermissions/ampi`](../../
 npm i -g @skippermissions/ampi-cli
 ```
 
-The package brings its own Pi (`@earendil-works/pi-coding-agent`) and ampi (`@skippermissions/ampi`) as dependencies. Sign in to a provider the way you do for Pi; the command uses Pi's configuration directory (`~/.pi/agent`, or `PI_CODING_AGENT_DIR`).
+The package brings its own Pi (`@earendil-works/pi-coding-agent`) and ampi (`@skippermissions/ampi`) as dependencies. Sign in to a provider the way you do for Pi; the command uses Pi's configuration directory (`~/.pi/agent`, or `PI_CODING_AGENT_DIR`). `ampi doctor` checks the setup, and `ampi update` updates an `npm i -g` install, Pi and ampi included (see [Update](#update)).
 
 ## Usage
 
@@ -32,6 +32,8 @@ ampi app --open          # every session on this machine in one web page
 ampi skill list          # the skills Pi loads in this directory
 ampi skill add ./skills  # install skills into this project's .agents/skills
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
+ampi doctor              # check Node.js, Pi, ampi, rg, fd, git, credentials and data files
+ampi update              # update ampi-cli, with its Pi and ampi, to the latest version
 ampi version             # ampi-cli, ampi and Pi versions
 ampi --help              # all options
 ampi --pi-help           # Pi's own options, including the flags ampi's extensions add
@@ -433,6 +435,53 @@ Servers stored on a hosted service are not available: `ampi mcp remote …` exit
 
 Exit status: `0` on success; `1` when a server is not connected or unknown, a change is refused or declined, or Pi fails (Pi's own commands exit with Pi's status); `2` on a usage error.
 
+## Doctor
+
+`ampi doctor` checks what ampi needs and says how to fix what is wrong. It prints one line per check, a status word (`ok`, `warn` or `fail`), the check's id and a summary, then a hint for each check that is not `ok`; the status words are colored only on a terminal (and not when `NO_COLOR` is set). MCP servers have their own check, `ampi mcp doctor` (see [MCP servers](#mcp-servers)).
+
+| Check | Looks at | Not `ok` when |
+| --- | --- | --- |
+| `node` | Node.js against ampi-cli's `engines` range | `fail`: older than the range |
+| `pi` | The installed Pi against the loading ampi's Pi range | `fail`: missing or outside the range |
+| `ampi` | Which ampi loads: Pi's own copy (with its source) or ampi-cli's | `fail`: no ampi is installed |
+| `agent-dir` | Pi's configuration directory and both `settings.json` files | `warn`: not created yet; `fail`: not writable, or a settings file does not parse |
+| `tools` | `rg` and `fd` (or `fdfind`) in Pi's bin directory or on PATH | `warn`: one or both missing |
+| `git` | `git` on PATH | `warn`: missing |
+| `models` | Models whose provider has credentials | `fail`: none |
+| `ampi-data` | ampi's thread index and live session registry | `warn`: either cannot be read |
+| `terminal` | `TERM`, `COLORTERM` and the color depth, only when stdout is a terminal | always `ok` |
+
+```bash
+ampi doctor --json   # {"checks":[{"id","status","summary","hint"}]}, the hint only when not ok
+```
+
+- **It only reads.** It installs nothing, writes no file (Pi's settings are read without Pi's lock files), makes no network request and starts no program of its own: programs are found by looking for executable files in the PATH directories. Pi itself asks npm for its global directory (`npm root -g`) when an npm package in its settings is not installed yet.
+- **Credentials.** A model counts when its provider has a key or token in Pi's `auth.json` or a provider environment variable. An OAuth token counts as stored and is not refreshed; a key given as a `!command` counts without the command being run. Keys and tokens are never printed. Models that only an extension registers are not counted.
+- **Search tools.** Pi looks for `rg` and `fd` in `bin` in its configuration directory first, then on PATH (`fd` also as `fdfind`, its Debian name), and downloads the missing ones into that `bin` directory on first use when it is online. Without network access, install them with the system package manager (`ripgrep` and `fd-find` on Debian and Ubuntu).
+- **ampi.** The check makes the decision ampi-cli makes when it starts (see [If ampi is also installed as a Pi package](#if-ampi-is-also-installed-as-a-pi-package)); an ampi that Pi's settings list but Pi has not installed yet counts, since Pi installs it on its next start.
+
+Exit status: `0` when no check fails, `1` when one does, `2` on a usage error.
+
+## Update
+
+`ampi update` (or `ampi up`) updates ampi-cli itself, with the Pi and ampi it brings, when it was installed with `npm i -g @skippermissions/ampi-cli`:
+
+```bash
+ampi update                            # the latest published version
+ampi update --target-version 0.4.0     # this version, newer or older
+ampi update --porcelain                # one line on stdout: "updated <version>" or "no update needed"
+```
+
+1. `npm root -g` gives npm's global directory. The command goes on only when the ampi-cli that runs is `@skippermissions/ampi-cli` in that directory (compared by real path).
+2. `npm view @skippermissions/ampi-cli version` gives the latest version; with `--target-version`, `npm view @skippermissions/ampi-cli@<version> version` checks that the version exists. A version that is the one installed, or (without `--target-version`) older than it, needs no update.
+3. `npm install -g --ignore-scripts @skippermissions/ampi-cli@<version>` installs it. Install scripts are skipped, as in Pi's own self-update: neither ampi-cli nor its dependencies need them.
+
+The command runs `npm` from PATH (Pi's `npmCommand` setting is not used) and ignores `PI_OFFLINE`, since an update needs the registry. With `--porcelain`, stdout holds only the result line; npm's output and every message go to stderr. A package or version the registry does not know, an `npm` that fails or cannot start, and an installation npm did not make exit `1` with a one-line reason. Other installations are left alone, with how to update them: a source checkout (also when linked with `npm link`) with `git pull` and `npm ci`, `npx` with `npx @skippermissions/ampi-cli@latest`, a pnpm, yarn or bun global install with that tool's global add, and anything else with whatever installed it.
+
+Pi's update arguments still go to Pi's own `update` command unchanged: `ampi update --extensions` updates Pi's packages, `ampi update npm:<package>` one of them, and `--models`, `--all`, `--self`, `--force`, `self` and `pi` keep Pi's meaning (`ampi up` with them is passed on as `update`). Mixing them with `--target-version` or `--porcelain` is a usage error. `ampi update` without arguments is how the Pi that comes with ampi-cli gets updated: Pi's own self-update (`--self`, `--all`, `--force`, `self`, `pi`) under a global ampi-cli runs `npm install -g @earendil-works/pi-coding-agent`, which installs a second, separate Pi.
+
+Exit status: `0` when ampi-cli was updated or needs no update, `1` when it cannot be updated here or npm fails, `2` on a usage error.
+
 ## Behavior
 
 ### If ampi is also installed as a Pi package
@@ -450,13 +499,13 @@ Project settings count even before you trust the project: once you grant trust, 
 
 ### Pi's own commands
 
-When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)).
+When the first argument is one of Pi's commands (`install`, `remove`, `uninstall`, `list`, `config`, `auth`), the command runs Pi's own executable with the command line untouched, and ampi is not added. `config keymap` and `config edit` are the exception: they are ampi's (see [Keymap and settings](#keymap-and-settings)). `update` (and `up`) is Pi's only when Pi's update arguments follow, such as `--extensions` or a package source; on its own, or with `--target-version` or `--porcelain`, it updates ampi-cli (see [Update](#update)).
 
 ## Compatibility
 
 - **Pi:** 1.3 or later within 1.x, installed as a dependency.
 - **Node.js:** 22.19 or later.
-- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands; `mcp add` of a local server at user and project level, `mcp doctor` before and after `mcp approve --yes`, against `/mcp` in the terminal UI).
+- **Last verified:** 2026-10-18, with Pi 1.3.0 and Node.js 24.22.0 (interactive session in a terminal, with and without ampi installed as a Pi package; execute mode with piped and terminal input and output; stream JSON with and without thinking; stream JSON input with a steering message, a follow-up and an image; `threads list`, `markdown` and `continue` in a terminal; `threads new`, then `continue` and `-x --session-id` on its id, `threads color`, and `threads search` with filters, JSON and its usage errors, and `threads context`, `threads usage` and `usage` against the Analyze Context and Thread Cost overlays of the same session; `tools list` in every mode against `/ampi-status` in the terminal UI, and `tools show read --json`; `skill add`, `list`, `info` and `remove` against the skills Pi lists at startup and offers as `/skill:` commands; `mcp add` of a local server at user and project level, `mcp doctor` before and after `mcp approve --yes`, against `/mcp` in the terminal UI). On 2026-10-19, with the same versions: `doctor` and `doctor --json` piped and in a terminal, with `rg` missing and then in Pi's bin directory; `update`, `update --porcelain` and `update --target-version` against a stand-in npm, from a copy installed in a stand-in global directory and from a source checkout; `update --extensions`, `update --all` and `update --all --force` reaching Pi's update.
 
 ## Development
 

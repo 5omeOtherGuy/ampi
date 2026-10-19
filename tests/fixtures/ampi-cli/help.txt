@@ -20,11 +20,17 @@ Commands:
   config keymap                 Print every command id with its keys as JSONC
   config edit [--workspace]     Open Pi's settings file, or this project's, in your editor
   app [--open]                  Serve every session on this machine from one local web page:
-                                read any of them, continue those nothing else has open, and
-                                join those a terminal runs with its web GUI on
+                                read any of them, and continue those nothing else has open
+  doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
+                                credentials and ampi's data files, and say how to fix problems;
+                                installs nothing
+  update, up [--target-version <v>] [--porcelain]
+                                Update the ampi command (an npm install -g) to the latest or
+                                the given version; ampi update --help has more
 
-  Pi's own commands (install, remove, uninstall, update, list, config, auth) run unchanged,
-  without ampi's options; config keymap and config edit are ampi's.
+  Pi's own commands (install, remove, uninstall, list, config, auth) run unchanged,
+  without ampi's options; config keymap and config edit are ampi's. update goes to Pi's
+  update unchanged when it has Pi's arguments, such as --extensions or a package source.
 
 Options:
 
@@ -125,3 +131,7 @@ List this directory's sessions, then open one by the start of its id:
 
   $ ampi threads
   $ ampi threads continue 019a3c
+
+Check what ampi needs when something does not work:
+
+  $ ampi doctor

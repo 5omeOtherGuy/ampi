@@ -182,7 +182,7 @@ Rebind under `ampi.keymap` (a key string, an array, or `null` to unbind; `leader
 
 ## Command line
 
-The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi with ampi loaded. Other options and Pi's own commands go to Pi unchanged.
+The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi with ampi loaded. Other options and Pi's own commands go to Pi unchanged. An `npm i -g` install updates itself, with its Pi and ampi, through `ampi update`.
 
 | I want to... | Run | Notes |
 | --- | --- | --- |
@@ -219,6 +219,8 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Sign in to an MCP server | `ampi mcp oauth login docs` | `oauth logout`, `oauth status` (signed in, needs sign-in, not an OAuth server); client credentials go in the server's `oauth` block in `mcp.json` |
 | Rename, archive, label, color or delete a session | `ampi threads rename 019a3c "New title"` | Also `archive`, `unarchive`, `label <id> <label...>`, `color <id> <color>` (a name, `#rrggbb` or `none`), `delete` (asks first; `--yes` skips) |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
+| Check the setup | `ampi doctor` | Node.js, Pi, ampi, Pi's configuration directory and settings, `rg`, `fd`, `git`, credentials, ampi's data files; `ok`/`warn`/`fail` with hints, `--json`; exit 1 on a `fail`; installs and writes nothing |
+| Update the `ampi` command | `ampi update` | `npm i -g` installs only, with the Pi and ampi it brings; `--target-version <v>`, `--porcelain`; `ampi update --extensions` and other Pi update arguments still go to Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |
 
 If Pi already loads ampi (from its settings, an extension directory or a `-e` argument), the command uses that copy and says so on stderr instead of loading ampi twice.
@@ -279,6 +281,7 @@ Settings are read from `~/.pi/agent/settings.json` and `<project>/.pi/settings.j
 
 | Symptom | Do this |
 | --- | --- |
+| A session will not start, or a search tool is missing | Run `ampi doctor`; it names the check that fails and what to do |
 | `Model applied: no` | Run `/ampi-status debug`; check provider registration/authentication |
 | Tool is `gated` | Enable its extension and restart Pi |
 | `librarian` is `gated` | Enable `AMPI_GITHUB_ENABLE`; add `AMPI_GITHUB_TOKEN` for private repos/search |
