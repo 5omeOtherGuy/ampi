@@ -66,9 +66,11 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
 /**
  * Values a shell inserts as typed without quoting: anything else (a space, a
  * quote, `$`, `;`) is left out rather than offered, so an MCP server with such
- * a name is not completed.
+ * a name is not completed. A value does not start with a character a shell
+ * reads specially there (`#` a comment, `~` the home directory, `@` and `%`
+ * in PowerShell, `=` in zsh), and is not PowerShell's stop-parsing token `--%`.
  */
-const SAFE_VALUE = /^[\w.@%+=,/~#-][\w.@%+=,/~#:-]*$/u;
+const SAFE_VALUE = /^(?!--%$)[\w.+,/-][\w.@%+=,/~#:-]*$/u;
 
 /** @param {string} text */
 const oneLine = (text) => text.replace(CONTROL, " ").replace(/\s+/g, " ").trim();
