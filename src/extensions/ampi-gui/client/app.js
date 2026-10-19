@@ -592,11 +592,26 @@ function shownSessionId() {
   return viewing ? viewing.session.id : liveSession.id || null;
 }
 
-/** A page that shows a session has read it: its unread mark goes and its read date moves on (409 without ampi-threads). */
+function listedRow(id) {
+  return sessionList.groups.flatMap((group) => group.sessions).find((candidate) => candidate.id === id);
+}
+
+/**
+ * The page shows session `id`, so it has read it: its unread mark goes and
+ * its read date moves on (409 without ampi-threads). Skipped until Pi has
+ * saved the session (no listed row, or no messages), so a page left unused
+ * records nothing. The read date is now, after all of the session's
+ * activity, so the row is marked read here instead of reloading the list.
+ */
 async function markRead(id) {
   if (!id || document.visibilityState !== "visible") return;
+  if (listing) await listing;
+  const row = listedRow(id);
+  if (!row || row.messageCount === 0) return;
   const result = await post("unread", { sessionId: id, unread: false });
-  if (result.ok) refreshSessions();
+  if (!result.ok || !row.unread) return;
+  row.unread = false;
+  sidebar.setData(sessionList);
 }
 
 document.addEventListener("visibilitychange", () => markRead(shownSessionId()));

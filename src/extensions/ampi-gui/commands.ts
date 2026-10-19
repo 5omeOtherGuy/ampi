@@ -406,8 +406,8 @@ export function createMmrGuiCommands(
         // One writer per session file: the process that has it open renames it, or nobody may.
         const owner = await findMmrLiveOwner(target.info.path, { ...registry, exceptPid: pid });
         if (owner) {
-          // A terminal's web GUI renames its own session; other holders stay read-only, as in ampi app.
-          const token = owner.kind === "tui" && owner.gui ? await readMmrLiveToken(owner, registry) : undefined;
+          // A holder with a web GUI (a terminal, or a session ampi app hosts) renames its own session; one without stays read-only.
+          const token = owner.gui ? await readMmrLiveToken(owner, registry) : undefined;
           if (owner.gui && token !== undefined) return postToMmrGui(owner.gui.port, token, "rename", { sessionId: target.id, name });
           return held(owner, "rename it there");
         }

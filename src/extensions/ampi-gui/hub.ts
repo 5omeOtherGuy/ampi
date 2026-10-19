@@ -490,7 +490,8 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     }
     // The process that runs the session renames it; one nobody runs is renamed in its file.
     if (state.state === "hosted" || state.state === "terminal") return proxy(upstreamOf(state), request, "rename", post.raw);
-    if (state.state === "elsewhere") return sendJson(res, 409, { ...describe(state), error: `Process ${state.pid} (${state.kind}) has this session open; rename it there.` });
+    if (state.state === "elsewhere" && !state.gui) return sendJson(res, 409, { ...describe(state), error: `Process ${state.pid} (${state.kind}) has this session open; rename it there.` });
+    // Another app's worker has a web GUI: the command forwards the rename to it.
     return run();
   }
 

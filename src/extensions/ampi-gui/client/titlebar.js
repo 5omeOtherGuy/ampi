@@ -479,15 +479,28 @@ export function mountTitlebar({ post, notify, onChanged, onDeleted, pageUrl, pre
     }
   }
 
-  /** Download GET /api/export through a link, so the page stays where it is. */
-  function download(session, format) {
+  /** Fetch GET /api/export, then save it through a link, so the page stays where it is and a refusal shows its reason. */
+  async function download(session, format) {
+    let res;
+    try {
+      res = await fetch(`/api/export?sessionId=${encodeURIComponent(session.id)}&format=${format}`);
+    } catch {
+      return notify("Could not reach the session's server.");
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => undefined);
+      return notify(errorText({ body }, "Could not export the session."));
+    }
+    const url = URL.createObjectURL(await res.blob());
     const link = element("a");
-    link.href = `/api/export?sessionId=${encodeURIComponent(session.id)}&format=${format}`;
-    link.download = "";
+    link.href = url;
+    link.download = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "";
     link.hidden = true;
     document.body.append(link);
     link.click();
     link.remove();
+    // Freed later: revoking at once can cancel a download the browser has not started yet.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   /** Show the shared action dialog with `html`, or with `build(dialog)`; `onClose(returnValue)` runs after, then focus returns to `from`. */

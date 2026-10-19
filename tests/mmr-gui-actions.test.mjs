@@ -4,7 +4,7 @@
 // and reports) on a stub Pi, and a private live registry whose processes
 // are declared alive. Covers validation and 404s, the live-holder 409 for
 // rename and delete with the file left as it was, a rename forwarded to the
-// terminal that holds the session, a rename and a delete of a session
+// terminal or app session that holds the session, a rename and a delete of a session
 // nobody holds, the exports against `ampi threads export`, the cost through
 // the reports seam, where a session runs, the snooze and unread rules, the
 // index fields through the store and the CLI's copy, and the client's
@@ -323,7 +323,7 @@ describe("ampi-gui More Actions: rename and delete", () => {
     assert.deepEqual(readFileSync(files[HELD_HERE]), here);
   });
 
-  it("forwards a rename to the web GUI of the terminal that holds the session, with that server's token", async () => {
+  it("forwards a rename to the web GUI of the process that holds the session, with that server's token", async () => {
     const before = readFileSync(files[HELD_TUI]);
     const res = await post("rename", { sessionId: HELD_TUI, name: "  Renamed   there " });
     assert.equal(res.status, 200);
@@ -335,6 +335,18 @@ describe("ampi-gui More Actions: rename and delete", () => {
     assert.equal(forwarded.headers.cookie, `ampi_gui_${terminal.port}=${TERMINAL_TOKEN}`);
     assert.deepEqual(JSON.parse(forwarded.body), { sessionId: HELD_TUI, name: "Renamed there" });
     assert.deepEqual(readFileSync(files[HELD_TUI]), before, "the holder writes its own file");
+
+    // A session ampi app hosts has a web GUI too: its worker's server renames it.
+    const entryFile = path.join(registryDir, `${TUI_PID}.json`);
+    const { version: _version, ...tuiEntry } = JSON.parse(readFileSync(entryFile, "utf8"));
+    await liveRegistry.writeMmrLiveEntry({ ...tuiEntry, kind: "app-session", ownerPid: EXEC_PID }, registry);
+    try {
+      assert.equal((await post("rename", { sessionId: HELD_TUI, name: "Renamed in the app" })).status, 200);
+      assert.deepEqual(JSON.parse(terminal.requests.at(-1).body), { sessionId: HELD_TUI, name: "Renamed in the app" });
+      assert.deepEqual(readFileSync(files[HELD_TUI]), before);
+    } finally {
+      await liveRegistry.writeMmrLiveEntry(tuiEntry, registry);
+    }
   });
 
   it("renames the session this process runs through Pi, and one nobody holds in its file, read back through Pi", async () => {

@@ -870,7 +870,7 @@ describe("ampi app hub: terminal sessions", () => {
     }
   });
 
-  it("keeps a session another ampi app runs read-only although its entry names a GUI with a matching token file", async () => {
+  it("keeps a session another ampi app runs read-only, except for a rename, although its entry names a GUI with a matching token file", async () => {
     const ctx = await startHub();
     const terminal = await startTerminal(ctx, "s-held");
     const entryFile = path.join(ctx.registryDir, `${process.pid}.json`);
@@ -886,6 +886,9 @@ describe("ampi app hub: terminal sessions", () => {
       assert.equal((await send(ctx.port, { target: "/s/s-held/api/events", headers: ctx.headers() })).status, 409);
       assert.deepEqual(terminal.mock.calls.sendUserMessage, [], "nothing reached the GUI the entry names");
       assert.deepEqual(ctx.starts, []);
+      // A rename is the exception: the session command forwards it to that app's worker.
+      assert.equal((await ctx.post("/api/rename", { sessionId: "s-held", name: "Renamed there" })).status, 200);
+      assert.deepEqual(ctx.renamedInFile, ["s-held"]);
     } finally {
       await ctx.close();
       await terminal.stop();
