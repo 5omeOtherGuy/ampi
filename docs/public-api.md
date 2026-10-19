@@ -570,7 +570,7 @@ the model choice, where images are saved and the limits.
 
 | Export | Kind | Notes |
 | --- | --- | --- |
-| `createMmrPainterExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `modelRegistry` and `store` (data folder, clock, temp-file suffix) overrides. |
+| `createMmrPainterExtension` | function | Factory producing the Pi extension; accepts `loadSettings`, `modelRegistry` and `store` (data folder, clock, temp-file suffix, link function) overrides. |
 | `loadMmrPainterSettings` | function | Reads `ampiPainter.*` from the settings files, then `AMPI_PAINTER_ENABLE`. |
 
 ### Re-exported types
