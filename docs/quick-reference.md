@@ -44,6 +44,7 @@ The mode is fixed once a session has a message: the dial or cycle, the picker an
 | Review a completed diff/change | “Use reviewer to review…” | `reviewer` |
 | Check a change against the repository's review rules | “Use reviewer to run the review checks on…” | `reviewer` with `checks_only`, `check_filter`, `check_scope`; rules in `.agents/checks/*.md` |
 | Research a GitHub repository | “Use librarian to explain owner/repo…” | `librarian` |
+| Look at an image or screenshot | “Use view_media to read the error in screenshot.png” | `view_media` |
 | Run independent jobs | “Run finder/Task/librarian with background: true…” | `background: true`, `task_poll`, `task_wait`, `task_cancel` |
 | Use custom workers | “Use sa__name to…” | imported Markdown `sa__*` tools |
 
@@ -54,6 +55,7 @@ Use finder to find where mode activation applies tool allowlists.
 Ask oracle to review the fallback design and list risks.
 Use Task to update the focused docs file and run git diff --check.
 Use reviewer to review all uncommitted changes.
+Use view_media to read the error in screenshot.png.
 Use reviewer with checks_only to run only the .agents/checks rules on the uncommitted changes.
 Use librarian to explain how owner/repo implements request cancellation.
 ```
