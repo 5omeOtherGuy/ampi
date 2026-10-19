@@ -399,7 +399,12 @@ export function connectMmrModeRegistryEvents(pi: MmrModeRegistryEventHost): MmrM
 
   const offRegister = pi.events.on(MMR_EVENT_REGISTER_MODE, (data) => {
     try {
-      viaBus.add(addMode(data));
+      const held = new Set(store.modes.values());
+      const mode = addMode(data);
+      // An identical re-registration returns the held registration unchanged,
+      // and it stays with whoever made it: a mode registered through the API
+      // never becomes removable over the bus.
+      if (!held.has(mode)) viaBus.add(mode);
     } catch (error) {
       warn(`Refused a mode registration: ${error instanceof Error ? error.message : String(error)}`);
     }

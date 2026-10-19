@@ -285,6 +285,16 @@ describe("mode registry over pi.events", () => {
     assert.deepEqual(registry.listMmrModes().map((mode) => mode.key), ["sketch"]);
   });
 
+  it("keeps an API registration out of reach of the bus when the bus registers the same definition again", async () => {
+    const t = await start();
+    const unregister = registry.registerMmrMode(REVIEW);
+    t.pi.events.emit("ampi-core:register-mode", REVIEW);
+    t.pi.events.emit("ampi-core:unregister-mode", { key: "review" });
+    assert.deepEqual(registry.listMmrModes().map((mode) => mode.key), ["review"], "the bus cannot remove what the API registered");
+    unregister();
+    assert.deepEqual(registry.listMmrModes(), [], "the API registrar still can");
+  });
+
   it("ignores an unregister message whose key cannot be read, without an error on the console", async () => {
     const t = await start({ after: [busModes(REVIEW)] });
     const printed = [];
