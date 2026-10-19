@@ -64,7 +64,6 @@ export interface MmrPromptBoxInstall {
   setOverlayOpen(open: boolean): void;
 }
 
-/** Ask the tmux server this session runs in for its `extended-keys` option. */
 /** The box's mode label: a registered mode's label in its colour, else the mode key. */
 function modeLabel(state: MmrModeState | undefined): Pick<MmrPromptBoxSlots, "mode" | "modeColor"> {
   const registered = state?.registeredMode;
@@ -73,6 +72,7 @@ function modeLabel(state: MmrModeState | undefined): Pick<MmrPromptBoxSlots, "mo
   return color ? { mode: registered.label, modeColor: color } : { mode: registered.label };
 }
 
+/** Ask the tmux server this session runs in for its `extended-keys` option. */
 function readTmuxExtendedKeys(): Promise<string | undefined> {
   if (!process.env.TMUX) return Promise.resolve(undefined);
   return new Promise((resolve) => {
