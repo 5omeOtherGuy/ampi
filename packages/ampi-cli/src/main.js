@@ -1,7 +1,7 @@
 // The `ampi` command: route the arguments, then print help or versions, or
 // start Pi with ampi loaded.
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -352,7 +352,7 @@ export async function runAmpi(argv) {
       process.stdout.write(formatVersions());
       return 0;
     case "error":
-      process.stderr.write(`ampi: ${route.error}\nRun ampi --help for the supported options.\n`);
+      process.stderr.write(`ampi: ${route.error}\n${route.usageHint ?? "Run ampi --help for the supported options."}\n`);
       return 2;
     case "pi-command":
       return runPiCommand(route.piArgs);
@@ -366,6 +366,42 @@ export async function runAmpi(argv) {
       return runToolsCommand(route.toolsArgs ?? [], {
         readTools: (mode) => readSessionTools(pi, cwd, mode),
         columns: process.stdout.isTTY ? process.stdout.columns : Number.POSITIVE_INFINITY,
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
+    case "doctor": {
+      // A check never installs packages or refreshes model catalogues.
+      process.env.PI_OFFLINE = "1";
+      const { createDoctorPi, DOCTOR_FILE_SYSTEM, runDoctorCommand } = await import("./doctor.js");
+      const cwd = process.cwd();
+      return runDoctorCommand(route.doctorArgs ?? [], {
+        env: process.env,
+        cwd,
+        platform: process.platform,
+        nodeVersion: process.versions.node,
+        cliRoot: CLI_ROOT,
+        loadPi: async () => {
+          try {
+            return createDoctorPi(await import(PI_PACKAGE_NAME), cwd);
+          } catch {
+            return undefined;
+          }
+        },
+        fs: DOCTOR_FILE_SYSTEM,
+        isTTY: process.stdout.isTTY === true,
+        colorDepth: process.stdout.isTTY ? process.stdout.getColorDepth() : undefined,
+        out: (text) => process.stdout.write(text),
+        err: (text) => process.stderr.write(text),
+      });
+    }
+    case "update": {
+      // An explicit request for the network: PI_OFFLINE does not apply, and Pi is not loaded.
+      const { runUpdateCommand, spawnNpm } = await import("./update.js");
+      return runUpdateCommand(route.updateArgs ?? [], {
+        cliRoot: CLI_ROOT,
+        runNpm: spawnNpm,
+        realpath: (file) => realpathSync(file),
         out: (text) => process.stdout.write(text),
         err: (text) => process.stderr.write(text),
       });

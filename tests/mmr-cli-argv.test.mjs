@@ -169,6 +169,60 @@ describe("ampi argv router: starting Pi", () => {
     }
   });
 
+  it("keeps update and up with only ampi's update options for ampi, with the rest of the command line", () => {
+    for (const [argv, updateArgs] of [
+      [["update"], []],
+      [["up"], []],
+      [["update", "--porcelain"], ["--porcelain"]],
+      [["up", "--target-version", "0.4.0", "--porcelain"], ["--target-version", "0.4.0", "--porcelain"]],
+      [["update", "--target-version=0.4.0"], ["--target-version=0.4.0"]],
+      [["update", "-h"], ["-h"]],
+      // A missing value is the update module's usage error, not Pi's argument.
+      [["update", "--target-version"], ["--target-version"]],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "update", argv.join(" "));
+      assert.deepEqual(route.updateArgs, updateArgs, argv.join(" "));
+      assert.deepEqual(route.piArgs, []);
+    }
+  });
+
+  it("hands update and up with any of Pi's update arguments to Pi's update verbatim, up as update", () => {
+    for (const [argv, piArgs] of [
+      [["update", "--extensions"], ["update", "--extensions"]],
+      [["up", "--extensions"], ["update", "--extensions"]],
+      [["update", "npm:some-package"], ["update", "npm:some-package"]],
+      [["update", "--extension", "npm:x", "--force"], ["update", "--extension", "npm:x", "--force"]],
+      [["update", "self"], ["update", "self"]],
+      [["up", "pi"], ["update", "pi"]],
+      [["update", "--all"], ["update", "--all"]],
+      [["update", "--models"], ["update", "--models"]],
+      [["update", "--self"], ["update", "--self"]],
+      [["update", "--extensions", "--help"], ["update", "--extensions", "--help"]],
+      [["update", "--", "--porcelain"], ["update", "--", "--porcelain"]],
+    ]) {
+      const route = routeAmpiArgv(argv);
+      assert.equal(route.command, "pi-command", argv.join(" "));
+      assert.deepEqual(route.piArgs, piArgs, argv.join(" "));
+    }
+  });
+
+  it("refuses ampi's update options mixed with Pi's update arguments, saying which is whose", () => {
+    const route = routeAmpiArgv(["update", "--porcelain", "--extensions"]);
+    assert.equal(route.command, "error");
+    assert.equal(route.error, "--porcelain is an option of ampi's own update, and --extensions goes to Pi's update; run them as two commands.");
+    assert.equal(route.usageHint, "Run ampi update --help for both.");
+    const both = routeAmpiArgv(["up", "--target-version", "0.4.0", "--porcelain", "npm:x", "--force"]);
+    assert.equal(both.error, "--target-version and --porcelain are options of ampi's own update, and npm:x --force go to Pi's update; run them as two commands.");
+  });
+
+  it("routes doctor with the rest of the command line", () => {
+    const route = routeAmpiArgv(["doctor", "--json"]);
+    assert.equal(route.command, "doctor");
+    assert.deepEqual(route.doctorArgs, ["--json"]);
+    assert.deepEqual(route.piArgs, []);
+  });
+
   it("keeps config keymap and config edit for ampi, with the rest of their command line", () => {
     assert.deepEqual(routeAmpiArgv(["config", "keymap"]).configArgs, ["keymap"]);
     const edit = routeAmpiArgv(["config", "edit", "--workspace"]);

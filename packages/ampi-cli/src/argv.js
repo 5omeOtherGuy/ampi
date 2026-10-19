@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "doctor" | "update" | "pi" | "pi-command" | "app" | "app-worker" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -32,15 +32,25 @@ import { parseArgs } from "node:util";
  * @property {boolean} [open] `ampi app --open`: open the page in a browser.
  * @property {string[]} [skillArgs] The command line after `skill` (or `skills`), when `command` is `"skill"`.
  * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
+ * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
+ * @property {string[]} [updateArgs] The command line after `update` (or `up`), when `command` is `"update"`.
  * @property {AmpiOptions} options ampi options read from the command line.
  * @property {string} [error] Usage error, set when `command` is `"error"`.
+ * @property {string} [usageHint] The help to point to after `error`, when it is not `ampi --help`.
  */
 
 /** Values of Pi's own `--mode` (output format); these keep Pi's meaning. */
 const PI_OUTPUT_MODES = new Set(["text", "json", "rpc"]);
 
-/** Pi's own commands. Pi recognises them only as the first argument and rejects options it does not know. */
-const PI_COMMANDS = new Set(["install", "remove", "uninstall", "update", "list", "config", "auth"]);
+/**
+ * Pi's own commands. Pi recognises them only as the first argument and rejects options it does not know.
+ * `update` is Pi's only with Pi's update arguments (see routeUpdate).
+ */
+const PI_COMMANDS = new Set(["install", "remove", "uninstall", "list", "config", "auth"]);
+
+/** The options of ampi's own `update`; `-h` and `--help` belong to whichever update runs. */
+const UPDATE_OPTIONS = new Set(["--target-version", "--porcelain"]);
+const UPDATE_HELP_FLAGS = new Set(["-h", "--help"]);
 
 /** The `config` subcommands ampi runs itself. */
 const CONFIG_COMMANDS = new Set(["keymap", "edit"]);
@@ -144,6 +154,8 @@ export function routeAmpiArgv(argv) {
   }
   if (args[0] === "skill" || args[0] === "skills") return { command: "skill", piArgs: [], options, skillArgs: args.slice(1) };
   if (args[0] === "mcp") return { command: "mcp", piArgs: [], options, mcpArgs: args.slice(1) };
+  if (args[0] === "doctor") return { command: "doctor", piArgs: [], options, doctorArgs: args.slice(1) };
+  if (args[0] === "update" || args[0] === "up") return routeUpdate(args.slice(1), options);
   // `config keymap` and `config edit` are ampi's; every other `config` command line is Pi's.
   if (args[0] === "config" && CONFIG_COMMANDS.has(args[1] ?? "")) {
     return { command: "config", piArgs: [], options, configArgs: args.slice(1) };
@@ -296,6 +308,51 @@ export function routeAmpiArgv(argv) {
 }
 
 /**
+ * `ampi update` and `ampi up`: ampi's own update when the rest of the command
+ * line holds only its options (`--target-version <v>`, `--porcelain`, `-h`,
+ * `--help`); Pi's `update` with the command line unchanged when it holds any
+ * other argument (`up` becomes `update`, which Pi knows). Both together are a
+ * usage error.
+ *
+ * @param {string[]} rest The arguments after `update` or `up`.
+ * @param {AmpiOptions} options
+ * @returns {AmpiRoute}
+ */
+function routeUpdate(rest, options) {
+  /** @type {string[]} */
+  const ours = [];
+  /** @type {string[]} */
+  const theirs = [];
+  for (let index = 0; index < rest.length; index++) {
+    const arg = rest[index];
+    if (arg === "--") {
+      theirs.push(...rest.slice(index));
+      break;
+    }
+    const name = arg.startsWith("--") ? arg.split("=")[0] : arg;
+    if (UPDATE_HELP_FLAGS.has(arg)) continue;
+    if (!UPDATE_OPTIONS.has(name)) {
+      theirs.push(arg);
+      continue;
+    }
+    ours.push(name);
+    // `--target-version <v>`: the value is the next argument unless that is an option.
+    if (arg === "--target-version" && index + 1 < rest.length && !rest[index + 1].startsWith("-")) index++;
+  }
+  if (theirs.length === 0) return { command: "update", piArgs: [], options, updateArgs: rest };
+  if (ours.length === 0) return { command: "pi-command", piArgs: ["update", ...rest], options };
+  return {
+    command: "error",
+    piArgs: [],
+    options,
+    error:
+      `${[...new Set(ours)].join(" and ")} ${ours.length === 1 ? "is an option" : "are options"} of ampi's own update, ` +
+      `and ${theirs.join(" ")} ${theirs.length === 1 ? "goes" : "go"} to Pi's update; run them as two commands.`,
+    usageHint: "Run ampi update --help for both.",
+  };
+}
+
+/**
  * The text `ampi --help` prints. Lists only what the command supports today.
  *
  * @returns {string}
@@ -325,9 +382,16 @@ Commands:
   app [--open]                  Serve every session on this machine from one local web page:
                                 read any of them, continue those nothing else has open, and
                                 join those a terminal runs with its web GUI on
+  doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
+                                credentials and ampi's data files, and say how to fix problems;
+                                installs nothing
+  update, up [--target-version <v>] [--porcelain]
+                                Update the ampi command (an npm install -g) to the latest or
+                                the given version; ampi update --help has more
 
-  Pi's own commands (install, remove, uninstall, update, list, config, auth) run unchanged,
-  without ampi's options; config keymap and config edit are ampi's.
+  Pi's own commands (install, remove, uninstall, list, config, auth) run unchanged,
+  without ampi's options; config keymap and config edit are ampi's. update goes to Pi's
+  update unchanged when it has Pi's arguments, such as --extensions or a package source.
 
 Options:
 
@@ -428,5 +492,9 @@ List this directory's sessions, then open one by the start of its id:
 
   $ ampi threads
   $ ampi threads continue 019a3c
+
+Check what ampi needs when something does not work:
+
+  $ ampi doctor
 `;
 }
