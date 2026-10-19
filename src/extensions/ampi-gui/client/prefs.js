@@ -1,5 +1,6 @@
 // The page's preferences: the sidebar's width and whether it is open, Full
-// Width, and the Activity page's default time window and status. They live in one cookie, not in localStorage, because every
+// Width, the right pane's width, whether it is open and its tab, and the
+// Activity page's default time window and status. They live in one cookie, not in localStorage, because every
 // ampi web GUI on this machine runs on its own 127.0.0.1 port: a browser
 // keeps localStorage per port but sends a cookie to every port of the same
 // host, so each terminal's page and ampi app share them. The cookie holds
@@ -16,6 +17,9 @@ const SCHEMA = {
   sidebarWidth: { fallback: 256, valid: (value) => Number.isFinite(value) },
   sidebarOpen: { fallback: true, valid: (value) => typeof value === "boolean" },
   fullWidth: { fallback: false, valid: (value) => typeof value === "boolean" },
+  rightPaneOpen: { fallback: false, valid: (value) => typeof value === "boolean" },
+  rightPaneWidth: { fallback: 520, valid: (value) => Number.isFinite(value) },
+  rightPaneTab: { fallback: "changes", valid: (value) => typeof value === "string" && /^[a-z]{1,20}$/.test(value) },
   feedDefaultTime: { fallback: "24h", valid: (value) => ["24h", "72h", "7d", "all"].includes(value) },
   feedDefaultStatus: { fallback: "all", valid: (value) => ["all", "active", "archived", "snoozed"].includes(value) },
 };

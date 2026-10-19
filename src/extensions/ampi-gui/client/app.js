@@ -9,7 +9,9 @@
 // their files (see app-mode.js).
 //
 // Both serve the Activity page at `/feed` (activity.js), and the Search
-// Threads dialog (thread-search.js) opens over any page.
+// Threads dialog (thread-search.js) opens over any page. A session page has
+// the right pane beside the chat (right-pane.js) with its Changes tab
+// (changes.js).
 
 import { feedPath, mountActivity, parseFeedSearch } from "./activity.js";
 import {
@@ -25,6 +27,7 @@ import {
   sessionPageUrl,
   shareableUrl,
 } from "./app-mode.js";
+import { mountChanges } from "./changes.js";
 import { createCommandRegistry, DEFAULT_COMMANDS } from "./commands.js";
 import { mountComposer } from "./composer.js";
 import { endJumps, mountOutline, nextUnread, outlineRows } from "./controls.js";
@@ -35,6 +38,7 @@ import { mountModePicker } from "./mode-picker.js";
 import { mountNewThread } from "./new-thread.js";
 import { mountPalette } from "./palette.js";
 import { createPrefs } from "./prefs.js";
+import { mountRightPane } from "./right-pane.js";
 import { mountSelectionActions } from "./selection.js";
 import { mountSidebar, paintDisc } from "./sidebar.js";
 import { mountThreadSearch } from "./thread-search.js";
@@ -121,7 +125,8 @@ const post = (route, body) => postTo(`/api/${route}`, body);
 async function composerPost(route, body) {
   if (!appMode) return postTo(`${base}${route}`, body);
   const id = shownId;
-  const starting = access === "dormant" && route === "send";
+  // Review asks the agent too, so it starts a session nothing runs as a send does.
+  const starting = access === "dormant" && (route === "send" || route === "review");
   if (starting) {
     setPhaseLabel("Starting");
     $("status-detail").textContent = "";
@@ -201,6 +206,19 @@ const activity = mountActivity({
   onFilters: (next, options) => showFeedRoute(next, options),
   onOpen: (id) => openSessionPage(id),
   sessionHref,
+});
+const changes = mountChanges({
+  root: $("changes-panel"),
+  notify,
+  review: () => runReview(),
+  visible: () => rightPane.showing("changes"),
+});
+const rightPane = mountRightPane({
+  app,
+  prefs,
+  onShow: (tab) => {
+    if (tab === "changes") changes.shown();
+  },
 });
 const threadSearch = mountThreadSearch({ dialog: $("search-dialog"), onOpen: (id) => openSessionPage(id), sessionHref });
 // Extensions' questions in a session ampi app runs; the session that asked answers them.
@@ -498,6 +516,7 @@ function drawTitle() {
     $("mode").hidden = true;
     titlebar.setTarget(null);
     sidebar.select(null);
+    drawPane(null);
     return;
   }
   const session = viewing ? viewing.session : liveSession;
@@ -524,6 +543,27 @@ function drawTitle() {
   disc.dataset.busy = String(busy && !viewing);
   titlebar.setTarget(session.id ? actionTarget(session.id, title, row, !viewing) : null);
   sidebar.select(session.id);
+  drawPane(appMode && !shownId ? null : session.id || null);
+}
+
+/** The right pane belongs to the session shown (`id`), and is not offered without one. */
+function drawPane(id) {
+  rightPane.setAvailable(id !== null);
+  changes.setSession(id);
+  changes.setReviewable(composer.writable(), "This session is read-only here");
+}
+
+/**
+ * Review: the session runs its review command when one is registered, or
+ * the agent is asked to review the uncommitted changes once its turn ends.
+ * In ampi app this starts a session nothing runs, as a send does.
+ */
+async function runReview() {
+  if (!composer.writable()) return notify("This session is read-only here");
+  const result = await composerPost("review", {});
+  if (!result.ok) return notify(result.body?.error ?? "Could not ask for a review.", "error");
+  if (result.body.ran) notify("Started the review");
+  else notify(result.body.delivered === "followUp" ? "Queued a review of the uncommitted changes for when this turn ends" : "Asked the agent to review the uncommitted changes");
 }
 
 /**
@@ -645,6 +685,8 @@ const handlers = {
     const group = groupOf(live, data.part.toolCallId);
     if (group) drawItems([live.callItem.get(group.id)]);
     else drawPart(item, index);
+    // An edit, write or shell call that ended may have changed the files the Changes tab lists.
+    if (!viewing) changes.toolEvent(data.part);
   },
   groups: (data) => {
     // Redraw the items that held or now hold a changed group's calls.
@@ -1274,8 +1316,13 @@ const ui = {
   moveMessage,
   focusPrompt() {
     sidebar.closeSheet();
+    rightPane.showChat();
     composer.focus();
   },
+  toggleRightPane: () => rightPane.toggle(),
+  showPaneTab: (tab) => rightPane.show(tab),
+  toggleFocusPane: () => rightPane.toggleFocus(),
+  runReview,
   openPalette: () => palette.toggle("commands"),
   switchThread: () => palette.toggle("switch"),
   cycleScheme() {

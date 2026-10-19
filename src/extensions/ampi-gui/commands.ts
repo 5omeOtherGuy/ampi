@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { unlink } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { type ExtensionAPI, type SessionInfo, SessionManager } from "@earendil-works/pi-coding-agent";
-import { getMmrCommand } from "../ampi-core/command-registry.js";
+import { getMmrCommand, getMmrCommands, type MmrCommandDefinition } from "../ampi-core/command-registry.js";
 import { getMmrGuiHost } from "../ampi-core/gui-host.js";
 import { findMmrLiveOwner, type MmrLiveEntry, type MmrLiveRegistryOptions, readMmrLiveToken } from "../ampi-core/live-registry.js";
 import { getMmrPromptQueue, removeMmrQueuedPrompt } from "../ampi-core/prompt-queue.js";
@@ -31,6 +31,7 @@ function liveModeName(): string | undefined {
  * | `/api/send`        | `{ text, deliverAs? }`        | idle: a new prompt; busy: steers the turn (`"steer"`, the default) or waits for it to end (`"followUp"`), through `pi.sendUserMessage` |
  * | `/api/dequeue`     | `{ kind, index, text }`       | takes one queued message back, through ampi-core's prompt-queue seam |
  * | `/api/steer-next`  | `{}`                          | runs the `prompt.steerQueuedMessage` command |
+ * | `/api/review`      | `{}`                          | the Changes tab's Review: runs a registered review command ({@link findMmrGuiReviewCommand}), else sends {@link MMR_GUI_REVIEW_PROMPT} as a follow-up message, which starts a turn when the agent is idle |
  * | `/api/interrupt`   | `{}`                          | cancels the open questions, then runs the `thread.interrupt` command, or `ctx.abort()` without it |
  * | `/api/dialog`      | `{ id, value }` or `{ id, cancelled: true }` | answers an extension's open question (a session `ampi app` hosts); the first answer wins, any later one answers 409 |
  * | `/api/mode`, `/api/model`, `/api/fast` | see `modes.ts` | the mode picker's changes |
@@ -95,6 +96,16 @@ export const MMR_GUI_SESSION_ACTIONS: readonly string[] = Object.freeze([
 export const MMR_GUI_MAX_PROMPT_LENGTH = 100_000;
 
 const STEER_COMMAND_ID = "prompt.steerQueuedMessage";
+
+/** What Review asks the agent when no review command is registered. */
+export const MMR_GUI_REVIEW_PROMPT =
+  "Review the uncommitted changes in this checkout: the staged and unstaged edits git diff HEAD shows, and the untracked files git status lists. " +
+  "List your findings by severity, most severe first, each with its file and line and why it matters. If nothing needs to change, say so.";
+
+/** A review command in ampi-core's command registry: the first whose id ends in `.review`, such as `thread.review`. */
+export function findMmrGuiReviewCommand(): MmrCommandDefinition | undefined {
+  return getMmrCommands().find((command) => /\.review$/.test(command.id));
+}
 const INTERRUPT_COMMAND_ID = "thread.interrupt";
 
 /** Longest session name the title bar may set. */
@@ -474,6 +485,20 @@ export function createMmrGuiCommands(
       if (!getMmrPromptQueue()) return conflict("This session does not show ampi its queue.");
       if (!removeMmrQueuedPrompt(kind, index, text)) return conflict("That message is no longer queued.");
       return ok({ text });
+    },
+    review() {
+      const ctx = bridge.context();
+      if (!ctx) return conflict("The session has ended.");
+      const command = findMmrGuiReviewCommand();
+      if (command) {
+        const availability = command.availability?.(ctx) ?? { state: "available" };
+        if (availability.state !== "available") return conflict(availability.reason ?? "The review cannot run now.");
+        return Promise.resolve(command.run(ctx)).then(() => ok({ ran: command.id }));
+      }
+      if (bridge.status().phase === "compacting") return conflict("Pi is compacting the conversation. Ask for the review when it is done.");
+      const idle = ctx.isIdle();
+      pi.sendUserMessage(MMR_GUI_REVIEW_PROMPT, { deliverAs: "followUp" });
+      return ok({ delivered: idle ? "prompt" : "followUp" });
     },
     "steer-next"() {
       const ctx = bridge.context();

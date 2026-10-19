@@ -136,7 +136,7 @@ export function mountSidebar({ app, prefs, now = () => Date.now() }) {
   const empty = $("sidebar-empty");
   const handle = $("sidebar-resize");
   const scrim = $("scrim");
-  const pane = document.querySelector(".pane");
+  const panes = document.querySelectorAll(".pane, .right-pane");
   const toggles = [$("sidebar-close"), $("sidebar-open")];
   const narrow = window.matchMedia("(max-width: 767px)");
 
@@ -168,7 +168,7 @@ export function mountSidebar({ app, prefs, now = () => Date.now() }) {
     const sheet = narrow.matches;
     scrim.hidden = !(open && sheet);
     // A sheet takes the page's place for keyboard and screen reader users.
-    pane.inert = open && sheet;
+    for (const pane of panes) pane.inert = open && sheet;
     for (const toggle of toggles) toggle.setAttribute("aria-expanded", String(open));
     if (!sheet && prefs.get("sidebarOpen") !== open) prefs.set("sidebarOpen", open);
     if (focus && open) search.focus();

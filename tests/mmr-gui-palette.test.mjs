@@ -90,6 +90,7 @@ describe("ampi-gui palette: fuzzy ranking", () => {
       "Switch Thread…",
       "Show Keymap",
       "Show Chat Pane",
+      "Show Changes Pane",
       "Copy as Markdown",
     ]);
     // "arch" starts both Archive titles (the shorter first) and sits inside "Search"; Unarchive cannot run here, so it comes last.
@@ -149,7 +150,7 @@ describe("ampi-gui palette: sections", () => {
     ]);
     assert.ok(byName.Global.includes("Reload Page"));
     assert.deepEqual(byName.Navigation, ["Go Home", "Go Back", "Go Forward"]);
-    assert.deepEqual(byName["Thread Panes"], ["Show Chat Pane", "Toggle Full Width"]);
+    assert.deepEqual(byName["Thread Panes"], ["Show Chat Pane", "Show Changes Pane", "Toggle Right Pane", "Focus Pane", "Toggle Full Width"]);
     assert.equal(byName.Thread[0], "Archive Thread", "the sidebar's archive key is listed under Thread");
     const all = Object.values(byName).flat();
     for (const absent of ["Toggle command palette", "Move between user messages", "Move sidebar selection down", "Toggle sidebar"]) {

@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import path from "node:path";
 import { buildMmrGuiFeed, parseMmrGuiFeedRequest, parseMmrGuiSearchRequest, searchMmrGuiSessions } from "./activity.js";
 import type { MmrGuiBridge } from "./bridge.js";
+import { isMmrGuiChangesRange, type MmrGuiChangesOptions, readMmrGuiChanges } from "./changes.js";
 import type { MmrGuiCommands, MmrGuiExporter } from "./commands.js";
 import { describeMmrGuiModes } from "./modes.js";
 import type { MmrGuiSessions } from "./sessions.js";
@@ -39,6 +40,9 @@ import type { MmrGuiSessions } from "./sessions.js";
  *   dialog (`activity.ts`), read-only.
  * - `GET /api/modes` answers the mode picker: the modes, the models and the
  *   session's mode (`modes.ts`).
+ * - `GET /api/changes?sessionId=<id>&range=` answers the right pane's
+ *   Changes list for the working directory of this session or a listed one
+ *   (`changes.ts`), read-only.
  */
 
 export interface MmrGuiServerOptions {
@@ -47,8 +51,8 @@ export interface MmrGuiServerOptions {
   commands: MmrGuiCommands;
   /** `GET /api/export`: a session as a Markdown or JSON file. */
   exportSession: MmrGuiExporter;
-  /** The sidebar's session list, the read-only views of other sessions, and the rows Activity and search filter. */
-  sessions: Pick<MmrGuiSessions, "list" | "view" | "searchable">;
+  /** The sidebar's session list, the read-only views of other sessions, the rows Activity and search filter, and the directories of listed sessions for the Changes list. */
+  sessions: Pick<MmrGuiSessions, "list" | "view" | "searchable" | "find">;
   token: string;
   /** Directory of the static client files. */
   clientDir: string;
@@ -147,6 +151,27 @@ export async function sendMmrGuiActivity(res: ServerResponse, rawPath: "/api/fee
   if (!request.ok) return sendJson(res, 400, { error: request.error });
   const { now, home, rows } = await sessions.searchable();
   return sendJson(res, 200, searchMmrGuiSessions(rows, request.value, { now, home }));
+}
+
+/**
+ * Answer `GET /api/changes?sessionId=&range=`: the Changes list for the
+ * working directory `cwdOf` names for the session (`undefined`: 404); 400
+ * for a session id or range that does not parse.
+ */
+export async function sendMmrGuiChanges(
+  res: ServerResponse,
+  url: URL,
+  cwdOf: (sessionId: string) => Promise<string | undefined>,
+  options?: MmrGuiChangesOptions,
+): Promise<void> {
+  const id = url.searchParams.get("sessionId") ?? "";
+  if (!isMmrGuiSessionId(id)) return sendJson(res, 400, { error: "Name the session by its id." });
+  const range = url.searchParams.get("range") ?? "uncommitted";
+  if (!isMmrGuiChangesRange(range)) return sendJson(res, 400, { error: 'range must be "uncommitted", "last-commit" or "branch".' });
+  const cwd = await cwdOf(id);
+  if (cwd === undefined) return sendJson(res, 404, { error: "No such session." });
+  const result = await readMmrGuiChanges(cwd, range, options);
+  sendJson(res, result.status, result.body);
 }
 
 /** One event-stream event; the hub's own events have no `id`, so they leave the replay position alone. */
@@ -397,7 +422,15 @@ export function startMmrGuiServer(options: MmrGuiServerOptions): Promise<MmrGuiS
     }
     if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
     if (rawPath === "/api/feed" || rawPath === "/api/search") return sendMmrGuiActivity(res, rawPath, request.url, options.sessions);
+    if (rawPath === "/api/changes") return sendMmrGuiChanges(res, request.url, cwdOf);
     return send(res, 404, "Not found");
+  }
+
+  /** The working directory of this session, or of a listed one. */
+  async function cwdOf(id: string): Promise<string | undefined> {
+    const ctx = bridge.context();
+    if (ctx && ctx.sessionManager.getSessionId() === id) return ctx.cwd;
+    return (await options.sessions.find(id))?.cwd;
   }
 
   return startMmrGuiHttpServer({ token: options.token, clientDir: options.clientDir, port: options.port, route });

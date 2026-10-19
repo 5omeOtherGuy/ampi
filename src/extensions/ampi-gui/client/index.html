@@ -69,6 +69,9 @@
             <button class="icon-button" id="scheme" type="button" aria-label="Color scheme: system" title="Color scheme: system">
               <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.75"/><path class="fill" d="M8 2.25a5.75 5.75 0 0 1 0 11.5z"/></svg>
             </button>
+            <button class="icon-button" id="right-pane-toggle" type="button" aria-controls="right-pane" aria-expanded="false" aria-label="Right pane" title="Right pane" hidden>
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.25" width="12.5" height="11.5" rx="1.5"/><path d="M10 2.25v11.5"/></svg>
+            </button>
           </div>
         </header>
         <main class="chat" id="chat" tabindex="-1" aria-label="Transcript">
@@ -219,6 +222,47 @@
           </div>
         </footer>
       </div>
+      <!-- The right pane: the Changes tab now; Files and Terminal add their tabs and panels the same way. -->
+      <aside class="right-pane" id="right-pane" aria-label="Right pane" hidden>
+        <div class="right-pane-resize" id="right-pane-resize" role="separator" aria-orientation="vertical" aria-controls="right-pane" aria-label="Resize right pane" tabindex="0"></div>
+        <div class="pane-tabs">
+          <button class="pane-tab pane-tab-chat" type="button" data-pane-tab="chat" aria-pressed="false">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.75 3.75a1 1 0 0 1 1-1h8.5a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H7l-3 2.5v-2.5h-.25a1 1 0 0 1-1-1z"/></svg>
+            Chat
+          </button>
+          <button class="pane-tab" type="button" data-pane-tab="changes" aria-pressed="true" aria-controls="changes-panel" aria-keyshortcuts="Control+Shift+G">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.75 1.75h6l2.5 2.5v10h-8.5z"/><path d="M8 4.75v4M6 6.75h4M6 11.25h4"/></svg>
+            Changes
+          </button>
+          <button class="icon-button pane-focus" id="focus-pane" type="button" aria-pressed="false" aria-label="Focus pane" title="Focus pane">
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.75h3.75V6.5M13.25 2.75 9.25 6.75M6.5 13.25H2.75V9.5M2.75 13.25l4-4"/></svg>
+          </button>
+        </div>
+        <section class="changes" id="changes-panel" data-pane-panel="changes" aria-label="Changes">
+          <div class="changes-toolbar">
+            <button class="pane-button" id="changes-review" type="button" aria-keyshortcuts="Control+G R">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m2.25 4 1.25 1.25L5.75 3M2.25 10l1.25 1.25L5.75 9M8.25 4.25h5.5M8.25 10.25h5.5"/></svg>
+              Review
+            </button>
+            <label class="visually-hidden" for="changes-range">Range</label>
+            <select class="changes-range" id="changes-range"></select>
+            <span class="changes-totals" id="changes-totals" hidden></span>
+            <button class="icon-button" id="changes-order" type="button" aria-pressed="false" aria-label="Most changed first">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.75v10.5M2.25 11l2.25 2.25L6.75 11M9 3.75h4.75M9 7.25h3.25M9 10.75h1.75"/></svg>
+            </button>
+            <button class="icon-button" id="changes-refresh" type="button" aria-label="Refresh" title="Refresh">
+              <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.25 8a5.25 5.25 0 1 1-1.54-3.71"/><path d="M13.25 2.25v3h-3"/></svg>
+            </button>
+          </div>
+          <p class="changes-note" id="changes-note" role="status" hidden></p>
+          <div class="changes-list" id="changes-list"></div>
+          <div class="changes-empty" id="changes-empty" hidden>
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.75 1.75h6l2.5 2.5v10h-8.5z"/><path d="M8 6.5v4M6 8.5h4"/></svg>
+            <p id="changes-empty-text" role="status"></p>
+          </div>
+          <div class="menu changes-menu" id="changes-menu" role="menu" aria-label="File actions" hidden></div>
+        </section>
+      </aside>
       <dialog class="dialog" id="rename-dialog" aria-labelledby="rename-heading">
         <form method="dialog">
           <h2 id="rename-heading">Rename session</h2>

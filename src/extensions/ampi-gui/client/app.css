@@ -3390,3 +3390,385 @@ details[open] > summary .chevron {
     max-width: 100%;
   }
 }
+
+/* The right pane: a resizable column beside the chat, its own tab row at the title bar's height. */
+.right-pane {
+  position: relative;
+  display: grid;
+  grid-template-rows: var(--ampi-titlebar-height) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--ampi-border);
+  background: var(--ampi-surface-bg);
+  color: var(--ampi-fg);
+}
+
+.right-pane-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 3;
+  width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.right-pane-resize:hover,
+.right-pane-resize:focus-visible,
+.app[data-resizing] .right-pane-resize {
+  outline: none;
+  background: linear-gradient(to right, transparent 1px, var(--ampi-link) 1px, var(--ampi-link) 4px, transparent 4px);
+}
+
+.pane-tabs {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1);
+  min-width: 0;
+  padding: 0 calc(var(--ampi-space) * 2);
+  border-bottom: 1px solid var(--ampi-border);
+}
+
+/* Tabs are buttons with a pressed state: the shown one on an accent background. */
+.pane-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  height: var(--ampi-control-size);
+  padding: 0 calc(var(--ampi-space) * 2);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-muted-fg);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pane-tab:hover {
+  color: var(--ampi-fg);
+}
+
+.pane-tab[aria-pressed="true"] {
+  background: var(--ampi-accent);
+  color: var(--ampi-shell-fg);
+}
+
+.pane-tab .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The Chat tab exists only where the pane is a full-screen tab. */
+.pane-tab-chat {
+  display: none;
+}
+
+.pane-focus {
+  margin-left: auto;
+}
+
+.pane-focus[aria-pressed="true"] {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+/* Changes: a toolbar, the sections of files, or a note in their place. */
+.changes {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.changes-toolbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1);
+  min-width: 0;
+  height: 40px;
+  padding: 0 calc(var(--ampi-space) * 2);
+  border-bottom: 1px solid var(--ampi-border);
+}
+
+.pane-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 1.5);
+  height: var(--ampi-control-size);
+  padding: 0 calc(var(--ampi-space) * 2);
+  border: 0;
+  border-radius: var(--ampi-radius-sm);
+  background: transparent;
+  color: var(--ampi-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pane-button:hover:not(:disabled) {
+  background: var(--ampi-accent);
+}
+
+.pane-button:disabled {
+  color: var(--ampi-muted-fg);
+  cursor: default;
+}
+
+.pane-button .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ampi-muted-fg);
+}
+
+.changes-range {
+  min-width: 0;
+  max-width: 12rem;
+  height: var(--ampi-control-size);
+  padding: 0 calc(var(--ampi-space) * 1.5);
+  border: 1px solid var(--ampi-input-border);
+  border-radius: var(--ampi-radius-sm);
+  background: var(--ampi-input-bg);
+  color: var(--ampi-fg);
+  font: inherit;
+  font-size: var(--ampi-text-sm);
+  text-overflow: ellipsis;
+}
+
+.changes-totals {
+  margin-left: auto;
+  padding: 0 calc(var(--ampi-space) * 1);
+  font-size: var(--ampi-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.change-added {
+  color: var(--ampi-success);
+}
+
+.change-removed {
+  color: var(--ampi-danger);
+}
+
+.change-files {
+  color: var(--ampi-warning);
+}
+
+#changes-order {
+  margin-left: auto;
+}
+
+.changes-totals:not([hidden]) + #changes-order {
+  margin-left: 0;
+}
+
+#changes-order[aria-pressed="true"] {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+.changes-note {
+  flex: none;
+  margin: 0;
+  padding: calc(var(--ampi-space) * 1.5) calc(var(--ampi-space) * 3);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-sm);
+}
+
+.changes-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(var(--ampi-space) * 4);
+  background: var(--ampi-shell-bg);
+}
+
+.changes-section-label {
+  margin: 0;
+  padding: calc(var(--ampi-space) * 4) calc(var(--ampi-space) * 3) calc(var(--ampi-space) * 1.5);
+  color: var(--ampi-muted-fg);
+  font-size: var(--ampi-text-xs);
+  font-weight: 500;
+  line-height: var(--ampi-leading-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.changes-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  min-height: 34px;
+  padding: 0 calc(var(--ampi-space) * 2) 0 calc(var(--ampi-space) * 1.5);
+}
+
+.change-row:hover {
+  background: var(--ampi-accent);
+}
+
+.change-chevron {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--ampi-muted-fg);
+}
+
+.change-chevron .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.change-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.change-file {
+  font-weight: 600;
+}
+
+.change-dir {
+  color: var(--ampi-muted-fg);
+}
+
+.change-stat {
+  flex: none;
+  font-size: var(--ampi-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.change-binary {
+  color: var(--ampi-muted-fg);
+}
+
+/* A, M, R and D in green, amber and red, as small outlined boxes. */
+.change-badge {
+  --ampi-badge: var(--ampi-warning);
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--ampi-badge) 55%, transparent);
+  border-radius: var(--ampi-radius-xs);
+  background: color-mix(in srgb, var(--ampi-badge) 10%, transparent);
+  color: var(--ampi-badge);
+  font-size: var(--ampi-text-xs);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.change-badge[data-status="A"] {
+  --ampi-badge: var(--ampi-success);
+}
+
+.change-badge[data-status="D"] {
+  --ampi-badge: var(--ampi-danger);
+}
+
+.change-more[aria-expanded="true"] {
+  background: var(--ampi-accent);
+  color: var(--ampi-fg);
+}
+
+.changes-empty {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: center;
+  justify-items: center;
+  gap: calc(var(--ampi-space) * 2);
+  padding: calc(var(--ampi-space) * 8) calc(var(--ampi-space) * 4);
+  background: var(--ampi-shell-bg);
+  color: var(--ampi-muted-fg);
+  text-align: center;
+}
+
+.changes-empty .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.changes-empty p {
+  margin: 0;
+}
+
+.changes-empty[data-kind="error"] p {
+  color: var(--ampi-danger);
+}
+
+.changes-empty[data-kind="loading"] .icon {
+  display: none;
+}
+
+.menu.changes-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: auto;
+  min-width: 10rem;
+}
+
+/* Wide pages: the open pane is a third column; Focus Pane gives it the chat's place. */
+@media (min-width: 768px) {
+  .app[data-right-pane="open"] {
+    grid-template-columns: minmax(0, 1fr) min(var(--ampi-right-pane-width, 520px), 70vw);
+  }
+
+  .app[data-sidebar="open"][data-right-pane="open"] {
+    grid-template-columns: var(--ampi-sidebar-width) minmax(0, 1fr) min(var(--ampi-right-pane-width, 520px), calc(70vw - var(--ampi-sidebar-width)));
+  }
+
+  .app[data-focus-pane] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app[data-sidebar="open"][data-focus-pane] {
+    grid-template-columns: var(--ampi-sidebar-width) minmax(0, 1fr);
+  }
+
+  .app[data-focus-pane] > .pane,
+  .app[data-focus-pane] .right-pane-resize {
+    display: none;
+  }
+
+  .app[data-focus-pane] .right-pane {
+    border-left: 0;
+  }
+}
+
+/* Narrow pages: the open pane is a full-screen tab in the chat's place, with a Chat tab to go back. */
+@media (max-width: 767px) {
+  .app[data-right-pane="open"] > .pane {
+    display: none;
+  }
+
+  .right-pane {
+    border-left: 0;
+  }
+
+  .right-pane-resize,
+  .pane-focus {
+    display: none;
+  }
+
+  .pane-tab-chat {
+    display: inline-flex;
+  }
+
+  .changes-range {
+    max-width: 9rem;
+  }
+}

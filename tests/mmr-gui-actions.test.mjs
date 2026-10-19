@@ -573,11 +573,20 @@ describe("ampi-gui More Actions: the index fields in the store and the CLI's cop
 describe("ampi-gui More Actions: client helpers", () => {
   it("stores the preferences in one cookie and reads back only known, valid values", async () => {
     const { decodePrefs, encodePrefs, defaultPrefs, PREFS_COOKIE } = await importSource("extensions/ampi-gui/client/prefs.js");
-    assert.deepEqual(defaultPrefs(), { sidebarWidth: 256, sidebarOpen: true, fullWidth: false, feedDefaultTime: "24h", feedDefaultStatus: "all" });
+    assert.deepEqual(defaultPrefs(), {
+      sidebarWidth: 256,
+      sidebarOpen: true,
+      fullWidth: false,
+      rightPaneOpen: false,
+      rightPaneWidth: 520,
+      rightPaneTab: "changes",
+      feedDefaultTime: "24h",
+      feedDefaultStatus: "all",
+    });
     const cookie = encodePrefs({ sidebarWidth: 320, sidebarOpen: false, fullWidth: true, secret: "no" });
     assert.equal(cookie, `${PREFS_COOKIE}=${encodeURIComponent('{"sidebarWidth":320,"sidebarOpen":false,"fullWidth":true}')}; Path=/; Max-Age=31536000; SameSite=Strict`);
     const header = `ampi_gui_4100=token; ${cookie.split(";")[0]}; other=1`;
-    assert.deepEqual(decodePrefs(header), { sidebarWidth: 320, sidebarOpen: false, fullWidth: true, feedDefaultTime: "24h", feedDefaultStatus: "all" });
+    assert.deepEqual(decodePrefs(header), { ...defaultPrefs(), sidebarWidth: 320, sidebarOpen: false, fullWidth: true });
     const tampered = `${PREFS_COOKIE}=${encodeURIComponent('{"sidebarWidth":"wide","fullWidth":1,"__proto__":{"x":1}}')}`;
     assert.deepEqual(decodePrefs(tampered), defaultPrefs(), "wrong types fall back to the defaults");
     assert.deepEqual(decodePrefs(`${PREFS_COOKIE}=%E0%A4%A`), defaultPrefs(), "a cookie that does not decode");

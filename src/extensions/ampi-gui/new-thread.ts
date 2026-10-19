@@ -230,15 +230,16 @@ export function mmrGuiWorktreeSlug(prompt: string, suffix: string = randomBytes(
   return `${base || "thread"}-${suffix}`;
 }
 
-/** `child_process.execFile`'s shape as New Worktree calls it: never through a shell. */
+/** `child_process.execFile`'s shape as New Worktree and the Changes list call it: never through a shell. */
 export type MmrGuiExecFile = (
   file: string,
   args: readonly string[],
-  options: { timeout: number; windowsHide: boolean; env: NodeJS.ProcessEnv },
+  options: { timeout: number; windowsHide: boolean; env: NodeJS.ProcessEnv; maxBuffer?: number },
 ) => Promise<{ stdout: string; stderr: string }>;
 
 const execFileText = promisify(execFile);
-const runFile: MmrGuiExecFile = (file, args, options) => execFileText(file, [...args], { ...options, encoding: "utf8" });
+/** `child_process.execFile` with UTF-8 output, as {@link MmrGuiExecFile}. */
+export const runMmrGuiFile: MmrGuiExecFile = (file, args, options) => execFileText(file, [...args], { ...options, encoding: "utf8" });
 
 /**
  * Variables that point `git` at a repository; `-C` does not override them, so
@@ -247,7 +248,7 @@ const runFile: MmrGuiExecFile = (file, args, options) => execFileText(file, [...
 const GIT_REPOSITORY_ENV = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
 
 /** The hub's environment without {@link GIT_REPOSITORY_ENV}, so `git -C <cwd>` finds the checkout of `cwd`. */
-function gitEnv(): NodeJS.ProcessEnv {
+export function mmrGuiGitEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const name of GIT_REPOSITORY_ENV) delete env[name];
   return env;
@@ -277,9 +278,9 @@ function gitMessage(error: unknown): string {
 export async function createMmrGuiWorktree(
   cwd: string,
   prompt: string,
-  { run = runFile, suffix }: { run?: MmrGuiExecFile; suffix?: string } = {},
+  { run = runMmrGuiFile, suffix }: { run?: MmrGuiExecFile; suffix?: string } = {},
 ): Promise<MmrGuiWorktreeResult> {
-  const options = { timeout: MMR_GUI_WORKTREE_TIMEOUT_MS, windowsHide: true, env: gitEnv() };
+  const options = { timeout: MMR_GUI_WORKTREE_TIMEOUT_MS, windowsHide: true, env: mmrGuiGitEnv() };
   const notCheckout = `${cwd} is not in a Git checkout, so it has no worktrees.`;
   let lines: string[];
   try {

@@ -34,6 +34,7 @@ import {
   send,
   sendJson,
   sendMmrGuiActivity,
+  sendMmrGuiChanges,
   sendMmrGuiExport,
   startMmrGuiHttpServer,
   viewMmrGuiSession,
@@ -55,6 +56,7 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  * | `GET /api/export` | as on a session server, for any session |
  * | `GET /api/feed`, `GET /api/search` | Activity and Search Threads, as on a session server, over the hub's rows |
  * | `GET /api/modes` | the mode picker's modes and models for a thread not started yet, with no lock or speed (`modes.ts`) |
+ * | `GET /api/changes?sessionId=&range=` | the Changes list (`changes.ts`) in the directory the catalogue gives the session, in any state, read here because it only reads; a new thread the catalogue does not list yet is asked of its worker |
  * | `GET /api/directories?q=` | the new-thread composer's directories (`new-thread.ts`) |
  * | `POST /api/threads` | `{ prompt, cwd, mode?, labels?, worktree? }`: with `worktree: true`, first creates a Git worktree of `cwd`'s checkout and uses it as `cwd` (`createMmrGuiWorktree`); starts a worker for a new session in `cwd` (in `mode`), records the labels in the thread index, sends the prompt as the first message and answers `{ ok, sessionId, worktree? }` |
  * | `POST /api/<action>` | the More Actions (`MMR_GUI_SESSION_ACTIONS`) as on a session server, for any session, except: |
@@ -80,8 +82,8 @@ import type { MmrGuiRowHost, MmrGuiSessions } from "./sessions.js";
  *   `events`, `modes` and every POST answer 409 with the holder and, when
  *   known, whether it serves a GUI (`gui`).
  * - **not running**: the same from the file, `events` and `modes` answer 409, and
- *   `POST send` starts a worker (one per session however many sends race),
- *   waits for it and forwards the message. Other POSTs answer 409. A send
+ *   `POST send` and `POST review` start a worker (one per session however
+ *   many race), wait for it and forward the request. Other POSTs answer 409. A send
  *   waits at most {@link MMR_GUI_HUB_START_TIMEOUT_MS} and then answers 504
  *   without sending; the start goes on, and once the worker is ready the
  *   session is hosted, so sending again reaches it.
@@ -490,9 +492,9 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     // ampi-core refuses every prompt in an imported session, so it never gets a worker.
     if (isMmrImportedSession((await sessions.read(info)).branch)) state = { state: "imported" };
     if (post) {
-      if (state.state !== "not-running" || rest !== "send") return sendJson(res, 409, describe(state));
+      if (state.state !== "not-running" || (rest !== "send" && rest !== "review")) return sendJson(res, 409, describe(state));
       const { text } = record(post.json);
-      if (typeof text !== "string" || text.trim() === "") return sendJson(res, 400, { error: "Type a message to send." });
+      if (rest === "send" && (typeof text !== "string" || text.trim() === "")) return sendJson(res, 400, { error: "Type a message to send." });
       let worker: HubWorker;
       try {
         worker = await waitForWorker(info.path, id);
@@ -526,6 +528,14 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
       pathKind: options.pathKind,
     });
     sendJson(res, 200, answer);
+  }
+
+  /** `GET /api/changes`: from the catalogue's directory; a new thread not listed yet is asked of the worker that runs it. */
+  async function changes(request: MmrGuiRequest): Promise<void> {
+    const id = request.url.searchParams.get("sessionId") ?? "";
+    const worker = workers.get(id);
+    if (worker && !(await sessions.find(id))) return proxy(workerUpstream(worker), request, "changes");
+    return sendMmrGuiChanges(request.res, request.url, async (sessionId) => (await sessions.find(sessionId))?.cwd);
   }
 
   /** `POST /api/threads`: start a worker for a new session, label it, and send its first message. */
@@ -660,6 +670,7 @@ export async function startMmrGuiHub(options: MmrGuiHubOptions): Promise<MmrGuiS
     if (rawPath === "/api/export") return sendMmrGuiExport(res, request.url, options.exportSession);
     if (rawPath === "/api/feed" || rawPath === "/api/search") return sendMmrGuiActivity(res, rawPath, request.url, sessions);
     if (rawPath === "/api/modes") return sendJson(res, 200, options.modes());
+    if (rawPath === "/api/changes") return changes(request);
     return send(res, 404, "Not found");
   }
 

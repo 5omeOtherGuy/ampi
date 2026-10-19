@@ -42,6 +42,8 @@ export const PALETTE_SECTIONS = ["Global", "Thread", "Thread Panes", "Navigation
 const AVAILABLE = { state: "available" };
 const HIDDEN = { state: "hidden" };
 const unavailable = (reason) => ({ state: "unavailable", reason });
+/** On a session page only: the right pane and its tabs belong to the session shown. */
+const threadOnly = (state) => (state.threadPage ? AVAILABLE : HIDDEN);
 
 /** Terminal ids (`thread.archive`) or web ids (`toggle-sidebar`). */
 const COMMAND_ID = /^([a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+|[a-z][a-z0-9]*(-[a-z0-9]+)*)$/;
@@ -465,6 +467,16 @@ export const DEFAULT_COMMANDS = [
     run: (state) => state.ui.copySelectionLink(),
   },
   // More Actions, for the session focused in the sidebar, else the one shown.
+  {
+    id: "run-review",
+    title: "Review changes",
+    section: "Thread",
+    keys: ["ctrl+g r"],
+    palette: { title: "Run Review" },
+    description: "Run the review command when one is registered, else ask the agent to review the uncommitted changes once its turn ends",
+    when: (state) => (!state.threadPage ? HIDDEN : state.writable ? AVAILABLE : unavailable("This session is read-only here")),
+    run: (state) => state.ui.runReview(),
+  },
   sessionCommand("thread.copyMarkdown", "Copy as Markdown", "markdown", "Copy the session to the clipboard as Markdown", {
     need: "markdown",
     what: "Copying",
@@ -570,9 +582,39 @@ export const DEFAULT_COMMANDS = [
     section: "Thread Panes",
     keys: ["ctrl+shift+a"],
     palette: { title: "Show Chat Pane" },
-    description: "Close the sidebar sheet and put the cursor in the composer",
+    description: "Close the sidebar sheet and the right pane's full-screen tab or focus, and put the cursor in the composer",
     when: (state) => (!state.threadPage ? HIDDEN : state.writable ? AVAILABLE : unavailable("This session is read-only here")),
     run: (state) => state.ui.focusPrompt(),
+  },
+  {
+    id: "show-changes",
+    title: "Show changes",
+    section: "Thread Panes",
+    keys: ["ctrl+shift+g"],
+    palette: { title: "Show Changes Pane" },
+    description: "Open the right pane on the Changes list: the files that differ in the session's Git checkout",
+    when: threadOnly,
+    run: (state) => state.ui.showPaneTab("changes"),
+  },
+  {
+    id: "toggle-right-pane",
+    title: "Toggle right pane",
+    section: "Thread Panes",
+    keys: ["mod+alt+b"],
+    palette: { title: "Toggle Right Pane" },
+    description: "Show or hide the pane beside the chat; this browser remembers it and its tab",
+    when: threadOnly,
+    run: (state) => state.ui.toggleRightPane(),
+  },
+  {
+    id: "toggle-focus-pane",
+    title: "Toggle focus pane",
+    section: "Thread Panes",
+    keys: ["mod+alt+f"],
+    palette: { title: "Focus Pane" },
+    description: "Widen the right pane over the chat, or give the chat its place back",
+    when: threadOnly,
+    run: (state) => state.ui.toggleFocusPane(),
   },
   {
     id: "toggle-full-width",
