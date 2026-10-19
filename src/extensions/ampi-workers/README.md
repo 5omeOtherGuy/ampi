@@ -112,6 +112,13 @@ prompt-assembly registry, worker tool guidance): spawned children for
 `ampi-workers`, and child `--ampi-subagent` activation re-derives policy
 fail-closed from `ampi-core` alone.
 
+`Task` children keep `ampi-permissions` too, so the user's permission rules
+gate their shell and edit calls. The runner writes the parent's permission
+answers into every child's environment (`AMPI_PERMISSIONS_ALLOW_ALL=1` while
+the parent allows every call for the session, `AMPI_PERMISSIONS_PROJECT_RULES=1`
+while it reads the project's rules) and removes each variable otherwise; see
+[`ampi-permissions`](../ampi-permissions/README.md#subagents).
+
 ## Behavior
 
 ### Concrete subagent ownership

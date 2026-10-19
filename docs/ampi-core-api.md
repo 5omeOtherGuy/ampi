@@ -612,8 +612,13 @@ The pure rule engine behind `ampi-permissions`. A rule is
 per-index problems. `evaluateMmrPermission(call, { project, user, defaults })`
 returns the first matching rule's decision in that order, `defaults`
 standing for `MMR_PERMISSIONS_DEFAULT_RULES` unless given, and `allow` when
-nothing matches. For `bash` and `shell_command` (`MMR_PERMISSIONS_SHELL_TOOLS`)
-it judges each simple command of the line, split by `splitMmrShellCommand`.
+nothing matches; `{ context: "subagent" }` applies the rules for subagent
+children instead of the main session (`thread`). For `bash` and
+`shell_command` (`MMR_PERMISSIONS_SHELL_TOOLS`) it judges each simple command
+of the line, split by `splitMmrShellCommand`: a rejected part rejects the line,
+else a delegated part makes it `delegate`, else an asking part makes it ask.
+A line of several parts carries every part's decision in `parts`, so a caller
+can run each delegated part's program. The engine never runs one itself.
 `formatMmrPermissionRule` writes a rule as one line
 (`ask bash --command 'git push*'`). `setMmrPermissionsSessionAllowAll` and
 `isMmrPermissionsSessionAllowAll` hold the session-wide "allow all" answer

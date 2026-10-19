@@ -181,7 +181,7 @@ The package ships as a set of Pi extensions; the network, history and web GUI on
 | `ampi-tasks` | On | Session-local `task_list` planning widget, and `ask_user_choice` for putting a decision to you as a list of answers |
 | `ampi-workers` | On | `finder`, `oracle`, `Task`, `reviewer`, `view_media`, gated `librarian`, background fleets |
 | `ampi-custom-subagents` | On | Markdown `sa__*` workers with scoped tools/models/thinking |
-| `ampi-permissions` | Off | Opt-in approval for risky tool calls: rules allow, reject or ask, ampi's defaults let reads, tests and builds run, and a dialog asks about the rest (`ampi.permissions` turns it on) |
+| `ampi-permissions` | Off | Opt-in approval for risky tool calls: rules allow, reject, ask or hand the call to a program you name, ampi's defaults let reads, tests and builds run, and a dialog asks about the rest; subagents refuse what would ask (`ampi.permissions` turns it on) |
 | `ampi-tui` | On | Terminal look and keys for interactive sessions: an Amp-compatible prompt box with the mode, cost, turn status and working directory in its borders instead of a footer, Amp-compatible chords, and a short intro on first start that "ampi show welcome" replays (`ampiTui.enabled: false` restores Pi's) |
 | `ampi-threads` | On | Thread index and Amp-compatible archive commands: archive and start a new session, archive and quit, unarchive (`ampiThreads.enabled: false` turns it off) |
 | `ampi-gui` | Off | Opt-in local web GUI: a live view of the running session in your browser, with a composer that steers, queues and interrupts and a sidebar of your sessions (see [Web GUI](#web-gui)) |
