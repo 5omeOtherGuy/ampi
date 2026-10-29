@@ -154,6 +154,16 @@ describe("architecture manifest guardrails", () => {
     }
   });
 
+  it("every auto-loaded extension records itself as a loaded ampi part under its own name", async () => {
+    const { MMR_EXTENSION_MANIFEST } = await loadManifest();
+    // ampi-workers keeps parts the user turned off out of subagent processes through this record.
+    for (const entry of MMR_EXTENSION_MANIFEST.filter((candidate) => candidate.autoLoaded)) {
+      const text = readFileSync(path.join(repoRoot, entry.entrypoint), "utf8");
+      const name = entry.name === "ampi-core" ? "AMPI_CORE_PART" : `"${entry.name}"`;
+      assert.ok(text.includes(`markAmpiPartLoaded(pi, ${name});`), `${entry.entrypoint} must call markAmpiPartLoaded(pi, ${name}) in its factory`);
+    }
+  });
+
   it("manifest covers exactly the on-disk src/extensions directories", async () => {
     const { MMR_EXTENSION_MANIFEST } = await loadManifest();
     const manifestNames = MMR_EXTENSION_MANIFEST.map((e) => e.name).sort();

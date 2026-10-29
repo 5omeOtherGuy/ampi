@@ -34,7 +34,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { findLiveOwner, liveRegistryDir } from "./live-registry.js";
-import { piAgentDir, piTheme } from "./pi-compat.js";
+import { listSessionExtensionPaths, piAgentDir, piTheme } from "./pi-compat.js";
 import { createAmpiSdkSession, locateSessionAmpi } from "./sdk-session.js";
 
 /**
@@ -49,6 +49,8 @@ export const HOSTED_SESSIONS_MIN_AMPI_VERSION = "0.4.0";
 
 /** The seam's file inside the ampi package; an older ampi lacks it. */
 const GUI_HOST_SEAM = path.join("src", "extensions", "ampi-core", "gui-host.ts");
+/** ampi-gui's entry, which serves the sessions; ampi setup can leave it out. */
+const GUI_ENTRY = path.join("src", "extensions", "ampi-gui", "index.ts");
 
 /**
  * Tell ampi's extensions in this process that it hosts the session for
@@ -295,7 +297,10 @@ export async function runAppWorker(options) {
     if (port === undefined) {
       /** @type {string[]} */
       const errors = (runtime.diagnostics ?? []).filter((/** @type {any} */ d) => d.type === "error").map((/** @type {any} */ d) => d.message);
-      return await fail("no-gui", ["ampi-gui did not start a server for this session.", ...errors].join(" "));
+      const loaded = listSessionExtensionPaths(runtime);
+      const off = loaded !== undefined && !loaded.includes(path.join(located.ampi.root, GUI_ENTRY));
+      const hint = off ? ["The gui part of ampi is off in Pi's settings; switch it on with ampi setup --add gui."] : [];
+      return await fail("no-gui", ["ampi-gui did not start a server for this session.", ...hint, ...errors].join(" "));
     }
     if (stopRequested) return 0;
 

@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { registerMmrConfigFlowSection } from "../ampi-core/config-flow-registry.js";
@@ -25,6 +26,7 @@ export interface MmrCustomSubagentsFactoryOverrides {
 
 export function createMmrCustomSubagentsExtension(overrides: MmrCustomSubagentsFactoryOverrides = {}) {
   return function ampiCustomSubagentsExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-custom-subagents");
     const customSubagentTools = registerMmrCustomSubagentTools(pi, overrides.customSubagents ?? {});
     const capabilities: MmrCustomSubagentsCapabilities = {
       customTools: () => customSubagentTools.map((tool) => tool.name),

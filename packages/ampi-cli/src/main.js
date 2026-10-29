@@ -464,6 +464,22 @@ export async function runAmpi(argv) {
         log,
       });
     }
+    case "setup": {
+      // Installing ampi when the settings lack it may need the network, so PI_OFFLINE is left as it is.
+      const [pi, { runSetupCommand }, { isPiProjectTrusted, openPiPackageSettings }] = await Promise.all([import(PI_PACKAGE_NAME), import("./setup.js"), import("./pi-compat.js")]);
+      const cwd = process.cwd();
+      return runSetupCommand(route.setupArgs ?? [], {
+        cwd,
+        openSettings: (scope) => openPiPackageSettings(pi, cwd, scope),
+        extensionSources: () => listPiExtensionSources(pi, cwd),
+        projectTrusted: () => isPiProjectTrusted(pi, cwd),
+        ownAmpi: locateAmpiPackage(CLI_ROOT),
+        isTTY: process.stdin.isTTY === true && process.stdout.isTTY === true,
+        ask: askLine,
+        out: (text) => process.stdout.write(text),
+        log,
+      });
+    }
     case "update": {
       // An explicit request for the network: PI_OFFLINE does not apply, and Pi is not loaded.
       const { runUpdateCommand, spawnNpm } = await import("./update.js");
@@ -774,6 +790,24 @@ async function confirm(question) {
   });
   prompt.close();
   return /^y(?:es)?$/i.test(String(answer).trim());
+}
+
+/**
+ * Ask a question on stdout and read one line of the answer from stdin; the
+ * end of stdin (Ctrl+D) is undefined.
+ *
+ * @param {string} question
+ * @returns {Promise<string | undefined>}
+ */
+async function askLine(question) {
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  /** @type {string | undefined} */
+  const answer = await new Promise((resolve) => {
+    prompt.once("close", () => resolve(undefined));
+    prompt.question(question, resolve);
+  });
+  prompt.close();
+  return answer;
 }
 
 /** The signals that end `ampi top`, each after it restores the terminal. */

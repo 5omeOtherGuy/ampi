@@ -36,6 +36,7 @@ ampi skill list          # the skills Pi loads in this directory
 ampi skill add ./skills  # install skills into this project's .agents/skills
 ampi dev keys            # what ampi reads for each key press, and the command it maps to
 ampi --model openai/gpt-5.6-sol -m ultra        # Pi options and ampi options together
+ampi setup               # choose which parts of ampi Pi loads
 ampi doctor              # check Node.js, Pi, ampi, rg, fd, git, credentials and data files
 ampi update              # update ampi-cli, with its Pi and ampi, to the latest version
 ampi version             # ampi-cli, ampi and Pi versions
@@ -683,6 +684,26 @@ Servers stored on a hosted service are not available: `ampi mcp remote …` exit
 
 Exit status: `0` on success; `1` when a server is not connected or unknown, a change is refused or declined, or Pi fails (Pi's own commands exit with Pi's status); `2` on a usage error.
 
+## Setup
+
+`ampi setup` chooses which of ampi's parts (its extensions) Pi loads. In a terminal it lists them, numbered, with a box checked for each part that is on, and reads lines until an empty one saves (`q` or Ctrl+D cancels): numbers or names switch parts on or off, `all` switches every part on and `none` leaves only `core`.
+
+```bash
+ampi setup --parts workers,web,tui      # core plus exactly these
+ampi setup --add history                # switch parts on, keep the others
+ampi setup --remove gui,painter         # switch parts off, keep the others
+ampi setup --all                        # every part, as a plain install
+ampi setup --list                       # the parts and which are on; changes nothing
+ampi setup --local --parts workers      # this project's .pi/settings.json
+```
+
+- **Parts.** One per entry of the ampi package's `pi.extensions`, named after the extension without `ampi-` (`ampi-web` is `web`; both spellings are accepted). `core` is always on, since every other part needs it, and a part another one needs is switched on with it (`custom-subagents` needs `workers`).
+- **Where the choice goes.** The ampi entry of the `packages` list in Pi's user settings, or with `--local` in the project's `.pi/settings.json`, becomes an object with an `extensions` filter of `+` and `-` entries, one per part: the entries Pi's "Select package resources" describes and `pi config` writes. Other settings, other packages and filter patterns that name no part stay as they are; with every part on, the entry goes back to a plain source. Pi itself then leaves the other parts out, in sessions started with `pi` or `ampi`, and in subagent processes.
+- **No ampi entry yet.** The command first installs ampi into those settings, as `pi install` does: `npm:@skippermissions/ampi`, with `--local` the ampi of the user settings (so the project entry replaces it instead of adding a second copy), or `--source <source>` in any form `pi install` takes.
+- **When it applies.** Pi reads the choice when it starts; in a running session, `/reload` applies it. When another entry, such as a project's, replaces the one just written in the current directory, the command says so. A project's settings count once Pi trusts the project.
+
+Exit status: `0` on success, `1` when the settings cannot be read or written, ampi cannot be installed or the choice was cancelled, `2` on a usage error.
+
 ## Doctor
 
 `ampi doctor` checks what ampi needs and says how to fix what is wrong. It prints one line per check, a status word (`ok`, `warn` or `fail`), the check's id and a summary, then a hint for each check that is not `ok`; the status words are colored only on a terminal (and not when `NO_COLOR` is set). MCP servers have their own check, `ampi mcp doctor` (see [MCP servers](#mcp-servers)).
@@ -692,6 +713,7 @@ Exit status: `0` on success; `1` when a server is not connected or unknown, a ch
 | `node` | Node.js against ampi-cli's `engines` range | `fail`: older than the range |
 | `pi` | The installed Pi against the loading ampi's Pi range | `fail`: missing or outside the range |
 | `ampi` | Which ampi loads: Pi's own copy (with its source) or ampi-cli's | `fail`: no ampi is installed |
+| `parts` | Which of ampi's parts load (see [Setup](#setup)); ampi-cli's own copy loads all of them | `fail`: `core` is off while other parts load; `warn`: a part is on without one it needs |
 | `agent-dir` | Pi's configuration directory and both `settings.json` files | `warn`: not created yet; `fail`: not writable, or a settings file does not parse |
 | `tools` | `rg` and `fd` (or `fdfind`) in Pi's bin directory or on PATH | `warn`: one or both missing |
 | `git` | `git` on PATH | `warn`: missing |

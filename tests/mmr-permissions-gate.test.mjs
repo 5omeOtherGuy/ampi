@@ -8,9 +8,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, before, describe, it } from "node:test";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+before(markAmpiCoreLoaded);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const dirs = [];

@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { loadMmrHistorySettings, type MmrHistorySettings } from "./config.js";
@@ -16,6 +17,7 @@ export interface MmrHistoryFactoryOverrides {
 
 export function createMmrHistoryExtension(overrides: MmrHistoryFactoryOverrides = {}) {
   return function ampiHistoryExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-history");
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrHistorySettings();
     const getSettings = () => settings;
     const deps = overrides.deps ? overrides.deps(getSettings) : createDefaultMmrHistoryToolDeps(getSettings);

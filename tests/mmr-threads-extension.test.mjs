@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, afterEach, beforeEach, describe, it } from "node:test";
+import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+before(markAmpiCoreLoaded);
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const ARCHIVED_AT = "2026-10-18T10:00:00.000Z";

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { importSource } from "./load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./pi-stub.mjs";
 
 export const TASK_CHILD_STATE = Object.freeze({
   profile: "task-subagent",
@@ -33,6 +33,7 @@ export function removeTempDirs() {
 
 /** The modules a suite needs, each loaded once. */
 export async function loadPermissionModules() {
+  await markAmpiCoreLoaded();
   return {
     extension: await importSource("extensions/ampi-permissions/index.ts"),
     rules: await importSource("extensions/ampi-core/permissions.ts"),

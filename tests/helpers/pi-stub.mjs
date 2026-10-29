@@ -392,3 +392,15 @@ export function createMockExtensionContext(options = {}) {
     autocompleteProviders,
   };
 }
+
+/**
+ * Record ampi-core as loaded in this test process, as it is in Pi, where it
+ * loads before every other part. Tests that run another extension on its own
+ * call this first, so its "loaded without ampi-core" warning
+ * (ampi-core/parts.ts) stays out of what they observe.
+ */
+export async function markAmpiCoreLoaded() {
+  const { importSource } = await import("./load-src.mjs");
+  const { AMPI_CORE_PART, markAmpiPartLoaded } = await importSource("extensions/ampi-core/parts.ts");
+  markAmpiPartLoaded(createMockPi().pi, AMPI_CORE_PART);
+}

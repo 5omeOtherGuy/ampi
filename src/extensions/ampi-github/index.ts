@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { loadMmrGithubSettings, type MmrGithubSettings } from "./config.js";
@@ -49,6 +50,7 @@ function normalizeOverrideResult(
  */
 export function createMmrGithubExtension(overrides: MmrGithubFactoryOverrides = {}) {
   return function mmrGithubExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-github");
     const initialCwd = process.cwd();
     const initial = overrides.loadSettings
       ? normalizeOverrideResult(overrides.loadSettings(initialCwd))

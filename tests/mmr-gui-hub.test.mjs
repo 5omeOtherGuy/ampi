@@ -16,9 +16,10 @@ import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { after, afterEach, before, describe, it } from "node:test";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+before(markAmpiCoreLoaded);
 
 const HUB_TOKEN = ["hub", "test", "token"].join("-");
 const WORKER_TOKEN = ["worker", "test", "token"].join("-");

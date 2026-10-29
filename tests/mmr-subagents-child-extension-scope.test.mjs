@@ -71,6 +71,25 @@ describe("mmr-subagents child-extension-scope: enumeration", () => {
   });
 });
 
+describe("mmr-subagents child-extension-scope: parts the user turned off", () => {
+  it("leaves keep-set parts the parent did not load out of the child, and keeps them when the record lacks ampi-core", async () => {
+    const mod = await importSource(MODULE);
+    const loadedPaths = [piMmr("ampi-core"), piMmr("ampi-workers"), EXTERNAL_A];
+    const resolve = (loadedParts) =>
+      mod.resolveMmrChildExtensionScope({ profileName: "task-subagent", loadedPaths, location: LOCATION, fileExists: defaultExists, loadedParts });
+    // ampi-permissions registers no tool or command, so only the parts record says it loaded.
+    assert.deepEqual(resolve(new Set(["ampi-core", "ampi-workers", "ampi-permissions"])), [
+      piMmr("ampi-core"),
+      piMmr("ampi-workers"),
+      piMmr("ampi-permissions"),
+      EXTERNAL_A,
+    ]);
+    const everything = [piMmr("ampi-core"), piMmr("ampi-web"), piMmr("ampi-workers"), piMmr("ampi-tasks"), piMmr("ampi-permissions"), EXTERNAL_A];
+    assert.deepEqual(resolve(new Set()), everything);
+    assert.deepEqual(resolve(new Set(["ampi-workers"])), everything);
+  });
+});
+
 describe("mmr-subagents child-extension-scope: resolver", () => {
   it("finder keeps only mmr-core plus all external packages, drops other ampi ext", async () => {
     const mod = await importSource(MODULE);

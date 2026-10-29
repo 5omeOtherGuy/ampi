@@ -1,4 +1,5 @@
 import { copyToClipboard, type ExtensionAPI, type ExtensionContext, type ToolInfo } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerMmrPromptHistory } from "../ampi-core/prompt-history.js";
 import { MMR_THREAD_SLASH_COMMAND, registerMmrThreadIndex } from "../ampi-core/thread-index.js";
 import { registerMmrThreadReports, summarizeMmrThreadCost } from "../ampi-core/thread-reports.js";
@@ -52,6 +53,7 @@ function contextInput(pi: ExtensionAPI, ctx: ExtensionContext): MmrContextAnalys
 
 export function createMmrThreadsExtension(overrides: MmrThreadsFactoryOverrides = {}) {
   return function ampiThreadsExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-threads");
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrThreadsSettings(process.cwd());
     if (!settings.enabled) return;
 

@@ -7,12 +7,13 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { after, afterEach, beforeEach, describe, it } from "node:test";
+import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { detectSupportedImageMimeTypeFromFile } from "@earendil-works/pi-coding-agent";
 import { cleanupLoadedSource, getPreparedSourceRoot, importSource } from "./helpers/load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+before(markAmpiCoreLoaded);
 
 const PIXEL_PATH = path.resolve(import.meta.dirname, "fixtures/ampi-painter/pixel.png");
 const PIXEL = readFileSync(PIXEL_PATH);

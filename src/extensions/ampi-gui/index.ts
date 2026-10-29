@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type ExtensionAPI, type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerMmrCommand, unregisterMmrCommand } from "../ampi-core/command-registry.js";
 import { getMmrGuiHost, type MmrGuiSessionHost } from "../ampi-core/gui-host.js";
 import { flushMmrLiveEntry, readMmrLiveEntries, setMmrLiveFields } from "../ampi-core/live-registry.js";
@@ -48,6 +49,7 @@ export function openMmrGuiUrl(url: string, env: NodeJS.ProcessEnv = process.env,
 
 export function createMmrGuiExtension(overrides: MmrGuiFactoryOverrides = {}) {
   return function ampiGuiExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-gui");
     // `ampi app` and the sessions it hosts have a GUI whatever the settings say: the user started the app for it.
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrGuiSettings(process.cwd());
     const loadHost = getMmrGuiHost();

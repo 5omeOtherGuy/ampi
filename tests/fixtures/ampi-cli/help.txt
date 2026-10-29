@@ -34,6 +34,8 @@ Commands:
   doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
                                 credentials and ampi's data files, and say how to fix problems;
                                 installs nothing
+  setup [--parts <parts>]       Choose which parts of ampi Pi loads, in a terminal or with
+                                --parts, --add, --remove or --all; ampi setup --help has more
   update, up [--target-version <v>] [--porcelain]
                                 Update the ampi command (an npm install -g) to the latest or
                                 the given version; ampi update --help has more

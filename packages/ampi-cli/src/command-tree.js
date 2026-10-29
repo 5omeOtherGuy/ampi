@@ -7,6 +7,7 @@
 // command modules is checked by tests/mmr-cli-completions.test.mjs: a new
 // command or option goes here too.
 import { LOG_LEVELS } from "./log.js";
+import { PART_INFO } from "./parts.js";
 import { THREAD_COLORS } from "./thread-index.js";
 
 /**
@@ -69,6 +70,9 @@ export const COLOR_CHOICES = Object.freeze([
   ...THREAD_COLORS.map((color) => ({ value: color, description: "Thread colour" })),
   { value: "none", description: "Remove the colour" },
 ]);
+
+/** The parts `ampi setup` takes by name. */
+const PART_CHOICES = { choices: Object.entries(PART_INFO).map(([value, { summary }]) => ({ value, description: summary })) };
 
 /** The values `--mode` offers: ampi's modes, then Pi's output formats. */
 const MODE_OR_OUTPUT = {
@@ -506,6 +510,17 @@ export const COMMAND_TREE = deepFreeze(
         options: [json("Print the list once as JSON"), option("--stream-jsonl", "Print a JSON line now and on every change")],
       }),
       command("doctor", "Check what ampi needs and say how to fix it", { options: [json()] }),
+      command("setup", "Choose which parts of ampi Pi loads", {
+        options: [
+          valued("--parts", "Load exactly these parts (and core)", { kind: PART_CHOICES, repeat: true }),
+          valued("--add", "Switch these parts on", { kind: PART_CHOICES, repeat: true }),
+          valued("--remove", "Switch these parts off", { kind: PART_CHOICES, repeat: true }),
+          option("--all", "Load every part"),
+          option("--list", "Print the parts and which are on"),
+          option("--local", "This project's settings instead of the user's", { short: ["-l"] }),
+          valued("--source", "What to install when the settings have no ampi entry"),
+        ],
+      }),
       command("update", "Update the ampi command", {
         aliases: ["up"],
         options: [valued("--target-version", "Install this version"), option("--porcelain", "Print one machine-readable line")],

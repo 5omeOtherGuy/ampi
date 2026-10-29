@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath, registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
 
 // Pi stamps each tool with the path of the extension entrypoint that
@@ -51,6 +52,7 @@ function createShellProvider(enabled: boolean): MmrToolProvider {
 
 export function createMmrShellExtension(overrides: MmrShellFactoryOverrides = {}) {
   return function ampiShellExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-shell");
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrShellSettings(process.cwd());
     registerMmrToolProvider(createShellProvider(settings.enabled));
     if (!settings.enabled) return;

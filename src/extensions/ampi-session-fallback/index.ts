@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionEvent } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { getMmrMode, isMmrModeKey } from "../ampi-core/modes.js";
 import {
   MMR_EVENT_STATE_CHANGED,
@@ -306,6 +307,7 @@ async function handleMessageEnd(pi: ExtensionAPI, event: { message?: unknown }, 
 
 export function createMmrSessionFallbackExtension() {
   return function mmrSessionFallbackExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-session-fallback");
     pi.on("session_start", async (event, ctx) => {
       await handleSessionStart(pi, event, ctx);
     });

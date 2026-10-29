@@ -3,9 +3,11 @@ import { createMmrModeController } from "./mode-controller.js";
 import { registerMmrCommands } from "./command-registration.js";
 import { registerMmrLifecycleHooks } from "./lifecycle-hooks.js";
 import { registerMmrLiveRegistry } from "./live-registry.js";
+import { AMPI_CORE_PART, markAmpiPartLoaded } from "./parts.js";
 import { MMR_FAST_FLAG } from "./speed.js";
 
 export default function mmrCoreExtension(pi: ExtensionAPI): void {
+  markAmpiPartLoaded(pi, AMPI_CORE_PART);
   pi.registerFlag("ampi-mode", {
     description: "Start with an ampi mode: low, medium, high, ultra, free, or a registered mode's key or label",
     type: "string",

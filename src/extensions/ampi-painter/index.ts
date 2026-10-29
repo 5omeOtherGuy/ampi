@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath, registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
 
 // Pi stamps each tool with the path of the extension entrypoint that
@@ -86,6 +87,7 @@ function createPainterToolProvider(enabled: boolean, choice: () => MmrPainterMod
 
 export function createMmrPainterExtension(overrides: MmrPainterFactoryOverrides = {}) {
   return function ampiPainterExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-painter");
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrPainterSettings(process.cwd());
     let choice: MmrPainterModelChoice = MMR_PAINTER_UNCHECKED;
     registerMmrFeatureGateProvider(createPainterFeatureGateProvider(settings.enabled, () => choice));

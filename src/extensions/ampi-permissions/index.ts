@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, getAgentDir, type ToolCallEvent, type ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import type { MmrGuardedFile } from "../ampi-core/guarded-files.js";
 import { isRecord } from "../ampi-core/internal/json.js";
 import { rewriteJsonSettingsFile } from "../ampi-core/internal/settings-file.js";
@@ -122,6 +123,7 @@ function createFeatureGateProvider(getSettings: () => MmrPermissionsSettings, fl
  */
 export function createMmrPermissionsExtension(overrides: MmrPermissionsFactoryOverrides = {}) {
   return function ampiPermissionsExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-permissions");
     const agentDir = overrides.agentDir ?? getAgentDir;
     const columns = overrides.columns ?? (() => process.stdout.columns || 80);
     let settings = INERT;

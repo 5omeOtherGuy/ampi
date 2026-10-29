@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { registerMmrConfigFlowSection } from "../ampi-core/config-flow-registry.js";
 import { registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
@@ -75,6 +76,7 @@ function normalizeOverrideResult(
  */
 export function createMmrWebExtension(overrides: MmrWebFactoryOverrides = {}) {
   return function mmrWebExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-web");
     const initialCwd = process.cwd();
     const initial = overrides.loadSettings
       ? normalizeOverrideResult(overrides.loadSettings(initialCwd))
