@@ -371,6 +371,7 @@ describe("ampi argv router: starting Pi", () => {
       permissions: "permissions",
       permission: "permissions",
       doctor: "doctor",
+      setup: "setup",
       review: "review",
       update: "update",
       up: "update",

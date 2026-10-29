@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath, registerAmpiOwnedTool } from "../ampi-core/owned-tools.js";
 
 // Pi stamps every tool registered through `pi.registerTool` with the
@@ -68,6 +69,7 @@ export function registerMmrPatchProviders(registry: { registerProvider(provider:
 export const registerAmpiPatchProviders = registerMmrPatchProviders;
 
 export default function ampiPatchExtension(pi: ExtensionAPI): void {
+  markAmpiPartLoaded(pi, "ampi-patch");
   // Mark apply_patch as ampi-owned before registering it with Pi so the
   // free-mode baseline can drop it.
   registerAmpiOwnedTool("apply_patch");

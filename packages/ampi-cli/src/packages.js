@@ -9,6 +9,17 @@ export const AMPI_PACKAGE_NAME = "@skippermissions/ampi";
 const AMPI_NPM_SOURCE = /^npm:@skippermissions\/ampi(?:@.*)?$/;
 /** ampi's GitHub repository in any form Pi accepts (`git:`, `https:`, `ssh:`, `git@`), with or without a ref. */
 const AMPI_GIT_SOURCE = /github\.com[/:]5omeOtherGuy\/ampi(?:\.git)?(?:@[^/]*)?\/?$/i;
+/**
+ * Whether a package source names ampi on npm or GitHub, with or without a
+ * version or ref; a local path is ampi only if its package is.
+ *
+ * @param {string} source
+ * @returns {boolean}
+ */
+export function isAmpiPackageSource(source) {
+  return AMPI_NPM_SOURCE.test(source) || AMPI_GIT_SOURCE.test(source);
+}
+
 /** Sources Pi resolves itself instead of reading a local path. */
 const REMOTE_SOURCE = /^(?:npm:|git:|git@|https?:|ssh:)/;
 
@@ -91,7 +102,9 @@ export function locateAmpiPackage(cliRoot) {
  * Whether the bin should hand ampi to Pi itself. Pi already loads ampi when a
  * `-e` argument names it, or, unless `--no-extensions` is given, when its
  * settings or extension directories provide it; loading it a second time would
- * register every ampi tool, command and flag twice.
+ * register every ampi tool, command and flag twice. Settings whose filter
+ * leaves out some or all of ampi's parts (`ampi setup`) count too, so the
+ * parts the user turned off stay off.
  *
  * @param {AmpiLoadInput} input
  * @returns {AmpiLoadDecision}
@@ -101,7 +114,7 @@ export function decideAmpiLoad({ piArgs, pi, cwd, packageNameAt }) {
   const options = end === -1 ? piArgs : piArgs.slice(0, end);
   /** @param {string} source */
   const isAmpiSource = (source) => {
-    if (AMPI_NPM_SOURCE.test(source) || AMPI_GIT_SOURCE.test(source)) return true;
+    if (isAmpiPackageSource(source)) return true;
     const location = REMOTE_SOURCE.test(source) ? pi.cachedPathOf(source) : path.resolve(cwd, source);
     return location !== undefined && packageNameAt(location) === AMPI_PACKAGE_NAME;
   };
@@ -113,12 +126,13 @@ export function decideAmpiLoad({ piArgs, pi, cwd, packageNameAt }) {
     }
   }
   if (options.includes("--no-extensions") || options.includes("-ne")) return { load: true };
-  for (const entry of pi.enabled) {
+  // A part the settings filter out still means Pi has ampi: the command must not bring those parts back.
+  for (const entry of [...pi.enabled, ...(pi.disabled ?? [])]) {
     if (path.isAbsolute(entry.path) && packageNameAt(entry.path) === AMPI_PACKAGE_NAME) {
       return { load: false, reason: "pi", source: entry.source };
     }
   }
-  const missing = pi.missing.find((source) => AMPI_NPM_SOURCE.test(source) || AMPI_GIT_SOURCE.test(source));
+  const missing = pi.missing.find(isAmpiPackageSource);
   if (missing !== undefined) return { load: false, reason: "pi", source: missing };
   return { load: true };
 }

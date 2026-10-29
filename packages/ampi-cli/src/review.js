@@ -292,7 +292,7 @@ export async function runReviewCommand(argv, host) {
 async function tooOldMessage(host) {
   const ampi = await host.locateAmpi();
   if (ampi !== undefined && existsSync(path.join(ampi.root, REVIEW_RUN_ENTRY))) {
-    return "review failed: review needs ampi-workers, which the ampi that Pi loads does not run; check the ampi entry in Pi's settings.";
+    return "review failed: review needs ampi-workers, which the ampi that Pi loads does not run; switch it on with ampi setup --add workers.";
   }
   const which = ampi?.version === undefined ? "the ampi package" : `ampi ${ampi.version}`;
   return `${which} is too old for review; update @skippermissions/ampi (or ampi-cli).`;

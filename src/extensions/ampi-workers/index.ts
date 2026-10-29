@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import { registerAmpiOwnedExtensionPath } from "../ampi-core/owned-tools.js";
 import { getMmrSubagentState, registerMmrFeatureGateProvider, registerMmrToolProvider } from "../ampi-core/runtime.js";
 import { parseBoolEnv, readPreferredEnv } from "../ampi-core/internal/env.js";
@@ -71,6 +72,7 @@ export interface MmrWorkersFactoryOverrides {
  */
 export function createMmrWorkersExtension(overrides: MmrWorkersFactoryOverrides = {}) {
   return function ampiWorkersExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-workers");
     // Register concrete subagent prompt builders against ampi-core's
     // prompt-assembly registry before any subagent worker can be
     // resolved. Idempotent across reloads.

@@ -8,7 +8,8 @@ Use this page as the user-facing map for `ampi`: AMP Code but in Pi Agent. The r
 | --- | --- |
 | Understand the AMP Code parity posture | [`../README.md`](../README.md) |
 | Learn the core commands and tools | [`quick-reference.md`](quick-reference.md) |
-| Install and verify the package | [`../README.md#quick-start`](../README.md#quick-start) |
+| Install and verify the package | [`../README.md#install`](../README.md#install) |
+| Load only some parts of ampi | [`../README.md#choose-the-parts`](../README.md#choose-the-parts) |
 | Pick the right mode | [`../README.md#modes`](../README.md#modes) |
 | Pick the right tool or subagent | [`../README.md#tools-and-subagents`](../README.md#tools-and-subagents) |
 | Diagnose model/tool resolution | [`troubleshooting.md`](troubleshooting.md) |

@@ -282,7 +282,7 @@ describe("ampi doctor: output and exit status", () => {
     assert.deepEqual(Object.keys(document), ["checks"]);
     assert.deepEqual(
       document.checks.map((check) => [check.id, check.status]),
-      [["node", "ok"], ["pi", "ok"], ["ampi", "ok"], ["agent-dir", "ok"], ["tools", "warn"], ["git", "warn"], ["models", "ok"], ["ampi-data", "ok"]],
+      [["node", "ok"], ["pi", "ok"], ["ampi", "ok"], ["parts", "ok"], ["agent-dir", "ok"], ["tools", "warn"], ["git", "warn"], ["models", "ok"], ["ampi-data", "ok"]],
     );
     for (const check of document.checks) {
       assert.deepEqual(Object.keys(check), check.status === "ok" ? ["id", "status", "summary"] : ["id", "status", "summary", "hint"], check.id);
@@ -295,10 +295,10 @@ describe("ampi doctor: output and exit status", () => {
     assert.equal(await runDoctorCommand([], host), 1);
     const lines = out.join("").split("\n");
     assert.equal(lines[0], "fail  node       Node.js 20.0.0 is older than ampi-cli needs (>=22.19.0)");
-    assert.equal(lines[4], "warn  tools      rg not found, fd not found");
-    assert.match(lines[3], /^ok {4}agent-dir {2}/);
-    assert.equal(lines[8], "");
-    assert.deepEqual(lines.slice(9).map((line) => line.split(":")[0]), ["node", "tools", "git", ""]);
+    assert.equal(lines[5], "warn  tools      rg not found, fd not found");
+    assert.match(lines[4], /^ok {4}agent-dir {2}/);
+    assert.equal(lines[9], "");
+    assert.deepEqual(lines.slice(10).map((line) => line.split(":")[0]), ["node", "tools", "git", ""]);
     assert.doesNotMatch(out.join(""), /\u001b\[/);
   });
 

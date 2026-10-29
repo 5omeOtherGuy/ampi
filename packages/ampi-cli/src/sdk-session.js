@@ -44,7 +44,7 @@ export async function locateSessionAmpi(pi, cwd) {
   const packageNameAt = (start) => readPackageAt(start)?.name;
   const decision = decideAmpiLoad({ piArgs: [], pi: sources, cwd, packageNameAt });
   if (decision.load) return { load: true, ampi: locateAmpiPackage(CLI_ROOT) };
-  const entry = sources.enabled.find((candidate) => packageNameAt(candidate.path) === AMPI_PACKAGE_NAME);
+  const entry = [...sources.enabled, ...sources.disabled].find((candidate) => packageNameAt(candidate.path) === AMPI_PACKAGE_NAME);
   return { load: false, ampi: entry ? readPackageAt(entry.path) : undefined };
 }
 

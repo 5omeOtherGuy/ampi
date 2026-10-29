@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { after, afterEach, describe, it } from "node:test";
+import { after, afterEach, before, describe, it } from "node:test";
 import { KeybindingsManager, stripTerminalSequences, TuiMainScreen } from "@earendil-works/pi-tui";
 import { isolateAnimationEnv, setNoAnimation } from "./helpers/animation-env.mjs";
 import { cleanupLoadedSource, importSource } from "./helpers/load-src.mjs";
-import { createMockExtensionContext, createMockPi } from "./helpers/pi-stub.mjs";
+import { createMockExtensionContext, createMockPi, markAmpiCoreLoaded } from "./helpers/pi-stub.mjs";
 
 after(cleanupLoadedSource);
+before(markAmpiCoreLoaded);
 isolateAnimationEnv();
 
 const repoRoot = path.resolve(import.meta.dirname, "..");

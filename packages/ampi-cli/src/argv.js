@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { isLogLevel } from "./log.js";
 
 /**
- * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "permissions" | "doctor" | "review" | "update" | "dev" | "completions" | "complete" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
+ * @typedef {"help" | "version" | "threads" | "tools" | "skill" | "mcp" | "config" | "permissions" | "doctor" | "setup" | "review" | "update" | "dev" | "completions" | "complete" | "pi" | "pi-command" | "app" | "app-worker" | "top" | "error"} AmpiCommand
  *
  * @typedef {object} AmpiOptions
  * @property {string} [mode] ampi mode from `-m`/`--mode`, forwarded as `--ampi-mode`.
@@ -43,6 +43,7 @@ import { isLogLevel } from "./log.js";
  * @property {string[]} [mcpArgs] The command line after `mcp`, when `command` is `"mcp"`.
  * @property {string[]} [permissionsArgs] The command line after `permissions` (or `permission`), when `command` is `"permissions"`.
  * @property {string[]} [doctorArgs] The command line after `doctor`, when `command` is `"doctor"`.
+ * @property {string[]} [setupArgs] The command line after `setup`, when `command` is `"setup"`.
  * @property {string[]} [reviewArgs] The command line after `review`, when `command` is `"review"`.
  * @property {string[]} [updateArgs] The command line after `update` (or `up`), when `command` is `"update"`.
  * @property {string[]} [completionsArgs] The command line after `completions`, when `command` is `"completions"`.
@@ -79,6 +80,7 @@ export const AMPI_COMMANDS = Object.freeze({
   mcp: aliasList(),
   permissions: aliasList("permission"),
   doctor: aliasList(),
+  setup: aliasList(),
   review: aliasList(),
   update: aliasList("up"),
   config: aliasList(),
@@ -296,6 +298,8 @@ function routeCommand(args) {
       return { command: "permissions", piArgs: [], permissionsArgs: args.slice(1) };
     case "doctor":
       return { command: "doctor", piArgs: [], doctorArgs: args.slice(1) };
+    case "setup":
+      return { command: "setup", piArgs: [], setupArgs: args.slice(1) };
     case "review":
       return { command: "review", piArgs: [], reviewArgs: args.slice(1) };
     case "update":
@@ -597,6 +601,8 @@ Commands:
   doctor [--json]               Check Node.js, Pi, ampi, Pi's configuration, rg, fd, git, model
                                 credentials and ampi's data files, and say how to fix problems;
                                 installs nothing
+  setup [--parts <parts>]       Choose which parts of ampi Pi loads, in a terminal or with
+                                --parts, --add, --remove or --all; ampi setup --help has more
   update, up [--target-version <v>] [--porcelain]
                                 Update the ampi command (an npm install -g) to the latest or
                                 the given version; ampi update --help has more

@@ -165,6 +165,8 @@ export async function createPiModelLookup(pi) {
  * @typedef {object} PiExtensionSources
  * @property {{ path: string, source: string }[]} enabled Extension entries Pi loads from its user and
  *   project settings (`packages` and `extensions`) and its extension directories.
+ * @property {{ path: string, source: string }[]} disabled Extension entries of those sources that a
+ *   package filter in the settings leaves out (see "Select package resources" in Pi's docs/packages.md).
  * @property {string[]} missing Package sources in the settings that are not installed yet; Pi installs
  *   them when it starts.
  * @property {(source: string) => string | undefined} cachedPathOf Where Pi keeps a `-e` package source
@@ -207,11 +209,11 @@ export async function listPiExtensionSources(pi, cwd, { readOnly = false, projec
   }
   /** @type {{ path: string, enabled: boolean, metadata: { source: string, origin: string } }[]} */
   const extensions = resolved.extensions;
+  // A package names its settings source; a file or directory entry names itself.
+  const describe = (/** @type {typeof extensions[number]} */ entry) => ({ path: entry.path, source: entry.metadata.origin === "package" ? entry.metadata.source : entry.path });
   return {
-    // A package names its settings source; a file or directory entry names itself.
-    enabled: extensions
-      .filter((entry) => entry.enabled)
-      .map((entry) => ({ path: entry.path, source: entry.metadata.origin === "package" ? entry.metadata.source : entry.path })),
+    enabled: extensions.filter((entry) => entry.enabled).map(describe),
+    disabled: extensions.filter((entry) => !entry.enabled).map(describe),
     missing,
     cachedPathOf: (source) => {
       try {
@@ -567,6 +569,79 @@ export async function createPiSessionServices(pi, { cwd, agentDir, extensionPath
       ...errors.map(({ path: file, error }) => ({ type: "error", message: `Failed to load extension "${file}": ${error}` })),
     ],
   };
+}
+
+/**
+ * @typedef {object} PiPackageSettings The `packages` list of one of Pi's settings files, read and
+ *   written through Pi's own settings and package managers, as `pi install` and `pi config` do.
+ * @property {string} file The settings file.
+ * @property {() => import("./parts.js").PiPackageEntry[]} packages The list as it is now.
+ * @property {(source: string) => string | undefined} installedPathOf Where Pi keeps a source of this list,
+ *   when it is installed.
+ * @property {(source: string) => Promise<void>} install Install a source and add it to the list, as
+ *   `pi install` does.
+ * @property {(packages: import("./parts.js").PiPackageEntry[]) => Promise<void>} save Replace the list.
+ */
+
+/**
+ * The package list of Pi's user settings, or of the project's in `cwd`.
+ * Writing the project's needs a project Pi trusts; Pi refuses otherwise.
+ * Throws when the settings file does not parse, so nothing overwrites it.
+ *
+ * @param {any} pi
+ * @param {string} cwd
+ * @param {"user" | "project"} scope
+ * @returns {PiPackageSettings}
+ */
+export function openPiPackageSettings(pi, cwd, scope) {
+  const settingsManager = piSettingsManager(pi, cwd);
+  const file = piSettingsPath(pi, cwd, scope);
+  const throwErrors = () => {
+    /** @type {{ scope: string, error: Error }[]} */
+    const errors = settingsManager.drainErrors();
+    const own = errors.find((entry) => entry.scope === (scope === "project" ? "project" : "global"));
+    if (own !== undefined) throw new Error(`${file}: ${own.error.message}`);
+  };
+  throwErrors();
+  const packageManager = new pi.DefaultPackageManager({ cwd, agentDir: pi.getAgentDir(), settingsManager });
+  return {
+    file,
+    packages: () => [...((scope === "project" ? settingsManager.getProjectSettings() : settingsManager.getGlobalSettings()).packages ?? [])],
+    installedPathOf: (source) => {
+      try {
+        return packageManager.getInstalledPath(source, scope);
+      } catch {
+        return undefined;
+      }
+    },
+    install: async (source) => {
+      await packageManager.installAndPersist(source, { local: scope === "project" });
+      await settingsManager.flush();
+      throwErrors();
+    },
+    save: async (packages) => {
+      if (scope === "project") settingsManager.setProjectPackages(packages);
+      else settingsManager.setPackages(packages);
+      await settingsManager.flush();
+      throwErrors();
+    },
+  };
+}
+
+/**
+ * The extension files a session runtime loaded, from its resource loader;
+ * undefined when the runtime does not say.
+ *
+ * @param {any} runtime Pi's `AgentSessionRuntime`, as createAmpiSdkSession returns it.
+ * @returns {string[] | undefined}
+ */
+export function listSessionExtensionPaths(runtime) {
+  try {
+    const extensions = runtime?.services?.resourceLoader?.getExtensions?.().extensions;
+    return Array.isArray(extensions) ? extensions.map((/** @type {{ path: string }} */ extension) => extension.path) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

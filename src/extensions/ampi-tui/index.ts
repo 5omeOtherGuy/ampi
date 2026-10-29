@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
+import { markAmpiPartLoaded } from "../ampi-core/parts.js";
 import type { TUI } from "@earendil-works/pi-tui";
 import { registerMmrChromeOwner } from "../ampi-core/chrome-owner.js";
 import { getMmrCommands } from "../ampi-core/command-registry.js";
@@ -31,6 +32,7 @@ export interface MmrTuiFactoryOverrides {
 
 export function createMmrTuiExtension(overrides: MmrTuiFactoryOverrides = {}) {
   return function ampiTuiExtension(pi: ExtensionAPI): void {
+    markAmpiPartLoaded(pi, "ampi-tui");
     const settings = overrides.loadSettings ? overrides.loadSettings() : loadMmrTuiSettings(process.cwd());
     // Disabled: register nothing, so ampi-core's footer shows as before.
     if (!settings.enabled) return;

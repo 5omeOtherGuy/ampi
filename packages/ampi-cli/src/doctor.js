@@ -10,6 +10,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { liveRegistryDir } from "./live-registry.js";
 import { AMPI_PACKAGE_NAME, decideAmpiLoad, locateAmpiPackage, readPackageAt } from "./packages.js";
+import { listAmpiParts, selectionProblems } from "./parts.js";
 import { countPiCredentialedModels, listPiExtensionSources, piAgentDir, piBinDir, readPiSettingsErrors } from "./pi-compat.js";
 import { readThreadIndex, threadIndexPath } from "./thread-index.js";
 import { satisfiesRange } from "./versions.js";
@@ -60,6 +61,7 @@ import { satisfiesRange } from "./versions.js";
  * @property {{ version: string, range: string | undefined, rangeOwner: string } | undefined} pi Undefined
  *   when Pi cannot be loaded.
  * @property {AmpiFacts} ampi
+ * @property {PartsFacts | undefined} parts Undefined while the ampi that loads is unknown or not installed.
  * @property {AgentDirFacts | undefined} agentDir
  * @property {{ binDir: string | undefined, rg: ToolLocation | undefined, fd: ToolLocation | undefined }} tools
  * @property {string | undefined} git Where git is on PATH.
@@ -73,6 +75,12 @@ import { satisfiesRange } from "./versions.js";
  * @property {{ source: string, version?: string, root?: string } | undefined} pi The ampi Pi loads from its
  *   settings or extension directories; no root when it is not installed yet.
  * @property {string | undefined} error Why Pi's sources could not be read.
+ *
+ * @typedef {object} PartsFacts
+ * @property {import("./parts.js").AmpiPart[]} parts The parts of the ampi that loads, in load order.
+ * @property {Set<string>} selected The parts that load.
+ * @property {boolean} fromSettings Whether the ampi entry in Pi's settings decides them; otherwise ampi-cli
+ *   loads its own ampi with every part.
  *
  * @typedef {object} AgentDirFacts
  * @property {string} path
@@ -108,6 +116,8 @@ Checks, in this order:
   pi          the installed Pi against the Pi versions the loading ampi supports
   ampi        which ampi loads: the one in Pi's settings or extension directories,
               or the one that comes with ampi-cli
+  parts       which of ampi's parts load (ampi setup chooses them), and that core
+              and every part another one needs are among them
   agent-dir   Pi's configuration directory exists and is writable, and its
               settings.json and the project's .pi/settings.json parse
   tools       rg and fd (or fdfind), in Pi's bin directory or on PATH
@@ -248,18 +258,30 @@ export async function gatherDoctorFacts(host) {
   const own = locateAmpiPackage(host.cliRoot);
   /** @type {AmpiFacts} */
   const ampi = { own: own === undefined ? undefined : { version: own.version, root: own.root }, pi: undefined, error: undefined };
+  /** @type {PartsFacts | undefined} */
+  let parts;
   if (pi !== undefined) {
     try {
       const sources = await pi.extensionSources();
       const decision = decideAmpiLoad({ piArgs: [], pi: sources, cwd: host.cwd, packageNameAt: (start) => readPackageAt(start)?.name });
       if (!decision.load) {
-        const entry = sources.enabled.find((candidate) => candidate.source === decision.source && path.isAbsolute(candidate.path));
+        const entry = [...sources.enabled, ...(sources.disabled ?? [])].find((candidate) => candidate.source === decision.source && path.isAbsolute(candidate.path));
         const found = entry === undefined ? undefined : readPackageAt(entry.path);
         ampi.pi = found?.name === AMPI_PACKAGE_NAME ? { source: decision.source, version: found.version, root: found.root } : { source: decision.source };
+        const root = ampi.pi.root;
+        if (root !== undefined) {
+          const list = listAmpiParts(readManifest(root));
+          const enabled = new Set(sources.enabled.map((entry) => entry.path));
+          parts = { parts: list, selected: new Set(list.filter((part) => enabled.has(path.join(root, part.entry))).map((part) => part.name)), fromSettings: true };
+        }
       }
     } catch (error) {
       ampi.error = messageOf(error);
     }
+  }
+  if (ampi.pi === undefined && ampi.own !== undefined) {
+    const list = listAmpiParts(readManifest(ampi.own.root));
+    parts = { parts: list, selected: new Set(list.map((part) => part.name)), fromSettings: false };
   }
   const loaded = ampi.pi?.root ?? ampi.own?.root;
   const peers = loaded === undefined ? undefined : readManifest(loaded)?.peerDependencies;
@@ -312,6 +334,7 @@ export async function gatherDoctorFacts(host) {
             rangeOwner: loadedVersion === undefined ? "ampi" : `ampi ${loadedVersion}`,
           },
     ampi,
+    parts,
     agentDir,
     tools: { binDir, rg: findTool("rg", ["rg"]), fd: findTool("fd", ["fd", "fdfind"]) },
     git: findOnPath("git", host),
@@ -366,7 +389,7 @@ function readLive(fs, dir) {
  * @returns {DoctorCheck[]}
  */
 export function buildDoctorChecks(facts) {
-  const checks = [checkNode(facts.node), checkPi(facts.pi), checkAmpi(facts.ampi), checkAgentDir(facts.agentDir), checkTools(facts.tools), checkGit(facts.git), checkModels(facts.models), checkAmpiData(facts.ampiData)];
+  const checks = [checkNode(facts.node), checkPi(facts.pi), checkAmpi(facts.ampi), checkParts(facts.parts), checkAgentDir(facts.agentDir), checkTools(facts.tools), checkGit(facts.git), checkModels(facts.models), checkAmpiData(facts.ampiData)];
   if (facts.terminal !== undefined) checks.push(checkTerminal(facts.terminal));
   return checks;
 }
@@ -415,6 +438,22 @@ function checkAmpi({ own, pi, error }) {
   const summary = `ampi ${own.version ?? "(no version)"} that comes with ampi-cli loads (${own.root})`;
   if (error !== undefined) return result("ampi", "warn", `${summary}; Pi's packages could not be read: ${error}`, "Check the packages and extensions entries of Pi's settings.");
   return result("ampi", "ok", summary);
+}
+
+/** @param {PartsFacts | undefined} facts */
+function checkParts(facts) {
+  if (facts === undefined) return result("parts", "ok", "the parts that load are known once ampi is installed");
+  const { parts, selected, fromSettings } = facts;
+  const on = parts.filter((part) => selected.has(part.name)).map((part) => part.name);
+  const off = parts.filter((part) => !selected.has(part.name)).map((part) => part.name);
+  const summary = `${on.length} of ${parts.length} parts load${on.length > 0 ? ` (${on.join(", ")})` : ""}${off.length > 0 ? `; off: ${off.join(", ")}` : ""}`;
+  const problems = selectionProblems(selected, parts);
+  if (problems.length > 0) {
+    const status = problems.some((problem) => problem.severity === "fail") ? "fail" : "warn";
+    return result("parts", status, `${summary}; ${problems.map((problem) => problem.message).join("; ")}`, "Run ampi setup to choose the parts again: it keeps core and every part another one needs on.");
+  }
+  if (!fromSettings) return result("parts", "ok", `${summary}: ampi is not in Pi's settings, so ampi-cli loads all of them (ampi setup chooses)`);
+  return result("parts", "ok", summary);
 }
 
 /** @param {AgentDirFacts | undefined} dir */

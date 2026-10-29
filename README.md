@@ -60,6 +60,28 @@ Prefer git, or want an unreleased commit? Use the git source (pin with `@<ref>`)
 pi install git:github.com/5omeOtherGuy/ampi
 ```
 
+### Choose the parts
+
+ampi is a set of [extensions](#extensions), its parts, and a plain install loads all of them. To load only some, pick them with `ampi setup` from the [`ampi` command](#the-ampi-command); `npx` runs it without a global install, and it installs ampi first when Pi's settings have none:
+
+```bash
+npx @skippermissions/ampi-cli setup                       # list the parts and pick them in the terminal
+npx @skippermissions/ampi-cli setup --parts workers,tui,threads   # core plus exactly these
+ampi setup --remove gui,painter                           # switch parts off, keep the rest
+ampi setup --list                                         # which parts are on
+ampi setup --local --parts workers                        # this project's .pi/settings.json only
+```
+
+The parts are `core`, `session-fallback`, `patch`, `shell`, `tasks`, `web`, `painter`, `github`, `workers`, `custom-subagents`, `permissions`, `tui`, `threads`, `gui` and `history`, one per extension in the table below. `core` is always on: the other parts need it. A part another one needs comes along (`custom-subagents` needs `workers`), and a few use another part when it is there: `librarian` needs `github`, `ampi review` needs `workers`, `ampi app` needs `gui`, and `read_session` and thread titles run on `workers`.
+
+The choice is Pi's own package filter on the ampi entry in Pi's settings, so Pi leaves the other parts out entirely, with or without the `ampi` command, and subagent processes leave them out too. `pi config` shows and edits the same switches, and a hand-written filter works as well (see "Select package resources" in Pi's `docs/packages.md`):
+
+```json
+{ "packages": [{ "source": "npm:@skippermissions/ampi", "extensions": ["-src/extensions/ampi-gui/index.ts"] }] }
+```
+
+Pi applies a change when it starts, or after `/reload` in a running session. `ampi doctor` shows which parts load and fails when `core` is off; parts that start without `core` warn in the session. Parts that are loaded still have their own switches: web, GitHub, history, painter, permissions and the web GUI stay off until you enable them.
+
 ### The `ampi` command
 
 [`@skippermissions/ampi-cli`](packages/ampi-cli/README.md) adds an `ampi` command with Amp-compatible short flags such as `-m high`. It brings its own Pi and ampi and passes every other option to Pi:
@@ -189,7 +211,7 @@ A registered provider outside this list still routes; it just sorts into the las
 
 ## Extensions
 
-The package ships as a set of Pi extensions; the network, history and web GUI ones are off until you enable them.
+The package ships as a set of Pi extensions; the network, history and web GUI ones are off until you enable them. [`ampi setup`](#choose-the-parts) chooses which of them load at all; "Default" below is what a loaded extension does without configuration.
 
 | Extension | Default | What it adds |
 | --- | --- | --- |

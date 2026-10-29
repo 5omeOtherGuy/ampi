@@ -25,7 +25,7 @@ const packageNameAt = (start) => {
 };
 const CACHED = new Map([["git:github.com/someone/ampi-fork", "/agent/tmp/extensions/git-github.com/1a2b3c4d/someone/ampi-fork"]]);
 /** What Pi reports: enabled extension entries, sources it would install, cached `-e` packages. */
-const piSources = ({ enabled = [], missing = [] } = {}) => ({ enabled, missing, cachedPathOf: (source) => CACHED.get(source) });
+const piSources = ({ enabled = [], disabled = [], missing = [] } = {}) => ({ enabled, disabled, missing, cachedPathOf: (source) => CACHED.get(source) });
 const decide = (piArgs, pi = piSources()) => decideAmpiLoad({ piArgs, pi, cwd: CWD, packageNameAt });
 
 describe("ampi load guard", () => {
@@ -43,6 +43,13 @@ describe("ampi load guard", () => {
     ]) {
       assert.deepEqual(decide([], piSources({ enabled: [entry] })), { load: false, reason: "pi", source: entry.source });
     }
+  });
+
+  it("leaves ampi to Pi when the settings filter out every part of it, so ampi setup's choice holds", () => {
+    const off = { path: "/agent/npm/node_modules/@skippermissions/ampi/src/extensions/ampi-gui/index.ts", source: "npm:@skippermissions/ampi" };
+    assert.deepEqual(decide([], piSources({ disabled: [off] })), { load: false, reason: "pi", source: off.source });
+    const other = { path: "/agent/npm/node_modules/pi-other/index.ts", source: "npm:pi-other" };
+    assert.deepEqual(decide([], piSources({ disabled: [other] })), { load: true });
   });
 
   it("leaves ampi to Pi when the settings `extensions` key or an extension directory provides it", () => {

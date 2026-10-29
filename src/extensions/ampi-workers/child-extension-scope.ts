@@ -13,7 +13,9 @@
  *
  *   1. ampi-core (always) — owns the `--ampi-subagent` activation guard, the tool
  *      allowlist, model routing, and thinking policy.
- *   2. The ampi extensions that own the worker's declared tools.
+ *   2. The ampi extensions that own the worker's declared tools, among those
+ *      the parent loaded: a part the user left out of their selection in
+ *      Pi's settings is not loaded into the child either.
  *   3. EVERY other currently-loaded extension (external provider packages,
  *      unknown third-party tool/command extensions). These are kept verbatim
  *      because the parent resolves the worker's model route against its full
@@ -37,6 +39,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isRecord } from "../ampi-core/internal/json.js";
+import { AMPI_CORE_PART, getLoadedAmpiParts } from "../ampi-core/parts.js";
 
 /**
  * Per-profile set of ampi extension directory names the child MUST keep
@@ -156,6 +159,12 @@ export interface ResolveMmrChildExtensionScopeInput {
   location: MmrChildExtensionLocation;
   fileExists?: (candidate: string) => boolean;
   debugCaptureActive?: boolean;
+  /**
+   * The ampi parts the parent loaded (see `ampi-core/parts.ts`). When it
+   * holds ampi-core, keep-set parts outside it are left out: a part the
+   * user turned off in Pi's settings stays off in the child too.
+   */
+  loadedParts?: ReadonlySet<string>;
 }
 
 /**
@@ -170,8 +179,12 @@ export interface ResolveMmrChildExtensionScopeInput {
 export function resolveMmrChildExtensionScope(
   input: ResolveMmrChildExtensionScopeInput,
 ): readonly string[] | undefined {
-  const keepNames = MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS[input.profileName];
-  if (!keepNames) return undefined;
+  const profileKeepNames = MMR_SUBAGENT_CHILD_KEEP_EXTENSIONS[input.profileName];
+  if (!profileKeepNames) return undefined;
+  const loadedParts = input.loadedParts;
+  const keepNames = loadedParts?.has(AMPI_CORE_PART)
+    ? profileKeepNames.filter((name) => name === AMPI_CORE_PART || loadedParts.has(name))
+    : profileKeepNames;
   if (input.debugCaptureActive) return undefined;
 
   const fileExists = input.fileExists ?? existsSync;
@@ -235,6 +248,8 @@ export interface ComputeMmrChildExtensionScopeInput {
   location?: MmrChildExtensionLocation;
   fileExists?: (candidate: string) => boolean;
   debugCaptureActive?: boolean;
+  /** Defaults to the parts this process loaded. */
+  loadedParts?: ReadonlySet<string>;
 }
 
 /**
@@ -263,6 +278,7 @@ export function computeMmrChildExtensionScope(
       location,
       ...(input.fileExists ? { fileExists: input.fileExists } : {}),
       debugCaptureActive: input.debugCaptureActive ?? isMmrDebugCaptureActive(),
+      loadedParts: input.loadedParts ?? getLoadedAmpiParts(),
     });
   } catch {
     return undefined;

@@ -244,7 +244,8 @@ The optional `ampi` command (`npm i -g @skippermissions/ampi-cli`) starts Pi wit
 | Turn colour off or on | `ampi --no-color -x "..."` | Sets `NO_COLOR=1` (`--color`: `FORCE_COLOR=1`) for Pi and the tools it runs; Pi's text outside the terminal UI follows the flag |
 | See versions | `ampi version` | ampi-cli, ampi and Pi |
 | Complete ampi's commands on Tab | `source <(ampi completions bash)` | Also `zsh`, `fish` and `pwsh`; `ampi completions --help` shows where each goes. Completes commands, options, modes, colours, this directory's session ids, skill and MCP server names |
-| Check the setup | `ampi doctor` | Node.js, Pi, ampi, Pi's configuration directory and settings, `rg`, `fd`, `git`, credentials, ampi's data files; `ok`/`warn`/`fail` with hints, `--json`; exit 1 on a `fail`; installs and writes nothing |
+| Choose which parts of ampi load | `ampi setup` | Lists the parts and asks in a terminal; `--parts <list>` (core plus these), `--add`, `--remove`, `--all`, `--list`, `--local` for the project; writes Pi's package filter on the ampi entry and installs ampi first when the settings have none |
+| Check the setup | `ampi doctor` | Node.js, Pi, ampi, the parts that load, Pi's configuration directory and settings, `rg`, `fd`, `git`, credentials, ampi's data files; `ok`/`warn`/`fail` with hints, `--json`; exit 1 on a `fail`; installs and writes nothing |
 | Update the `ampi` command | `ampi update` | `npm i -g` installs only, with the Pi and ampi it brings; `--target-version <v>`, `--porcelain`; `ampi update --extensions` and other Pi update arguments still go to Pi |
 | See Pi's options | `ampi --pi-help` | Includes the `--ampi-*` flags |
 
