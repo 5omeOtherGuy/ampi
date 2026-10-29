@@ -2,6 +2,22 @@
 
 A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
 
+> **Read this first.** ampi is still very unfinished, and I do not know when or how I will keep working
+> on it. If you look into it anyway, the most interesting part is probably the system prompts: the
+> mode prompts in [`src/extensions/ampi-core/prompt-content.ts`](src/extensions/ampi-core/prompt-content.ts)
+> (how they are spliced into Pi's prompt: [`docs/prompt-provenance.md`](docs/prompt-provenance.md)), the
+> worker prompts in [`src/extensions/ampi-workers/profiles/prompts.ts`](src/extensions/ampi-workers/profiles/prompts.ts)
+> and [`src/extensions/ampi-workers/builtin-workers/oracle-prompt.ts`](src/extensions/ampi-workers/builtin-workers/oracle-prompt.ts),
+> and the subagent prompt assembly described in [`docs/subagent-framework.md`](docs/subagent-framework.md).
+>
+> **Looking for the real Amp with your Claude subscription?** ampi is a Pi harness, not Amp. If you
+> want to run [Amp](https://ampcode.com) itself and have its native modes bill their Claude models to
+> your Claude Pro/Max subscription (not Amp's own "Claude Subscription" option, which only calls
+> Claude Code as a separate process inside Amp), use
+> [amp-claude-native](https://github.com/5omeOtherGuy/amp-claude-native) instead: a small proxy
+> behind Amp's Custom URL model provider that keeps Amp's modes and models unchanged and only moves
+> the billing.
+
 Status: released. Published on npm as `@skippermissions/ampi` with SemVer versions; while ampi is `0.x`, a minor release may contain breaking changes, listed in [`CHANGELOG.md`](CHANGELOG.md).
 
 [![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
@@ -159,7 +175,7 @@ The chord keys come from `ampi-tui`; rebind them under `ampi.keymap` in Pi setti
 
 ampi routes against whatever providers your Pi install registers. The built-in priority order groups them so subscriptions win first:
 
-- **Subscription / OAuth:** `claude-subscription`, `openai-codex`, `github-copilot`
+- **Subscription / OAuth:** `claude-subscription`, `openai-codex`, `github-copilot` (the `claude-subscription` provider is Pi's; to use the Claude subscription inside Amp itself, see [amp-claude-native](https://github.com/5omeOtherGuy/amp-claude-native))
 - **API key:** `anthropic`, `openai`, `azure`
 - **Other registered providers:** `google`, `google-vertex`, `openrouter`, `vercel-ai-gateway`
 
