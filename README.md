@@ -1,5 +1,7 @@
 # ampi
 
+![ampi logo](docs/assets/ampi-logo.png)
+
 A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
 
 > **Read this first.** ampi is still very unfinished, and I do not know when or how I will keep working
