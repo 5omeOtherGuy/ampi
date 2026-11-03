@@ -2,9 +2,9 @@
 
 A locked, mode-based coding harness for Pi Agent with deterministic multi-model routing across your providers.
 
-> **Read this first.** ampi is still very unfinished, and I do not know when or how I will keep working
-> on it. If you look into it anyway, the most interesting part is probably the system prompts: the
-> mode prompts in [`src/extensions/ampi-core/prompt-content.ts`](src/extensions/ampi-core/prompt-content.ts)
+> **Not actively maintained.** ampi is unfinished and no longer actively developed: expect no new
+> features, fixes or releases, and issues and pull requests may go unanswered. If you look into it
+> anyway, the most interesting part is probably the system prompts: the mode prompts in [`src/extensions/ampi-core/prompt-content.ts`](src/extensions/ampi-core/prompt-content.ts)
 > (how they are spliced into Pi's prompt: [`docs/prompt-provenance.md`](docs/prompt-provenance.md)), the
 > worker prompts in [`src/extensions/ampi-workers/profiles/prompts.ts`](src/extensions/ampi-workers/profiles/prompts.ts)
 > and [`src/extensions/ampi-workers/builtin-workers/oracle-prompt.ts`](src/extensions/ampi-workers/builtin-workers/oracle-prompt.ts),
@@ -18,7 +18,7 @@ A locked, mode-based coding harness for Pi Agent with deterministic multi-model 
 > behind Amp's Custom URL model provider that keeps Amp's modes and models unchanged and only moves
 > the billing.
 
-Status: released. Published on npm as `@skippermissions/ampi` with SemVer versions; while ampi is `0.x`, a minor release may contain breaking changes, listed in [`CHANGELOG.md`](CHANGELOG.md).
+Status: not actively maintained. Published on npm as `@skippermissions/ampi` with SemVer versions; while ampi is `0.x`, a minor release may contain breaking changes, listed in [`CHANGELOG.md`](CHANGELOG.md).
 
 [![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@skippermissions/ampi)](https://www.npmjs.com/package/@skippermissions/ampi)
