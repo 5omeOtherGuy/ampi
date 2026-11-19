@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Worktree setup helper. Points a task worktree's `node_modules` at the primary
-# checkout's install via a relative symlink, so parallel worktrees share one
+# Worktree setup helper. Points a task worktree (~/Work/.worktrees/ampi/<slug>)
+# `node_modules` at the primary checkout's install via a relative symlink, so parallel worktrees share one
 # 300+ MB install instead of each running `npm ci`. Source stays isolated per
 # worktree; only the dependency tree is shared.
 #

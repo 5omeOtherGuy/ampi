@@ -4,7 +4,7 @@
 # with a single call that emits one status line on success.
 #
 # Run from OUTSIDE the worktree being removed (the primary checkout or any
-# sibling worktree). `sync:primary` is always applied to the resolved primary
+# other worktree). `sync:primary` is always applied to the resolved primary
 # checkout, so this works regardless of where it is invoked.
 #
 # Safety:
@@ -18,7 +18,7 @@
 #
 # Usage:
 #   npm run cleanup:worktree -- <worktree-path> [branch] [--force]
-#   bash scripts/worktree-cleanup.sh ../ampi-<slug> [chore/<branch>] [--force]
+#   bash scripts/worktree-cleanup.sh ~/Work/.worktrees/ampi/<slug> [chore/<branch>] [--force]
 #
 # Exit codes:
 #   0   cleaned up
@@ -72,7 +72,7 @@ if [ -d "$WT_ABS/.git" ]; then
 fi
 
 # Resolve the primary checkout so sync:primary always targets it, even when
-# cleanup runs from a sibling worktree.
+# cleanup runs from another worktree.
 COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
 [ -n "$COMMON_DIR" ] || { warn "cannot resolve git common dir"; exit 20; }
 case "$COMMON_DIR" in

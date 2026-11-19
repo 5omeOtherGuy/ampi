@@ -5,7 +5,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 ## Profile
 
 - Purpose: Pi Agent extension package (`@skippermissions/ampi` on npm) with locked modes, model routing, tools and workers.
-- Stage: released (repository standard 2026-10-18)
+- Stage: released (repository standard)
 - Gate: `npm run gate` (CI job `gate`)
 - Landing: PR, squash-merged on a green gate; agents land: yes
 - Release: release-please PR; agents release: no
@@ -18,20 +18,6 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
   - The gate has no format check: Biome's formatter is off, and turning it on would rewrite most of the tree. That is the owner's call.
   - CI keeps the `Test (Node 24.x)` check because branch protection requires it; it can go once a ruleset requires `gate`.
 
-## Where things live
-
-| Path | What |
-| --- | --- |
-| `src/extensions/<name>/` | One Pi extension per directory; `package.json` `pi.extensions` lists the registered ones in load order. `ampi-debug` is developer-only and never packed; `ampi-toolbox` is a deprecated shim. |
-| `src/index.ts`, `package.json` `exports` | Public API, including the legacy `mmr-*` subpaths. |
-| `packages/ampi-cli/` | The `@skippermissions/ampi-cli` package (the `ampi` command), published and versioned separately. |
-| `tests/*.test.mjs` | `node:test` suites. They load source through `tests/helpers/load-src.mjs`, never from `src/` directly; fixtures are in `tests/fixtures/`. |
-| `docs/` | User and contributor docs (shipped in the package, except `docs/private/`); decisions in `docs/adr/`. |
-| `scripts/gate.sh` | The gate: secret scan, lint, tests, type check, `npm pack --dry-run`. |
-| `scripts/*worktree*`, `scripts/sync-primary.sh`, `scripts/link-node-modules.sh` | Worktree workflow helpers (below). |
-| `.agents/setup` | Orb setup: Node.js check (in an Amp orb, installs Node.js 24, the CI gate's major), `npm ci`, hooks, credential presence report. Idempotent. |
-| `REPOMAP.md`, `INDEX.md` | Detailed source map and navigation. |
-
 ## Landing a change
 
 `main` changes only through squash-merged PRs, one concern per PR.
@@ -39,25 +25,24 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 1. Work in a worktree branched from `origin/main`, never on the primary checkout's `main`, which only fast-forwards:
    ```bash
    git fetch origin
-   git worktree add ../ampi-<slug> -b <type>/<slug> origin/main
-   cd ../ampi-<slug> && npm run link:node-modules   # share the primary checkout's install
+   git worktree add ~/Work/.worktrees/ampi/<slug> -b <type>/<slug> origin/main
+   cd ~/Work/.worktrees/ampi/<slug> && npm run link:node-modules   # share the primary checkout's install
    ```
    `npm run preflight` reports whether the primary checkout is behind `origin/main`.
 2. Branch `<type>/<slug>` (`<type>/<issue>-<slug>` with an issue). Commit subjects and the PR title follow Conventional Commits 1.0.
 3. Run `npm run gate` before pushing. The PR body follows `.github/pull_request_template.md`: the intent, the changed behavior, the repository constraints it touches, the evidence it works, whether a sensitive path changed, and `Fixes #n` when it resolves an issue.
-4. Changes to the profile's sensitive paths, public interfaces, security-sensitive code, auth or credential handling, install or setup, deployment, CI or release configuration, and agent policy files (`AGENTS.md`, `.agents/`, `.githooks/`) get an independent review (another agent or the owner) before merge, listed paths or not. Docs changes that alter rules or executable instructions count too. The reviewer reads the diff itself, checks the changed behavior against the repository's constraints, and records the verdict on the PR against the reviewed head commit; a later push needs a new review.
-5. Merge once the latest `gate` run on the head commit concluded `success` (skipped, cancelled or missing is not green): `gh pr merge <number> --squash --delete-branch --match-head-commit <sha>`. There is no ruleset yet, so do not use `--auto`.
-6. Afterwards: `npm run sync:primary` in the primary checkout, then `npm run cleanup:worktree -- ../ampi-<slug>`.
+4. Changes that need an independent review under the `repository-standard` skill get it before merge, recorded on the PR.
+5. Merge with `--squash --delete-branch` once `gate` on the head commit is green.
+6. Afterwards: `npm run sync:primary` in the primary checkout, then `npm run cleanup:worktree -- ~/Work/.worktrees/ampi/<slug>`.
 
 Do not edit `CHANGELOG.md`: release-please writes it from the squash-merged PR titles, so write the title in user-facing words (`feat`, `fix` and `perf` appear in the changelog; a PR body can replace its entries with a `BEGIN_COMMIT_OVERRIDE` … `END_COMMIT_OVERRIDE` block). Never merge the release PR or publish to npm.
 
 ## Rules for this repository
 
-- Tests are hermetic: no provider or network calls, no real user directories, no sleep-based timing. Credential-shaped test values are built from parts (`["AKIA", "..."].join("")`) so the secret scan never sees them.
+- Tests are hermetic: no provider or network calls, no real user directories, no sleep-based timing. They load source through `tests/helpers/load-src.mjs`, never from `src/` directly. Credential-shaped test values are built from parts (`["AKIA", "..."].join("")`) so the secret scan never sees them.
 - Keep the canonical mode keys (`low`, `medium`, `high`, `ultra`, `free`), subagent names and the legacy `mmr-*` exports and mode aliases (`rush`, `smart`, `deep`, `fable`) working.
 - `typebox` is pinned to the exact version `@earendil-works/pi-coding-agent` uses; move it only together with the Pi packages.
-- Never commit secrets, Pi session data, raw provider payloads or `ampi-debug` captures (`.pi/ampi-debug/`).
-- Do not add status or handoff files; work state lives in issues and PRs.
+- Never commit Pi session data, raw provider payloads or `ampi-debug` captures (`.pi/ampi-debug/`).
 
 ## Focused tests
 
