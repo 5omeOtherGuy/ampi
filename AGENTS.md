@@ -5,7 +5,7 @@ Guidance for coding agents working on `ampi`. Human contributors: see [`CONTRIBU
 ## Profile
 
 - Purpose: Pi Agent extension package (`@skippermissions/ampi` on npm) with locked modes, model routing, tools and workers.
-- Stage: released (repository standard 2026-10-18)
+- Stage: archived (repository standard)
 - Gate: `npm run gate` (CI job `gate`)
 - Landing: PR, squash-merged on a green gate; agents land: yes
 - Release: release-please PR; agents release: no
