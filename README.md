@@ -1,3 +1,5 @@
+Archived 2026-11-20: this repository is retired. Source, branches, tags and existing releases are retained for reference.
+
 # ampi
 
 ![ampi logo](docs/assets/ampi-logo.png)
@@ -20,7 +22,7 @@ A locked, mode-based coding harness for Pi Agent with deterministic multi-model 
 > behind Amp's Custom URL model provider that keeps Amp's modes and models unchanged and only moves
 > the billing.
 
-Status: not actively maintained. Published on npm as `@skippermissions/ampi` with SemVer versions; while ampi is `0.x`, a minor release may contain breaking changes, listed in [`CHANGELOG.md`](CHANGELOG.md).
+Status: archived. Retained for reference; no further development is planned.
 
 [![CI](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml/badge.svg)](https://github.com/5omeOtherGuy/ampi/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@skippermissions/ampi)](https://www.npmjs.com/package/@skippermissions/ampi)
